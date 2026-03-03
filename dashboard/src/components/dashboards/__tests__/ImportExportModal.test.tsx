@@ -30,6 +30,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     importDashboard: vi.fn().mockResolvedValue({warnings: []}),
     exportDashboard: vi.fn().mockResolvedValue({title: 'Test', widgets: []}),
+    listCustomDataSources: vi.fn().mockResolvedValue([]),
   },
 }))
 
@@ -119,6 +120,29 @@ describe('ImportExportModal', () => {
       await user.click(grafanaBtn)
       // Grafana should now be "active" (has border-primary class)
       expect(grafanaBtn.className).toContain('border-primary')
+    })
+
+    it('shows datasource mapper when Grafana JSON has __inputs with datasources', async () => {
+      renderWithQuery(
+        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
+      )
+      const grafanaJsonWithInputs = JSON.stringify({
+        __inputs: [
+          {name: 'DS_REDIS', type: 'datasource', pluginId: 'redis-datasource'}
+        ],
+        panels: [
+          {type: 'stat', datasource: '${DS_REDIS}', targets: [{refId: 'A'}]}
+        ]
+      })
+      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
+      const {fireEvent} = await import('@testing-library/react')
+      fireEvent.change(textarea, {target: {value: grafanaJsonWithInputs}})
+
+      const importBtn = screen.getByText('Import')
+      await userEvent.setup().click(importBtn)
+
+      // The DataSourceMapperModal should appear with "Map Data Sources"
+      expect(screen.getByText('Map Data Sources')).toBeInTheDocument()
     })
   })
 

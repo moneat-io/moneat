@@ -107,33 +107,61 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       const parsed = JSON.parse(jsonInput)
       const foundDataSources = new Set<string>()
       
-      if (format === 'grafana' && parsed.panels) {
-        // Check all panels for datasources
-        const checkPanel = (panel: Record<string, unknown>) => {
-          if (panel.targets) {
-            for (const target of panel.targets) {
-              // Grafana datasources can be:
-              // - {uid: "...", type: "prometheus"}
-              // - "datasource-name"
-              // - null (default datasource)
-              if (target.datasource) {
-                if (typeof target.datasource === 'string') {
-                  foundDataSources.add(target.datasource)
-                } else if (target.datasource.type) {
-                  // Use the type as identifier (e.g., "prometheus", "postgres", "mysql")
-                  foundDataSources.add(target.datasource.type)
-                }
-              }
+      if (format === 'grafana') {
+        // Check __inputs for declared datasource template variables
+        // These are the standard Grafana way to declare required datasources
+        if (Array.isArray(parsed.__inputs)) {
+          for (const input of parsed.__inputs) {
+            if (input.type === 'datasource' && input.pluginId) {
+              foundDataSources.add(input.pluginId)
             }
           }
         }
         
-        for (const panel of parsed.panels) {
-          checkPanel(panel)
-          // Check nested panels in collapsed rows
-          if (panel.panels) {
-            for (const nested of panel.panels) {
-              checkPanel(nested)
+        if (parsed.panels) {
+          // Check all panels for datasources
+          const checkPanel = (panel: Record<string, unknown>) => {
+            // Check panel-level datasource (e.g. "${DS_REDIS}" or a direct name)
+            if (typeof panel.datasource === 'string') {
+              const varMatch = /^\$\{(\w+)\}$/.exec(panel.datasource)
+              if (varMatch) {
+                // Template variable — already handled via __inputs above
+              } else {
+                foundDataSources.add(panel.datasource)
+              }
+            } else if (panel.datasource && typeof panel.datasource === 'object') {
+              const ds = panel.datasource as Record<string, unknown>
+              if (typeof ds.type === 'string') {
+                foundDataSources.add(ds.type)
+              }
+            }
+            
+            if (panel.targets) {
+              for (const target of panel.targets as Record<string, unknown>[]) {
+                // Grafana datasources can be:
+                // - {uid: "...", type: "prometheus"}
+                // - "datasource-name"
+                // - null (default datasource)
+                if (target.datasource) {
+                  if (typeof target.datasource === 'string') {
+                    foundDataSources.add(target.datasource)
+                  } else if ((target.datasource as Record<string, unknown>).type) {
+                    foundDataSources.add(
+                      (target.datasource as Record<string, unknown>).type as string
+                    )
+                  }
+                }
+              }
+            }
+          }
+          
+          for (const panel of parsed.panels) {
+            checkPanel(panel)
+            // Check nested panels in collapsed rows
+            if (panel.panels) {
+              for (const nested of panel.panels) {
+                checkPanel(nested)
+              }
             }
           }
         }

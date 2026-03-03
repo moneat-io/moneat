@@ -27,6 +27,7 @@ import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.WidgetResponse
 import com.moneat.dashboards.translation.GrafanaTranslator
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
@@ -1186,5 +1187,185 @@ class GrafanaTranslatorTest {
         assertTrue(dc["thresholds"]!!.contains("\"color\":\"red\""))
         assertTrue(dc["valueMappings"]!!.contains("\"value\":\"null\""))
         assertTrue(dc["valueMappings"]!!.contains("\"text\":\"N/A\""))
+    }
+
+    @Test
+    fun `parseInputsMap extracts datasource entries from __inputs`() {
+        val json = buildJsonObject {
+            put(
+                "__inputs",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("name", "DS_REDIS")
+                            put("label", "Redis")
+                            put("type", "datasource")
+                            put("pluginId", "redis-datasource")
+                            put("pluginName", "Redis")
+                        }
+                    )
+                    add(
+                        buildJsonObject {
+                            put("name", "DS_PROM")
+                            put("label", "Prometheus")
+                            put("type", "datasource")
+                            put("pluginId", "prometheus")
+                            put("pluginName", "Prometheus")
+                        }
+                    )
+                    add(
+                        buildJsonObject {
+                            put("type", "panel")
+                            put("id", "bargauge")
+                            put("name", "Bar gauge")
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.parseInputsMap(json)
+        assertEquals(2, result.size)
+        assertEquals("redis-datasource", result["DS_REDIS"])
+        assertEquals("prometheus", result["DS_PROM"])
+    }
+
+    @Test
+    fun `parseInputsMap returns empty map when no __inputs`() {
+        val json = buildJsonObject {
+            put("title", "test")
+        }
+        assertEquals(emptyMap(), translator.parseInputsMap(json))
+    }
+
+    @Test
+    fun `resolveDatasource resolves template variable via inputsMap`() {
+        val ds = JsonPrimitive("\${DS_REDIS}")
+        val inputsMap = mapOf("DS_REDIS" to "redis-datasource")
+        val result = translator.resolveDatasource(ds, 0, inputsMap)
+        assertEquals("redis-datasource", result)
+    }
+
+    @Test
+    fun `resolveDatasource returns raw string when no inputsMap match`() {
+        val ds = JsonPrimitive("\${DS_UNKNOWN}")
+        val result = translator.resolveDatasource(ds, 0, emptyMap())
+        assertEquals("\${DS_UNKNOWN}", result)
+    }
+
+    @Test
+    fun `resolveDatasource returns plain string datasource as-is`() {
+        val ds = JsonPrimitive("prometheus")
+        val result = translator.resolveDatasource(ds, 0, emptyMap())
+        assertEquals("prometheus", result)
+    }
+
+    @Test
+    fun `import resolves panel datasource from __inputs`() {
+        val json = buildJsonObject {
+            put("title", "Redis Dashboard")
+            put(
+                "__inputs",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("name", "DS_REDIS")
+                            put("type", "datasource")
+                            put("pluginId", "redis-datasource")
+                        }
+                    )
+                }
+            )
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("title", "Ops/sec")
+                            put("datasource", "\${DS_REDIS}")
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 6)
+                                    put("h", 4)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("command", "info")
+                                            put("query", "")
+                                            put("refId", "A")
+                                            put("section", "stats")
+                                            put("type", "command")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widget = result.dashboard.widgets.first()
+        assertEquals("redis-datasource", widget.queryConfigs.first().dataSource)
+    }
+
+    @Test
+    fun `parseTarget stores non-standard target fields as rawQuery JSON`() {
+        val panel = buildJsonObject {
+            put(
+                "targets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("command", "info")
+                            put("query", "")
+                            put("refId", "A")
+                            put("section", "stats")
+                            put("type", "command")
+                        }
+                    )
+                }
+            )
+        }
+        val warnings = mutableListOf<String>()
+        val queries = translator.parseGrafanaTargets(panel, warnings, 0)
+        val q = queries.first()
+        val rawQuery = q.rawQuery!!
+        // rawQuery should contain the full target JSON with plugin-specific fields
+        assertTrue(rawQuery.contains("\"command\":\"info\""))
+        assertTrue(rawQuery.contains("\"section\":\"stats\""))
+        assertContains(
+            warnings.joinToString(),
+            "non-standard query target"
+        )
+    }
+
+    @Test
+    fun `parseTarget skips empty query string and falls through`() {
+        val panel = buildJsonObject {
+            put(
+                "targets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("query", "")
+                            put("refId", "A")
+                        }
+                    )
+                }
+            )
+        }
+        val warnings = mutableListOf<String>()
+        val queries = translator.parseGrafanaTargets(panel, warnings, 0)
+        val q = queries.first()
+        // With only refId and empty query, no extra fields → fallback
+        assertContains(warnings.joinToString(), "no recognizable query target")
     }
 }

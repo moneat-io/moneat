@@ -85,6 +85,9 @@ class GrafanaTranslator : DashboardTranslator {
         val title = json["title"]?.jsonPrimitive?.contentOrNull ?: "Imported Grafana Dashboard"
         val description = json["description"]?.jsonPrimitive?.contentOrNull
 
+        // Build a map from __inputs: "${DS_X}" -> pluginId (e.g. "redis-datasource")
+        val inputsMap = parseInputsMap(json)
+
         val panels = json["panels"]?.jsonArray ?: JsonArray(emptyList())
 
         // Flatten: row panels may contain nested panels; import rows as text widgets
@@ -105,7 +108,7 @@ class GrafanaTranslator : DashboardTranslator {
 
         val widgets = allPanels.mapIndexedNotNull { index, panel ->
             try {
-                importPanel(panel, index, warnings)
+                importPanel(panel, index, warnings, inputsMap)
             } catch (e: Exception) {
                 warnings.add("Panel $index: failed to import - ${e.message}")
                 null
@@ -132,7 +135,8 @@ class GrafanaTranslator : DashboardTranslator {
     private fun importPanel(
         panelJson: JsonObject,
         index: Int,
-        warnings: MutableList<String>
+        warnings: MutableList<String>,
+        inputsMap: Map<String, String> = emptyMap()
     ): WidgetResponse? {
         val grafanaType = panelJson["type"]?.jsonPrimitive?.contentOrNull ?: "timeseries"
 
@@ -180,7 +184,7 @@ class GrafanaTranslator : DashboardTranslator {
         val gridW = (gridXEnd - gridX).coerceAtLeast(1)
         val gridH = scaleGridValue(grafanaH)
 
-        val queryConfigs = parseGrafanaTargets(panelJson, warnings, index)
+        val queryConfigs = parseGrafanaTargets(panelJson, warnings, index, inputsMap)
         val displayConfig = extractDisplayConfig(panelJson)
 
         val minH = if (moneatType == "stat" || moneatType == "gauge") 1 else 3
@@ -314,7 +318,8 @@ class GrafanaTranslator : DashboardTranslator {
     internal fun parseGrafanaTargets(
         panelJson: JsonObject,
         warnings: MutableList<String>,
-        panelIndex: Int
+        panelIndex: Int,
+        inputsMap: Map<String, String> = emptyMap()
     ): List<QueryDsl> {
         val targets = panelJson["targets"]?.jsonArray
 
@@ -329,7 +334,7 @@ class GrafanaTranslator : DashboardTranslator {
 
         // Resolve datasource: check panel-level, then fall back per-target
         val panelDs = panelJson["datasource"]
-        val preMappedDataSource = resolveDatasource(panelDs, panelIndex)
+        val preMappedDataSource = resolveDatasource(panelDs, panelIndex, inputsMap)
 
         return targets.mapIndexed { idx, targetEl ->
             val target = targetEl.jsonObject
@@ -338,7 +343,8 @@ class GrafanaTranslator : DashboardTranslator {
 
             // Per-target datasource overrides panel-level
             val targetDs = target["datasource"]
-            val effectiveDs = resolveDatasource(targetDs, panelIndex) ?: preMappedDataSource
+            val effectiveDs = resolveDatasource(targetDs, panelIndex, inputsMap)
+                ?: preMappedDataSource
 
             val parsed = parseTarget(target, warnings, panelIndex, legendFormat)
             val withDs = if (effectiveDs != null) parsed.copy(dataSource = effectiveDs) else parsed
@@ -346,11 +352,21 @@ class GrafanaTranslator : DashboardTranslator {
         }
     }
 
-    private fun resolveDatasource(
+    internal fun resolveDatasource(
         ds: JsonElement?,
         @Suppress("UNUSED_PARAMETER") panelIndex: Int = -1,
+        inputsMap: Map<String, String> = emptyMap()
     ): String? = when (ds) {
-        is JsonPrimitive if ds.isString -> ds.content
+        is JsonPrimitive if ds.isString -> {
+            val ref = ds.content
+            // Resolve ${DS_...} template variable references via __inputs
+            val varMatch = Regex("""\$\{(\w+)\}""").matchEntire(ref)
+            if (varMatch != null) {
+                inputsMap[varMatch.groupValues[1]] ?: ref
+            } else {
+                ref
+            }
+        }
         is JsonObject if ds["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true ->
             ds["type"]?.jsonPrimitive?.content
         else -> null
@@ -380,14 +396,29 @@ class GrafanaTranslator : DashboardTranslator {
             return parseGrafanaSql(rawSql, warnings, panelIndex)
         }
 
-        // Try generic query
+        // Try generic query (skip empty strings from plugin-specific targets)
         val query = target["query"]?.jsonPrimitive?.contentOrNull
-        if (query != null) {
+        if (!query.isNullOrBlank()) {
             warnings.add("Panel $panelIndex: generic query stored as rawQuery")
             return QueryDsl(
                 dataSource = "events",
                 metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
                 rawQuery = query
+            )
+        }
+
+        // No standard query format found — serialize the full target as rawQuery
+        // so plugin-specific fields (e.g. Redis command/section) are preserved
+        val knownKeys = setOf("refId", "datasource", "legendFormat", "query")
+        val hasExtraFields = target.keys.any { it !in knownKeys }
+        if (hasExtraFields) {
+            warnings.add(
+                "Panel $panelIndex: non-standard query target stored as rawQuery"
+            )
+            return QueryDsl(
+                dataSource = "events",
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+                rawQuery = target.toString()
             )
         }
 
@@ -518,6 +549,24 @@ class GrafanaTranslator : DashboardTranslator {
         metricName.contains("network_transmit") || metricName.contains("net_sent") -> "net_sent_bytes"
         metricName.contains("duration") || metricName.contains("latency") -> "duration_ms"
         else -> null
+    }
+
+    /**
+     * Parse Grafana `__inputs` array to build a map from template variable
+     * names (e.g. "DS_REDIS") to their pluginId (e.g. "redis-datasource").
+     */
+    internal fun parseInputsMap(json: JsonObject): Map<String, String> {
+        val inputs = json["__inputs"]?.jsonArray ?: return emptyMap()
+        val map = mutableMapOf<String, String>()
+        for (element in inputs) {
+            val obj = element.jsonObject
+            val type = obj["type"]?.jsonPrimitive?.contentOrNull
+            if (type != "datasource") continue
+            val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: continue
+            val pluginId = obj["pluginId"]?.jsonPrimitive?.contentOrNull ?: continue
+            map[name] = pluginId
+        }
+        return map
     }
 
     internal fun parseGrafanaVariables(json: JsonObject): List<DashboardVariable> {
