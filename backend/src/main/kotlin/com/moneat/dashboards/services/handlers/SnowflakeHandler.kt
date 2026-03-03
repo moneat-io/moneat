@@ -29,8 +29,14 @@ class SnowflakeHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDa
     override fun buildJdbcUrl(host: String, port: Int, database: String): String {
         val account = host.removePrefix("https://").removePrefix("http://")
             .replace(".snowflakecomputing.com", "").trim()
-        val db = database.ifBlank { "PUBLIC" }
-        return "jdbc:snowflake://$account.snowflakecomputing.com/?db=$db&warehouse=COMPUTE_WH"
+        val params = buildString {
+            if (database.isNotBlank()) append("db=$database")
+        }
+        return if (params.isNotEmpty()) {
+            "jdbc:snowflake://$account.snowflakecomputing.com/?$params"
+        } else {
+            "jdbc:snowflake://$account.snowflakecomputing.com/"
+        }
     }
 
     override fun defaultPort(): Int = 443
