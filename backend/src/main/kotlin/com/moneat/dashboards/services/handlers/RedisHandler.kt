@@ -197,9 +197,11 @@ class RedisHandler : DataSourceHandler {
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val uri = buildRedisUri(host, port ?: 6379, credentials.password)
+        val dbIndex = databaseName?.toIntOrNull() ?: 0
         return try {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
+                    if (dbIndex != 0) conn.sync().select(dbIndex)
                     val keys = scanKeys(conn.sync(), "*", 100)
                     keys.map { DataSourceField(it, "key", "Redis key") }
                 }
