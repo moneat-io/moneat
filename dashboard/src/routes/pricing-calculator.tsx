@@ -112,6 +112,10 @@ function PricingCalculatorPage() {
             </Link>
           </nav>
           <p className="text-xs text-slate-500">
+            Operated by Adrian Elder &middot; 1235 East Blvd, Ste E PMB 2045, Charlotte, NC 28203, USA &middot;{' '}
+            <a href="mailto:support@moneat.io" className="hover:text-sky-400 transition-colors">support@moneat.io</a>
+          </p>
+          <p className="text-xs text-slate-500">
             &copy; {new Date().getFullYear()} Moneat. All rights reserved.
           </p>
           <p className="text-xs text-slate-500">
