@@ -25,10 +25,13 @@ import com.moneat.monitor.models.AllContainersResponse
 import com.moneat.monitor.models.ContainerStatsResponse
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.CreateSilencePeriodRequest
+import com.moneat.monitor.models.CreateHostRequest
+import com.moneat.monitor.models.CreateHostResponse
 import com.moneat.monitor.models.CreateSystemRequest
 import com.moneat.monitor.models.CreateSystemResponse
 import com.moneat.monitor.models.IngestResponse
 import com.moneat.monitor.models.SystemMetricsPayload
+import com.moneat.monitor.models.HostResponse
 import com.moneat.monitor.models.SystemResponse
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
@@ -135,7 +138,7 @@ fun Route.monitorRoutes(
                 }
 
                 val agentKey = authHeader.removePrefix("Bearer ").trim()
-                val (systemId, organizationId) =
+                val (hostId, organizationId) =
                     monitorService.validateAgentKey(agentKey) ?: run {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid agent key"))
                         return@post
@@ -159,7 +162,7 @@ fun Route.monitorRoutes(
                         decompressedBytes.decodeToString()
                     )
 
-                logger.debug { "Received metrics from system $systemId (org $organizationId)" }
+                logger.debug { "Received metrics from host $hostId (org $organizationId)" }
 
                 val metricCount = monitorService.countMetricsInPayload(payload)
                 val billableBytes = decompressedBytes.size.toLong()
@@ -188,7 +191,7 @@ fun Route.monitorRoutes(
                 }
 
                 // Ingest metrics and get poll interval
-                val intervalSeconds = monitorService.ingestMetrics(systemId, organizationId, payload)
+                val intervalSeconds = monitorService.ingestMetrics(hostId, organizationId, payload)
 
                 if (metricCount > 0) {
                     usageTracking.recordOrgUsage(
@@ -244,7 +247,7 @@ fun Route.monitorRoutes(
                 }
 
                 val agentKey = authHeader.removePrefix("Bearer ").trim()
-                val (systemId, organizationId) =
+                val (hostId, organizationId) =
                     monitorService.validateAgentKey(agentKey) ?: run {
                         call.respond(
                             HttpStatusCode.Unauthorized,
@@ -274,7 +277,7 @@ fun Route.monitorRoutes(
                 }
 
                 if (quotaService.isEnforcementEnabled()) {
-                    val billableBytes = logService.estimateBillableBytes(payload.logs, systemId.toString())
+                    val billableBytes = logService.estimateBillableBytes(payload.logs, hostId)
                     val reservation =
                         quotaService.reserveUnits(
                             organizationId = organizationId,
@@ -302,13 +305,13 @@ fun Route.monitorRoutes(
                         ?: "moneat:logs:queue"
                 val accepted = logService.enqueueAgentLogs(
                     organizationId.toLong(),
-                    systemId.toString(),
+                    hostId,
                     payload.logs,
                     queueKey
                 )
                 call.respond(
                     HttpStatusCode.Accepted,
-                    AgentLogIngestResponse(accepted = accepted, systemId = systemId.toString())
+                    AgentLogIngestResponse(accepted = accepted, systemId = hostId.toString())
                 )
             } catch (e: Exception) {
                 logger.error(e) { "Failed to ingest agent logs: ${e.message}" }
@@ -326,8 +329,8 @@ fun Route.monitorRoutes(
          * Dashboard-facing endpoints (JWT auth required).
          */
         authenticate("auth-jwt") {
-            // List all systems for organization
-            get("/systems") {
+            // List all hosts for organization
+            get("/hosts") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
@@ -337,26 +340,31 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                // Get systems from all user's organizations
-                val allSystems =
+                // Get hosts from all user's organizations
+                val allHosts =
                     organizationIds.flatMap { orgId ->
-                        monitorService.listSystems(orgId)
+                        monitorService.listHosts(orgId)
                     }
 
                 val response =
-                    allSystems.map { system ->
-                        SystemResponse(
-                            id = system.id.toString(),
-                            projectId = 0L, // Not used - logs are now scoped by system_id
-                            name = system.name,
-                            host = system.host,
-                            status = system.status,
-                            last_seen_at = system.lastSeenAt?.toEpochMilliseconds(),
-                            agent_version = system.agentVersion,
-                            os = system.os,
-                            arch = system.arch,
-                            created_at = system.createdAt.toEpochMilliseconds(),
-                            latest_metrics = monitorService.getLatestMetrics(system.id)
+                    allHosts.map { host ->
+                        HostResponse(
+                            id = host.id,
+                            projectId = 0L,
+                            name = host.displayName ?: host.hostname,
+                            hostname = host.hostname,
+                            status = host.status,
+                            last_seen_at = host.lastSeenAt?.toEpochMilliseconds(),
+                            firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
+                            agent_version = host.agentVersion,
+                            os = host.os,
+                            arch = host.arch,
+                            platform = host.platform,
+                            processor = host.processor,
+                            cpuCores = host.cpuCores,
+                            memoryTotalKb = host.memoryTotalKb,
+                            created_at = host.createdAt.toEpochMilliseconds(),
+                            latest_metrics = monitorService.getLatestMetrics(host.id)
                         )
                     }
 
@@ -378,8 +386,8 @@ fun Route.monitorRoutes(
                 call.respond(HttpStatusCode.OK, AllContainersResponse(containers = containers))
             }
 
-            // Create a new system
-            post("/systems") {
+            // Create a new host (Moneat Agent)
+            post("/hosts") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
@@ -389,22 +397,19 @@ fun Route.monitorRoutes(
                     return@post
                 }
 
-                // Use the first organization for creating the system
                 val organizationId = organizationIds.first()
 
-                // Check quota
-                if (!monitorService.checkSystemQuota(organizationId)) {
+                if (!monitorService.checkHostQuota(organizationId)) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        ErrorResponse("System limit reached for your plan")
+                        ErrorResponse("Host limit reached for your plan")
                     )
                     return@post
                 }
 
-                val request = call.receive<CreateSystemRequest>()
-                val (system, agentKey) = monitorService.createSystem(organizationId, request.name)
+                val request = call.receive<CreateHostRequest>()
+                val (host, agentKey) = monitorService.createHost(organizationId, request.name)
 
-                // Generate docker run command
                 val dockerCommand =
                     """
                     docker run -d --name moneat-agent \
@@ -417,19 +422,24 @@ fun Route.monitorRoutes(
 
                 call.respond(
                     HttpStatusCode.Created,
-                    CreateSystemResponse(
-                        system =
-                        SystemResponse(
-                            id = system.id.toString(),
-                            projectId = 0L, // Not used - logs are now scoped by system_id
-                            name = system.name,
-                            host = system.host,
-                            status = system.status,
-                            last_seen_at = system.lastSeenAt?.toEpochMilliseconds(),
-                            agent_version = system.agentVersion,
-                            os = system.os,
-                            arch = system.arch,
-                            created_at = system.createdAt.toEpochMilliseconds(),
+                    CreateHostResponse(
+                        host =
+                        HostResponse(
+                            id = host.id,
+                            projectId = 0L,
+                            name = host.displayName ?: host.hostname,
+                            hostname = host.hostname,
+                            status = host.status,
+                            last_seen_at = host.lastSeenAt?.toEpochMilliseconds(),
+                            firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
+                            agent_version = host.agentVersion,
+                            os = host.os,
+                            arch = host.arch,
+                            platform = host.platform,
+                            processor = host.processor,
+                            cpuCores = host.cpuCores,
+                            memoryTotalKb = host.memoryTotalKb,
+                            created_at = host.createdAt.toEpochMilliseconds(),
                             latest_metrics = null
                         ),
                         agent_key = agentKey,
@@ -438,11 +448,11 @@ fun Route.monitorRoutes(
                 )
             }
 
-            // Get system details
-            get("/systems/{id}") {
+            // Get host details
+            get("/hosts/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["id"]
+                val hostIdStr = call.parameters["id"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
@@ -450,43 +460,46 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@get
                     }
 
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@get
                 }
 
                 call.respond(
                     HttpStatusCode.OK,
-                    SystemResponse(
-                        id = system.id.toString(),
-                        projectId = 0L, // Not used - logs are now scoped by system_id
-                        name = system.name,
-                        host = system.host,
-                        status = system.status,
-                        last_seen_at = system.lastSeenAt?.toEpochMilliseconds(),
-                        agent_version = system.agentVersion,
-                        os = system.os,
-                        arch = system.arch,
-                        created_at = system.createdAt.toEpochMilliseconds(),
-                        latest_metrics = monitorService.getLatestMetrics(system.id)
+                    HostResponse(
+                        id = host.id,
+                        projectId = 0L,
+                        name = host.displayName ?: host.hostname,
+                        hostname = host.hostname,
+                        status = host.status,
+                        last_seen_at = host.lastSeenAt?.toEpochMilliseconds(),
+                        firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
+                        agent_version = host.agentVersion,
+                        os = host.os,
+                        arch = host.arch,
+                        platform = host.platform,
+                        processor = host.processor,
+                        cpuCores = host.cpuCores,
+                        memoryTotalKb = host.memoryTotalKb,
+                        created_at = host.createdAt.toEpochMilliseconds(),
+                        latest_metrics = monitorService.getLatestMetrics(host.id)
                     )
                 )
             }
 
-            // Delete system
-            delete("/systems/{id}") {
+            // Delete host
+            delete("/hosts/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["id"]
+                val hostIdStr = call.parameters["id"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
@@ -494,24 +507,21 @@ fun Route.monitorRoutes(
                     return@delete
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@delete
                     }
 
-                // Check if system belongs to any of user's organizations
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@delete
                 }
 
-                val deleted = monitorService.deleteSystem(systemId, system.organizationId)
+                val deleted = monitorService.deleteHost(hostId, host.organizationId)
                 if (!deleted) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@delete
                 }
 
@@ -519,10 +529,10 @@ fun Route.monitorRoutes(
             }
 
             // Get historical metrics with downsampling
-            get("/systems/{id}/metrics") {
+            get("/hosts/{id}/metrics") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["id"]
+                val hostIdStr = call.parameters["id"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
@@ -530,18 +540,15 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@get
                     }
 
-                // Verify ownership
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@get
                 }
 
@@ -554,15 +561,15 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val response = monitorService.getHistoricalMetrics(systemId, fromParam, toParam, intervalParam)
+                val response = monitorService.getHistoricalMetrics(hostId, fromParam, toParam, intervalParam)
                 call.respond(HttpStatusCode.OK, response)
             }
 
             // Get latest container stats
-            get("/systems/{id}/containers") {
+            get("/hosts/{id}/containers") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["id"]
+                val hostIdStr = call.parameters["id"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
@@ -570,30 +577,27 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@get
                     }
 
-                // Verify ownership
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@get
                 }
 
-                val containers = monitorService.getLatestContainers(systemId)
+                val containers = monitorService.getLatestContainers(hostId)
                 call.respond(HttpStatusCode.OK, ContainerStatsResponse(containers = containers))
             }
 
             // Get container historical metrics
-            get("/systems/{id}/containers/{name}/metrics") {
+            get("/hosts/{id}/containers/{name}/metrics") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["id"]
+                val hostIdStr = call.parameters["id"]
                 val containerName = call.parameters["name"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
@@ -607,18 +611,15 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@get
                     }
 
-                // Verify ownership
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@get
                 }
 
@@ -633,7 +634,7 @@ fun Route.monitorRoutes(
 
                 val response =
                     monitorService.getContainerHistoricalMetrics(
-                        systemId,
+                        hostId,
                         containerName,
                         fromParam,
                         toParam,
@@ -642,11 +643,11 @@ fun Route.monitorRoutes(
                 call.respond(HttpStatusCode.OK, response)
             }
 
-            // Get logs for a system (container logs)
-            get("/systems/{id}/logs") {
+            // Get logs for a host (container logs)
+            get("/hosts/{id}/logs") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["id"]
+                val hostIdStr = call.parameters["id"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
@@ -654,22 +655,18 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@get
                     }
 
-                // Verify ownership
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@get
                 }
 
-                // Parse query parameters
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
                 val cursor = call.request.queryParameters["cursor"]
                 val query = call.request.queryParameters["query"]
@@ -690,20 +687,19 @@ fun Route.monitorRoutes(
                         environment = environment,
                         from = from,
                         to = to,
-                        systemId = systemIdStr,
+                        hostId = hostId,
                         containerName = containerName
                     )
 
-                // Use a dummy projectId (0) since we're querying by systemId
                 val response = logService.queryLogs(0L, logRequest)
                 call.respond(HttpStatusCode.OK, response)
             }
 
-            // List alerts for a system
-            get("/systems/{id}/alerts") {
+            // List alerts for a host
+            get("/hosts/{id}/alerts") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["id"]
+                val hostIdStr = call.parameters["id"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
@@ -711,30 +707,27 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@get
                     }
 
-                // Verify ownership
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@get
                 }
 
-                val alerts = monitorService.listAlerts(systemId)
+                val alerts = monitorService.listAlerts(hostId)
                 call.respond(HttpStatusCode.OK, alerts)
             }
 
-            // List scoped alert config for a system
-            get("/systems/{id}/alerts/config") {
+            // List scoped alert config for a host
+            get("/hosts/{id}/alerts/config") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["id"]
+                val hostIdStr = call.parameters["id"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
@@ -742,29 +735,27 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@get
                     }
 
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@get
                 }
 
-                val config = monitorService.getAlertConfig(systemId, system.organizationId)
+                val config = monitorService.getAlertConfig(hostId, host.organizationId)
                 call.respond(HttpStatusCode.OK, config)
             }
 
-            // Update active alert scope for a system (global vs system)
-            put("/systems/{id}/alerts/scope") {
+            // Update active alert scope for a host (global vs host)
+            put("/hosts/{id}/alerts/scope") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["id"]
+                val hostIdStr = call.parameters["id"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
@@ -772,36 +763,34 @@ fun Route.monitorRoutes(
                     return@put
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@put
                     }
 
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@put
                 }
 
                 val request = call.receive<UpdateAlertScopeRequest>()
                 val scope = request.scope.lowercase()
-                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
+                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_HOST) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
                     return@put
                 }
 
-                monitorService.updateAlertScope(systemId, system.organizationId, scope)
+                monitorService.updateAlertScope(hostId, host.organizationId, scope)
                 call.respond(HttpStatusCode.NoContent)
             }
 
             // Create an alert
-            post("/systems/{id}/alerts") {
+            post("/hosts/{id}/alerts") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["id"]
+                val hostIdStr = call.parameters["id"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
                 if (organizationIds.isEmpty()) {
@@ -809,37 +798,34 @@ fun Route.monitorRoutes(
                     return@post
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@post
                     }
 
-                // Verify ownership
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@post
                 }
 
-                val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
-                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
+                val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_HOST).lowercase()
+                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_HOST) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
                     return@post
                 }
 
                 val request = call.receive<CreateAlertRequest>()
-                val alert = monitorService.createAlert(systemId, system.organizationId, request, scope)
+                val alert = monitorService.createAlert(hostId, host.organizationId, request, scope)
                 call.respond(HttpStatusCode.Created, alert)
             }
 
             // Update an alert
-            put("/systems/{systemId}/alerts/{alertId}") {
+            put("/hosts/{hostId}/alerts/{alertId}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["systemId"]
+                val hostIdStr = call.parameters["hostId"]
                 val alertIdStr = call.parameters["alertId"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
@@ -848,11 +834,9 @@ fun Route.monitorRoutes(
                     return@put
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@put
                     }
 
@@ -862,21 +846,20 @@ fun Route.monitorRoutes(
                     return@put
                 }
 
-                // Verify ownership
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@put
                 }
 
-                val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
-                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
+                val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_HOST).lowercase()
+                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_HOST) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
                     return@put
                 }
 
                 val request = call.receive<UpdateAlertRequest>()
-                val updated = monitorService.updateAlert(alertId, systemId, system.organizationId, request, scope)
+                val updated = monitorService.updateAlert(alertId, hostId, host.organizationId, request, scope)
                 if (!updated) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@put
@@ -886,10 +869,10 @@ fun Route.monitorRoutes(
             }
 
             // Delete an alert
-            delete("/systems/{systemId}/alerts/{alertId}") {
+            delete("/hosts/{hostId}/alerts/{alertId}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val systemIdStr = call.parameters["systemId"]
+                val hostIdStr = call.parameters["hostId"]
                 val alertIdStr = call.parameters["alertId"]
 
                 val organizationIds = getOrganizationIdsForUser(userId)
@@ -898,11 +881,9 @@ fun Route.monitorRoutes(
                     return@delete
                 }
 
-                val systemId =
-                    try {
-                        UUID.fromString(systemIdStr)
-                    } catch (e: Exception) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid system ID"))
+                val hostId = hostIdStr?.toIntOrNull()
+                    ?: run {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
                         return@delete
                     }
 
@@ -912,20 +893,19 @@ fun Route.monitorRoutes(
                     return@delete
                 }
 
-                // Verify ownership
-                val system = monitorService.getSystemById(systemId)
-                if (system == null || system.organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("System not found"))
+                val host = monitorService.getHostById(hostId)
+                if (host == null || host.organizationId !in organizationIds) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@delete
                 }
 
-                val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_SYSTEM).lowercase()
-                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_SYSTEM) {
+                val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_HOST).lowercase()
+                if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_HOST) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert scope"))
                     return@delete
                 }
 
-                val deleted = monitorService.deleteAlert(alertId, systemId, system.organizationId, scope)
+                val deleted = monitorService.deleteAlert(alertId, hostId, host.organizationId, scope)
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@delete

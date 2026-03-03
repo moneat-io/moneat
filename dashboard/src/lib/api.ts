@@ -1364,6 +1364,51 @@ interface CreateMonitorSystemResponse {
   docker_command: string
 }
 
+export interface MonitorHostResponse {
+  id: number
+  project_id?: number
+  name: string
+  hostname: string
+  status: string
+  last_seen_at?: number | null
+  first_seen_at?: number | null
+  agent_version?: string | null
+  os?: string | null
+  arch?: string | null
+  platform?: string | null
+  processor?: string | null
+  cpu_cores?: number | null
+  memory_total_kb?: number | null
+  created_at: number
+  latest_metrics?: LatestMetrics | null
+}
+
+export interface CreateMonitorHostResponse {
+  host: MonitorHostResponse
+  agent_key: string
+  docker_command: string
+}
+
+/** Maps MonitorHostResponse to DdHostResponse shape for unified UI */
+export function mapMonitorHostToDdHost(h: MonitorHostResponse): DdHostResponse {
+  const status = (h.status ?? '').toLowerCase()
+  const isOnline = status === 'up' || status === 'online'
+  return {
+    id: h.id,
+    hostname: h.hostname ?? h.name ?? '',
+    os: h.os ?? '',
+    platform: h.platform ?? h.arch ?? '',
+    processor: h.processor ?? '',
+    cpuCores: h.cpu_cores ?? 0,
+    memoryTotalKb: h.memory_total_kb ?? (h.latest_metrics?.mem_total ? Math.round(h.latest_metrics.mem_total / 1024) : 0),
+    agentVersion: h.agent_version ?? '',
+    tags: {},
+    firstSeenAt: h.first_seen_at ? new Date(h.first_seen_at).toISOString() : '',
+    lastSeenAt: h.last_seen_at ? new Date(h.last_seen_at).toISOString() : '',
+    isOnline,
+  }
+}
+
 interface HistoricalDataPoint {
   timestamp: number
   cpu_percent?: number
@@ -2863,7 +2908,7 @@ class ApiClient {
     // Only send Authorization header for impersonation; normal auth uses httpOnly cookie
     if (impersonateToken) headers['Authorization'] = `Bearer ${impersonateToken}`
 
-    const { signal, cleanup } = withRequestTimeoutSignal(options.signal)
+    const { signal, cleanup } = withRequestTimeoutSignal(options.signal ?? undefined)
 
     let response: Response
     try {
@@ -2969,7 +3014,7 @@ class ApiClient {
     }
     if (impersonateToken) headers['Authorization'] = `Bearer ${impersonateToken}`
 
-    const { signal, cleanup } = withRequestTimeoutSignal(options.signal)
+    const { signal, cleanup } = withRequestTimeoutSignal(options.signal ?? undefined)
 
     let response: Response
     try {
@@ -4603,17 +4648,74 @@ class ApiClient {
     })
   }
 
-  // Monitoring API
+  // Monitoring API (hosts - unified for Moneat Agent and Datadog Agent)
+  async getMonitorHosts(): Promise<MonitorHostResponse[]> {
+    return this.request<MonitorHostResponse[]>(`${API_BASE}/monitor/hosts`)
+  }
+
+  async getMonitorHost(hostId: number): Promise<MonitorHostResponse> {
+    return this.request<MonitorHostResponse>(`${API_BASE}/monitor/hosts/${hostId}`)
+  }
+
+  async createMonitorHost(name: string): Promise<CreateMonitorHostResponse> {
+    return this.request<CreateMonitorHostResponse>(`${API_BASE}/monitor/hosts`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  }
+
+  async deleteMonitorHost(hostId: number): Promise<void> {
+    return this.request<void>(`${API_BASE}/monitor/hosts/${hostId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async getMonitorHostMetrics(
+    hostId: number,
+    from?: string,
+    to?: string,
+    interval?: string
+  ): Promise<SystemMetricsHistory> {
+    const params = new URLSearchParams()
+    if (from) params.append('from', from)
+    if (to) params.append('to', to)
+    if (interval) params.append('interval', interval)
+    const query = params.toString()
+    return this.request<SystemMetricsHistory>(
+      `${API_BASE}/monitor/hosts/${hostId}/metrics${query ? `?${query}` : ''}`
+    )
+  }
+
+  async getMonitorHostContainers(hostId: number) {
+    const response = await this.request<{containers: RawContainerStats[]}>(
+      `${API_BASE}/monitor/hosts/${hostId}/containers`
+    )
+    return response.containers.map((row) => ({
+      name: row.name,
+      id: row.id,
+      image: row.image,
+      status: row.status,
+      cpuPercent: row.cpuPercent ?? row.cpu_percent,
+      memUsed: row.memUsed ?? row.mem_used,
+      memLimit: row.memLimit ?? row.mem_limit,
+      netRecvBytes: row.netRecvBytes ?? row.net_recv_bytes,
+      netSentBytes: row.netSentBytes ?? row.net_sent_bytes,
+    }))
+  }
+
+  /** @deprecated Use getMonitorHosts instead */
   async getMonitorSystems() {
     const rows = await this.request<Record<string, unknown>[]>(`${API_BASE}/monitor/systems`)
     return rows.map((row) => this.mapMonitorSystem(row))
   }
 
+  /** @deprecated Use getMonitorHost instead */
   async getMonitorSystem(systemId: string) {
     const row = await this.request<Record<string, unknown>>(`${API_BASE}/monitor/systems/${systemId}`)
     return this.mapMonitorSystem(row) as MonitorSystemDetail
   }
 
+  /** @deprecated Use createMonitorHost instead */
   async createMonitorSystem(name: string) {
     return this.request<CreateMonitorSystemResponse>(`${API_BASE}/monitor/systems`, {
       method: 'POST',
@@ -4621,6 +4723,7 @@ class ApiClient {
     })
   }
 
+  /** @deprecated Use deleteMonitorHost instead */
   async deleteMonitorSystem(systemId: string) {
     return this.request<void>(`${API_BASE}/monitor/systems/${systemId}`, {
       method: 'DELETE',

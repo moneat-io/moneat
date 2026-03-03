@@ -1333,16 +1333,16 @@ function BillingTab() {
               <div className="rounded-lg bg-muted/50 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-sm">
                   <span className="font-medium">Summary: </span>
-                  {pendingOnCallSeats > usage.oncallSeats ? (
+                  {pendingOnCallSeats > (usage.oncallSeats ?? 0) ? (
                     <>
-                      Adding {pendingOnCallSeats - usage.oncallSeats} seat{(pendingOnCallSeats - usage.oncallSeats) > 1 ? 's' : ''}.
+                      Adding {pendingOnCallSeats - (usage.oncallSeats ?? 0)} seat{(pendingOnCallSeats - (usage.oncallSeats ?? 0)) > 1 ? 's' : ''}.
                       <span className="text-muted-foreground ml-1">
-                        (approx. +{formatCurrency(calculateProration(pendingOnCallSeats - usage.oncallSeats))} now)
+                        (approx. +{formatCurrency(calculateProration(pendingOnCallSeats - (usage.oncallSeats ?? 0)))} now)
                       </span>
                     </>
                   ) : (
                     <>
-                      Removing {usage.oncallSeats - pendingOnCallSeats} seat{(usage.oncallSeats - pendingOnCallSeats) > 1 ? 's' : ''}.
+                      Removing {(usage.oncallSeats ?? 0) - pendingOnCallSeats} seat{((usage.oncallSeats ?? 0) - pendingOnCallSeats) > 1 ? 's' : ''}.
                       <span className="text-muted-foreground ml-1">
                         (credit applied to next bill)
                       </span>

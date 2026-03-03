@@ -46,10 +46,10 @@ interface SecurityEvent {
 function SecurityEvents() {
   const {data, isLoading} = useQuery({
     queryKey: ['security-events'],
-    queryFn: () => api.get('/v1/security/events?limit=50'),
+    queryFn: () => api.get<{events?: SecurityEvent[]; totalCount?: number}>('/v1/security/events?limit=50'),
   })
 
-  const events: SecurityEvent[] = (data?.events as SecurityEvent[] | undefined) ?? []
+  const events: SecurityEvent[] = data?.events ?? []
 
   if (isLoading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" /></div>
 

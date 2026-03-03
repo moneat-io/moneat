@@ -135,7 +135,7 @@ describe('priority route coverage', () => {
   })
 
   it('issues route renders empty project state', async () => {
-    const Component = (IssuesIndexRoute as { component: React.ComponentType }).component
+    const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
     renderRoute(Component)
 
     expect(await screen.findByText('No projects yet')).toBeInTheDocument()
@@ -143,7 +143,7 @@ describe('priority route coverage', () => {
   })
 
   it('issue detail route renders not found state when issue is missing', async () => {
-    const Component = (IssueDetailRoute as { component: React.ComponentType }).component
+    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
     renderRoute(Component)
 
     expect(await screen.findByText('Issue not found')).toBeInTheDocument()
@@ -151,14 +151,14 @@ describe('priority route coverage', () => {
   })
 
   it('performance route renders no projects message when there are no projects', async () => {
-    const Component = (PerformanceRoute as { component: React.ComponentType }).component
+    const Component = (PerformanceRoute as unknown as { component: React.ComponentType }).component
     renderRoute(Component)
 
     expect(await screen.findByText('No projects yet. Create a project to view performance data.')).toBeInTheDocument()
   })
 
   it('ai route prompts for project selection when no project is selected', () => {
-    const Component = (AiRoute as { component: React.ComponentType }).component
+    const Component = (AiRoute as unknown as { component: React.ComponentType }).component
     renderRoute(Component)
 
     expect(screen.getByText('Select a project to view AI observability data.')).toBeInTheDocument()

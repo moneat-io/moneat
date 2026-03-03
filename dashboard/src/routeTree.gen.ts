@@ -79,7 +79,6 @@ import { Route as MonitoringEventsRouteImport } from './routes/monitoring.events
 import { Route as MonitoringDebuggerRouteImport } from './routes/monitoring.debugger'
 import { Route as MonitoringDatabasesRouteImport } from './routes/monitoring.databases'
 import { Route as MonitoringContainersRouteImport } from './routes/monitoring.containers'
-import { Route as MonitoringSystemIdRouteImport } from './routes/monitoring.$systemId'
 import { Route as LegalTermsRouteImport } from './routes/legal.terms'
 import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
 import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
@@ -471,11 +470,6 @@ const MonitoringContainersRoute = MonitoringContainersRouteImport.update({
   path: '/containers',
   getParentRoute: () => MonitoringRoute,
 } as any)
-const MonitoringSystemIdRoute = MonitoringSystemIdRouteImport.update({
-  id: '/$systemId',
-  path: '/$systemId',
-  getParentRoute: () => MonitoringRoute,
-} as any)
 const LegalTermsRoute = LegalTermsRouteImport.update({
   id: '/legal/terms',
   path: '/legal/terms',
@@ -726,7 +720,6 @@ export interface FileRoutesByFullPath {
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
-  '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
   '/monitoring/databases': typeof MonitoringDatabasesRoute
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
@@ -825,7 +818,6 @@ export interface FileRoutesByTo {
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
-  '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
   '/monitoring/databases': typeof MonitoringDatabasesRoute
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
@@ -934,7 +926,6 @@ export interface FileRoutesById {
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
-  '/monitoring/$systemId': typeof MonitoringSystemIdRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
   '/monitoring/databases': typeof MonitoringDatabasesRoute
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
@@ -1046,7 +1037,6 @@ export interface FileRouteTypes {
     | '/legal/privacy'
     | '/legal/sms-consent'
     | '/legal/terms'
-    | '/monitoring/$systemId'
     | '/monitoring/containers'
     | '/monitoring/databases'
     | '/monitoring/debugger'
@@ -1145,7 +1135,6 @@ export interface FileRouteTypes {
     | '/legal/privacy'
     | '/legal/sms-consent'
     | '/legal/terms'
-    | '/monitoring/$systemId'
     | '/monitoring/containers'
     | '/monitoring/databases'
     | '/monitoring/debugger'
@@ -1253,7 +1242,6 @@ export interface FileRouteTypes {
     | '/legal/privacy'
     | '/legal/sms-consent'
     | '/legal/terms'
-    | '/monitoring/$systemId'
     | '/monitoring/containers'
     | '/monitoring/databases'
     | '/monitoring/debugger'
@@ -1851,13 +1839,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MonitoringContainersRouteImport
       parentRoute: typeof MonitoringRoute
     }
-    '/monitoring/$systemId': {
-      id: '/monitoring/$systemId'
-      path: '/$systemId'
-      fullPath: '/monitoring/$systemId'
-      preLoaderRoute: typeof MonitoringSystemIdRouteImport
-      parentRoute: typeof MonitoringRoute
-    }
     '/legal/terms': {
       id: '/legal/terms'
       path: '/legal/terms'
@@ -2262,7 +2243,6 @@ const MonitoringNetworkDevicesRouteWithChildren =
   )
 
 interface MonitoringRouteChildren {
-  MonitoringSystemIdRoute: typeof MonitoringSystemIdRoute
   MonitoringContainersRoute: typeof MonitoringContainersRoute
   MonitoringDatabasesRoute: typeof MonitoringDatabasesRoute
   MonitoringDebuggerRoute: typeof MonitoringDebuggerRoute
@@ -2277,7 +2257,6 @@ interface MonitoringRouteChildren {
 }
 
 const MonitoringRouteChildren: MonitoringRouteChildren = {
-  MonitoringSystemIdRoute: MonitoringSystemIdRoute,
   MonitoringContainersRoute: MonitoringContainersRoute,
   MonitoringDatabasesRoute: MonitoringDatabasesRoute,
   MonitoringDebuggerRoute: MonitoringDebuggerRoute,

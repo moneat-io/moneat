@@ -50,11 +50,10 @@ function KubernetesPods() {
 
   const {data, isLoading} = useQuery({
     queryKey: ['k8s-resources', 'Pod'],
-    queryFn: () => api.get('/v1/infra/k8s-resources?resource_type=Pod&limit=100'),
+    queryFn: () => api.get<{resources?: KubernetesPodResource[]}>('/v1/infra/k8s-resources?resource_type=Pod&limit=100'),
   })
 
-  const resources: KubernetesPodResource[] =
-    (data?.resources as KubernetesPodResource[] | undefined) ?? []
+  const resources: KubernetesPodResource[] = data?.resources ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return resources
@@ -152,7 +151,7 @@ function KubernetesPods() {
                     </TableCell>
                     <TableCell className="text-sm">{r.clusterName}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={cn('text-xs', statusColor(r.status))}>
+                      <Badge variant="secondary" className={cn('text-xs', statusColor(r.status ?? ''))}>
                         {r.status || 'Unknown'}
                       </Badge>
                     </TableCell>

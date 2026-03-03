@@ -236,7 +236,7 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
                 return (
                   <Link
                     key={trace.traceId}
-                    to={`${basePath || '/apm-traces'}/$traceId`}
+                    to={`${basePath || '/apm-traces'}/$traceId` as '/apm-traces/$traceId'}
                     params={{traceId: trace.traceId}}
                     className="grid grid-cols-[minmax(180px,2fr)_minmax(200px,3fr)_80px_140px_minmax(120px,1.5fr)_80px] gap-px px-3 py-2 hover:bg-muted/40 transition-colors items-center group"
                   >

@@ -33,10 +33,10 @@ function NdmPaths() {
 
   const {data, isLoading} = useQuery({
     queryKey: ['ndm-paths'],
-    queryFn: () => api.get('/v1/network-devices/paths?limit=100'),
+    queryFn: () => api.get<{paths?: NetworkPath[]}>('/v1/network-devices/paths?limit=100'),
   })
 
-  const paths: NetworkPath[] = (data?.paths as NetworkPath[] | undefined) ?? []
+  const paths: NetworkPath[] = data?.paths ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return paths

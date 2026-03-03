@@ -49,11 +49,12 @@ export function DataSourceTypePicker({value, onChange, disabled}: DataSourceType
     cloud: 'Cloud',
   }
 
-  const derivedCategories = Array.from(new Set(DATA_SOURCE_TYPES.map((t) => t.category)))
+  const derivedCategories: string[] = Array.from(new Set(DATA_SOURCE_TYPES.map((t) => t.category)))
   const orderedPriority = ['database', 'metrics', 'search', 'nosql', 'cloud']
+  const prioritySet = new Set(orderedPriority)
   const categoryOrder = [
     ...orderedPriority.filter((c) => derivedCategories.includes(c)),
-    ...derivedCategories.filter((c) => !orderedPriority.includes(c)),
+    ...derivedCategories.filter((c) => !prioritySet.has(c)),
   ]
 
   return (

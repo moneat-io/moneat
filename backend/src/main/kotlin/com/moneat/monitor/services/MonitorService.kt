@@ -29,12 +29,17 @@ import com.moneat.monitor.models.ContainerMetricsResponse
 import com.moneat.monitor.models.ContainerStats
 import com.moneat.monitor.models.ContainerWithSystem
 import com.moneat.monitor.models.CreateAlertRequest
+import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.HistoricalMetricsResponse
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.MetricDataPoint
 import com.moneat.monitor.models.SystemData
 import com.moneat.monitor.models.SystemMetricsPayload
 import com.moneat.monitor.models.UpdateAlertRequest
+import com.moneat.shared.models.HostAlertSettings
+import com.moneat.shared.models.HostAlertTemplateStates
+import com.moneat.shared.models.HostAlerts
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.SystemAlertSettings
 import com.moneat.shared.models.SystemAlertTemplateStates
@@ -79,6 +84,7 @@ class MonitorService {
     companion object {
         const val ALERT_SCOPE_GLOBAL = "global"
         const val ALERT_SCOPE_SYSTEM = "system"
+        const val ALERT_SCOPE_HOST = "host"
         const val INFRA_LOOKBACK_DAYS = 7
     }
 
@@ -97,110 +103,114 @@ class MonitorService {
         )
 
     /**
-     * Create a new system and generate an agent key.
+     * Create a new host (Moneat Agent) and generate an agent key.
      */
-    fun createSystem(
+    fun createHost(
         organizationId: Int,
         name: String
-    ): Pair<SystemData, String> {
+    ): Pair<HostData, String> {
         val agentKey = generateAgentKey()
         val agentKeyHash = hashAgentKey(agentKey)
-        val systemId = UUID.randomUUID()
         val now = Clock.System.now()
+        val placeholderHostname = "pending-${UUID.randomUUID()}"
 
         ensureOrganizationAlertTemplates(organizationId)
 
-        transaction {
-            Systems.insert {
-                it[id] = systemId
-                it[Systems.organization_id] = organizationId
-                it[Systems.name] = name
-                it[host] = null
-                it[agent_key_hash] = agentKeyHash
-                it[status] = "pending"
-                it[last_seen_at] = null
-                it[agent_version] = null
-                it[os] = null
-                it[arch] = null
-                it[created_at] = now
-                it[updated_at] = now
+        val hostId =
+            transaction {
+                Hosts.insert {
+                    it[Hosts.organization_id] = organizationId
+                    it[Hosts.hostname] = placeholderHostname
+                    it[Hosts.display_name] = name
+                    it[Hosts.agent_key_hash] = agentKeyHash
+                    it[Hosts.status] = "pending"
+                    it[Hosts.os] = ""
+                    it[Hosts.platform] = ""
+                    it[Hosts.arch] = null
+                    it[Hosts.agent_version] = ""
+                    it[Hosts.gohai] = ""
+                    it[Hosts.tags] = "{}"
+                    it[Hosts.first_seen_at] = now
+                    it[Hosts.last_seen_at] = now
+                } get Hosts.id
             }
 
-            SystemAlertSettings.insert {
-                it[SystemAlertSettings.system_id] = systemId
-                it[SystemAlertSettings.organization_id] = organizationId
-                it[SystemAlertSettings.scope] = ALERT_SCOPE_GLOBAL
-                it[updated_at] = now
+        transaction {
+            HostAlertSettings.insert {
+                it[HostAlertSettings.host_id] = hostId
+                it[HostAlertSettings.organization_id] = organizationId
+                it[HostAlertSettings.scope] = ALERT_SCOPE_GLOBAL
+                it[HostAlertSettings.updated_at] = now
             }
         }
 
-        ensureSystemAlertsSeeded(systemId, organizationId)
+        ensureHostAlertsSeeded(hostId, organizationId)
 
-        val system = getSystemById(systemId)!!
-        return Pair(system, agentKey)
+        val host = getHostById(hostId)!!
+        return Pair(host, agentKey)
     }
 
     /**
-     * Validate agent key and return system ID + organization ID.
+     * Validate agent key and return host ID + organization ID (for Moneat Agent).
      */
-    fun validateAgentKey(agentKey: String): Pair<UUID, Int>? {
+    fun validateAgentKey(agentKey: String): Pair<Int, Int>? {
         val keyHash = hashAgentKey(agentKey)
         return transaction {
-            Systems
+            Hosts
                 .selectAll()
-                .where { Systems.agent_key_hash eq keyHash }
+                .where { Hosts.agent_key_hash eq keyHash }
                 .firstOrNull()
                 ?.let {
                     Pair(
-                        it[Systems.id],
-                        it[Systems.organization_id]
+                        it[Hosts.id],
+                        it[Hosts.organization_id]
                     )
                 }
         }
     }
 
     /**
-     * Check if organization can add more systems.
+     * Check if organization can add more hosts.
      */
-    fun checkSystemQuota(organizationId: Int): Boolean {
+    fun checkHostQuota(organizationId: Int): Boolean {
         if (EnvConfig.SelfHost.enabled) return true
         val tier = getTierConfig(organizationId)
+        val maxHosts = tier.maxHosts ?: Int.MAX_VALUE
         val currentCount =
             transaction {
-                Systems.selectAll().where { Systems.organization_id eq organizationId }.count()
+                Hosts.selectAll().where { Hosts.organization_id eq organizationId }.count()
             }
-        return currentCount < tier.maxSystems
+        return currentCount < maxHosts
     }
 
     /**
      * Ingest metrics from agent and store in ClickHouse.
      */
     suspend fun ingestMetrics(
-        systemId: UUID,
+        hostId: Int,
         organizationId: Int,
         payload: SystemMetricsPayload
     ): Int {
         val now = Clock.System.now()
+        val hostnameFromPayload = payload.host ?: hostId.toString()
 
-        // Update system metadata and last_seen_at
+        // Update host metadata and last_seen_at
         transaction {
-            Systems.update({ Systems.id eq systemId }) {
-                it[last_seen_at] = now
-                it[status] = "up"
-                it[updated_at] = now
-
-                payload.agent_version?.let { version -> it[agent_version] = version }
-                payload.os?.let { osName -> it[os] = osName }
-                payload.arch?.let { architecture -> it[arch] = architecture }
-                payload.host?.let { hostname -> it[host] = hostname }
+            Hosts.update({ Hosts.id eq hostId }) {
+                it[Hosts.last_seen_at] = now
+                it[Hosts.status] = "up"
+                it[Hosts.agent_version] = payload.agent_version ?: ""
+                it[Hosts.os] = payload.os ?: ""
+                it[Hosts.arch] = payload.arch
+                it[Hosts.hostname] = hostnameFromPayload
             }
         }
 
-        // Insert system metrics as named metrics into metrics table
+        // Insert metrics into ClickHouse with host_id tag
         val timestamp = payload.timestamp
-        val host = payload.host ?: systemId.toString()
+        val host = hostnameFromPayload
         val escapedHost = escapeSql(host)
-        val tagsMap = "map('system_id','$systemId')"
+        val tagsMap = "map('host_id','$hostId')"
         val ts = "fromUnixTimestamp64Milli(${timestamp * 1000})"
 
         val metricRows: List<Triple<String, Double, String>> =
@@ -250,7 +260,7 @@ class MonitorService {
 
         // Insert container metrics if present
         payload.containers?.forEach { container ->
-            insertContainerMetric(systemId, organizationId, timestamp, container, host)
+            insertContainerMetric(hostId, organizationId, timestamp, container, host)
         }
 
         // Return the poll interval for this organization's tier
@@ -274,7 +284,7 @@ class MonitorService {
     }
 
     private suspend fun insertContainerMetric(
-        systemId: UUID,
+        hostId: Int,
         organizationId: Int,
         timestamp: Long,
         container: ContainerMetricsPayload,
@@ -282,7 +292,7 @@ class MonitorService {
     ) {
         val fullQuery =
             buildContainerInsertQuery(
-                systemId = systemId,
+                hostId = hostId,
                 organizationId = organizationId,
                 timestamp = timestamp,
                 container = container,
@@ -292,20 +302,20 @@ class MonitorService {
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             logger.warn {
-                "Failed to insert container metrics for system=$systemId container=${container.name}: $errorBody"
+                "Failed to insert container metrics for host=$hostId container=${container.name}: $errorBody"
             }
         }
     }
 
     private fun buildContainerInsertQuery(
-        systemId: UUID,
+        hostId: Int,
         organizationId: Int,
         timestamp: Long,
         container: ContainerMetricsPayload,
         host: String
     ): String {
         val ts = "fromUnixTimestamp64Milli(${timestamp * 1000})"
-        val tagsMap = "map('system_id','$systemId')"
+        val tagsMap = "map('host_id','$hostId')"
         return """
             INSERT INTO $clickhouseDb.containers (
                 organization_id, host, container_id, name, image, state,
@@ -329,54 +339,53 @@ class MonitorService {
     }
 
     /**
-     * List all systems for an organization.
+     * List all hosts for an organization.
      */
-    fun listSystems(organizationId: Int): List<SystemData> {
+    fun listHosts(organizationId: Int): List<HostData> {
         return transaction {
-            Systems
+            Hosts
                 .selectAll()
-                .where { Systems.organization_id eq organizationId }
-                .orderBy(Systems.created_at to SortOrder.DESC)
-                .map { rowToSystemData(it) }
+                .where { Hosts.organization_id eq organizationId }
+                .orderBy(Hosts.first_seen_at to SortOrder.DESC)
+                .map { rowToHostData(it) }
         }
     }
 
     /**
-     * Get a single system by ID.
+     * Get a single host by ID.
      */
-    fun getSystemById(systemId: UUID): SystemData? {
+    fun getHostById(hostId: Int): HostData? {
         return transaction {
-            Systems
+            Hosts
                 .selectAll()
-                .where { Systems.id eq systemId }
+                .where { Hosts.id eq hostId }
                 .firstOrNull()
-                ?.let { rowToSystemData(it) }
+                ?.let { rowToHostData(it) }
         }
     }
 
     /**
-     * Delete a system and all its metrics.
+     * Delete a host and all its metrics.
      */
-    fun deleteSystem(
-        systemId: UUID,
+    fun deleteHost(
+        hostId: Int,
         organizationId: Int
     ): Boolean {
         return transaction {
             val deleted =
-                Systems.deleteWhere {
-                    (Systems.id eq systemId) and (Systems.organization_id eq organizationId)
+                Hosts.deleteWhere {
+                    (Hosts.id eq hostId) and (Hosts.organization_id eq organizationId)
                 }
             deleted > 0
         }
     }
 
     /**
-     * Get latest metrics for a system from ClickHouse metrics table.
+     * Get latest metrics for a host from ClickHouse metrics table.
      */
-    suspend fun getLatestMetrics(systemId: UUID): LatestMetrics? {
-        val system = getSystemById(systemId) ?: return null
-        val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
-        val sysIdStr = systemId.toString()
+    suspend fun getLatestMetrics(hostId: Int): LatestMetrics? {
+        val host = getHostById(hostId) ?: return null
+        val retentionDays = retentionPolicyService.getRetentionDaysForHost(hostId) ?: PricingTier.FREE.retentionDays
         val query =
             """
             SELECT
@@ -393,8 +402,8 @@ class MonitorService {
                 argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
                 argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent
             FROM $clickhouseDb.metrics
-            WHERE organization_id = ${system.organizationId}
-              AND tags['system_id'] = '$sysIdStr'
+            WHERE organization_id = ${host.organizationId}
+              AND tags['host_id'] = '$hostId'
               AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
             FORMAT JSONCompact
             """.trimIndent()
@@ -402,7 +411,7 @@ class MonitorService {
         val response = ClickHouseClient.execute(query)
 
         if (!response.status.isSuccess()) {
-            logger.warn { "Failed to fetch latest metrics for system $systemId" }
+            logger.warn { "Failed to fetch latest metrics for host $hostId" }
             return null
         }
 
@@ -490,23 +499,25 @@ class MonitorService {
      * Get historical metrics with optional downsampling.
      */
     suspend fun getHistoricalMetrics(
-        systemId: UUID,
+        hostId: Int,
         fromTimestamp: Long,
         toTimestamp: Long,
         intervalSeconds: Int?
     ): HistoricalMetricsResponse =
-        CacheService.cached("cache:monitor_hist:$systemId:$fromTimestamp:$toTimestamp:$intervalSeconds", 30) {
-            val system = getSystemById(systemId) ?: return@cached HistoricalMetricsResponse(
-                system_id = systemId.toString(),
+        CacheService.cached("cache:monitor_hist:$hostId:$fromTimestamp:$toTimestamp:$intervalSeconds", 30) {
+            val host = getHostById(hostId) ?: return@cached HistoricalMetricsResponse(
+                system_id = "",
+                host_id = hostId,
                 from = fromTimestamp,
                 to = toTimestamp,
                 interval_seconds = intervalSeconds ?: 3600,
                 data_points = emptyList()
             )
-            val clampedWindow = clampRangeToRetention(systemId, fromTimestamp, toTimestamp)
+            val clampedWindow = clampRangeToRetention(hostId, fromTimestamp, toTimestamp)
             if (clampedWindow == null) {
                 return@cached HistoricalMetricsResponse(
-                    system_id = systemId.toString(),
+                    system_id = "",
+                    host_id = hostId,
                     from = fromTimestamp,
                     to = toTimestamp,
                     interval_seconds = intervalSeconds ?: 3600,
@@ -526,7 +537,6 @@ class MonitorService {
                     else -> 3600
                 }
 
-            val sysIdStr = systemId.toString()
             val query =
                 """
             SELECT
@@ -545,8 +555,8 @@ class MonitorService {
                 avg(CASE WHEN metric_name='system.gpu.percent' THEN value END) as gpu,
                 avg(CASE WHEN metric_name='system.battery.percent' THEN value END) as battery
             FROM $clickhouseDb.metrics
-            WHERE organization_id = ${system.organizationId}
-              AND tags['system_id'] = '$sysIdStr'
+            WHERE organization_id = ${host.organizationId}
+              AND tags['host_id'] = '$hostId'
               AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * 1000})
               AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * 1000})
             GROUP BY ts
@@ -560,7 +570,8 @@ class MonitorService {
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to fetch historical metrics: $errorBody" }
                 return@cached HistoricalMetricsResponse(
-                    system_id = systemId.toString(),
+                    system_id = "",
+                    host_id = hostId,
                     from = effectiveFrom,
                     to = effectiveTo,
                     interval_seconds = calculatedInterval,
@@ -575,7 +586,8 @@ class MonitorService {
                     val result = json.parseToJsonElement(body).jsonObject
                     val data =
                         result["data"]?.jsonArray ?: return@cached HistoricalMetricsResponse(
-                            system_id = systemId.toString(),
+                            system_id = "",
+                            host_id = hostId,
                             from = effectiveFrom,
                             to = effectiveTo,
                             interval_seconds = calculatedInterval,
@@ -615,7 +627,8 @@ class MonitorService {
                 }
 
             HistoricalMetricsResponse(
-                system_id = systemId.toString(),
+                system_id = "",
+                host_id = hostId,
                 from = effectiveFrom,
                 to = effectiveTo,
                 interval_seconds = calculatedInterval,
@@ -626,12 +639,11 @@ class MonitorService {
     /**
      * Get latest container stats from ClickHouse containers table.
      */
-    suspend fun getLatestContainers(systemId: UUID): List<ContainerStats> {
-        val system = getSystemById(systemId) ?: return emptyList()
-        val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
-        val monitorIntervalSeconds = getTierConfig(system.organizationId).monitorIntervalSeconds
+    suspend fun getLatestContainers(hostId: Int): List<ContainerStats> {
+        val host = getHostById(hostId) ?: return emptyList()
+        val retentionDays = retentionPolicyService.getRetentionDaysForHost(hostId) ?: PricingTier.FREE.retentionDays
+        val monitorIntervalSeconds = getTierConfig(host.organizationId).monitorIntervalSeconds
         val freshnessWindowSeconds = max(monitorIntervalSeconds * 3, 300)
-        val sysIdStr = systemId.toString()
 
         val query =
             """
@@ -640,8 +652,8 @@ class MonitorService {
                 SELECT *,
                     ROW_NUMBER() OVER (PARTITION BY host, container_id ORDER BY timestamp DESC) as rn
                 FROM $clickhouseDb.containers
-                WHERE organization_id = ${system.organizationId}
-                  AND tags['system_id'] = '$sysIdStr'
+                WHERE organization_id = ${host.organizationId}
+                  AND tags['host_id'] = '$hostId'
                   AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
             ) WHERE rn = 1
               AND timestamp >= now64(3) - INTERVAL $freshnessWindowSeconds SECOND
@@ -690,19 +702,20 @@ class MonitorService {
     }
 
     /**
-     * Get latest container stats from all systems in the given organizations.
+     * Get latest container stats from all hosts in the given organizations.
      */
     suspend fun getLatestContainersForOrganizations(organizationIds: List<Int>): List<ContainerWithSystem> {
         val allContainers = mutableListOf<ContainerWithSystem>()
         for (orgId in organizationIds) {
-            val systems = listSystems(orgId)
-            for (system in systems) {
-                val containers = getLatestContainers(system.id)
+            val hosts = listHosts(orgId)
+            for (host in hosts) {
+                val containers = getLatestContainers(host.id)
                 for (c in containers) {
                     allContainers.add(
                         ContainerWithSystem(
-                            systemId = system.id.toString(),
-                            systemName = system.name,
+                            systemId = host.id.toString(),
+                            hostId = host.id,
+                            systemName = host.displayName ?: host.hostname,
                             name = c.name,
                             id = c.id,
                             image = c.image,
@@ -813,20 +826,20 @@ class MonitorService {
      * Get historical metrics for a specific container.
      */
     suspend fun getContainerHistoricalMetrics(
-        systemId: UUID,
+        hostId: Int,
         containerName: String,
         fromTimestamp: Long,
         toTimestamp: Long,
         intervalSeconds: Int?
     ): ContainerMetricsResponse {
-        val system = getSystemById(systemId) ?: return ContainerMetricsResponse(
+        val host = getHostById(hostId) ?: return ContainerMetricsResponse(
             container_name = containerName,
             from = fromTimestamp,
             to = toTimestamp,
             interval_seconds = intervalSeconds ?: 3600,
             data_points = emptyList()
         )
-        val clampedWindow = clampRangeToRetention(systemId, fromTimestamp, toTimestamp)
+        val clampedWindow = clampRangeToRetention(hostId, fromTimestamp, toTimestamp)
         if (clampedWindow == null) {
             return ContainerMetricsResponse(
                 container_name = containerName,
@@ -848,7 +861,6 @@ class MonitorService {
                 else -> 3600
             }
 
-        val sysIdStr = systemId.toString()
         val escapedName = escapeSql(containerName)
         val query =
             """
@@ -860,8 +872,8 @@ class MonitorService {
                 sum(net_rx_bytes) as net_recv,
                 sum(net_tx_bytes) as net_sent
             FROM $clickhouseDb.containers
-            WHERE organization_id = ${system.organizationId}
-              AND tags['system_id'] = '$sysIdStr'
+            WHERE organization_id = ${host.organizationId}
+              AND tags['host_id'] = '$hostId'
               AND name = '$escapedName'
               AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * 1000})
               AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * 1000})
@@ -942,34 +954,34 @@ class MonitorService {
     }
 
     /**
-     * List all alerts for a system.
+     * List all alerts for a host.
      */
-    fun listAlerts(systemId: UUID): List<AlertResponse> {
-        return listSystemAlerts(systemId)
+    fun listAlerts(hostId: Int): List<AlertResponse> {
+        return listHostAlerts(hostId)
     }
 
     fun getAlertConfig(
-        systemId: UUID,
+        hostId: Int,
         organizationId: Int
     ): AlertConfigResponse {
         ensureOrganizationAlertTemplates(organizationId)
-        ensureSystemAlertsSeeded(systemId, organizationId)
+        ensureHostAlertsSeeded(hostId, organizationId)
 
-        val scope = getSystemAlertScope(systemId, organizationId)
-        val globalAlerts = listGlobalAlerts(systemId, organizationId)
-        val systemAlerts = listSystemAlerts(systemId)
-        val effectiveAlerts = if (scope == ALERT_SCOPE_GLOBAL) globalAlerts else systemAlerts
+        val scope = getHostAlertScope(hostId, organizationId)
+        val globalAlerts = listGlobalAlertsForHost(hostId, organizationId)
+        val hostAlerts = listHostAlerts(hostId)
+        val effectiveAlerts = if (scope == ALERT_SCOPE_GLOBAL) globalAlerts else hostAlerts
 
         return AlertConfigResponse(
             scope = scope,
             globalAlerts = globalAlerts,
-            systemAlerts = systemAlerts,
+            systemAlerts = hostAlerts,
             effectiveAlerts = effectiveAlerts
         )
     }
 
     fun updateAlertScope(
-        systemId: UUID,
+        hostId: Int,
         organizationId: Int,
         scope: String
     ): Boolean {
@@ -977,29 +989,29 @@ class MonitorService {
             return false
         }
         ensureOrganizationAlertTemplates(organizationId)
-        ensureSystemAlertsSeeded(systemId, organizationId)
+        ensureHostAlertsSeeded(hostId, organizationId)
 
         val now = Clock.System.now()
         transaction {
             val existing =
-                SystemAlertSettings
+                HostAlertSettings
                     .selectAll()
                     .where {
-                        (SystemAlertSettings.system_id eq systemId) and
-                            (SystemAlertSettings.organization_id eq organizationId)
+                        (HostAlertSettings.host_id eq hostId) and
+                            (HostAlertSettings.organization_id eq organizationId)
                     }.firstOrNull()
 
             if (existing != null) {
-                SystemAlertSettings.update({ SystemAlertSettings.system_id eq systemId }) {
-                    it[SystemAlertSettings.scope] = scope
-                    it[updated_at] = now
+                HostAlertSettings.update({ HostAlertSettings.host_id eq hostId }) {
+                    it[HostAlertSettings.scope] = scope
+                    it[HostAlertSettings.updated_at] = now
                 }
             } else {
-                SystemAlertSettings.insert {
-                    it[SystemAlertSettings.system_id] = systemId
-                    it[SystemAlertSettings.organization_id] = organizationId
-                    it[SystemAlertSettings.scope] = scope
-                    it[updated_at] = now
+                HostAlertSettings.insert {
+                    it[HostAlertSettings.host_id] = hostId
+                    it[HostAlertSettings.organization_id] = organizationId
+                    it[HostAlertSettings.scope] = scope
+                    it[HostAlertSettings.updated_at] = now
                 }
             }
         }
@@ -1007,13 +1019,13 @@ class MonitorService {
     }
 
     /**
-     * Create an alert for a system.
+     * Create an alert for a host.
      */
     fun createAlert(
-        systemId: UUID,
+        hostId: Int,
         organizationId: Int,
         request: CreateAlertRequest,
-        scope: String = ALERT_SCOPE_SYSTEM
+        scope: String = ALERT_SCOPE_HOST
     ): AlertResponse {
         if (scope == ALERT_SCOPE_GLOBAL) {
             ensureOrganizationAlertTemplates(organizationId)
@@ -1034,7 +1046,7 @@ class MonitorService {
 
             return AlertResponse(
                 id = alertId,
-                systemId = systemId.toString(),
+                hostId = hostId,
                 scope = ALERT_SCOPE_GLOBAL,
                 metric = request.metric,
                 condition = request.condition,
@@ -1046,28 +1058,28 @@ class MonitorService {
             )
         }
 
-        ensureSystemAlertsSeeded(systemId, organizationId)
+        ensureHostAlertsSeeded(hostId, organizationId)
         val now = Clock.System.now()
 
         val alertId =
             transaction {
-                SystemAlerts.insert {
-                    it[system_id] = systemId
-                    it[SystemAlerts.organization_id] = organizationId
-                    it[metric] = request.metric
-                    it[condition] = request.condition
-                    it[threshold] = request.threshold
-                    it[duration_seconds] = request.durationSeconds
-                    it[enabled] = request.enabled
-                    it[last_triggered_at] = null
-                    it[created_at] = now
-                } get SystemAlerts.id
+                HostAlerts.insert {
+                    it[HostAlerts.host_id] = hostId
+                    it[HostAlerts.organization_id] = organizationId
+                    it[HostAlerts.metric] = request.metric
+                    it[HostAlerts.condition] = request.condition
+                    it[HostAlerts.threshold] = request.threshold
+                    it[HostAlerts.duration_seconds] = request.durationSeconds
+                    it[HostAlerts.enabled] = request.enabled
+                    it[HostAlerts.last_triggered_at] = null
+                    it[HostAlerts.created_at] = now
+                } get HostAlerts.id
             }
 
         return AlertResponse(
             id = alertId,
-            systemId = systemId.toString(),
-            scope = ALERT_SCOPE_SYSTEM,
+            hostId = hostId,
+            scope = ALERT_SCOPE_HOST,
             metric = request.metric,
             condition = request.condition,
             threshold = request.threshold,
@@ -1083,10 +1095,10 @@ class MonitorService {
      */
     fun updateAlert(
         alertId: Int,
-        systemId: UUID,
+        hostId: Int,
         organizationId: Int,
         request: UpdateAlertRequest,
-        scope: String = ALERT_SCOPE_SYSTEM
+        scope: String = ALERT_SCOPE_HOST
     ): Boolean {
         if (scope == ALERT_SCOPE_GLOBAL) {
             val now = Clock.System.now()
@@ -1097,11 +1109,11 @@ class MonitorService {
                             (OrganizationAlertTemplates.organization_id eq organizationId)
                     }) {
                         request.metric?.let { metric -> it[OrganizationAlertTemplates.metric] = metric }
-                        request.condition?.let { cond -> it[condition] = cond }
-                        request.threshold?.let { thresh -> it[threshold] = thresh }
-                        request.durationSeconds?.let { dur -> it[duration_seconds] = dur }
-                        request.enabled?.let { en -> it[enabled] = en }
-                        it[updated_at] = now
+                        request.condition?.let { cond -> it[OrganizationAlertTemplates.condition] = cond }
+                        request.threshold?.let { thresh -> it[OrganizationAlertTemplates.threshold] = thresh }
+                        request.durationSeconds?.let { dur -> it[OrganizationAlertTemplates.duration_seconds] = dur }
+                        request.enabled?.let { en -> it[OrganizationAlertTemplates.enabled] = en }
+                        it[OrganizationAlertTemplates.updated_at] = now
                     }
                 count > 0
             }
@@ -1109,16 +1121,16 @@ class MonitorService {
 
         return transaction {
             val count =
-                SystemAlerts.update({
-                    (SystemAlerts.id eq alertId) and
-                        (SystemAlerts.system_id eq systemId) and
-                        (SystemAlerts.organization_id eq organizationId)
+                HostAlerts.update({
+                    (HostAlerts.id eq alertId) and
+                        (HostAlerts.host_id eq hostId) and
+                        (HostAlerts.organization_id eq organizationId)
                 }) {
-                    request.metric?.let { metric -> it[SystemAlerts.metric] = metric }
-                    request.condition?.let { cond -> it[condition] = cond }
-                    request.threshold?.let { thresh -> it[threshold] = thresh }
-                    request.durationSeconds?.let { dur -> it[duration_seconds] = dur }
-                    request.enabled?.let { en -> it[enabled] = en }
+                    request.metric?.let { metric -> it[HostAlerts.metric] = metric }
+                    request.condition?.let { cond -> it[HostAlerts.condition] = cond }
+                    request.threshold?.let { thresh -> it[HostAlerts.threshold] = thresh }
+                    request.durationSeconds?.let { dur -> it[HostAlerts.duration_seconds] = dur }
+                    request.enabled?.let { en -> it[HostAlerts.enabled] = en }
                 }
             count > 0
         }
@@ -1129,9 +1141,9 @@ class MonitorService {
      */
     fun deleteAlert(
         alertId: Int,
-        systemId: UUID,
+        hostId: Int,
         organizationId: Int,
-        scope: String = ALERT_SCOPE_SYSTEM
+        scope: String = ALERT_SCOPE_HOST
     ): Boolean {
         if (scope == ALERT_SCOPE_GLOBAL) {
             return transaction {
@@ -1146,10 +1158,10 @@ class MonitorService {
 
         return transaction {
             val deleted =
-                SystemAlerts.deleteWhere {
-                    (SystemAlerts.id eq alertId) and
-                        (SystemAlerts.system_id eq systemId) and
-                        (SystemAlerts.organization_id eq organizationId)
+                HostAlerts.deleteWhere {
+                    (HostAlerts.id eq alertId) and
+                        (HostAlerts.host_id eq hostId) and
+                        (HostAlerts.organization_id eq organizationId)
                 }
             deleted > 0
         }
@@ -1158,7 +1170,7 @@ class MonitorService {
     // Helper functions
 
     private fun isValidAlertScope(scope: String): Boolean {
-        return scope == ALERT_SCOPE_GLOBAL || scope == ALERT_SCOPE_SYSTEM
+        return scope == ALERT_SCOPE_GLOBAL || scope == ALERT_SCOPE_SYSTEM || scope == ALERT_SCOPE_HOST
     }
 
     private fun ensureOrganizationAlertTemplates(organizationId: Int) {
@@ -1189,17 +1201,17 @@ class MonitorService {
         }
     }
 
-    private fun ensureSystemAlertsSeeded(
-        systemId: UUID,
+    private fun ensureHostAlertsSeeded(
+        hostId: Int,
         organizationId: Int
     ) {
         transaction {
             val existingCount =
-                SystemAlerts
+                HostAlerts
                     .selectAll()
                     .where {
-                        (SystemAlerts.system_id eq systemId) and
-                            (SystemAlerts.organization_id eq organizationId)
+                        (HostAlerts.host_id eq hostId) and
+                            (HostAlerts.organization_id eq organizationId)
                     }.count()
             if (existingCount > 0) {
                 return@transaction
@@ -1215,101 +1227,101 @@ class MonitorService {
 
             if (templates.isEmpty()) {
                 defaultAlertTemplates.forEach { template ->
-                    SystemAlerts.insert {
-                        it[SystemAlerts.system_id] = systemId
-                        it[SystemAlerts.organization_id] = organizationId
-                        it[metric] = template.metric
-                        it[condition] = template.condition
-                        it[threshold] = template.threshold
-                        it[duration_seconds] = template.durationSeconds
-                        it[enabled] = template.enabled
-                        it[last_triggered_at] = null
-                        it[created_at] = now
+                    HostAlerts.insert {
+                        it[HostAlerts.host_id] = hostId
+                        it[HostAlerts.organization_id] = organizationId
+                        it[HostAlerts.metric] = template.metric
+                        it[HostAlerts.condition] = template.condition
+                        it[HostAlerts.threshold] = template.threshold
+                        it[HostAlerts.duration_seconds] = template.durationSeconds
+                        it[HostAlerts.enabled] = template.enabled
+                        it[HostAlerts.last_triggered_at] = null
+                        it[HostAlerts.created_at] = now
                     }
                 }
                 return@transaction
             }
 
             templates.forEach { template ->
-                SystemAlerts.insert {
-                    it[SystemAlerts.system_id] = systemId
-                    it[SystemAlerts.organization_id] = organizationId
-                    it[metric] = template[OrganizationAlertTemplates.metric]
-                    it[condition] = template[OrganizationAlertTemplates.condition]
-                    it[threshold] = template[OrganizationAlertTemplates.threshold]
-                    it[duration_seconds] = template[OrganizationAlertTemplates.duration_seconds]
-                    it[enabled] = template[OrganizationAlertTemplates.enabled]
-                    it[last_triggered_at] = null
-                    it[created_at] = now
+                HostAlerts.insert {
+                    it[HostAlerts.host_id] = hostId
+                    it[HostAlerts.organization_id] = organizationId
+                    it[HostAlerts.metric] = template[OrganizationAlertTemplates.metric]
+                    it[HostAlerts.condition] = template[OrganizationAlertTemplates.condition]
+                    it[HostAlerts.threshold] = template[OrganizationAlertTemplates.threshold]
+                    it[HostAlerts.duration_seconds] = template[OrganizationAlertTemplates.duration_seconds]
+                    it[HostAlerts.enabled] = template[OrganizationAlertTemplates.enabled]
+                    it[HostAlerts.last_triggered_at] = null
+                    it[HostAlerts.created_at] = now
                 }
             }
         }
     }
 
-    private fun getSystemAlertScope(
-        systemId: UUID,
+    private fun getHostAlertScope(
+        hostId: Int,
         organizationId: Int
     ): String {
         return transaction {
             val existing =
-                SystemAlertSettings
+                HostAlertSettings
                     .selectAll()
                     .where {
-                        (SystemAlertSettings.system_id eq systemId) and
-                            (SystemAlertSettings.organization_id eq organizationId)
+                        (HostAlertSettings.host_id eq hostId) and
+                            (HostAlertSettings.organization_id eq organizationId)
                     }.firstOrNull()
 
             if (existing != null) {
-                return@transaction existing[SystemAlertSettings.scope]
+                return@transaction existing[HostAlertSettings.scope]
             }
 
             val now = Clock.System.now()
-            SystemAlertSettings.insert {
-                it[SystemAlertSettings.system_id] = systemId
-                it[SystemAlertSettings.organization_id] = organizationId
-                it[SystemAlertSettings.scope] = ALERT_SCOPE_SYSTEM
-                it[updated_at] = now
+            HostAlertSettings.insert {
+                it[HostAlertSettings.host_id] = hostId
+                it[HostAlertSettings.organization_id] = organizationId
+                it[HostAlertSettings.scope] = ALERT_SCOPE_HOST
+                it[HostAlertSettings.updated_at] = now
             }
-            ALERT_SCOPE_SYSTEM
+            ALERT_SCOPE_HOST
         }
     }
 
-    private fun listSystemAlerts(systemId: UUID): List<AlertResponse> {
+    private fun listHostAlerts(hostId: Int): List<AlertResponse> {
         return transaction {
-            SystemAlerts
+            HostAlerts
                 .selectAll()
-                .where { SystemAlerts.system_id eq systemId }
-                .orderBy(SystemAlerts.created_at to SortOrder.DESC)
+                .where { HostAlerts.host_id eq hostId }
+                .orderBy(HostAlerts.created_at to SortOrder.DESC)
                 .map { row ->
                     AlertResponse(
-                        id = row[SystemAlerts.id],
-                        systemId = row[SystemAlerts.system_id].toString(),
-                        scope = ALERT_SCOPE_SYSTEM,
-                        metric = row[SystemAlerts.metric],
-                        condition = row[SystemAlerts.condition],
-                        threshold = row[SystemAlerts.threshold],
-                        durationSeconds = row[SystemAlerts.duration_seconds],
-                        enabled = row[SystemAlerts.enabled],
-                        lastTriggeredAt = row[SystemAlerts.last_triggered_at]?.toEpochMilliseconds(),
-                        createdAt = row[SystemAlerts.created_at].toEpochMilliseconds()
+                        id = row[HostAlerts.id],
+                        hostId = hostId,
+                        scope = ALERT_SCOPE_HOST,
+                        metric = row[HostAlerts.metric],
+                        condition = row[HostAlerts.condition],
+                        threshold = row[HostAlerts.threshold],
+                        durationSeconds = row[HostAlerts.duration_seconds],
+                        enabled = row[HostAlerts.enabled],
+                        lastTriggeredAt = row[HostAlerts.last_triggered_at]?.toEpochMilliseconds(),
+                        createdAt = row[HostAlerts.created_at].toEpochMilliseconds()
                     )
                 }
         }
     }
 
-    private fun listGlobalAlerts(
-        systemId: UUID,
+    private fun listGlobalAlertsForHost(
+        hostId: Int,
         organizationId: Int
     ): List<AlertResponse> {
         return transaction {
             val templateStates =
-                SystemAlertTemplateStates
+                HostAlertTemplateStates
                     .selectAll()
                     .where {
-                        SystemAlertTemplateStates.system_id eq systemId
+                        HostAlertTemplateStates.host_id eq hostId
                     }.associateBy(
-                        keySelector = { it[SystemAlertTemplateStates.template_alert_id] },
-                        valueTransform = { it[SystemAlertTemplateStates.last_triggered_at] }
+                        keySelector = { it[HostAlertTemplateStates.template_alert_id] },
+                        valueTransform = { it[HostAlertTemplateStates.last_triggered_at] }
                     )
 
             OrganizationAlertTemplates
@@ -1320,7 +1332,7 @@ class MonitorService {
                 .map { row ->
                     AlertResponse(
                         id = row[OrganizationAlertTemplates.id],
-                        systemId = systemId.toString(),
+                        hostId = hostId,
                         scope = ALERT_SCOPE_GLOBAL,
                         metric = row[OrganizationAlertTemplates.metric],
                         condition = row[OrganizationAlertTemplates.condition],
@@ -1356,17 +1368,38 @@ class MonitorService {
     }
 
     private suspend fun clampRangeToRetention(
-        systemId: UUID,
+        hostId: Int,
         fromTimestamp: Long,
         toTimestamp: Long
     ): Pair<Long, Long>? {
-        val retentionDays = retentionPolicyService.getRetentionDaysForSystem(systemId) ?: PricingTier.FREE.retentionDays
+        val retentionDays = retentionPolicyService.getRetentionDaysForHost(hostId) ?: PricingTier.FREE.retentionDays
         val nowEpochSeconds = Clock.System.now().epochSeconds
         val oldestAllowed = nowEpochSeconds - (retentionDays * 86_400L)
         val clampedFrom = max(fromTimestamp, oldestAllowed)
         val clampedTo = min(toTimestamp, nowEpochSeconds)
         if (clampedFrom > clampedTo) return null
         return clampedFrom to clampedTo
+    }
+
+    private fun rowToHostData(row: ResultRow): HostData {
+        return HostData(
+            id = row[Hosts.id],
+            organizationId = row[Hosts.organization_id],
+            hostname = row[Hosts.hostname],
+            displayName = row[Hosts.display_name],
+            agentKeyHash = row[Hosts.agent_key_hash],
+            status = row[Hosts.status],
+            lastSeenAt = row[Hosts.last_seen_at],
+            agentVersion = row[Hosts.agent_version].takeIf { it.isNotBlank() },
+            os = row[Hosts.os].takeIf { it.isNotBlank() },
+            arch = row[Hosts.arch],
+            platform = row[Hosts.platform].takeIf { it.isNotBlank() },
+            processor = row[Hosts.processor].takeIf { it.isNotBlank() },
+            cpuCores = row[Hosts.cpu_cores].takeIf { it > 0 },
+            memoryTotalKb = row[Hosts.memory_total_kb].takeIf { it > 0 },
+            firstSeenAt = row[Hosts.first_seen_at],
+            createdAt = row[Hosts.first_seen_at]
+        )
     }
 
     private fun rowToSystemData(row: ResultRow): SystemData {

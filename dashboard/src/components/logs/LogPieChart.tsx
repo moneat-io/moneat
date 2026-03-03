@@ -36,7 +36,7 @@ const COLORS = [
   '#8b5cf6',
 ]
 
-function CustomTooltip({active, payload}: TooltipProps<number, string>) {
+function CustomTooltip({active, payload}: TooltipProps<number, string> & {payload?: Array<{name: string; value: number}>}) {
   if (!active || !payload || !payload.length) return null
   
   const data = payload[0]

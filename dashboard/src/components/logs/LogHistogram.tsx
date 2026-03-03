@@ -114,8 +114,9 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
           margin={{top: 2, right: 8, left: 0, bottom: 0}}
           barGap={1}
           barCategoryGap="10%"
-          onClick={(event) => {
-            const point = event?.activePayload?.[0]?.payload as HistogramPoint | undefined
+          onClick={(nextState: unknown) => {
+            const ev = nextState as { activePayload?: Array<{ payload: HistogramPoint }> }
+            const point = ev?.activePayload?.[0]?.payload
             if (point?.timestamp && onBucketClick) onBucketClick(point.timestamp)
           }}
         >
@@ -149,7 +150,7 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
           <Tooltip
             cursor={false}
             labelFormatter={(ts) => formatTooltipTime(ts as number)}
-            formatter={(value: number, name: string) => [value.toLocaleString(), name === 'total' ? 'logs' : name]}
+            formatter={(value?: number, name?: string) => [(value ?? 0).toLocaleString(), name === 'total' ? 'logs' : (name ?? '')]}
             contentStyle={{
               backgroundColor: 'hsl(var(--popover) / 0.95)',
               border: '1px solid hsl(var(--border))',

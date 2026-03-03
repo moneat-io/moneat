@@ -18,6 +18,7 @@ package com.moneat.shared.services
 
 import com.moneat.billing.models.PricingTier
 import com.moneat.billing.services.PricingTierService
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Systems
@@ -58,6 +59,20 @@ class RetentionPolicyService(
                         .where { Systems.id eq systemId }
                         .firstOrNull()
                         ?.get(Systems.organization_id)
+                }
+            organizationId?.let { getRetentionDaysForOrganization(it) }
+        }
+    }
+
+    suspend fun getRetentionDaysForHost(hostId: Int): Int? {
+        return CacheService.cached("cache:retention:host:$hostId", 300) {
+            val organizationId =
+                transaction {
+                    Hosts
+                        .selectAll()
+                        .where { Hosts.id eq hostId }
+                        .firstOrNull()
+                        ?.get(Hosts.organization_id)
                 }
             organizationId?.let { getRetentionDaysForOrganization(it) }
         }

@@ -386,9 +386,9 @@ function DashboardPage() {
     queryFn: () => api.getUptimeMonitors(),
   })
 
-  const {data: monitorSystems = [], isLoading: isLoadingMonitors} = useQuery({
-    queryKey: ['monitor-systems'],
-    queryFn: () => api.getMonitorSystems(),
+  const {data: monitorHosts = [], isLoading: isLoadingMonitors} = useQuery({
+    queryKey: ['monitor-hosts'],
+    queryFn: () => api.getMonitorHosts(),
   })
 
   const {data: enterpriseFeatures} = useEnterpriseFeatures()
@@ -432,8 +432,8 @@ function DashboardPage() {
   const triggeredIncidents = incidents.filter(i => i.status === 'TRIGGERED')
   const uptimeUp = uptimeMonitors.filter(m => m.status === 'up').length
   const uptimeDown = uptimeMonitors.filter(m => m.status === 'down').length
-  const systemsUp = monitorSystems.filter(s => s.status === 'up').length
-  const systemsDown = monitorSystems.filter(s => s.status === 'down').length
+  const hostsUp = monitorHosts.filter(h => (h.status ?? '').toLowerCase() === 'up' || (h.status ?? '').toLowerCase() === 'online').length
+  const hostsDown = monitorHosts.filter(h => (h.status ?? '').toLowerCase() === 'down').length
   const recentReleases = releases.slice(0, 5)
   const recentFeedback = feedback.slice(0, 5)
   const dashboardUptimeMonitors = uptimeMonitors.slice(0, 6)
@@ -517,10 +517,10 @@ function DashboardPage() {
               />
               <StatsCard
                 title="Infrastructure"
-                value={`${systemsUp}/${monitorSystems.length}`}
+                value={`${hostsUp}/${monitorHosts.length}`}
                 icon={Server}
                 accent="cyan"
-                subtitle={systemsDown > 0 ? `${systemsDown} down` : 'All online'}
+                subtitle={hostsDown > 0 ? `${hostsDown} down` : 'All online'}
               />
               <StatsCard
                 title="Users (24h)"
@@ -822,23 +822,23 @@ function DashboardPage() {
             iconClassName="text-blue-600 dark:text-blue-400"
             iconBgClassName="bg-blue-100 dark:bg-blue-900/20"
             headerRight={
-              monitorSystems.length > 0 ? (
+              monitorHosts.length > 0 ? (
                 <div className="flex items-center gap-3 text-xs font-medium">
-                  {systemsDown > 0 && (
+                  {hostsDown > 0 && (
                     <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
                       <ArrowDown className="h-3.5 w-3.5" />
-                      <span>{systemsDown} Offline</span>
+                      <span>{hostsDown} Offline</span>
                     </div>
                   )}
-                  {systemsUp > 0 && (
+                  {hostsUp > 0 && (
                     <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-500">
                       <ArrowUp className="h-3.5 w-3.5" />
-                      <span>{systemsUp} Online</span>
+                      <span>{hostsUp} Online</span>
                     </div>
                   )}
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Server className="h-3.5 w-3.5" />
-                    <span>{monitorSystems.length} Total</span>
+                    <span>{monitorHosts.length} Total</span>
                   </div>
                 </div>
               ) : null
@@ -846,31 +846,31 @@ function DashboardPage() {
           >
             {isLoadingMonitors ? (
               <SkeletonSection />
-            ) : monitorSystems.length === 0 ? (
+            ) : monitorHosts.length === 0 ? (
               <EmptySection message="No systems being monitored" />
             ) : (
               <div className="space-y-0.5">
-                {monitorSystems.slice(0, 6).map(sys => (
+                {monitorHosts.slice(0, 6).map(host => (
                   <Link
-                    key={sys.id}
+                    key={host.id}
                     to="/monitoring/hosts/$hostId"
-                    params={{hostId: String(sys.id)}}
+                    params={{hostId: String(host.id)}}
                     className="grid gap-3 py-2 px-2.5 rounded-md hover:bg-muted/50 transition md:[grid-template-columns:minmax(12rem,15rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,11rem)] md:items-center"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(sys.status)}`} />
-                      <span className="text-sm flex-1 truncate min-w-0">{sys.name}</span>
+                      <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(host.status)}`} />
+                      <span className="text-sm flex-1 truncate min-w-0">{host.name ?? host.hostname}</span>
                     </div>
 
-                    <UtilizationBar label="CPU" value={sys.cpuPercent} />
-                    <UtilizationBar label="RAM" value={sys.latest_metrics?.mem_percent} />
-                    <UtilizationBar label="Disk" value={sys.latest_metrics?.disk_percent} />
-                    {sys.os ? (
+                    <UtilizationBar label="CPU" value={host.latest_metrics?.cpu_percent} />
+                    <UtilizationBar label="RAM" value={host.latest_metrics?.mem_percent} />
+                    <UtilizationBar label="Disk" value={host.latest_metrics?.disk_percent} />
+                    {host.os ? (
                       <Badge
                         variant="outline"
                         className="w-fit max-w-[11rem] justify-self-start truncate text-[10px] px-2 py-0"
                       >
-                        {sys.os}
+                        {host.os}
                       </Badge>
                     ) : (
                       <span className="text-[10px] text-muted-foreground">—</span>
