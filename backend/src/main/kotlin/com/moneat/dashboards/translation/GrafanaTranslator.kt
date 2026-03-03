@@ -554,8 +554,13 @@ class GrafanaTranslator : DashboardTranslator {
         target: JsonObject
     ): String {
         val section = target["section"]?.jsonPrimitive?.contentOrNull
+        val field = target["query"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
         return when (command.lowercase()) {
-            "info" -> if (!section.isNullOrBlank()) "INFO $section" else "INFO"
+            "info" -> buildString {
+                append("INFO")
+                if (!section.isNullOrBlank()) append(" $section")
+                if (!field.isNullOrBlank()) append(" $field")
+            }
             "clientlist" -> "CLIENT LIST"
             "slowlogget" -> "SLOWLOG GET"
             "clusterinfo" -> "CLUSTER INFO"

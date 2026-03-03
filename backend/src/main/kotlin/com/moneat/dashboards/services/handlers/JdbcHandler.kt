@@ -24,6 +24,7 @@ import com.moneat.dashboards.services.DataSourceCredentials
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
 import java.sql.ResultSet

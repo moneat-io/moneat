@@ -1376,6 +1376,26 @@ class GrafanaTranslatorTest {
     }
 
     @Test
+    fun `translateGrafanaRedisCommand maps info with section and field`() {
+        val target = buildJsonObject {
+            put("command", "info")
+            put("section", "server")
+            put("query", "redis_version")
+            put("type", "command")
+        }
+        assertEquals("INFO server redis_version", translator.translateGrafanaRedisCommand("info", target))
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps info with field but no section`() {
+        val target = buildJsonObject {
+            put("command", "info")
+            put("query", "maxmemory_policy")
+        }
+        assertEquals("INFO maxmemory_policy", translator.translateGrafanaRedisCommand("info", target))
+    }
+
+    @Test
     fun `translateGrafanaRedisCommand maps info without section`() {
         val target = buildJsonObject { put("command", "info") }
         assertEquals("INFO", translator.translateGrafanaRedisCommand("info", target))

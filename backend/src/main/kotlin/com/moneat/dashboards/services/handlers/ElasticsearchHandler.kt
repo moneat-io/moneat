@@ -147,6 +147,8 @@ class ElasticsearchHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
+        } catch (e: Exception) {
+            logger.error(e) { "Elasticsearch schema fetch failed" }
             emptyList()
         }
     }

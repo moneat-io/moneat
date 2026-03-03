@@ -884,14 +884,19 @@ const StatWidget = memo(function StatWidget({
 
   // Single value (no time, no multiple categories)
   const row = data[data.length - 1] || data[0] || {}
-  const displayKeys = valueKeys.length > 0 ? valueKeys : Object.keys(row).filter(
-    (k) => typeof row[k] === 'number' && !isTimeKey(k)
-  )
+  const allNonTimeKeys = Object.keys(row).filter((k) => !isTimeKey(k))
+  // Include string-only columns when there's a single row with no numeric data
+  // (e.g. Redis INFO fields like redis_version, maxmemory_policy)
+  const displayKeys = valueKeys.length > 0
+    ? valueKeys
+    : labelKeys.length > 0 && valueKeys.length === 0 && data.length === 1
+      ? labelKeys
+      : allNonTimeKeys.filter((k) => typeof row[k] === 'number')
 
   if (displayKeys.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-        No numeric data
+        No data
       </div>
     )
   }

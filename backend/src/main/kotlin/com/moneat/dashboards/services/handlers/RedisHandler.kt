@@ -75,11 +75,18 @@ class RedisHandler : DataSourceHandler {
                     val result = when (parts.firstOrNull()?.uppercase()) {
                         "INFO" -> {
                             val section = parts.getOrNull(1)
+                            val field = parts.getOrNull(2)
                             val raw = if (section != null) cmd.info(section) else cmd.info()
-                            if (section?.lowercase() == "commandstats") {
+                            val rows = if (section?.lowercase() == "commandstats") {
                                 parseCommandStats(raw)
                             } else {
                                 parseInfoOutput(raw)
+                            }
+                            if (!field.isNullOrBlank() && rows.isNotEmpty()) {
+                                val filtered = rows[0].filterKeys { it == field }
+                                if (filtered.isEmpty()) rows else listOf(filtered)
+                            } else {
+                                rows
                             }
                         }
                         "CLIENT" -> {
