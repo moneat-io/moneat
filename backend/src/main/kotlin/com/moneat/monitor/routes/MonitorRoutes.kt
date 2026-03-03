@@ -27,6 +27,7 @@ import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.CreateSilencePeriodRequest
 import com.moneat.monitor.models.CreateHostRequest
 import com.moneat.monitor.models.CreateHostResponse
+import com.moneat.monitor.models.HostResponse
 import com.moneat.monitor.models.IngestResponse
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.SystemMetricsPayload
@@ -274,7 +275,8 @@ fun Route.monitorRoutes(
                 }
 
                 if (quotaService.isEnforcementEnabled()) {
-                    val billableBytes = logService.estimateBillableBytes(payload.logs, hostId)
+                    val billableBytes =
+                        payload.logs.sumOf { ((it.message?.length ?: 0) + (it.body?.length ?: 0)).toLong() }
                     val reservation =
                         quotaService.reserveUnits(
                             organizationId = organizationId,
