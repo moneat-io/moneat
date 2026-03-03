@@ -140,9 +140,9 @@ function TermsOfUsePage() {
           <section className="space-y-2">
             <h2 className="text-lg font-semibold">13. Contact</h2>
             <p>
-              Adrian Lee Elder, d/b/a Moneat
+              Adrian Elder, d/b/a Moneat
               <br />
-              144 Sierra Chase Dr, Statesville, NC 28677, United States
+              1235 East Blvd, Ste E PMB 2045, Charlotte, NC 28203, United States
               <br />
               Email: <a className="text-primary hover:underline" href="mailto:support@moneat.io">support@moneat.io</a>
             </p>

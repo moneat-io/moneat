@@ -24,7 +24,9 @@ export type UnitType =
   | 'none'
   | 'short'
   | 'bytes'
+  | 'decbytes'
   | 'bytes/s'
+  | 'KBs'
   | 'percent'
   | 'ms'
   | 's'
@@ -34,6 +36,7 @@ export type UnitType =
   | 'locale'
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+const DEC_BYTE_UNITS = ['B', 'kB', 'MB', 'GB', 'TB', 'PB']
 const SHORT_SUFFIXES = ['', 'K', 'M', 'B', 'T']
 
 function resolveDecimals(decimals: string | undefined, fallback: number): number {
@@ -55,6 +58,31 @@ function formatBytes(value: number, decimals: string | undefined): string {
 
 function formatBytesPerSec(value: number, decimals: string | undefined): string {
   return `${formatBytes(value, decimals)}/s`
+}
+
+function formatDecBytes(value: number, decimals: string | undefined): string {
+  if (value === 0) return '0 B'
+  const abs = Math.abs(value)
+  const k = 1000
+  let idx = Math.floor(Math.log(abs) / Math.log(k))
+  idx = Math.min(idx, DEC_BYTE_UNITS.length - 1)
+  const scaled = value / Math.pow(k, idx)
+  const dec = resolveDecimals(decimals, idx === 0 ? 0 : 2)
+  return `${scaled.toFixed(dec)} ${DEC_BYTE_UNITS[idx]}`
+}
+
+const RATE_UNITS = ['kB/s', 'MB/s', 'GB/s', 'TB/s']
+
+function formatKBps(value: number, decimals: string | undefined): string {
+  const dec = resolveDecimals(decimals, 1)
+  const sign = value < 0 ? '-' : ''
+  let abs = Math.abs(value)
+  let idx = 0
+  while (abs >= 1000 && idx < RATE_UNITS.length - 1) {
+    abs /= 1000
+    idx++
+  }
+  return `${sign}${abs.toFixed(dec)} ${RATE_UNITS[idx]}`
 }
 
 function formatShort(value: number, decimals: string | undefined): string {
@@ -152,8 +180,12 @@ export function formatValue(
       return formatShort(value, decimals)
     case 'bytes':
       return formatBytes(value, decimals)
+    case 'decbytes':
+      return formatDecBytes(value, decimals)
     case 'bytes/s':
       return formatBytesPerSec(value, decimals)
+    case 'KBs':
+      return formatKBps(value, decimals)
     case 'percent':
       return formatPercent(value, decimals)
     case 'ms':

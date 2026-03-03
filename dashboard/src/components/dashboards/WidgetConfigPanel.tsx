@@ -20,7 +20,7 @@ import {Button} from '@/components/ui/button'
 import {QueryBuilderForm} from './QueryBuilderForm'
 import {WidgetRenderer} from './WidgetRenderer'
 import {AlertConfigForm} from './AlertConfigForm'
-import {X, BarChart3, LineChart, PieChart, Hash, Table2, List, Grid3X3, Type, Plus, Trash2, Gauge} from 'lucide-react'
+import {X, BarChart3, LineChart, PieChart, Hash, Table2, List, Grid3X3, Type, Plus, Trash2, Gauge, BarChartHorizontalBig} from 'lucide-react'
 import type {ValueMapping} from './formatValue'
 
 const WIDGET_TYPES = [
@@ -29,6 +29,7 @@ const WIDGET_TYPES = [
   {value: 'donut', label: 'Donut', icon: PieChart},
   {value: 'stat', label: 'Stat', icon: Hash},
   {value: 'gauge', label: 'Gauge', icon: Gauge},
+  {value: 'bargauge', label: 'Bar Gauge', icon: BarChartHorizontalBig},
   {value: 'table', label: 'Table', icon: Table2},
   {value: 'toplist', label: 'Top List', icon: List},
   {value: 'heatmap', label: 'Heatmap', icon: Grid3X3},
@@ -275,10 +276,10 @@ function DisplayConfigForm({
     onChange({display_config: {...config, [key]: value}})
   }
 
-  const isChart = wt === 'timeseries' || wt === 'bar'
+  const isChart = wt === 'timeseries' || wt === 'bar' || wt === 'bargauge'
   const supportsLegend = isChart || wt === 'donut'
-  const supportsAxis = isChart
-  const supportsStyle = isChart
+  const supportsAxis = wt === 'timeseries' || wt === 'bar'
+  const supportsStyle = wt === 'timeseries' || wt === 'bar'
   const supportsThresholds = isChart || wt === 'stat' || wt === 'gauge'
   const supportsMappings = wt === 'stat' || wt === 'gauge' || wt === 'table' || wt === 'toplist'
 

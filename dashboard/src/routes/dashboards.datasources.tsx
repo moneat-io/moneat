@@ -87,37 +87,93 @@ function DataSourcesPage() {
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['custom-datasources']}),
   })
 
+  const buildPayload = useCallback(() => {
+    const host =
+      formData.host ||
+      (formData.source_type === 'cloudwatch' ? 'aws' : '') ||
+      (formData.source_type === 'bigquery' ? formData.project_id || '' : '') ||
+      'localhost'
+    return {...formData, host}
+  }, [formData])
+
   const testMutation = useMutation({
-    mutationFn: () =>
-      api.testDataSourceConnection({
-        source_type: formData.source_type,
-        host: formData.host,
-        port: formData.port,
-        database_name: formData.database_name,
-        username: formData.username,
-        password: formData.password,
-        api_key: formData.api_key,
-      }),
+    mutationFn: () => {
+      const payload = buildPayload()
+      return api.testDataSourceConnection({
+        source_type: payload.source_type,
+        host: payload.host,
+        port: payload.port,
+        database_name: payload.database_name,
+        username: payload.username,
+        password: payload.password,
+        api_key: payload.api_key,
+        access_key_id: payload.access_key_id,
+        secret_access_key: payload.secret_access_key,
+        service_account_json: payload.service_account_json,
+        account_identifier: payload.account_identifier,
+        connection_string: payload.connection_string,
+        project_id: payload.project_id,
+        region: payload.region,
+      })
+    },
     onSuccess: (result) => setTestResult(result),
     onError: () => setTestResult({success: false, message: 'Connection test failed'}),
   })
 
+  const DEFAULT_PORTS: Record<string, number> = {
+    postgresql: 5432,
+    mysql: 3306,
+    mariadb: 3306,
+    mssql: 1433,
+    clickhouse: 8123,
+    cockroachdb: 26257,
+    prometheus: 9090,
+    influxdb: 8086,
+    elasticsearch: 9200,
+    graphite: 80,
+    loki: 3100,
+    mongodb: 27017,
+    redis: 6379,
+  }
+
   const parseConnectionUrl = useCallback(
     (url: string) => {
       try {
-        // Handle postgresql:// and postgres:// schemes
         const normalized = url.replace(/^postgres:\/\//, 'postgresql://')
-        if (!normalized.startsWith('postgresql://')) return
-        // Parse using URL API with a dummy http replacement for port parsing
-        const parsed = new URL(normalized.replace('postgresql://', 'http://'))
-        setFormData((prev) => ({
-          ...prev,
-          host: parsed.hostname || prev.host,
-          port: parsed.port ? parseInt(parsed.port) : 5432,
-          database_name: parsed.pathname.replace(/^\//, '') || prev.database_name,
-          username: parsed.username ? decodeURIComponent(parsed.username) : prev.username,
-          password: parsed.password ? decodeURIComponent(parsed.password) : prev.password,
-        }))
+        if (normalized.startsWith('postgresql://') || normalized.startsWith('postgres://')) {
+          const parsed = new URL(normalized.replace(/^postgres(ql)?:\/\//, 'http://'))
+          setFormData((prev) => ({
+            ...prev,
+            host: parsed.hostname || prev.host,
+            port: parsed.port ? parseInt(parsed.port) : 5432,
+            database_name: parsed.pathname.replace(/^\//, '') || prev.database_name,
+            username: parsed.username ? decodeURIComponent(parsed.username) : prev.username,
+            password: parsed.password ? decodeURIComponent(parsed.password) : prev.password,
+          }))
+        } else if (normalized.startsWith('mysql://') || normalized.startsWith('mariadb://')) {
+          const parsed = new URL(normalized.replace(/^mysql:\/\//, 'http://').replace(/^mariadb:\/\//, 'http://'))
+          setFormData((prev) => ({
+            ...prev,
+            host: parsed.hostname || prev.host,
+            port: parsed.port ? parseInt(parsed.port) : 3306,
+            database_name: parsed.pathname.replace(/^\//, '') || prev.database_name,
+            username: parsed.username ? decodeURIComponent(parsed.username) : prev.username,
+            password: parsed.password ? decodeURIComponent(parsed.password) : prev.password,
+          }))
+        } else if (normalized.startsWith('mongodb://') || normalized.startsWith('mongodb+srv://')) {
+          setFormData((prev) => ({
+            ...prev,
+            connection_string: url,
+          }))
+        } else if (normalized.startsWith('redis://')) {
+          const parsed = new URL(normalized.replace('redis://', 'http://'))
+          setFormData((prev) => ({
+            ...prev,
+            host: parsed.hostname || prev.host,
+            port: parsed.port ? parseInt(parsed.port) : 6379,
+            password: parsed.password ? decodeURIComponent(parsed.password) : prev.password,
+          }))
+        }
       } catch {
         // Invalid URL — don't update fields
       }
@@ -158,10 +214,11 @@ function DataSourcesPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const payload = buildPayload()
     if (editingId) {
-      updateMutation.mutate({id: editingId, req: formData})
+      updateMutation.mutate({id: editingId, req: payload})
     } else {
-      createMutation.mutate(formData)
+      createMutation.mutate(payload)
     }
   }
 
@@ -170,6 +227,18 @@ function DataSourcesPage() {
   }
 
   const isPostgres = formData.source_type === 'postgresql'
+  const isJdbcDatabase =
+    ['postgresql', 'mysql', 'mariadb', 'mssql', 'clickhouse', 'cockroachdb', 'snowflake'].includes(
+      formData.source_type
+    )
+  const isPrometheus = formData.source_type === 'prometheus'
+  const isSqlite = formData.source_type === 'sqlite'
+  const isBigQuery = formData.source_type === 'bigquery'
+  const isCloudWatch = formData.source_type === 'cloudwatch'
+  const isMongoDB = formData.source_type === 'mongodb'
+  const isHttpApi = ['prometheus', 'influxdb', 'elasticsearch', 'graphite', 'loki'].includes(
+    formData.source_type
+  )
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
@@ -209,7 +278,7 @@ function DataSourcesPage() {
                     value={formData.source_type}
                     onChange={(val) => {
                       updateField('source_type', val)
-                      updateField('port', val === 'postgresql' ? 5432 : 9090)
+                      updateField('port', DEFAULT_PORTS[val] ?? 5432)
                     }}
                     disabled={!!editingId}
                   />
@@ -228,7 +297,7 @@ function DataSourcesPage() {
               />
             </div>
 
-            {isPostgres && (
+            {(isPostgres || (formData.source_type === 'mysql') || (formData.source_type === 'mariadb')) && (
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Connection</span>
                 <div className="bg-muted inline-flex rounded-md p-0.5">
@@ -251,13 +320,99 @@ function DataSourcesPage() {
               </div>
             )}
 
-            {isPostgres && connectionMode === 'url' ? (
+            {isBigQuery ? (
+              <>
+                <div>
+                  <label className="text-sm font-medium">Project ID</label>
+                  <input
+                    type="text"
+                    required
+                    className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                    placeholder="my-gcp-project"
+                    value={formData.project_id ?? formData.host}
+                    onChange={(e) => {
+                      updateField('project_id', e.target.value)
+                      updateField('host', e.target.value)
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Dataset (optional)</label>
+                  <input
+                    type="text"
+                    className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                    placeholder="my_dataset"
+                    value={formData.database_name ?? ''}
+                    onChange={(e) => updateField('database_name', e.target.value || undefined)}
+                  />
+                </div>
+              </>
+            ) : isCloudWatch ? (
+              <>
+                <div>
+                  <label className="text-sm font-medium">AWS Region</label>
+                  <input
+                    type="text"
+                    required
+                    className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                    placeholder="us-east-1"
+                    value={formData.region ?? ''}
+                    onChange={(e) => updateField('region', e.target.value)}
+                  />
+                </div>
+              </>
+            ) : isMongoDB ? (
+              <>
+                <div>
+                  <label className="text-sm font-medium">Connection String</label>
+                  <input
+                    type="text"
+                    className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 font-mono text-sm"
+                    placeholder="mongodb://user:password@host:27017/dbname"
+                    value={formData.connection_string ?? ''}
+                    onChange={(e) => updateField('connection_string', e.target.value || undefined)}
+                  />
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Paste a MongoDB connection string, or use host/port below.
+                  </p>
+                </div>
+                {!formData.connection_string && (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-2">
+                      <label className="text-sm font-medium">Host</label>
+                      <input
+                        type="text"
+                        className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                        placeholder="localhost"
+                        value={formData.host}
+                        onChange={(e) => updateField('host', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Port</label>
+                      <input
+                        type="number"
+                        className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                        value={formData.port ?? 27017}
+                        onChange={(e) => updateField('port', parseInt(e.target.value) || undefined)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (isPostgres || isJdbcDatabase) && !isSqlite && connectionMode === 'url' ? (
               <div>
                 <label className="text-sm font-medium">Connection URL</label>
                 <input
                   type="text"
                   className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 font-mono text-sm"
-                  placeholder="postgresql://user:password@host:5432/dbname"
+                  placeholder={
+                    formData.source_type === 'postgresql'
+                      ? 'postgresql://user:password@host:5432/dbname'
+                      : formData.source_type === 'mysql' || formData.source_type === 'mariadb'
+                        ? 'mysql://user:password@host:3306/dbname'
+                        : 'postgresql://user:password@host:5432/dbname'
+                  }
                   value={connectionUrl}
                   onChange={(e) => {
                     setConnectionUrl(e.target.value)
@@ -279,47 +434,116 @@ function DataSourcesPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium">Host</label>
+                {isSqlite ? (
+                  <div>
+                    <label className="text-sm font-medium">Database File Path</label>
                     <input
                       type="text"
                       required
                       className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                      placeholder={isPostgres ? 'db.example.com' : 'prometheus.example.com'}
+                      placeholder="/path/to/database.db"
                       value={formData.host}
                       onChange={(e) => updateField('host', e.target.value)}
                     />
                   </div>
-                  <div>
-                    <label className="text-sm font-medium">Port</label>
-                    <input
-                      type="number"
-                      className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                      value={formData.port ?? ''}
-                      onChange={(e) => updateField('port', parseInt(e.target.value) || undefined)}
-                    />
+                ) : !isBigQuery && !isCloudWatch ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="col-span-2">
+                        <label className="text-sm font-medium">
+                          {formData.source_type === 'snowflake' ? 'Account Identifier' : 'Host'}
+                        </label>
+                        <input
+                          type="text"
+                          required={!isMongoDB}
+                          className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                          placeholder={
+                            formData.source_type === 'snowflake'
+                              ? 'xy12345.us-east-1'
+                              : isPostgres
+                                ? 'db.example.com'
+                                : isPrometheus
+                                  ? 'prometheus.example.com'
+                                  : 'host.example.com'
+                          }
+                          value={formData.host}
+                          onChange={(e) => updateField('host', e.target.value)}
+                        />
                   </div>
-                </div>
+                      <div>
+                        <label className="text-sm font-medium">Port</label>
+                        <input
+                          type="number"
+                          className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                          value={formData.port ?? ''}
+                          onChange={(e) => updateField('port', parseInt(e.target.value) || undefined)}
+                        />
+                      </div>
+                    </div>
 
-                {isPostgres && (
-                  <div>
-                    <label className="text-sm font-medium">Database Name</label>
-                    <input
-                      type="text"
-                      className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                      placeholder="postgres"
-                      value={formData.database_name ?? ''}
-                      onChange={(e) => updateField('database_name', e.target.value || undefined)}
-                    />
-                  </div>
-                )}
+                    {(isJdbcDatabase || isHttpApi) && !isSqlite && (
+                      <div>
+                        <label className="text-sm font-medium">Database Name</label>
+                        <input
+                          type="text"
+                          className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                          placeholder={
+                            formData.source_type === 'clickhouse'
+                              ? 'default'
+                              : formData.source_type === 'cockroachdb'
+                                ? 'defaultdb'
+                                : 'postgres'
+                          }
+                          value={formData.database_name ?? ''}
+                          onChange={(e) => updateField('database_name', e.target.value || undefined)}
+                        />
+                      </div>
+                    )}
+                  </>
+                ) : null}
               </>
             )}
 
             <div className="border-t pt-4">
               <h3 className="mb-3 text-sm font-semibold">Credentials</h3>
-              {isPostgres ? (
+              {isBigQuery ? (
+                <div>
+                  <label className="text-sm font-medium">Service Account JSON</label>
+                  <textarea
+                    className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 font-mono text-sm"
+                    rows={6}
+                    placeholder='{"type":"service_account","project_id":"..."}'
+                    value={formData.service_account_json ?? ''}
+                    onChange={(e) => updateField('service_account_json', e.target.value || undefined)}
+                  />
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Paste the contents of your GCP service account JSON key file.
+                  </p>
+                </div>
+              ) : isCloudWatch ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Access Key ID</label>
+                    <input
+                      type="text"
+                      className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                      placeholder="AKIA..."
+                      value={formData.access_key_id ?? ''}
+                      onChange={(e) => updateField('access_key_id', e.target.value || undefined)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Secret Access Key</label>
+                    <input
+                      type="password"
+                      className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                      placeholder={editingId ? '(unchanged)' : 'Enter secret key'}
+                      value={formData.secret_access_key ?? ''}
+                      onChange={(e) => updateField('secret_access_key', e.target.value || undefined)}
+                    />
+                  </div>
+                </div>
+              ) : isJdbcDatabase && !isSqlite ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Username</label>
@@ -342,6 +566,10 @@ function DataSourcesPage() {
                     />
                   </div>
                 </div>
+              ) : isMongoDB && formData.connection_string ? (
+                <p className="text-muted-foreground text-xs">
+                  Credentials are included in the connection string.
+                </p>
               ) : (
                 <div>
                   <label className="text-sm font-medium">API Key / Bearer Token</label>
@@ -389,7 +617,13 @@ function DataSourcesPage() {
                 type="button"
                 variant="outline"
                 onClick={() => testMutation.mutate()}
-                disabled={!formData.host || testMutation.isPending}
+                disabled={
+                  testMutation.isPending ||
+                  (isBigQuery && !formData.project_id && !formData.host) ||
+                  (isCloudWatch && !formData.region) ||
+                  (isMongoDB && !formData.connection_string && !formData.host) ||
+                  (!isBigQuery && !isCloudWatch && !isMongoDB && !formData.host)
+                }
               >
                 <FlaskConical className="mr-2 h-4 w-4" />
                 {testMutation.isPending ? 'Testing...' : 'Test Connection'}
@@ -400,7 +634,12 @@ function DataSourcesPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={createMutation.isPending || updateMutation.isPending || !formData.name || !formData.host}
+                disabled={
+                  createMutation.isPending ||
+                  updateMutation.isPending ||
+                  !formData.name ||
+                  (isBigQuery ? !formData.project_id && !formData.host : isCloudWatch ? !formData.region : isMongoDB ? !formData.connection_string && !formData.host : !formData.host)
+                }
               >
                 {editingId ? 'Update' : 'Create'} Data Source
               </Button>

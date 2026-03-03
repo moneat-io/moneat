@@ -32,6 +32,7 @@ interface DataSourceMapperModalProps {
   // For import flow
   unmappedDataSources?: string[]
   onMapped?: (mapping: Record<string, string>) => void
+  initialMappings?: Record<string, string>
 }
 
 export function DataSourceMapperModal({
@@ -44,6 +45,7 @@ export function DataSourceMapperModal({
   onCancel,
   unmappedDataSources = [],
   onMapped,
+  initialMappings = {},
 }: DataSourceMapperModalProps) {
   // Import mode uses unmappedDataSources, widget paste mode uses unknownSources
   const isImportMode = unmappedDataSources.length > 0 && !widget
@@ -52,7 +54,7 @@ export function DataSourceMapperModal({
   const [mappings, setMappings] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {}
     sourcesToMap.forEach((s) => {
-      initial[s] = '__skip__'  // Default to skip
+      initial[s] = initialMappings[s] || '__skip__'
     })
     return initial
   })
@@ -115,8 +117,26 @@ export function DataSourceMapperModal({
 
         <div className="space-y-4">
           {sourcesToMap.map((source) => {
-            // Show a human-friendly label for known markers
-            const sourceLabel = source === '__prometheus' ? 'Prometheus' : source
+            // Show a human-friendly label for known Grafana plugin IDs
+            const pluginLabels: Record<string, string> = {
+              'redis-datasource': 'Redis',
+              'prometheus': 'Prometheus',
+              'elasticsearch': 'Elasticsearch',
+              'grafana-elasticsearch-datasource': 'Elasticsearch',
+              'influxdb': 'InfluxDB',
+              'graphite': 'Graphite',
+              'loki': 'Loki',
+              'cloudwatch': 'CloudWatch',
+              'mysql': 'MySQL',
+              'postgres': 'PostgreSQL',
+              'grafana-postgresql-datasource': 'PostgreSQL',
+              'mssql': 'MS SQL Server',
+              'grafana-clickhouse-datasource': 'ClickHouse',
+              'grafana-bigquery-datasource': 'BigQuery',
+              'grafana-mongodb-datasource': 'MongoDB',
+              '__prometheus': 'Prometheus',
+            }
+            const sourceLabel = pluginLabels[source] || source
             
             // Add "Skip" option to datasources for this picker
             const dataSourcesWithSkip = [

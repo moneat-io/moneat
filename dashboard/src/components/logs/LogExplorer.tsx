@@ -185,8 +185,17 @@ export function LogExplorer({
   const [accumulatedLogs, setAccumulatedLogs] = useState<LogEntry[]>([])
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const scrollSentinelRef = useRef<HTMLDivElement>(null)
+  const logContainerRef = useRef<HTMLDivElement>(null)
   // Tracks whether the next logPage load should replace (reset) or append (infinite scroll)
   const isReplacingRef = useRef(true)
+  // Ref holding latest scroll-callback state so the IntersectionObserver closure is never stale
+  const scrollStateRef = useRef({
+    hasMore: false,
+    nextCursor: null as string | null,
+    isLoadingMore: false,
+    isFetching: false,
+    cursor: null as string | null,
+  })
 
   // Detail panel
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
@@ -565,39 +574,53 @@ export function LogExplorer({
     setAccumulatedLogs([])
   }
   
-  // Infinite scroll with Intersection Observer
+  // Keep scroll-state ref in sync so the observer callback reads fresh values
   useEffect(() => {
-    if (!scrollSentinelRef.current) return
-    
+    scrollStateRef.current = {
+      hasMore: logPage?.hasMore ?? false,
+      nextCursor: logPage?.nextCursor ?? null,
+      isLoadingMore,
+      isFetching,
+      cursor,
+    }
+  }, [logPage?.hasMore, logPage?.nextCursor, isLoadingMore, isFetching, cursor])
+
+  // Infinite scroll with Intersection Observer
+  // Only recreate the observer when the sentinel appears/disappears (logs.length changes)
+  // or when hasMore/isFetching settle, so we avoid rapid disconnect/reconnect cycles
+  // that can cause the browser to drop async intersection callbacks.
+  useEffect(() => {
+    if (!scrollSentinelRef.current || !logContainerRef.current) return
+
     const observer = new IntersectionObserver(
       (entries) => {
         const [entry] = entries
-        if (entry.isIntersecting && logPage?.hasMore && !isLoadingMore && !isFetching) {
-          if (!logPage?.nextCursor || isLoadingMore) return
+        const state = scrollStateRef.current
+        if (entry.isIntersecting && state.hasMore && !state.isLoadingMore && !state.isFetching) {
+          if (!state.nextCursor) return
           isReplacingRef.current = false
           setIsLoadingMore(true)
-          setCursorHistory((current) => [...current, cursor])
-          setCursor(logPage.nextCursor)
+          setCursorHistory((current) => [...current, state.cursor])
+          setCursor(state.nextCursor)
         }
       },
       {
         root: logContainerRef.current,
-        rootMargin: '200px', // Load 200px before reaching the end
+        rootMargin: '200px',
         threshold: 0,
       }
     )
-    
+
     observer.observe(scrollSentinelRef.current)
-    
+
     return () => {
       observer.disconnect()
     }
-  }, [logPage?.hasMore, logPage?.nextCursor, isLoadingMore, isFetching, cursor, logs.length])
+  }, [logs.length, logPage?.hasMore, isFetching])
 
   // Show loading state only on initial load with no accumulated logs
   const isInitialLoadingState = isInitialLoading && accumulatedLogs.length === 0
   const showEmptyState = !isInitialLoadingState && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && (totalCount === 0 || totalCount === null)
-  const logContainerRef = useRef<HTMLDivElement>(null)
 
   return (
     <div className={cn("flex flex-col overflow-hidden bg-gradient-to-br from-background via-background to-blue-500/[0.03]", className)}>

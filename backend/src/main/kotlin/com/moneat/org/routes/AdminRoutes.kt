@@ -448,45 +448,9 @@ fun Route.adminRoutes() {
                                 }
 
                                 "weekly_summary" -> {
-                                    val testData =
-                                        com.moneat.notifications.services.EmailService.WeeklySummaryData(
-                                            startDate = "Jan 1, 2026",
-                                            endDate = "Jan 7, 2026",
-                                            totalEvents = "12.5K",
-                                            eventsTrend = 15,
-                                            newIssues = "23",
-                                            issuesTrend = -8,
-                                            affectedUsers = "1.2K",
-                                            usersTrend = 5,
-                                            topIssues =
-                                            listOf(
-                                                com.moneat.notifications.services.EmailService.TopIssue(
-                                                    title = "[TEST] Database timeout",
-                                                    culprit = "DatabaseConnection.query",
-                                                    project = "Test API",
-                                                    count = "156"
-                                                ),
-                                                com.moneat.notifications.services.EmailService.TopIssue(
-                                                    title = "[TEST] Invalid token",
-                                                    culprit = "AuthMiddleware.validate",
-                                                    project = "Test Mobile",
-                                                    count = "89"
-                                                )
-                                            ),
-                                            projects =
-                                            listOf(
-                                                com.moneat.notifications.services.EmailService.ProjectSummary(
-                                                    name = "Test API",
-                                                    events = "8.2K",
-                                                    issues = "15",
-                                                    crashFree = "99.8"
-                                                )
-                                            ),
-                                            dashboardUrl = frontendUrl,
-                                            settingsUrl = "$frontendUrl/settings/notifications",
-                                            unsubscribeUrl = "$frontendUrl/settings/notifications"
-                                        )
-                                    emailService.sendWeeklySummaryEmail(userEmail, testData)
+                                    val notificationService =
+                                        com.moneat.notifications.services.NotificationService(emailService)
+                                    notificationService.sendWeeklySummaryForUser(userId, userEmail)
                                     emailSent = true
                                 }
 

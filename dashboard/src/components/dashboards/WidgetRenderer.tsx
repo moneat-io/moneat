@@ -137,9 +137,11 @@ export const WidgetRenderer = memo(function WidgetRenderer({
 }: WidgetRendererProps) {
   const queries = widget.query_configs?.length > 0 ? widget.query_configs : []
   const isBatch = queries.length > 1
+  // Include query config fingerprint so datasource/query changes trigger refetch
+  const queryFingerprint = JSON.stringify(queries.map(q => ({d: q.dataSource, r: q.rawQuery || ''})))
 
   const {data, isLoading, error} = useQuery({
-    queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queries.length, variables],
+    queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queryFingerprint, variables],
     queryFn: async () => {
       if (!projectId && !isDemo()) return []
       const effectiveProjectId = projectId ?? -1
@@ -212,8 +214,9 @@ export const WidgetRenderer = memo(function WidgetRenderer({
     )
   }
 
-  const chartData = data as Record<string, unknown>[]
+  const rawData = data as Record<string, unknown>[]
   const dc = widget.display_config || {}
+  const chartData = applyFieldTransforms(rawData, dc)
 
   switch (widget.widget_type) {
     case 'timeseries':
@@ -226,6 +229,8 @@ export const WidgetRenderer = memo(function WidgetRenderer({
       return <StatWidget data={chartData} widget={widget} displayConfig={dc} />
     case 'gauge':
       return <GaugeWidget data={chartData} widget={widget} displayConfig={dc} />
+    case 'bargauge':
+      return <BarGaugeWidget data={chartData} displayConfig={dc} />
     case 'table':
       return <TableWidget data={chartData} displayConfig={dc} />
     case 'toplist':
@@ -309,6 +314,43 @@ function parseThresholds(dc: DisplayConfig): {value: number; color: string; labe
 function parseValueMappings(dc: DisplayConfig): ValueMapping[] {
   try { return dc.valueMappings ? JSON.parse(dc.valueMappings) : [] }
   catch { return [] }
+}
+
+/** Applies visibleFields filtering and fieldRenames from display config (e.g. from Grafana transformations). */
+function applyFieldTransforms(data: Record<string, unknown>[], dc: DisplayConfig): Record<string, unknown>[] {
+  const visible = dc.visibleFields ? dc.visibleFields.split(',').map(f => f.trim()).filter(Boolean) : null
+  let renames: Record<string, string> | null = null
+  try { renames = dc.fieldRenames ? JSON.parse(dc.fieldRenames) : null } catch { renames = null }
+
+  if (!visible && !renames) return data
+
+  // Build reverse rename map (renamed -> original) so visibleFields can match renamed names
+  const reverseRenames: Record<string, string> = {}
+  if (renames) {
+    for (const [orig, renamed] of Object.entries(renames)) {
+      reverseRenames[renamed] = orig
+    }
+  }
+
+  return data.map(row => {
+    const out: Record<string, unknown> = {}
+    if (visible) {
+      for (const field of visible) {
+        // Try original key first, then check if it matches a renamed name
+        const origKey = (field in row) ? field : reverseRenames[field]
+        if (origKey && origKey in row) {
+          const newKey = renames?.[origKey] || origKey
+          out[newKey] = row[origKey]
+        }
+      }
+    } else {
+      for (const k of Object.keys(row)) {
+        const newKey = renames?.[k] || k
+        out[newKey] = row[k]
+      }
+    }
+    return out
+  })
 }
 
 function getYAxisDomain(dc: DisplayConfig): [string | number, string | number] {
@@ -861,14 +903,19 @@ const StatWidget = memo(function StatWidget({
 
   // Single value (no time, no multiple categories)
   const row = data[data.length - 1] || data[0] || {}
-  const displayKeys = valueKeys.length > 0 ? valueKeys : Object.keys(row).filter(
-    (k) => typeof row[k] === 'number' && !isTimeKey(k)
-  )
+  const allNonTimeKeys = Object.keys(row).filter((k) => !isTimeKey(k))
+  // Include string-only columns when there's a single row with no numeric data
+  // (e.g. Redis INFO fields like redis_version, maxmemory_policy)
+  const displayKeys = valueKeys.length > 0
+    ? valueKeys
+    : labelKeys.length > 0 && valueKeys.length === 0 && data.length === 1
+      ? labelKeys
+      : allNonTimeKeys.filter((k) => typeof row[k] === 'number')
 
   if (displayKeys.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-        No numeric data
+        No data
       </div>
     )
   }
@@ -916,18 +963,49 @@ const GaugeWidget = memo(function GaugeWidget({
   const decimals = dc.decimals
 
   const row = data[data.length - 1] || data[0] || {}
-  const valueKey = valueKeys[0] || Object.keys(row).find(k => typeof row[k] === 'number' && !isTimeKey(k))
-  const rawValue = valueKey ? (row[valueKey] as number) : 0
-  const value = typeof rawValue === 'number' ? rawValue : 0
+  const numericKeys = valueKeys.length > 0
+    ? valueKeys
+    : Object.keys(row).filter(k => typeof row[k] === 'number' && !isTimeKey(k))
+
+  if (numericKeys.length === 0) return null
 
   const min = parseFloat(dc.gaugeMin || '0')
   const max = parseFloat(dc.gaugeMax || (unit === 'percent' ? '100' : '100'))
-  const pct = Math.max(0, Math.min(1, (value - min) / (max - min)))
 
-  const fmtVal = unit && unit !== 'none'
-    ? formatValue(value, unit, decimals, valueMappings)
-    : formatStatValue(value)
+  const fmtGauge = (v: number) =>
+    (unit && unit !== 'none') || valueMappings.length > 0
+      ? formatValue(v, unit, decimals, valueMappings)
+      : formatStatValue(v)
 
+  return (
+    <div className="h-full w-full flex items-center justify-center p-1 gap-1">
+      {numericKeys.map((key) => {
+        const rawValue = typeof row[key] === 'number' ? (row[key] as number) : 0
+        return (
+          <SingleGauge
+            key={key}
+            value={rawValue}
+            label={numericKeys.length > 1 ? key.replace(/_/g, ' ') : (widget.title || key.replace(/_/g, ' '))}
+            min={min}
+            max={max}
+            thresholds={thresholds}
+            fmtVal={fmtGauge}
+          />
+        )
+      })}
+    </div>
+  )
+})
+
+function SingleGauge({value, label, min, max, thresholds, fmtVal}: {
+  value: number; label: string; min: number; max: number
+  thresholds: {value: number; color: string}[]
+  fmtVal: (v: number) => string
+}) {
+  const denom = max - min
+  const pct = denom <= 0
+    ? (value <= min ? 0 : 1)
+    : Math.max(0, Math.min(1, (value - min) / denom))
   const cx = 100, cy = 94, r = 84, strokeW = 26
   const describeArc = (startAngle: number, endAngle: number) => {
     const x1 = cx + r * Math.cos(startAngle)
@@ -949,8 +1027,8 @@ const GaugeWidget = memo(function GaugeWidget({
         const toVal = i === sorted.length ? max : sorted[i].value
         const color = i === 0 ? '#73BF69' : sorted[i - 1].color
         if (toVal <= fromVal) continue
-        const fromPct = (fromVal - min) / (max - min)
-        const toPct = (toVal - min) / (max - min)
+        const fromPct = denom <= 0 ? 0 : (fromVal - min) / denom
+        const toPct = denom <= 0 ? 1 : (toVal - min) / denom
         arcs.push({
           startAngle: GAUGE_ARC_START - fromPct * Math.PI,
           endAngle: GAUGE_ARC_START - toPct * Math.PI,
@@ -967,7 +1045,7 @@ const GaugeWidget = memo(function GaugeWidget({
         color: stop.color,
       }
     })
-  }, [thresholds, min, max])
+  }, [thresholds, min, max, denom])
 
   const activeColor = useMemo(() => {
     if (thresholds.length > 0) {
@@ -979,40 +1057,118 @@ const GaugeWidget = memo(function GaugeWidget({
   }, [value, pct, thresholds])
 
   return (
-    <div className="h-full w-full flex items-center justify-center p-1">
-      <svg viewBox="0 -4 200 128" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-        {gaugeArcs.map((arc, i) => (
+    <svg viewBox="0 -4 200 128" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+      {gaugeArcs.map((arc, i) => (
+        <path
+          key={`bg-${i}`}
+          d={describeArc(arc.startAngle, arc.endAngle)}
+          fill="none"
+          stroke={arc.color}
+          strokeWidth={strokeW}
+          strokeLinecap="butt"
+          opacity={0.3}
+        />
+      ))}
+      {pct > 0 && gaugeArcs.map((arc, i) => {
+        if (valueAngle >= arc.startAngle) return null
+        const fillEnd = Math.max(arc.endAngle, valueAngle)
+        return (
           <path
-            key={`bg-${i}`}
-            d={describeArc(arc.startAngle, arc.endAngle)}
+            key={`fill-${i}`}
+            d={describeArc(arc.startAngle, fillEnd)}
             fill="none"
             stroke={arc.color}
             strokeWidth={strokeW}
             strokeLinecap="butt"
-            opacity={0.3}
           />
-        ))}
-        {pct > 0 && gaugeArcs.map((arc, i) => {
-          if (valueAngle >= arc.startAngle) return null
-          const fillEnd = Math.max(arc.endAngle, valueAngle)
+        )
+      })}
+      <text x={cx} y={cy + 2} textAnchor="middle" className="font-bold" style={{fontSize: '22px', fill: activeColor}}>
+        {fmtVal(value)}
+      </text>
+      <text x={cx} y={cy + 20} textAnchor="middle" className="fill-muted-foreground" style={{fontSize: '11px'}}>
+        {label}
+      </text>
+    </svg>
+  )
+}
+
+const BarGaugeWidget = memo(function BarGaugeWidget({
+  data,
+  displayConfig: dc,
+}: {
+  data: Record<string, unknown>[]
+  displayConfig: DisplayConfig
+}) {
+  const thresholds = parseThresholds(dc)
+  const valueMappings = parseValueMappings(dc)
+  const unit = dc.unit
+  const decimals = dc.decimals
+  const isVertical = dc.orientation === 'vertical'
+
+  const fmtVal = (v: unknown) => {
+    if (unit && unit !== 'none') return formatValue(v, unit, decimals, valueMappings)
+    if (valueMappings.length > 0) return formatValue(v, undefined, undefined, valueMappings)
+    return formatStatValue(v)
+  }
+
+  const row = data[data.length - 1] || data[0] || {}
+  const entries = Object.entries(row)
+    .filter(([k, v]) => typeof v === 'number' && !isTimeKey(k))
+    .map(([k, v]) => ({label: k.replace(/_/g, ' '), value: v as number}))
+
+  if (entries.length === 0) return null
+
+  const maxVal = Math.max(...entries.map(e => Math.abs(e.value)), 1)
+  const gaugeMax = Math.max(parseFloat(dc.gaugeMax || '0') || maxVal, maxVal, 1)
+
+  if (isVertical) {
+    return (
+      <div className="h-full flex items-end justify-center gap-3 px-2 pb-6 pt-2">
+        {entries.map(({label, value}) => {
+          const pct = Math.min(100, (Math.abs(value) / gaugeMax) * 100)
+          const color = getThresholdColor(value, thresholds) || '#73BF69'
           return (
-            <path
-              key={`fill-${i}`}
-              d={describeArc(arc.startAngle, fillEnd)}
-              fill="none"
-              stroke={arc.color}
-              strokeWidth={strokeW}
-              strokeLinecap="butt"
-            />
+            <div key={label} className="flex flex-col items-center gap-1 flex-1 h-full justify-end">
+              <div className="text-xs font-medium tabular-nums" style={{color}}>
+                {fmtVal(value)}
+              </div>
+              <div className="w-full max-w-[40px] flex-1 relative rounded-t overflow-hidden bg-muted/30">
+                <div
+                  className="absolute bottom-0 w-full rounded-t"
+                  style={{height: `${pct}%`, backgroundColor: color, opacity: 0.85}}
+                />
+              </div>
+              <div className="text-[10px] text-muted-foreground text-center truncate w-full max-w-[80px]">
+                {label}
+              </div>
+            </div>
           )
         })}
-        <text x={cx} y={cy + 2} textAnchor="middle" className="font-bold" style={{fontSize: '22px', fill: activeColor}}>
-          {fmtVal}
-        </text>
-        <text x={cx} y={cy + 20} textAnchor="middle" className="fill-muted-foreground" style={{fontSize: '11px'}}>
-          {widget.title}
-        </text>
-      </svg>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-full flex flex-col justify-center gap-2 px-3 py-2 overflow-auto">
+      {entries.map(({label, value}) => {
+        const pct = Math.min(100, (Math.abs(value) / gaugeMax) * 100)
+        const color = getThresholdColor(value, thresholds) || '#73BF69'
+        return (
+          <div key={label} className="flex items-center gap-2 min-h-[24px]">
+            <div className="text-[11px] text-muted-foreground w-[120px] truncate text-right shrink-0">{label}</div>
+            <div className="flex-1 h-[18px] bg-muted/30 rounded overflow-hidden relative">
+              <div
+                className="h-full rounded"
+                style={{width: `${pct}%`, backgroundColor: color, opacity: 0.85}}
+              />
+            </div>
+            <div className="text-xs font-medium tabular-nums w-[80px] shrink-0" style={{color}}>
+              {fmtVal(value)}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 })
@@ -1022,6 +1178,7 @@ const ROW_HEIGHT = 28
 const TableWidget = memo(function TableWidget({data, displayConfig: dc}: {data: Record<string, unknown>[]; displayConfig: DisplayConfig}) {
   const columns = data.length > 0 ? Object.keys(data[0]) : []
   const valueMappings = parseValueMappings(dc)
+  const thresholds = parseThresholds(dc)
   const unit = dc.unit
   const decimals = dc.decimals
 
@@ -1032,6 +1189,17 @@ const TableWidget = memo(function TableWidget({data, displayConfig: dc}: {data: 
     }
     if (unit && unit !== 'none' && typeof v === 'number') return formatValue(v, unit, decimals)
     return String(v ?? '')
+  }
+
+  const baseThresholdColor = thresholds.length > 0
+    ? [...thresholds].sort((a, b) => a.value - b.value)[0]?.color
+    : undefined
+
+  const cellColor = (v: unknown): string | undefined => {
+    if (thresholds.length === 0) return undefined
+    if (typeof v === 'number') return getThresholdColor(v, thresholds)
+    // String cells get the base (lowest) threshold color
+    return baseThresholdColor
   }
 
   const parentRef = useRef<HTMLDivElement>(null)
@@ -1078,11 +1246,20 @@ const TableWidget = memo(function TableWidget({data, displayConfig: dc}: {data: 
                   height: `${virtualRow.size}px`,
                 }}
               >
-                {columns.map((col) => (
-                  <td key={col} className="px-2 py-1 truncate max-w-[300px]" title={String(row[col])}>
-                    {fmtCell(row[col])}
-                  </td>
-                ))}
+                {columns.map((col) => {
+                    const v = row[col]
+                    const color = cellColor(v)
+                    return (
+                      <td
+                        key={col}
+                        className="px-2 py-1 truncate max-w-[300px]"
+                        title={String(v)}
+                        style={color ? {color} : undefined}
+                      >
+                        {fmtCell(v)}
+                      </td>
+                    )
+                  })}
               </tr>
             )
           })}
