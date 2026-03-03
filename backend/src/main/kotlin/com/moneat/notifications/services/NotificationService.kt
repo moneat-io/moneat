@@ -316,6 +316,14 @@ class NotificationService(private val emailService: EmailService) {
         }
     }
 
+    suspend fun sendWeeklySummaryForUser(userId: Int, email: String) {
+        val now = Instant.now()
+        val endDate = now
+        val startDate = now.minus(Duration.ofDays(7))
+        val priorStartDate = startDate.minus(Duration.ofDays(7))
+        sendUserWeeklySummary(userId, email, null, startDate, endDate, priorStartDate)
+    }
+
     private suspend fun sendUserWeeklySummary(
         userId: Int,
         email: String,
