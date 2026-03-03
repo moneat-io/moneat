@@ -107,7 +107,7 @@ class BigQueryHandler : DataSourceHandler {
             val queryConfig = QueryJobConfiguration.newBuilder(
                 """
                 SELECT table_name, column_name, data_type
-                FROM `$validatedProjectId.$datasetId.COLUMNS`
+                FROM `$validatedProjectId.$datasetId.INFORMATION_SCHEMA.COLUMNS`
                 ORDER BY table_name, ordinal_position
                 LIMIT 500
                 """.trimIndent()
