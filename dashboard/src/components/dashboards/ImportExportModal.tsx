@@ -208,38 +208,46 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
     importMutation.mutate({format, json: jsonInput})
   }
   
-  const handleDataSourceMapped = (mapping: Record<string, string>) => {
+   const handleDataSourceMapped = (mapping: Record<string, string>) => {
     if (!pendingImport) return
-    
-    console.log('Applying mappings:', mapping)
     
     // Apply mappings to the JSON
     try {
       const parsed = JSON.parse(pendingImport.json)
       
       if (pendingImport.format === 'grafana' && parsed.panels) {
+        // Build template variable → pluginId map from __inputs
+        // e.g. "DS_REDIS" → "redis-datasource"
+        const templateToPluginId: Record<string, string> = {}
+        if (Array.isArray(parsed.__inputs)) {
+          for (const input of parsed.__inputs) {
+            if (input.type === 'datasource' && input.name && input.pluginId) {
+              templateToPluginId[input.name] = input.pluginId
+            }
+          }
+        }
+
         const mapDatasource = (ds: unknown): unknown => {
           if (!ds) return ds
           
-          // Handle different datasource formats
           if (typeof ds === 'string') {
-            // String datasource name
-            if (mapping[ds]) {
-              console.log(`  Mapped string datasource: ${ds} → ${mapping[ds]}`)
-              return mapping[ds]
+            // Resolve ${DS_...} template variables via __inputs
+            const varMatch = /^\$\{(\w+)\}$/.exec(ds)
+            if (varMatch) {
+              const pluginId = templateToPluginId[varMatch[1]]
+              if (pluginId && mapping[pluginId]) {
+                return mapping[pluginId]
+              }
             }
-          } else if (ds.type) {
-            // Object with type field - check if we have a mapping for this type
-            if (mapping[ds.type]) {
-              console.log(`  Mapped datasource by type: ${ds.type} → ${mapping[ds.type]}`)
-              // Replace with mapped custom datasource
-              return mapping[ds.type]
+            // Direct string match
+            if (mapping[ds]) return mapping[ds]
+          } else if (typeof ds === 'object' && ds !== null) {
+            const dsObj = ds as Record<string, unknown>
+            if (typeof dsObj.type === 'string' && mapping[dsObj.type]) {
+              return mapping[dsObj.type]
             }
-          } else if (ds.uid) {
-            // Object with UID
-            if (mapping[ds.uid]) {
-              console.log(`  Mapped datasource by uid: ${ds.uid} → ${mapping[ds.uid]}`)
-              return mapping[ds.uid]
+            if (typeof dsObj.uid === 'string' && mapping[dsObj.uid]) {
+              return mapping[dsObj.uid]
             }
           }
           
@@ -247,24 +255,13 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         }
         
         const applyMapping = (panel: Record<string, unknown>) => {
-          // Map panel-level datasource
           if (panel.datasource) {
-            const originalDs = JSON.stringify(panel.datasource)
             panel.datasource = mapDatasource(panel.datasource)
-            if (originalDs !== JSON.stringify(panel.datasource)) {
-              console.log(`  Panel datasource mapped`)
-            }
           }
-          
-          // Map target-level datasources
           if (panel.targets) {
-            for (const target of panel.targets) {
+            for (const target of panel.targets as Record<string, unknown>[]) {
               if (target.datasource) {
-                const originalDs = JSON.stringify(target.datasource)
                 target.datasource = mapDatasource(target.datasource)
-                if (originalDs === JSON.stringify(target.datasource)) {
-                  console.log(`  No mapping applied for datasource: ${originalDs}`)
-                }
               }
             }
           }

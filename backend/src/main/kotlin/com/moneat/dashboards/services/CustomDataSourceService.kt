@@ -55,10 +55,22 @@ class CustomDataSourceService {
     fun createDataSource(orgId: Long, userId: Long, request: CreateCustomDataSourceRequest): CustomDataSourceResponse {
         val sourceType = CustomDataSourceType.fromString(request.sourceType)
             ?: throw IllegalArgumentException(
-                "Unsupported source type: ${request.sourceType}. Use 'postgresql' or 'prometheus'"
+                "Unsupported source type: ${request.sourceType}"
             )
 
-        val encryptedCreds = encryptCredentials(request.username, request.password, request.apiKey)
+        val creds = DataSourceCredentials(
+            username = request.username,
+            password = request.password,
+            apiKey = request.apiKey,
+            accessKeyId = request.accessKeyId,
+            secretAccessKey = request.secretAccessKey,
+            serviceAccountJson = request.serviceAccountJson,
+            accountIdentifier = request.accountIdentifier,
+            connectionString = request.connectionString,
+            projectId = request.projectId,
+            region = request.region,
+        )
+        val encryptedCreds = encryptCredentials(creds)
         val now = Clock.System.now()
 
         return transaction {
@@ -93,10 +105,28 @@ class CustomDataSourceService {
                 .firstOrNull() ?: return@transaction null
 
             // Only re-encrypt credentials if new values are provided
-            val newEncryptedCreds = if (
-                request.username != null || request.password != null || request.apiKey != null
-            ) {
-                encryptCredentials(request.username, request.password, request.apiKey)
+            val hasNewCreds = request.username != null || request.password != null || request.apiKey != null ||
+                request.accessKeyId != null || request.secretAccessKey != null || request.serviceAccountJson != null ||
+                request.accountIdentifier != null || request.connectionString != null || request.projectId != null ||
+                request.region != null
+            val newEncryptedCreds = if (hasNewCreds) {
+                val existingCreds = try {
+                    val dec = CredentialEncryption.decrypt(existing[CustomDataSources.encryptedCredentials])
+                    json.decodeFromString<DataSourceCredentials>(dec)
+                } catch (_: Exception) { null }
+                val merged = DataSourceCredentials(
+                    username = request.username ?: existingCreds?.username,
+                    password = request.password ?: existingCreds?.password,
+                    apiKey = request.apiKey ?: existingCreds?.apiKey,
+                    accessKeyId = request.accessKeyId ?: existingCreds?.accessKeyId,
+                    secretAccessKey = request.secretAccessKey ?: existingCreds?.secretAccessKey,
+                    serviceAccountJson = request.serviceAccountJson ?: existingCreds?.serviceAccountJson,
+                    accountIdentifier = request.accountIdentifier ?: existingCreds?.accountIdentifier,
+                    connectionString = request.connectionString ?: existingCreds?.connectionString,
+                    projectId = request.projectId ?: existingCreds?.projectId,
+                    region = request.region ?: existingCreds?.region,
+                )
+                encryptCredentials(merged)
             } else {
                 null
             }
@@ -146,12 +176,7 @@ class CustomDataSourceService {
         }
     }
 
-    private fun encryptCredentials(username: String?, password: String?, apiKey: String?): String {
-        val creds = DataSourceCredentials(
-            username = username,
-            password = password,
-            apiKey = apiKey
-        )
+    private fun encryptCredentials(creds: DataSourceCredentials): String {
         val credsJson = json.encodeToString(DataSourceCredentials.serializer(), creds)
         return CredentialEncryption.encrypt(credsJson)
     }
@@ -181,4 +206,11 @@ data class DataSourceCredentials(
     val username: String? = null,
     val password: String? = null,
     @kotlinx.serialization.SerialName("api_key") val apiKey: String? = null,
+    @kotlinx.serialization.SerialName("access_key_id") val accessKeyId: String? = null,
+    @kotlinx.serialization.SerialName("secret_access_key") val secretAccessKey: String? = null,
+    @kotlinx.serialization.SerialName("service_account_json") val serviceAccountJson: String? = null,
+    @kotlinx.serialization.SerialName("account_identifier") val accountIdentifier: String? = null,
+    @kotlinx.serialization.SerialName("connection_string") val connectionString: String? = null,
+    @kotlinx.serialization.SerialName("project_id") val projectId: String? = null,
+    val region: String? = null,
 )

@@ -17,118 +17,71 @@
 package com.moneat.dashboards.services
 
 import com.moneat.dashboards.models.CustomDataSourceType
-import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.TimeRangeDef
-import com.zaxxer.hikari.HikariConfig
+import com.moneat.dashboards.services.handlers.BigQueryHandler
+import com.moneat.dashboards.services.handlers.CloudWatchHandler
+import com.moneat.dashboards.services.handlers.ClickHouseHandler
+import com.moneat.dashboards.services.handlers.CockroachHandler
+import com.moneat.dashboards.services.handlers.DataSourceHandler
+import com.moneat.dashboards.services.handlers.ElasticsearchHandler
+import com.moneat.dashboards.services.handlers.GraphiteHandler
+import com.moneat.dashboards.services.handlers.InfluxDBHandler
+import com.moneat.dashboards.services.handlers.LokiHandler
+import com.moneat.dashboards.services.handlers.MariaDBHandler
+import com.moneat.dashboards.services.handlers.MongoDBHandler
+import com.moneat.dashboards.services.handlers.MSSQLHandler
+import com.moneat.dashboards.services.handlers.MySQLHandler
+import com.moneat.dashboards.services.handlers.PostgresHandler
+import com.moneat.dashboards.services.handlers.PrometheusHandler
+import com.moneat.dashboards.services.handlers.RedisHandler
+import com.moneat.dashboards.services.handlers.SnowflakeHandler
+import com.moneat.dashboards.services.handlers.SQLiteHandler
 import com.zaxxer.hikari.HikariDataSource
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.engine.cio.endpoint
-import io.ktor.client.request.get
-import io.ktor.client.request.header
-import io.ktor.client.request.parameter
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpHeaders
-import io.ktor.http.isSuccess
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import mu.KotlinLogging
-import java.sql.ResultSet
 import java.util.concurrent.ConcurrentHashMap
-
-private val logger = KotlinLogging.logger {}
 
 class CustomDataSourceExecutor {
 
-    companion object {
-        private fun wordBoundary(keyword: String) = Regex("""\b${Regex.escape(keyword)}\b""", RegexOption.IGNORE_CASE)
+    private val jdbcPools = ConcurrentHashMap<Long, HikariDataSource>()
+    private val postgresHandler = PostgresHandler(jdbcPools)
+    private val prometheusHandler = PrometheusHandler()
+    private val mysqlHandler = MySQLHandler(jdbcPools)
+    private val mariadbHandler = MariaDBHandler(jdbcPools)
+    private val mssqlHandler = MSSQLHandler(jdbcPools)
+    private val clickhouseHandler = ClickHouseHandler(jdbcPools)
+    private val sqliteHandler = SQLiteHandler(jdbcPools)
+    private val cockroachHandler = CockroachHandler(jdbcPools)
+    private val bigQueryHandler = BigQueryHandler()
+    private val snowflakeHandler = SnowflakeHandler(jdbcPools)
+    private val influxDBHandler = InfluxDBHandler()
+    private val elasticsearchHandler = ElasticsearchHandler()
+    private val graphiteHandler = GraphiteHandler()
+    private val lokiHandler = LokiHandler()
+    private val cloudWatchHandler = CloudWatchHandler()
+    private val mongoDBHandler = MongoDBHandler()
+    private val redisHandler = RedisHandler()
 
-        private val FORBIDDEN_KEYWORD_PATTERNS = listOf(
-            wordBoundary("INSERT"),
-            wordBoundary("UPDATE"),
-            wordBoundary("DELETE"),
-            wordBoundary("DROP"),
-            wordBoundary("ALTER"),
-            wordBoundary("CREATE"),
-            wordBoundary("TRUNCATE"),
-            wordBoundary("GRANT"),
-            wordBoundary("REVOKE"),
-            wordBoundary("EXEC"),
-            wordBoundary("EXECUTE"),
-            wordBoundary("COPY"),
-            wordBoundary("VACUUM"),
-            wordBoundary("ANALYZE"),
-            wordBoundary("REINDEX"),
-            wordBoundary("CLUSTER"),
-            Regex("""\bCOMMENT\s+ON\b""", RegexOption.IGNORE_CASE),
-            Regex("""\bLOCK\s+TABLE\b""", RegexOption.IGNORE_CASE),
-        )
-
-        private val FORBIDDEN_KEYWORD_NAMES = listOf(
-            "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE",
-            "TRUNCATE", "GRANT", "REVOKE", "EXEC", "EXECUTE", "COPY",
-            "VACUUM", "ANALYZE", "REINDEX", "CLUSTER", "COMMENT", "LOCK",
-        )
-
-        private val FORBIDDEN_FUNCTIONS = listOf(
-            "PG_READ_FILE", "PG_WRITE_FILE", "PG_READ_BINARY_FILE",
-            "LO_IMPORT", "LO_EXPORT", "LO_CREATE", "LO_UNLINK",
-            "PG_SLEEP", "PG_CANCEL_BACKEND", "PG_TERMINATE_BACKEND",
-            "CURRENT_SETTING", "SET_CONFIG", "PG_RELOAD_CONF",
-            "PG_ROTATE_LOGFILE", "DBLINK", "DBLINK_EXEC",
-            "PG_SHADOW", "PG_AUTHID",
-        )
-
-        private val FORBIDDEN_FUNCTION_PATTERNS = FORBIDDEN_FUNCTIONS.map { fn ->
-            Regex("""\b${Regex.escape(fn)}\s*\(""", RegexOption.IGNORE_CASE)
-        }
-    }
-
-    private fun hasSemicolonOutsideQuotes(query: String): Boolean {
-        var i = 0
-        var inSingle = false
-        var inDouble = false
-        while (i < query.length) {
-            val c = query[i]
-            when {
-                inSingle -> {
-                    if (c == '\'' && i + 1 < query.length && query[i + 1] == '\'') {
-                        i++ // skip escaped '' in SQL
-                    } else if (c == '\'') {
-                        inSingle = false
-                    }
-                }
-                inDouble -> {
-                    if (c == '"') inDouble = false
-                }
-                c == '\'' -> inSingle = true
-                c == '"' -> inDouble = true
-                c == ';' -> return true
-            }
-            i++
-        }
-        return false
-    }
-    private val json = Json { ignoreUnknownKeys = true }
-    private val httpClient = HttpClient(CIO) {
-        engine {
-            requestTimeout = 30_000
-            endpoint { connectTimeout = 10_000 }
-        }
-    }
-
-    // Short-lived connection pools for PostgreSQL sources, keyed by data source ID
-    private val pgPools = ConcurrentHashMap<Long, HikariDataSource>()
+    private val handlers: Map<CustomDataSourceType, DataSourceHandler> = mapOf(
+        CustomDataSourceType.POSTGRESQL to postgresHandler,
+        CustomDataSourceType.PROMETHEUS to prometheusHandler,
+        CustomDataSourceType.MYSQL to mysqlHandler,
+        CustomDataSourceType.MARIADB to mariadbHandler,
+        CustomDataSourceType.MSSQL to mssqlHandler,
+        CustomDataSourceType.CLICKHOUSE to clickhouseHandler,
+        CustomDataSourceType.SQLITE to sqliteHandler,
+        CustomDataSourceType.COCKROACHDB to cockroachHandler,
+        CustomDataSourceType.BIGQUERY to bigQueryHandler,
+        CustomDataSourceType.SNOWFLAKE to snowflakeHandler,
+        CustomDataSourceType.INFLUXDB to influxDBHandler,
+        CustomDataSourceType.ELASTICSEARCH to elasticsearchHandler,
+        CustomDataSourceType.GRAPHITE to graphiteHandler,
+        CustomDataSourceType.LOKI to lokiHandler,
+        CustomDataSourceType.CLOUDWATCH to cloudWatchHandler,
+        CustomDataSourceType.MONGODB to mongoDBHandler,
+        CustomDataSourceType.REDIS to redisHandler,
+    )
 
     /**
      * Test connectivity to a data source without persisting it.
@@ -137,20 +90,10 @@ class CustomDataSourceExecutor {
         val sourceType = CustomDataSourceType.fromString(request.sourceType)
             ?: return TestConnectionResult(false, "Unsupported source type: ${request.sourceType}")
 
-        return when (sourceType) {
-            CustomDataSourceType.POSTGRESQL -> testPostgresConnection(
-                host = request.host,
-                port = request.port ?: 5432,
-                database = request.databaseName ?: "postgres",
-                username = request.username,
-                password = request.password,
-            )
-            CustomDataSourceType.PROMETHEUS -> testPrometheusConnection(
-                host = request.host,
-                port = request.port,
-                apiKey = request.apiKey,
-            )
-        }
+        val handler = handlers[sourceType]
+            ?: return TestConnectionResult(false, "Unsupported source type: ${request.sourceType}")
+
+        return handler.testConnection(request)
     }
 
     /**
@@ -167,21 +110,19 @@ class CustomDataSourceExecutor {
         limit: Int = 100,
         timeRange: TimeRangeDef? = null,
     ): List<Map<String, JsonElement>> {
-        return when (sourceType) {
-            CustomDataSourceType.POSTGRESQL -> executePostgresQuery(
-                sourceId,
-                host,
-                port ?: 5432,
-                databaseName ?: "postgres",
-                credentials,
-                query,
-                limit
-            )
-            CustomDataSourceType.PROMETHEUS -> {
-                val promLimit = if (timeRange != null) limit.coerceAtLeast(5000) else limit
-                executePrometheusQuery(host, port, credentials, query, timeRange, promLimit)
-            }
-        }
+        val handler = handlers[sourceType]
+            ?: return emptyList()
+
+        return handler.executeQuery(
+            sourceId,
+            host,
+            port,
+            databaseName,
+            credentials,
+            query,
+            limit,
+            timeRange,
+        )
     }
 
     /**
@@ -193,445 +134,32 @@ class CustomDataSourceExecutor {
         port: Int?,
         databaseName: String?,
         credentials: DataSourceCredentials,
-    ): List<DataSourceField> {
-        return when (sourceType) {
-            CustomDataSourceType.POSTGRESQL -> getPostgresSchema(
-                host,
-                port ?: 5432,
-                databaseName ?: "postgres",
-                credentials
-            )
-            CustomDataSourceType.PROMETHEUS -> getPrometheusMetrics(host, port, credentials)
-        }
-    }
-
-    // --- PostgreSQL ---
-
-    private fun testPostgresConnection(
-        host: String,
-        port: Int,
-        database: String,
-        username: String?,
-        password: String?,
-    ): TestConnectionResult {
-        return try {
-            val ds = createTempPgDataSource(host, port, database, username, password)
-            try {
-                ds.connection.use { conn ->
-                    val tables = mutableListOf<String>()
-                    conn.createStatement().use { stmt ->
-                        stmt.executeQuery(
-                            """SELECT table_name FROM information_schema.tables 
-                               WHERE table_schema = 'public' ORDER BY table_name LIMIT 50"""
-                        ).use { rs ->
-                            while (rs.next()) tables.add(rs.getString(1))
-                        }
-                    }
-                    TestConnectionResult(true, "Connected successfully", tables = tables)
-                }
-            } finally {
-                ds.close()
-            }
-        } catch (e: Exception) {
-            logger.warn(e) { "PostgreSQL connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        }
-    }
-
-    private fun executePostgresQuery(
-        sourceId: Long,
-        host: String,
-        port: Int,
-        database: String,
-        credentials: DataSourceCredentials,
-        query: String,
-        limit: Int,
-    ): List<Map<String, JsonElement>> {
-        validateSqlQuery(query)
-        val ds = getOrCreatePgPool(sourceId, host, port, database, credentials)
-        return ds.connection.use { conn ->
-            conn.createStatement().use { stmt ->
-                stmt.maxRows = limit.coerceIn(1, 10000)
-                stmt.queryTimeout = 30
-                stmt.executeQuery(query).use { rs -> resultSetToMaps(rs) }
-            }
-        }
-    }
-
-    private fun getPostgresSchema(
-        host: String,
-        port: Int,
-        database: String,
-        credentials: DataSourceCredentials,
-    ): List<DataSourceField> {
-        val ds = createTempPgDataSource(host, port, database, credentials.username, credentials.password)
-        return try {
-            ds.connection.use { conn ->
-                val fields = mutableListOf<DataSourceField>()
-                conn.createStatement().use { stmt ->
-                    stmt.executeQuery(
-                        """
-                        SELECT table_name || '.' || column_name, data_type, '' 
-                        FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                        ORDER BY table_name, ordinal_position 
-                        LIMIT 500
-                        """.trimIndent()
-                    ).use { rs ->
-                        while (rs.next()) {
-                            fields.add(DataSourceField(rs.getString(1), rs.getString(2), rs.getString(3)))
-                        }
-                    }
-                }
-                fields
-            }
-        } finally {
-            ds.close()
-        }
-    }
-
-    private fun getOrCreatePgPool(
-        sourceId: Long,
-        host: String,
-        port: Int,
-        database: String,
-        credentials: DataSourceCredentials,
-    ): HikariDataSource {
-        return pgPools.computeIfAbsent(sourceId) {
-            createPgPool(host, port, database, credentials.username, credentials.password)
-        }
-    }
-
-    private fun createPgPool(
-        host: String,
-        port: Int,
-        database: String,
-        username: String?,
-        password: String?,
-    ): HikariDataSource {
-        val config = HikariConfig().apply {
-            jdbcUrl = "jdbc:postgresql://$host:$port/$database"
-            this.username = username ?: ""
-            this.password = password ?: ""
-            maximumPoolSize = 3
-            minimumIdle = 0
-            idleTimeout = 60_000
-            maxLifetime = 300_000
-            connectionTimeout = 10_000
-            isReadOnly = true // Safety: only allow reads
-            addDataSourceProperty("ApplicationName", "moneat-custom-datasource")
-        }
-        return HikariDataSource(config)
-    }
-
-    private fun createTempPgDataSource(
-        host: String,
-        port: Int,
-        database: String,
-        username: String?,
-        password: String?,
-    ): HikariDataSource {
-        val config = HikariConfig().apply {
-            jdbcUrl = "jdbc:postgresql://$host:$port/$database"
-            this.username = username ?: ""
-            this.password = password ?: ""
-            maximumPoolSize = 1
-            connectionTimeout = 10_000
-            isReadOnly = true
-        }
-        return HikariDataSource(config)
-    }
-
-    private fun resultSetToMaps(rs: ResultSet): List<Map<String, JsonElement>> {
-        val meta = rs.metaData
-        val cols = (1..meta.columnCount).map { meta.getColumnLabel(it) }
-        val rows = mutableListOf<Map<String, JsonElement>>()
-        while (rs.next()) {
-            val row = mutableMapOf<String, JsonElement>()
-            for ((i, col) in cols.withIndex()) {
-                val value = rs.getObject(i + 1)
-                row[col] = when (value) {
-                    null -> JsonNull
-                    is Number -> JsonPrimitive(value)
-                    is Boolean -> JsonPrimitive(value)
-                    else -> JsonPrimitive(value.toString())
-                }
-            }
-            rows.add(row)
-        }
-        return rows
-    }
-
-    // --- Prometheus ---
-
-    private suspend fun testPrometheusConnection(
-        host: String,
-        port: Int?,
-        apiKey: String?,
-    ): TestConnectionResult {
-        return try {
-            val baseUrl = buildPrometheusUrl(host, port)
-            val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
-                apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
-                parameter("limit", 20)
-            }
-            if (response.status.isSuccess()) {
-                val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
-                val metrics = body["data"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
-                TestConnectionResult(true, "Connected successfully", metrics = metrics.take(20))
-            } else {
-                TestConnectionResult(false, "Prometheus returned ${response.status}")
-            }
-        } catch (e: Exception) {
-            logger.warn(e) { "Prometheus connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        }
-    }
-
-    private suspend fun executePrometheusQuery(
-        host: String,
-        port: Int?,
-        credentials: DataSourceCredentials,
-        query: String,
-        timeRange: TimeRangeDef?,
-        limit: Int,
-    ): List<Map<String, JsonElement>> {
-        val baseUrl = buildPrometheusUrl(host, port)
-
-        return try {
-            // Use range query if time range is provided, otherwise instant query
-            val response = if (timeRange != null) {
-                val nowSec = System.currentTimeMillis() / 1000
-                val fromSec = resolveRelativeTimeSec(timeRange.from, nowSec)
-                val toSec = resolveRelativeTimeSec(timeRange.to, nowSec)
-                val step = resolvePrometheusStep(toSec - fromSec)
-
-                httpClient.get("$baseUrl/api/v1/query_range") {
-                    credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
-                    parameter("query", query)
-                    parameter("start", fromSec)
-                    parameter("end", toSec)
-                    parameter("step", step)
-                }
-            } else {
-                httpClient.get("$baseUrl/api/v1/query") {
-                    credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
-                    parameter("query", query)
-                }
-            }
-
-            if (!response.status.isSuccess()) {
-                val body = response.bodyAsText()
-                logger.error { "Prometheus query failed: ${response.status} | query=$query | response=$body" }
-                return emptyList()
-            }
-
-            parsePrometheusResponse(response.bodyAsText(), limit)
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to execute Prometheus query" }
-            emptyList()
-        }
-    }
+    ) = handlers[sourceType]?.getSchema(host, port, databaseName, credentials) ?: emptyList()
 
     /**
-     * Execute a Grafana-style label_values() query against Prometheus.
-     * Parses: label_values(metric{filters}, labelName)
+     * Execute a Grafana-style label_values() query (Prometheus, Loki, etc.).
      */
     suspend fun executeLabelValuesQuery(
+        sourceType: CustomDataSourceType,
         host: String,
         port: Int?,
         credentials: DataSourceCredentials,
         query: String,
     ): List<String> {
-        // label_values(metric{filters}, label) or label_values(label)
-        val twoArgMatch = Regex("""label_values\((.+),\s*(\w+)\)""").find(query)
-        val oneArgMatch = if (twoArgMatch == null) Regex("""label_values\((\w+)\)""").find(query) else null
-
-        val matcher: String?
-        val labelName: String
-        if (twoArgMatch != null) {
-            matcher = twoArgMatch.groupValues[1].trim()
-            labelName = twoArgMatch.groupValues[2].trim()
-        } else if (oneArgMatch != null) {
-            matcher = null
-            labelName = oneArgMatch.groupValues[1].trim()
-        } else {
-            return emptyList()
+        val handler = when (sourceType) {
+            CustomDataSourceType.PROMETHEUS -> prometheusHandler
+            CustomDataSourceType.LOKI -> lokiHandler
+            else -> prometheusHandler
         }
-
-        val baseUrl = buildPrometheusUrl(host, port)
-
-        return try {
-            val response = httpClient.get("$baseUrl/api/v1/label/$labelName/values") {
-                credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
-                if (!matcher.isNullOrEmpty()) {
-                    parameter("match[]", matcher)
-                }
-            }
-            if (response.status.isSuccess()) {
-                val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
-                body["data"]?.jsonArray?.map { it.jsonPrimitive.content }?.sorted() ?: emptyList()
-            } else {
-                logger.warn { "Prometheus label_values query failed: ${response.status}" }
-                emptyList()
-            }
-        } catch (e: Exception) {
-            logger.warn(e) { "Failed to execute label_values query" }
-            emptyList()
-        }
-    }
-
-    private suspend fun getPrometheusMetrics(
-        host: String,
-        port: Int?,
-        credentials: DataSourceCredentials,
-    ): List<DataSourceField> {
-        val baseUrl = buildPrometheusUrl(host, port)
-        return try {
-            val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
-                credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
-            }
-            if (response.status.isSuccess()) {
-                val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
-                body["data"]?.jsonArray?.map {
-                    DataSourceField(it.jsonPrimitive.content, "gauge", "Prometheus metric")
-                } ?: emptyList()
-            } else {
-                emptyList()
-            }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch Prometheus metrics" }
-            emptyList()
-        }
-    }
-
-    private fun parsePrometheusResponse(body: String, limit: Int): List<Map<String, JsonElement>> {
-        val root = json.parseToJsonElement(body).jsonObject
-        val data = root["data"]?.jsonObject ?: return emptyList()
-        val resultType = data["resultType"]?.jsonPrimitive?.content
-        val results = data["result"]?.jsonArray ?: return emptyList()
-
-        val rows = mutableListOf<Map<String, JsonElement>>()
-        for (result in results) {
-            val metric = result.jsonObject["metric"]?.jsonObject ?: JsonObject(emptyMap())
-            val metricName = metric["__name__"]?.jsonPrimitive?.content ?: "value"
-
-            when (resultType) {
-                "matrix" -> {
-                    val values = result.jsonObject["values"]?.jsonArray ?: continue
-                    for (point in values) {
-                        val arr = point.jsonArray
-                        val row = mutableMapOf<String, JsonElement>()
-                        row["time_bucket"] = promTimestampToMs(arr[0])
-                        row[metricName] = promValueToNumber(arr[1])
-                        for ((k, v) in metric) {
-                            if (k != "__name__") row[k] = v
-                        }
-                        rows.add(row)
-                        if (rows.size >= limit) return rows
-                    }
-                }
-                "vector" -> {
-                    val value = result.jsonObject["value"]?.jsonArray
-                    if (value != null) {
-                        val row = mutableMapOf<String, JsonElement>()
-                        row["time_bucket"] = promTimestampToMs(value[0])
-                        row[metricName] = promValueToNumber(value[1])
-                        for ((k, v) in metric) {
-                            if (k != "__name__") row[k] = v
-                        }
-                        rows.add(row)
-                    }
-                }
-            }
-            if (rows.size >= limit) break
-        }
-        return rows
-    }
-
-    private fun promTimestampToMs(element: JsonElement): JsonElement {
-        val sec = element.jsonPrimitive.doubleOrNull ?: return element
-        return JsonPrimitive((sec * 1000).toLong())
-    }
-
-    private fun promValueToNumber(element: JsonElement): JsonElement {
-        val str = element.jsonPrimitive.contentOrNull ?: return element
-        if (str == "NaN" || str == "+Inf" || str == "-Inf") return JsonNull
-        return str.toDoubleOrNull()?.let { JsonPrimitive(it) } ?: element
-    }
-
-    private fun buildPrometheusUrl(host: String, port: Int?): String {
-        val scheme = when {
-            host.startsWith("https://") -> "https://"
-            host.startsWith("http://") -> "http://"
-            else -> "http://"
-        }
-        val cleanHost = host.removePrefix("https://").removePrefix("http://").trimEnd('/')
-        // Don't append port if: none specified, host already has one, or it's the default for the scheme
-        val hostHasPort = cleanHost.contains(":")
-        if (port == null || hostHasPort) return "${scheme}$cleanHost"
-        val isDefaultPort = (scheme == "http://" && port == 80) || (scheme == "https://" && port == 443)
-        return if (isDefaultPort) {
-            "${scheme}$cleanHost"
-        } else {
-            "${scheme}$cleanHost:$port"
-        }
-    }
-
-    private fun resolveRelativeTimeSec(expr: String, nowSec: Long): Long {
-        if (expr == "now") return nowSec
-        val match = Regex("""^now-(\d+)([smhdwMy])$""").matchEntire(expr) ?: return nowSec
-        val amount = match.groupValues[1].toLong()
-        val offsetSec = when (match.groupValues[2]) {
-            "s" -> amount
-            "m" -> amount * 60
-            "h" -> amount * 3600
-            "d" -> amount * 86400
-            "w" -> amount * 604800
-            "M" -> amount * 2592000
-            "y" -> amount * 31536000
-            else -> 0
-        }
-        return nowSec - offsetSec
-    }
-
-    private fun resolvePrometheusStep(rangeSec: Long): String = when {
-        rangeSec <= 3600 -> "15s"
-        rangeSec <= 21600 -> "1m"
-        rangeSec <= 86400 -> "5m"
-        rangeSec <= 604800 -> "1h"
-        else -> "1d"
-    }
-
-    /**
-     * SQL injection protection for custom PostgreSQL queries.
-     * Only SELECT queries are allowed; stacked statements and dangerous PG functions are blocked.
-     */
-    private fun validateSqlQuery(query: String) {
-        val trimmed = query.trim().uppercase()
-        require(trimmed.startsWith("SELECT")) { "Only SELECT queries are allowed" }
-
-        // Block stacked statements (semicolons outside quoted regions only)
-        require(!hasSemicolonOutsideQuotes(query)) { "Multiple statements are not allowed" }
-
-        for ((pattern, name) in FORBIDDEN_KEYWORD_PATTERNS.zip(FORBIDDEN_KEYWORD_NAMES)) {
-            require(!pattern.containsMatchIn(query)) {
-                "$name statements are not allowed"
-            }
-        }
-
-        // Block dangerous PostgreSQL file/system functions (call-site pattern)
-        for ((pattern, fn) in FORBIDDEN_FUNCTION_PATTERNS.zip(FORBIDDEN_FUNCTIONS)) {
-            require(!pattern.containsMatchIn(query)) { "Function or table $fn is not allowed" }
-        }
+        return handler.executeLabelValuesQuery(host, port, credentials, query)
     }
 
     fun closePool(sourceId: Long) {
-        pgPools.remove(sourceId)?.close()
+        postgresHandler.closePool(sourceId)
     }
 
     fun closeAllPools() {
-        pgPools.values.forEach { it.close() }
-        pgPools.clear()
+        jdbcPools.values.forEach { it.close() }
+        jdbcPools.clear()
     }
 }

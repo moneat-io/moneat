@@ -135,6 +135,7 @@ export function DashboardGrid({
       w.widget_type !== 'section' &&
       w.widget_type !== 'stat' &&
       w.widget_type !== 'gauge' &&
+      w.widget_type !== 'bargauge' &&
       w.widget_type !== 'text' &&
       w.grid_h <= 4
     ),
@@ -159,7 +160,7 @@ export function DashboardGrid({
           isDraggable: isEditing,
           isResizable: isEditing && w.widget_type !== 'section',
           minW: w.widget_type === 'section' ? 12 : 2,
-          minH: w.widget_type === 'section' ? 1 : (w.widget_type === 'stat' || w.widget_type === 'gauge' ? 4 : 6),
+          minH: w.widget_type === 'section' ? 1 : (['stat', 'gauge', 'bargauge'].includes(w.widget_type) ? 4 : 6),
           maxH: w.widget_type === 'section' ? 1 : undefined,
         }
       })

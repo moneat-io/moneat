@@ -87,6 +87,42 @@ describe('formatValue', () => {
     })
   })
 
+  describe('unit: decbytes', () => {
+    it('formats zero', () => {
+      expect(formatValue(0, 'decbytes')).toBe('0 B')
+    })
+
+    it('formats kilobytes (base 1000)', () => {
+      expect(formatValue(1500, 'decbytes')).toBe('1.50 kB')
+    })
+
+    it('formats megabytes (base 1000)', () => {
+      expect(formatValue(1000000, 'decbytes')).toBe('1.00 MB')
+    })
+
+    it('formats gigabytes (base 1000)', () => {
+      expect(formatValue(1000000000, 'decbytes')).toBe('1.00 GB')
+    })
+
+    it('respects decimals', () => {
+      expect(formatValue(1500, 'decbytes', '0')).toBe('2 kB')
+    })
+  })
+
+  describe('unit: KBs', () => {
+    it('formats kB/s', () => {
+      expect(formatValue(4.5, 'KBs')).toBe('4.5 kB/s')
+    })
+
+    it('formats large values as MB/s', () => {
+      expect(formatValue(1500, 'KBs')).toBe('1.5 MB/s')
+    })
+
+    it('respects decimals', () => {
+      expect(formatValue(4.567, 'KBs', '2')).toBe('4.57 kB/s')
+    })
+  })
+
   describe('unit: percent', () => {
     it('formats percentage', () => {
       expect(formatValue(95.5, 'percent')).toBe('95.5%')

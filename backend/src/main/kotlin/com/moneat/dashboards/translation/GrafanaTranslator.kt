@@ -48,7 +48,7 @@ private val logger = KotlinLogging.logger {}
 private const val GRAFANA_COLS = 24
 private const val MONEAT_COLS = 12
 private const val GRAFANA_ROW_PX = 30.0
-private const val MONEAT_ROW_PX = 80.0
+private const val MONEAT_ROW_PX = 30.0
 
 class GrafanaTranslator : DashboardTranslator {
 
@@ -61,7 +61,7 @@ class GrafanaTranslator : DashboardTranslator {
         "heatmap" to "heatmap",
         "text" to "text",
         "gauge" to "gauge",
-        "bargauge" to "bar",
+        "bargauge" to "bargauge",
         "graph" to "timeseries",
         "logs" to "table"
     )
@@ -69,6 +69,7 @@ class GrafanaTranslator : DashboardTranslator {
     private val reverseWidgetTypeMap = mapOf(
         "timeseries" to "timeseries",
         "bar" to "barchart",
+        "bargauge" to "bargauge",
         "donut" to "piechart",
         "stat" to "stat",
         "gauge" to "gauge",
@@ -312,7 +313,65 @@ class GrafanaTranslator : DashboardTranslator {
         fieldDefaults?.get("min")?.jsonPrimitive?.intOrNull?.let { config["gaugeMin"] = it.toString() }
         fieldDefaults?.get("max")?.jsonPrimitive?.intOrNull?.let { config["gaugeMax"] = it.toString() }
 
+        // Bar gauge: orientation and display mode
+        options?.get("orientation")?.jsonPrimitive?.contentOrNull?.let {
+            config["orientation"] = it
+        }
+        options?.get("displayMode")?.jsonPrimitive?.contentOrNull?.let {
+            config["displayMode"] = it
+        }
+
+        // Extract field filters and renames from Grafana transformations
+        extractGrafanaTransformations(panelJson, config)
+
         return config
+    }
+
+    /**
+     * Parse Grafana panel `transformations` array and extract:
+     * - `filterFieldsByName` → `visibleFields` (comma-separated field names)
+     * - `organize.renameByName` → `fieldRenames` (JSON object: old→new)
+     */
+    internal fun extractGrafanaTransformations(
+        panelJson: JsonObject,
+        config: MutableMap<String, String>
+    ) {
+        val transforms = panelJson["transformations"]?.jsonArray ?: return
+
+        for (element in transforms) {
+            val transform = element.jsonObject
+            val id = transform["id"]?.jsonPrimitive?.contentOrNull ?: continue
+            val opts = transform["options"]?.jsonObject ?: continue
+
+            when (id) {
+                "filterFieldsByName" -> {
+                    val include = opts["include"]?.jsonObject
+                    val names = include?.get("names")?.jsonArray
+                    if (names != null && names.isNotEmpty()) {
+                        config["visibleFields"] = names.joinToString(",") {
+                            it.jsonPrimitive.content
+                        }
+                    }
+                }
+                "organize" -> {
+                    val renameByName = opts["renameByName"]?.jsonObject
+                    if (renameByName != null && renameByName.isNotEmpty()) {
+                        val renames = renameByName.entries
+                            .filter {
+                                it.value.jsonPrimitive.contentOrNull?.isNotEmpty() == true
+                            }
+                            .associate {
+                                it.key to it.value.jsonPrimitive.content
+                            }
+                        if (renames.isNotEmpty()) {
+                            config["fieldRenames"] = buildJsonObject {
+                                renames.forEach { (k, v) -> put(k, v) }
+                            }.toString()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     internal fun parseGrafanaTargets(
@@ -407,8 +466,19 @@ class GrafanaTranslator : DashboardTranslator {
             )
         }
 
+        // Try Grafana Redis datasource plugin format (command/section/type fields)
+        val redisCommand = target["command"]?.jsonPrimitive?.contentOrNull
+        if (redisCommand != null) {
+            val rawCmd = translateGrafanaRedisCommand(redisCommand, target)
+            return QueryDsl(
+                dataSource = "events",
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+                rawQuery = rawCmd
+            )
+        }
+
         // No standard query format found — serialize the full target as rawQuery
-        // so plugin-specific fields (e.g. Redis command/section) are preserved
+        // so plugin-specific fields are preserved
         val knownKeys = setOf("refId", "datasource", "legendFormat", "query")
         val hasExtraFields = target.keys.any { it !in knownKeys }
         if (hasExtraFields) {
@@ -427,6 +497,26 @@ class GrafanaTranslator : DashboardTranslator {
             dataSource = "events",
             metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
         )
+    }
+
+    /**
+     * Convert Grafana Redis datasource plugin target to a Redis command string
+     * that [RedisHandler] can execute directly.
+     */
+    internal fun translateGrafanaRedisCommand(
+        command: String,
+        target: JsonObject
+    ): String {
+        val section = target["section"]?.jsonPrimitive?.contentOrNull
+        return when (command.lowercase()) {
+            "info" -> if (!section.isNullOrBlank()) "INFO $section" else "INFO"
+            "clientlist" -> "CLIENT LIST"
+            "slowlogget" -> "SLOWLOG GET"
+            "clusterinfo" -> "CLUSTER INFO"
+            "clusternodes" -> "CLUSTER NODES"
+            "dbsize" -> "DBSIZE"
+            else -> command.uppercase()
+        }
     }
 
     internal fun parseGrafanaSql(

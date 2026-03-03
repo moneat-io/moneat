@@ -216,7 +216,7 @@ class GrafanaTranslatorTest {
         assertEquals(6, w.gridX) // 12 * 12/24 = 6
         assertEquals(6, w.gridW) // 12 * 12/24 = 6
         assertEquals(0, w.gridY)
-        assertEquals(3, w.gridH) // round(9 * 30/80) = 3 (height scaled down, clamped to minH=2)
+        assertEquals(9, w.gridH) // 1:1 pass-through preserves exact Grafana height ratios
     }
 
     @Test
@@ -1338,13 +1338,8 @@ class GrafanaTranslatorTest {
         val queries = translator.parseGrafanaTargets(panel, warnings, 0)
         val q = queries.first()
         val rawQuery = q.rawQuery!!
-        // rawQuery should contain the full target JSON with plugin-specific fields
-        assertTrue(rawQuery.contains("\"command\":\"info\""))
-        assertTrue(rawQuery.contains("\"section\":\"stats\""))
-        assertContains(
-            warnings.joinToString(),
-            "non-standard query target"
-        )
+        // Redis command targets are translated to executable command strings
+        assertEquals("INFO stats", rawQuery)
     }
 
     @Test
@@ -1367,5 +1362,134 @@ class GrafanaTranslatorTest {
         val q = queries.first()
         // With only refId and empty query, no extra fields → fallback
         assertContains(warnings.joinToString(), "no recognizable query target")
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps info with section`() {
+        val target = buildJsonObject {
+            put("command", "info")
+            put("section", "stats")
+            put("type", "command")
+        }
+        assertEquals("INFO stats", translator.translateGrafanaRedisCommand("info", target))
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps info without section`() {
+        val target = buildJsonObject { put("command", "info") }
+        assertEquals("INFO", translator.translateGrafanaRedisCommand("info", target))
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps clientList`() {
+        val target = buildJsonObject { put("command", "clientList") }
+        assertEquals("CLIENT LIST", translator.translateGrafanaRedisCommand("clientList", target))
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps slowlogGet`() {
+        val target = buildJsonObject { put("command", "slowlogGet") }
+        assertEquals(
+            "SLOWLOG GET",
+            translator.translateGrafanaRedisCommand("slowlogGet", target)
+        )
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps clusterInfo`() {
+        val target = buildJsonObject { put("command", "clusterInfo") }
+        assertEquals(
+            "CLUSTER INFO",
+            translator.translateGrafanaRedisCommand("clusterInfo", target)
+        )
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand falls back to uppercase for unknown`() {
+        val target = buildJsonObject { put("command", "custom") }
+        assertEquals("CUSTOM", translator.translateGrafanaRedisCommand("custom", target))
+    }
+
+    @Test
+    fun `extractGrafanaTransformations extracts filterFieldsByName`() {
+        val panel = buildJsonObject {
+            put(
+                "transformations",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "filterFieldsByName")
+                            put(
+                                "options",
+                                buildJsonObject {
+                                    put(
+                                        "include",
+                                        buildJsonObject {
+                                            put(
+                                                "names",
+                                                buildJsonArray {
+                                                    add(JsonPrimitive("used_memory"))
+                                                    add(
+                                                        JsonPrimitive("used_memory_peak")
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val config = mutableMapOf<String, String>()
+        translator.extractGrafanaTransformations(panel, config)
+        assertEquals("used_memory,used_memory_peak", config["visibleFields"])
+    }
+
+    @Test
+    fun `extractGrafanaTransformations extracts organize renames`() {
+        val panel = buildJsonObject {
+            put(
+                "transformations",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "organize")
+                            put(
+                                "options",
+                                buildJsonObject {
+                                    put(
+                                        "renameByName",
+                                        buildJsonObject {
+                                            put("used_memory", "Used Memory")
+                                            put("uptime_in_seconds", "Uptime")
+                                            // Empty renames should be skipped
+                                            put("ignored_field", "")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val config = mutableMapOf<String, String>()
+        translator.extractGrafanaTransformations(panel, config)
+        val renames = config["fieldRenames"]!!
+        assertContains(renames, "\"used_memory\":\"Used Memory\"")
+        assertContains(renames, "\"uptime_in_seconds\":\"Uptime\"")
+        // Empty-value rename should not appear
+        assertTrue(!renames.contains("ignored_field"))
+    }
+
+    @Test
+    fun `extractGrafanaTransformations handles missing transforms`() {
+        val panel = buildJsonObject { put("type", "stat") }
+        val config = mutableMapOf<String, String>()
+        translator.extractGrafanaTransformations(panel, config)
+        assertTrue(config.isEmpty())
     }
 }

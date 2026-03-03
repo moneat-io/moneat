@@ -50,7 +50,52 @@ enum class CustomDataSourceType {
     POSTGRESQL,
 
     @SerialName("prometheus")
-    PROMETHEUS;
+    PROMETHEUS,
+
+    @SerialName("mysql")
+    MYSQL,
+
+    @SerialName("mariadb")
+    MARIADB,
+
+    @SerialName("mssql")
+    MSSQL,
+
+    @SerialName("clickhouse")
+    CLICKHOUSE,
+
+    @SerialName("sqlite")
+    SQLITE,
+
+    @SerialName("cockroachdb")
+    COCKROACHDB,
+
+    @SerialName("bigquery")
+    BIGQUERY,
+
+    @SerialName("snowflake")
+    SNOWFLAKE,
+
+    @SerialName("influxdb")
+    INFLUXDB,
+
+    @SerialName("elasticsearch")
+    ELASTICSEARCH,
+
+    @SerialName("graphite")
+    GRAPHITE,
+
+    @SerialName("loki")
+    LOKI,
+
+    @SerialName("cloudwatch")
+    CLOUDWATCH,
+
+    @SerialName("mongodb")
+    MONGODB,
+
+    @SerialName("redis")
+    REDIS;
 
     companion object {
         fun fromString(value: String): CustomDataSourceType? =
@@ -89,6 +134,13 @@ data class CreateCustomDataSourceRequest(
     val password: String? = null,
     @SerialName("api_key") val apiKey: String? = null,
     @SerialName("extra_config") val extraConfig: Map<String, String> = emptyMap(),
+    @SerialName("access_key_id") val accessKeyId: String? = null,
+    @SerialName("secret_access_key") val secretAccessKey: String? = null,
+    @SerialName("service_account_json") val serviceAccountJson: String? = null,
+    @SerialName("account_identifier") val accountIdentifier: String? = null,
+    @SerialName("connection_string") val connectionString: String? = null,
+    @SerialName("project_id") val projectId: String? = null,
+    val region: String? = null,
 )
 
 @Serializable
@@ -103,6 +155,13 @@ data class UpdateCustomDataSourceRequest(
     @SerialName("api_key") val apiKey: String? = null,
     @SerialName("extra_config") val extraConfig: Map<String, String>? = null,
     val enabled: Boolean? = null,
+    @SerialName("access_key_id") val accessKeyId: String? = null,
+    @SerialName("secret_access_key") val secretAccessKey: String? = null,
+    @SerialName("service_account_json") val serviceAccountJson: String? = null,
+    @SerialName("account_identifier") val accountIdentifier: String? = null,
+    @SerialName("connection_string") val connectionString: String? = null,
+    @SerialName("project_id") val projectId: String? = null,
+    val region: String? = null,
 )
 
 @Serializable
@@ -114,14 +173,23 @@ data class TestConnectionRequest(
     val username: String? = null,
     val password: String? = null,
     @SerialName("api_key") val apiKey: String? = null,
+    @SerialName("access_key_id") val accessKeyId: String? = null,
+    @SerialName("secret_access_key") val secretAccessKey: String? = null,
+    @SerialName("service_account_json") val serviceAccountJson: String? = null,
+    @SerialName("account_identifier") val accountIdentifier: String? = null,
+    @SerialName("connection_string") val connectionString: String? = null,
+    @SerialName("project_id") val projectId: String? = null,
+    val region: String? = null,
 )
 
 @Serializable
 data class TestConnectionResult(
     val success: Boolean,
     val message: String,
-    val tables: List<String>? = null, // For PostgreSQL: available tables
+    val tables: List<String>? = null, // For JDBC: available tables
     val metrics: List<String>? = null, // For Prometheus: sample metric names
+    val databases: List<String>? = null, // For MongoDB: available databases
+    val keys: List<String>? = null, // For Redis: sample keys
 )
 
 @Serializable

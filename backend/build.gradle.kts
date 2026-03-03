@@ -92,6 +92,17 @@ dependencies {
     // Redis
     implementation(libs.lettuce)
 
+    // JDBC drivers for custom datasources
+    implementation(libs.mysql.connector.j)
+    implementation(libs.mariadb.java.client)
+    implementation(libs.mssql.jdbc)
+    implementation(libs.clickhouse.jdbc)
+    implementation(libs.sqlite.jdbc)
+    implementation(libs.snowflake.jdbc)
+    implementation(libs.mongodb.driver.sync)
+    implementation(libs.aws.sdk.cloudwatch)
+    implementation(libs.google.cloud.bigquery)
+
     // Email - SMTP
     implementation(libs.jakarta.mail)
 
