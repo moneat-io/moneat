@@ -26,7 +26,7 @@
 
 # Moneat: The open-source, self-hostable observability platform.
 
-Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-compatible observability platform.
+Moneat is the monitoring tool you wished you had — a self-hostable, Sentry SDK & Datadog Agent compatible observability platform.
 
 **What you get out of the box:**
 
