@@ -119,6 +119,14 @@ function getStatusDot(status: string) {
   }
 }
 
+function normalizeHostStatus(status?: string): 'up' | 'down' | 'degraded' | 'unknown' {
+  const normalized = (status ?? '').toLowerCase()
+  if (normalized === 'online') return 'up'
+  if (normalized === 'offline') return 'down'
+  if (normalized === 'up' || normalized === 'down' || normalized === 'degraded') return normalized
+  return 'unknown'
+}
+
 type StatusPageMonitorSummary = {
   total: number
   up: number
@@ -432,8 +440,8 @@ function DashboardPage() {
   const triggeredIncidents = incidents.filter(i => i.status === 'TRIGGERED')
   const uptimeUp = uptimeMonitors.filter(m => m.status === 'up').length
   const uptimeDown = uptimeMonitors.filter(m => m.status === 'down').length
-  const hostsUp = monitorHosts.filter(h => (h.status ?? '').toLowerCase() === 'up' || (h.status ?? '').toLowerCase() === 'online').length
-  const hostsDown = monitorHosts.filter(h => (h.status ?? '').toLowerCase() === 'down').length
+  const hostsUp = monitorHosts.filter(h => normalizeHostStatus(h.status) === 'up').length
+  const hostsDown = monitorHosts.filter(h => normalizeHostStatus(h.status) === 'down').length
   const recentReleases = releases.slice(0, 5)
   const recentFeedback = feedback.slice(0, 5)
   const dashboardUptimeMonitors = uptimeMonitors.slice(0, 6)
@@ -858,7 +866,7 @@ function DashboardPage() {
                     className="grid gap-3 py-2 px-2.5 rounded-md hover:bg-muted/50 transition md:[grid-template-columns:minmax(12rem,15rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,11rem)] md:items-center"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(host.status)}`} />
+                      <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(normalizeHostStatus(host.status))}`} />
                       <span className="text-sm flex-1 truncate min-w-0">{host.name ?? host.hostname}</span>
                     </div>
 

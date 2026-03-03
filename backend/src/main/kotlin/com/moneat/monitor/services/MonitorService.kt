@@ -391,7 +391,7 @@ class MonitorService {
         val metricsDelete =
             "ALTER TABLE $clickhouseDb.metrics DELETE WHERE organization_id = $organizationId AND tags['host_id'] = '$hostId'"
         val containersDelete =
-            "ALTER TABLE $clickhouseDb.containers DELETE WHERE organization_id = $organizationId AND host_id = '$hostId'"
+            "ALTER TABLE $clickhouseDb.containers DELETE WHERE organization_id = $organizationId AND tags['host_id'] = '$hostId'"
 
         val metricsResponse = ClickHouseClient.execute(metricsDelete)
         if (!metricsResponse.status.isSuccess()) {
