@@ -27,13 +27,9 @@ import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.CreateSilencePeriodRequest
 import com.moneat.monitor.models.CreateHostRequest
 import com.moneat.monitor.models.CreateHostResponse
-import com.moneat.monitor.models.CreateSystemRequest
-import com.moneat.monitor.models.CreateSystemResponse
 import com.moneat.monitor.models.IngestResponse
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.SystemMetricsPayload
-import com.moneat.monitor.models.HostResponse
-import com.moneat.monitor.models.SystemResponse
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
 import com.moneat.monitor.services.MonitorAlertService

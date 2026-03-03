@@ -89,8 +89,7 @@ class LogService {
         entries: List<AgentLogEntry>,
         queueKey: String
     ): Int {
-        val normalized = entries.mapNotNull { normalizeAgentEntry(it, systemId, null) }
-        return enqueueNormalized(organizationId, systemId, null, "agent", normalized, queueKey)
+        val normalized = entries.mapNotNull { normalizeAgentEntry(it, systemId) }
     }
 
     suspend fun enqueueAgentLogs(
@@ -99,8 +98,7 @@ class LogService {
         entries: List<AgentLogEntry>,
         queueKey: String
     ): Int {
-        val normalized = entries.mapNotNull { normalizeAgentEntry(it, null, hostId) }
-        return enqueueNormalized(organizationId, null, hostId, "agent", normalized, queueKey)
+        val normalized = entries.mapNotNull { normalizeAgentEntry(it, null) }
     }
 
     suspend fun enqueueOtlpLogs(
@@ -124,7 +122,7 @@ class LogService {
         systemId: String?
     ): Long {
         return entries
-            .mapNotNull { normalizeAgentEntry(it, systemId, null) }
+            .mapNotNull { normalizeAgentEntry(it, systemId) }
             .sumOf { (it.message.length + it.body.length).toLong() }
     }
 
@@ -133,7 +131,7 @@ class LogService {
         hostId: Int
     ): Long {
         return entries
-            .mapNotNull { normalizeAgentEntry(it, null, hostId) }
+            .mapNotNull { normalizeAgentEntry(it, null) }
             .sumOf { (it.message.length + it.body.length).toLong() }
     }
 
@@ -1220,8 +1218,7 @@ class LogService {
 
     private fun normalizeAgentEntry(
         entry: AgentLogEntry,
-        systemId: String?,
-        hostId: Int? = null
+        systemId: String?
     ): QueuedLogEntry? {
         val message = entry.message?.trim().orEmpty()
         if (message.isBlank()) return null
@@ -1390,7 +1387,7 @@ class LogService {
         hostId: Int? = null
     ): String? {
         hostId?.let { id ->
-            return "${ClickHouseQueryUtils.orgIdClause(organizationId)} AND tags['host_id'] = '${id}'"
+            return "${ClickHouseQueryUtils.orgIdClause(organizationId)} AND tags['host_id'] = '$id'"
         }
 
         val rawSystemId = systemId?.trim()

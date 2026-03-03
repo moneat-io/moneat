@@ -41,9 +41,6 @@ import com.moneat.shared.models.HostAlertTemplateStates
 import com.moneat.shared.models.HostAlerts
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.OrganizationAlertTemplates
-import com.moneat.shared.models.SystemAlertSettings
-import com.moneat.shared.models.SystemAlertTemplateStates
-import com.moneat.shared.models.SystemAlerts
 import com.moneat.shared.models.Systems
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.RetentionPolicyService
