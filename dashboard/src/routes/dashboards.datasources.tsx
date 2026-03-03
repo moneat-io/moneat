@@ -87,28 +87,35 @@ function DataSourcesPage() {
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['custom-datasources']}),
   })
 
+  const buildPayload = useCallback(() => {
+    const host =
+      formData.host ||
+      (formData.source_type === 'cloudwatch' ? 'aws' : '') ||
+      (formData.source_type === 'bigquery' ? formData.project_id || '' : '') ||
+      'localhost'
+    return {...formData, host}
+  }, [formData])
+
   const testMutation = useMutation({
-    mutationFn: () =>
-      api.testDataSourceConnection({
-        source_type: formData.source_type,
-        host:
-          formData.host ||
-          (formData.source_type === 'cloudwatch' ? 'aws' : '') ||
-          (formData.source_type === 'bigquery' ? formData.project_id || '' : '') ||
-          'localhost',
-        port: formData.port,
-        database_name: formData.database_name,
-        username: formData.username,
-        password: formData.password,
-        api_key: formData.api_key,
-        access_key_id: formData.access_key_id,
-        secret_access_key: formData.secret_access_key,
-        service_account_json: formData.service_account_json,
-        account_identifier: formData.account_identifier,
-        connection_string: formData.connection_string,
-        project_id: formData.project_id,
-        region: formData.region,
-      }),
+    mutationFn: () => {
+      const payload = buildPayload()
+      return api.testDataSourceConnection({
+        source_type: payload.source_type,
+        host: payload.host,
+        port: payload.port,
+        database_name: payload.database_name,
+        username: payload.username,
+        password: payload.password,
+        api_key: payload.api_key,
+        access_key_id: payload.access_key_id,
+        secret_access_key: payload.secret_access_key,
+        service_account_json: payload.service_account_json,
+        account_identifier: payload.account_identifier,
+        connection_string: payload.connection_string,
+        project_id: payload.project_id,
+        region: payload.region,
+      })
+    },
     onSuccess: (result) => setTestResult(result),
     onError: () => setTestResult({success: false, message: 'Connection test failed'}),
   })
@@ -132,7 +139,6 @@ function DataSourcesPage() {
   const parseConnectionUrl = useCallback(
     (url: string) => {
       try {
-        const scheme = url.split('://')[0]?.toLowerCase()
         const normalized = url.replace(/^postgres:\/\//, 'postgresql://')
         if (normalized.startsWith('postgresql://') || normalized.startsWith('postgres://')) {
           const parsed = new URL(normalized.replace(/^postgres(ql)?:\/\//, 'http://'))
@@ -208,10 +214,11 @@ function DataSourcesPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const payload = buildPayload()
     if (editingId) {
-      updateMutation.mutate({id: editingId, req: formData})
+      updateMutation.mutate({id: editingId, req: payload})
     } else {
-      createMutation.mutate(formData)
+      createMutation.mutate(payload)
     }
   }
 

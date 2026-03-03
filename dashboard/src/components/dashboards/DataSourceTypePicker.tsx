@@ -41,7 +41,6 @@ export function DataSourceTypePicker({value, onChange, disabled}: DataSourceType
     }
   }, [])
 
-  const categoryOrder = ['database', 'metrics', 'search', 'nosql', 'cloud'] as const
   const categoryLabels: Record<string, string> = {
     database: 'Databases',
     metrics: 'Metrics & Time-Series',
@@ -49,6 +48,13 @@ export function DataSourceTypePicker({value, onChange, disabled}: DataSourceType
     nosql: 'NoSQL',
     cloud: 'Cloud',
   }
+
+  const derivedCategories = Array.from(new Set(DATA_SOURCE_TYPES.map((t) => t.category)))
+  const orderedPriority = ['database', 'metrics', 'search', 'nosql', 'cloud']
+  const categoryOrder = [
+    ...orderedPriority.filter((c) => derivedCategories.includes(c)),
+    ...derivedCategories.filter((c) => !orderedPriority.includes(c)),
+  ]
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

@@ -948,9 +948,10 @@ const GaugeWidget = memo(function GaugeWidget({
   const min = parseFloat(dc.gaugeMin || '0')
   const max = parseFloat(dc.gaugeMax || (unit === 'percent' ? '100' : '100'))
 
-  const fmtGauge = (v: number) => unit && unit !== 'none'
-    ? formatValue(v, unit, decimals, valueMappings)
-    : formatStatValue(v)
+  const fmtGauge = (v: number) =>
+    (unit && unit !== 'none') || valueMappings.length > 0
+      ? formatValue(v, unit, decimals, valueMappings)
+      : formatStatValue(v)
 
   return (
     <div className="h-full w-full flex items-center justify-center p-1 gap-1">
@@ -977,7 +978,10 @@ function SingleGauge({value, label, min, max, thresholds, fmtVal}: {
   thresholds: {value: number; color: string}[]
   fmtVal: (v: number) => string
 }) {
-  const pct = Math.max(0, Math.min(1, (value - min) / (max - min)))
+  const denom = max - min
+  const pct = denom <= 0
+    ? (value <= min ? 0 : 1)
+    : Math.max(0, Math.min(1, (value - min) / denom))
   const cx = 100, cy = 94, r = 84, strokeW = 26
   const describeArc = (startAngle: number, endAngle: number) => {
     const x1 = cx + r * Math.cos(startAngle)

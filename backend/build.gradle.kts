@@ -93,12 +93,12 @@ dependencies {
     implementation(libs.lettuce)
 
     // JDBC drivers for custom datasources
-    implementation(libs.mysql.connector.j)
-    implementation(libs.mariadb.java.client)
-    implementation(libs.mssql.jdbc)
-    implementation(libs.clickhouse.jdbc)
-    implementation(libs.sqlite.jdbc)
-    implementation(libs.snowflake.jdbc)
+    runtimeOnly(libs.mysql.connector.j)
+    runtimeOnly(libs.mariadb.java.client)
+    runtimeOnly(libs.mssql.jdbc)
+    runtimeOnly(libs.clickhouse.jdbc)
+    runtimeOnly(libs.sqlite.jdbc)
+    runtimeOnly(libs.snowflake.jdbc)
     implementation(libs.mongodb.driver.sync)
     implementation(libs.aws.sdk.cloudwatch)
     implementation(libs.google.cloud.bigquery)

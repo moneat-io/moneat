@@ -38,6 +38,7 @@ import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertContains
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class GrafanaTranslatorTest {
@@ -1405,9 +1406,11 @@ class GrafanaTranslatorTest {
     }
 
     @Test
-    fun `translateGrafanaRedisCommand falls back to uppercase for unknown`() {
+    fun `translateGrafanaRedisCommand throws for unsupported command`() {
         val target = buildJsonObject { put("command", "custom") }
-        assertEquals("CUSTOM", translator.translateGrafanaRedisCommand("custom", target))
+        assertFailsWith<IllegalArgumentException> {
+            translator.translateGrafanaRedisCommand("custom", target)
+        }
     }
 
     @Test
@@ -1694,8 +1697,10 @@ class GrafanaTranslatorTest {
                             put(
                                 "gridPos",
                                 buildJsonObject {
-                                    put("x", 0); put("y", 0)
-                                    put("w", 24); put("h", 8)
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 8)
                                 }
                             )
                             put(
@@ -1799,7 +1804,10 @@ class GrafanaTranslatorTest {
         }
         val result = translator.translateGrafanaElasticsearchTarget(target)
         val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
-        assertEquals("*", parsed["query"]?.jsonObject?.get("query_string")?.jsonObject?.get("query")?.jsonPrimitive?.content)
+        val queryStr = parsed["query"]?.jsonObject
+            ?.get("query_string")?.jsonObject
+            ?.get("query")?.jsonPrimitive?.content
+        assertEquals("*", queryStr)
         // count is implicit — no aggs section needed
         assertEquals(0, parsed["size"]?.jsonPrimitive?.int)
     }
@@ -1847,8 +1855,10 @@ class GrafanaTranslatorTest {
                             put(
                                 "gridPos",
                                 buildJsonObject {
-                                    put("x", 0); put("y", 0)
-                                    put("w", 24); put("h", 8)
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 8)
                                 }
                             )
                             put(
@@ -1887,8 +1897,10 @@ class GrafanaTranslatorTest {
                             put(
                                 "gridPos",
                                 buildJsonObject {
-                                    put("x", 0); put("y", 0)
-                                    put("w", 24); put("h", 8)
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 8)
                                 }
                             )
                             put(
@@ -1930,8 +1942,10 @@ class GrafanaTranslatorTest {
                             put(
                                 "gridPos",
                                 buildJsonObject {
-                                    put("x", 0); put("y", 0)
-                                    put("w", 24); put("h", 8)
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 8)
                                 }
                             )
                             put(

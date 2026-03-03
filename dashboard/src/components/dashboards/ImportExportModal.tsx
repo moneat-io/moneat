@@ -258,7 +258,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
           if (panel.datasource) {
             panel.datasource = mapDatasource(panel.datasource)
           }
-          if (panel.targets) {
+          if (Array.isArray(panel.targets)) {
             for (const target of panel.targets as Record<string, unknown>[]) {
               if (target.datasource) {
                 target.datasource = mapDatasource(target.datasource)

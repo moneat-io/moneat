@@ -111,7 +111,9 @@ class CustomDataSourceExecutor {
         timeRange: TimeRangeDef? = null,
     ): List<Map<String, JsonElement>> {
         val handler = handlers[sourceType]
-            ?: return emptyList()
+            ?: throw IllegalArgumentException(
+                "No handler registered for data source type: $sourceType"
+            )
 
         return handler.executeQuery(
             sourceId,
@@ -134,7 +136,10 @@ class CustomDataSourceExecutor {
         port: Int?,
         databaseName: String?,
         credentials: DataSourceCredentials,
-    ) = handlers[sourceType]?.getSchema(host, port, databaseName, credentials) ?: emptyList()
+    ) = handlers[sourceType]?.getSchema(host, port, databaseName, credentials)
+        ?: throw IllegalArgumentException(
+            "No handler registered for data source type: $sourceType"
+        )
 
     /**
      * Execute a Grafana-style label_values() query (Prometheus, Loki, etc.).
@@ -149,7 +154,9 @@ class CustomDataSourceExecutor {
         val handler = when (sourceType) {
             CustomDataSourceType.PROMETHEUS -> prometheusHandler
             CustomDataSourceType.LOKI -> lokiHandler
-            else -> prometheusHandler
+            else -> throw IllegalArgumentException(
+                "label_values queries not supported for: $sourceType"
+            )
         }
         return handler.executeLabelValuesQuery(host, port, credentials, query)
     }

@@ -2727,13 +2727,6 @@ interface CreateCustomDataSourceRequest {
   project_id?: string
   region?: string
   extra_config?: Record<string, string>
-  access_key_id?: string
-  secret_access_key?: string
-  service_account_json?: string
-  account_identifier?: string
-  connection_string?: string
-  project_id?: string
-  region?: string
 }
 
 interface UpdateCustomDataSourceRequest {
@@ -2754,13 +2747,6 @@ interface UpdateCustomDataSourceRequest {
   region?: string
   extra_config?: Record<string, string>
   enabled?: boolean
-  access_key_id?: string
-  secret_access_key?: string
-  service_account_json?: string
-  account_identifier?: string
-  connection_string?: string
-  project_id?: string
-  region?: string
 }
 
 interface TestConnectionRequest {

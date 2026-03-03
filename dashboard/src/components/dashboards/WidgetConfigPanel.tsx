@@ -276,10 +276,10 @@ function DisplayConfigForm({
     onChange({display_config: {...config, [key]: value}})
   }
 
-  const isChart = wt === 'timeseries' || wt === 'bar'
+  const isChart = wt === 'timeseries' || wt === 'bar' || wt === 'bargauge'
   const supportsLegend = isChart || wt === 'donut'
-  const supportsAxis = isChart
-  const supportsStyle = isChart
+  const supportsAxis = wt === 'timeseries' || wt === 'bar'
+  const supportsStyle = wt === 'timeseries' || wt === 'bar'
   const supportsThresholds = isChart || wt === 'stat' || wt === 'gauge'
   const supportsMappings = wt === 'stat' || wt === 'gauge' || wt === 'table' || wt === 'toplist'
 

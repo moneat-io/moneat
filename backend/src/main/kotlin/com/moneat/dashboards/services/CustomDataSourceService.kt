@@ -113,18 +113,24 @@ class CustomDataSourceService {
                 val existingCreds = try {
                     val dec = CredentialEncryption.decrypt(existing[CustomDataSources.encryptedCredentials])
                     json.decodeFromString<DataSourceCredentials>(dec)
-                } catch (_: Exception) { null }
+                } catch (e: Exception) {
+                    throw IllegalStateException(
+                        "Failed to decrypt existing credentials for data source $id; " +
+                            "cannot safely merge new credentials",
+                        e
+                    )
+                }
                 val merged = DataSourceCredentials(
-                    username = request.username ?: existingCreds?.username,
-                    password = request.password ?: existingCreds?.password,
-                    apiKey = request.apiKey ?: existingCreds?.apiKey,
-                    accessKeyId = request.accessKeyId ?: existingCreds?.accessKeyId,
-                    secretAccessKey = request.secretAccessKey ?: existingCreds?.secretAccessKey,
-                    serviceAccountJson = request.serviceAccountJson ?: existingCreds?.serviceAccountJson,
-                    accountIdentifier = request.accountIdentifier ?: existingCreds?.accountIdentifier,
-                    connectionString = request.connectionString ?: existingCreds?.connectionString,
-                    projectId = request.projectId ?: existingCreds?.projectId,
-                    region = request.region ?: existingCreds?.region,
+                    username = request.username ?: existingCreds.username,
+                    password = request.password ?: existingCreds.password,
+                    apiKey = request.apiKey ?: existingCreds.apiKey,
+                    accessKeyId = request.accessKeyId ?: existingCreds.accessKeyId,
+                    secretAccessKey = request.secretAccessKey ?: existingCreds.secretAccessKey,
+                    serviceAccountJson = request.serviceAccountJson ?: existingCreds.serviceAccountJson,
+                    accountIdentifier = request.accountIdentifier ?: existingCreds.accountIdentifier,
+                    connectionString = request.connectionString ?: existingCreds.connectionString,
+                    projectId = request.projectId ?: existingCreds.projectId,
+                    region = request.region ?: existingCreds.region,
                 )
                 encryptCredentials(merged)
             } else {

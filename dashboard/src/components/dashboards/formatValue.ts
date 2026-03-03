@@ -71,10 +71,18 @@ function formatDecBytes(value: number, decimals: string | undefined): string {
   return `${scaled.toFixed(dec)} ${DEC_BYTE_UNITS[idx]}`
 }
 
+const RATE_UNITS = ['kB/s', 'MB/s', 'GB/s', 'TB/s']
+
 function formatKBps(value: number, decimals: string | undefined): string {
   const dec = resolveDecimals(decimals, 1)
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(dec)} MB/s`
-  return `${value.toFixed(dec)} kB/s`
+  const sign = value < 0 ? '-' : ''
+  let abs = Math.abs(value)
+  let idx = 0
+  while (abs >= 1000 && idx < RATE_UNITS.length - 1) {
+    abs /= 1000
+    idx++
+  }
+  return `${sign}${abs.toFixed(dec)} ${RATE_UNITS[idx]}`
 }
 
 function formatShort(value: number, decimals: string | undefined): string {

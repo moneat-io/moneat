@@ -561,7 +561,9 @@ class GrafanaTranslator : DashboardTranslator {
             "clusterinfo" -> "CLUSTER INFO"
             "clusternodes" -> "CLUSTER NODES"
             "dbsize" -> "DBSIZE"
-            else -> command.uppercase()
+            else -> throw IllegalArgumentException(
+                "Unsupported Redis command for import: $command"
+            )
         }
     }
 
