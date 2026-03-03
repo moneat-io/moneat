@@ -35,7 +35,7 @@ Moneat is the monitoring tool you wished you had — a self-hostable, Sentry SDK
 - [**Performance Monitoring**](#performance-monitoring) — Trace slow transactions and bottlenecks
 - [**Logging**](#logging) — Centralized, searchable log management
 - [**Uptime Monitoring & Status Pages**](#uptime-monitoring--status-pages) — Know when things go down, tell users what's up
-- [**Custom Dashboards**](#custom-dashboards) — Build your own views with drag-and-drop widgets
+- [**Custom Dashboards**](#custom-dashboards) — Build your own views with drag-and-drop widgets. Supports importing entire Grafana dashboards with 15+ custom datasources. 
 - [**Product Analytics**](#product-analytics) — Understand user behavior with funnels, retention, and event tracking
 - [**AI Observability**](#ai-observability) — Trace and debug LLM calls
 - [**On-Call & Incident Management**](#on-call--incident-management-enterprise) — PagerDuty-style escalations (Enterprise)
