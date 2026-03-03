@@ -102,11 +102,12 @@ class BigQueryHandler : DataSourceHandler {
 
         return try {
             val bigQuery = createBigQueryClient(projectId, serviceAccountJson)
-            val datasetId = dataset.ifBlank { "INFORMATION_SCHEMA" }
+            val datasetId = validateBigQueryIdentifier(dataset.ifBlank { "INFORMATION_SCHEMA" })
+            val validatedProjectId = validateBigQueryIdentifier(projectId)
             val queryConfig = QueryJobConfiguration.newBuilder(
                 """
                 SELECT table_name, column_name, data_type
-                FROM `$projectId.$datasetId.COLUMNS`
+                FROM `$validatedProjectId.$datasetId.COLUMNS`
                 ORDER BY table_name, ordinal_position
                 LIMIT 500
                 """.trimIndent()
@@ -161,5 +162,27 @@ class BigQueryHandler : DataSourceHandler {
         val trimmed = query.trim().uppercase()
         require(trimmed.startsWith("SELECT")) { "Only SELECT queries are allowed" }
         require(!query.contains(";")) { "Multiple statements are not allowed" }
+        val forbiddenKeywords = listOf(
+            Regex("""\bINSERT\b""") to "INSERT",
+            Regex("""\bUPDATE\b""") to "UPDATE",
+            Regex("""\bDELETE\b""") to "DELETE",
+            Regex("""\bDROP\b""") to "DROP",
+            Regex("""\bCREATE\b""") to "CREATE",
+            Regex("""\bALTER\b""") to "ALTER",
+            Regex("""\bTRUNCATE\b""") to "TRUNCATE",
+            Regex("""\bEXEC(UTE)?\b""") to "EXEC",
+            Regex("""\bMERGE\b""") to "MERGE",
+            Regex("""\bCALL\b""") to "CALL",
+        )
+        for ((pattern, name) in forbiddenKeywords) {
+            require(!pattern.containsMatchIn(trimmed)) { "$name statements are not allowed" }
+        }
+    }
+
+    private fun validateBigQueryIdentifier(identifier: String): String {
+        require(identifier.matches(Regex("[A-Za-z0-9_]+"))) {
+            "Invalid BigQuery identifier '$identifier': only letters, digits, and underscores are allowed"
+        }
+        return identifier
     }
 }

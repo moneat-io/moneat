@@ -113,7 +113,7 @@ class PrometheusHandler : HttpApiHandler() {
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
         val baseUrl = buildUrl(host, port)
-        val promLimit = if (timeRange != null) limit.coerceAtLeast(5000) else limit
+        val promLimit = limit
 
         return try {
             val response = if (timeRange != null) {

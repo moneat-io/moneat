@@ -22,6 +22,8 @@ import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
 import io.lettuce.core.RedisClient
+import io.lettuce.core.ScanArgs
+import io.lettuce.core.ScanCursor
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -43,7 +45,7 @@ class RedisHandler : DataSourceHandler {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     conn.sync().ping()
-                    val keys = conn.sync().keys("*").take(20)
+                    val keys = scanKeys(conn.sync(), "*", 20)
                     TestConnectionResult(true, "Connected successfully", keys = keys)
                 }
             }
@@ -157,13 +159,13 @@ class RedisHandler : DataSourceHandler {
                             val matchPart = parts.drop(2).joinToString(" ")
                             val pattern = Regex("""MATCH\s+(\S+)""")
                                 .find(matchPart)?.groupValues?.get(1) ?: "*"
-                            cmd.keys(pattern).take(limit).map { k ->
+                            scanKeys(cmd, pattern, limit).map { k ->
                                 mapOf("key" to JsonPrimitive(k))
                             }
                         }
                         "KEYS" -> {
                             val pattern = parts.getOrNull(1) ?: "*"
-                            cmd.keys(pattern).take(limit).map { k ->
+                            scanKeys(cmd, pattern, limit).map { k ->
                                 mapOf("key" to JsonPrimitive(k))
                             }
                         }
@@ -198,7 +200,7 @@ class RedisHandler : DataSourceHandler {
         return try {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
-                    val keys = conn.sync().keys("*").take(100)
+                    val keys = scanKeys(conn.sync(), "*", 100)
                     keys.map { DataSourceField(it, "key", "Redis key") }
                 }
             }
@@ -212,6 +214,26 @@ class RedisHandler : DataSourceHandler {
         val cleanHost = host.removePrefix("redis://").removePrefix("rediss://")
         val auth = if (!password.isNullOrBlank()) ":$password@" else ""
         return "redis://$auth$cleanHost:$port"
+    }
+
+    /**
+     * Scan Redis keys using the non-blocking SCAN command with cursor iteration.
+     * Avoids [io.lettuce.core.api.sync.RedisKeyCommands.keys] which can block the server.
+     */
+    private fun scanKeys(
+        cmd: io.lettuce.core.api.sync.RedisCommands<String, String>,
+        pattern: String,
+        maxKeys: Int,
+    ): List<String> {
+        val result = mutableListOf<String>()
+        val args = ScanArgs.Builder.limit(maxKeys.toLong()).match(pattern)
+        var cursor = ScanCursor.INITIAL
+        do {
+            val scanResult = cmd.scan(cursor, args)
+            result.addAll(scanResult.keys)
+            cursor = scanResult
+        } while (!cursor.isFinished && result.size < maxKeys)
+        return result.take(maxKeys)
     }
 
     companion object {
