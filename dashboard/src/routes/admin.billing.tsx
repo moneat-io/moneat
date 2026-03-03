@@ -387,7 +387,7 @@ function AdminBillingPage() {
     [createTierVersions],
   )
 
-  const currentTierVersion = currentTierConfig ? `${currentTierConfig.tier}-${currentTierConfig.version}` : undefined
+  const currentTierVersion = currentTierConfig ? `${currentTierConfig.tierName}-${currentTierConfig.version}` : undefined
   const createForm = (createFormState.tierVersion === currentTierVersion && currentTierVersion !== undefined)
     ? createFormState.data
     : (currentTierConfig ? buildCreateFormFromConfig(currentTierConfig) : DEFAULT_FORM)

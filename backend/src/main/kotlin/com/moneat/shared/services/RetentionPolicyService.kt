@@ -18,6 +18,7 @@ package com.moneat.shared.services
 
 import com.moneat.billing.models.PricingTier
 import com.moneat.billing.services.PricingTierService
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Systems
@@ -29,14 +30,18 @@ import java.util.*
 class RetentionPolicyService(
     private val pricingTierService: PricingTierService = PricingTierService()
 ) {
+    companion object {
+        const val RETENTION_CACHE_TTL_SECONDS = 300L
+    }
+
     suspend fun getRetentionDaysForOrganization(organizationId: Int): Int {
-        return CacheService.cached("cache:retention:org:$organizationId", 300) {
+        return CacheService.cached("cache:retention:org:$organizationId", RETENTION_CACHE_TTL_SECONDS) {
             pricingTierService.getEffectiveTierForOrganization(organizationId).tier.retentionDays
         }
     }
 
     suspend fun getRetentionDaysForProject(projectId: Long): Int? {
-        return CacheService.cached("cache:retention:project:$projectId", 300) {
+        return CacheService.cached("cache:retention:project:$projectId", RETENTION_CACHE_TTL_SECONDS) {
             val organizationId =
                 transaction {
                     Projects
@@ -50,7 +55,7 @@ class RetentionPolicyService(
     }
 
     suspend fun getRetentionDaysForSystem(systemId: UUID): Int? {
-        return CacheService.cached("cache:retention:system:$systemId", 300) {
+        return CacheService.cached("cache:retention:system:$systemId", RETENTION_CACHE_TTL_SECONDS) {
             val organizationId =
                 transaction {
                     Systems
@@ -58,6 +63,20 @@ class RetentionPolicyService(
                         .where { Systems.id eq systemId }
                         .firstOrNull()
                         ?.get(Systems.organization_id)
+                }
+            organizationId?.let { getRetentionDaysForOrganization(it) }
+        }
+    }
+
+    suspend fun getRetentionDaysForHost(hostId: Int): Int? {
+        return CacheService.cached("cache:retention:host:$hostId", RETENTION_CACHE_TTL_SECONDS) {
+            val organizationId =
+                transaction {
+                    Hosts
+                        .selectAll()
+                        .where { Hosts.id eq hostId }
+                        .firstOrNull()
+                        ?.get(Hosts.organization_id)
                 }
             organizationId?.let { getRetentionDaysForOrganization(it) }
         }
@@ -78,13 +97,13 @@ class RetentionPolicyService(
     }
 
     suspend fun getLogRetentionDaysForOrganization(organizationId: Int): Int {
-        return CacheService.cached("cache:log_retention:org:$organizationId", 300) {
+        return CacheService.cached("cache:log_retention:org:$organizationId", RETENTION_CACHE_TTL_SECONDS) {
             pricingTierService.getEffectiveTierForOrganization(organizationId).tier.logRetentionDays
         }
     }
 
     suspend fun getLogRetentionDaysForProject(projectId: Long): Int? {
-        return CacheService.cached("cache:log_retention:project:$projectId", 300) {
+        return CacheService.cached("cache:log_retention:project:$projectId", RETENTION_CACHE_TTL_SECONDS) {
             val organizationId =
                 transaction {
                     Projects
@@ -112,7 +131,7 @@ class RetentionPolicyService(
     }
 
     suspend fun getReplayRetentionDaysForOrganization(organizationId: Int): Int {
-        return CacheService.cached("cache:replay_retention:org:$organizationId", 300) {
+        return CacheService.cached("cache:replay_retention:org:$organizationId", RETENTION_CACHE_TTL_SECONDS) {
             pricingTierService.getEffectiveTierForOrganization(organizationId).tier.replayRetentionDays
         }
     }
@@ -130,7 +149,7 @@ class RetentionPolicyService(
     }
 
     suspend fun getLlmRetentionDaysForOrganization(organizationId: Int): Int {
-        return CacheService.cached("cache:llm_retention:org:$organizationId", 300) {
+        return CacheService.cached("cache:llm_retention:org:$organizationId", RETENTION_CACHE_TTL_SECONDS) {
             pricingTierService.getEffectiveTierForOrganization(organizationId).tier.llmRetentionDays
         }
     }
@@ -148,7 +167,7 @@ class RetentionPolicyService(
     }
 
     suspend fun getAnalyticsRetentionDaysForOrganization(organizationId: Int): Int {
-        return CacheService.cached("cache:analytics_retention:org:$organizationId", 300) {
+        return CacheService.cached("cache:analytics_retention:org:$organizationId", RETENTION_CACHE_TTL_SECONDS) {
             pricingTierService.getEffectiveTierForOrganization(organizationId).tier.analyticsRetentionDays
         }
     }

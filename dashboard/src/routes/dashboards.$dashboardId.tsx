@@ -81,12 +81,13 @@ function DashboardViewPage() {
 
   // Initialize variable values from dashboard variable defaults on first load
   useEffect(() => {
-    if (!dashboard?.variables?.length) return
+    const vars = dashboard?.variables
+    if (!vars?.length) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setVariableValues((prev) => {
       const next = {...prev}
       let changed = false
-      for (const v of dashboard.variables) {
+      for (const v of vars) {
         if (!(v.name in next)) {
           let defaultVal = v.current ?? v.default_value ?? (v.options.length > 0 ? v.options[0] : '')
           // Grafana's $__all means "match all" — keep it so the backend can handle it

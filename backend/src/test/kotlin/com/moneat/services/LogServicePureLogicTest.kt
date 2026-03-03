@@ -16,7 +16,6 @@
 
 package com.moneat.services
 
-import com.moneat.logs.models.AgentLogEntry
 import com.moneat.logs.models.LogEntryResponse
 import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.models.LogTailFilters
@@ -70,25 +69,25 @@ class LogServicePureLogicTest {
 
     @Test
     fun `estimateBillableBytes agent returns 0 for empty list`() {
-        assertEquals(0L, service.estimateBillableBytes(emptyList<AgentLogEntry>(), systemId = null))
+        assertEquals(0L, service.estimateBillableBytes(emptyList<LogIngestEntry>()))
     }
 
     @Test
     fun `estimateBillableBytes agent sums message and body lengths`() {
         val entries = listOf(
-            AgentLogEntry(message = "AgentMsg", body = "AgentBody"), // 8+9=17
-            AgentLogEntry(message = "Short", body = "Txt"), // 5+3=8
+            LogIngestEntry(message = "AgentMsg", body = "AgentBody"), // 8+9=17
+            LogIngestEntry(message = "Short", body = "Txt"), // 5+3=8
         )
-        assertEquals(25L, service.estimateBillableBytes(entries, systemId = "sys-1"))
+        assertEquals(25L, service.estimateBillableBytes(entries))
     }
 
     @Test
     fun `estimateBillableBytes agent handles null message`() {
         val entries = listOf(
-            AgentLogEntry(message = null, body = "body"),
+            LogIngestEntry(message = null, body = "body"),
         )
         // normalizeAgentEntry returns null when message is null
-        assertEquals(0L, service.estimateBillableBytes(entries, systemId = null))
+        assertEquals(0L, service.estimateBillableBytes(entries))
     }
 
     // ==================== decodeQueueMessage / encodeQueueMessage ====================

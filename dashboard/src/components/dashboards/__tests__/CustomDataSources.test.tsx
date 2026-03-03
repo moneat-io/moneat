@@ -206,7 +206,7 @@ describe('Custom Data Sources', () => {
       ])
 
       const result = await api.listCustomDataSources()
-      const ds = result[0] as Record<string, unknown>
+      const ds = result[0] as unknown as Record<string, unknown>
       expect(ds.password).toBeUndefined()
       expect(ds.username).toBeUndefined()
       expect(ds.api_key).toBeUndefined()

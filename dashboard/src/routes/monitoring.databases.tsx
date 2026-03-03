@@ -148,7 +148,7 @@ function DatabaseMonitoring() {
                                     }}
                                     wrapLongLines
                                   >
-                                    {q.statement}
+                                    {String(q.statement ?? '')}
                                   </SyntaxHighlighter>
                                 </div>
                               </TooltipTrigger>

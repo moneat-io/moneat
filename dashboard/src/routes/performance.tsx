@@ -40,7 +40,7 @@ function PerformanceLayout() {
   const currentPath = router.location.pathname
   const hasDatadog = useHasModule('datadog')
 
-  const visibleTabs = tabs.filter((t) => !t.requiresDatadog || hasDatadog)
+  const visibleTabs = tabs.filter((t) => !('requiresDatadog' in t && t.requiresDatadog) || hasDatadog)
 
   const activeTab = visibleTabs.find(
     (t) => t.href !== '/performance'

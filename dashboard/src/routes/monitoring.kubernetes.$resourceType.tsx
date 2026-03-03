@@ -58,18 +58,19 @@ function statusColor(status: string) {
 
 function KubernetesResourceList() {
   const {resourceType} = Route.useParams()
-  const k8sType = RESOURCE_TYPE_MAP[resourceType] || resourceType
-  const title = resourceType.charAt(0).toUpperCase() + resourceType.slice(1)
+  const rt = resourceType ?? ''
+  const k8sType = RESOURCE_TYPE_MAP[rt] || rt
+  const title = rt.charAt(0).toUpperCase() + rt.slice(1)
 
   const [searchQuery, setSearchQuery] = useState('')
 
   const {data, isLoading} = useQuery({
     queryKey: ['k8s-resources', k8sType],
-    queryFn: () => api.get(`/v1/infra/k8s-resources?resource_type=${k8sType}&limit=100`),
+    queryFn: () => api.get<{resources?: KubernetesResource[]}>(`/v1/infra/k8s-resources?resource_type=${k8sType}&limit=100`),
+    enabled: Boolean(k8sType),
   })
 
-  const resources: KubernetesResource[] =
-    (data as {resources?: KubernetesResource[]} | undefined)?.resources ?? []
+  const resources: KubernetesResource[] = data?.resources ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return resources
@@ -167,7 +168,7 @@ function KubernetesResourceList() {
                     </TableCell>
                     <TableCell className="text-sm">{r.clusterName}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={cn('text-xs', statusColor(r.status))}>
+                      <Badge variant="secondary" className={cn('text-xs', statusColor(r.status ?? ''))}>
                         {r.status || 'Unknown'}
                       </Badge>
                     </TableCell>

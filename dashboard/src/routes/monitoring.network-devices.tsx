@@ -47,11 +47,11 @@ function NetworkDevicesLayout() {
 
   const {data, isLoading} = useQuery({
     queryKey: ['ndm-devices'],
-    queryFn: () => api.get('/v1/network-devices?limit=100'),
+    queryFn: () => api.get<{devices?: NetworkDevice[]}>('/v1/network-devices?limit=100'),
     enabled: isIndexPage,
   })
 
-  const devices: NetworkDevice[] = (data?.devices as NetworkDevice[] | undefined) ?? []
+  const devices: NetworkDevice[] = data?.devices ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return devices

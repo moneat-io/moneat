@@ -271,8 +271,9 @@ function formatXAxisTick(v: string | number, spanMs: number) {
   return `${hours}:${mins}`
 }
 
-function formatTooltipLabel(v: string | number) {
-  const ts = typeof v === 'number' ? v : parseUtcTimestamp(v)
+function formatTooltipLabel(v?: string | number) {
+  if (v === undefined) return ''
+  const ts = typeof v === 'number' ? v : parseUtcTimestamp(v as string)
   if (isNaN(ts)) return String(v)
   const d = new Date(ts)
   const month = String(d.getUTCMonth() + 1).padStart(2, '0')
@@ -282,7 +283,8 @@ function formatTooltipLabel(v: string | number) {
   return `${month}/${day} ${hours}:${mins}`
 }
 
-function formatTooltipValue(value: number | string) {
+function formatTooltipValue(value?: number | string) {
+  if (value === undefined) return ''
   if (typeof value !== 'number') return value
   if (Number.isInteger(value)) return value.toLocaleString()
   return value.toLocaleString(undefined, {maximumFractionDigits: 2})
@@ -505,7 +507,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
     ? (v: number) => formatValue(v, unit, decimals)
     : undefined
   const tooltipFormatter = unit && unit !== 'none'
-    ? (v: number | string) => typeof v === 'number' ? formatValue(v, unit, decimals) : v
+    ? (v?: number | string) => (v !== undefined && typeof v === 'number' ? formatValue(v, unit, decimals) : (v ?? ''))
     : formatTooltipValue
 
   const useArea = fillOpacity > 0 || stackMode !== 'none'
@@ -534,8 +536,8 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
             wrapperStyle={TOOLTIP_WRAPPER_STYLE}
-            labelFormatter={formatTooltipLabel}
-            formatter={tooltipFormatter}
+            labelFormatter={(label) => formatTooltipLabel(label as string | number)}
+            formatter={tooltipFormatter as (value: string | number | undefined, name: string | undefined, props: unknown) => ReactNode}
           />
           {legendProps && <Legend {...legendProps} />}
           {thresholds.map((t, i) => (
@@ -579,8 +581,8 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
             wrapperStyle={TOOLTIP_WRAPPER_STYLE}
-            labelFormatter={formatTooltipLabel}
-            formatter={tooltipFormatter}
+            labelFormatter={(label) => formatTooltipLabel(label as string | number)}
+            formatter={tooltipFormatter as (value: string | number | undefined, name: string | undefined, props: unknown) => ReactNode}
           />
           {legendProps && <Legend {...legendProps} />}
           {thresholds.map((t, i) => (
@@ -620,7 +622,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
     ? (v: number) => formatValue(v, unit, decimals)
     : undefined
   const tooltipFormatter = unit && unit !== 'none'
-    ? (v: number | string) => typeof v === 'number' ? formatValue(v, unit, decimals) : v
+    ? (v?: number | string) => (v !== undefined && typeof v === 'number' ? formatValue(v, unit, decimals) : (v ?? ''))
     : formatTooltipValue
 
   if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
@@ -655,8 +657,8 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
               cursor={{fill: 'transparent'}}
               contentStyle={TOOLTIP_STYLE}
               wrapperStyle={TOOLTIP_WRAPPER_STYLE}
-              labelFormatter={formatTooltipLabel}
-              formatter={tooltipFormatter}
+              labelFormatter={(label) => formatTooltipLabel(label as string | number)}
+              formatter={tooltipFormatter as (value: string | number | undefined, name: string | undefined, props: unknown) => ReactNode}
             />
             {legendProps && <Legend {...legendProps} iconSize={8} />}
             {thresholds.map((t, i) => (
@@ -724,7 +726,7 @@ const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc
             innerRadius="35%"
             outerRadius="65%"
             paddingAngle={2}
-            label={({percent}) => `${(percent * 100).toFixed(0)}%`}
+            label={({percent}) => `${((percent ?? 0) * 100).toFixed(0)}%`}
             labelLine={false}
           >
             {data.map((_, i) => (

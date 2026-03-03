@@ -80,7 +80,7 @@ class LogService {
         queueKey: String
     ): Int {
         val normalized = entries.mapNotNull { normalizeSdkEntry(it) }
-        return enqueueNormalized(organizationId, null, "sdk", normalized, queueKey)
+        return enqueueNormalized(organizationId, null, null, "sdk", normalized, queueKey)
     }
 
     suspend fun enqueueAgentLogs(
@@ -90,7 +90,17 @@ class LogService {
         queueKey: String
     ): Int {
         val normalized = entries.mapNotNull { normalizeAgentEntry(it, systemId) }
-        return enqueueNormalized(organizationId, systemId, "agent", normalized, queueKey)
+        return enqueueNormalized(organizationId, systemId, null, "agent", normalized, queueKey)
+    }
+
+    suspend fun enqueueAgentLogs(
+        organizationId: Long,
+        hostId: Int,
+        entries: List<AgentLogEntry>,
+        queueKey: String
+    ): Int {
+        val normalized = entries.mapNotNull { normalizeAgentEntry(it, null) }
+        return enqueueNormalized(organizationId, null, hostId, "agent", normalized, queueKey)
     }
 
     suspend fun enqueueOtlpLogs(
@@ -100,21 +110,12 @@ class LogService {
     ): Int {
         val parsed = parseOtlpJson(body)
         val normalized = parsed.mapNotNull { normalizeOtlpEntry(it) }
-        return enqueueNormalized(organizationId, null, "otlp", normalized, queueKey)
+        return enqueueNormalized(organizationId, null, null, "otlp", normalized, queueKey)
     }
 
     fun estimateBillableBytes(entries: List<LogIngestEntry>): Long {
         return entries
             .mapNotNull { normalizeSdkEntry(it) }
-            .sumOf { (it.message.length + it.body.length).toLong() }
-    }
-
-    fun estimateBillableBytes(
-        entries: List<AgentLogEntry>,
-        systemId: String?
-    ): Long {
-        return entries
-            .mapNotNull { normalizeAgentEntry(it, systemId) }
             .sumOf { (it.message.length + it.body.length).toLong() }
     }
 
@@ -133,6 +134,9 @@ class LogService {
 
         val rows =
             batch.logs.joinToString(",\n") { entry ->
+                val tagsWithHost = batch.hostId?.let { id ->
+                    (entry.tags + ("host_id" to id.toString()))
+                } ?: entry.tags
                 """
             (
                 toUUID('${escapeSql(entry.logId)}'),
@@ -151,7 +155,7 @@ class LogService {
                 '${escapeSql(entry.containerImage)}',
                 '${escapeSql(entry.traceId)}',
                 '${escapeSql(entry.spanId)}',
-                ${mapToSqlMap(entry.tags)},
+                ${mapToSqlMap(tagsWithHost)},
                 ${mapToSqlMap(entry.resourceAttributes)},
                 '${escapeSql(entry.indexName)}'
             )
@@ -198,7 +202,7 @@ class LogService {
             logger.error { "organizationId $orgIdLong out of Int range, skipping usage recording" }
         }
 
-        return batch.logs.map { toResponse(it, batch.systemId) }
+        return batch.logs.map { toResponse(it, batch.systemId, batch.hostId) }
     }
 
     suspend fun publishLiveLogs(
@@ -252,7 +256,7 @@ class LogService {
         val conditions = mutableListOf<String>()
 
         val totalCountFilter =
-            buildScopeFilter(organizationId, request.systemId) ?: return LogQueryResponse(
+            buildScopeFilter(organizationId, request.systemId, request.hostId) ?: return LogQueryResponse(
                 logs = emptyList(),
                 nextCursor = null,
                 hasMore = false,
@@ -1085,6 +1089,8 @@ class LogService {
                     val systemId =
                         obj["system_id_text"]?.jsonPrimitive?.contentOrNull
                             ?: obj["system_id"]?.jsonPrimitive?.contentOrNull
+                    val tagsMap = parseMapField(obj["tags"])
+                    val hostIdFromTags = tagsMap["host_id"]?.toIntOrNull()
                     val log =
                         LogEntryResponse(
                             logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
@@ -1107,9 +1113,10 @@ class LogService {
                             containerImage = obj["container_image"]?.jsonPrimitive?.content ?: "",
                             traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
                             spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
-                            tags = parseMapField(obj["tags"]),
+                            tags = tagsMap,
                             resourceAttributes = parseMapField(obj["resource_attributes"]),
-                            systemId = if (systemId == "00000000-0000-0000-0000-000000000000") null else systemId
+                            systemId = if (systemId == "00000000-0000-0000-0000-000000000000") null else systemId,
+                            hostId = hostIdFromTags
                         )
                     LogWithCursor(log = log, timestampMs = timestampMs)
                 } catch (e: Exception) {
@@ -1146,6 +1153,7 @@ class LogService {
     private suspend fun enqueueNormalized(
         organizationId: Long,
         systemId: String?,
+        hostId: Int? = null,
         source: String,
         logs: List<QueuedLogEntry>,
         queueKey: String
@@ -1158,6 +1166,7 @@ class LogService {
                     organizationId = organizationId,
                     legacyProjectId = null,
                     systemId = systemId,
+                    hostId = hostId,
                     source = source,
                     logs = logs
                 )
@@ -1232,7 +1241,8 @@ class LogService {
 
     private fun toResponse(
         entry: QueuedLogEntry,
-        systemId: String?
+        systemId: String?,
+        hostId: Int? = null
     ): LogEntryResponse {
         return LogEntryResponse(
             logId = entry.logId,
@@ -1251,7 +1261,8 @@ class LogService {
             spanId = entry.spanId,
             tags = entry.tags,
             resourceAttributes = entry.resourceAttributes,
-            systemId = systemId
+            systemId = systemId,
+            hostId = hostId
         )
     }
 
@@ -1356,8 +1367,13 @@ class LogService {
 
     private fun buildScopeFilter(
         organizationId: Long,
-        systemId: String?
+        systemId: String?,
+        hostId: Int? = null
     ): String? {
+        hostId?.let { id ->
+            return "${ClickHouseQueryUtils.orgIdClause(organizationId)} AND tags['host_id'] = '$id'"
+        }
+
         val rawSystemId = systemId?.trim()
         if (rawSystemId.isNullOrEmpty()) {
             return ClickHouseQueryUtils.orgIdClause(organizationId)

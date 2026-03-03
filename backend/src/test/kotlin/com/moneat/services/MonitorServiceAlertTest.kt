@@ -25,15 +25,14 @@ import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
-import com.moneat.shared.models.SystemAlertSettings
-import com.moneat.shared.models.SystemAlertTemplateStates
-import com.moneat.shared.models.SystemAlerts
-import com.moneat.shared.models.Systems
+import com.moneat.shared.models.HostAlertSettings
+import com.moneat.shared.models.HostAlertTemplateStates
+import com.moneat.shared.models.HostAlerts
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.*
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -51,7 +50,7 @@ class MonitorServiceAlertTest {
 
     companion object {
         private var db: Database? = null
-        private const val ALERT_SCOPE_SYSTEM = "system"
+        private const val ALERT_SCOPE_SYSTEM = "host"
         private const val ALERT_SCOPE_GLOBAL = "global"
     }
 
@@ -67,9 +66,9 @@ class MonitorServiceAlertTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         TestDatabaseHelper.resetSchema(
-            Users, Organizations, Memberships, Projects, Subscriptions, Systems,
-            SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings,
-            SystemAlertTemplateStates, PricingTierConfigs
+            Users, Organizations, Memberships, Projects, Subscriptions, Hosts,
+            HostAlerts, OrganizationAlertTemplates, HostAlertSettings,
+            HostAlertTemplateStates, PricingTierConfigs
         )
     }
 
@@ -97,10 +96,9 @@ class MonitorServiceAlertTest {
             } get PricingTierConfigs.id
         }
 
-    private fun seedSystem(orgId: Int, name: String = "test-server"): Pair<UUID, String> {
-        "test-key-${UUID.randomUUID()}"
-        val (system, returnedKey) = service.createSystem(orgId, name)
-        return system.id to returnedKey
+    private fun seedSystem(orgId: Int, name: String = "test-server"): Pair<Int, String> {
+        val (host, returnedKey) = service.createHost(orgId, name)
+        return host.id to returnedKey
     }
 
     // ==================== createAlert ====================
@@ -179,7 +177,7 @@ class MonitorServiceAlertTest {
         seedFreeTier()
         val (systemId, _) = seedSystem(orgId)
 
-        val alerts = service.listAlerts(systemId)
+        val alerts = service.listAlerts(systemId, orgId)
         // createSystem auto-seeds default alerts (cpu, mem, disk, etc.)
         assertTrue(alerts.isNotEmpty())
     }
@@ -190,11 +188,11 @@ class MonitorServiceAlertTest {
         seedFreeTier()
         val (systemId, _) = seedSystem(orgId)
 
-        val beforeCount = service.listAlerts(systemId).size
+        val beforeCount = service.listAlerts(systemId, orgId).size
         service.createAlert(systemId, orgId, CreateAlertRequest("cpu_percent", ">", 90.0))
         service.createAlert(systemId, orgId, CreateAlertRequest("mem_percent", ">=", 85.0))
 
-        val alerts = service.listAlerts(systemId)
+        val alerts = service.listAlerts(systemId, orgId)
         assertEquals(beforeCount + 2, alerts.size)
         val metrics = alerts.map { it.metric }.toSet()
         assertTrue(metrics.contains("cpu_percent"))
@@ -208,11 +206,11 @@ class MonitorServiceAlertTest {
         val (system1, _) = seedSystem(orgId, "server-1")
         val (system2, _) = seedSystem(orgId, "server-2")
 
-        val before1 = service.listAlerts(system1).size
+        val before1 = service.listAlerts(system1, orgId).size
         service.createAlert(system1, orgId, CreateAlertRequest("cpu_percent", ">", 90.0))
         service.createAlert(system2, orgId, CreateAlertRequest("mem_percent", ">", 90.0))
 
-        val alerts = service.listAlerts(system1)
+        val alerts = service.listAlerts(system1, orgId)
         // Only system1's custom alert added; system2's alert not included
         assertEquals(before1 + 1, alerts.size)
         assertTrue(alerts.any { it.metric == "cpu_percent" })
@@ -228,7 +226,7 @@ class MonitorServiceAlertTest {
 
         val result = service.updateAlert(
             alertId = 99999,
-            systemId = systemId,
+            hostId = systemId,
             organizationId = orgId,
             request = UpdateAlertRequest(threshold = 75.0),
             scope = ALERT_SCOPE_SYSTEM
@@ -245,14 +243,14 @@ class MonitorServiceAlertTest {
 
         val result = service.updateAlert(
             alertId = created.id,
-            systemId = systemId,
+            hostId = systemId,
             organizationId = orgId,
             request = UpdateAlertRequest(threshold = 75.0),
             scope = ALERT_SCOPE_SYSTEM
         )
         assertTrue(result)
 
-        val alerts = service.listAlerts(systemId)
+        val alerts = service.listAlerts(systemId, orgId)
         val updated = alerts.first { it.id == created.id }
         assertEquals(75.0, updated.threshold)
     }
@@ -266,13 +264,13 @@ class MonitorServiceAlertTest {
 
         service.updateAlert(
             alertId = created.id,
-            systemId = systemId,
+            hostId = systemId,
             organizationId = orgId,
             request = UpdateAlertRequest(enabled = false),
             scope = ALERT_SCOPE_SYSTEM
         )
 
-        val alerts = service.listAlerts(systemId)
+        val alerts = service.listAlerts(systemId, orgId)
         val updated = alerts.first { it.id == created.id }
         assertFalse(updated.enabled)
     }
@@ -286,13 +284,13 @@ class MonitorServiceAlertTest {
 
         service.updateAlert(
             alertId = created.id,
-            systemId = systemId,
+            hostId = systemId,
             organizationId = orgId,
             request = UpdateAlertRequest(metric = "disk_percent", condition = ">="),
             scope = ALERT_SCOPE_SYSTEM
         )
 
-        val alerts = service.listAlerts(systemId)
+        val alerts = service.listAlerts(systemId, orgId)
         val updated = alerts.first { it.id == created.id }
         assertEquals("disk_percent", updated.metric)
         assertEquals(">=", updated.condition)
@@ -312,7 +310,7 @@ class MonitorServiceAlertTest {
 
         val result = service.updateAlert(
             alertId = created.id,
-            systemId = systemId,
+            hostId = systemId,
             organizationId = orgId,
             request = UpdateAlertRequest(threshold = 85.0),
             scope = ALERT_SCOPE_GLOBAL
@@ -330,7 +328,7 @@ class MonitorServiceAlertTest {
 
         val result = service.updateAlert(
             alertId = created.id,
-            systemId = system2,
+            hostId = system2,
             organizationId = orgId,
             request = UpdateAlertRequest(threshold = 50.0),
             scope = ALERT_SCOPE_SYSTEM
@@ -338,7 +336,7 @@ class MonitorServiceAlertTest {
         assertFalse(result)
 
         // Original should be unchanged
-        val alerts = service.listAlerts(system1)
+        val alerts = service.listAlerts(system1, orgId)
         assertEquals(90.0, alerts.first().threshold)
     }
 
@@ -354,7 +352,7 @@ class MonitorServiceAlertTest {
         val result = service.deleteAlert(created.id, systemId, orgId, ALERT_SCOPE_SYSTEM)
         assertTrue(result)
 
-        val alerts = service.listAlerts(systemId)
+        val alerts = service.listAlerts(systemId, orgId)
         assertTrue(alerts.none { it.id == created.id })
     }
 
@@ -380,7 +378,7 @@ class MonitorServiceAlertTest {
         assertFalse(result)
 
         // Original alert should still exist (verify by looking for the specific ID)
-        assertTrue(service.listAlerts(systemId).any { it.id == created.id })
+        assertTrue(service.listAlerts(systemId, org1).any { it.id == created.id })
     }
 
     @Test

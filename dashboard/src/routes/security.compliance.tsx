@@ -50,16 +50,16 @@ interface ComplianceFinding {
 function ComplianceFindings() {
   const {data: summaryData} = useQuery({
     queryKey: ['compliance-summary'],
-    queryFn: () => api.get('/v1/security/compliance/summary'),
+    queryFn: () => api.get<{summary?: ComplianceSummary[]}>('/v1/security/compliance/summary'),
   })
 
   const {data, isLoading} = useQuery({
     queryKey: ['compliance-findings'],
-    queryFn: () => api.get('/v1/security/compliance?limit=50'),
+    queryFn: () => api.get<{findings?: ComplianceFinding[]; totalCount?: number}>('/v1/security/compliance?limit=50'),
   })
 
-  const findings: ComplianceFinding[] = (data?.findings as ComplianceFinding[] | undefined) ?? []
-  const summary: ComplianceSummary[] = (summaryData?.summary as ComplianceSummary[] | undefined) ?? []
+  const findings: ComplianceFinding[] = data?.findings ?? []
+  const summary: ComplianceSummary[] = summaryData?.summary ?? []
 
   return (
     <div className="space-y-6">
