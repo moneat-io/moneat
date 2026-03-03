@@ -31,7 +31,6 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -55,7 +54,8 @@ class ElasticsearchHandler : HttpApiHandler() {
                 request.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
                 request.username?.let { u ->
                     request.password?.let { p ->
-                        header(HttpHeaders.Authorization, "Basic ${java.util.Base64.getEncoder().encodeToString("$u:$p".toByteArray())}")
+                        val encoded = java.util.Base64.getEncoder().encodeToString("$u:$p".toByteArray())
+                        header(HttpHeaders.Authorization, "Basic $encoded")
                     }
                 }
             }
@@ -88,12 +88,16 @@ class ElasticsearchHandler : HttpApiHandler() {
             json.parseToJsonElement(query) as? JsonObject
                 ?: JsonObject(mapOf("query" to (json.parseToJsonElement(query) as JsonObject)))
         } catch (_: Exception) {
-            JsonObject(mapOf(
-                "query" to JsonObject(mapOf(
-                    "query_string" to JsonObject(mapOf("query" to JsonPrimitive(query)))
-                )),
-                "size" to JsonPrimitive(limit.coerceIn(1, 10000))
-            ))
+            JsonObject(
+                mapOf(
+                    "query" to JsonObject(
+                        mapOf(
+                            "query_string" to JsonObject(mapOf("query" to JsonPrimitive(query)))
+                        )
+                    ),
+                    "size" to JsonPrimitive(limit.coerceIn(1, 10000))
+                )
+            )
         }
 
         val bodyObj = queryBody.toMutableMap()
@@ -106,7 +110,8 @@ class ElasticsearchHandler : HttpApiHandler() {
                 credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
                 credentials.username?.let { u ->
                     credentials.password?.let { p ->
-                        header(HttpHeaders.Authorization, "Basic ${java.util.Base64.getEncoder().encodeToString("$u:$p".toByteArray())}")
+                        val encoded = java.util.Base64.getEncoder().encodeToString("$u:$p".toByteArray())
+                        header(HttpHeaders.Authorization, "Basic $encoded")
                     }
                 }
             }
@@ -139,9 +144,9 @@ class ElasticsearchHandler : HttpApiHandler() {
                     val index = obj["index"]?.jsonPrimitive?.content ?: return@mapNotNull null
                     DataSourceField(index, "index", "Elasticsearch index")
                 }.take(100)
-            } else emptyList()
-        } catch (e: Exception) {
-            logger.error(e) { "Elasticsearch schema fetch failed" }
+            } else {
+                emptyList()
+            }
             emptyList()
         }
     }

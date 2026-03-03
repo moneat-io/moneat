@@ -23,8 +23,11 @@ class MySQLHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDataSo
     pools = pools,
 ) {
     override fun buildJdbcUrl(host: String, port: Int, database: String): String =
-        if (database.isBlank()) "jdbc:mysql://$host:$port/"
-        else "jdbc:mysql://$host:$port/$database"
+        if (database.isBlank()) {
+            "jdbc:mysql://$host:$port/"
+        } else {
+            "jdbc:mysql://$host:$port/$database"
+        }
 
     override fun defaultPort(): Int = 3306
 
@@ -34,7 +37,8 @@ class MySQLHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDataSo
         "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name LIMIT 50"
 
     override fun testConnectionQuery(): String =
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = IFNULL(DATABASE(), SCHEMA()) ORDER BY table_name LIMIT 50"
+        "SELECT table_name FROM information_schema.tables " +
+            "WHERE table_schema = IFNULL(DATABASE(), SCHEMA()) ORDER BY table_name LIMIT 50"
 
     override fun schemaFieldsQuery(): String =
         """

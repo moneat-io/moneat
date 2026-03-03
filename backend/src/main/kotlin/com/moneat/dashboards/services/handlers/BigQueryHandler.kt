@@ -16,6 +16,7 @@
 
 package com.moneat.dashboards.services.handlers
 
+import com.google.cloud.bigquery.BigQuery
 import com.google.cloud.bigquery.BigQueryOptions
 import com.google.cloud.bigquery.FieldValueList
 import com.google.cloud.bigquery.QueryJobConfiguration
@@ -124,7 +125,7 @@ class BigQueryHandler : DataSourceHandler {
         }
     }
 
-    private fun createBigQueryClient(projectId: String, serviceAccountJson: String): com.google.cloud.bigquery.BigQuery {
+    private fun createBigQueryClient(projectId: String, serviceAccountJson: String): BigQuery {
         val credentials = com.google.auth.oauth2.GoogleCredentials.fromStream(
             serviceAccountJson.byteInputStream()
         )

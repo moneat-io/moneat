@@ -22,18 +22,12 @@ import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
 import com.mongodb.client.MongoClients
-import com.mongodb.client.MongoCollection
-import com.mongodb.client.MongoDatabase
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import org.bson.BsonDocument
-import org.bson.BsonValue
 import org.bson.Document
 import org.bson.conversions.Bson
 
@@ -46,8 +40,9 @@ private val logger = KotlinLogging.logger {}
 class MongoDBHandler : DataSourceHandler {
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        val connStr = request.connectionString
-            ?: buildConnectionString(request.host, request.port ?: 27017, request.databaseName, request.username, request.password)
+        val connStr = request.connectionString ?: buildConnectionString(
+            request.host, request.port ?: 27017, request.databaseName, request.username, request.password
+        )
 
         return try {
             MongoClients.create(connStr).use { client ->

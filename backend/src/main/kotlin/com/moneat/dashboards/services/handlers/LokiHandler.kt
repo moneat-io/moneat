@@ -29,7 +29,6 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -111,7 +110,9 @@ class LokiHandler : HttpApiHandler() {
                 body["data"]?.jsonArray?.map {
                     DataSourceField(it.jsonPrimitive.content, "label", "Loki label")
                 } ?: emptyList()
-            } else emptyList()
+            } else {
+                emptyList()
+            }
         } catch (e: Exception) {
             logger.error(e) { "Loki schema fetch failed" }
             emptyList()
@@ -137,7 +138,9 @@ class LokiHandler : HttpApiHandler() {
             if (response.status.isSuccess()) {
                 val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
                 body["data"]?.jsonArray?.map { it.jsonPrimitive.content }?.sorted() ?: emptyList()
-            } else emptyList()
+            } else {
+                emptyList()
+            }
         } catch (e: Exception) {
             logger.warn(e) { "Loki label_values failed" }
             emptyList()

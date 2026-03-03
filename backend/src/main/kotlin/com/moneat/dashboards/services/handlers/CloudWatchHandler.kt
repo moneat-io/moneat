@@ -31,7 +31,6 @@ import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -163,10 +162,12 @@ class CloudWatchHandler : DataSourceHandler {
                     for ((i, ts) in timestamps.withIndex()) {
                         val value = values.getOrNull(i) ?: continue
                         val tsMs = ts.epochSeconds * 1000
-                        rows.add(mapOf(
-                            "time_bucket" to JsonPrimitive(tsMs),
-                            label to JsonPrimitive(value)
-                        ))
+                        rows.add(
+                            mapOf(
+                                "time_bucket" to JsonPrimitive(tsMs),
+                                label to JsonPrimitive(value)
+                            )
+                        )
                         if (rows.size >= limit) return rows
                     }
                 }

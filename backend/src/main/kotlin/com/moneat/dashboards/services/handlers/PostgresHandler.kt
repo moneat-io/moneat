@@ -16,7 +16,6 @@
 
 package com.moneat.dashboards.services.handlers
 
-import com.moneat.dashboards.models.TestConnectionRequest
 import java.util.concurrent.ConcurrentHashMap
 
 class PostgresHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDataSource>) : JdbcHandler(

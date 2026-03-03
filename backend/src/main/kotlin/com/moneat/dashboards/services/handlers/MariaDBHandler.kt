@@ -23,8 +23,11 @@ class MariaDBHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariData
     pools = pools,
 ) {
     override fun buildJdbcUrl(host: String, port: Int, database: String): String =
-        if (database.isBlank()) "jdbc:mariadb://$host:$port/"
-        else "jdbc:mariadb://$host:$port/$database"
+        if (database.isBlank()) {
+            "jdbc:mariadb://$host:$port/"
+        } else {
+            "jdbc:mariadb://$host:$port/$database"
+        }
 
     override fun defaultPort(): Int = 3306
 
@@ -34,7 +37,8 @@ class MariaDBHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariData
         "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name LIMIT 50"
 
     override fun testConnectionQuery(): String =
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = IFNULL(DATABASE(), SCHEMA()) ORDER BY table_name LIMIT 50"
+        "SELECT table_name FROM information_schema.tables " +
+            "WHERE table_schema = IFNULL(DATABASE(), SCHEMA()) ORDER BY table_name LIMIT 50"
 
     override fun schemaFieldsQuery(): String =
         """

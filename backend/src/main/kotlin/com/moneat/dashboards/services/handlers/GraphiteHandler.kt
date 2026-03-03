@@ -131,10 +131,12 @@ class GraphiteHandler : HttpApiHandler() {
                 val pair = dp.jsonArray
                 val ts = pair.getOrNull(1)?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
                 val value = pair.getOrNull(0)?.jsonPrimitive?.content?.toDoubleOrNull()
-                rows.add(mapOf(
-                    "time_bucket" to JsonPrimitive(ts * 1000),
-                    target to JsonPrimitive(value ?: 0.0)
-                ))
+                rows.add(
+                    mapOf(
+                        "time_bucket" to JsonPrimitive(ts * 1000),
+                        target to JsonPrimitive(value ?: 0.0)
+                    )
+                )
             }
         }
         return rows

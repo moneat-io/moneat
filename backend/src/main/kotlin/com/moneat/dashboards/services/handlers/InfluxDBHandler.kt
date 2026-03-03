@@ -31,13 +31,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -85,7 +79,8 @@ class InfluxDBHandler : HttpApiHandler() {
         val fluxQuery = if (timeRange != null) {
             val from = timeRange.from
             val to = timeRange.to
-            "from(bucket: \"${databaseName ?: "moneat"}\") |> range(start: $from, stop: $to) |> $query |> limit(n: $limit)"
+            val bucket = databaseName ?: "moneat"
+            "from(bucket: \"$bucket\") |> range(start: $from, stop: $to) |> $query |> limit(n: $limit)"
         } else {
             "$query |> limit(n: $limit)"
         }
@@ -117,7 +112,8 @@ class InfluxDBHandler : HttpApiHandler() {
         val baseUrl = buildUrl(host, port ?: 8086)
         val org = databaseName ?: "moneat"
         return try {
-            val query = "import \"influxdata/influxdb/schema\" schema.measurements(bucket: \"${databaseName ?: "moneat"}\")"
+            val bucket = databaseName ?: "moneat"
+            val query = "import \"influxdata/influxdb/schema\" schema.measurements(bucket: \"$bucket\")"
             val body = "org=$org&query=${java.net.URLEncoder.encode(query, "UTF-8")}"
             val response = httpClient.post("$baseUrl/api/v2/query") {
                 contentType(ContentType.Application.FormUrlEncoded)
@@ -128,14 +124,17 @@ class InfluxDBHandler : HttpApiHandler() {
                 val csv = response.bodyAsText()
                 val lines = csv.lines().filter { it.isNotBlank() }
                 if (lines.size >= 2) {
-                    val headers = lines[0].split(",").map { it.trim() }
                     lines.drop(1).take(100).mapNotNull { line ->
                         val vals = line.split(",").map { it.trim() }
                         val name = vals.getOrNull(1) ?: return@mapNotNull null
                         DataSourceField(name, "measurement", "InfluxDB measurement")
                     }
-                } else emptyList()
-            } else emptyList()
+                } else {
+                    emptyList()
+                }
+            } else {
+                emptyList()
+            }
         } catch (e: Exception) {
             logger.error(e) { "InfluxDB schema fetch failed" }
             emptyList()

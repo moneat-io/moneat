@@ -24,8 +24,6 @@ import com.moneat.dashboards.services.DataSourceCredentials
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
 import java.sql.ResultSet
@@ -202,10 +200,15 @@ abstract class JdbcHandler(
             val c = query[i]
             when {
                 inSingle -> {
-                    if (c == '\'' && i + 1 < query.length && query[i + 1] == '\'') i++
-                    else if (c == '\'') inSingle = false
+                    if (c == '\'' && i + 1 < query.length && query[i + 1] == '\'') {
+                        i++
+                    } else if (c == '\'') {
+                        inSingle = false
+                    }
                 }
-                inDouble -> if (c == '"') inDouble = false
+                inDouble -> {
+                    if (c == '"') inDouble = false
+                }
                 c == '\'' -> inSingle = true
                 c == '"' -> inDouble = true
                 c == ';' -> return true

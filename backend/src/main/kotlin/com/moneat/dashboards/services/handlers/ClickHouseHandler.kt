@@ -23,8 +23,11 @@ class ClickHouseHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariD
     pools = pools,
 ) {
     override fun buildJdbcUrl(host: String, port: Int, database: String): String =
-        if (database.isBlank()) "jdbc:clickhouse://$host:$port"
-        else "jdbc:clickhouse://$host:$port/$database"
+        if (database.isBlank()) {
+            "jdbc:clickhouse://$host:$port"
+        } else {
+            "jdbc:clickhouse://$host:$port/$database"
+        }
 
     override fun defaultPort(): Int = 8123
 
