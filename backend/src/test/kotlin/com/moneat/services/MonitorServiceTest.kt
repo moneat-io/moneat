@@ -1,6 +1,8 @@
 package com.moneat.services
 
 import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.config.ClickHouseClient
+import com.moneat.config.EnvConfig
 import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationAlertTemplates
@@ -12,6 +14,13 @@ import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Users
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -28,6 +37,14 @@ class MonitorServiceTest {
 
     @BeforeTest
     fun setupDatabase() {
+        mockkObject(ClickHouseClient)
+        val clickHouseOk = mockk<HttpResponse>()
+        every { clickHouseOk.status } returns HttpStatusCode.OK
+        coEvery { ClickHouseClient.execute(any(), any()) } returns clickHouseOk
+
+        mockkObject(EnvConfig.SelfHost)
+        every { EnvConfig.SelfHost.enabled } returns false
+
         if (db == null) {
             db = Database.connect(
                 url = "jdbc:h2:mem:moneat_monitor_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -42,6 +59,12 @@ class MonitorServiceTest {
             HostAlerts, OrganizationAlertTemplates, HostAlertSettings,
             HostAlertTemplateStates, PricingTierConfigs
         )
+    }
+
+    @AfterTest
+    fun teardownMocks() {
+        unmockkObject(ClickHouseClient)
+        unmockkObject(EnvConfig.SelfHost)
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =
@@ -62,6 +85,7 @@ class MonitorServiceTest {
                 it[retention_days] = 3
                 it[log_retention_days] = 3
                 it[max_systems] = 3
+                it[max_hosts] = 3
                 it[monitor_interval_seconds] = 60
                 it[monthly_price_cents] = 0
                 it[is_current] = true

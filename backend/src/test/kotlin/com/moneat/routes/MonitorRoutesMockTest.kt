@@ -429,7 +429,7 @@ class MonitorRoutesMockTest {
             val logResponse = LogQueryResponse(logs = emptyList(), hasMore = false, totalCount = 0L)
 
             every { mockMonitorService.getHostById(system.id) } returns system
-            coEvery { mockLogService.queryLogs(0L, any()) } returns logResponse
+            coEvery { mockLogService.queryLogs(orgId.toLong(), any()) } returns logResponse
 
             application {
                 installAuth()
