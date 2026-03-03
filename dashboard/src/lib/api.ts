@@ -4867,6 +4867,74 @@ class ApiClient {
     })
   }
 
+  // Host-based alert methods (using /monitor/hosts/{hostId}/alerts endpoints)
+
+  async getHostAlertConfig(hostId: number) {
+    const response = await this.request<RawSystemAlertConfigResponse>(
+      `${API_BASE}/monitor/hosts/${hostId}/alerts/config`
+    )
+    return {
+      scope: (response.scope ?? 'host') as 'global' | 'host',
+      globalAlerts: (response.globalAlerts ?? response.global_alerts ?? []).map(
+        (row) => this.mapSystemAlert(row)
+      ),
+      hostAlerts: (response.systemAlerts ?? response.system_alerts ?? []).map(
+        (row) => this.mapSystemAlert(row)
+      ),
+      effectiveAlerts: (response.effectiveAlerts ?? response.effective_alerts ?? []).map(
+        (row) => this.mapSystemAlert(row)
+      ),
+    }
+  }
+
+  async updateHostAlertScope(hostId: number, scope: 'global' | 'host') {
+    return this.request<void>(
+      `${API_BASE}/monitor/hosts/${hostId}/alerts/scope`,
+      { method: 'PUT', body: JSON.stringify({scope}) }
+    )
+  }
+
+  async createHostAlert(
+    hostId: number,
+    alert: {
+      metric: string
+      condition: string
+      threshold: number
+      durationSeconds?: number
+      enabled?: boolean
+      incidentSeverity?: string
+    },
+    scope: 'global' | 'host' = 'host'
+  ) {
+    return this.request<SystemAlert>(
+      `${API_BASE}/monitor/hosts/${hostId}/alerts?scope=${scope}`,
+      { method: 'POST', body: JSON.stringify(alert) }
+    )
+  }
+
+  async updateHostAlert(
+    hostId: number,
+    alertId: number,
+    updates: Partial<SystemAlert>,
+    scope: 'global' | 'host' = 'host'
+  ) {
+    return this.request<SystemAlert>(
+      `${API_BASE}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
+      { method: 'PUT', body: JSON.stringify(updates) }
+    )
+  }
+
+  async deleteHostAlert(
+    hostId: number,
+    alertId: number,
+    scope: 'global' | 'host' = 'host'
+  ) {
+    return this.request<void>(
+      `${API_BASE}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
+      { method: 'DELETE' }
+    )
+  }
+
   // Alert Silence Period Methods
 
   private mapSilencePeriod(row: Record<string, unknown>): SilencePeriod {
