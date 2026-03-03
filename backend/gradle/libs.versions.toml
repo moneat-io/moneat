@@ -112,6 +112,19 @@ testcontainers-core = { module = "org.testcontainers:testcontainers", version.re
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql", version.ref = "testcontainers" }
 testcontainers-clickhouse = { module = "org.testcontainers:testcontainers-clickhouse", version.ref = "testcontainers" }
 
+# Datasource JDBC drivers
+mysql-connector-j = { module = "com.mysql:mysql-connector-j", version = "9.1.0" }
+mariadb-java-client = { module = "org.mariadb.jdbc:mariadb-java-client", version = "3.4.0" }
+mssql-jdbc = { module = "com.microsoft.sqlserver:mssql-jdbc", version = "12.8.1.jre11" }
+clickhouse-jdbc = { module = "com.clickhouse:clickhouse-jdbc", version = "0.9.0" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version = "3.46.1.0" }
+snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "3.24.2" }
+
+# Non-JDBC data clients / SDKs
+mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version = "5.3.0" }
+aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.2.15" }
+google-cloud-bigquery = { module = "com.google.cloud:google-cloud-bigquery", version = "2.42.2" }
+
 # Detekt
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
 

@@ -497,7 +497,10 @@ fun Route.customDashboardRoutes(
                     }
 
                     val creds = dataSourceService.getDecryptedCredentials(promSource.id, orgId) ?: continue
+                    val sourceType = com.moneat.dashboards.models.CustomDataSourceType.fromString(promSource.sourceType)
+                        ?: com.moneat.dashboards.models.CustomDataSourceType.PROMETHEUS
                     val options = dataSourceExecutor.executeLabelValuesQuery(
+                        sourceType,
                         promSource.host,
                         promSource.port,
                         creds,

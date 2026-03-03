@@ -41,8 +41,20 @@ export function DataSourceTypePicker({value, onChange, disabled}: DataSourceType
     }
   }, [])
 
-  const availableTypes = DATA_SOURCE_TYPES.filter((t) => t.category !== 'coming-soon')
-  const comingSoonTypes = DATA_SOURCE_TYPES.filter((t) => t.category === 'coming-soon')
+  const categoryLabels: Record<string, string> = {
+    database: 'Databases',
+    metrics: 'Metrics & Time-Series',
+    search: 'Search & Logs',
+    nosql: 'NoSQL',
+    cloud: 'Cloud',
+  }
+
+  const derivedCategories = Array.from(new Set(DATA_SOURCE_TYPES.map((t) => t.category)))
+  const orderedPriority = ['database', 'metrics', 'search', 'nosql', 'cloud']
+  const categoryOrder = [
+    ...orderedPriority.filter((c) => derivedCategories.includes(c)),
+    ...derivedCategories.filter((c) => !orderedPriority.includes(c)),
+  ]
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -75,47 +87,34 @@ export function DataSourceTypePicker({value, onChange, disabled}: DataSourceType
           <CommandInput placeholder="Search data sources..." />
           <CommandList>
             <CommandEmpty>No data source found.</CommandEmpty>
-            <CommandGroup heading="Available">
-              {availableTypes.map((type) => (
-                <CommandItem
-                  key={type.value}
-                  value={type.label}
-                  onSelect={() => {
-                    onChange(type.value)
-                    setOpen(false)
-                  }}
-                  className="flex items-center gap-3 py-2.5"
-                >
-                  <Check
-                    className={cn('h-4 w-4 shrink-0', value === type.value ? 'opacity-100' : 'opacity-0')}
-                  />
-                  <span className="shrink-0">{type.logo}</span>
-                  <div className="min-w-0">
-                    <div className="font-medium">{type.label}</div>
-                    <div className="text-muted-foreground text-xs">{type.description}</div>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            {comingSoonTypes.length > 0 && (
-              <CommandGroup heading="Coming Soon">
-                {comingSoonTypes.map((type) => (
-                  <CommandItem
-                    key={type.value}
-                    value={type.label}
-                    disabled
-                    className="flex items-center gap-3 py-2.5 opacity-50"
-                  >
-                    <Check className="h-4 w-4 shrink-0 opacity-0" />
-                    <span className="shrink-0">{type.logo}</span>
-                    <div className="min-w-0">
-                      <div className="font-medium">{type.label}</div>
-                      <div className="text-muted-foreground text-xs">{type.description}</div>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
+            {categoryOrder.map((cat) => {
+              const typesInCategory = DATA_SOURCE_TYPES.filter((t) => t.category === cat)
+              if (typesInCategory.length === 0) return null
+              return (
+                <CommandGroup key={cat} heading={categoryLabels[cat] ?? cat}>
+                  {typesInCategory.map((type) => (
+                    <CommandItem
+                      key={type.value}
+                      value={type.label}
+                      onSelect={() => {
+                        onChange(type.value)
+                        setOpen(false)
+                      }}
+                      className="flex items-center gap-3 py-2.5"
+                    >
+                      <Check
+                        className={cn('h-4 w-4 shrink-0', value === type.value ? 'opacity-100' : 'opacity-0')}
+                      />
+                      <span className="shrink-0">{type.logo}</span>
+                      <div className="min-w-0">
+                        <div className="font-medium">{type.label}</div>
+                        <div className="text-muted-foreground text-xs">{type.description}</div>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )
+            })}
           </CommandList>
         </Command>
       </PopoverContent>

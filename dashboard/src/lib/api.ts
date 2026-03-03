@@ -2719,6 +2719,13 @@ interface CreateCustomDataSourceRequest {
   username?: string
   password?: string
   api_key?: string
+  access_key_id?: string
+  secret_access_key?: string
+  service_account_json?: string
+  account_identifier?: string
+  connection_string?: string
+  project_id?: string
+  region?: string
   extra_config?: Record<string, string>
 }
 
@@ -2731,6 +2738,13 @@ interface UpdateCustomDataSourceRequest {
   username?: string
   password?: string
   api_key?: string
+  access_key_id?: string
+  secret_access_key?: string
+  service_account_json?: string
+  account_identifier?: string
+  connection_string?: string
+  project_id?: string
+  region?: string
   extra_config?: Record<string, string>
   enabled?: boolean
 }
@@ -2743,6 +2757,13 @@ interface TestConnectionRequest {
   username?: string
   password?: string
   api_key?: string
+  access_key_id?: string
+  secret_access_key?: string
+  service_account_json?: string
+  account_identifier?: string
+  connection_string?: string
+  project_id?: string
+  region?: string
 }
 
 interface TestConnectionResult {
@@ -2750,6 +2771,8 @@ interface TestConnectionResult {
   message: string
   tables?: string[]
   metrics?: string[]
+  databases?: string[]
+  keys?: string[]
 }
 
 interface CustomDataSourceQueryRequest {

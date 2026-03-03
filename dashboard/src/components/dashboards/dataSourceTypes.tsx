@@ -23,7 +23,7 @@ export interface DataSourceTypeOption {
   label: string
   description: string
   logo: React.ReactNode
-  category: 'database' | 'metrics' | 'coming-soon'
+  category: 'database' | 'metrics' | 'search' | 'nosql' | 'cloud'
 }
 
 // SVG logos for each data source type
@@ -65,6 +65,26 @@ function MySQLLogo({className}: {className?: string}) {
   )
 }
 
+function MariaDBLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="6" width="24" height="20" rx="3" fill="#C0765A" />
+      <text x="16" y="19.5" textAnchor="middle" fill="white" fontSize="6" fontWeight="bold" fontFamily="sans-serif">
+        Maria
+      </text>
+    </svg>
+  )
+}
+
+function MSSQLLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="4" width="24" height="24" rx="2" fill="#CC2927" />
+      <path d="M10 12h4v8h-4zM18 12h4v8h-4z" fill="white" />
+    </svg>
+  )
+}
+
 function ClickHouseLogo({className}: {className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
@@ -73,6 +93,43 @@ function ClickHouseLogo({className}: {className?: string}) {
       <rect x="15" y="4" width="3.5" height="24" rx="0.5" fill="#FFCC00" />
       <rect x="20" y="4" width="3.5" height="24" rx="0.5" fill="#FFCC00" />
       <rect x="25" y="10" width="3.5" height="12" rx="0.5" fill="#FFCC00" />
+    </svg>
+  )
+}
+
+function SQLiteLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect x="6" y="4" width="20" height="24" rx="2" fill="#003B57" />
+      <rect x="8" y="8" width="16" height="4" rx="0.5" fill="#44A9D8" />
+      <rect x="8" y="14" width="16" height="4" rx="0.5" fill="#44A9D8" />
+    </svg>
+  )
+}
+
+function CockroachDBLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="12" fill="#6933FF" />
+      <path d="M12 16l4-4 4 4-4 4z" fill="white" />
+    </svg>
+  )
+}
+
+function BigQueryLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="6" width="24" height="20" rx="2" fill="#4285F4" />
+      <path d="M16 12l-4 6h8l-4-6z" fill="white" />
+    </svg>
+  )
+}
+
+function SnowflakeLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M16 4v24M8 8l16 16M8 24l16-16" stroke="#29B5E8" strokeWidth="2" />
+      <circle cx="16" cy="16" r="4" fill="#29B5E8" />
     </svg>
   )
 }
@@ -97,47 +154,69 @@ function InfluxDBLogo({className}: {className?: string}) {
   )
 }
 
+function GraphiteLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 28L16 4l12 24H4z" fill="#2E2E2E" />
+    </svg>
+  )
+}
+
+function LokiLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="12" fill="#F26022" />
+    </svg>
+  )
+}
+
+function CloudWatchLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="6" width="24" height="20" rx="2" fill="#FF9900" />
+      <path d="M8 14h16v4H8z" fill="white" />
+    </svg>
+  )
+}
+
+function MongoLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M16 4c-2 4-4 10-4 14 0 4 2 8 4 10 2-2 4-6 4-10s-2-10-4-14z" fill="#47A248" />
+      <path d="M16 4c2 4 4 10 4 14 0 4-2 8-4 10-2-2-4-6-4-10s2-10 4-14z" fill="#47A248" opacity="0.8" />
+    </svg>
+  )
+}
+
+function RedisLogo({className}: {className?: string}) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="12" fill="#DC382D" />
+    </svg>
+  )
+}
+
 export const DATA_SOURCE_TYPES: DataSourceTypeOption[] = [
-  {
-    value: 'postgresql',
-    label: 'PostgreSQL',
-    description: 'Open-source relational database',
-    logo: <PostgreSQLLogo className="h-6 w-6" />,
-    category: 'database',
-  },
-  {
-    value: 'prometheus',
-    label: 'Prometheus',
-    description: 'Metrics & monitoring system',
-    logo: <PrometheusLogo className="h-6 w-6" />,
-    category: 'metrics',
-  },
-  {
-    value: 'mysql',
-    label: 'MySQL',
-    description: 'Popular relational database',
-    logo: <MySQLLogo className="h-6 w-6" />,
-    category: 'coming-soon',
-  },
-  {
-    value: 'clickhouse',
-    label: 'ClickHouse',
-    description: 'Fast OLAP database',
-    logo: <ClickHouseLogo className="h-6 w-6" />,
-    category: 'coming-soon',
-  },
-  {
-    value: 'elasticsearch',
-    label: 'Elasticsearch',
-    description: 'Search & analytics engine',
-    logo: <ElasticsearchLogo className="h-6 w-6" />,
-    category: 'coming-soon',
-  },
-  {
-    value: 'influxdb',
-    label: 'InfluxDB',
-    description: 'Time-series database',
-    logo: <InfluxDBLogo className="h-6 w-6" />,
-    category: 'coming-soon',
-  },
+  // Databases
+  {value: 'postgresql', label: 'PostgreSQL', description: 'Open-source relational database', logo: <PostgreSQLLogo className="h-6 w-6" />, category: 'database'},
+  {value: 'mysql', label: 'MySQL', description: 'Popular relational database', logo: <MySQLLogo className="h-6 w-6" />, category: 'database'},
+  {value: 'mariadb', label: 'MariaDB', description: 'MySQL-compatible database', logo: <MariaDBLogo className="h-6 w-6" />, category: 'database'},
+  {value: 'mssql', label: 'SQL Server', description: 'Microsoft SQL Server', logo: <MSSQLLogo className="h-6 w-6" />, category: 'database'},
+  {value: 'clickhouse', label: 'ClickHouse', description: 'Fast OLAP database', logo: <ClickHouseLogo className="h-6 w-6" />, category: 'database'},
+  {value: 'sqlite', label: 'SQLite', description: 'Embedded SQL database', logo: <SQLiteLogo className="h-6 w-6" />, category: 'database'},
+  {value: 'cockroachdb', label: 'CockroachDB', description: 'Distributed SQL database', logo: <CockroachDBLogo className="h-6 w-6" />, category: 'database'},
+  // Metrics & Time-Series
+  {value: 'prometheus', label: 'Prometheus', description: 'Metrics & monitoring system', logo: <PrometheusLogo className="h-6 w-6" />, category: 'metrics'},
+  {value: 'influxdb', label: 'InfluxDB', description: 'Time-series database', logo: <InfluxDBLogo className="h-6 w-6" />, category: 'metrics'},
+  {value: 'graphite', label: 'Graphite', description: 'Metrics storage & graphing', logo: <GraphiteLogo className="h-6 w-6" />, category: 'metrics'},
+  // Search & Logs
+  {value: 'elasticsearch', label: 'Elasticsearch', description: 'Search & analytics engine', logo: <ElasticsearchLogo className="h-6 w-6" />, category: 'search'},
+  {value: 'loki', label: 'Loki', description: 'Log aggregation system', logo: <LokiLogo className="h-6 w-6" />, category: 'search'},
+  // NoSQL
+  {value: 'mongodb', label: 'MongoDB', description: 'Document database', logo: <MongoLogo className="h-6 w-6" />, category: 'nosql'},
+  {value: 'redis', label: 'Redis', description: 'In-memory data store', logo: <RedisLogo className="h-6 w-6" />, category: 'nosql'},
+  // Cloud
+  {value: 'bigquery', label: 'BigQuery', description: 'Google Cloud data warehouse', logo: <BigQueryLogo className="h-6 w-6" />, category: 'cloud'},
+  {value: 'snowflake', label: 'Snowflake', description: 'Cloud data platform', logo: <SnowflakeLogo className="h-6 w-6" />, category: 'cloud'},
+  {value: 'cloudwatch', label: 'CloudWatch', description: 'AWS monitoring & metrics', logo: <CloudWatchLogo className="h-6 w-6" />, category: 'cloud'},
 ]
