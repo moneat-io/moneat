@@ -35,10 +35,10 @@ function SbomDashboard() {
 
   const {data, isLoading} = useQuery({
     queryKey: ['sbom-packages'],
-    queryFn: () => api.get('/v1/infra/sbom?limit=100'),
+    queryFn: () => api.get<{packages?: SbomPackage[]}>('/v1/infra/sbom?limit=100'),
   })
 
-  const packages: SbomPackage[] = (data?.packages as SbomPackage[] | undefined) ?? []
+  const packages: SbomPackage[] = data?.packages ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return packages

@@ -37,11 +37,11 @@ import {Badge} from '@/components/ui/badge'
 import {Bell, BellRing, Clock, Edit, Globe2, Mail, Plus, Server, Shield, Trash2, Zap} from 'lucide-react'
 import {formatRelativeTime} from '@/lib/utils'
 
-interface AlertsTabProps {
-  systemId: string
-}
+type HostAlertScope = 'global' | 'host'
 
-type AlertScope = 'global' | 'system'
+interface AlertsTabProps {
+  hostId: number
+}
 
 const METRIC_OPTIONS = [
   {value: 'cpu_percent', label: 'CPU Usage (%)', color: 'text-blue-500'},
@@ -63,22 +63,17 @@ const CONDITION_OPTIONS = [
   {value: '==', label: 'Equal to (==)'},
 ]
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-export function AlertsTab({systemId}: AlertsTabProps) {
+export function AlertsTab({hostId}: AlertsTabProps) {
   const queryClient = useQueryClient()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingAlert, setEditingAlert] = useState<SystemAlert | null>(null)
   const [createEnabled, setCreateEnabled] = useState(false)
 
-  const rawId = systemId.startsWith('host:') ? systemId.slice(5) : systemId
-  const effectiveSystemId = UUID_REGEX.test(rawId) ? rawId : null
-
   const {data: alertConfig, isLoading} = useQuery({
-    queryKey: ['system-alert-config', effectiveSystemId ?? 'none'],
-    queryFn: () => api.getSystemAlertConfig(effectiveSystemId!),
-    enabled: !!effectiveSystemId && api.isAuthenticated(),
+    queryKey: ['host-alert-config', hostId],
+    queryFn: () => api.getHostAlertConfig(hostId),
+    enabled: api.isAuthenticated(),
   })
 
   const {data: integrations = []} = useQuery({
@@ -90,25 +85,24 @@ export function AlertsTab({systemId}: AlertsTabProps) {
   const slackEnabled = integrations.some(i => i.integrationType === 'slack' && i.enabled)
   const discordEnabled = integrations.some(i => i.integrationType === 'discord' && i.enabled)
 
-  const activeScope: AlertScope = alertConfig?.scope ?? 'global'
+  const activeScope: HostAlertScope = (alertConfig?.scope as HostAlertScope) ?? 'global'
 
   const alerts = useMemo(() => {
     if (!alertConfig) return []
-    const baseAlerts = activeScope === 'global' ? alertConfig.globalAlerts : alertConfig.systemAlerts
-    // Sort by ID to maintain stable order regardless of API response order
+    const baseAlerts = activeScope === 'global' ? alertConfig.globalAlerts : alertConfig.hostAlerts
     return [...baseAlerts].sort((a, b) => a.id - b.id)
   }, [alertConfig, activeScope])
 
   const scopeMutation = useMutation({
-    mutationFn: (scope: AlertScope) => api.updateSystemAlertScope(effectiveSystemId!, scope),
+    mutationFn: (scope: HostAlertScope) => api.updateHostAlertScope(hostId, scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['system-alert-config', effectiveSystemId ?? 'none']})
+      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
     },
   })
 
   const createMutation = useMutation({
     mutationFn: ({scope, alert}: {
-      scope: AlertScope
+      scope: HostAlertScope
       alert: {
         metric: string
         condition: string
@@ -117,9 +111,9 @@ export function AlertsTab({systemId}: AlertsTabProps) {
         enabled: boolean
         incidentSeverity?: string
       }
-    }) => api.createSystemAlert(effectiveSystemId!, alert, scope),
+    }) => api.createHostAlert(hostId, alert, scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['system-alert-config', effectiveSystemId ?? 'none']})
+      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
       setIsCreateDialogOpen(false)
       setCreateEnabled(false)
     },
@@ -127,26 +121,26 @@ export function AlertsTab({systemId}: AlertsTabProps) {
 
   const updateMutation = useMutation({
     mutationFn: ({alert, updates}: {alert: SystemAlert; updates: Partial<SystemAlert>}) =>
-      api.updateSystemAlert(effectiveSystemId!, alert.id, updates, alert.scope),
+      api.updateHostAlert(hostId, alert.id, updates, alert.scope as HostAlertScope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['system-alert-config', effectiveSystemId ?? 'none']})
+      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
       setIsEditDialogOpen(false)
       setEditingAlert(null)
     },
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (alert: SystemAlert) => api.deleteSystemAlert(effectiveSystemId!, alert.id, alert.scope),
+    mutationFn: (alert: SystemAlert) => api.deleteHostAlert(hostId, alert.id, alert.scope as HostAlertScope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['system-alert-config', effectiveSystemId ?? 'none']})
+      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
     },
   })
 
   const toggleMutation = useMutation({
     mutationFn: ({alert, enabled}: {alert: SystemAlert; enabled: boolean}) =>
-      api.updateSystemAlert(effectiveSystemId!, alert.id, {enabled}, alert.scope),
+      api.updateHostAlert(hostId, alert.id, {enabled}, alert.scope as HostAlertScope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['system-alert-config', effectiveSystemId ?? 'none']})
+      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
     },
   })
 
@@ -209,19 +203,6 @@ export function AlertsTab({systemId}: AlertsTabProps) {
   const enabledAlerts = alerts.filter((a) => a.enabled).length
   const totalAlerts = alerts.length
 
-  if (!effectiveSystemId) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <p className="text-muted-foreground text-sm">
-            Alerts are configured per monitor system. This host does not have an associated monitor
-            system, or the system ID could not be resolved.
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <Card>
@@ -235,7 +216,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                 <CardTitle>Alert Rules</CardTitle>
                 <CardDescription>
                   {totalAlerts > 0
-                    ? `${enabledAlerts} of ${totalAlerts} rules active (${activeScope === 'global' ? 'shared globally' : 'system-only'})`
+                    ? `${enabledAlerts} of ${totalAlerts} rules active (${activeScope === 'global' ? 'shared globally' : 'host-only'})`
                     : 'No rules available'}
                 </CardDescription>
               </div>
@@ -257,13 +238,13 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                 <Button
                   type="button"
                   size="sm"
-                  variant={activeScope === 'system' ? 'default' : 'ghost'}
+                  variant={activeScope === 'host' ? 'default' : 'ghost'}
                   className="h-8 gap-1.5"
-                  onClick={() => scopeMutation.mutate('system')}
-                  disabled={scopeMutation.isPending || activeScope === 'system'}
+                  onClick={() => scopeMutation.mutate('host')}
+                  disabled={scopeMutation.isPending || activeScope === 'host'}
                 >
                   <Server className="h-3.5 w-3.5" />
-                  This System
+                  This Host
                 </Button>
               </div>
 
@@ -282,7 +263,7 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                     </DialogTitle>
                     <DialogDescription>
                       This rule will be added to{' '}
-                      {activeScope === 'global' ? 'the global shared profile.' : 'this system only.'}
+                      {activeScope === 'global' ? 'the global shared profile.' : 'this host only.'}
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleCreateAlert}>
@@ -388,8 +369,8 @@ export function AlertsTab({systemId}: AlertsTabProps) {
 
           <p className="text-xs text-muted-foreground">
             {activeScope === 'global'
-              ? 'Global profile applies to all systems currently set to Global.'
-              : 'System profile applies only to this system. Global changes will not affect it.'}
+              ? 'Global profile applies to all hosts currently set to Global.'
+              : 'Host profile applies only to this host. Global changes will not affect it.'}
           </p>
         </CardHeader>
 
@@ -650,9 +631,9 @@ export function AlertsTab({systemId}: AlertsTabProps) {
                 <Shield className="h-4 w-4 text-emerald-500" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-sm font-medium">System Status Notifications</h4>
+                <h4 className="text-sm font-medium">Host Status Notifications</h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  You'll also receive notifications when systems go down (no metrics for 5+
+                  You'll also receive notifications when hosts go down (no metrics for 5+
                   minutes) or come back online after being offline
                   {slackEnabled && ', both via email and Slack'}.
                 </p>

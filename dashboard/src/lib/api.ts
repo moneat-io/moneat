@@ -1364,6 +1364,63 @@ interface CreateMonitorSystemResponse {
   docker_command: string
 }
 
+export interface MonitorHostResponse {
+  id: number
+  project_id?: number
+  name: string
+  hostname: string
+  status: string
+  last_seen_at?: number | string | null
+  first_seen_at?: number | string | null
+  agent_version?: string | null
+  os?: string | null
+  arch?: string | null
+  platform?: string | null
+  processor?: string | null
+  cpu_cores?: number | null
+  memory_total_kb?: number | null
+  created_at: number
+  latest_metrics?: LatestMetrics | null
+}
+
+export interface CreateMonitorHostResponse {
+  host: MonitorHostResponse
+  agent_key: string
+  docker_command: string
+}
+
+/** Maps MonitorHostResponse to DdHostResponse shape for unified UI */
+export function mapMonitorHostToDdHost(h: MonitorHostResponse): DdHostResponse {
+  const status = (h.status ?? '').toLowerCase()
+  const isOnline = status === 'up' || status === 'online'
+  const toIsoTimestamp = (value: number | string | null | undefined): string => {
+    if (value === null || value === undefined || value === '') return ''
+
+    const numeric = Number(value)
+    const normalized = Number.isFinite(numeric)
+      ? (Math.abs(numeric) < 1_000_000_000_000 ? numeric * 1000 : numeric)
+      : value
+    const date = new Date(normalized)
+
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+  }
+
+  return {
+    id: h.id,
+    hostname: h.hostname ?? h.name ?? '',
+    os: h.os ?? '',
+    platform: h.platform ?? h.arch ?? '',
+    processor: h.processor ?? '',
+    cpuCores: h.cpu_cores ?? 0,
+    memoryTotalKb: h.memory_total_kb ?? (h.latest_metrics?.mem_total ? Math.round(h.latest_metrics.mem_total / 1024) : 0),
+    agentVersion: h.agent_version ?? '',
+    tags: {},
+    firstSeenAt: toIsoTimestamp(h.first_seen_at),
+    lastSeenAt: toIsoTimestamp(h.last_seen_at),
+    isOnline,
+  }
+}
+
 interface HistoricalDataPoint {
   timestamp: number
   cpu_percent?: number
@@ -1428,7 +1485,7 @@ interface ContainerMetricsHistory {
 interface SystemAlert {
   id: number
   systemId?: string
-  scope: 'global' | 'system'
+  scope: 'global' | 'system' | 'host'
   metric: string
   condition: string
   threshold: number
@@ -2863,7 +2920,7 @@ class ApiClient {
     // Only send Authorization header for impersonation; normal auth uses httpOnly cookie
     if (impersonateToken) headers['Authorization'] = `Bearer ${impersonateToken}`
 
-    const { signal, cleanup } = withRequestTimeoutSignal(options.signal)
+    const { signal, cleanup } = withRequestTimeoutSignal(options.signal ?? undefined)
 
     let response: Response
     try {
@@ -2969,7 +3026,7 @@ class ApiClient {
     }
     if (impersonateToken) headers['Authorization'] = `Bearer ${impersonateToken}`
 
-    const { signal, cleanup } = withRequestTimeoutSignal(options.signal)
+    const { signal, cleanup } = withRequestTimeoutSignal(options.signal ?? undefined)
 
     let response: Response
     try {
@@ -3068,6 +3125,15 @@ class ApiClient {
       incidentSeverity: (row.incidentSeverity ?? row.incident_severity ?? null) as string | null,
       lastTriggeredAt: (row.lastTriggeredAt ?? row.last_triggered_at) as number | undefined,
       createdAt: (row.createdAt ?? row.created_at) as number,
+    }
+  }
+
+  private mapHostAlert(row: Record<string, unknown>): SystemAlert {
+    const alert = this.mapSystemAlert(row)
+    const rawScope = ((row.scope as string | undefined) ?? '').toLowerCase()
+    return {
+      ...alert,
+      scope: rawScope === 'global' ? 'global' : 'host',
     }
   }
 
@@ -4603,17 +4669,74 @@ class ApiClient {
     })
   }
 
-  // Monitoring API
+  // Monitoring API (hosts - unified for Moneat Agent and Datadog Agent)
+  async getMonitorHosts(): Promise<MonitorHostResponse[]> {
+    return this.request<MonitorHostResponse[]>(`${API_BASE}/monitor/hosts`)
+  }
+
+  async getMonitorHost(hostId: number): Promise<MonitorHostResponse> {
+    return this.request<MonitorHostResponse>(`${API_BASE}/monitor/hosts/${hostId}`)
+  }
+
+  async createMonitorHost(name: string): Promise<CreateMonitorHostResponse> {
+    return this.request<CreateMonitorHostResponse>(`${API_BASE}/monitor/hosts`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  }
+
+  async deleteMonitorHost(hostId: number): Promise<void> {
+    return this.request<void>(`${API_BASE}/monitor/hosts/${hostId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async getMonitorHostMetrics(
+    hostId: number,
+    from?: string,
+    to?: string,
+    interval?: string
+  ): Promise<SystemMetricsHistory> {
+    const params = new URLSearchParams()
+    if (from) params.append('from', from)
+    if (to) params.append('to', to)
+    if (interval) params.append('interval', interval)
+    const query = params.toString()
+    return this.request<SystemMetricsHistory>(
+      `${API_BASE}/monitor/hosts/${hostId}/metrics${query ? `?${query}` : ''}`
+    )
+  }
+
+  async getMonitorHostContainers(hostId: number) {
+    const response = await this.request<{containers: RawContainerStats[]}>(
+      `${API_BASE}/monitor/hosts/${hostId}/containers`
+    )
+    return response.containers.map((row) => ({
+      name: row.name,
+      id: row.id,
+      image: row.image,
+      status: row.status,
+      cpuPercent: row.cpuPercent ?? row.cpu_percent,
+      memUsed: row.memUsed ?? row.mem_used,
+      memLimit: row.memLimit ?? row.mem_limit,
+      netRecvBytes: row.netRecvBytes ?? row.net_recv_bytes,
+      netSentBytes: row.netSentBytes ?? row.net_sent_bytes,
+    }))
+  }
+
+  /** @deprecated Use getMonitorHosts instead */
   async getMonitorSystems() {
     const rows = await this.request<Record<string, unknown>[]>(`${API_BASE}/monitor/systems`)
     return rows.map((row) => this.mapMonitorSystem(row))
   }
 
+  /** @deprecated Use getMonitorHost instead */
   async getMonitorSystem(systemId: string) {
     const row = await this.request<Record<string, unknown>>(`${API_BASE}/monitor/systems/${systemId}`)
     return this.mapMonitorSystem(row) as MonitorSystemDetail
   }
 
+  /** @deprecated Use createMonitorHost instead */
   async createMonitorSystem(name: string) {
     return this.request<CreateMonitorSystemResponse>(`${API_BASE}/monitor/systems`, {
       method: 'POST',
@@ -4621,6 +4744,7 @@ class ApiClient {
     })
   }
 
+  /** @deprecated Use deleteMonitorHost instead */
   async deleteMonitorSystem(systemId: string) {
     return this.request<void>(`${API_BASE}/monitor/systems/${systemId}`, {
       method: 'DELETE',
@@ -4762,6 +4886,74 @@ class ApiClient {
     return this.request<void>(`${API_BASE}/monitor/systems/${systemId}/alerts/${alertId}?scope=${scope}`, {
       method: 'DELETE',
     })
+  }
+
+  // Host-based alert methods (using /monitor/hosts/{hostId}/alerts endpoints)
+
+  async getHostAlertConfig(hostId: number) {
+    const response = await this.request<RawSystemAlertConfigResponse>(
+      `${API_BASE}/monitor/hosts/${hostId}/alerts/config`
+    )
+    return {
+      scope: response.scope === 'global' ? 'global' : 'host',
+      globalAlerts: (response.globalAlerts ?? response.global_alerts ?? []).map(
+        (row) => ({...this.mapHostAlert(row), scope: 'global' as const})
+      ),
+      hostAlerts: (response.systemAlerts ?? response.system_alerts ?? []).map(
+        (row) => this.mapHostAlert(row)
+      ),
+      effectiveAlerts: (response.effectiveAlerts ?? response.effective_alerts ?? []).map(
+        (row) => this.mapHostAlert(row)
+      ),
+    }
+  }
+
+  async updateHostAlertScope(hostId: number, scope: 'global' | 'host') {
+    return this.request<void>(
+      `${API_BASE}/monitor/hosts/${hostId}/alerts/scope`,
+      { method: 'PUT', body: JSON.stringify({scope}) }
+    )
+  }
+
+  async createHostAlert(
+    hostId: number,
+    alert: {
+      metric: string
+      condition: string
+      threshold: number
+      durationSeconds?: number
+      enabled?: boolean
+      incidentSeverity?: string
+    },
+    scope: 'global' | 'host' = 'host'
+  ) {
+    return this.request<SystemAlert>(
+      `${API_BASE}/monitor/hosts/${hostId}/alerts?scope=${scope}`,
+      { method: 'POST', body: JSON.stringify(alert) }
+    )
+  }
+
+  async updateHostAlert(
+    hostId: number,
+    alertId: number,
+    updates: Partial<SystemAlert>,
+    scope: 'global' | 'host' = 'host'
+  ) {
+    return this.request<SystemAlert>(
+      `${API_BASE}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
+      { method: 'PUT', body: JSON.stringify(updates) }
+    )
+  }
+
+  async deleteHostAlert(
+    hostId: number,
+    alertId: number,
+    scope: 'global' | 'host' = 'host'
+  ) {
+    return this.request<void>(
+      `${API_BASE}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
+      { method: 'DELETE' }
+    )
   }
 
   // Alert Silence Period Methods

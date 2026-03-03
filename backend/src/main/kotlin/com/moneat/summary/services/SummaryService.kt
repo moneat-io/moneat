@@ -59,7 +59,6 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
-import java.util.UUID
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -79,7 +78,6 @@ private const val PERCENT_MULTIPLIER = 100.0
 private const val STATUS_ONLINE = "online"
 private const val STATUS_OFFLINE = "offline"
 private const val STATUS_DOWN = "down"
-private const val UUID_STRING_LENGTH = 36
 private const val SPIKE_FACTOR = 2
 private const val WEEK_SECONDS = 7 * 24 * 3600L
 private const val TWO_WEEKS_SECONDS = 14 * 24 * 3600L
@@ -99,16 +97,16 @@ class SummaryService(
         organizationId: Int,
         period: String
     ): InfrastructureSummaryResponse = coroutineScope {
-        val systems = monitorService.listSystems(organizationId)
+        val hosts = monitorService.listHosts(organizationId)
         val monitors = uptimeService.listMonitors(organizationId)
 
         val hostCounts = HostStatusCounts(
-            online = systems.count { it.status == STATUS_ONLINE },
-            offline = systems.count { it.status == STATUS_OFFLINE },
-            warning = systems.count {
+            online = hosts.count { it.status == STATUS_ONLINE },
+            offline = hosts.count { it.status == STATUS_OFFLINE },
+            warning = hosts.count {
                 it.status != STATUS_ONLINE && it.status != STATUS_OFFLINE
             },
-            total = systems.size
+            total = hosts.size
         )
 
         val uptimeSummaries = monitors.map { m ->
@@ -126,7 +124,7 @@ class SummaryService(
             getTopAlerts(organizationId, period)
         }
         val topErrorHostsDeferred = async {
-            getTopErrorRateHosts(systems, period)
+            getTopErrorRateHosts(hosts, period)
         }
 
         InfrastructureSummaryResponse(
@@ -178,7 +176,7 @@ class SummaryService(
             getLogErrorCount(organizationId, prevStart, prevEnd)
         }
 
-        val systems = monitorService.listSystems(organizationId)
+        val hosts = monitorService.listHosts(organizationId)
         val monitors = uptimeService.listMonitors(organizationId)
 
         val overnightErrors = errorCountDeferred.await()
@@ -193,16 +191,18 @@ class SummaryService(
             0.0
         }
 
-        val hostChanges = systems.filter { sys ->
-            sys.lastSeenAt != null &&
-                sys.status == STATUS_OFFLINE
-        }.map { sys ->
+        val hostChanges = hosts.filter { h ->
+            h.lastSeenAt != null &&
+                h.status == STATUS_OFFLINE &&
+                h.lastSeenAt.toEpochMilliseconds() >= windowStart.toEpochMilli() &&
+                h.lastSeenAt.toEpochMilliseconds() <= windowEnd.toEpochMilli()
+        }.map { h ->
             HostStatusChange(
-                systemId = sys.id.toString(),
-                systemName = sys.name,
+                systemId = h.id.toString(),
+                systemName = h.displayName ?: h.hostname,
                 previousStatus = STATUS_ONLINE,
-                currentStatus = sys.status,
-                changedAt = sys.lastSeenAt?.let {
+                currentStatus = h.status,
+                changedAt = h.lastSeenAt?.let {
                     isoFormatter.format(
                         Instant.ofEpochMilli(it.toEpochMilliseconds())
                     )
@@ -251,7 +251,7 @@ class SummaryService(
 
         val projectIds = getProjectIds(organizationId)
         val monitors = uptimeService.listMonitors(organizationId)
-        val systems = monitorService.listSystems(organizationId)
+        val hosts = monitorService.listHosts(organizationId)
 
         val dailyErrorsDeferred = async {
             getDailyErrors(projectIds, weekAgo, now)
@@ -291,21 +291,21 @@ class SummaryService(
             )
         }
 
-        val systemMetrics = if (systems.isEmpty()) {
+        val hostMetrics = if (hosts.isEmpty()) {
             emptyList()
         } else {
-            systems.mapNotNull {
+            hosts.mapNotNull {
                 runCatching {
                     monitorService.getLatestMetrics(it.id)
                 }.getOrNull()
             }
         }
 
-        val avgCpu = systemMetrics
+        val avgCpu = hostMetrics
             .map { it.cpu_percent.toDouble() }
             .takeIf { it.isNotEmpty() }?.average() ?: 0.0
 
-        val avgMem = systemMetrics
+        val avgMem = hostMetrics
             .map { it.mem_percent.toDouble() }
             .takeIf { it.isNotEmpty() }?.average() ?: 0.0
 
@@ -322,7 +322,7 @@ class SummaryService(
             hostResourceTrends = HostResourceTrend(
                 avgCpuPercent = avgCpu,
                 avgMemoryPercent = avgMem,
-                hostCount = systems.size
+                hostCount = hosts.size
             )
         )
     }
@@ -332,7 +332,7 @@ class SummaryService(
         organizationId: Int,
         incidentId: Long
     ): IncidentContextResponse = coroutineScope {
-        val systems = monitorService.listSystems(organizationId)
+        val hosts = monitorService.listHosts(organizationId)
         val monitors = uptimeService.listMonitors(organizationId)
         val projectIds = getProjectIds(organizationId)
 
@@ -340,38 +340,38 @@ class SummaryService(
         val windowStart = now.minusSeconds(METRICS_WINDOW_MINUTES * 60)
 
         // Load the specific incident from IncidentEventLog by ID and org, then
-        // parse the deduplication key to find the exact triggering system/alert.
+        // parse the deduplication key to find the exact triggering host/alert.
         var alertContext: AlertContextInfo? = null
         var hostMetrics: HostMetricsWindow? = null
 
         val incidentLog = loadIncidentLog(organizationId, incidentId)
         if (incidentLog != null) {
-            val systemUuid = parseSystemUuidFromDedupKey(incidentLog.deduplicationKey)
+            val hostId = parseHostIdFromDedupKey(incidentLog.deduplicationKey)
             val alertId = parseAlertIdFromDedupKey(incidentLog.deduplicationKey)
-            val system = if (systemUuid != null) {
-                systems.firstOrNull { it.id == systemUuid }
+            val host = if (hostId != null) {
+                hosts.firstOrNull { it.id == hostId }
             } else {
                 null
             }
-            if (system != null) {
+            if (host != null) {
                 val alert = if (alertId != null) {
-                    monitorService.listAlerts(system.id).firstOrNull { it.id == alertId }
+                    monitorService.listAlerts(host.id, host.organizationId).firstOrNull { it.id == alertId }
                 } else {
-                    monitorService.listAlerts(system.id).firstOrNull { it.lastTriggeredAt != null }
+                    monitorService.listAlerts(host.id, host.organizationId).firstOrNull { it.lastTriggeredAt != null }
                 }
                 alertContext = AlertContextInfo(
                     alertId = alert?.id ?: 0,
                     metric = alert?.metric ?: "",
                     condition = alert?.condition ?: "",
                     threshold = alert?.threshold ?: 0.0,
-                    systemId = system.id.toString(),
-                    systemName = system.name
+                    systemId = host.id.toString(),
+                    systemName = host.displayName ?: host.hostname
                 )
-                val metrics = runCatching { monitorService.getLatestMetrics(system.id) }.getOrNull()
+                val metrics = runCatching { monitorService.getLatestMetrics(host.id) }.getOrNull()
                 if (metrics != null) {
                     hostMetrics = HostMetricsWindow(
-                        systemId = system.id.toString(),
-                        systemName = system.name,
+                        systemId = host.id.toString(),
+                        systemName = host.displayName ?: host.hostname,
                         avgCpu = metrics.cpu_percent.toDouble(),
                         maxCpu = metrics.cpu_percent.toDouble(),
                         avgMemory = metrics.mem_percent.toDouble(),
@@ -384,26 +384,26 @@ class SummaryService(
         } else {
             // Fallback: use the most recently triggered alert across the org
             // when the incident log entry cannot be found.
-            val mostRecent = systems.flatMap { system ->
-                monitorService.listAlerts(system.id)
+            val mostRecent = hosts.flatMap { host ->
+                monitorService.listAlerts(host.id, host.organizationId)
                     .filter { it.lastTriggeredAt != null }
-                    .map { alert -> alert to system }
+                    .map { alert -> alert to host }
             }.maxByOrNull { it.first.lastTriggeredAt ?: 0 }
             if (mostRecent != null) {
-                val (alert, system) = mostRecent
+                val (alert, host) = mostRecent
                 alertContext = AlertContextInfo(
                     alertId = alert.id,
                     metric = alert.metric,
                     condition = alert.condition,
                     threshold = alert.threshold,
-                    systemId = system.id.toString(),
-                    systemName = system.name
+                    systemId = host.id.toString(),
+                    systemName = host.displayName ?: host.hostname
                 )
-                val metrics = runCatching { monitorService.getLatestMetrics(system.id) }.getOrNull()
+                val metrics = runCatching { monitorService.getLatestMetrics(host.id) }.getOrNull()
                 if (metrics != null) {
                     hostMetrics = HostMetricsWindow(
-                        systemId = system.id.toString(),
-                        systemName = system.name,
+                        systemId = host.id.toString(),
+                        systemName = host.displayName ?: host.hostname,
                         avgCpu = metrics.cpu_percent.toDouble(),
                         maxCpu = metrics.cpu_percent.toDouble(),
                         avgMemory = metrics.mem_percent.toDouble(),
@@ -483,30 +483,29 @@ class SummaryService(
 
     /**
      * Deduplication key formats:
-     * - `moneat-system-alert-{UUID}-id_{Int}` or `...-tpl_{Int}`
-     * - `moneat-system-down-{UUID}`
-     * - `moneat-uptime-{UUID}`
-     * Returns the UUID of the host system when present, or null.
+     * - `moneat-host-alert-{hostId}-id_{Int}` or `...-tpl_{Int}`
+     * - `moneat-host-down-{hostId}`
+     * - `moneat-uptime-{monitorId}` (uptime uses monitor ID, not host)
+     * Returns the host ID when present, or null.
      */
-    private fun parseSystemUuidFromDedupKey(key: String): UUID? {
-        val systemAlertPrefix = "moneat-system-alert-"
-        val systemDownPrefix = "moneat-system-down-"
-        val uptimePrefix = "moneat-uptime-"
-        val uuidStr = when {
-            key.startsWith(systemAlertPrefix) -> {
-                val remainder = key.removePrefix(systemAlertPrefix)
-                // UUID is 36 chars; the suffix (-id_ or -tpl_) follows immediately
-                remainder.take(UUID_STRING_LENGTH)
+    private fun parseHostIdFromDedupKey(key: String): Int? {
+        val hostAlertPrefix = "moneat-host-alert-"
+        val hostDownPrefix = "moneat-host-down-"
+        val remainder = when {
+            key.startsWith(hostAlertPrefix) -> {
+                val rest = key.removePrefix(hostAlertPrefix)
+                // hostId is numeric; the suffix (-id_ or -tpl_) follows
+                val dashIdx = rest.indexOf('-')
+                if (dashIdx > 0) rest.substring(0, dashIdx) else rest
             }
-            key.startsWith(systemDownPrefix) -> key.removePrefix(systemDownPrefix)
-            key.startsWith(uptimePrefix) -> key.removePrefix(uptimePrefix)
+            key.startsWith(hostDownPrefix) -> key.removePrefix(hostDownPrefix)
             else -> null
         }
-        return uuidStr?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        return remainder?.toIntOrNull()
     }
 
     /**
-     * Parses the alert ID integer from `moneat-system-alert-{UUID}-id_{Int}` keys.
+     * Parses the alert ID integer from `moneat-host-alert-{hostId}-id_{Int}` keys.
      * Returns null for other key formats.
      */
     private fun parseAlertIdFromDedupKey(key: String): Int? {
@@ -531,12 +530,12 @@ class SummaryService(
     ): List<AlertSummaryItem> {
         val periodMs = periodToMillis(period)
         val cutoff = System.currentTimeMillis() - periodMs
-        val systems = monitorService.listSystems(organizationId)
-        val allAlerts = systems.flatMap { sys ->
-            monitorService.listAlerts(sys.id).map { alert ->
+        val hosts = monitorService.listHosts(organizationId)
+        val allAlerts = hosts.flatMap { host ->
+            monitorService.listAlerts(host.id, organizationId).map { alert ->
                 AlertSummaryItem(
                     alertId = alert.id,
-                    systemId = alert.systemId,
+                    systemId = alert.hostId?.toString() ?: alert.systemId,
                     metric = alert.metric,
                     condition = alert.condition,
                     threshold = alert.threshold,
@@ -554,20 +553,20 @@ class SummaryService(
     }
 
     private fun getTopErrorRateHosts(
-        systems: List<com.moneat.monitor.models.SystemData>,
+        hosts: List<com.moneat.monitor.models.HostData>,
         period: String
     ): List<HostErrorRate> {
         val periodMs = periodToMillis(period)
         val cutoff = System.currentTimeMillis() - periodMs
-        return systems.map { sys ->
-            val alertCount = monitorService.listAlerts(sys.id)
+        return hosts.map { host ->
+            val alertCount = monitorService.listAlerts(host.id, host.organizationId)
                 .count { alert ->
                     alert.lastTriggeredAt != null &&
                         alert.lastTriggeredAt >= cutoff
                 }
             HostErrorRate(
-                systemId = sys.id.toString(),
-                systemName = sys.name,
+                systemId = host.id.toString(),
+                systemName = host.displayName ?: host.hostname,
                 alertCount = alertCount
             )
         }.filter { it.alertCount > 0 }

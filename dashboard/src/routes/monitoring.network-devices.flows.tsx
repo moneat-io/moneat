@@ -37,10 +37,10 @@ function NdmFlows() {
 
   const {data, isLoading} = useQuery({
     queryKey: ['ndm-flows'],
-    queryFn: () => api.get('/v1/network-devices/flows?limit=100'),
+    queryFn: () => api.get<{flows?: NetworkFlow[]}>('/v1/network-devices/flows?limit=100'),
   })
 
-  const flows: NetworkFlow[] = (data?.flows as NetworkFlow[] | undefined) ?? []
+  const flows: NetworkFlow[] = data?.flows ?? []
 
   const filtered = useMemo(() => {
     if (!searchQuery) return flows

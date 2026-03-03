@@ -12,6 +12,6 @@ describe('LoginLogo', () => {
   it('applies custom className', () => {
     render(<LoginLogo className="my-class" />)
     const svg = screen.getByLabelText('Moneat')
-    expect(svg.className.baseVal).toContain('my-class')
+    expect(svg.getAttribute('class')).toContain('my-class')
   })
 })

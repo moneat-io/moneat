@@ -156,6 +156,10 @@ function ChartTooltip({
   )
 }
 
+function Skeleton({className}: {className?: string}) {
+  return <div className={`animate-pulse rounded-md bg-muted ${className ?? ''}`} />
+}
+
 function MetricCard({
   title,
   value,
@@ -165,6 +169,7 @@ function MetricCard({
   gradientFrom,
   gradientTo,
   borderColor,
+  loading,
 }: {
   title: string
   value: string
@@ -174,6 +179,7 @@ function MetricCard({
   gradientFrom: string
   gradientTo: string
   borderColor: string
+  loading?: boolean
 }) {
   return (
     <Card className={`relative overflow-hidden bg-gradient-to-br ${gradientFrom} ${gradientTo} ${borderColor}`}>
@@ -183,8 +189,17 @@ function MetricCard({
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               {title}
             </p>
-            <p className="text-2xl font-bold tracking-tight">{value}</p>
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
+            {loading ? (
+              <>
+                <Skeleton className="h-8 w-20" />
+                <Skeleton className="h-3 w-28 mt-1" />
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-bold tracking-tight">{value}</p>
+                <p className="text-xs text-muted-foreground">{subtitle}</p>
+              </>
+            )}
           </div>
           <div className={`flex items-center justify-center h-12 w-12 rounded-xl ${iconColor} bg-opacity-15`}>
             <Icon className="h-6 w-6" />
@@ -239,7 +254,7 @@ function HostDetailPage() {
   const from = Math.floor(fromMs / 1000).toString()
   const to = Math.floor(now.getTime() / 1000).toString()
 
-  const {data: metrics} = useQuery({
+  const {data: metrics, isLoading: metricsLoading} = useQuery({
     queryKey: ['host-metrics', hostIdNum, effectiveTimeRange],
     queryFn: () => api.getHostMetrics(hostIdNum, from, to),
     refetchInterval: 30000,
@@ -478,6 +493,7 @@ function HostDetailPage() {
                 gradientFrom="from-blue-500/5"
                 gradientTo="to-cyan-500/5"
                 borderColor="border-blue-500/10"
+                loading={metricsLoading}
               />
               <MetricCard
                 title="Memory"
@@ -488,6 +504,7 @@ function HostDetailPage() {
                 gradientFrom="from-violet-500/5"
                 gradientTo="to-purple-500/5"
                 borderColor="border-violet-500/10"
+                loading={metricsLoading}
               />
               <MetricCard
                 title="Disk Usage"
@@ -498,6 +515,7 @@ function HostDetailPage() {
                 gradientFrom="from-amber-500/5"
                 gradientTo="to-orange-500/5"
                 borderColor="border-amber-500/10"
+                loading={metricsLoading}
               />
               <MetricCard
                 title="Load Average"
@@ -508,6 +526,7 @@ function HostDetailPage() {
                 gradientFrom="from-emerald-500/5"
                 gradientTo="to-teal-500/5"
                 borderColor="border-emerald-500/10"
+                loading={metricsLoading}
               />
             </div>
 
@@ -527,7 +546,9 @@ function HostDetailPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {cpuData.length > 0 ? (
+                  {metricsLoading ? (
+                    <ChartSkeleton />
+                  ) : cpuData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={250}>
                       <AreaChart data={cpuData}>
                         <defs>
@@ -576,7 +597,9 @@ function HostDetailPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {memoryData.length > 0 ? (
+                  {metricsLoading ? (
+                    <ChartSkeleton />
+                  ) : memoryData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={250}>
                       <AreaChart data={memoryData}>
                         <defs>
@@ -625,7 +648,9 @@ function HostDetailPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {diskData.length > 0 ? (
+                  {metricsLoading ? (
+                    <ChartSkeleton />
+                  ) : diskData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={250}>
                       <AreaChart data={diskData}>
                         <defs>
@@ -674,7 +699,9 @@ function HostDetailPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {loadData.length > 0 ? (
+                  {metricsLoading ? (
+                    <ChartSkeleton />
+                  ) : loadData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={250}>
                       <LineChart data={loadData}>
                         <CartesianGrid {...commonGrid} />
@@ -932,7 +959,9 @@ function HostDetailPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {networkData.length > 0 ? (
+                {metricsLoading ? (
+                  <ChartSkeleton height={400} />
+                ) : networkData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
                     <AreaChart data={networkData}>
                       <defs>
@@ -990,7 +1019,7 @@ function HostDetailPage() {
           </TabsContent>
 
           <TabsContent value="alerts" className="space-y-6">
-            <AlertsTab systemId={host.tags?.system_id ?? `host:${hostId}`} />
+            <AlertsTab hostId={hostIdNum} />
           </TabsContent>
         </Tabs>
       </div>
@@ -1079,6 +1108,22 @@ function EmptyChart({height = 250}: {height?: number}) {
     >
       <Activity className="h-8 w-8 opacity-30" />
       <p className="text-sm">No data available</p>
+    </div>
+  )
+}
+
+function ChartSkeleton({height = 250}: {height?: number}) {
+  return (
+    <div className="space-y-2 py-1" style={{height}}>
+      <div className="flex items-end gap-1 h-full px-1">
+        {Array.from({length: 20}).map((_, i) => (
+          <div
+            key={i}
+            className="flex-1 animate-pulse rounded-sm bg-muted"
+            style={{height: `${30 + Math.sin(i * 0.8) * 20 + (i % 3) * 10}%`}}
+          />
+        ))}
+      </div>
     </div>
   )
 }

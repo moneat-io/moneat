@@ -388,6 +388,27 @@ object PromotionalCreditGrants : Table("promotional_credit_grants") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object Hosts : Table("hosts") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val hostname = varchar("hostname", 512)
+    val display_name = varchar("display_name", 255).nullable()
+    val agent_key_hash = varchar("agent_key_hash", 255).nullable()
+    val status = varchar("status", 20).default("pending")
+    val os = varchar("os", 128).default("")
+    val platform = varchar("platform", 128).default("")
+    val arch = varchar("arch", 20).nullable()
+    val processor = varchar("processor", 256).default("")
+    val cpu_cores = integer("cpu_cores").default(0)
+    val memory_total_kb = long("memory_total_kb").default(0)
+    val agent_version = varchar("agent_version", 64).default("")
+    val gohai = text("gohai").default("")
+    val tags = text("tags").default("{}")
+    val first_seen_at = timestamp("first_seen_at")
+    val last_seen_at = timestamp("last_seen_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
 object Systems : Table("systems") {
     val id = javaUUID("id")
     val organization_id = integer("organization_id").references(Organizations.id)
@@ -402,6 +423,36 @@ object Systems : Table("systems") {
     val created_at = timestamp("created_at")
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
+}
+
+object HostAlerts : Table("host_alerts") {
+    val id = integer("id").autoIncrement()
+    val host_id = integer("host_id").references(Hosts.id)
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val metric = varchar("metric", 50)
+    val condition = varchar("condition", 20)
+    val threshold = double("threshold")
+    val duration_seconds = integer("duration_seconds")
+    val enabled = bool("enabled")
+    val last_triggered_at = timestamp("last_triggered_at").nullable()
+    val incident_severity = varchar("incident_severity", 20).nullable()
+    val created_at = timestamp("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object HostAlertSettings : Table("host_alert_settings") {
+    val host_id = integer("host_id").references(Hosts.id)
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val scope = varchar("scope", 20).default("host")
+    val updated_at = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(host_id)
+}
+
+object HostAlertTemplateStates : Table("host_alert_template_states") {
+    val template_alert_id = integer("template_alert_id").references(OrganizationAlertTemplates.id)
+    val host_id = integer("host_id").references(Hosts.id)
+    val last_triggered_at = timestamp("last_triggered_at").nullable()
+    override val primaryKey = PrimaryKey(template_alert_id, host_id)
 }
 
 object SystemAlerts : Table("system_alerts") {

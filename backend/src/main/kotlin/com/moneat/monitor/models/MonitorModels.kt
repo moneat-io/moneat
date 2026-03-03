@@ -82,7 +82,11 @@ data class SystemMetricsPayload(
     val agent_version: String? = null,
     val os: String? = null,
     val arch: String? = null,
-    val host: String? = null
+    val host: String? = null,
+    val platform: String? = null,
+    val processor: String? = null,
+    val cpu_cores: Int? = null,
+    val memory_total_kb: Long? = null
 )
 
 @Serializable
@@ -108,7 +112,7 @@ data class IngestResponse(
 @Serializable
 data class AgentLogIngestResponse(
     val accepted: Int? = null,
-    @SerialName("system_id") val systemId: String? = null,
+    @SerialName("host_id") val hostId: String? = null,
     val error: String? = null,
     val message: String? = null,
     val reason: String? = null,
@@ -116,6 +120,26 @@ data class AgentLogIngestResponse(
 )
 
 // Dashboard-facing models
+@Serializable
+data class HostResponse(
+    val id: Int,
+    @SerialName("project_id") val projectId: Long,
+    val name: String,
+    val hostname: String,
+    val status: String,
+    val last_seen_at: Long?,
+    @SerialName("first_seen_at") val firstSeenAt: Long? = null,
+    val agent_version: String?,
+    val os: String?,
+    val arch: String?,
+    val platform: String? = null,
+    val processor: String? = null,
+    @SerialName("cpu_cores") val cpuCores: Int? = null,
+    @SerialName("memory_total_kb") val memoryTotalKb: Long? = null,
+    val created_at: Long,
+    val latest_metrics: LatestMetrics?
+)
+
 @Serializable
 data class SystemResponse(
     val id: String,
@@ -163,8 +187,21 @@ data class CreateSystemResponse(
 )
 
 @Serializable
+data class CreateHostRequest(
+    val name: String
+)
+
+@Serializable
+data class CreateHostResponse(
+    val host: HostResponse,
+    val agent_key: String,
+    val docker_command: String
+)
+
+@Serializable
 data class HistoricalMetricsResponse(
     val system_id: String,
+    val host_id: Int? = null,
     val from: Long,
     val to: Long,
     val interval_seconds: Int,
@@ -195,6 +232,7 @@ data class ContainerStatsResponse(
 @Serializable
 data class ContainerWithSystem(
     @SerialName("system_id") val systemId: String,
+    @SerialName("host_id") val hostId: Int? = null,
     @SerialName("system_name") val systemName: String,
     val name: String,
     val id: String,
@@ -250,6 +288,7 @@ data class ContainerMetricDataPoint(
 data class AlertResponse(
     val id: Int,
     @SerialName("system_id") val systemId: String? = null,
+    @SerialName("host_id") val hostId: Int? = null,
     val scope: String = "system",
     val metric: String,
     val condition: String,
@@ -292,6 +331,29 @@ data class UpdateAlertRequest(
 )
 
 // Internal data classes
+@Serializable
+data class HostData(
+    val id: Int,
+    val organizationId: Int,
+    val hostname: String,
+    val displayName: String?,
+    val agentKeyHash: String?,
+    val status: String,
+    @Serializable(with = KotlinInstantSerializer::class)
+    val lastSeenAt: kotlin.time.Instant?,
+    val agentVersion: String?,
+    val os: String?,
+    val arch: String?,
+    val platform: String? = null,
+    val processor: String? = null,
+    val cpuCores: Int? = null,
+    val memoryTotalKb: Long? = null,
+    @Serializable(with = KotlinInstantSerializer::class)
+    val firstSeenAt: kotlin.time.Instant,
+    @Serializable(with = KotlinInstantSerializer::class)
+    val createdAt: kotlin.time.Instant
+)
+
 @Serializable
 data class SystemData(
     @Serializable(with = UUIDSerializer::class)

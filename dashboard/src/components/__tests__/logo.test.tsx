@@ -19,7 +19,7 @@ describe('Logo', () => {
   it('applies custom className', () => {
     render(<Logo className="h-12 w-12" />)
     const svg = screen.getByLabelText('Moneat')
-    expect(svg.className.baseVal).toContain('h-12')
+    expect(svg.getAttribute('class')).toContain('h-12')
   })
 
   it('contains wordmark text in full logo', () => {

@@ -72,6 +72,7 @@ data class QueuedLogBatch(
     @SerialName("organization_id") val organizationId: Long? = null,
     @SerialName("project_id") val legacyProjectId: Long? = null,
     @SerialName("system_id") val systemId: String? = null,
+    @SerialName("host_id") val hostId: Int? = null,
     val source: String,
     val logs: List<QueuedLogEntry>
 ) {
@@ -120,7 +121,8 @@ data class LogEntryResponse(
     @SerialName("span_id") val spanId: String,
     val tags: Map<String, String> = emptyMap(),
     @SerialName("resource_attributes") val resourceAttributes: Map<String, String> = emptyMap(),
-    @SerialName("system_id") val systemId: String? = null
+    @SerialName("system_id") val systemId: String? = null,
+    @SerialName("host_id") val hostId: Int? = null
 )
 
 @Serializable
@@ -156,6 +158,7 @@ data class LogQueryRequest(
     val to: String? = null,
     val tags: Map<String, String> = emptyMap(),
     val systemId: String? = null,
+    val hostId: Int? = null,
     val containerName: String? = null,
     val excludeService: String? = null,
     val excludeEnvironment: String? = null,

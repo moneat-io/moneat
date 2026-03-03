@@ -1,7 +1,5 @@
 package com.moneat.services
 
-import java.security.MessageDigest
-import java.util.*
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.models.Memberships
@@ -9,16 +7,16 @@ import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
-import com.moneat.shared.models.SystemAlerts
-import com.moneat.shared.models.SystemAlertSettings
-import com.moneat.shared.models.SystemAlertTemplateStates
-import com.moneat.shared.models.Systems
+import com.moneat.shared.models.HostAlerts
+import com.moneat.shared.models.HostAlertSettings
+import com.moneat.shared.models.HostAlertTemplateStates
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
-import kotlin.time.Clock
+import kotlinx.coroutines.runBlocking
 import com.moneat.testsupport.TestDatabaseHelper
 
 class MonitorServiceTest {
@@ -40,9 +38,9 @@ class MonitorServiceTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         TestDatabaseHelper.resetSchema(
-            Users, Organizations, Memberships, Projects, Subscriptions, Systems,
-            SystemAlerts, OrganizationAlertTemplates, SystemAlertSettings,
-            SystemAlertTemplateStates, PricingTierConfigs
+            Users, Organizations, Memberships, Projects, Subscriptions, Hosts,
+            HostAlerts, OrganizationAlertTemplates, HostAlertSettings,
+            HostAlertTemplateStates, PricingTierConfigs
         )
     }
 
@@ -73,35 +71,9 @@ class MonitorServiceTest {
     private fun seedSystem(
         orgId: Int,
         name: String = "test-server"
-    ): Pair<UUID, String> {
-        val agentKey = "test-key-${UUID.randomUUID()}"
-        val keyHash = hashKey(agentKey)
-        val systemId = UUID.randomUUID()
-        val now = Clock.System.now()
-
-        transaction {
-            Systems.insert {
-                it[id] = systemId
-                it[organization_id] = orgId
-                it[Systems.name] = name
-                it[host] = null
-                it[agent_key_hash] = keyHash
-                it[status] = "pending"
-                it[last_seen_at] = null
-                it[agent_version] = null
-                it[os] = null
-                it[arch] = null
-                it[created_at] = now
-                it[updated_at] = now
-            }
-        }
-
-        return systemId to agentKey
-    }
-
-    private fun hashKey(key: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
+    ): Pair<Int, String> {
+        val (host, agentKey) = service.createHost(orgId, name)
+        return host.id to agentKey
     }
 
     // --- createSystem ---
@@ -111,10 +83,10 @@ class MonitorServiceTest {
         val orgId = seedOrg()
         seedFreeTier()
 
-        val (system, agentKey) = service.createSystem(orgId, "web-server")
+        val (system, agentKey) = service.createHost(orgId, "web-server")
 
         assertNotNull(system)
-        assertEquals("web-server", system.name)
+        assertEquals("web-server", system.displayName)
         assertEquals(orgId, system.organizationId)
         assertEquals("pending", system.status)
         assertTrue(agentKey.isNotBlank())
@@ -125,13 +97,13 @@ class MonitorServiceTest {
         val orgId = seedOrg()
         seedFreeTier()
 
-        val (system, _) = service.createSystem(orgId, "web-server")
+        val (system, _) = service.createHost(orgId, "web-server")
 
         val settings =
             transaction {
-                SystemAlertSettings
+                HostAlertSettings
                     .selectAll()
-                    .where { SystemAlertSettings.system_id eq system.id }
+                    .where { HostAlertSettings.host_id eq system.id }
                     .firstOrNull()
             }
         assertNotNull(settings)
@@ -143,7 +115,7 @@ class MonitorServiceTest {
     fun `validateAgentKey returns system info for valid key`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (_, agentKey) = service.createSystem(orgId, "server")
+        val (_, agentKey) = service.createHost(orgId, "server")
 
         val result = service.validateAgentKey(agentKey)
         assertNotNull(result)
@@ -161,17 +133,17 @@ class MonitorServiceTest {
     fun `listSystems returns all systems for org`() {
         val orgId = seedOrg()
         seedFreeTier()
-        service.createSystem(orgId, "server-1")
-        service.createSystem(orgId, "server-2")
+        service.createHost(orgId, "server-1")
+        service.createHost(orgId, "server-2")
 
-        val systems = service.listSystems(orgId)
+        val systems = service.listHosts(orgId)
         assertEquals(2, systems.size)
     }
 
     @Test
     fun `listSystems returns empty for org with no systems`() {
         val orgId = seedOrg()
-        assertTrue(service.listSystems(orgId).isEmpty())
+        assertTrue(service.listHosts(orgId).isEmpty())
     }
 
     @Test
@@ -179,12 +151,12 @@ class MonitorServiceTest {
         val org1 = seedOrg("Org 1")
         val org2 = seedOrg("Org 2")
         seedFreeTier()
-        service.createSystem(org1, "server-1")
-        service.createSystem(org2, "server-2")
+        service.createHost(org1, "server-1")
+        service.createHost(org2, "server-2")
 
-        val systems1 = service.listSystems(org1)
+        val systems1 = service.listHosts(org1)
         assertEquals(1, systems1.size)
-        assertEquals("server-1", systems1[0].name)
+        assertEquals("server-1", systems1[0].displayName)
     }
 
     // --- getSystemById ---
@@ -193,16 +165,16 @@ class MonitorServiceTest {
     fun `getSystemById returns system when exists`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (system, _) = service.createSystem(orgId, "my-server")
+        val (system, _) = service.createHost(orgId, "my-server")
 
-        val found = service.getSystemById(system.id)
+        val found = service.getHostById(system.id)
         assertNotNull(found)
-        assertEquals("my-server", found.name)
+        assertEquals("my-server", found.displayName)
     }
 
     @Test
     fun `getSystemById returns null for non-existent id`() {
-        assertNull(service.getSystemById(UUID.randomUUID()))
+        assertNull(service.getHostById(Int.MAX_VALUE))
     }
 
     // --- deleteSystem ---
@@ -211,17 +183,17 @@ class MonitorServiceTest {
     fun `deleteSystem removes system after clearing alerts`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (system, _) = service.createSystem(orgId, "to-delete")
+        val (system, _) = service.createHost(orgId, "to-delete")
 
         // Clean up dependent rows first (simulates CASCADE which PostgreSQL has in production)
         transaction {
-            SystemAlertTemplateStates.deleteAll()
-            SystemAlerts.deleteWhere { SystemAlerts.system_id eq system.id }
-            SystemAlertSettings.deleteWhere { SystemAlertSettings.system_id eq system.id }
+            HostAlertTemplateStates.deleteAll()
+            HostAlerts.deleteWhere { HostAlerts.host_id eq system.id }
+            HostAlertSettings.deleteWhere { HostAlertSettings.host_id eq system.id }
         }
 
-        assertTrue(service.deleteSystem(system.id, orgId))
-        assertNull(service.getSystemById(system.id))
+        assertTrue(runBlocking { service.deleteHost(system.id, orgId) })
+        assertNull(service.getHostById(system.id))
     }
 
     @Test
@@ -229,17 +201,17 @@ class MonitorServiceTest {
         val orgId = seedOrg("Org A")
         val otherOrgId = seedOrg("Org B")
         seedFreeTier()
-        val (system, _) = service.createSystem(orgId, "server")
+        val (system, _) = service.createHost(orgId, "server")
 
-        assertFalse(service.deleteSystem(system.id, otherOrgId))
+        assertFalse(runBlocking { service.deleteHost(system.id, otherOrgId) })
         // System should still exist
-        assertNotNull(service.getSystemById(system.id))
+        assertNotNull(service.getHostById(system.id))
     }
 
     @Test
     fun `deleteSystem returns false for non-existent system`() {
         val orgId = seedOrg()
-        assertFalse(service.deleteSystem(UUID.randomUUID(), orgId))
+        assertFalse(runBlocking { service.deleteHost(Int.MAX_VALUE, orgId) })
     }
 
     // --- checkSystemQuota ---
@@ -249,17 +221,17 @@ class MonitorServiceTest {
         val orgId = seedOrg()
         seedFreeTier() // maxSystems = 3
 
-        assertTrue(service.checkSystemQuota(orgId))
+        assertTrue(service.checkHostQuota(orgId))
     }
 
     @Test
     fun `checkSystemQuota returns false when at limit`() {
         val orgId = seedOrg()
         seedFreeTier() // maxSystems = 3
-        service.createSystem(orgId, "s1")
-        service.createSystem(orgId, "s2")
-        service.createSystem(orgId, "s3")
+        service.createHost(orgId, "s1")
+        service.createHost(orgId, "s2")
+        service.createHost(orgId, "s3")
 
-        assertFalse(service.checkSystemQuota(orgId))
+        assertFalse(service.checkHostQuota(orgId))
     }
 }
