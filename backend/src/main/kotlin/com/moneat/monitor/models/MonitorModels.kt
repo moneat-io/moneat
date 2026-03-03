@@ -112,7 +112,7 @@ data class IngestResponse(
 @Serializable
 data class AgentLogIngestResponse(
     val accepted: Int? = null,
-    @SerialName("system_id") val systemId: String? = null,
+    @SerialName("host_id") val hostId: String? = null,
     val error: String? = null,
     val message: String? = null,
     val reason: String? = null,
@@ -350,6 +350,7 @@ data class HostData(
     val memoryTotalKb: Long? = null,
     @Serializable(with = KotlinInstantSerializer::class)
     val firstSeenAt: kotlin.time.Instant,
+    @Serializable(with = KotlinInstantSerializer::class)
     val createdAt: kotlin.time.Instant
 )
 

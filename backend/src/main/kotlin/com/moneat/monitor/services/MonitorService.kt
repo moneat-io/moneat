@@ -86,6 +86,7 @@ class MonitorService {
         const val ALERT_SCOPE_SYSTEM = "system"
         const val ALERT_SCOPE_HOST = "host"
         const val INFRA_LOOKBACK_DAYS = 7
+        const val MONITOR_HISTORY_CACHE_TTL_SECONDS = 30L
     }
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -193,6 +194,20 @@ class MonitorService {
     ): Int {
         val now = Clock.System.now()
         val hostnameFromPayload = payload.host ?: hostId.toString()
+
+        // Verify the host belongs to the claimed organization (prevent cross-tenant writes)
+        val hostOrgId =
+            transaction {
+                Hosts
+                    .selectAll()
+                    .where { Hosts.id eq hostId }
+                    .firstOrNull()
+                    ?.get(Hosts.organization_id)
+            }
+        if (hostOrgId == null || hostOrgId != organizationId) {
+            logger.warn { "Organization mismatch for hostId=$hostId: expected $organizationId, got $hostOrgId" }
+            throw IllegalArgumentException("Host $hostId does not belong to organization $organizationId")
+        }
 
         // Update host metadata and last_seen_at
         transaction {
@@ -371,10 +386,29 @@ class MonitorService {
     /**
      * Delete a host and all its metrics.
      */
-    fun deleteHost(
+    suspend fun deleteHost(
         hostId: Int,
         organizationId: Int
     ): Boolean {
+        // Delete telemetry from ClickHouse before removing the host row
+        val metricsDelete =
+            "ALTER TABLE $clickhouseDb.metrics DELETE WHERE organization_id = $organizationId AND tags['host_id'] = '$hostId'"
+        val containersDelete =
+            "ALTER TABLE $clickhouseDb.containers DELETE WHERE organization_id = $organizationId AND host_id = '$hostId'"
+
+        val metricsResponse = ClickHouseClient.execute(metricsDelete)
+        if (!metricsResponse.status.isSuccess()) {
+            val body = metricsResponse.bodyAsText()
+            logger.error { "Failed to delete ClickHouse metrics for hostId=$hostId: $body" }
+            throw Exception("Failed to delete host telemetry (metrics): $body")
+        }
+        val containersResponse = ClickHouseClient.execute(containersDelete)
+        if (!containersResponse.status.isSuccess()) {
+            val body = containersResponse.bodyAsText()
+            logger.error { "Failed to delete ClickHouse containers for hostId=$hostId: $body" }
+            throw Exception("Failed to delete host telemetry (containers): $body")
+        }
+
         return transaction {
             val deleted =
                 Hosts.deleteWhere {
@@ -500,6 +534,92 @@ class MonitorService {
     }
 
     /**
+     * Get latest metrics for multiple hosts in a single ClickHouse query (avoids N+1).
+     * Returns a map from hostId to LatestMetrics (null if no data for that host).
+     */
+    suspend fun getLatestMetricsForHosts(hostIds: List<Int>, organizationId: Int): Map<Int, LatestMetrics?> {
+        if (hostIds.isEmpty()) return emptyMap()
+        val retentionDays = retentionPolicyService.getRetentionDaysForOrganization(organizationId)
+        val hostIdList = hostIds.joinToString(",")
+        val query =
+            """
+            SELECT
+                toInt32(tags['host_id']) as host_id,
+                argMax(CASE WHEN metric_name='system.cpu.percent' THEN value END, timestamp) as cpu_percent,
+                argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp) as mem_total,
+                argMax(CASE WHEN metric_name='system.mem.used' THEN value END, timestamp) as mem_used,
+                argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) as mem_available,
+                argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp) as disk_total,
+                argMax(CASE WHEN metric_name='system.disk.used' THEN value END, timestamp) as disk_used,
+                argMax(CASE WHEN metric_name='system.net.recv_bytes' THEN value END, timestamp) as net_recv_bytes,
+                argMax(CASE WHEN metric_name='system.net.sent_bytes' THEN value END, timestamp) as net_sent_bytes,
+                argMax(CASE WHEN metric_name='system.load.1' THEN value END, timestamp) as load_1,
+                argMax(CASE WHEN metric_name='system.temp.max' THEN value END, timestamp) as temp_max,
+                argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
+                argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent
+            FROM $clickhouseDb.metrics
+            WHERE organization_id = $organizationId
+              AND toInt32(tags['host_id']) IN ($hostIdList)
+              AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
+            GROUP BY host_id
+            FORMAT JSONCompact
+            """.trimIndent()
+
+        val response = ClickHouseClient.execute(query)
+        if (!response.status.isSuccess()) {
+            logger.warn { "Failed to fetch batch latest metrics for org $organizationId" }
+            return hostIds.associateWith { null }
+        }
+
+        val body = response.bodyAsText()
+        if (body.isBlank()) return hostIds.associateWith { null }
+
+        return try {
+            val json = Json { ignoreUnknownKeys = true }
+            val rows = json.parseToJsonElement(body).jsonObject["data"]?.jsonArray ?: return hostIds.associateWith { null }
+            val result = mutableMapOf<Int, LatestMetrics?>()
+            for (row in rows) {
+                val arr = row.jsonArray
+                val rowHostId = arr.getOrNull(0)?.toString()?.replace("\"", "")?.toIntOrNull() ?: continue
+                val cpuPercent = arr.getOrNull(1)?.toString()?.toFloatOrNull() ?: 0f
+                val memTotal = arr.getOrNull(2)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val memUsed = arr.getOrNull(3)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val memAvailable = arr.getOrNull(4)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val diskTotal = arr.getOrNull(5)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val diskUsed = arr.getOrNull(6)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val netRecvBytes = arr.getOrNull(7)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val netSentBytes = arr.getOrNull(8)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val load1 = arr.getOrNull(9)?.toString()?.toFloatOrNull() ?: 0f
+                val tempMax = arr.getOrNull(10)?.toString()?.toFloatOrNull()
+                val gpuPercent = arr.getOrNull(11)?.toString()?.toFloatOrNull()
+                val batteryPercent = arr.getOrNull(12)?.toString()?.toFloatOrNull()
+                val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
+                result[rowHostId] = LatestMetrics(
+                    cpu_percent = cpuPercent,
+                    mem_total = memTotal,
+                    mem_used = effectiveMemUsed,
+                    mem_percent = if (memTotal > 0) (effectiveMemUsed.toFloat() / memTotal * 100) else 0f,
+                    disk_total = diskTotal,
+                    disk_used = diskUsed,
+                    disk_percent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * 100) else 0f,
+                    net_recv_bytes = netRecvBytes,
+                    net_sent_bytes = netSentBytes,
+                    net_recv_mbps = null,
+                    net_sent_mbps = null,
+                    load_1 = load1,
+                    temp_max = tempMax,
+                    gpu_percent = gpuPercent,
+                    battery_percent = batteryPercent
+                )
+            }
+            hostIds.associateWith { result[it] }
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to parse batch latest metrics response" }
+            hostIds.associateWith { null }
+        }
+    }
+
+    /**
      * Get historical metrics with optional downsampling.
      */
     suspend fun getHistoricalMetrics(
@@ -508,7 +628,10 @@ class MonitorService {
         toTimestamp: Long,
         intervalSeconds: Int?
     ): HistoricalMetricsResponse =
-        CacheService.cached("cache:monitor_hist:$hostId:$fromTimestamp:$toTimestamp:$intervalSeconds", 30) {
+        CacheService.cached(
+            "cache:monitor_hist:$hostId:$fromTimestamp:$toTimestamp:$intervalSeconds",
+            MONITOR_HISTORY_CACHE_TTL_SECONDS
+        ) {
             val host = getHostById(hostId) ?: return@cached HistoricalMetricsResponse(
                 system_id = "",
                 host_id = hostId,
@@ -960,8 +1083,8 @@ class MonitorService {
     /**
      * List all alerts for a host.
      */
-    fun listAlerts(hostId: Int): List<AlertResponse> {
-        return listHostAlerts(hostId)
+    fun listAlerts(hostId: Int, organizationId: Int): List<AlertResponse> {
+        return listHostAlerts(hostId, organizationId)
     }
 
     fun getAlertConfig(
@@ -973,7 +1096,7 @@ class MonitorService {
 
         val scope = getHostAlertScope(hostId, organizationId)
         val globalAlerts = listGlobalAlertsForHost(hostId, organizationId)
-        val hostAlerts = listHostAlerts(hostId)
+        val hostAlerts = listHostAlerts(hostId, organizationId)
         val effectiveAlerts = if (scope == ALERT_SCOPE_GLOBAL) globalAlerts else hostAlerts
 
         return AlertConfigResponse(
@@ -992,6 +1115,8 @@ class MonitorService {
         if (!isValidAlertScope(scope)) {
             return false
         }
+        // Normalize legacy "system" value to "host" before persisting
+        val normalizedScope = if (scope == ALERT_SCOPE_SYSTEM) ALERT_SCOPE_HOST else scope
         ensureOrganizationAlertTemplates(organizationId)
         ensureHostAlertsSeeded(hostId, organizationId)
 
@@ -1007,14 +1132,14 @@ class MonitorService {
 
             if (existing != null) {
                 HostAlertSettings.update({ HostAlertSettings.host_id eq hostId }) {
-                    it[HostAlertSettings.scope] = scope
+                    it[HostAlertSettings.scope] = normalizedScope
                     it[HostAlertSettings.updated_at] = now
                 }
             } else {
                 HostAlertSettings.insert {
                     it[HostAlertSettings.host_id] = hostId
                     it[HostAlertSettings.organization_id] = organizationId
-                    it[HostAlertSettings.scope] = scope
+                    it[HostAlertSettings.scope] = normalizedScope
                     it[HostAlertSettings.updated_at] = now
                 }
             }
@@ -1290,11 +1415,11 @@ class MonitorService {
         }
     }
 
-    private fun listHostAlerts(hostId: Int): List<AlertResponse> {
+    private fun listHostAlerts(hostId: Int, organizationId: Int): List<AlertResponse> {
         return transaction {
             HostAlerts
                 .selectAll()
-                .where { HostAlerts.host_id eq hostId }
+                .where { (HostAlerts.host_id eq hostId) and (HostAlerts.organization_id eq organizationId) }
                 .orderBy(HostAlerts.created_at to SortOrder.DESC)
                 .map { row ->
                     AlertResponse(

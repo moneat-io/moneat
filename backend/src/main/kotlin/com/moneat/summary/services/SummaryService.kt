@@ -193,7 +193,9 @@ class SummaryService(
 
         val hostChanges = hosts.filter { h ->
             h.lastSeenAt != null &&
-                h.status == STATUS_OFFLINE
+                h.status == STATUS_OFFLINE &&
+                h.lastSeenAt.toEpochMilliseconds() >= windowStart.toEpochMilli() &&
+                h.lastSeenAt.toEpochMilliseconds() <= windowEnd.toEpochMilli()
         }.map { h ->
             HostStatusChange(
                 systemId = h.id.toString(),
@@ -353,9 +355,9 @@ class SummaryService(
             }
             if (host != null) {
                 val alert = if (alertId != null) {
-                    monitorService.listAlerts(host.id).firstOrNull { it.id == alertId }
+                    monitorService.listAlerts(host.id, host.organizationId).firstOrNull { it.id == alertId }
                 } else {
-                    monitorService.listAlerts(host.id).firstOrNull { it.lastTriggeredAt != null }
+                    monitorService.listAlerts(host.id, host.organizationId).firstOrNull { it.lastTriggeredAt != null }
                 }
                 alertContext = AlertContextInfo(
                     alertId = alert?.id ?: 0,
@@ -383,7 +385,7 @@ class SummaryService(
             // Fallback: use the most recently triggered alert across the org
             // when the incident log entry cannot be found.
             val mostRecent = hosts.flatMap { host ->
-                monitorService.listAlerts(host.id)
+                monitorService.listAlerts(host.id, host.organizationId)
                     .filter { it.lastTriggeredAt != null }
                     .map { alert -> alert to host }
             }.maxByOrNull { it.first.lastTriggeredAt ?: 0 }
@@ -530,7 +532,7 @@ class SummaryService(
         val cutoff = System.currentTimeMillis() - periodMs
         val hosts = monitorService.listHosts(organizationId)
         val allAlerts = hosts.flatMap { host ->
-            monitorService.listAlerts(host.id).map { alert ->
+            monitorService.listAlerts(host.id, organizationId).map { alert ->
                 AlertSummaryItem(
                     alertId = alert.id,
                     systemId = alert.hostId?.toString() ?: alert.systemId,
@@ -557,7 +559,7 @@ class SummaryService(
         val periodMs = periodToMillis(period)
         val cutoff = System.currentTimeMillis() - periodMs
         return hosts.map { host ->
-            val alertCount = monitorService.listAlerts(host.id)
+            val alertCount = monitorService.listAlerts(host.id, host.organizationId)
                 .count { alert ->
                     alert.lastTriggeredAt != null &&
                         alert.lastTriggeredAt >= cutoff

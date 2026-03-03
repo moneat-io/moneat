@@ -1152,7 +1152,7 @@ function MonitoringHostsPage() {
 
       <div className="container mx-auto px-4 py-4 space-y-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          {!isLoading && hosts.length > 0 && (
+          {!isLoadingHosts && hosts.length > 0 && (
             <div className="flex items-center gap-3 text-sm flex-wrap">
               <div className="flex items-center gap-1.5">
                 <HardDrive className="h-3.5 w-3.5 text-blue-500" />

@@ -67,6 +67,7 @@ function KubernetesResourceList() {
   const {data, isLoading} = useQuery({
     queryKey: ['k8s-resources', k8sType],
     queryFn: () => api.get<{resources?: KubernetesResource[]}>(`/v1/infra/k8s-resources?resource_type=${k8sType}&limit=100`),
+    enabled: Boolean(k8sType),
   })
 
   const resources: KubernetesResource[] = data?.resources ?? []

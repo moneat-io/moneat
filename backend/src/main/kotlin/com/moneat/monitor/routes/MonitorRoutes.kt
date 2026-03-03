@@ -30,6 +30,7 @@ import com.moneat.monitor.models.CreateHostResponse
 import com.moneat.monitor.models.CreateSystemRequest
 import com.moneat.monitor.models.CreateSystemResponse
 import com.moneat.monitor.models.IngestResponse
+import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.SystemMetricsPayload
 import com.moneat.monitor.models.HostResponse
 import com.moneat.monitor.models.SystemResponse
@@ -311,7 +312,7 @@ fun Route.monitorRoutes(
                 )
                 call.respond(
                     HttpStatusCode.Accepted,
-                    AgentLogIngestResponse(accepted = accepted, systemId = hostId.toString())
+                    AgentLogIngestResponse(accepted = accepted, hostId = hostId.toString())
                 )
             } catch (e: Exception) {
                 logger.error(e) { "Failed to ingest agent logs: ${e.message}" }
@@ -346,6 +347,18 @@ fun Route.monitorRoutes(
                         monitorService.listHosts(orgId)
                     }
 
+                // Batch-fetch latest metrics per org to avoid N+1 ClickHouse queries
+                val latestMetricsByHost: Map<Int, LatestMetrics?> =
+                    organizationIds.flatMap { orgId ->
+                        val orgHosts = allHosts.filter { it.organizationId == orgId }
+                        if (orgHosts.isEmpty()) {
+                            emptyList()
+                        } else {
+                            val metrics = monitorService.getLatestMetricsForHosts(orgHosts.map { it.id }, orgId)
+                            metrics.entries.map { it.toPair() }
+                        }
+                    }.toMap()
+
                 val response =
                     allHosts.map { host ->
                         HostResponse(
@@ -364,7 +377,7 @@ fun Route.monitorRoutes(
                             cpuCores = host.cpuCores,
                             memoryTotalKb = host.memoryTotalKb,
                             created_at = host.createdAt.toEpochMilliseconds(),
-                            latest_metrics = monitorService.getLatestMetrics(host.id)
+                            latest_metrics = latestMetricsByHost[host.id]
                         )
                     }
 
@@ -719,7 +732,7 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val alerts = monitorService.listAlerts(hostId)
+                val alerts = monitorService.listAlerts(hostId, host.organizationId)
                 call.respond(HttpStatusCode.OK, alerts)
             }
 

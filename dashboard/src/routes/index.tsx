@@ -847,7 +847,7 @@ function DashboardPage() {
             {isLoadingMonitors ? (
               <SkeletonSection />
             ) : monitorHosts.length === 0 ? (
-              <EmptySection message="No systems being monitored" />
+              <EmptySection message="No hosts being monitored" />
             ) : (
               <div className="space-y-0.5">
                 {monitorHosts.slice(0, 6).map(host => (

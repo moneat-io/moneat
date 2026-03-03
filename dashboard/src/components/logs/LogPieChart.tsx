@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, type TooltipProps} from 'recharts'
+import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, type TooltipContentProps} from 'recharts'
 import type {LogTopValue} from '@/lib/api'
 
 interface LogPieChartProps {
@@ -36,10 +36,11 @@ const COLORS = [
   '#8b5cf6',
 ]
 
-function CustomTooltip({active, payload}: TooltipProps<number, string> & {payload?: Array<{name: string; value: number}>}) {
-  if (!active || !payload || !payload.length) return null
+function CustomTooltip({active, payload}: Partial<TooltipContentProps<number, string>>) {
+  if (!active || !Array.isArray(payload) || !payload.length) return null
   
   const data = payload[0]
+  if (!data || data.name == null || data.value == null) return null
   return (
     <div
       style={{
