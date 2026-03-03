@@ -90,6 +90,7 @@ class LogService {
         queueKey: String
     ): Int {
         val normalized = entries.mapNotNull { normalizeAgentEntry(it, systemId) }
+        return enqueueNormalized(organizationId, systemId, null, "agent", normalized, queueKey)
     }
 
     suspend fun enqueueAgentLogs(
@@ -99,6 +100,7 @@ class LogService {
         queueKey: String
     ): Int {
         val normalized = entries.mapNotNull { normalizeAgentEntry(it, null) }
+        return enqueueNormalized(organizationId, null, hostId, "agent", normalized, queueKey)
     }
 
     suspend fun enqueueOtlpLogs(
@@ -114,24 +116,6 @@ class LogService {
     fun estimateBillableBytes(entries: List<LogIngestEntry>): Long {
         return entries
             .mapNotNull { normalizeSdkEntry(it) }
-            .sumOf { (it.message.length + it.body.length).toLong() }
-    }
-
-    fun estimateBillableBytes(
-        entries: List<AgentLogEntry>,
-        systemId: String?
-    ): Long {
-        return entries
-            .mapNotNull { normalizeAgentEntry(it, systemId) }
-            .sumOf { (it.message.length + it.body.length).toLong() }
-    }
-
-    fun estimateBillableBytes(
-        entries: List<AgentLogEntry>,
-        hostId: Int
-    ): Long {
-        return entries
-            .mapNotNull { normalizeAgentEntry(it, null) }
             .sumOf { (it.message.length + it.body.length).toLong() }
     }
 
