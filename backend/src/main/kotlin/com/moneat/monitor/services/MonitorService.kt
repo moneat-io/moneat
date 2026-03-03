@@ -203,6 +203,10 @@ class MonitorService {
                 it[Hosts.os] = payload.os ?: ""
                 it[Hosts.arch] = payload.arch
                 it[Hosts.hostname] = hostnameFromPayload
+                payload.platform?.takeIf { p -> p.isNotBlank() }?.let { p -> it[Hosts.platform] = p }
+                payload.processor?.takeIf { p -> p.isNotBlank() }?.let { p -> it[Hosts.processor] = p }
+                payload.cpu_cores?.takeIf { c -> c > 0 }?.let { c -> it[Hosts.cpu_cores] = c }
+                payload.memory_total_kb?.takeIf { m -> m > 0 }?.let { m -> it[Hosts.memory_total_kb] = m }
             }
         }
 

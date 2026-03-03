@@ -82,7 +82,11 @@ data class SystemMetricsPayload(
     val agent_version: String? = null,
     val os: String? = null,
     val arch: String? = null,
-    val host: String? = null
+    val host: String? = null,
+    val platform: String? = null,
+    val processor: String? = null,
+    val cpu_cores: Int? = null,
+    val memory_total_kb: Long? = null
 )
 
 @Serializable
