@@ -57,6 +57,7 @@ Moneat is the monitoring tool you wished you had — a self-hostable, Sentry-com
   - [AI Observability](#ai-observability)
   - [On-Call & Incident Management (Enterprise)](#on-call--incident-management-enterprise)
   - [Datadog Compatibility (Enterprise)](#datadog-compatibility-enterprise)
+  - [Terraform Provider](#terraform-provider)
 - [Sentry Compatibility](#sentry-compatibility)
 - [Architecture](#architecture)
 - [Screenshots](#screenshots)
@@ -299,6 +300,28 @@ Moneat Enterprise implements the Datadog agent ingestion protocol end-to-end, so
 - Kubernetes resource and manifest payloads from the Datadog orchestrator check
 
 → [Enterprise pricing](https://moneat.io/pricing) · [Contact sales](mailto:support@moneat.io)
+
+### Terraform Provider
+
+Manage your Moneat infrastructure as code with the official Terraform provider. Configure projects, uptime monitors, status pages, dashboards, alerts, and more — all from your Terraform configurations.
+
+```hcl
+resource "moneat_project" "backend" {
+  name     = "backend-api"
+  platform = "python"
+}
+
+resource "moneat_uptime_monitor" "api_health" {
+  name             = "API Health Check"
+  url              = "https://api.example.com/health"
+  type             = "http"
+  interval_seconds = 60
+}
+```
+
+- **[Terraform Registry](https://registry.terraform.io/providers/moneat-io/moneat/latest)** — Install and docs
+- **[GitHub Repository](https://github.com/moneat-io/terraform-provider-moneat)** — Source code and issues
+- **[Provider Documentation](https://registry.terraform.io/providers/moneat-io/moneat/latest/docs)** — Full resource reference
 
 ---
 
