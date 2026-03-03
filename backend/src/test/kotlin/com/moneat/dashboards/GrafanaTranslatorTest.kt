@@ -1626,8 +1626,7 @@ class GrafanaTranslatorTest {
             )
         }
         val result = translator.translateGrafanaInfluxTarget(target)
-        assertContains(result, "r._field == \"bytes_recv\"")
-        assertContains(result, "r._field == \"bytes_sent\"")
+        assertContains(result, "(r._field == \"bytes_recv\" or r._field == \"bytes_sent\")")
     }
 
     // --- CloudWatch translator tests ---

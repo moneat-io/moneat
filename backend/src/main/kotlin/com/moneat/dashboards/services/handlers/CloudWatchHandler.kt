@@ -117,10 +117,16 @@ class CloudWatchHandler : DataSourceHandler {
             ?: return emptyList()
         val metricName = metricSpec["MetricName"]?.jsonPrimitive?.content
             ?: return emptyList()
-        val dimensions = metricSpec["Dimensions"]?.jsonArray?.map {
-            Dimension {
-                name = it.jsonObject["Name"]?.jsonPrimitive?.content ?: ""
-                value = it.jsonObject["Value"]?.jsonPrimitive?.content ?: ""
+        val dimensions = metricSpec["Dimensions"]?.jsonArray?.mapNotNull {
+            val n = it.jsonObject["Name"]?.jsonPrimitive?.content
+            val v = it.jsonObject["Value"]?.jsonPrimitive?.content
+            if (!n.isNullOrEmpty() && !v.isNullOrEmpty()) {
+                Dimension {
+                    name = n
+                    value = v
+                }
+            } else {
+                null
             }
         } ?: emptyList()
 
@@ -129,13 +135,14 @@ class CloudWatchHandler : DataSourceHandler {
         val endTime = resolveTime(timeRange?.to ?: "now", now)
 
         return try {
+            val normalizedLimit = limit.coerceIn(1, 100800)
             createClient(region, accessKey, secretKey).use { client ->
                 val startJava = java.time.Instant.ofEpochMilli(startTime.toEpochMilliseconds())
                 val endJava = java.time.Instant.ofEpochMilli(endTime.toEpochMilliseconds())
                 val request = GetMetricDataRequest {
                     this.startTime = aws.smithy.kotlin.runtime.time.Instant(startJava)
                     this.endTime = aws.smithy.kotlin.runtime.time.Instant(endJava)
-                    maxDatapoints = limit.coerceIn(1, 100800)
+                    maxDatapoints = normalizedLimit
                     metricDataQueries = listOf(
                         MetricDataQuery {
                             id = "m1"
@@ -165,10 +172,11 @@ class CloudWatchHandler : DataSourceHandler {
                         rows.add(
                             mapOf(
                                 "time_bucket" to JsonPrimitive(tsMs),
-                                label to JsonPrimitive(value)
+                                "value" to JsonPrimitive(value),
+                                "metric" to JsonPrimitive(label)
                             )
                         )
-                        if (rows.size >= limit) return rows
+                        if (rows.size >= normalizedLimit) return rows
                     }
                 }
                 rows

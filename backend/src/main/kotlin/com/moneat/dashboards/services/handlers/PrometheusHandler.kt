@@ -68,8 +68,12 @@ class PrometheusHandler : HttpApiHandler() {
         credentials: DataSourceCredentials,
         query: String,
     ): List<String> {
-        val twoArgMatch = Regex("""label_values\((.+),\s*(\w+)\)""").find(query)
-        val oneArgMatch = if (twoArgMatch == null) Regex("""label_values\((\w+)\)""").find(query) else null
+        val twoArgMatch = Regex("""label_values\((.+),\s*(\w+)\)""").matchEntire(query)
+        val oneArgMatch = if (twoArgMatch == null) {
+            Regex("""label_values\((\w+)\)""").matchEntire(query)
+        } else {
+            null
+        }
 
         val matcher: String?
         val labelName: String
@@ -173,6 +177,7 @@ class PrometheusHandler : HttpApiHandler() {
     }
 
     internal fun parsePrometheusResponse(body: String, limit: Int): List<Map<String, JsonElement>> {
+        if (limit <= 0) return emptyList()
         val root = json.parseToJsonElement(body).jsonObject
         val data = root["data"]?.jsonObject ?: return emptyList()
         val resultType = data["resultType"]?.jsonPrimitive?.content

@@ -585,6 +585,7 @@ class GrafanaTranslator : DashboardTranslator {
         // Extract field names from the select array
         // Format: [[{type:"field",params:["usage_idle"]},{type:"mean"}],...]
         val selectArr = target["select"]?.jsonArray
+        val fieldPredicates = mutableListOf<String>()
         if (selectArr != null) {
             for (col in selectArr) {
                 val parts = col.jsonArray
@@ -595,9 +596,14 @@ class GrafanaTranslator : DashboardTranslator {
                     ?.get("params")?.jsonArray
                     ?.firstOrNull()?.jsonPrimitive?.contentOrNull
                 if (!fieldName.isNullOrBlank()) {
-                    conditions.add("r._field == \"$fieldName\"")
+                    fieldPredicates.add("r._field == \"$fieldName\"")
                 }
             }
+        }
+        if (fieldPredicates.size == 1) {
+            conditions.add(fieldPredicates[0])
+        } else if (fieldPredicates.size > 1) {
+            conditions.add("(${fieldPredicates.joinToString(" or ")})")
         }
         // Extract tag filters
         val tags = target["tags"]?.jsonArray

@@ -76,18 +76,19 @@ class LokiHandler : HttpApiHandler() {
         val toSec = timeRange?.to?.let { resolveRelativeTimeSec(it, nowSec) } ?: nowSec
 
         return try {
+            val boundedLimit = limit.coerceIn(1, 5000)
             val response = httpClient.get("$baseUrl/loki/api/v1/query_range") {
                 parameter("query", query)
                 parameter("start", fromSec.toString() + "000000000")
                 parameter("end", toSec.toString() + "000000000")
-                parameter("limit", limit.coerceIn(1, 5000))
+                parameter("limit", boundedLimit)
                 credentials.apiKey?.let { header("X-Scope-OrgID", it) }
             }
             if (!response.status.isSuccess()) {
                 logger.error { "Loki query failed: ${response.status}" }
                 return emptyList()
             }
-            parseLokiResponse(response.bodyAsText(), limit)
+            parseLokiResponse(response.bodyAsText(), boundedLimit)
         } catch (e: Exception) {
             logger.error(e) { "Loki query failed" }
             emptyList()

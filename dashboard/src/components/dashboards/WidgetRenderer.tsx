@@ -138,7 +138,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   const queries = widget.query_configs?.length > 0 ? widget.query_configs : []
   const isBatch = queries.length > 1
   // Include query config fingerprint so datasource/query changes trigger refetch
-  const queryFingerprint = queries.map(q => `${q.dataSource}:${q.rawQuery || ''}`).join('|')
+  const queryFingerprint = JSON.stringify(queries.map(q => ({d: q.dataSource, r: q.rawQuery || ''})))
 
   const {data, isLoading, error} = useQuery({
     queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queryFingerprint, variables],
@@ -324,13 +324,30 @@ function applyFieldTransforms(data: Record<string, unknown>[], dc: DisplayConfig
 
   if (!visible && !renames) return data
 
+  // Build reverse rename map (renamed -> original) so visibleFields can match renamed names
+  const reverseRenames: Record<string, string> = {}
+  if (renames) {
+    for (const [orig, renamed] of Object.entries(renames)) {
+      reverseRenames[renamed] = orig
+    }
+  }
+
   return data.map(row => {
     const out: Record<string, unknown> = {}
-    const keys = visible ?? Object.keys(row)
-    for (const k of keys) {
-      if (!(k in row)) continue
-      const newKey = renames?.[k] || k
-      out[newKey] = row[k]
+    if (visible) {
+      for (const field of visible) {
+        // Try original key first, then check if it matches a renamed name
+        const origKey = (field in row) ? field : reverseRenames[field]
+        if (origKey && origKey in row) {
+          const newKey = renames?.[origKey] || origKey
+          out[newKey] = row[origKey]
+        }
+      }
+    } else {
+      for (const k of Object.keys(row)) {
+        const newKey = renames?.[k] || k
+        out[newKey] = row[k]
+      }
     }
     return out
   })
@@ -1010,8 +1027,8 @@ function SingleGauge({value, label, min, max, thresholds, fmtVal}: {
         const toVal = i === sorted.length ? max : sorted[i].value
         const color = i === 0 ? '#73BF69' : sorted[i - 1].color
         if (toVal <= fromVal) continue
-        const fromPct = (fromVal - min) / (max - min)
-        const toPct = (toVal - min) / (max - min)
+        const fromPct = denom <= 0 ? 0 : (fromVal - min) / denom
+        const toPct = denom <= 0 ? 1 : (toVal - min) / denom
         arcs.push({
           startAngle: GAUGE_ARC_START - fromPct * Math.PI,
           endAngle: GAUGE_ARC_START - toPct * Math.PI,
@@ -1028,7 +1045,7 @@ function SingleGauge({value, label, min, max, thresholds, fmtVal}: {
         color: stop.color,
       }
     })
-  }, [thresholds, min, max])
+  }, [thresholds, min, max, denom])
 
   const activeColor = useMemo(() => {
     if (thresholds.length > 0) {
@@ -1103,7 +1120,7 @@ const BarGaugeWidget = memo(function BarGaugeWidget({
   if (entries.length === 0) return null
 
   const maxVal = Math.max(...entries.map(e => Math.abs(e.value)), 1)
-  const gaugeMax = parseFloat(dc.gaugeMax || '0') || maxVal
+  const gaugeMax = Math.max(parseFloat(dc.gaugeMax || '0') || maxVal, maxVal, 1)
 
   if (isVertical) {
     return (

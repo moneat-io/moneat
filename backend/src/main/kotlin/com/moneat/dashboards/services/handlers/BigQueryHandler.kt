@@ -146,8 +146,8 @@ class BigQueryHandler : DataSourceHandler {
                 fv.attribute == com.google.cloud.bigquery.FieldValue.Attribute.PRIMITIVE -> {
                     val str = fv.stringValue
                     when {
-                        str?.toDoubleOrNull() != null -> JsonPrimitive(str.toDouble())
                         str?.toLongOrNull() != null -> JsonPrimitive(str.toLong())
+                        str?.toDoubleOrNull() != null -> JsonPrimitive(str.toDouble())
                         str == "true" || str == "false" -> JsonPrimitive(str == "true")
                         else -> JsonPrimitive(str ?: "")
                     }

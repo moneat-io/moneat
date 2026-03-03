@@ -80,8 +80,17 @@ class ElasticsearchHandler : HttpApiHandler() {
         val path = if (index == "_all") "/_search" else "/$index/_search"
 
         val queryBody = try {
-            json.parseToJsonElement(query) as? JsonObject
-                ?: JsonObject(mapOf("query" to (json.parseToJsonElement(query) as JsonObject)))
+            val parsed = json.parseToJsonElement(query)
+            if (parsed is JsonObject) {
+                parsed
+            } else {
+                JsonObject(
+                    mapOf(
+                        "query" to parsed,
+                        "size" to JsonPrimitive(limit.coerceIn(1, 10000))
+                    )
+                )
+            }
         } catch (_: Exception) {
             JsonObject(
                 mapOf(
