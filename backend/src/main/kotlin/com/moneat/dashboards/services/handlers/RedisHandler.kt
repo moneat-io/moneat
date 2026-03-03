@@ -211,9 +211,10 @@ class RedisHandler : DataSourceHandler {
     }
 
     private fun buildRedisUri(host: String, port: Int, password: String?): String {
-        val cleanHost = host.removePrefix("redis://").removePrefix("rediss://")
+        val scheme = if (host.startsWith("rediss://")) "rediss://" else "redis://"
+        val cleanHost = host.removePrefix("rediss://").removePrefix("redis://")
         val auth = if (!password.isNullOrBlank()) ":$password@" else ""
-        return "redis://$auth$cleanHost:$port"
+        return "$scheme$auth$cleanHost:$port"
     }
 
     /**
