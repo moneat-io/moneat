@@ -1,0 +1,5 @@
+com.moneat.enterprise.monitoring.MonitoringModule
+com.moneat.enterprise.analytics.AnalyticsModule
+com.moneat.enterprise.ai.AiModule
+com.moneat.enterprise.datadog.DatadogModule
+com.moneat.enterprise.mcp.McpModule

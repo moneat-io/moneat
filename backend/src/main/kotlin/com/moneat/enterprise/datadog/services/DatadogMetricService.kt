@@ -1,0 +1,269 @@
+// Moneat Enterprise - proprietary module
+// Copyright (c) 2026 Moneat. All rights reserved.
+// See enterprise/LICENSE for license terms.
+
+package com.moneat.enterprise.datadog.services
+
+import com.moneat.config.ClickHouseClient
+import com.moneat.config.RedisConfig
+import com.moneat.enterprise.datadog.models.DatadogMetricSeriesV1
+import com.moneat.enterprise.datadog.models.DatadogMetricV1
+import com.moneat.enterprise.datadog.models.DatadogSketchPayload
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
+private const val METRIC_QUEUE_KEY = "moneat:metrics:queue"
+
+@Serializable
+data class QueuedMetricBatch(
+    @SerialName("organization_id") val organizationId: Long,
+    val metrics: List<QueuedMetricEntry>
+)
+
+@Serializable
+data class QueuedMetricEntry(
+    val name: String,
+    val type: String,
+    @SerialName("timestamp_ms") val timestampMs: Long,
+    val value: Double,
+    val host: String = "",
+    val tags: Map<String, String> = emptyMap(),
+    val unit: String = "",
+    @SerialName("source_type_name") val sourceTypeName: String = ""
+)
+
+@Serializable
+data class QueuedSketchBatch(
+    @SerialName("organization_id") val organizationId: Long,
+    val sketches: List<QueuedSketchEntry>
+)
+
+@Serializable
+data class QueuedSketchEntry(
+    val name: String,
+    @SerialName("timestamp_ms") val timestampMs: Long,
+    val host: String = "",
+    val tags: Map<String, String> = emptyMap(),
+    val count: Long = 0,
+    val min: Double = 0.0,
+    val max: Double = 0.0,
+    val avg: Double = 0.0,
+    val sum: Double = 0.0,
+    val k: List<Int> = emptyList(),
+    val n: List<Int> = emptyList()
+)
+
+object DatadogMetricService {
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+
+    fun mapV1Series(
+        organizationId: Long,
+        payload: DatadogMetricSeriesV1
+    ): QueuedMetricBatch {
+        val metrics = payload.series.flatMap { series ->
+            flattenV1Points(series)
+        }
+
+        return QueuedMetricBatch(
+            organizationId = organizationId,
+            metrics = metrics
+        )
+    }
+
+    internal fun flattenV1Points(
+        series: DatadogMetricV1
+    ): List<QueuedMetricEntry> {
+        val tags = parseDdTagList(series.tags)
+        val metricType = normalizeMetricType(series.type)
+
+        return series.points.mapNotNull { point ->
+            if (point.size < 2) return@mapNotNull null
+            @Suppress("MagicNumber")
+            val timestampMs = (point[0] * 1000).toLong()
+            val value = point[1]
+            QueuedMetricEntry(
+                name = series.metric,
+                type = metricType,
+                timestampMs = timestampMs,
+                value = value,
+                host = series.host,
+                tags = tags,
+                unit = series.unit,
+                sourceTypeName = series.sourceTypeName
+            )
+        }
+    }
+
+    fun mapSketches(
+        organizationId: Long,
+        payload: DatadogSketchPayload
+    ): QueuedSketchBatch {
+        val sketches = payload.sketches.flatMap { sketch ->
+            val tags = parseDdTagList(sketch.tags)
+            sketch.distributions.map { dist ->
+                @Suppress("MagicNumber")
+                QueuedSketchEntry(
+                    name = sketch.metric,
+                    timestampMs = dist.ts * 1000,
+                    host = sketch.host,
+                    tags = tags,
+                    count = dist.cnt,
+                    min = dist.min,
+                    max = dist.max,
+                    avg = dist.avg,
+                    sum = dist.sum,
+                    k = dist.k,
+                    n = dist.n.map { it }
+                )
+            }
+        }
+
+        return QueuedSketchBatch(
+            organizationId = organizationId,
+            sketches = sketches
+        )
+    }
+
+    suspend fun enqueueMetrics(
+        organizationId: Long,
+        payload: DatadogMetricSeriesV1,
+        queueKey: String = METRIC_QUEUE_KEY
+    ): Int {
+        val batch = mapV1Series(organizationId, payload)
+        if (batch.metrics.isEmpty()) return 0
+        val message = json.encodeToString(batch)
+        RedisConfig.sync().lpush(queueKey, message)
+        logger.debug {
+            "Enqueued ${batch.metrics.size} DD metrics for org $organizationId"
+        }
+        return batch.metrics.size
+    }
+
+    suspend fun insertMetricBatch(batch: QueuedMetricBatch) {
+        if (batch.metrics.isEmpty()) return
+        val db = ClickHouseClient.getDatabase()
+
+        val rows = batch.metrics.joinToString(",\n") { m ->
+            val tagsMap = m.tags.entries.joinToString(",") { (k, v) ->
+                "'${escapeSql(k)}','${escapeSql(v)}'"
+            }
+            """(
+                ${batch.organizationId},
+                '${escapeSql(m.name)}',
+                '${escapeSql(m.type)}',
+                fromUnixTimestamp64Milli(${m.timestampMs}),
+                ${m.value},
+                '${escapeSql(m.host)}',
+                map($tagsMap),
+                '${escapeSql(m.unit)}',
+                '${escapeSql(m.sourceTypeName)}'
+            )"""
+        }
+
+        val insert = """
+            INSERT INTO $db.metrics (
+                organization_id, metric_name, metric_type, timestamp,
+                value, host, tags, unit, source_type_name
+            ) VALUES $rows
+        """.trimIndent()
+
+        val response = ClickHouseClient.execute(insert)
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            throw IllegalStateException(
+                "Failed to insert DD metrics: ${errorBody.take(600)}"
+            )
+        }
+    }
+
+    suspend fun insertSketchBatch(batch: QueuedSketchBatch) {
+        if (batch.sketches.isEmpty()) return
+        val db = ClickHouseClient.getDatabase()
+
+        val rows = batch.sketches.joinToString(",\n") { s ->
+            val tagsMap = s.tags.entries.joinToString(",") { (k, v) ->
+                "'${escapeSql(k)}','${escapeSql(v)}'"
+            }
+            val kArray = s.k.joinToString(",")
+            val nArray = s.n.joinToString(",")
+            """(
+                ${batch.organizationId},
+                '${escapeSql(s.name)}',
+                fromUnixTimestamp64Milli(${s.timestampMs}),
+                '${escapeSql(s.host)}',
+                map($tagsMap),
+                ${s.count},
+                ${s.min},
+                ${s.max},
+                ${s.avg},
+                ${s.sum},
+                [$kArray],
+                [$nArray]
+            )"""
+        }
+
+        val insert = """
+            INSERT INTO $db.metric_sketches (
+                organization_id, metric_name, timestamp, host, tags,
+                sketch_count, sketch_min, sketch_max, sketch_avg,
+                sketch_sum, sketch_k, sketch_n
+            ) VALUES $rows
+        """.trimIndent()
+
+        val response = ClickHouseClient.execute(insert)
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            throw IllegalStateException(
+                "Failed to insert DD sketches: ${errorBody.take(600)}"
+            )
+        }
+    }
+
+    fun decodeMetricBatch(encoded: String): QueuedMetricBatch {
+        return json.decodeFromString(encoded)
+    }
+
+    fun decodeSketchBatch(encoded: String): QueuedSketchBatch {
+        return json.decodeFromString(encoded)
+    }
+
+    internal fun parseDdTagList(
+        tags: List<String>
+    ): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        tags.forEach { tag ->
+            val colonIdx = tag.indexOf(':')
+            if (colonIdx > 0) {
+                result[tag.substring(0, colonIdx)] =
+                    tag.substring(colonIdx + 1)
+            } else if (tag.isNotEmpty()) {
+                result[tag] = ""
+            }
+        }
+        return result
+    }
+
+    private fun normalizeMetricType(type: String): String {
+        return when (type.lowercase()) {
+            "gauge" -> "gauge"
+            "rate" -> "rate"
+            "count" -> "count"
+            else -> "gauge"
+        }
+    }
+
+    private fun escapeSql(value: String): String {
+        return value
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+    }
+}
