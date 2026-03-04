@@ -341,8 +341,7 @@ function SettingsPage() {
 }
 
 function ApiKeysTab() {
-  const { data: features } = useEnterpriseFeatures()
-  const hasDatadog = hasEnterpriseModule(features, 'datadog')
+  const hasDatadog = true // Datadog module is always available (OSS)
   return (
     <Tabs defaultValue="sentry">
       <TabsList className="mb-4">

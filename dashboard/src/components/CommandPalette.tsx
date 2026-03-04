@@ -246,7 +246,6 @@ export function CommandPalette() {
   const visiblePageItems = useMemo(
     () =>
       PAGE_ITEMS.filter((p) => {
-        if (p.label === 'Analytics' && !hasEnterpriseModule(features, 'analytics')) return false
         if (p.label === 'On-Call' && !hasEnterpriseModule(features, 'oncall')) return false
         return true
       }),

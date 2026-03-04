@@ -1,0 +1,148 @@
+// Moneat Enterprise - proprietary module
+// Copyright (c) 2026 Moneat. All rights reserved.
+// See ee/LICENSE for license terms.
+
+package com.moneat.enterprise.oncall.services
+
+import com.moneat.enterprise.oncall.models.BusinessHours
+import com.moneat.enterprise.oncall.models.BusinessHoursConfig
+import com.moneat.enterprise.oncall.models.BusinessHoursWindow
+import com.moneat.enterprise.oncall.models.BusinessHoursWindows
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
+import kotlin.time.Clock
+
+class BusinessHoursService {
+    fun getBusinessHours(organizationId: Int): BusinessHoursConfig? =
+        transaction {
+            val bhRow =
+                BusinessHours
+                    .selectAll()
+                    .where { BusinessHours.organizationId eq organizationId }
+                    .singleOrNull() ?: return@transaction null
+
+            val windows =
+                BusinessHoursWindows
+                    .selectAll()
+                    .where { BusinessHoursWindows.businessHoursId eq bhRow[BusinessHours.id].value }
+                    .map { row ->
+                        BusinessHoursWindow(
+                            dayOfWeek = row[BusinessHoursWindows.dayOfWeek],
+                            startTime = row[BusinessHoursWindows.startTime],
+                            endTime = row[BusinessHoursWindows.endTime],
+                        )
+                    }
+
+            BusinessHoursConfig(
+                id = bhRow[BusinessHours.id].value,
+                organizationId = bhRow[BusinessHours.organizationId],
+                timezone = bhRow[BusinessHours.timezone],
+                enabled = bhRow[BusinessHours.enabled],
+                windows = windows,
+                createdAt = bhRow[BusinessHours.createdAt].toString(),
+                updatedAt = bhRow[BusinessHours.updatedAt].toString(),
+            )
+        }
+
+    fun isWithinBusinessHours(organizationId: Int): Boolean =
+        transaction {
+            val config = getBusinessHours(organizationId) ?: return@transaction true // Default: always escalate
+
+            if (!config.enabled) return@transaction true // Business hours disabled, always escalate
+
+            val tz =
+                try {
+                    TimeZone.of(config.timezone)
+                } catch (e: Exception) {
+                    TimeZone.UTC
+                }
+
+            val now = Clock.System.now().toLocalDateTime(tz)
+            val currentDayOfWeek =
+                when (now.dayOfWeek) {
+                    kotlinx.datetime.DayOfWeek.SUNDAY -> 0
+                    kotlinx.datetime.DayOfWeek.MONDAY -> 1
+                    kotlinx.datetime.DayOfWeek.TUESDAY -> 2
+                    kotlinx.datetime.DayOfWeek.WEDNESDAY -> 3
+                    kotlinx.datetime.DayOfWeek.THURSDAY -> 4
+                    kotlinx.datetime.DayOfWeek.FRIDAY -> 5
+                    kotlinx.datetime.DayOfWeek.SATURDAY -> 6
+                }
+
+            val currentTime = java.time.LocalTime.of(now.hour, now.minute, now.second)
+
+            // Check if current time falls within any window for current day
+            config.windows.any { window ->
+                window.dayOfWeek == currentDayOfWeek &&
+                    !currentTime.isBefore(window.startTime) &&
+                    !currentTime.isAfter(window.endTime)
+            }
+        }
+
+    fun shouldEscalate(
+        organizationId: Int,
+        priorityLevel: String,
+    ): Boolean {
+        // P0-P2 always escalate, P3+ only during business hours
+        return when (priorityLevel) {
+            "P0", "P1", "P2" -> true
+            else -> isWithinBusinessHours(organizationId)
+        }
+    }
+
+    fun updateBusinessHours(
+        organizationId: Int,
+        timezone: String,
+        enabled: Boolean,
+        windows: List<BusinessHoursWindow>,
+    ): BusinessHoursConfig =
+        transaction {
+            val now = Clock.System.now()
+
+            // Update or insert business_hours
+            val bhId =
+                BusinessHours
+                    .selectAll()
+                    .where { BusinessHours.organizationId eq organizationId }
+                    .singleOrNull()
+                    ?.let { it[BusinessHours.id].value }
+                    ?: BusinessHours
+                        .insertAndGetId {
+                            it[BusinessHours.organizationId] = organizationId
+                            it[BusinessHours.timezone] = timezone
+                            it[BusinessHours.enabled] = enabled
+                            it[BusinessHours.createdAt] = now
+                            it[BusinessHours.updatedAt] = now
+                        }.value
+
+            // Update existing record
+            BusinessHours.update({ BusinessHours.id eq bhId }) {
+                it[BusinessHours.timezone] = timezone
+                it[BusinessHours.enabled] = enabled
+                it[BusinessHours.updatedAt] = now
+            }
+
+            // Delete old windows
+            BusinessHoursWindows.deleteWhere { businessHoursId eq bhId }
+
+            // Insert new windows
+            windows.forEach { window ->
+                BusinessHoursWindows.insert {
+                    it[businessHoursId] = bhId
+                    it[dayOfWeek] = window.dayOfWeek
+                    it[startTime] = window.startTime
+                    it[endTime] = window.endTime
+                    it[createdAt] = now
+                }
+            }
+
+            getBusinessHours(organizationId)!!
+        }
+}

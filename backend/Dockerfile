@@ -15,16 +15,10 @@ RUN --mount=type=cache,target=/home/gradle/.gradle \
 COPY backend/src ./src
 # Copy built email templates from email-builder stage into src so they're processed as resources
 COPY --from=email-builder /emails/build/templates/email ./src/main/resources/email-templates/
-# Copy enterprise backend sources if present in build context (used by moneat-deploy CI/CD)
-ARG ENTERPRISE=false
-RUN --mount=type=bind,source=.,target=/repo,readonly \
-    --mount=type=cache,target=/home/gradle/.gradle \
-    if [ "$ENTERPRISE" = "true" ] && [ -d /repo/enterprise/backend ]; then \
-      mkdir -p /enterprise && cp -r /repo/enterprise/backend /enterprise/backend && \
-      gradle shadowJar -Penterprise -PenterprisePath=/enterprise/backend --no-daemon --build-cache; \
-    else \
-      gradle shadowJar --no-daemon --build-cache; \
-    fi
+# Copy enterprise (ee/) backend sources
+COPY ee/backend /ee/backend
+RUN --mount=type=cache,target=/home/gradle/.gradle \
+    gradle shadowJar --no-daemon --build-cache
 
 FROM eclipse-temurin:25.0.2_10-jre
 RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
@@ -32,15 +26,12 @@ RUN groupadd --system moneat && useradd --system --gid moneat --home /app --crea
 WORKDIR /app
 COPY --from=build /app/build/libs/moneat-backend-all.jar app.jar
 
-# Download Datadog Java agent for enterprise builds (profiling, APM, dynamic instrumentation)
-ARG ENTERPRISE=false
+# Download Datadog Java agent (profiling, APM, dynamic instrumentation)
 ARG DD_JAVA_AGENT_VERSION=1.59.0
 ARG DD_JAVA_AGENT_SHA256=f2aa729581b60af266cc6555cf9d9701e98ee71c194b4f25d97de354f46fc533
-RUN if [ "$ENTERPRISE" = "true" ]; then \
-      wget -q -O /app/dd-java-agent.jar \
-        "https://repo1.maven.org/maven2/com/datadoghq/dd-java-agent/${DD_JAVA_AGENT_VERSION}/dd-java-agent-${DD_JAVA_AGENT_VERSION}.jar" && \
-      echo "${DD_JAVA_AGENT_SHA256}  /app/dd-java-agent.jar" | sha256sum -c -; \
-    fi
+RUN wget -q -O /app/dd-java-agent.jar \
+      "https://repo1.maven.org/maven2/com/datadoghq/dd-java-agent/${DD_JAVA_AGENT_VERSION}/dd-java-agent-${DD_JAVA_AGENT_VERSION}.jar" && \
+    echo "${DD_JAVA_AGENT_SHA256}  /app/dd-java-agent.jar" | sha256sum -c -
 
 COPY backend/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
