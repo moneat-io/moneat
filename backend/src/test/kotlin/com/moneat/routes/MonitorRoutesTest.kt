@@ -21,7 +21,7 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.Systems
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Users
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -66,7 +66,7 @@ class MonitorRoutesTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, Systems)
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, Hosts)
     }
 
     private fun Application.installAuth() {
@@ -135,7 +135,7 @@ class MonitorRoutesTest {
 
             val userId = seedUser()
             val response =
-                client.get("/v1/monitor/systems") {
+                client.get("/v1/monitor/hosts") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -154,7 +154,7 @@ class MonitorRoutesTest {
             val orgId = seedOrg()
             seedMembership(userId, orgId)
             val response =
-                client.get("/v1/monitor/systems") {
+                client.get("/v1/monitor/hosts") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -174,7 +174,7 @@ class MonitorRoutesTest {
 
             val userId = seedUser()
             val response =
-                client.post("/v1/monitor/systems") {
+                client.post("/v1/monitor/hosts") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -195,7 +195,7 @@ class MonitorRoutesTest {
             val orgId = seedOrg()
             seedMembership(userId, orgId)
             val response =
-                client.get("/v1/monitor/systems/not-a-uuid") {
+                client.get("/v1/monitor/hosts/not-a-uuid") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -212,7 +212,7 @@ class MonitorRoutesTest {
 
             val userId = seedUser()
             val response =
-                client.get("/v1/monitor/systems/${UUID.randomUUID()}") {
+                client.get("/v1/monitor/hosts/${UUID.randomUUID()}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -231,7 +231,7 @@ class MonitorRoutesTest {
             val orgId = seedOrg()
             seedMembership(userId, orgId)
             val response =
-                client.get("/v1/monitor/systems/${UUID.randomUUID()}") {
+                client.get("/v1/monitor/hosts/2147483647") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -252,7 +252,7 @@ class MonitorRoutesTest {
             val orgId = seedOrg()
             seedMembership(userId, orgId)
             val response =
-                client.delete("/v1/monitor/systems/bad-uuid") {
+                client.delete("/v1/monitor/hosts/bad-uuid") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -269,7 +269,7 @@ class MonitorRoutesTest {
 
             val userId = seedUser()
             val response =
-                client.delete("/v1/monitor/systems/${UUID.randomUUID()}") {
+                client.delete("/v1/monitor/hosts/${UUID.randomUUID()}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -290,7 +290,7 @@ class MonitorRoutesTest {
             val orgId = seedOrg()
             seedMembership(userId, orgId)
             val response =
-                client.get("/v1/monitor/systems/not-a-uuid/metrics") {
+                client.get("/v1/monitor/hosts/not-a-uuid/metrics") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -307,7 +307,7 @@ class MonitorRoutesTest {
 
             val userId = seedUser()
             val response =
-                client.get("/v1/monitor/systems/${UUID.randomUUID()}/metrics") {
+                client.get("/v1/monitor/hosts/${UUID.randomUUID()}/metrics") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -328,7 +328,7 @@ class MonitorRoutesTest {
             val orgId = seedOrg()
             seedMembership(userId, orgId)
             val response =
-                client.get("/v1/monitor/systems/not-a-uuid/containers") {
+                client.get("/v1/monitor/hosts/not-a-uuid/containers") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
