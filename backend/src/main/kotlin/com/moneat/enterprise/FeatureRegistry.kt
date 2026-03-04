@@ -16,6 +16,8 @@
 
 package com.moneat.enterprise
 
+import com.moneat.enterprise.license.LicenseInfo
+import com.moneat.enterprise.license.LicenseValidator
 import io.ktor.server.application.*
 import io.ktor.server.routing.*
 import mu.KotlinLogging
@@ -31,6 +33,12 @@ private val logger = KotlinLogging.logger {}
 interface EnterpriseModule {
     /** Human-readable name of the module (e.g., "SSO", "On-Call"). */
     val name: String
+
+    /**
+     * The license feature name required to activate this module (e.g. "sso", "oncall").
+     * Null means the module is open-source and always loaded.
+     */
+    val licenseFeature: String? get() = null
 
     /** Register enterprise routes into the core routing tree. */
     fun registerRoutes(route: Route)
@@ -51,26 +59,50 @@ object FeatureRegistry {
     private val modules = mutableListOf<EnterpriseModule>()
     private var initialized = false
 
+    private var license: LicenseInfo? = null
+
     val isEnterpriseAvailable: Boolean
         get() = modules.isNotEmpty()
 
     val registeredModules: List<EnterpriseModule>
         get() = modules.toList()
 
+    /** The validated license, or null if no valid license key is set. */
+    val activeLicense: LicenseInfo? get() = license
+
     fun initialize() {
         if (initialized) return
         initialized = true
 
+        val licenseKey = System.getenv("MONEAT_LICENSE_KEY")
+        val resolvedLicense = licenseKey?.takeIf { it.isNotBlank() }?.let { key ->
+            LicenseValidator.validate(key).also { info ->
+                if (info != null) {
+                    logger.info { "License valid — customer: ${info.customer}, plan: ${info.plan}, features: ${info.features}, expires: ${info.expiresAt ?: "never"}" }
+                } else {
+                    logger.warn { "MONEAT_LICENSE_KEY is set but invalid or expired — licensed modules will not load" }
+                }
+            }
+        }
+        license = resolvedLicense
+
         val loader = ServiceLoader.load(EnterpriseModule::class.java)
         for (module in loader) {
+            val feature = module.licenseFeature
+            if (feature != null && (resolvedLicense == null || feature !in resolvedLicense.features)) {
+                logger.info { "Skipping module: ${module.name} (requires '$feature' license feature)" }
+                continue
+            }
             modules.add(module)
-            logger.info { "Registered enterprise module: ${module.name}" }
+            logger.info { "Registered module: ${module.name}" }
         }
 
+        val licensedCount = modules.count { it.licenseFeature != null }
+        val ossCount = modules.size - licensedCount
         if (modules.isEmpty()) {
-            logger.info { "No enterprise modules found — running in core-only mode" }
+            logger.info { "No modules found — running in core-only mode" }
         } else {
-            logger.info { "Loaded ${modules.size} enterprise module(s)" }
+            logger.info { "Loaded ${modules.size} module(s) ($ossCount open-source, $licensedCount licensed)" }
         }
     }
 
@@ -110,6 +142,7 @@ object FeatureRegistry {
     // For testing
     internal fun reset() {
         modules.clear()
+        license = null
         initialized = false
     }
 }

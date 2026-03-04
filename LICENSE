@@ -1,6 +1,14 @@
 Copyright (c) 2026 Moneat
 
-This program is licensed under the GNU Affero General Public License v3.0.
+Moneat uses a dual-license model:
+
+  * Content of the ee/ directory is licensed under the Moneat Enterprise
+    License (see ee/LICENSE). Production use requires a valid Moneat
+    Enterprise subscription.
+
+  * All other content is licensed under the GNU Affero General Public
+    License v3.0 (AGPLv3), reproduced below.
+
 For licensing questions, contact licensing@moneat.io.
 
 ================================================================================

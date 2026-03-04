@@ -164,10 +164,14 @@ dependencies {
     integrationTestImplementation(libs.testcontainers.postgresql)
     integrationTestImplementation(libs.testcontainers.clickhouse)
 
-    // Enterprise modules — included only when building with -Penterprise
-    if (project.hasProperty("enterprise")) {
-        runtimeOnly(project(":enterprise"))
-    }
+    // Zstandard decompression for DD agent payloads
+    implementation(libs.zstd.jni)
+
+    // Protobuf for decoding DD process-agent binary payloads
+    implementation(libs.protobuf.java)
+
+    // Enterprise modules (SSO, On-Call) — always included, license-gated at runtime
+    runtimeOnly(project(":ee"))
 }
 
 // Task to copy email templates into resources
