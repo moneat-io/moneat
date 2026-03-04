@@ -109,11 +109,11 @@ object UserNotificationChannelPreferences : IntIdTable("user_notification_channe
     val category = varchar("category", 32)
     val channel = varchar("channel", 32)
     val enabled = bool("enabled").default(true)
-    val createdAt = timestamp("created_at")
-    val updatedAt = timestamp("updated_at")
+    val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
+    val updatedAt = timestamp("updated_at").clientDefault { Clock.System.now() }
 
     init {
-        uniqueIndex(userId, category, channel)
+        uniqueIndex(userId, organizationId, category, channel)
     }
 }
 
@@ -122,7 +122,7 @@ object ShiftChangeNotificationsSent : IntIdTable("shift_change_notifications_sen
     val scheduleId = integer("schedule_id").references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE)
     val shiftStartAt = timestamp("shift_start_at")
     val channel = varchar("channel", 32)
-    val sentAt = timestamp("sent_at")
+    val sentAt = timestamp("sent_at").clientDefault { Clock.System.now() }
 
     init {
         uniqueIndex(userId, scheduleId, shiftStartAt, channel)

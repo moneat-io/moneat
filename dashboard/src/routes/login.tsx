@@ -98,9 +98,9 @@ function LoginPage() {
         return true
       }
 
-      // Allow Expo deep links in non-production dashboard environments
+      // Allow Expo deep links only in local development
       if ((url.protocol === 'exp:' || url.protocol === 'exps:') &&
-          !allowedHosts.includes(window.location.hostname)) {
+          process.env.NODE_ENV === 'development') {
         return true
       }
 
