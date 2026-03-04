@@ -98,12 +98,10 @@ function LoginPage() {
         return true
       }
 
-      // Allow exp:// / exps:// only for known Expo Go development hosts
-      if (process.env.NODE_ENV === 'development' && (url.protocol === 'exp:' || url.protocol === 'exps:')) {
-        const allowedExpHosts = ['127.0.0.1', 'localhost', '10.0.2.2']
-        if (allowedExpHosts.includes(url.hostname)) {
-          return true
-        }
+      // Allow Expo deep links in non-production dashboard environments
+      if ((url.protocol === 'exp:' || url.protocol === 'exps:') &&
+          !allowedHosts.includes(window.location.hostname)) {
+        return true
       }
 
       return false
