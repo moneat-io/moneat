@@ -84,9 +84,6 @@ services:
       SELF_HOST: "true"
       # Set MONEAT_LICENSE_KEY to enable enterprise features (SSO, On-Call)
       MONEAT_LICENSE_KEY: ${MONEAT_LICENSE_KEY:-}
-    env_file:
-      - file: .env.enterprise  # Optional: enterprise-specific secrets (Twilio, SAML, DD_, etc.)
-        required: false
     volumes:
       - backend_storage:/app/storage
     depends_on:
@@ -132,17 +129,24 @@ services:
     container_name: moneat-datadog-agent
     restart: unless-stopped
     environment:
+      # Core
       DD_API_KEY: ${DD_API_KEY:-}
       DD_DD_URL: ${DD_DD_URL:-https://api.moneat.io/dd}
       DD_ENV: ${DD_ENV:-production}
       DD_HOSTNAME: ${DD_HOSTNAME:-moneat-host}
+      # APM
       DD_APM_ENABLED: "true"
       DD_APM_NON_LOCAL_TRAFFIC: "true"
+      # Continuous Profiling
       DD_PROFILING_ENABLED: "true"
+      # Live Processes
       DD_PROCESS_AGENT_ENABLED: "true"
+      # Log Collection
       DD_LOGS_ENABLED: "true"
       DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
+      # Dynamic Instrumentation (Probes / Debugger)
       DD_DYNAMIC_INSTRUMENTATION_ENABLED: "true"
+      # Network Performance Monitoring
       DD_SYSTEM_PROBE_ENABLED: "true"
       DD_SYSTEM_PROBE_NETWORK_ENABLED: "true"
     volumes:
@@ -151,8 +155,8 @@ services:
       - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
       - /sys/kernel/debug:/sys/kernel/debug:ro
     ports:
-      - "8126:8126"
-      - "8125:8125"
+      - "8126:8126"   # APM traces
+      - "8125:8125"   # DogStatsD metrics
     cap_add:
       - SYS_ADMIN
       - SYS_RESOURCE
