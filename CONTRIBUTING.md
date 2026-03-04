@@ -116,10 +116,13 @@ cd backend && ./gradlew run -Penterprise -PenterprisePath=/path/to/enterprise/ba
 # Or with a custom enterprise path
 ENTERPRISE_PATH=/path/to/enterprise ./scripts/docker-build.sh --enterprise
 
-# Run with enterprise compose override
-docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
+# Run with enterprise features (set MONEAT_LICENSE_KEY in your .env)
+docker compose up -d
 
-# Optionally create .env.enterprise for enterprise-specific secrets (Twilio, SAML, etc.)
+# Optionally include the Datadog agent
+docker compose --profile datadog up -d
+
+# Enterprise-specific secrets (Twilio, SAML, etc.) go in your .env file
 ```
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup instructions.

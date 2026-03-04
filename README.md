@@ -75,7 +75,7 @@ Deploy Moneat on any VPS with Docker Compose.
 ```bash
 git clone -b main https://github.com/moneat-io/moneat.git
 cd moneat-deploy
-# Follow the setup guide in the repo
+cp .env.example .env   # then edit .env with your production secrets
 docker-compose up -d
 ```
 
@@ -103,6 +103,8 @@ TELEMETRY_ENABLED=false
 
 ### Development Setup
 
+For active development, run infrastructure in Docker but the backend and dashboard locally for hot-reload.
+
 <details>
 <summary><b>Prerequisites</b></summary>
 
@@ -113,13 +115,16 @@ TELEMETRY_ENABLED=false
 </details>
 
 ```bash
-# 1. Start infrastructure (PostgreSQL, ClickHouse, Redis)
-docker-compose up -d
+# 1. Create your local environment config
+cp .env.example .env
 
-# 2. Start the backend (API at localhost:8080)
+# 2. Start infrastructure only (PostgreSQL, ClickHouse, Redis)
+docker compose up -d postgres clickhouse redis
+
+# 3. Start the backend with hot-reload (API at localhost:8080)
 cd backend && ./gradlew run
 
-# 3. Start the dashboard (UI at localhost:5173)
+# 4. Start the dashboard with hot-reload (UI at localhost:5173)
 cd dashboard && npm install && npm run dev
 ```
 
