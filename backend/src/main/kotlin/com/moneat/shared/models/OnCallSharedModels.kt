@@ -102,3 +102,29 @@ object OnCallParticipants : IntIdTable("on_call_participants") {
     val position = integer("position")
     val createdAt = timestamp("created_at")
 }
+
+object UserNotificationChannelPreferences : IntIdTable("user_notification_channel_preferences") {
+    val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val category = varchar("category", 32)
+    val channel = varchar("channel", 32)
+    val enabled = bool("enabled").default(true)
+    val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
+    val updatedAt = timestamp("updated_at").clientDefault { Clock.System.now() }
+
+    init {
+        uniqueIndex(userId, organizationId, category, channel)
+    }
+}
+
+object ShiftChangeNotificationsSent : IntIdTable("shift_change_notifications_sent") {
+    val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val scheduleId = integer("schedule_id").references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE)
+    val shiftStartAt = timestamp("shift_start_at")
+    val channel = varchar("channel", 32)
+    val sentAt = timestamp("sent_at").clientDefault { Clock.System.now() }
+
+    init {
+        uniqueIndex(userId, scheduleId, shiftStartAt, channel)
+    }
+}
