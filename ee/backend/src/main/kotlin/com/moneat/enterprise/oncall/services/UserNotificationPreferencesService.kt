@@ -1,6 +1,6 @@
 // Moneat Enterprise - proprietary module
 // Copyright (c) 2026 Moneat. All rights reserved.
-// See enterprise/LICENSE for license terms.
+// See ee/LICENSE for license terms.
 
 package com.moneat.enterprise.oncall.services
 

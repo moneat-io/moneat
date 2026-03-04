@@ -83,7 +83,8 @@ fun Application.datadogRoutes() {
                         )
 
                     val deleted = DatadogService.deleteApiKey(
-                        keyId, organizationId
+                        keyId,
+                        organizationId
                     )
                     if (deleted) {
                         call.respond(HttpStatusCode.NoContent)

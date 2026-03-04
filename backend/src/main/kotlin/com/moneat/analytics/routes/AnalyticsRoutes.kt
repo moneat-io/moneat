@@ -117,7 +117,12 @@ fun Route.analyticsRoutes(
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT
 
                 val result = analyticsService.getBreakdown(
-                    projectId, dateFrom, dateTo, filters, "referrer_source", limit,
+                    projectId,
+                    dateFrom,
+                    dateTo,
+                    filters,
+                    "referrer_source",
+                    limit,
                 )
                 call.respond(result)
             }
@@ -147,7 +152,12 @@ fun Route.analyticsRoutes(
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT
 
                 val result = analyticsService.getBreakdown(
-                    projectId, dateFrom, dateTo, filters, "country_code", limit,
+                    projectId,
+                    dateFrom,
+                    dateTo,
+                    filters,
+                    "country_code",
+                    limit,
                 )
                 call.respond(result)
             }

@@ -116,9 +116,12 @@ object SecurityIngestionService {
         val entries = payload.dumps.map { d ->
             QueuedActivityDumpEntry(
                 activityType = d.activityType,
-                processName = d.processName, host = d.host,
-                durationNs = d.durationNs, dumpData = d.dumpData,
-                tags = parseDdTagList(d.tags), timestampMs = now,
+                processName = d.processName,
+                host = d.host,
+                durationNs = d.durationNs,
+                dumpData = d.dumpData,
+                tags = parseDdTagList(d.tags),
+                timestampMs = now,
             )
         }
         if (entries.isEmpty()) return 0

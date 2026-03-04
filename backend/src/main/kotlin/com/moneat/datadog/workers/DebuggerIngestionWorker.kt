@@ -61,24 +61,22 @@ class DebuggerIngestionWorker(
     @Suppress("TooGenericExceptionCaught")
     private suspend fun runWorker(workerId: Int) {
         val redis = RedisConfig.newBlockingConnection()
-        try {
-            while (scope.isActive) {
-                try {
-                    val result = redis.brpop(
-                        BRPOP_TIMEOUT_SECONDS, queueKey
-                    )
-                    val payload = result?.value ?: continue
-                    processMessage(workerId, payload)
-                } catch (e: CancellationException) {
-                    break
-                } catch (e: Exception) {
-                    logger.error(e) {
-                        "Debugger worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+        while (scope.isActive) {
+            try {
+                val result = redis.brpop(
+                    BRPOP_TIMEOUT_SECONDS,
+                    queueKey
+                )
+                val payload = result?.value ?: continue
+                processMessage(workerId, payload)
+            } catch (e: CancellationException) {
+                break
+            } catch (e: Exception) {
+                logger.error(e) {
+                    "Debugger worker $workerId error in BRPOP loop"
                 }
+                delay(ERROR_DELAY_MS)
             }
-        } finally {
         }
     }
 

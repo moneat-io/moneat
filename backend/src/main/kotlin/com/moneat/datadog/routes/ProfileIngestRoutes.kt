@@ -36,7 +36,10 @@ import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+private val json = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+}
 
 internal data class ProfileUploadFilePart(
     val partName: String?,

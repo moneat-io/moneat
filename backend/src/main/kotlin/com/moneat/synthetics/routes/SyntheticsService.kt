@@ -14,19 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.synthetics.services
+package com.moneat.synthetics.routes
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
-import com.moneat.synthetics.models.CreateSyntheticTestRequest
-import com.moneat.synthetics.models.SyntheticAssertion
-import com.moneat.synthetics.models.SyntheticStep
-import com.moneat.synthetics.models.SyntheticTestData
-import com.moneat.synthetics.models.SyntheticTestResponse
-import com.moneat.synthetics.models.SyntheticTests
-import com.moneat.synthetics.models.UpdateSyntheticTestRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

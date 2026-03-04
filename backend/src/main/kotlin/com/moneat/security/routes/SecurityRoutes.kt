@@ -172,7 +172,10 @@ fun Route.securityRoutes() {
                     put("events", JsonArray(results))
                     put("totalCount", JsonPrimitive(totalCount))
                 }
-                call.respondText(json.encodeToString(JsonObject.serializer(), responseJson), ContentType.Application.Json)
+                call.respondText(
+                    json.encodeToString(JsonObject.serializer(), responseJson),
+                    ContentType.Application.Json
+                )
             }
 
             // --- Compliance Findings ---
@@ -229,7 +232,10 @@ fun Route.securityRoutes() {
                     put("findings", JsonArray(results))
                     put("totalCount", JsonPrimitive(totalCount))
                 }
-                call.respondText(json.encodeToString(JsonObject.serializer(), responseJson), ContentType.Application.Json)
+                call.respondText(
+                    json.encodeToString(JsonObject.serializer(), responseJson),
+                    ContentType.Application.Json
+                )
             }
         }
     }

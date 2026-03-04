@@ -86,7 +86,9 @@ class DbmIngestionServiceTest {
     @Test
     fun `mapQueries handles empty rows`() {
         val payload = DdDbmQueryPayload(
-            dbHost = "test", dbSystem = "pg", rows = emptyList(),
+            dbHost = "test",
+            dbSystem = "pg",
+            rows = emptyList(),
         )
 
         val batch = DbmIngestionService.mapQueries(1, payload)
@@ -96,7 +98,8 @@ class DbmIngestionServiceTest {
     @Test
     fun `mapQueries uses current time when timestamp is null`() {
         val payload = DdDbmQueryPayload(
-            dbHost = "test", dbSystem = "pg",
+            dbHost = "test",
+            dbSystem = "pg",
             rows = listOf(
                 DdDbmQueryRow(
                     querySignature = "sig1",
@@ -202,7 +205,8 @@ class DbmIngestionServiceTest {
     @Test
     fun `decodeBatch round-trips queries batch`() {
         val payload = DdDbmQueryPayload(
-            dbHost = "test", dbSystem = "pg",
+            dbHost = "test",
+            dbSystem = "pg",
             rows = listOf(
                 DdDbmQueryRow(querySignature = "sig1", statement = "SELECT 1", timestamp = 1700000000L),
             ),
@@ -220,7 +224,8 @@ class DbmIngestionServiceTest {
     @Test
     fun `decodeBatch round-trips metrics batch`() {
         val payload = DdDbmMetricsPayload(
-            dbHost = "test", dbSystem = "pg",
+            dbHost = "test",
+            dbSystem = "pg",
             rows = listOf(
                 DdDbmMetricRow(dbName = "mydb", querySignature = "sig1", timestamp = 1700000000L, calls = 50),
             ),
@@ -238,11 +243,14 @@ class DbmIngestionServiceTest {
     @Test
     fun `decodeBatch round-trips activity batch`() {
         val payload = DdDbmActivityPayload(
-            dbHost = "test", dbSystem = "pg",
+            dbHost = "test",
+            dbSystem = "pg",
             activity = listOf(
                 DdDbmActivityRow(
-                    dbName = "mydb", querySignature = "sig1",
-                    statement = "SELECT 1", state = "active",
+                    dbName = "mydb",
+                    querySignature = "sig1",
+                    statement = "SELECT 1",
+                    state = "active",
                     blockingPids = listOf(1L, 2L),
                     timestamp = 1700000000L,
                 ),

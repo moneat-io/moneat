@@ -44,7 +44,7 @@ fun Route.datadogInfraRoutes() {
         route("/api/v1") {
             post("/collector") {
                 val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@post
-                handleProcessAgentPayload(call, orgId, ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC)
+                handleProcessAgentPayload(call, orgId)
             }
 
             post("/container") { handleContainer(call) }
@@ -62,13 +62,12 @@ fun Route.datadogInfraRoutes() {
 
 private suspend fun handleContainer(call: ApplicationCall) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    handleProcessAgentPayload(call, orgId, ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONTAINER)
+    handleProcessAgentPayload(call, orgId)
 }
 
 private suspend fun handleProcessAgentPayload(
     call: ApplicationCall,
-    orgId: Int,
-    expectedType: Int
+    orgId: Int
 ) {
     val rawBody = call.receive<ByteArray>()
     val header = ProcessAgentPayloadDecoder.readHeader(rawBody)

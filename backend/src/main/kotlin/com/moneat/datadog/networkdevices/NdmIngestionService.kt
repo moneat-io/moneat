@@ -128,9 +128,12 @@ object NdmIngestionService {
             "ndmtraps" -> {
                 val entries = payload.traps.map { t ->
                     QueuedNdmTrapEntry(
-                        deviceIp = t.deviceIp, oid = t.oid,
-                        severity = t.severity, message = t.message,
-                        variables = t.variables, timestampMs = now,
+                        deviceIp = t.deviceIp,
+                        oid = t.oid,
+                        severity = t.severity,
+                        message = t.message,
+                        variables = t.variables,
+                        timestampMs = now,
                     )
                 }
                 QueuedNdmBatch(orgId, "traps", traps = entries)
@@ -151,9 +154,12 @@ object NdmIngestionService {
             "netpath" -> {
                 val entries = payload.paths.map { p ->
                     QueuedNdmPathEntry(
-                        source = p.source, destination = p.destination,
-                        hops = p.hops, hopRtts = p.hopRtts,
-                        tags = parseDdTagList(p.tags), timestampMs = now,
+                        source = p.source,
+                        destination = p.destination,
+                        hops = p.hops,
+                        hopRtts = p.hopRtts,
+                        tags = parseDdTagList(p.tags),
+                        timestampMs = now,
                     )
                 }
                 QueuedNdmBatch(orgId, "paths", paths = entries)
@@ -161,9 +167,11 @@ object NdmIngestionService {
             "ndmconfig" -> {
                 val entries = payload.configs.map { c ->
                     QueuedNdmConfigEntry(
-                        deviceId = c.deviceId, configType = c.configType,
+                        deviceId = c.deviceId,
+                        configType = c.configType,
                         content = c.content,
-                        tags = parseDdTagList(c.tags), timestampMs = now,
+                        tags = parseDdTagList(c.tags),
+                        timestampMs = now,
                     )
                 }
                 QueuedNdmBatch(orgId, "configs", configs = entries)

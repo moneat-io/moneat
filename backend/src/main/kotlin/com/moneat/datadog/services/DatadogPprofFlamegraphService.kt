@@ -81,10 +81,13 @@ object DatadogPprofFlamegraphService {
                 val profile = decodeProfile(payload)
                 val roots = buildFrameTree(profile)
                 buildJsonObject {
-                    put("frames", buildJsonArray {
-                        roots.sortedByDescending { it.value }
-                            .forEach { add(toJson(it)) }
-                    })
+                    put(
+                        "frames",
+                        buildJsonArray {
+                            roots.sortedByDescending { it.value }
+                                .forEach { add(toJson(it)) }
+                        }
+                    )
                 }
             }
         }.onFailure { e ->
@@ -439,10 +442,13 @@ object DatadogPprofFlamegraphService {
     private fun toJson(frame: MutableFrame): JsonObject = buildJsonObject {
         put("name", frame.name)
         put("value", frame.value)
-        put("children", buildJsonArray {
-            frame.children.values.sortedByDescending { it.value }
-                .forEach { add(toJson(it)) }
-        })
+        put(
+            "children",
+            buildJsonArray {
+                frame.children.values.sortedByDescending { it.value }
+                    .forEach { add(toJson(it)) }
+            }
+        )
     }
 
     private fun emptyFlamegraph(): JsonObject = buildJsonObject {

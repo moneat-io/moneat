@@ -14,11 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.synthetics.services
+package com.moneat.synthetics.routes
 
-import com.moneat.synthetics.models.SyntheticAssertion
-import com.moneat.synthetics.models.SyntheticStep
-import com.moneat.synthetics.models.SyntheticTestData
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -98,7 +95,11 @@ class SyntheticsCheckExecutor {
         } catch (e: Exception) {
             val durationMs = System.currentTimeMillis() - startTime
             logger.warn { "API test failed for ${test.id}: ${e.message}" }
-            SyntheticCheckResult(status = "failed", durationMs = durationMs, errorMessage = e.message ?: "Request failed")
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = e.message ?: "Request failed"
+            )
         } finally {
             client.close()
         }
@@ -214,7 +215,8 @@ class SyntheticsCheckExecutor {
                 }
                 else -> {
                     logger.warn {
-                        "Unknown assertion type '${assertion.type}' (assertion operator: ${assertion.operator}) - failing assertion"
+                        "Unknown assertion type '${assertion.type}' " +
+                            "(assertion operator: ${assertion.operator}) - failing assertion"
                     }
                     false
                 }
@@ -303,4 +305,3 @@ class SyntheticsCheckExecutor {
         }
     }
 }
-

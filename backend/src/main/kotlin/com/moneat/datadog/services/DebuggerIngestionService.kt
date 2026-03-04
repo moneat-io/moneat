@@ -31,10 +31,17 @@ private val logger = KotlinLogging.logger {}
 private const val DEBUGGER_QUEUE_KEY = "moneat:dd:debugger:queue"
 
 private val validDebuggerTypes = setOf(
-    "log_probe", "snapshot", "span_decoration", "metric_probe"
+    "log_probe",
+    "snapshot",
+    "span_decoration",
+    "metric_probe"
 )
 private val validDiagnosticStatuses = setOf(
-    "received", "installed", "emitting", "error", "blocked"
+    "received",
+    "installed",
+    "emitting",
+    "error",
+    "blocked"
 )
 
 @Serializable

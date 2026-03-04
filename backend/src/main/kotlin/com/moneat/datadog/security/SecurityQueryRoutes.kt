@@ -103,10 +103,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
         }
     }
 
-    call.respond(buildJsonObject {
-        putJsonArray("events") { rows.forEach { add(it) } }
-        put("totalCount", totalCount)
-    })
+    call.respond(
+        buildJsonObject {
+            putJsonArray("events") { rows.forEach { add(it) } }
+            put("totalCount", totalCount)
+        }
+    )
 }
 
 @Suppress("TooGenericExceptionCaught")
@@ -194,10 +196,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
         }
     }
 
-    call.respond(buildJsonObject {
-        putJsonArray("findings") { rows.forEach { add(it) } }
-        put("totalCount", totalCount)
-    })
+    call.respond(
+        buildJsonObject {
+            putJsonArray("findings") { rows.forEach { add(it) } }
+            put("totalCount", totalCount)
+        }
+    )
 }
 
 @Suppress("TooGenericExceptionCaught")
@@ -220,9 +224,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummar
         }
     }
 
-    call.respond(buildJsonObject {
-        putJsonArray("summary") { rows.forEach { add(it) } }
-    })
+    call.respond(
+        buildJsonObject {
+            putJsonArray("summary") { rows.forEach { add(it) } }
+        }
+    )
 }
 
 private fun io.ktor.server.routing.RoutingContext.extractOrgId(): Int? {

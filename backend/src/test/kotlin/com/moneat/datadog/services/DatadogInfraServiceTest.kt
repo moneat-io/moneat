@@ -95,7 +95,8 @@ class DatadogInfraServiceTest {
         )
 
         val batch = DatadogInfraService.mapContainers(
-            42L, payload
+            42L,
+            payload
         )
 
         assertEquals(42L, batch.organizationId)
@@ -142,7 +143,8 @@ class DatadogInfraServiceTest {
         )
 
         val batch = DatadogInfraService.mapConnections(
-            42L, payload
+            42L,
+            payload
         )
 
         assertEquals(42L, batch.organizationId)

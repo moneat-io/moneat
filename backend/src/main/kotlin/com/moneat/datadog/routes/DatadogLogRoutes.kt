@@ -42,7 +42,7 @@ fun Route.datadogLogRoutes() {
         route("/api/v2") {
             post("/logs") {
                 val orgId = DatadogAuthMiddleware.authenticate(call)
-                        ?: return@post
+                    ?: return@post
 
                 val contentEncoding =
                     call.request.headers["Content-Encoding"]
@@ -71,7 +71,7 @@ fun Route.datadogLogRoutes() {
                 )
 
                 logger.debug {
-                    "Accepted $count DD logs for org ${orgId}"
+                    "Accepted $count DD logs for org $orgId"
                 }
 
                 call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))

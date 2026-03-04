@@ -47,7 +47,7 @@ fun Route.datadogMetricRoutes() {
         route("/api/v1") {
             post("/series") {
                 val orgId = DatadogAuthMiddleware.authenticate(call)
-                        ?: return@post
+                    ?: return@post
 
                 val contentEncoding =
                     call.request.headers["Content-Encoding"]
@@ -88,7 +88,7 @@ fun Route.datadogMetricRoutes() {
                 DatadogHostService.touchHostLastSeen(orgId, hosts)
 
                 logger.debug {
-                    "Accepted $count DD V1 metrics for org ${orgId}"
+                    "Accepted $count DD V1 metrics for org $orgId"
                 }
 
                 call.respond(
@@ -111,7 +111,7 @@ fun Route.datadogMetricRoutes() {
         route("/api/v3") {
             post("/series") {
                 val orgId = DatadogAuthMiddleware.authenticate(call)
-                        ?: return@post
+                    ?: return@post
 
                 val contentEncoding = call.request.headers["Content-Encoding"]
                 val contentType = call.request.contentType().toString()
@@ -143,7 +143,7 @@ fun Route.datadogMetricRoutes() {
                     .toSet()
                 DatadogHostService.touchHostLastSeen(orgId, hosts)
 
-                logger.debug { "Accepted $count DD V3 metrics for org ${orgId}" }
+                logger.debug { "Accepted $count DD V3 metrics for org $orgId" }
                 call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             }
 
@@ -155,7 +155,7 @@ fun Route.datadogMetricRoutes() {
         route("/api/v2") {
             post("/series") {
                 val orgId = DatadogAuthMiddleware.authenticate(call)
-                        ?: return@post
+                    ?: return@post
 
                 val contentEncoding = call.request.headers["Content-Encoding"]
                 val contentType = call.request.contentType().toString()
@@ -187,7 +187,7 @@ fun Route.datadogMetricRoutes() {
                     .toSet()
                 DatadogHostService.touchHostLastSeen(orgId, hosts)
 
-                logger.debug { "Accepted $count DD V2 metrics for org ${orgId}" }
+                logger.debug { "Accepted $count DD V2 metrics for org $orgId" }
                 call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             }
         }
@@ -234,7 +234,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches() {
 
     logger.debug {
         "Accepted ${batch.sketches.size} DD sketches " +
-            "for org ${orgId}"
+            "for org $orgId"
     }
 
     call.respond(

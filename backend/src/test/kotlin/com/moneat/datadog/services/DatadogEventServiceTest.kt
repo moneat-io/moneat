@@ -146,7 +146,8 @@ class DatadogEventServiceTest {
     @Test
     fun `mapServiceChecks handles empty list`() {
         val batch = DatadogEventService.mapServiceChecks(
-            1L, emptyList()
+            1L,
+            emptyList()
         )
         assertEquals(0, batch.serviceChecks.size)
     }
@@ -250,7 +251,8 @@ class DatadogEventServiceTest {
         assertEquals(batch.organizationId, decoded.organizationId)
         assertEquals(batch.events.size, decoded.events.size)
         assertEquals(
-            batch.events[0].title, decoded.events[0].title
+            batch.events[0].title,
+            decoded.events[0].title
         )
     }
 
@@ -273,7 +275,8 @@ class DatadogEventServiceTest {
             DatadogEventService.decodeServiceCheckBatch(encoded)
 
         assertEquals(
-            batch.organizationId, decoded.organizationId
+            batch.organizationId,
+            decoded.organizationId
         )
         assertEquals(
             batch.serviceChecks.size,

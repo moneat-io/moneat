@@ -1,6 +1,6 @@
 // Moneat Enterprise - proprietary module
 // Copyright (c) 2026 Moneat. All rights reserved.
-// See enterprise/LICENSE for license terms.
+// See ee/LICENSE for license terms.
 
 package com.moneat.enterprise.oncall.services
 
@@ -131,7 +131,6 @@ class OnCallScheduleService {
 
     // Extracted so both getCurrentOnCall and getOnCallAt share logic within an open transaction
     private fun computeOnCallAt(scheduleId: Int, now: Instant): OnCallParticipant? {
-
             // Check for active override first
             val override =
                 OnCallOverrides

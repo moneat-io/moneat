@@ -45,7 +45,7 @@ fun Route.datadogEventRoutes() {
         route("/api/v1") {
             post("/check_run") {
                 val orgId = DatadogAuthMiddleware.authenticate(call)
-                        ?: return@post
+                    ?: return@post
 
                 val contentEncoding =
                     call.request.headers["Content-Encoding"]
@@ -75,7 +75,7 @@ fun Route.datadogEventRoutes() {
                 val batch =
                     DatadogEventService.mapServiceChecks(
                         organizationId =
-                            orgId.toLong(),
+                        orgId.toLong(),
                         checks = checks
                     )
 
@@ -93,7 +93,7 @@ fun Route.datadogEventRoutes() {
                 logger.debug {
                     "Accepted ${batch.serviceChecks.size} " +
                         "DD V1 check_run service checks " +
-                        "for org ${orgId}"
+                        "for org $orgId"
                 }
 
                 call.respond(
@@ -106,7 +106,7 @@ fun Route.datadogEventRoutes() {
         route("/api/v2") {
             post("/events") {
                 val orgId = DatadogAuthMiddleware.authenticate(call)
-                        ?: return@post
+                    ?: return@post
 
                 val contentEncoding =
                     call.request.headers["Content-Encoding"]
@@ -135,13 +135,13 @@ fun Route.datadogEventRoutes() {
 
                 val count = DatadogEventService.enqueueEvents(
                     organizationId =
-                        orgId.toLong(),
+                    orgId.toLong(),
                     events = payload.events
                 )
 
                 logger.debug {
                     "Accepted $count DD events for " +
-                        "org ${orgId}"
+                        "org $orgId"
                 }
 
                 call.respond(
@@ -152,7 +152,7 @@ fun Route.datadogEventRoutes() {
 
             post("/service_checks") {
                 val orgId = DatadogAuthMiddleware.authenticate(call)
-                        ?: return@post
+                    ?: return@post
 
                 val contentEncoding =
                     call.request.headers["Content-Encoding"]
@@ -182,7 +182,7 @@ fun Route.datadogEventRoutes() {
                 val batch =
                     DatadogEventService.mapServiceChecks(
                         organizationId =
-                            orgId.toLong(),
+                        orgId.toLong(),
                         checks = payload.serviceChecks
                     )
 
@@ -200,7 +200,7 @@ fun Route.datadogEventRoutes() {
                 logger.debug {
                     "Accepted ${batch.serviceChecks.size} " +
                         "DD service checks for " +
-                        "org ${orgId}"
+                        "org $orgId"
                 }
 
                 call.respond(

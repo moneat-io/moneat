@@ -144,8 +144,10 @@ object MiscIngestionService {
 
     fun enqueueSymbolDb(orgId: Int, payload: DdSymbolDbPayload) {
         val entry = QueuedSymbolDbEntry(
-            service = payload.service, env = payload.env,
-            language = payload.language, version = payload.version,
+            service = payload.service,
+            env = payload.env,
+            language = payload.language,
+            version = payload.version,
             symbols = payload.symbols,
             timestampMs = System.currentTimeMillis(),
         )
@@ -159,9 +161,12 @@ object MiscIngestionService {
             QueuedPipelineStatEntry(
                 pipelineId = payload.pipelineId,
                 stageName = s.stageName,
-                inCount = s.inCount, outCount = s.outCount,
-                dropCount = s.dropCount, errorCount = s.errorCount,
-                host = payload.host, timestampMs = now,
+                inCount = s.inCount,
+                outCount = s.outCount,
+                dropCount = s.dropCount,
+                errorCount = s.errorCount,
+                host = payload.host,
+                timestampMs = now,
             )
         }
         if (entries.isEmpty()) return 0
@@ -172,10 +177,13 @@ object MiscIngestionService {
 
     fun enqueueDataLineage(orgId: Int, payload: DdDataLineagePayload) {
         val entry = QueuedDataLineageEntry(
-            runId = payload.runId, jobName = payload.jobName,
+            runId = payload.runId,
+            jobName = payload.jobName,
             namespace = payload.namespace,
-            inputs = payload.inputs, outputs = payload.outputs,
-            eventType = payload.eventType, facets = payload.facets,
+            inputs = payload.inputs,
+            outputs = payload.outputs,
+            eventType = payload.eventType,
+            facets = payload.facets,
             timestampMs = System.currentTimeMillis(),
         )
         val batch = QueuedMiscBatch(orgId, "data_lineage", dataLineage = listOf(entry))
@@ -189,8 +197,11 @@ object MiscIngestionService {
             QueuedDataStreamEntry(
                 pipelineId = payload.pipelineId,
                 stageName = s.stageName,
-                latencyNs = s.latencyNs, payloadSize = s.payloadSize,
-                direction = s.direction, tags = tags, timestampMs = now,
+                latencyNs = s.latencyNs,
+                payloadSize = s.payloadSize,
+                direction = s.direction,
+                tags = tags,
+                timestampMs = now,
             )
         }
         if (entries.isEmpty()) return 0

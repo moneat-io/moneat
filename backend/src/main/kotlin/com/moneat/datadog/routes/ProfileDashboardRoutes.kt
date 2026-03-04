@@ -61,14 +61,21 @@ fun Route.profileDashboardRoutes() {
                 val service = call.parameters["service"]
                 val profileType = call.parameters["type"]
                 val source = call.parameters["source"]
-                val limit = (call.parameters["limit"]
-                    ?.toIntOrNull() ?: DEFAULT_LIMIT)
+                val limit = (
+                    call.parameters["limit"]
+                        ?.toIntOrNull() ?: DEFAULT_LIMIT
+                    )
                     .coerceAtMost(MAX_LIMIT)
                 val offset = call.parameters["offset"]
                     ?.toIntOrNull() ?: 0
 
                 val result = ProfileIngestionService.listProfiles(
-                    orgId, service, profileType, source, limit, offset
+                    orgId,
+                    service,
+                    profileType,
+                    source,
+                    limit,
+                    offset
                 )
                 call.respond(result)
             }
@@ -89,7 +96,8 @@ fun Route.profileDashboardRoutes() {
                     )
 
                 val meta = ProfileIngestionService.getProfileMeta(
-                    orgId, profileId
+                    orgId,
+                    profileId
                 )
                 if (meta == null) {
                     call.respond(
@@ -151,7 +159,8 @@ fun Route.profileDashboardRoutes() {
 
                 val meta =
                     ProfileIngestionService.getProfileMeta(
-                        orgId, profileId
+                        orgId,
+                        profileId
                     )
                 if (meta == null) {
                     call.respond(
@@ -288,22 +297,28 @@ private fun parseSentryProfileToFrames(
         fun toJson(f: MutableFrame): JsonObject = buildJsonObject {
             put("name", f.name)
             put("value", f.value)
-            put("children", buildJsonArray {
-                for (child in f.children.values.sortedByDescending {
-                    it.value
-                }) {
-                    add(toJson(child))
+            put(
+                "children",
+                buildJsonArray {
+                    for (child in f.children.values.sortedByDescending {
+                        it.value
+                    }) {
+                        add(toJson(child))
+                    }
                 }
-            })
+            )
         }
 
         buildJsonObject {
-            put("frames", buildJsonArray {
-                for (child in rootFrame.children.values
-                    .sortedByDescending { it.value }) {
-                    add(toJson(child))
+            put(
+                "frames",
+                buildJsonArray {
+                    for (child in rootFrame.children.values
+                        .sortedByDescending { it.value }) {
+                        add(toJson(child))
+                    }
                 }
-            })
+            )
         }
     } catch (e: Exception) {
         buildJsonObject { put("frames", buildJsonArray {}) }

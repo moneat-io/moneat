@@ -39,7 +39,7 @@ fun Route.datadogDogStatsDRoutes() {
         route("/dogstatsd/v2") {
             post("/proxy") {
                 val orgId = DatadogAuthMiddleware.authenticate(call)
-                        ?: return@post
+                    ?: return@post
 
                 val contentEncoding =
                     call.request.headers["Content-Encoding"]
@@ -64,7 +64,7 @@ fun Route.datadogDogStatsDRoutes() {
 
                 logger.debug {
                     "Accepted ${metrics.size} DogStatsD metrics " +
-                        "for org ${orgId}"
+                        "for org $orgId"
                 }
 
                 call.respond(

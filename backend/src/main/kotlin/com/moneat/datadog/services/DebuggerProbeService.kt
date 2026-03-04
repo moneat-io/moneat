@@ -37,7 +37,10 @@ import java.util.UUID
 import kotlin.time.Clock
 
 private val supportedProbeTypes = setOf(
-    "log_probe", "snapshot", "span_decoration", "metric_probe"
+    "log_probe",
+    "snapshot",
+    "span_decoration",
+    "metric_probe"
 )
 private val supportedWhereTypes = setOf("method", "line")
 private val supportedMetricKinds = setOf("count", "gauge", "histogram")
@@ -259,7 +262,7 @@ object DebuggerProbeService {
             probeType = request.probeType?.let { normalizeProbeType(it) } ?: existing[DebuggerProbes.probeType],
             service = request.service?.trim()?.takeUnless { it.isBlank() } ?: existing[DebuggerProbes.service],
             environment =
-                request.environment?.trim()?.ifEmpty { "*" } ?: existing[DebuggerProbes.environment],
+            request.environment?.trim()?.ifEmpty { "*" } ?: existing[DebuggerProbes.environment],
             language = request.language?.let { normalizeLanguage(it) } ?: existing[DebuggerProbes.language],
             active = request.active ?: existing[DebuggerProbes.active],
             whereType = whereType,
@@ -269,11 +272,11 @@ object DebuggerProbeService {
             sourceLines = location.sourceLines,
             template = request.template?.takeUnless { it.isBlank() } ?: existing[DebuggerProbes.template],
             metricName =
-                request.metricName?.trim()?.takeUnless { it.isBlank() } ?: existing[DebuggerProbes.metricName],
+            request.metricName?.trim()?.takeUnless { it.isBlank() } ?: existing[DebuggerProbes.metricName],
             metricKind = requestedMetricKind ?: existingMetricKind,
             tags = request.tags?.takeUnless { it.isBlank() } ?: existing[DebuggerProbes.tags],
             captureConfig =
-                request.captureConfig?.takeUnless { it.isBlank() } ?: existing[DebuggerProbes.captureConfig],
+            request.captureConfig?.takeUnless { it.isBlank() } ?: existing[DebuggerProbes.captureConfig],
         )
     }
 

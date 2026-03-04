@@ -32,7 +32,10 @@ import mu.KotlinLogging
 import com.moneat.datadog.decompression.DecompressionService
 
 private val logger = KotlinLogging.logger {}
-private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+private val json = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+}
 
 fun Route.orchestratorIngestRoutes() {
     route("/dd/api/v2") {

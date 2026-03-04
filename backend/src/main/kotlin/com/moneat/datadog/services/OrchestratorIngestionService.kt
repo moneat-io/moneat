@@ -18,8 +18,6 @@ package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
-import com.moneat.datadog.models.DdK8sManifest
-import com.moneat.datadog.models.DdK8sResource
 import com.moneat.datadog.models.DdManifestPayload
 import com.moneat.datadog.models.DdOrchestratorPayload
 import com.moneat.shared.services.UsageTrackingService

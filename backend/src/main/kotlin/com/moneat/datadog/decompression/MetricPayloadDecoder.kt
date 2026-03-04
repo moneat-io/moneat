@@ -108,7 +108,8 @@ object MetricPayloadDecoder {
     // Resource: field 1 (string) type, field 2 (string) name
     private fun decodeResource(bytes: ByteArray): Pair<String, String> {
         val input = CodedInputStream.newInstance(bytes)
-        var type = ""; var name = ""
+        var type = ""
+        var name = ""
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
@@ -124,11 +125,12 @@ object MetricPayloadDecoder {
     @Suppress("MagicNumber")
     private fun decodeMetricPoint(bytes: ByteArray): List<Double> {
         val input = CodedInputStream.newInstance(bytes)
-        var value = 0.0; var timestamp = 0L
+        var value = 0.0
+        var timestamp = 0L
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl 3) or 1 -> value = input.readDouble()   // wire type 1 = 64-bit
+                (1 shl 3) or 1 -> value = input.readDouble() // wire type 1 = 64-bit
                 (2 shl 3) or 0 -> timestamp = input.readInt64() // wire type 0 = varint
                 else -> input.skipField(tag)
             }

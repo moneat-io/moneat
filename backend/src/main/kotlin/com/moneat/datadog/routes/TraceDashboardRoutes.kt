@@ -42,14 +42,19 @@ fun Route.traceDashboardRoutes() {
                         mapOf("error" to "Invalid token")
                     )
                 val service = call.parameters["service"]
-                val limit = (call.parameters["limit"]
-                    ?.toIntOrNull() ?: DEFAULT_LIMIT)
+                val limit = (
+                    call.parameters["limit"]
+                        ?.toIntOrNull() ?: DEFAULT_LIMIT
+                    )
                     .coerceAtMost(MAX_LIMIT)
                 val offset = call.parameters["offset"]
                     ?.toIntOrNull() ?: 0
 
                 val result = TraceIngestionService.listResourceStats(
-                    orgId, service, limit, offset
+                    orgId,
+                    service,
+                    limit,
+                    offset
                 )
                 call.respond(result)
             }
@@ -65,14 +70,20 @@ fun Route.traceDashboardRoutes() {
                     )
                 val service = call.parameters["service"]
                 val env = call.parameters["env"]
-                val limit = (call.parameters["limit"]
-                    ?.toIntOrNull() ?: DEFAULT_LIMIT)
+                val limit = (
+                    call.parameters["limit"]
+                        ?.toIntOrNull() ?: DEFAULT_LIMIT
+                    )
                     .coerceAtMost(MAX_LIMIT)
                 val offset = call.parameters["offset"]
                     ?.toIntOrNull() ?: 0
 
                 val result = TraceIngestionService.listTraces(
-                    orgId, service, env, limit, offset
+                    orgId,
+                    service,
+                    env,
+                    limit,
+                    offset
                 )
                 call.respond(result)
             }
@@ -99,7 +110,8 @@ fun Route.traceDashboardRoutes() {
                 }
 
                 val result = TraceIngestionService.getTraceDetail(
-                    orgId, traceId
+                    orgId,
+                    traceId
                 )
                 if (result == null) {
                     call.respond(

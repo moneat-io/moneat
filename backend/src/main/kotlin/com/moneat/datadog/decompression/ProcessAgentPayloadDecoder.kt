@@ -21,8 +21,6 @@ import com.moneat.datadog.models.DatadogContainer
 import com.moneat.datadog.models.DatadogContainerPayload
 import com.moneat.datadog.models.DatadogProcess
 import com.moneat.datadog.models.DatadogProcessPayload
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
  * Decodes the Datadog process-agent MessageV3 binary wire format.
@@ -53,12 +51,23 @@ object ProcessAgentPayloadDecoder {
     const val TYPE_COLLECTOR_PROC_DISCOVERY: Int = 53
 
     private val CONTAINER_STATES = mapOf(
-        0 to "unknown", 1 to "created", 2 to "restarting",
-        3 to "running",  4 to "paused",  5 to "exited", 6 to "dead"
+        0 to "unknown",
+        1 to "created",
+        2 to "restarting",
+        3 to "running",
+        4 to "paused",
+        5 to "exited",
+        6 to "dead"
     )
     private val PROCESS_STATES = mapOf(
-        0 to "unknown", 1 to "D", 2 to "R", 3 to "S",
-        4 to "T",       5 to "W", 6 to "X", 7 to "Z"
+        0 to "unknown",
+        1 to "D",
+        2 to "R",
+        3 to "S",
+        4 to "T",
+        5 to "W",
+        6 to "X",
+        7 to "Z"
     )
 
     data class MessageHeader(val version: Int, val encoding: Int, val type: Int)
@@ -68,9 +77,9 @@ object ProcessAgentPayloadDecoder {
         if (data.size < HEADER_SIZE) return null
         if (data[0] != MSG_VERSION_V3) return null
         return MessageHeader(
-            version  = data[0].toInt() and 0xFF,
+            version = data[0].toInt() and 0xFF,
             encoding = data[1].toInt() and 0xFF,
-            type     = data[2].toInt() and 0xFF
+            type = data[2].toInt() and 0xFF
         )
     }
 
@@ -122,19 +131,25 @@ object ProcessAgentPayloadDecoder {
     @Suppress("MagicNumber")
     private fun decodeContainer(bytes: ByteArray): DatadogContainer {
         val input = CodedInputStream.newInstance(bytes)
-        var id = ""; var name = ""; var image = ""; var state = 0
-        var memLimit = 0L; var memRss = 0L
-        var netRcvdBps = 0f; var netSentBps = 0f; var totalPct = 0f
+        var id = ""
+        var name = ""
+        var image = ""
+        var state = 0
+        var memLimit = 0L
+        var memRss = 0L
+        var netRcvdBps = 0f
+        var netSentBps = 0f
+        var totalPct = 0f
         val tags = mutableListOf<String>()
 
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl 3) or 2  -> id = input.readString()
-                (3 shl 3) or 2  -> name = input.readString()
-                (4 shl 3) or 2  -> image = input.readString()
-                (6 shl 3) or 0  -> memLimit = input.readUInt64()
-                (8 shl 3) or 0  -> state = input.readEnum()
+                (2 shl 3) or 2 -> id = input.readString()
+                (3 shl 3) or 2 -> name = input.readString()
+                (4 shl 3) or 2 -> image = input.readString()
+                (6 shl 3) or 0 -> memLimit = input.readUInt64()
+                (8 shl 3) or 0 -> state = input.readEnum()
                 (16 shl 3) or 5 -> netRcvdBps = input.readFloat()
                 (17 shl 3) or 5 -> netSentBps = input.readFloat()
                 (20 shl 3) or 5 -> totalPct = input.readFloat()
@@ -145,15 +160,15 @@ object ProcessAgentPayloadDecoder {
         }
         return DatadogContainer(
             containerId = id,
-            name        = name,
-            image       = image,
-            state       = CONTAINER_STATES[state] ?: "unknown",
-            cpuPercent  = totalPct.toDouble(),
-            memUsage    = memRss,
-            memLimit    = memLimit,
-            netRxBytes  = netRcvdBps.toLong(),
-            netTxBytes  = netSentBps.toLong(),
-            tags        = tags
+            name = name,
+            image = image,
+            state = CONTAINER_STATES[state] ?: "unknown",
+            cpuPercent = totalPct.toDouble(),
+            memUsage = memRss,
+            memLimit = memLimit,
+            netRxBytes = netRcvdBps.toLong(),
+            netTxBytes = netSentBps.toLong(),
+            tags = tags
         )
     }
 
@@ -190,21 +205,44 @@ object ProcessAgentPayloadDecoder {
     @Suppress("MagicNumber")
     private fun decodeProcess(bytes: ByteArray): DatadogProcess {
         val input = CodedInputStream.newInstance(bytes)
-        var pid = 0; var openFdCount = 0; var state = 0
-        var cmdName = ""; var cmdFull = ""
+        var pid = 0
+        var openFdCount = 0
+        var state = 0
+        var cmdName = ""
+        var cmdFull = ""
         var userName = ""
-        var memRss = 0L; var memVms = 0L
-        var cpuTotalPct = 0f; var numThreads = 0
+        var memRss = 0L
+        var memVms = 0L
+        var cpuTotalPct = 0f
+        var numThreads = 0
         val tags = mutableListOf<String>()
 
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl 3) or 0  -> pid = input.readInt32()
-                (4 shl 3) or 2  -> { val r = decodeCommand(input.readByteArray()); cmdName = r.first; cmdFull = r.second }
-                (5 shl 3) or 2  -> userName = decodeProcessUser(input.readByteArray())
-                (7 shl 3) or 2  -> { val r = decodeMemoryStat(input.readByteArray()); memRss = r.first; memVms = r.second }
-                (8 shl 3) or 2  -> { val r = decodeCpuStat(input.readByteArray()); cpuTotalPct = r.first; numThreads = r.second }
+                (2 shl 3) or 0 -> pid = input.readInt32()
+                (4 shl 3) or 2 -> {
+                    val r = decodeCommand(
+                        input.readByteArray()
+                    )
+                    cmdName = r.first
+                    cmdFull = r.second
+                }
+                (5 shl 3) or 2 -> userName = decodeProcessUser(input.readByteArray())
+                (7 shl 3) or 2 -> {
+                    val r = decodeMemoryStat(
+                        input.readByteArray()
+                    )
+                    memRss = r.first
+                    memVms = r.second
+                }
+                (8 shl 3) or 2 -> {
+                    val r = decodeCpuStat(
+                        input.readByteArray()
+                    )
+                    cpuTotalPct = r.first
+                    numThreads = r.second
+                }
                 (11 shl 3) or 0 -> openFdCount = input.readInt32()
                 (12 shl 3) or 0 -> state = input.readEnum()
                 (23 shl 3) or 2 -> tags += input.readString()
@@ -212,17 +250,17 @@ object ProcessAgentPayloadDecoder {
             }
         }
         return DatadogProcess(
-            pid         = pid,
-            name        = cmdName,
-            command     = cmdFull,
-            user        = userName,
-            cpuPercent  = cpuTotalPct.toDouble(),
-            memRss      = memRss,
-            memVms      = memVms,
-            state       = PROCESS_STATES[state] ?: "S",
+            pid = pid,
+            name = cmdName,
+            command = cmdFull,
+            user = userName,
+            cpuPercent = cpuTotalPct.toDouble(),
+            memRss = memRss,
+            memVms = memVms,
+            state = PROCESS_STATES[state] ?: "S",
             threadCount = numThreads,
             openFdCount = openFdCount,
-            tags        = tags
+            tags = tags
         )
     }
 
@@ -260,7 +298,8 @@ object ProcessAgentPayloadDecoder {
     // MemoryStat: field 1 (uint64) rss, field 2 (uint64) vms
     private fun decodeMemoryStat(bytes: ByteArray): Pair<Long, Long> {
         val input = CodedInputStream.newInstance(bytes)
-        var rss = 0L; var vms = 0L
+        var rss = 0L
+        var vms = 0L
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
@@ -276,7 +315,8 @@ object ProcessAgentPayloadDecoder {
     @Suppress("MagicNumber")
     private fun decodeCpuStat(bytes: ByteArray): Pair<Float, Int> {
         val input = CodedInputStream.newInstance(bytes)
-        var totalPct = 0f; var numThreads = 0
+        var totalPct = 0f
+        var numThreads = 0
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break

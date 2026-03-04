@@ -1,6 +1,6 @@
 // Moneat Enterprise - proprietary module
 // Copyright (c) 2026 Moneat. All rights reserved.
-// See enterprise/LICENSE for license terms.
+// See ee/LICENSE for license terms.
 
 package com.moneat.enterprise.oncall.routes
 
@@ -34,7 +34,6 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.less
-import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll

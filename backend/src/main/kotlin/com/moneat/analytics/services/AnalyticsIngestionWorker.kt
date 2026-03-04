@@ -63,20 +63,20 @@ class AnalyticsIngestionWorker(
 
     private suspend fun runWorker(workerId: Int) {
         val redis = RedisConfig.newBlockingConnection()
-        try {
-            while (scope.isActive) {
-                try {
-                    val result = redis.brpop(BRPOP_TIMEOUT, queueKey)
-                    val value = result?.value ?: continue
-                    processMessage(workerId, value)
-                } catch (_: CancellationException) {
-                    break
-                } catch (e: Exception) {
-                    logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
-                    delay(ERROR_BACKOFF_MS)
-                }
+        while (scope.isActive) {
+            try {
+                val result = redis.brpop(
+                    BRPOP_TIMEOUT,
+                    queueKey
+                )
+                val value = result?.value ?: continue
+                processMessage(workerId, value)
+            } catch (_: CancellationException) {
+                break
+            } catch (e: Exception) {
+                logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
+                delay(ERROR_BACKOFF_MS)
             }
-        } finally {
         }
     }
 

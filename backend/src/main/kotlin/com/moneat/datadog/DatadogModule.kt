@@ -25,7 +25,6 @@ import com.moneat.datadog.routes.datadogInfraQueryRoutes
 import com.moneat.datadog.routes.datadogInfraRoutes
 import com.moneat.datadog.routes.datadogLogRoutes
 import com.moneat.datadog.routes.datadogMetricRoutes
-import com.moneat.datadog.routes.datadogRoutes
 import com.moneat.datadog.routes.datadogValidateRoutes
 import com.moneat.datadog.routes.dbmIngestRoutes
 import com.moneat.datadog.routes.debuggerIngestRoutes
@@ -59,13 +58,13 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 private const val METRICS_QUEUE = "moneat:metrics:queue"
-    private const val METRICS_DLQ = "moneat:metrics:dlq"
-    private const val EVENTS_QUEUE = "moneat:infra_events:queue"
-    private const val EVENTS_DLQ = "moneat:infra_events:dlq"
-    private const val INFRA_QUEUE = "moneat:infra:queue"
-    private const val INFRA_DLQ = "moneat:infra:dlq"
-    private const val MISC_QUEUE = "moneat:dd:misc:queue"
-    private const val MISC_DLQ = "moneat:dd:misc:dlq"
+private const val METRICS_DLQ = "moneat:metrics:dlq"
+private const val EVENTS_QUEUE = "moneat:infra_events:queue"
+private const val EVENTS_DLQ = "moneat:infra_events:dlq"
+private const val INFRA_QUEUE = "moneat:infra:queue"
+private const val INFRA_DLQ = "moneat:infra:dlq"
+private const val MISC_QUEUE = "moneat:dd:misc:queue"
+private const val MISC_DLQ = "moneat:dd:misc:dlq"
 private const val WORKER_COUNT_2 = 2
 private const val WORKER_COUNT_1 = 1
 

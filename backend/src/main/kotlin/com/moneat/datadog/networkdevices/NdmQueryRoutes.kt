@@ -30,7 +30,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -92,10 +91,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListDevices() {
         }
     }
 
-    call.respond(buildJsonObject {
-        putJsonArray("devices") { rows.forEach { add(it) } }
-        put("totalCount", totalCount)
-    })
+    call.respond(
+        buildJsonObject {
+            putJsonArray("devices") { rows.forEach { add(it) } }
+            put("totalCount", totalCount)
+        }
+    )
 }
 
 @Suppress("TooGenericExceptionCaught")
@@ -169,10 +170,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListTraps() {
         }
     }
 
-    call.respond(buildJsonObject {
-        putJsonArray("traps") { rows.forEach { add(it) } }
-        put("totalCount", totalCount)
-    })
+    call.respond(
+        buildJsonObject {
+            putJsonArray("traps") { rows.forEach { add(it) } }
+            put("totalCount", totalCount)
+        }
+    )
 }
 
 @Suppress("TooGenericExceptionCaught")
@@ -211,10 +214,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFlows() {
         }
     }
 
-    call.respond(buildJsonObject {
-        putJsonArray("flows") { rows.forEach { add(it) } }
-        put("totalCount", totalCount)
-    })
+    call.respond(
+        buildJsonObject {
+            putJsonArray("flows") { rows.forEach { add(it) } }
+            put("totalCount", totalCount)
+        }
+    )
 }
 
 @Suppress("TooGenericExceptionCaught")
@@ -247,10 +252,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListPaths() {
         }
     }
 
-    call.respond(buildJsonObject {
-        putJsonArray("paths") { rows.forEach { add(it) } }
-        put("totalCount", totalCount)
-    })
+    call.respond(
+        buildJsonObject {
+            putJsonArray("paths") { rows.forEach { add(it) } }
+            put("totalCount", totalCount)
+        }
+    )
 }
 
 private fun io.ktor.server.routing.RoutingContext.extractOrgId(): Int? {

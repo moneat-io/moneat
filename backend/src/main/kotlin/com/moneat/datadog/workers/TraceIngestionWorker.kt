@@ -33,7 +33,6 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import mu.KotlinLogging
 import java.util.Base64
 
@@ -70,24 +69,22 @@ class TraceIngestionWorker(
     @Suppress("TooGenericExceptionCaught")
     private suspend fun runWorker(workerId: Int) {
         val redis = RedisConfig.newBlockingConnection()
-        try {
-            while (scope.isActive) {
-                try {
-                    val result = redis.brpop(
-                        BRPOP_TIMEOUT_SECONDS, queueKey
-                    )
-                    val payload = result?.value ?: continue
-                    processMessage(workerId, payload)
-                } catch (e: CancellationException) {
-                    break
-                } catch (e: Exception) {
-                    logger.error(e) {
-                        "Trace worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+        while (scope.isActive) {
+            try {
+                val result = redis.brpop(
+                    BRPOP_TIMEOUT_SECONDS,
+                    queueKey
+                )
+                val payload = result?.value ?: continue
+                processMessage(workerId, payload)
+            } catch (e: CancellationException) {
+                break
+            } catch (e: Exception) {
+                logger.error(e) {
+                    "Trace worker $workerId error in BRPOP loop"
                 }
+                delay(ERROR_DELAY_MS)
             }
-        } finally {
         }
     }
 
@@ -122,7 +119,11 @@ class TraceIngestionWorker(
             }
 
             TraceIngestionService.insertTraces(
-                organizationId, traces, hostname, env, version
+                organizationId,
+                traces,
+                hostname,
+                env,
+                version
             )
         } catch (e: Exception) {
             logger.error(e) {

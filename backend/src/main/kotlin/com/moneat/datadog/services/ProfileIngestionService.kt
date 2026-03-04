@@ -24,7 +24,6 @@ import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -74,11 +73,15 @@ object ProfileIngestionService {
             try {
                 return entry.mutex.withLock {
                     val existing = findExistingSession(
-                        organizationId, runtimeId, startMs, endMs
+                        organizationId,
+                        runtimeId,
+                        startMs,
+                        endMs
                     )
                     if (existing != null) {
                         ProfileStorageService.storeAdditional(
-                            existing.storageKey, fileParts
+                            existing.storageKey,
+                            fileParts
                         )
                         logger.debug {
                             "Merged ${fileParts.size} files into existing profile ${existing.profileId}"
@@ -86,8 +89,12 @@ object ProfileIngestionService {
                         existing.profileId
                     } else {
                         insertNewProfile(
-                            organizationId, event, fileParts, profileType,
-                            tags, startMs, endMs
+                            organizationId,
+                            fileParts,
+                            profileType,
+                            tags,
+                            startMs,
+                            endMs
                         )
                     }
                 }
@@ -99,14 +106,17 @@ object ProfileIngestionService {
         }
 
         return insertNewProfile(
-            organizationId, event, fileParts, profileType,
-            tags, startMs, endMs
+            organizationId,
+            fileParts,
+            profileType,
+            tags,
+            startMs,
+            endMs
         )
     }
 
     private suspend fun insertNewProfile(
         organizationId: Int,
-        event: DdProfileEvent,
         fileParts: List<Pair<String, ByteArray>>,
         profileType: String,
         tags: Map<String, String>,
@@ -115,24 +125,38 @@ object ProfileIngestionService {
     ): String {
         val profileId = UUID.randomUUID().toString()
         val storageKey = ProfileStorageService.storeMultiple(
-            organizationId, profileId, fileParts
+            organizationId,
+            profileId,
+            fileParts
         )
 
         val host = firstNonBlankTag(tags, "host", "host.name")
         val service = firstNonBlankTag(
-            tags, "service", "service.name", "service_name"
+            tags,
+            "service",
+            "service.name",
+            "service_name"
         )
         val env = firstNonBlankTag(
-            tags, "env", "environment", "deployment.environment"
+            tags,
+            "env",
+            "environment",
+            "deployment.environment"
         )
         val version = firstNonBlankTag(
-            tags, "version", "service.version"
+            tags,
+            "version",
+            "service.version"
         )
         val runtime = firstNonBlankTag(
-            tags, "runtime", "runtime.name"
+            tags,
+            "runtime",
+            "runtime.name"
         )
         val language = firstNonBlankTag(
-            tags, "language", "runtime.language"
+            tags,
+            "language",
+            "runtime.language"
         ).ifBlank {
             runtime.substringBefore(" ").trim()
         }
@@ -174,7 +198,8 @@ object ProfileIngestionService {
         }
 
         usageTracking.recordOrgUsage(
-            organizationId, "dd_profile",
+            organizationId,
+            "dd_profile",
             fileParts.sumOf { it.second.size }
         )
 
@@ -211,7 +236,8 @@ object ProfileIngestionService {
             WHERE $whereClause
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
-            countQuery, "TabSeparated"
+            countQuery,
+            "TabSeparated"
         )
         val totalCount = countResult.trim().toLongOrNull() ?: 0
 
@@ -284,7 +310,8 @@ object ProfileIngestionService {
         }
 
         return DdProfileListResponse(
-            profiles = profiles, totalCount = totalCount
+            profiles = profiles,
+            totalCount = totalCount
         )
     }
 
@@ -373,7 +400,9 @@ object ProfileIngestionService {
         val parts = line.split("\t")
         return if (parts.size >= 2) {
             ExistingSession(parts[0], parts[1])
-        } else null
+        } else {
+            null
+        }
     }
 
     private fun extractProfileTags(event: DdProfileEvent): Map<String, String> {

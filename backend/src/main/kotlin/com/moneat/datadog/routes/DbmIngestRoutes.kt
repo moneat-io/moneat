@@ -35,7 +35,10 @@ import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+private val json = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+}
 
 fun Route.dbmIngestRoutes() {
     route("/dd/api/v2") {

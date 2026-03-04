@@ -37,7 +37,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -60,7 +59,7 @@ fun Route.datadogHostRoutes() {
         route("/api/v1") {
             post("/metadata") {
                 val orgId = DatadogAuthMiddleware.authenticate(call)
-                        ?: return@post
+                    ?: return@post
 
                 val contentEncoding =
                     call.request.headers["Content-Encoding"]
@@ -95,7 +94,7 @@ fun Route.datadogHostRoutes() {
                 logger.debug {
                     "Accepted DD host metadata for " +
                         "${metadata.hostname}, " +
-                        "org ${orgId}"
+                        "org $orgId"
                 }
 
                 call.respond(
@@ -108,7 +107,7 @@ fun Route.datadogHostRoutes() {
         route("/api/v2") {
             post("/host_metadata") {
                 val orgId = DatadogAuthMiddleware.authenticate(call)
-                        ?: return@post
+                    ?: return@post
 
                 val contentEncoding =
                     call.request.headers["Content-Encoding"]
@@ -149,7 +148,7 @@ fun Route.datadogHostRoutes() {
 
         post("/intake/") {
             val orgId = DatadogAuthMiddleware.authenticate(call)
-                    ?: return@post
+                ?: return@post
 
             val contentEncoding =
                 call.request.headers["Content-Encoding"]
@@ -345,9 +344,11 @@ fun Route.datadogHostRoutes() {
                     }
                 }
 
-                call.respond(buildJsonObject {
-                    putJsonArray("data_points") { dataPoints.forEach { add(it) } }
-                })
+                call.respond(
+                    buildJsonObject {
+                        putJsonArray("data_points") { dataPoints.forEach { add(it) } }
+                    }
+                )
             }
 
             get("/hosts/{hostId}/containers") {
@@ -433,12 +434,16 @@ fun Route.datadogHostRoutes() {
                             put("timestamp", obj["ts"]?.jsonPrimitive?.content ?: "")
                         }
                     }
-                } else emptyList()
+                } else {
+                    emptyList()
+                }
 
-                call.respond(buildJsonObject {
-                    putJsonArray("containers") { containers.forEach { add(it) } }
-                    put("totalCount", containers.size)
-                })
+                call.respond(
+                    buildJsonObject {
+                        putJsonArray("containers") { containers.forEach { add(it) } }
+                        put("totalCount", containers.size)
+                    }
+                )
             }
         }
     }

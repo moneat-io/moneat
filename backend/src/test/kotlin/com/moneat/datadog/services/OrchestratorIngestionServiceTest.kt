@@ -108,7 +108,9 @@ class OrchestratorIngestionServiceTest {
         val payload = DdOrchestratorPayload(
             resources = listOf(
                 DdK8sResource(
-                    uid = "rs-1", type = "replicaset", name = "rs-1",
+                    uid = "rs-1",
+                    type = "replicaset",
+                    name = "rs-1",
                     creationTimestamp = null,
                 )
             ),

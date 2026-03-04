@@ -1,6 +1,6 @@
 // Moneat Enterprise - proprietary module
 // Copyright (c) 2026 Moneat. All rights reserved.
-// See enterprise/LICENSE for license terms.
+// See ee/LICENSE for license terms.
 
 package com.moneat.enterprise.oncall.services
 
@@ -39,7 +39,7 @@ class ShiftChangeNotifier(
     private val emailService = EmailService()
 
     companion object {
-        private const val CHECK_INTERVAL_MS = 5 * 60 * 1000L  // 5 minutes
+        private const val CHECK_INTERVAL_MS = 5 * 60 * 1000L // 5 minutes
         private const val NOTIFY_BEFORE_MINUTES = 15L
     }
 

@@ -18,9 +18,6 @@ package com.moneat.synthetics.routes
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Memberships
-import com.moneat.synthetics.models.CreateSyntheticTestRequest
-import com.moneat.synthetics.models.UpdateSyntheticTestRequest
-import com.moneat.synthetics.services.SyntheticsService
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -174,7 +171,10 @@ fun Route.syntheticsRoutes() {
                     put("results", JsonArray(results))
                     put("totalCount", JsonPrimitive(totalCount))
                 }
-                call.respondText(json.encodeToString(JsonObject.serializer(), responseJson), ContentType.Application.Json)
+                call.respondText(
+                    json.encodeToString(JsonObject.serializer(), responseJson),
+                    ContentType.Application.Json
+                )
             }
 
             // --- Synthetic Test Management ---

@@ -30,7 +30,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -56,8 +55,10 @@ fun Route.datadogInfraQueryRoutes() {
                         mapOf("error" to "Missing org context")
                     )
 
-                val limit = (call.parameters["limit"]
-                    ?.toIntOrNull() ?: DEFAULT_LIMIT)
+                val limit = (
+                    call.parameters["limit"]
+                        ?.toIntOrNull() ?: DEFAULT_LIMIT
+                    )
                     .coerceAtMost(MAX_LIMIT)
                 val offset = call.parameters["offset"]
                     ?.toIntOrNull() ?: 0
@@ -137,8 +138,10 @@ fun Route.datadogInfraQueryRoutes() {
                         mapOf("error" to "Missing org context")
                     )
 
-                val limit = (call.parameters["limit"]
-                    ?.toIntOrNull() ?: DEFAULT_LIMIT)
+                val limit = (
+                    call.parameters["limit"]
+                        ?.toIntOrNull() ?: DEFAULT_LIMIT
+                    )
                     .coerceAtMost(MAX_LIMIT)
                 val offset = call.parameters["offset"]
                     ?.toIntOrNull() ?: 0
@@ -218,8 +221,10 @@ fun Route.datadogInfraQueryRoutes() {
                         mapOf("error" to "Missing org context")
                     )
 
-                val limit = (call.parameters["limit"]
-                    ?.toIntOrNull() ?: DEFAULT_LIMIT)
+                val limit = (
+                    call.parameters["limit"]
+                        ?.toIntOrNull() ?: DEFAULT_LIMIT
+                    )
                     .coerceAtMost(MAX_LIMIT)
                 val offset = call.parameters["offset"]
                     ?.toIntOrNull() ?: 0

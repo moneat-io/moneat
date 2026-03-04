@@ -34,7 +34,8 @@ class ProfileIngestionServiceTest {
     @Suppress("UNCHECKED_CAST")
     private fun parseDdTags(tags: String): Map<String, String> =
         parseDdTagsMethod.invoke(
-            ProfileIngestionService, tags
+            ProfileIngestionService,
+            tags
         ) as Map<String, String>
 
     private val extractProfileTagsMethod: Method =
@@ -45,7 +46,8 @@ class ProfileIngestionServiceTest {
     @Suppress("UNCHECKED_CAST")
     private fun extractProfileTags(event: DdProfileEvent): Map<String, String> =
         extractProfileTagsMethod.invoke(
-            ProfileIngestionService, event
+            ProfileIngestionService,
+            event
         ) as Map<String, String>
 
     private val firstNonBlankTagMethod: Method =
@@ -61,7 +63,9 @@ class ProfileIngestionServiceTest {
         tags: Map<String, String>,
         vararg keys: String,
     ): String = firstNonBlankTagMethod.invoke(
-        ProfileIngestionService, tags, keys
+        ProfileIngestionService,
+        tags,
+        keys
     ) as String
 
     // ============ DD TAG PARSING TESTS ============
@@ -84,7 +88,8 @@ class ProfileIngestionServiceTest {
 
         assertEquals("ip-10-0-1-42", result["host"])
         assertEquals(
-            "https://example.com:8080/api", result["url"],
+            "https://example.com:8080/api",
+            result["url"],
             "Values containing colons should preserve everything after first colon"
         )
     }
@@ -199,7 +204,8 @@ class ProfileIngestionServiceTest {
     @Test
     fun `escapeSql escapes single quotes`() {
         assertEquals(
-            "O\\'Reilly", escapeSql("O'Reilly"),
+            "O\\'Reilly",
+            escapeSql("O'Reilly"),
             "Single quotes should be escaped"
         )
     }
@@ -207,7 +213,8 @@ class ProfileIngestionServiceTest {
     @Test
     fun `escapeSql escapes backslashes`() {
         assertEquals(
-            "C:\\\\Users", escapeSql("C:\\Users"),
+            "C:\\\\Users",
+            escapeSql("C:\\Users"),
             "Backslashes should be escaped"
         )
     }

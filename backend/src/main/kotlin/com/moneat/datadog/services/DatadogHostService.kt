@@ -274,8 +274,10 @@ object DatadogHostService {
         val didUpsert = transaction {
             val existing = DdHostsTable.selectAll()
                 .where {
-                    (DdHostsTable.organizationId eq
-                        organizationId) and
+                    (
+                        DdHostsTable.organizationId eq
+                            organizationId
+                        ) and
                         (DdHostsTable.hostname eq hostname)
                 }
                 .firstOrNull()

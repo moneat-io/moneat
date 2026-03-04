@@ -33,9 +33,7 @@ import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -252,7 +250,8 @@ object TraceIngestionService {
             WHERE $whereClause
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
-            countQuery, "TabSeparated"
+            countQuery,
+            "TabSeparated"
         )
         val totalCount = countResult.trim().toLongOrNull() ?: 0
 
@@ -297,8 +296,10 @@ object TraceIngestionService {
                             .jsonPrimitive.long,
                         startNs = obj["start_ns"]?.jsonPrimitive?.long
                             ?: 0,
-                        hasError = (obj["has_error"]
-                            ?.jsonPrimitive?.int ?: 0) > 0,
+                        hasError = (
+                            obj["has_error"]
+                                ?.jsonPrimitive?.int ?: 0
+                            ) > 0,
                     )
                 }
         }
@@ -415,7 +416,8 @@ object TraceIngestionService {
         """.trimIndent()
 
         val callsResult = ClickHouseClient.executeWithFormat(
-            callsQuery, ""
+            callsQuery,
+            ""
         )
         val callsMap = mutableMapOf<String, MutableSet<String>>()
         if (callsResult.isNotBlank()) {
@@ -432,8 +434,10 @@ object TraceIngestionService {
         }
 
         val enriched = services.map { svc ->
-            svc.copy(callsTo = callsMap[svc.service]?.toList()
-                ?: emptyList())
+            svc.copy(
+                callsTo = callsMap[svc.service]?.toList()
+                    ?: emptyList()
+            )
         }
 
         return DdServiceMapResponse(services = enriched)
@@ -462,7 +466,8 @@ object TraceIngestionService {
             WHERE $whereClause
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
-            countQuery, "TabSeparated"
+            countQuery,
+            "TabSeparated"
         )
         val totalCount = countResult.trim().toLongOrNull() ?: 0
 
@@ -540,7 +545,8 @@ object TraceIngestionService {
             WHERE $whereClause
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
-            countQuery, "TabSeparated"
+            countQuery,
+            "TabSeparated"
         )
         val totalCount = countResult.trim().toLongOrNull() ?: 0
 
@@ -773,22 +779,29 @@ object TraceIngestionService {
     @Suppress("CyclomaticComplexMethod")
     private fun decodeProtobufSpan(bytes: ByteArray): DdSpan {
         val input = CodedInputStream.newInstance(bytes)
-        var service = ""; var name = ""; var resource = ""; var type = ""
-        var traceId = 0uL; var spanId = 0uL; var parentId = 0uL
-        var start = 0L; var duration = 0L; var error = 0
+        var service = ""
+        var name = ""
+        var resource = ""
+        var type = ""
+        var traceId = 0uL
+        var spanId = 0uL
+        var parentId = 0uL
+        var start = 0L
+        var duration = 0L
+        var error = 0
         val meta = mutableMapOf<String, String>()
         val metrics = mutableMapOf<String, Double>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl 3) or 2  -> service  = input.readString()
-                (2 shl 3) or 2  -> name     = input.readString()
-                (3 shl 3) or 2  -> resource = input.readString()
-                (4 shl 3) or 0  -> traceId  = input.readUInt64().toULong()
-                (5 shl 3) or 0  -> spanId   = input.readUInt64().toULong()
-                (6 shl 3) or 0  -> parentId = input.readUInt64().toULong()
-                (7 shl 3) or 0  -> start    = input.readInt64()
-                (8 shl 3) or 0  -> duration = input.readInt64()
-                (9 shl 3) or 0  -> error    = input.readInt32()
+                (1 shl 3) or 2 -> service = input.readString()
+                (2 shl 3) or 2 -> name = input.readString()
+                (3 shl 3) or 2 -> resource = input.readString()
+                (4 shl 3) or 0 -> traceId = input.readUInt64().toULong()
+                (5 shl 3) or 0 -> spanId = input.readUInt64().toULong()
+                (6 shl 3) or 0 -> parentId = input.readUInt64().toULong()
+                (7 shl 3) or 0 -> start = input.readInt64()
+                (8 shl 3) or 0 -> duration = input.readInt64()
+                (9 shl 3) or 0 -> error = input.readInt32()
                 (10 shl 3) or 2 -> {
                     val (k, v) = decodeStringStringEntry(input.readBytes().toByteArray())
                     meta[k] = v
@@ -812,7 +825,8 @@ object TraceIngestionService {
     // Map entry: field 1 = key (string), field 2 = value (string)
     private fun decodeStringStringEntry(bytes: ByteArray): Pair<String, String> {
         val input = CodedInputStream.newInstance(bytes)
-        var key = ""; var value = ""
+        var key = ""
+        var value = ""
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 (1 shl 3) or 2 -> key = input.readString()
@@ -826,7 +840,8 @@ object TraceIngestionService {
     // Map entry: field 1 = key (string), field 2 = value (fixed64 double)
     private fun decodeStringDoubleEntry(bytes: ByteArray): Pair<String, Double> {
         val input = CodedInputStream.newInstance(bytes)
-        var key = ""; var value = 0.0
+        var key = ""
+        var value = 0.0
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 (1 shl 3) or 2 -> key = input.readString()

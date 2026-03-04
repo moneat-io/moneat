@@ -170,10 +170,12 @@ class DatadogHostServiceTest {
     @Test
     fun `listHosts filters by organization`() {
         val metadata1 = DatadogHostMetadata(
-            hostname = "org1-host", os = "linux"
+            hostname = "org1-host",
+            os = "linux"
         )
         val metadata2 = DatadogHostMetadata(
-            hostname = "org2-host", os = "linux"
+            hostname = "org2-host",
+            os = "linux"
         )
         DatadogHostService.upsertFromMetadata(1, metadata1)
         DatadogHostService.upsertFromMetadata(2, metadata2)

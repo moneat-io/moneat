@@ -24,7 +24,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.request.contentType
-import io.ktor.server.request.receive
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -39,7 +38,10 @@ import mu.KotlinLogging
 import java.util.Base64
 
 private val logger = KotlinLogging.logger {}
-private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+private val json = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+}
 
 private const val QUEUE_KEY = "moneat:traces:queue"
 
@@ -132,4 +134,3 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceStats() {
 
     call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
 }
-

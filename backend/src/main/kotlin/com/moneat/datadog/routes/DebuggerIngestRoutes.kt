@@ -32,7 +32,10 @@ import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+private val json = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+}
 
 fun Route.debuggerIngestRoutes() {
     route("/dd/debugger/v1") {
@@ -88,5 +91,3 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerDiagnost
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-

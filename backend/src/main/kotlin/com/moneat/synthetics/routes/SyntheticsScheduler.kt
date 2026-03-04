@@ -16,9 +16,6 @@
 
 package com.moneat.synthetics.routes
 
-import com.moneat.synthetics.models.SyntheticTestData
-import com.moneat.synthetics.services.SyntheticsCheckExecutor
-import com.moneat.synthetics.services.SyntheticsService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

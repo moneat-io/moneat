@@ -53,8 +53,10 @@ fun Route.datadogEventQueryRoutes() {
                         mapOf("error" to "Missing org context")
                     )
 
-                val limit = (call.parameters["limit"]
-                    ?.toIntOrNull() ?: DEFAULT_LIMIT)
+                val limit = (
+                    call.parameters["limit"]
+                        ?.toIntOrNull() ?: DEFAULT_LIMIT
+                    )
                     .coerceAtMost(MAX_LIMIT)
                 val offset = call.parameters["offset"]
                     ?.toIntOrNull() ?: 0
@@ -155,8 +157,10 @@ fun Route.datadogEventQueryRoutes() {
                         mapOf("error" to "Missing org context")
                     )
 
-                val limit = (call.parameters["limit"]
-                    ?.toIntOrNull() ?: DEFAULT_LIMIT)
+                val limit = (
+                    call.parameters["limit"]
+                        ?.toIntOrNull() ?: DEFAULT_LIMIT
+                    )
                     .coerceAtMost(MAX_LIMIT)
                 val offset = call.parameters["offset"]
                     ?.toIntOrNull() ?: 0

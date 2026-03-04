@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.detekt)
 }
 
 kotlin {
@@ -45,6 +46,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.sentry.kotlin)
 
+    // Detekt formatting (ktlint)
+    detektPlugins(libs.detekt.formatting)
+
     // Unit tests
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.junit.jupiter.api)
@@ -65,5 +69,29 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     compilerOptions {
         allWarningsAsErrors.set(true)
         freeCompilerArgs.add("-opt-in=kotlin.uuid.ExperimentalUuidApi")
+    }
+}
+
+detekt {
+    config.setFrom(files("$projectDir/detekt.yml"))
+    buildUponDefaultConfig = true
+    parallel = true
+    source.setFrom(files("src/main/kotlin", "src/test/kotlin"))
+}
+
+tasks.register<io.gitlab.arturbosch.detekt.Detekt>("detektFormat") {
+    description = "Auto-corrects code style issues using detekt-formatting (ktlint)"
+    autoCorrect = true
+    config.setFrom(files("$projectDir/detekt-format.yml"))
+    buildUponDefaultConfig = false
+    parallel = true
+    setSource(files("src/main/kotlin", "src/test/kotlin"))
+    classpath.setFrom()
+    reports {
+        html.required.set(false)
+        xml.required.set(false)
+        txt.required.set(false)
+        sarif.required.set(false)
+        md.required.set(false)
     }
 }

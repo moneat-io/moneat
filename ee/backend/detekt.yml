@@ -1,0 +1,103 @@
+build:
+  maxIssues: 0
+
+comments:
+  AbsentOrWrongFileLicense:
+    active: true
+    licenseTemplateFile: 'license-header.txt'
+    licenseTemplateIsRegex: false
+
+# Disable rules that have widespread pre-existing violations.
+# Mirror core's disabled rules for consistency.
+style:
+  MagicNumber:
+    active: false
+  WildcardImport:
+    active: false
+  ReturnCount:
+    active: false
+  ThrowsCount:
+    active: false
+  MaxLineLength:
+    active: false
+  UseRequire:
+    active: false
+  UseCheckOrError:
+    active: false
+  ForbiddenComment:
+    active: false
+  LoopWithTooManyJumpStatements:
+    active: false
+  DestructuringDeclarationWithTooManyEntries:
+    active: false
+  UnusedPrivateProperty:
+    active: false
+  UnusedPrivateMember:
+    active: false
+
+complexity:
+  LongParameterList:
+    active: false
+  LongMethod:
+    active: false
+  TooManyFunctions:
+    active: false
+  CyclomaticComplexMethod:
+    active: false
+  LargeClass:
+    active: false
+  ComplexCondition:
+    active: false
+  NestedBlockDepth:
+    active: false
+  NestedScopeFunctions:
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false
+  TooGenericExceptionThrown:
+    active: false
+  SwallowedException:
+    active: false
+
+naming:
+  MatchingDeclarationName:
+    active: false
+  ConstructorParameterNaming:
+    active: false
+  FunctionNaming:
+    active: false
+  VariableNaming:
+    active: false
+
+coroutines:
+  active: true
+
+performance:
+  SpreadOperator:
+    active: false
+
+empty-blocks:
+  EmptyCatchBlock:
+    active: false
+
+potential-bugs:
+  ImplicitDefaultLocale:
+    active: false
+
+formatting:
+  ImportOrdering:
+    active: false
+  Indentation:
+    active: false
+  ArgumentListWrapping:
+    active: false
+  MaximumLineLength:
+    active: false
+  NoWildcardImports:
+    active: false
+  Filename:
+    active: false
+  Wrapping:
+    active: false

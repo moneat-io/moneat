@@ -16,7 +16,6 @@
 
 package com.moneat.datadog.services
 
-import com.moneat.datadog.models.DdSpan
 import org.junit.jupiter.api.Test
 import org.msgpack.core.MessageBufferPacker
 import org.msgpack.core.MessagePack
@@ -73,8 +72,10 @@ class TraceIngestionServiceTest {
                 listOf(
                     buildSpanMap(traceId = 1L, spanId = 10L, name = "root"),
                     buildSpanMap(
-                        traceId = 1L, spanId = 11L,
-                        parentId = 10L, name = "child"
+                        traceId = 1L,
+                        spanId = 11L,
+                        parentId = 10L,
+                        name = "child"
                     ),
                 ),
                 listOf(
@@ -119,11 +120,13 @@ class TraceIngestionServiceTest {
         val span = result[0][0]
 
         assertEquals(
-            "postgresql", span.meta["db.type"],
+            "postgresql",
+            span.meta["db.type"],
             "Should parse meta map"
         )
         assertEquals(
-            "SELECT * FROM users", span.meta["db.statement"]
+            "SELECT * FROM users",
+            span.meta["db.statement"]
         )
         assertEquals(1.0, span.metrics["_dd.measured"])
         assertEquals(2.0, span.metrics["_sampling_priority_v1"])
@@ -135,8 +138,10 @@ class TraceIngestionServiceTest {
             listOf(
                 listOf(
                     buildSpanMap(
-                        traceId = 1L, spanId = 1L,
-                        name = "failing.op", error = 1,
+                        traceId = 1L,
+                        spanId = 1L,
+                        name = "failing.op",
+                        error = 1,
                         meta = mapOf(
                             "error.msg" to "NullPointerException"
                         )

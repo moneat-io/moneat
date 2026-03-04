@@ -166,8 +166,8 @@ class AnalyticsService {
         val sql = """
             SELECT
                 $column AS name,
-                uniq(${alias}.session_id) AS visitors,
-                ${if (table == "analytics_sessions_hourly") "sum(${alias}.pageviews)" else "count()"} AS pageviews
+                uniq($alias.session_id) AS visitors,
+                ${if (table == "analytics_sessions_hourly") "sum($alias.pageviews)" else "count()"} AS pageviews
             FROM $table AS $alias
             WHERE $where AND name != ''
             GROUP BY name

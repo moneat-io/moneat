@@ -78,7 +78,10 @@ object FeatureRegistry {
         val resolvedLicense = licenseKey?.takeIf { it.isNotBlank() }?.let { key ->
             LicenseValidator.validate(key).also { info ->
                 if (info != null) {
-                    logger.info { "License valid — customer: ${info.customer}, plan: ${info.plan}, features: ${info.features}, expires: ${info.expiresAt ?: "never"}" }
+                    logger.info {
+                        "License valid — customer: ${info.customer}, plan: ${info.plan}, " +
+                            "features: ${info.features}, expires: ${info.expiresAt ?: "never"}"
+                    }
                 } else {
                     logger.warn { "MONEAT_LICENSE_KEY is set but invalid or expired — licensed modules will not load" }
                 }

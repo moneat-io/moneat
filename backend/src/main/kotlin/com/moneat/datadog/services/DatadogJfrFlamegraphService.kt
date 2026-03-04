@@ -71,11 +71,14 @@ object DatadogJfrFlamegraphService {
                 }
 
                 buildJsonObject {
-                    put("frames", buildJsonArray {
-                        root.children.values
-                            .sortedByDescending { it.value }
-                            .forEach { add(toJson(it)) }
-                    })
+                    put(
+                        "frames",
+                        buildJsonArray {
+                            root.children.values
+                                .sortedByDescending { it.value }
+                                .forEach { add(toJson(it)) }
+                        }
+                    )
                 }
             }
         }.onFailure { e ->
@@ -122,11 +125,14 @@ object DatadogJfrFlamegraphService {
     private fun toJson(frame: MutableFrame): JsonObject = buildJsonObject {
         put("name", frame.name)
         put("value", frame.value)
-        put("children", buildJsonArray {
-            frame.children.values
-                .sortedByDescending { it.value }
-                .forEach { add(toJson(it)) }
-        })
+        put(
+            "children",
+            buildJsonArray {
+                frame.children.values
+                    .sortedByDescending { it.value }
+                    .forEach { add(toJson(it)) }
+            }
+        )
     }
 
     private fun emptyFlamegraph(): JsonObject = buildJsonObject {

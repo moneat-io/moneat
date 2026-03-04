@@ -98,7 +98,8 @@ object UserAgentService {
     private fun detectDeviceType(ua: String): String {
         return when {
             ua.contains("Tablet") || ua.contains("iPad") -> "Tablet"
-            ua.contains("Mobile") || ua.contains("iPhone") || ua.contains("Android") && !ua.contains("Tablet") -> "Mobile"
+            ua.contains("Mobile") || ua.contains("iPhone") ||
+                ua.contains("Android") && !ua.contains("Tablet") -> "Mobile"
             else -> "Desktop"
         }
     }
