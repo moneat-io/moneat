@@ -59,6 +59,15 @@ data class SyntheticCheckResult(
 
 open class SyntheticsCheckExecutor {
 
+    private fun extractHostname(url: String): String? {
+        return try {
+            java.net.URI(url).host?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            url.removePrefix("https://").removePrefix("http://")
+                .split("/").firstOrNull()?.split(":")?.firstOrNull()
+        }
+    }
+
     open suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult {
         return when (test.testType.lowercase()) {
             "multistep" -> executeMultistepTest(test)
@@ -161,8 +170,7 @@ open class SyntheticsCheckExecutor {
             }
         }
         val hostname = config?.hostname
-            ?: test.url?.removePrefix("https://")
-                ?.removePrefix("http://")?.split("/")?.firstOrNull()
+            ?: test.url?.let { extractHostname(it) }
             ?: return SyntheticCheckResult(
                 status = "failed", durationMs = 0,
                 errorMessage = "No hostname configured"
@@ -243,10 +251,7 @@ open class SyntheticsCheckExecutor {
     private suspend fun executeDnsTest(
         test: SyntheticTestData
     ): SyntheticCheckResult {
-        val hostname = test.url
-            ?.removePrefix("https://")
-            ?.removePrefix("http://")
-            ?.split("/")?.firstOrNull()
+        val hostname = test.url?.let { extractHostname(it) }
             ?: return SyntheticCheckResult(
                 status = "failed", durationMs = 0,
                 errorMessage = "No hostname configured"
@@ -318,8 +323,7 @@ open class SyntheticsCheckExecutor {
             }
         }
         val hostname = config?.hostname
-            ?: test.url?.removePrefix("https://")
-                ?.removePrefix("http://")?.split("/")?.firstOrNull()
+            ?: test.url?.let { extractHostname(it) }
             ?: return SyntheticCheckResult(
                 status = "failed", durationMs = 0,
                 errorMessage = "No hostname configured"
@@ -385,8 +389,7 @@ open class SyntheticsCheckExecutor {
             }
         }
         val hostname = config?.hostname
-            ?: test.url?.removePrefix("https://")
-                ?.removePrefix("http://")?.split("/")?.firstOrNull()
+            ?: test.url?.let { extractHostname(it) }
             ?: return SyntheticCheckResult(
                 status = "failed", durationMs = 0,
                 errorMessage = "No hostname configured"
