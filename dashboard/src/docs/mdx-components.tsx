@@ -1,4 +1,4 @@
-import {isValidElement, type ReactElement} from 'react'
+import {isValidElement, type ComponentPropsWithoutRef, type ReactElement} from 'react'
 import {Link as TanStackLink} from '@tanstack/react-router'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark} from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -6,7 +6,7 @@ import Admonition from './components/Admonition'
 import StepList from './components/StepList'
 import SdkSetup from './components/SdkSetup'
 
-export function MdxPre(props: React.ComponentPropsWithoutRef<'pre'>) {
+export function MdxPre(props: ComponentPropsWithoutRef<'pre'>) {
   const child = props.children
   if (isValidElement(child)) {
     const {className, children} = (child as ReactElement<{className?: string; children?: string}>).props
@@ -22,7 +22,7 @@ export function MdxPre(props: React.ComponentPropsWithoutRef<'pre'>) {
   return <pre {...props} />
 }
 
-export function DocsLink(props: React.ComponentPropsWithoutRef<'a'>) {
+export function DocsLink(props: ComponentPropsWithoutRef<'a'>) {
   return <a {...props} className={props.className ?? 'text-sky-400 hover:text-sky-300 underline'} />
 }
 

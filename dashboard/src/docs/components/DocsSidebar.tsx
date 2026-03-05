@@ -46,6 +46,7 @@ function CategoryView({category, currentSlug, depth = 0}: {category: SidebarCate
   // Track user-toggled state separately; hasActive always forces open
   const [userOpen, setUserOpen] = useState(!category.collapsed)
   const open = hasActive || userOpen
+  const panelId = `docs-panel-${category.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 
   return (
     <div>
@@ -54,9 +55,12 @@ function CategoryView({category, currentSlug, depth = 0}: {category: SidebarCate
         style={{paddingLeft: `${12 + depth * 12}px`}}
       >
         <button
+          type="button"
           onClick={() => setUserOpen((v) => !v)}
           className="flex items-center justify-center p-1.5 shrink-0 hover:bg-white/[0.05] rounded"
           aria-label={open ? 'Collapse section' : 'Expand section'}
+          aria-expanded={open}
+          aria-controls={panelId}
         >
           <ChevronRight
             className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
@@ -75,13 +79,13 @@ function CategoryView({category, currentSlug, depth = 0}: {category: SidebarCate
             {category.label}
           </Link>
         ) : (
-          <button onClick={() => setUserOpen((v) => !v)} className="flex-1 py-1.5 pr-3 text-left">
+          <button type="button" onClick={() => setUserOpen((v) => !v)} className="flex-1 py-1.5 pr-3 text-left">
             {category.label}
           </button>
         )}
       </div>
       {open && (
-        <div className="mt-0.5">
+        <div id={panelId} className="mt-0.5">
           {category.items.map((child, i) => (
             <SidebarItemView key={i} item={child} currentSlug={currentSlug} depth={depth + 1} />
           ))}

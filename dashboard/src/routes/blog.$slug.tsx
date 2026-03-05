@@ -3,6 +3,7 @@ import {getPost} from '@/blog/loader'
 import {Helmet} from 'react-helmet-async'
 import {MdxPre} from '@/docs/mdx-components'
 import {BlogPostFeedback} from '@/components/BlogPostFeedback'
+import {SITE_ORIGIN} from '@/lib/site'
 
 export const Route = createFileRoute('/blog/$slug')({
   loader: ({params}) => {
@@ -51,11 +52,11 @@ function BlogPost() {
       <Helmet>
         <title>{post.title} — Moneat Blog</title>
         <meta name="description" content={post.description} />
-        <link rel="canonical" href={`https://moneat.io/blog/${post.slug}`} />
+        <link rel="canonical" href={`${SITE_ORIGIN}/blog/${post.slug}`} />
         <meta property="og:type" content="article" />
         <meta property="og:title" content={post.title} />
         <meta property="og:description" content={post.description} />
-        <meta property="og:url" content={`https://moneat.io/blog/${post.slug}`} />
+        <meta property="og:url" content={`${SITE_ORIGIN}/blog/${post.slug}`} />
         <meta property="article:published_time" content={post.date} />
         <meta property="article:author" content={post.author} />
       </Helmet>

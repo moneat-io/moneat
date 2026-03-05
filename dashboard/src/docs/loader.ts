@@ -44,7 +44,7 @@ for (const doc of allDocs) {
 }
 for (const [slug, titles] of slugCounts) {
   if (titles.length > 1) {
-    console.error(`[docs/loader] Duplicate slug "${slug}": ${titles.join(', ')}`)
+    throw new Error(`[docs/loader] Duplicate slug "${slug}": ${titles.join(', ')}`)
   }
 }
 
