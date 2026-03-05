@@ -82,7 +82,7 @@ export default function DocsSidebar() {
   const currentSlug = pathname.replace(/^\/docs\/?/, '').replace(/\/$/, '') || 'intro'
 
   return (
-    <nav className="w-64 shrink-0 border-r border-white/[0.06] overflow-y-auto py-4 pr-2 hidden lg:block">
+    <nav className="w-64 shrink-0 border-r border-white/[0.06] overflow-y-auto py-4 pr-2 hidden lg:block sticky top-16 h-[calc(100vh-4rem)]">
       <div className="space-y-1">
         {docsSidebar.map((category, i) => (
           <div key={i} className="mb-3">

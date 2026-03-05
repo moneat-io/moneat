@@ -8,6 +8,8 @@ import Admonition from '@/docs/components/Admonition'
 import StepList from '@/docs/components/StepList'
 import SdkSetup from '@/docs/components/SdkSetup'
 
+import {DocsFeedback} from '@/docs/components/DocsFeedback'
+
 export const Route = createFileRoute('/docs/')({
   component: DocsIndex,
 })
@@ -57,6 +59,7 @@ function DocsIndex() {
         <div className="prose prose-invert prose-sky max-w-none prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white prose-a:text-sky-400 hover:prose-a:text-sky-300">
           <Component components={mdxComponents} />
         </div>
+        <DocsFeedback slug="intro" />
       </article>
     </>
   )

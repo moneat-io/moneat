@@ -28,7 +28,7 @@ function DocsLayout() {
       </Helmet>
       <div className="min-h-screen bg-slate-950 text-slate-100">
         <LandingNavbar />
-        <div className="flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 items-start">
           <DocsSidebar />
           <main className="flex-1 min-w-0">
             <Outlet />

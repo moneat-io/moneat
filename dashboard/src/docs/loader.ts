@@ -27,7 +27,10 @@ function slugFromPath(path: string): string {
 
 export const allDocs: Doc[] = Object.entries(modules).map(([path, mod]) => ({
   slug: slugFromPath(path),
-  title: mod.frontmatter?.title ?? slugFromPath(path).split('/').pop() ?? '',
+  title: mod.frontmatter?.title ??
+    (slugFromPath(path).split('/').pop() ?? '')
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase()),
   description: mod.frontmatter?.description,
   Component: mod.default,
 }))
