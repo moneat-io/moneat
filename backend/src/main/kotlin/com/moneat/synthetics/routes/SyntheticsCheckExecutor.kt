@@ -62,6 +62,8 @@ open class SyntheticsCheckExecutor {
     private fun extractHostname(url: String): String? {
         return try {
             java.net.URI(url).host?.takeIf { it.isNotBlank() }
+                ?: url.removePrefix("https://").removePrefix("http://")
+                    .split("/").firstOrNull()?.split(":")?.firstOrNull()?.takeIf { it.isNotBlank() }
         } catch (_: Exception) {
             url.removePrefix("https://").removePrefix("http://")
                 .split("/").firstOrNull()?.split(":")?.firstOrNull()
