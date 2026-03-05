@@ -68,25 +68,38 @@ const DiscordLogo = ({className}: {className?: string}) => (
 // when real screenshots are available.
 // ────────────────────────────────────────────────────────────────
 
-function ScreenshotFrame({
+export function ScreenshotFrame({
   gradient,
   className,
   children,
+  fade,
 }: {
   gradient: string
   className?: string
   children?: React.ReactNode
+  fade?: 'bottom' | 'all-edges'
 }) {
+  const maskStyle: React.CSSProperties | undefined = fade === 'all-edges'
+    ? {
+        maskImage: 'linear-gradient(to bottom, black 40%, transparent 100%), linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)',
+        WebkitMaskImage: 'linear-gradient(to bottom, black 40%, transparent 100%), linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)',
+        maskComposite: 'intersect',
+        WebkitMaskComposite: 'source-in',
+      }
+    : fade === 'bottom'
+      ? {
+          maskImage: 'linear-gradient(to bottom, black 0%, black 65%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, black 0%, black 65%, transparent 100%)',
+        }
+      : undefined
+
   return (
-    <div className={`relative ${className ?? ''}`}>
-      {/* Ambient glow */}
-      <div
-        className={`absolute -inset-4 bg-gradient-to-r ${gradient} opacity-20 blur-2xl rounded-3xl pointer-events-none`}
-      />
-      {/* Window frame */}
+    <div className={`relative ${className ?? ''}`} style={maskStyle}>
       <div className="relative rounded-xl border border-white/[0.08] bg-[#0c0e14] shadow-2xl shadow-black/40 overflow-hidden ring-1 ring-white/[0.05]">
-        {/* macOS title bar */}
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.02]">
+        <div
+          className={`absolute -inset-4 bg-gradient-to-r ${gradient} opacity-20 blur-2xl rounded-3xl pointer-events-none`}
+        />
+        <div className="relative z-10 flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06] bg-[#0e1018]">
           <div className="flex gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/80" />
             <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/80" />
@@ -96,8 +109,7 @@ function ScreenshotFrame({
             <div className="h-4 rounded-md bg-white/[0.04] max-w-[200px] mx-auto" />
           </div>
         </div>
-        {/* 16:9 screenshot area */}
-        <div className="aspect-video overflow-hidden bg-[#09090b] p-1">
+        <div className="relative z-10 aspect-video overflow-hidden bg-[#09090b] p-1">
           <div className="relative w-full h-full rounded-sm overflow-hidden">
             {children}
           </div>
@@ -206,21 +218,21 @@ const secondaryFeatures: Feature[] = [
     iconColor: 'text-orange-400',
     noFrame: true,
     mock: (
-      <div className="relative w-full rounded-xl overflow-hidden bg-[#0B1120] border border-white/10">
+      <div className="relative w-full rounded-xl overflow-hidden bg-[#0a0e1a] border border-white/[0.08]">
         <div className="absolute inset-0"
              style={{
-               backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)',
+               backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px)',
                backgroundSize: '24px 24px'
              }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0B1120] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e1a] via-transparent to-transparent" />
 
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.02]">
            <div className="h-4 opacity-0" />
         </div>
 
         <div className="aspect-video relative flex flex-col items-center justify-center p-6 gap-3">
-            <div className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 backdrop-blur-sm">
+            <div className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/[0.08] backdrop-blur-sm">
                 <div className="h-8 w-8 rounded-full bg-sky-500/20 flex items-center justify-center text-sky-400 font-bold text-xs">AE</div>
                 <div className="flex-1 space-y-1.5">
                     <div className="h-2 w-24 rounded bg-white/20"/>
@@ -229,7 +241,7 @@ const secondaryFeatures: Feature[] = [
                 <div className="px-2 py-1 rounded bg-green-500/20 text-green-400 text-[10px] font-medium border border-green-500/20">Active</div>
             </div>
              <div className="h-4 w-0.5 bg-white/10"/>
-            <div className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 opacity-60 backdrop-blur-sm">
+            <div className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/[0.08] opacity-60 backdrop-blur-sm">
                 <div className="h-8 w-8 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-400 font-bold text-xs">JD</div>
                 <div className="flex-1 space-y-1.5">
                     <div className="h-2 w-20 rounded bg-white/20"/>
@@ -251,25 +263,24 @@ const secondaryFeatures: Feature[] = [
     iconColor: 'text-rose-400',
     noFrame: true,
     mock: (
-      <div className="relative w-full rounded-xl overflow-hidden bg-[#0B1120] border border-white/10">
+      <div className="relative w-full rounded-xl overflow-hidden bg-[#0a0e1a] border border-white/[0.08]">
         <div className="absolute inset-0" 
              style={{
-               backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)',
+               backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px)',
                backgroundSize: '24px 24px'
              }} 
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0B1120] via-transparent to-transparent" />
-        
-        {/* Header spacer to match ScreenshotFrame height */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e1a] via-transparent to-transparent" />
+
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.02]">
           <div className="h-4 opacity-0" />
         </div>
 
         <div className="aspect-video relative flex items-center justify-center gap-10">
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm hover:border-rose-500/50 hover:bg-rose-500/10 transition-colors duration-300">
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/[0.08] backdrop-blur-sm hover:border-rose-500/50 hover:bg-rose-500/10 transition-colors duration-300">
             <SlackLogo className="h-14 w-14" />
           </div>
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm hover:border-indigo-500/50 hover:bg-indigo-500/10 transition-colors duration-300">
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/[0.08] backdrop-blur-sm hover:border-indigo-500/50 hover:bg-indigo-500/10 transition-colors duration-300">
             <DiscordLogo className="h-14 w-14" />
           </div>
         </div>
@@ -323,7 +334,7 @@ export function VariantA() {
   return (
     <>
       {/* ── Hero ─────────────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-slate-950">
+      <section className="relative overflow-hidden bg-[#0a0b14]">
         {/* Gradient orbs */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full bg-sky-500/20 blur-[120px] animate-pulse-glow" />
@@ -339,29 +350,6 @@ export function VariantA() {
             backgroundSize: '60px 60px',
           }}
         />
-
-        {/* Animated pulse line */}
-        <svg
-          viewBox="0 0 1200 120"
-          className="absolute bottom-0 left-0 right-0 w-full opacity-20 z-[1]"
-          aria-hidden="true"
-          preserveAspectRatio="none"
-        >
-          <polyline
-            points="0,80 100,80 160,20 240,100 320,20 400,80 480,40 560,90 640,30 720,70 800,80 1200,80"
-            fill="none"
-            stroke="url(#hero-line-gradient)"
-            strokeWidth="2"
-            className="animate-draw-line"
-          />
-          <defs>
-            <linearGradient id="hero-line-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#38bdf8" />
-              <stop offset="50%" stopColor="#a78bfa" />
-              <stop offset="100%" stopColor="#38bdf8" />
-            </linearGradient>
-          </defs>
-        </svg>
 
         {/* Hero text */}
         <div className="min-h-[70vh] flex flex-col justify-center relative z-10 px-4 sm:px-6 lg:px-8 pt-16">
@@ -428,22 +416,19 @@ export function VariantA() {
           </div>
         </div>
 
-        {/* Hero screenshot — floating dashboard preview */}
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 pb-16 animate-fade-in-up animation-delay-400">
           <div style={{perspective: '2000px'}}>
             <div style={{transform: 'rotateX(8deg)', transformOrigin: 'center top'}}>
-              <ScreenshotFrame gradient="from-sky-500 to-cyan-400">
+              <ScreenshotFrame gradient="from-sky-500 to-cyan-400" fade="all-edges">
                 <img src="/screenshots/dashboard.png" alt="Main dashboard overview with statistics and error trends" className="w-full h-full object-cover" />
               </ScreenshotFrame>
             </div>
           </div>
-          {/* Bottom fade into next section */}
-          <div className="absolute -bottom-1 left-0 right-0 h-32 bg-gradient-to-t from-slate-950 to-transparent pointer-events-none" />
         </div>
       </section>
 
       {/* ── Stats bar ────────────────────────────────────── */}
-      <section className="relative bg-slate-900 border-y border-slate-800">
+      <section className="relative bg-[#0d0f1a] border-y border-white/[0.06]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, i) => (
@@ -551,7 +536,7 @@ export function VariantA() {
                   </div>
                   {/* Screenshot */}
                   <div className="lg:w-[60%] w-full">
-                    <ScreenshotFrame gradient={feature.gradient}>
+                    <ScreenshotFrame gradient={feature.gradient} fade="bottom">
                       {feature.mock}
                     </ScreenshotFrame>
                   </div>
@@ -563,7 +548,7 @@ export function VariantA() {
       </section>
 
       {/* ── Secondary features — grid with screenshots ── */}
-      <section className="py-28 px-4 sm:px-6 lg:px-8 bg-slate-950">
+      <section className="py-28 px-4 sm:px-6 lg:px-8 bg-[#0a0b14]">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl text-white mb-3">
@@ -580,7 +565,7 @@ export function VariantA() {
                 {feature.noFrame ? (
                   <div className="mb-6">{feature.mock}</div>
                 ) : (
-                  <ScreenshotFrame gradient={feature.gradient} className="mb-6">
+                  <ScreenshotFrame gradient={feature.gradient} fade="bottom" className="mb-6">
                     {feature.mock}
                   </ScreenshotFrame>
                 )}
@@ -684,7 +669,7 @@ export function VariantA() {
       </section>
 
       {/* ── Datadog Agent callout ─────────────────────────── */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-slate-950">
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-[#0a0b14]">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
             <div className="lg:w-[42%] text-center lg:text-left">
@@ -854,7 +839,7 @@ export function VariantA() {
       </section>
 
       {/* ── CTA Banner ───────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-slate-950 py-24 px-4 sm:px-6 lg:px-8">
+      <section className="relative overflow-hidden bg-[#0a0b14] py-24 px-4 sm:px-6 lg:px-8">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-0 left-1/4 w-[400px] h-[400px] rounded-full bg-sky-500/10 blur-[100px]" />
           <div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] rounded-full bg-violet-500/10 blur-[80px]" />
