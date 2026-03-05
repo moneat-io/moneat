@@ -121,7 +121,7 @@ sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version = "3.46.1.0" }
 snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "3.24.2" }
 
 # Non-JDBC data clients / SDKs
-mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version = "5.3.0" }
+mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version = "5.6.4" }
 aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.29" }
 google-cloud-bigquery = { module = "com.google.cloud:google-cloud-bigquery", version = "2.60.0" }
 
