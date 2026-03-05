@@ -742,8 +742,8 @@ class MonitorAlertService {
                     com.moneat.incident.models.IncidentEvent(
                         title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
                         description =
-                            "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold" +
-                                "\nCurrent Value: $formattedValue",
+                        "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold" +
+                            "\nCurrent Value: $formattedValue",
                         severity = incidentSeverity,
                         status = com.moneat.incident.models.IncidentStatus.FIRING,
                         source = com.moneat.incident.models.AlertSource.HOST_ALERT,
