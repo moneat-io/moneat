@@ -182,7 +182,7 @@ object DatadogMetricService {
         }
 
         val insert = """
-            INSERT INTO $db.metrics (
+            INSERT INTO `$db`.metrics (
                 organization_id, metric_name, metric_type, timestamp,
                 value, host, tags, unit, source_type_name
             ) VALUES $rows
@@ -224,7 +224,7 @@ object DatadogMetricService {
         }
 
         val insert = """
-            INSERT INTO $db.metric_sketches (
+            INSERT INTO `$db`.metric_sketches (
                 organization_id, metric_name, timestamp, host, tags,
                 sketch_count, sketch_min, sketch_max, sketch_avg,
                 sketch_sum, sketch_k, sketch_n

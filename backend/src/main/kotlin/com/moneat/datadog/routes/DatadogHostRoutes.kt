@@ -288,7 +288,7 @@ fun Route.datadogHostRoutes() {
                         toUnixTimestamp(toStartOfInterval(timestamp, INTERVAL 5 MINUTE)) as ts,
                         metric_name,
                         if(metric_name = 'system.disk.in_use', max(value), avg(value)) as value
-                    FROM $db.metrics
+                    FROM `$db`.metrics
                     WHERE ${ClickHouseQueryUtils.orgIdClause(orgId.toLong())}
                       AND host = '${escapeSqlHost(host.hostname)}'
                       AND metric_name IN (
@@ -388,7 +388,7 @@ fun Route.datadogHostRoutes() {
                         argMax(net_tx_bytes, timestamp) as net_tx_bytes,
                         argMax(tags, timestamp) as tags,
                         formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
-                    FROM $db.containers
+                    FROM `$db`.containers
                     WHERE ${ClickHouseQueryUtils.orgIdClause(orgId.toLong())}
                       AND host = '${escapeSqlHost(host.hostname)}'
                       AND timestamp >= now64(3) - INTERVAL 10 MINUTE

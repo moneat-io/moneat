@@ -593,7 +593,7 @@ class SummaryService(
         val query = """
             SELECT issue_id, any(message) as title,
                    count() as event_count, any(project_id) as pid
-            FROM $clickhouseDb.events
+            FROM `$clickhouseDb`.events
             WHERE $projectClause
                 AND event_type = 'error'
                 AND timestamp >= toDateTime('${formatClickhouse(from)}')
@@ -615,7 +615,7 @@ class SummaryService(
         val projectClause = projectIdClause(projectIds)
         val query = """
             SELECT count() as total
-            FROM $clickhouseDb.events
+            FROM `$clickhouseDb`.events
             WHERE $projectClause
                 AND event_type = 'error'
                 AND timestamp >= toDateTime('${formatClickhouse(from)}')
@@ -633,7 +633,7 @@ class SummaryService(
         val orgId = organizationId.toLong()
         val query = """
             SELECT count() as total
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE organization_id = $orgId
                 AND level IN ('error', 'fatal', 'critical')
                 AND timestamp >= toDateTime('${formatClickhouse(from)}')
@@ -652,7 +652,7 @@ class SummaryService(
         val projectClause = projectIdClause(projectIds)
         val query = """
             SELECT toDate(timestamp) as date, count() as count
-            FROM $clickhouseDb.events
+            FROM `$clickhouseDb`.events
             WHERE $projectClause
                 AND event_type = 'error'
                 AND timestamp >= toDateTime('${formatClickhouse(from)}')
@@ -675,7 +675,7 @@ class SummaryService(
             SELECT transaction as name,
                    quantile(0.95)(duration) as p95,
                    count() as cnt
-            FROM $clickhouseDb.events
+            FROM `$clickhouseDb`.events
             WHERE $projectClause
                 AND event_type = 'transaction'
                 AND timestamp >= toDateTime('${formatClickhouse(from)}')
@@ -698,7 +698,7 @@ class SummaryService(
         val query = """
             SELECT issue_id, any(message) as title,
                    count() as event_count, any(project_id) as pid
-            FROM $clickhouseDb.events
+            FROM `$clickhouseDb`.events
             WHERE $projectClause
                 AND event_type = 'error'
                 AND timestamp >= toDateTime('${formatClickhouse(from)}')
@@ -720,7 +720,7 @@ class SummaryService(
         val query = """
             SELECT timestamp, level, message,
                    service_name as service
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE organization_id = $orgId
                 AND level IN ('error', 'fatal', 'critical')
                 AND timestamp >= toDateTime('${formatClickhouse(from)}')
@@ -743,7 +743,7 @@ class SummaryService(
             SELECT issue_id, any(message) as title,
                    count() as cnt,
                    min(timestamp) as first_seen
-            FROM $clickhouseDb.events
+            FROM `$clickhouseDb`.events
             WHERE $projectClause
                 AND event_type = 'error'
                 AND timestamp >= toDateTime('${formatClickhouse(from)}')

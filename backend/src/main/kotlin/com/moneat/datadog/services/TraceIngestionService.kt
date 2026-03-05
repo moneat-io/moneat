@@ -146,7 +146,7 @@ object TraceIngestionService {
         }
 
         val insert = """
-            INSERT INTO $clickhouseDb.apm_spans (
+            INSERT INTO `$clickhouseDb`.apm_spans (
                 span_id, trace_id, parent_id, organization_id,
                 name, service, resource, type,
                 start, duration, error,
@@ -206,7 +206,7 @@ object TraceIngestionService {
         }
 
         val insert = """
-            INSERT INTO $clickhouseDb.trace_stats (
+            INSERT INTO `$clickhouseDb`.trace_stats (
                 organization_id, service, resource, type, name,
                 http_status_code, synthetics, start, duration,
                 hits, top_level_hits, errors,
@@ -246,7 +246,7 @@ object TraceIngestionService {
 
         val countQuery = """
             SELECT count(DISTINCT trace_id)
-            FROM $clickhouseDb.apm_spans
+            FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
@@ -265,7 +265,7 @@ object TraceIngestionService {
                 max(duration) as duration_ns,
                 toInt64(toUnixTimestamp64Nano(min(start))) as start_ns,
                 max(error) as has_error
-            FROM $clickhouseDb.apm_spans
+            FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
             GROUP BY trace_id
             ORDER BY start_ns DESC
@@ -320,7 +320,7 @@ object TraceIngestionService {
                 duration, error,
                 meta, metrics,
                 host, env, version
-            FROM $clickhouseDb.apm_spans
+            FROM `$clickhouseDb`.apm_spans
             WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
               AND trace_id = $parsedTraceId
             ORDER BY start_ns ASC
@@ -367,7 +367,7 @@ object TraceIngestionService {
                 count() as span_count,
                 countIf(error = 1) as error_count,
                 avg(duration) as avg_duration_ns
-            FROM $clickhouseDb.apm_spans
+            FROM `$clickhouseDb`.apm_spans
             WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
               AND start >= now() - INTERVAL 1 HOUR
             GROUP BY service
@@ -403,8 +403,8 @@ object TraceIngestionService {
             SELECT
                 parent.service as from_service,
                 child.service as to_service
-            FROM $clickhouseDb.apm_spans child
-            INNER JOIN $clickhouseDb.apm_spans parent
+            FROM `$clickhouseDb`.apm_spans child
+            INNER JOIN `$clickhouseDb`.apm_spans parent
                 ON child.parent_id = parent.span_id
                 AND child.trace_id = parent.trace_id
                 AND child.organization_id = parent.organization_id
@@ -462,7 +462,7 @@ object TraceIngestionService {
         val countQuery = """
             SELECT count(DISTINCT
                 concat(service, resource, meta['error.msg']))
-            FROM $clickhouseDb.apm_spans
+            FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
@@ -480,7 +480,7 @@ object TraceIngestionService {
                 count() as error_count,
                 max(start) as last_seen,
                 any(trace_id) as sample_trace_id
-            FROM $clickhouseDb.apm_spans
+            FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
             GROUP BY service, resource,
                 meta['error.msg'], meta['error.type']
@@ -541,7 +541,7 @@ object TraceIngestionService {
 
         val countQuery = """
             SELECT count(DISTINCT (service, resource, name, type))
-            FROM $clickhouseDb.trace_stats
+            FROM `$clickhouseDb`.trace_stats
             WHERE $whereClause
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
@@ -560,7 +560,7 @@ object TraceIngestionService {
                 SUM(errors) as total_errors,
                 SUM(ok_summary_sum) as ok_sum,
                 SUM(ok_summary_count) as ok_count
-            FROM $clickhouseDb.trace_stats
+            FROM `$clickhouseDb`.trace_stats
             WHERE $whereClause
             GROUP BY service, resource, name, type
             ORDER BY total_hits DESC

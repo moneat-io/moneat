@@ -142,9 +142,9 @@ class MonitorService {
     ): Boolean {
         // Delete telemetry from ClickHouse before removing the host row
         val metricsDelete =
-            "ALTER TABLE $clickhouseDb.metrics DELETE WHERE organization_id = $organizationId AND tags['host_id'] = '$hostId'"
+            "ALTER TABLE `$clickhouseDb`.metrics DELETE WHERE organization_id = $organizationId AND tags['host_id'] = '$hostId'"
         val containersDelete =
-            "ALTER TABLE $clickhouseDb.containers DELETE WHERE organization_id = $organizationId AND tags['host_id'] = '$hostId'"
+            "ALTER TABLE `$clickhouseDb`.containers DELETE WHERE organization_id = $organizationId AND tags['host_id'] = '$hostId'"
 
         val metricsResponse = ClickHouseClient.execute(metricsDelete)
         if (!metricsResponse.status.isSuccess()) {
@@ -189,7 +189,7 @@ class MonitorService {
                 argMax(CASE WHEN metric_name='system.temp.max' THEN value END, timestamp) as temp_max,
                 argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
                 argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent
-            FROM $clickhouseDb.metrics
+            FROM `$clickhouseDb`.metrics
             WHERE organization_id = ${host.organizationId}
               AND tags['host_id'] = '$hostId'
               AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
@@ -307,7 +307,7 @@ class MonitorService {
                 argMax(CASE WHEN metric_name='system.temp.max' THEN value END, timestamp) as temp_max,
                 argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
                 argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent
-            FROM $clickhouseDb.metrics
+            FROM `$clickhouseDb`.metrics
             WHERE organization_id = $organizationId
               AND toInt32(tags['host_id']) IN ($hostIdList)
               AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
@@ -431,7 +431,7 @@ class MonitorService {
                 max(CASE WHEN metric_name='system.temp.max' THEN value END) as temp,
                 avg(CASE WHEN metric_name='system.gpu.percent' THEN value END) as gpu,
                 avg(CASE WHEN metric_name='system.battery.percent' THEN value END) as battery
-            FROM $clickhouseDb.metrics
+            FROM `$clickhouseDb`.metrics
             WHERE organization_id = ${host.organizationId}
               AND tags['host_id'] = '$hostId'
               AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * 1000})
@@ -528,7 +528,7 @@ class MonitorService {
             FROM (
                 SELECT *,
                     ROW_NUMBER() OVER (PARTITION BY host, container_id ORDER BY timestamp DESC) as rn
-                FROM $clickhouseDb.containers
+                FROM `$clickhouseDb`.containers
                 WHERE organization_id = ${host.organizationId}
                   AND tags['host_id'] = '$hostId'
                   AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
@@ -632,7 +632,7 @@ class MonitorService {
             FROM (
                 SELECT *,
                     ROW_NUMBER() OVER (PARTITION BY organization_id, host, container_id ORDER BY timestamp DESC) as rn
-                FROM $clickhouseDb.containers
+                FROM `$clickhouseDb`.containers
                 WHERE organization_id IN ($orgList)
                   AND timestamp >= now64(3) - INTERVAL $INFRA_LOOKBACK_DAYS DAY
                   $hostClause
@@ -748,7 +748,7 @@ class MonitorService {
                 avg(mem_limit) as mem_limit,
                 sum(net_rx_bytes) as net_recv,
                 sum(net_tx_bytes) as net_sent
-            FROM $clickhouseDb.containers
+            FROM `$clickhouseDb`.containers
             WHERE organization_id = ${host.organizationId}
               AND tags['host_id'] = '$hostId'
               AND name = '$escapedName'

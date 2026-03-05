@@ -82,7 +82,7 @@ fun Route.datadogEventQueryRoutes() {
 
                 val countSql = """
                     SELECT count() as cnt
-                    FROM $db.infra_events
+                    FROM `$db`.infra_events
                     WHERE $where
                     FORMAT JSONEachRow
                 """.trimIndent()
@@ -108,7 +108,7 @@ fun Route.datadogEventQueryRoutes() {
                         priority, host, tags, alert_type,
                         aggregation_key, source_type_name,
                         device_name
-                    FROM $db.infra_events
+                    FROM `$db`.infra_events
                     WHERE $where
                     ORDER BY timestamp DESC
                     LIMIT $limit OFFSET $offset
@@ -187,7 +187,7 @@ fun Route.datadogEventQueryRoutes() {
 
                 val countSql = """
                     SELECT count() as cnt
-                    FROM $db.service_checks
+                    FROM `$db`.service_checks
                     WHERE $where
                     FORMAT JSONEachRow
                 """.trimIndent()
@@ -212,7 +212,7 @@ fun Route.datadogEventQueryRoutes() {
                             'UTC'
                         ) as ts,
                         tags, message
-                    FROM $db.service_checks
+                    FROM `$db`.service_checks
                     WHERE $where
                     ORDER BY timestamp DESC
                     LIMIT $limit OFFSET $offset

@@ -11,33 +11,49 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailRequiredRouteImport } from './routes/verify-email-required'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as UptimeMonitoringRouteImport } from './routes/uptime-monitoring'
 import { Route as TracesRouteImport } from './routes/traces'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SyntheticsRouteImport } from './routes/synthetics'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SessionReplayRouteImport } from './routes/session-replay'
+import { Route as SecuritySbomRouteImport } from './routes/security-sbom'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReplaysRouteImport } from './routes/replays'
 import { Route as ReleasesRouteImport } from './routes/releases'
+import { Route as PublicStatusPagesRouteImport } from './routes/public-status-pages'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as ProfilingRouteImport } from './routes/profiling'
 import { Route as ProfilesRouteImport } from './routes/profiles'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingCalculatorRouteImport } from './routes/pricing-calculator'
+import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as PerformanceMonitoringRouteImport } from './routes/performance-monitoring'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as OnCallManagementRouteImport } from './routes/on-call-management'
 import { Route as OnCallRouteImport } from './routes/on-call'
 import { Route as MonitoringRouteImport } from './routes/monitoring'
+import { Route as McpServerRouteImport } from './routes/mcp-server'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LogManagementRouteImport } from './routes/log-management'
 import { Route as IssuesRouteImport } from './routes/issues'
+import { Route as InfrastructureMonitoringRouteImport } from './routes/infrastructure-monitoring'
 import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-callback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
+import { Route as ErrorTrackingRouteImport } from './routes/error-tracking'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
+import { Route as CustomDashboardsRouteImport } from './routes/custom-dashboards'
+import { Route as BlogRouteImport } from './routes/blog'
 import { Route as ApmTracesRouteImport } from './routes/apm-traces'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
+import { Route as AlertingRouteImport } from './routes/alerting'
+import { Route as AiObservabilityRouteImport } from './routes/ai-observability'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as IndexRouteImport } from './routes/index'
@@ -51,6 +67,7 @@ import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
+import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
@@ -86,6 +103,7 @@ import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
 import { Route as DashboardsDatasourcesRouteImport } from './routes/dashboards.datasources'
 import { Route as DashboardsDashboardIdRouteImport } from './routes/dashboards.$dashboardId'
+import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as ApmTracesTraceIdRouteImport } from './routes/apm-traces.$traceId'
 import { Route as AiGenerationsRouteImport } from './routes/ai.generations'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
@@ -127,6 +145,11 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
   path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UptimeMonitoringRoute = UptimeMonitoringRouteImport.update({
+  id: '/uptime-monitoring',
+  path: '/uptime-monitoring',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TracesRoute = TracesRouteImport.update({
   id: '/traces',
   path: '/traces',
@@ -152,6 +175,16 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SessionReplayRoute = SessionReplayRouteImport.update({
+  id: '/session-replay',
+  path: '/session-replay',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecuritySbomRoute = SecuritySbomRouteImport.update({
+  id: '/security-sbom',
+  path: '/security-sbom',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SecurityRoute = SecurityRouteImport.update({
   id: '/security',
   path: '/security',
@@ -172,9 +205,19 @@ const ReleasesRoute = ReleasesRouteImport.update({
   path: '/releases',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PublicStatusPagesRoute = PublicStatusPagesRouteImport.update({
+  id: '/public-status-pages',
+  path: '/public-status-pages',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfilingRoute = ProfilingRouteImport.update({
+  id: '/profiling',
+  path: '/profiling',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProfilesRoute = ProfilesRouteImport.update({
@@ -192,6 +235,16 @@ const PricingCalculatorRoute = PricingCalculatorRouteImport.update({
   path: '/pricing-calculator',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerformanceMonitoringRoute = PerformanceMonitoringRouteImport.update({
+  id: '/performance-monitoring',
+  path: '/performance-monitoring',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PerformanceRoute = PerformanceRouteImport.update({
   id: '/performance',
   path: '/performance',
@@ -200,6 +253,11 @@ const PerformanceRoute = PerformanceRouteImport.update({
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnCallManagementRoute = OnCallManagementRouteImport.update({
+  id: '/on-call-management',
+  path: '/on-call-management',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnCallRoute = OnCallRouteImport.update({
@@ -212,6 +270,11 @@ const MonitoringRoute = MonitoringRouteImport.update({
   path: '/monitoring',
   getParentRoute: () => rootRouteImport,
 } as any)
+const McpServerRoute = McpServerRouteImport.update({
+  id: '/mcp-server',
+  path: '/mcp-server',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LogsRoute = LogsRouteImport.update({
   id: '/logs',
   path: '/logs',
@@ -222,11 +285,22 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LogManagementRoute = LogManagementRouteImport.update({
+  id: '/log-management',
+  path: '/log-management',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IssuesRoute = IssuesRouteImport.update({
   id: '/issues',
   path: '/issues',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InfrastructureMonitoringRoute =
+  InfrastructureMonitoringRouteImport.update({
+    id: '/infrastructure-monitoring',
+    path: '/infrastructure-monitoring',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ImpersonateCallbackRoute = ImpersonateCallbackRouteImport.update({
   id: '/impersonate-callback',
   path: '/impersonate-callback',
@@ -242,6 +316,11 @@ const FeedbackRoute = FeedbackRouteImport.update({
   path: '/feedback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ErrorTrackingRoute = ErrorTrackingRouteImport.update({
+  id: '/error-tracking',
+  path: '/error-tracking',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DemoRoute = DemoRouteImport.update({
   id: '/demo',
   path: '/demo',
@@ -252,6 +331,16 @@ const DashboardsRoute = DashboardsRouteImport.update({
   path: '/dashboards',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CustomDashboardsRoute = CustomDashboardsRouteImport.update({
+  id: '/custom-dashboards',
+  path: '/custom-dashboards',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogRoute = BlogRouteImport.update({
+  id: '/blog',
+  path: '/blog',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApmTracesRoute = ApmTracesRouteImport.update({
   id: '/apm-traces',
   path: '/apm-traces',
@@ -260,6 +349,16 @@ const ApmTracesRoute = ApmTracesRouteImport.update({
 const AnalyticsRoute = AnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AlertingRoute = AlertingRouteImport.update({
+  id: '/alerting',
+  path: '/alerting',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiObservabilityRoute = AiObservabilityRouteImport.update({
+  id: '/ai-observability',
+  path: '/ai-observability',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -326,6 +425,11 @@ const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DashboardsRoute,
+} as any)
+const BlogIndexRoute = BlogIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => BlogRoute,
 } as any)
 const ApmTracesIndexRoute = ApmTracesIndexRouteImport.update({
   id: '/',
@@ -505,6 +609,11 @@ const DashboardsDashboardIdRoute = DashboardsDashboardIdRouteImport.update({
   path: '/$dashboardId',
   getParentRoute: () => DashboardsRoute,
 } as any)
+const BlogSlugRoute = BlogSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => BlogRoute,
+} as any)
 const ApmTracesTraceIdRoute = ApmTracesTraceIdRouteImport.update({
   id: '/$traceId',
   path: '/$traceId',
@@ -671,33 +780,49 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRouteWithChildren
+  '/ai-observability': typeof AiObservabilityRoute
+  '/alerting': typeof AlertingRoute
   '/analytics': typeof AnalyticsRouteWithChildren
   '/apm-traces': typeof ApmTracesRouteWithChildren
+  '/blog': typeof BlogRouteWithChildren
+  '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/demo': typeof DemoRoute
+  '/error-tracking': typeof ErrorTrackingRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
+  '/infrastructure-monitoring': typeof InfrastructureMonitoringRoute
   '/issues': typeof IssuesRouteWithChildren
+  '/log-management': typeof LogManagementRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/mcp-server': typeof McpServerRoute
   '/monitoring': typeof MonitoringRouteWithChildren
   '/on-call': typeof OnCallRouteWithChildren
+  '/on-call-management': typeof OnCallManagementRoute
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
+  '/performance-monitoring': typeof PerformanceMonitoringRoute
+  '/pricing': typeof PricingRoute
   '/pricing-calculator': typeof PricingCalculatorRoute
   '/privacy': typeof PrivacyRoute
   '/profiles': typeof ProfilesRouteWithChildren
+  '/profiling': typeof ProfilingRoute
   '/projects': typeof ProjectsRouteWithChildren
+  '/public-status-pages': typeof PublicStatusPagesRoute
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/security': typeof SecurityRouteWithChildren
+  '/security-sbom': typeof SecuritySbomRoute
+  '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/synthetics': typeof SyntheticsRouteWithChildren
   '/terms': typeof TermsRoute
   '/traces': typeof TracesRoute
+  '/uptime-monitoring': typeof UptimeMonitoringRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/admin/attribution': typeof AdminAttributionRoute
@@ -713,6 +838,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
   '/apm-traces/$traceId': typeof ApmTracesTraceIdRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
@@ -748,6 +874,7 @@ export interface FileRoutesByFullPath {
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
+  '/blog/': typeof BlogIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
@@ -779,23 +906,38 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
+  '/ai-observability': typeof AiObservabilityRoute
+  '/alerting': typeof AlertingRoute
+  '/custom-dashboards': typeof CustomDashboardsRoute
   '/demo': typeof DemoRoute
+  '/error-tracking': typeof ErrorTrackingRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
+  '/infrastructure-monitoring': typeof InfrastructureMonitoringRoute
+  '/log-management': typeof LogManagementRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/mcp-server': typeof McpServerRoute
+  '/on-call-management': typeof OnCallManagementRoute
   '/onboarding': typeof OnboardingRoute
+  '/performance-monitoring': typeof PerformanceMonitoringRoute
+  '/pricing': typeof PricingRoute
   '/pricing-calculator': typeof PricingCalculatorRoute
   '/privacy': typeof PrivacyRoute
+  '/profiling': typeof ProfilingRoute
   '/projects': typeof ProjectsRouteWithChildren
+  '/public-status-pages': typeof PublicStatusPagesRoute
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/security-sbom': typeof SecuritySbomRoute
+  '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/traces': typeof TracesRoute
+  '/uptime-monitoring': typeof UptimeMonitoringRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/admin/attribution': typeof AdminAttributionRoute
@@ -811,6 +953,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
   '/apm-traces/$traceId': typeof ApmTracesTraceIdRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
@@ -844,6 +987,7 @@ export interface FileRoutesByTo {
   '/ai': typeof AiIndexRoute
   '/analytics': typeof AnalyticsIndexRoute
   '/apm-traces': typeof ApmTracesIndexRoute
+  '/blog': typeof BlogIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
@@ -877,33 +1021,49 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRouteWithChildren
+  '/ai-observability': typeof AiObservabilityRoute
+  '/alerting': typeof AlertingRoute
   '/analytics': typeof AnalyticsRouteWithChildren
   '/apm-traces': typeof ApmTracesRouteWithChildren
+  '/blog': typeof BlogRouteWithChildren
+  '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/demo': typeof DemoRoute
+  '/error-tracking': typeof ErrorTrackingRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
+  '/infrastructure-monitoring': typeof InfrastructureMonitoringRoute
   '/issues': typeof IssuesRouteWithChildren
+  '/log-management': typeof LogManagementRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/mcp-server': typeof McpServerRoute
   '/monitoring': typeof MonitoringRouteWithChildren
   '/on-call': typeof OnCallRouteWithChildren
+  '/on-call-management': typeof OnCallManagementRoute
   '/onboarding': typeof OnboardingRoute
   '/performance': typeof PerformanceRouteWithChildren
+  '/performance-monitoring': typeof PerformanceMonitoringRoute
+  '/pricing': typeof PricingRoute
   '/pricing-calculator': typeof PricingCalculatorRoute
   '/privacy': typeof PrivacyRoute
   '/profiles': typeof ProfilesRouteWithChildren
+  '/profiling': typeof ProfilingRoute
   '/projects': typeof ProjectsRouteWithChildren
+  '/public-status-pages': typeof PublicStatusPagesRoute
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/security': typeof SecurityRouteWithChildren
+  '/security-sbom': typeof SecuritySbomRoute
+  '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/synthetics': typeof SyntheticsRouteWithChildren
   '/terms': typeof TermsRoute
   '/traces': typeof TracesRoute
+  '/uptime-monitoring': typeof UptimeMonitoringRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/admin/attribution': typeof AdminAttributionRoute
@@ -919,6 +1079,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
   '/apm-traces/$traceId': typeof ApmTracesTraceIdRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
@@ -954,6 +1115,7 @@ export interface FileRoutesById {
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
+  '/blog/': typeof BlogIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
@@ -988,33 +1150,49 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/admin'
+    | '/ai-observability'
+    | '/alerting'
     | '/analytics'
     | '/apm-traces'
+    | '/blog'
+    | '/custom-dashboards'
     | '/dashboards'
     | '/demo'
+    | '/error-tracking'
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
+    | '/infrastructure-monitoring'
     | '/issues'
+    | '/log-management'
     | '/login'
     | '/logs'
+    | '/mcp-server'
     | '/monitoring'
     | '/on-call'
+    | '/on-call-management'
     | '/onboarding'
     | '/performance'
+    | '/performance-monitoring'
+    | '/pricing'
     | '/pricing-calculator'
     | '/privacy'
     | '/profiles'
+    | '/profiling'
     | '/projects'
+    | '/public-status-pages'
     | '/releases'
     | '/replays'
     | '/reset-password'
     | '/security'
+    | '/security-sbom'
+    | '/session-replay'
     | '/settings'
     | '/signup'
     | '/synthetics'
     | '/terms'
     | '/traces'
+    | '/uptime-monitoring'
     | '/verify-email'
     | '/verify-email-required'
     | '/admin/attribution'
@@ -1030,6 +1208,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/ai/generations'
     | '/apm-traces/$traceId'
+    | '/blog/$slug'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
     | '/feedback/$feedbackId'
@@ -1065,6 +1244,7 @@ export interface FileRouteTypes {
     | '/ai/'
     | '/analytics/'
     | '/apm-traces/'
+    | '/blog/'
     | '/dashboards/'
     | '/issues/'
     | '/monitoring/'
@@ -1096,23 +1276,38 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/accept-invite'
+    | '/ai-observability'
+    | '/alerting'
+    | '/custom-dashboards'
     | '/demo'
+    | '/error-tracking'
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
+    | '/infrastructure-monitoring'
+    | '/log-management'
     | '/login'
     | '/logs'
+    | '/mcp-server'
+    | '/on-call-management'
     | '/onboarding'
+    | '/performance-monitoring'
+    | '/pricing'
     | '/pricing-calculator'
     | '/privacy'
+    | '/profiling'
     | '/projects'
+    | '/public-status-pages'
     | '/releases'
     | '/replays'
     | '/reset-password'
+    | '/security-sbom'
+    | '/session-replay'
     | '/settings'
     | '/signup'
     | '/terms'
     | '/traces'
+    | '/uptime-monitoring'
     | '/verify-email'
     | '/verify-email-required'
     | '/admin/attribution'
@@ -1128,6 +1323,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/ai/generations'
     | '/apm-traces/$traceId'
+    | '/blog/$slug'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
     | '/feedback/$feedbackId'
@@ -1161,6 +1357,7 @@ export interface FileRouteTypes {
     | '/ai'
     | '/analytics'
     | '/apm-traces'
+    | '/blog'
     | '/dashboards'
     | '/issues'
     | '/monitoring'
@@ -1193,33 +1390,49 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/admin'
+    | '/ai-observability'
+    | '/alerting'
     | '/analytics'
     | '/apm-traces'
+    | '/blog'
+    | '/custom-dashboards'
     | '/dashboards'
     | '/demo'
+    | '/error-tracking'
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
+    | '/infrastructure-monitoring'
     | '/issues'
+    | '/log-management'
     | '/login'
     | '/logs'
+    | '/mcp-server'
     | '/monitoring'
     | '/on-call'
+    | '/on-call-management'
     | '/onboarding'
     | '/performance'
+    | '/performance-monitoring'
+    | '/pricing'
     | '/pricing-calculator'
     | '/privacy'
     | '/profiles'
+    | '/profiling'
     | '/projects'
+    | '/public-status-pages'
     | '/releases'
     | '/replays'
     | '/reset-password'
     | '/security'
+    | '/security-sbom'
+    | '/session-replay'
     | '/settings'
     | '/signup'
     | '/synthetics'
     | '/terms'
     | '/traces'
+    | '/uptime-monitoring'
     | '/verify-email'
     | '/verify-email-required'
     | '/admin/attribution'
@@ -1235,6 +1448,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/ai/generations'
     | '/apm-traces/$traceId'
+    | '/blog/$slug'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
     | '/feedback/$feedbackId'
@@ -1270,6 +1484,7 @@ export interface FileRouteTypes {
     | '/ai/'
     | '/analytics/'
     | '/apm-traces/'
+    | '/blog/'
     | '/dashboards/'
     | '/issues/'
     | '/monitoring/'
@@ -1303,33 +1518,49 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcceptInviteRoute: typeof AcceptInviteRoute
   AdminRoute: typeof AdminRouteWithChildren
+  AiObservabilityRoute: typeof AiObservabilityRoute
+  AlertingRoute: typeof AlertingRoute
   AnalyticsRoute: typeof AnalyticsRouteWithChildren
   ApmTracesRoute: typeof ApmTracesRouteWithChildren
+  BlogRoute: typeof BlogRouteWithChildren
+  CustomDashboardsRoute: typeof CustomDashboardsRoute
   DashboardsRoute: typeof DashboardsRouteWithChildren
   DemoRoute: typeof DemoRoute
+  ErrorTrackingRoute: typeof ErrorTrackingRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   ImpersonateCallbackRoute: typeof ImpersonateCallbackRoute
+  InfrastructureMonitoringRoute: typeof InfrastructureMonitoringRoute
   IssuesRoute: typeof IssuesRouteWithChildren
+  LogManagementRoute: typeof LogManagementRoute
   LoginRoute: typeof LoginRoute
   LogsRoute: typeof LogsRoute
+  McpServerRoute: typeof McpServerRoute
   MonitoringRoute: typeof MonitoringRouteWithChildren
   OnCallRoute: typeof OnCallRouteWithChildren
+  OnCallManagementRoute: typeof OnCallManagementRoute
   OnboardingRoute: typeof OnboardingRoute
   PerformanceRoute: typeof PerformanceRouteWithChildren
+  PerformanceMonitoringRoute: typeof PerformanceMonitoringRoute
+  PricingRoute: typeof PricingRoute
   PricingCalculatorRoute: typeof PricingCalculatorRoute
   PrivacyRoute: typeof PrivacyRoute
   ProfilesRoute: typeof ProfilesRouteWithChildren
+  ProfilingRoute: typeof ProfilingRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
+  PublicStatusPagesRoute: typeof PublicStatusPagesRoute
   ReleasesRoute: typeof ReleasesRouteWithChildren
   ReplaysRoute: typeof ReplaysRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   SecurityRoute: typeof SecurityRouteWithChildren
+  SecuritySbomRoute: typeof SecuritySbomRoute
+  SessionReplayRoute: typeof SessionReplayRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
   SyntheticsRoute: typeof SyntheticsRouteWithChildren
   TermsRoute: typeof TermsRoute
   TracesRoute: typeof TracesRoute
+  UptimeMonitoringRoute: typeof UptimeMonitoringRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyEmailRequiredRoute: typeof VerifyEmailRequiredRoute
   AiGenerationsRoute: typeof AiGenerationsRoute
@@ -1361,6 +1592,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/uptime-monitoring': {
+      id: '/uptime-monitoring'
+      path: '/uptime-monitoring'
+      fullPath: '/uptime-monitoring'
+      preLoaderRoute: typeof UptimeMonitoringRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/traces': {
@@ -1398,6 +1636,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/session-replay': {
+      id: '/session-replay'
+      path: '/session-replay'
+      fullPath: '/session-replay'
+      preLoaderRoute: typeof SessionReplayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security-sbom': {
+      id: '/security-sbom'
+      path: '/security-sbom'
+      fullPath: '/security-sbom'
+      preLoaderRoute: typeof SecuritySbomRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/security': {
       id: '/security'
       path: '/security'
@@ -1426,11 +1678,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReleasesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/public-status-pages': {
+      id: '/public-status-pages'
+      path: '/public-status-pages'
+      fullPath: '/public-status-pages'
+      preLoaderRoute: typeof PublicStatusPagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects': {
       id: '/projects'
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profiling': {
+      id: '/profiling'
+      path: '/profiling'
+      fullPath: '/profiling'
+      preLoaderRoute: typeof ProfilingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profiles': {
@@ -1454,6 +1720,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingCalculatorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/performance-monitoring': {
+      id: '/performance-monitoring'
+      path: '/performance-monitoring'
+      fullPath: '/performance-monitoring'
+      preLoaderRoute: typeof PerformanceMonitoringRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/performance': {
       id: '/performance'
       path: '/performance'
@@ -1466,6 +1746,13 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/onboarding'
       preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/on-call-management': {
+      id: '/on-call-management'
+      path: '/on-call-management'
+      fullPath: '/on-call-management'
+      preLoaderRoute: typeof OnCallManagementRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/on-call': {
@@ -1482,6 +1769,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MonitoringRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mcp-server': {
+      id: '/mcp-server'
+      path: '/mcp-server'
+      fullPath: '/mcp-server'
+      preLoaderRoute: typeof McpServerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/logs': {
       id: '/logs'
       path: '/logs'
@@ -1496,11 +1790,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/log-management': {
+      id: '/log-management'
+      path: '/log-management'
+      fullPath: '/log-management'
+      preLoaderRoute: typeof LogManagementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/issues': {
       id: '/issues'
       path: '/issues'
       fullPath: '/issues'
       preLoaderRoute: typeof IssuesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/infrastructure-monitoring': {
+      id: '/infrastructure-monitoring'
+      path: '/infrastructure-monitoring'
+      fullPath: '/infrastructure-monitoring'
+      preLoaderRoute: typeof InfrastructureMonitoringRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/impersonate-callback': {
@@ -1524,6 +1832,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/error-tracking': {
+      id: '/error-tracking'
+      path: '/error-tracking'
+      fullPath: '/error-tracking'
+      preLoaderRoute: typeof ErrorTrackingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/demo': {
       id: '/demo'
       path: '/demo'
@@ -1538,6 +1853,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/custom-dashboards': {
+      id: '/custom-dashboards'
+      path: '/custom-dashboards'
+      fullPath: '/custom-dashboards'
+      preLoaderRoute: typeof CustomDashboardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog': {
+      id: '/blog'
+      path: '/blog'
+      fullPath: '/blog'
+      preLoaderRoute: typeof BlogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/apm-traces': {
       id: '/apm-traces'
       path: '/apm-traces'
@@ -1550,6 +1879,20 @@ declare module '@tanstack/react-router' {
       path: '/analytics'
       fullPath: '/analytics'
       preLoaderRoute: typeof AnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/alerting': {
+      id: '/alerting'
+      path: '/alerting'
+      fullPath: '/alerting'
+      preLoaderRoute: typeof AlertingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-observability': {
+      id: '/ai-observability'
+      path: '/ai-observability'
+      fullPath: '/ai-observability'
+      preLoaderRoute: typeof AiObservabilityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -1642,6 +1985,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboards/'
       preLoaderRoute: typeof DashboardsIndexRouteImport
       parentRoute: typeof DashboardsRoute
+    }
+    '/blog/': {
+      id: '/blog/'
+      path: '/'
+      fullPath: '/blog/'
+      preLoaderRoute: typeof BlogIndexRouteImport
+      parentRoute: typeof BlogRoute
     }
     '/apm-traces/': {
       id: '/apm-traces/'
@@ -1887,6 +2237,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboards/$dashboardId'
       preLoaderRoute: typeof DashboardsDashboardIdRouteImport
       parentRoute: typeof DashboardsRoute
+    }
+    '/blog/$slug': {
+      id: '/blog/$slug'
+      path: '/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof BlogSlugRouteImport
+      parentRoute: typeof BlogRoute
     }
     '/apm-traces/$traceId': {
       id: '/apm-traces/$traceId'
@@ -2170,6 +2527,18 @@ const ApmTracesRouteWithChildren = ApmTracesRoute._addFileChildren(
   ApmTracesRouteChildren,
 )
 
+interface BlogRouteChildren {
+  BlogSlugRoute: typeof BlogSlugRoute
+  BlogIndexRoute: typeof BlogIndexRoute
+}
+
+const BlogRouteChildren: BlogRouteChildren = {
+  BlogSlugRoute: BlogSlugRoute,
+  BlogIndexRoute: BlogIndexRoute,
+}
+
+const BlogRouteWithChildren = BlogRoute._addFileChildren(BlogRouteChildren)
+
 interface DashboardsRouteChildren {
   DashboardsDashboardIdRoute: typeof DashboardsDashboardIdRoute
   DashboardsDatasourcesRoute: typeof DashboardsDatasourcesRoute
@@ -2445,33 +2814,49 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcceptInviteRoute: AcceptInviteRoute,
   AdminRoute: AdminRouteWithChildren,
+  AiObservabilityRoute: AiObservabilityRoute,
+  AlertingRoute: AlertingRoute,
   AnalyticsRoute: AnalyticsRouteWithChildren,
   ApmTracesRoute: ApmTracesRouteWithChildren,
+  BlogRoute: BlogRouteWithChildren,
+  CustomDashboardsRoute: CustomDashboardsRoute,
   DashboardsRoute: DashboardsRouteWithChildren,
   DemoRoute: DemoRoute,
+  ErrorTrackingRoute: ErrorTrackingRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   ImpersonateCallbackRoute: ImpersonateCallbackRoute,
+  InfrastructureMonitoringRoute: InfrastructureMonitoringRoute,
   IssuesRoute: IssuesRouteWithChildren,
+  LogManagementRoute: LogManagementRoute,
   LoginRoute: LoginRoute,
   LogsRoute: LogsRoute,
+  McpServerRoute: McpServerRoute,
   MonitoringRoute: MonitoringRouteWithChildren,
   OnCallRoute: OnCallRouteWithChildren,
+  OnCallManagementRoute: OnCallManagementRoute,
   OnboardingRoute: OnboardingRoute,
   PerformanceRoute: PerformanceRouteWithChildren,
+  PerformanceMonitoringRoute: PerformanceMonitoringRoute,
+  PricingRoute: PricingRoute,
   PricingCalculatorRoute: PricingCalculatorRoute,
   PrivacyRoute: PrivacyRoute,
   ProfilesRoute: ProfilesRouteWithChildren,
+  ProfilingRoute: ProfilingRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
+  PublicStatusPagesRoute: PublicStatusPagesRoute,
   ReleasesRoute: ReleasesRouteWithChildren,
   ReplaysRoute: ReplaysRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   SecurityRoute: SecurityRouteWithChildren,
+  SecuritySbomRoute: SecuritySbomRoute,
+  SessionReplayRoute: SessionReplayRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   SyntheticsRoute: SyntheticsRouteWithChildren,
   TermsRoute: TermsRoute,
   TracesRoute: TracesRoute,
+  UptimeMonitoringRoute: UptimeMonitoringRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyEmailRequiredRoute: VerifyEmailRequiredRoute,
   AiGenerationsRoute: AiGenerationsRoute,

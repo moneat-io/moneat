@@ -209,7 +209,7 @@ class RetentionBackgroundService(
             for ((table, timeColumn) in tables) {
                 val query =
                     """
-                    ALTER TABLE $clickhouseDb.$table
+                    ALTER TABLE `$clickhouseDb`.`$table`
                     DELETE WHERE project_id IN ($projectList)
                         AND $timeColumn < now() - INTERVAL $retentionDays DAY
                     """.trimIndent()
@@ -239,7 +239,7 @@ class RetentionBackgroundService(
             for ((table, timeColumn) in tables) {
                 val query =
                     """
-                    ALTER TABLE $clickhouseDb.$table
+                    ALTER TABLE `$clickhouseDb`.`$table`
                     DELETE WHERE organization_id IN ($orgList)
                         AND $timeColumn < now64(3) - INTERVAL $retentionDays DAY
                     """.trimIndent()
@@ -262,7 +262,7 @@ class RetentionBackgroundService(
             val projectList = chunk.joinToString(",")
             val query =
                 """
-                ALTER TABLE $clickhouseDb.logs
+                ALTER TABLE `$clickhouseDb`.logs
                 DELETE WHERE project_id IN ($projectList)
                     AND timestamp < now() - INTERVAL $logRetentionDays DAY
                 """.trimIndent()

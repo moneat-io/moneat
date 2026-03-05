@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+echo "⚙️  Running detekt --auto-correct..."
+cd "$ROOT/backend"
+./gradlew detekt --auto-correct --daemon -q

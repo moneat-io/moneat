@@ -75,7 +75,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
     val where = conditions.joinToString(" AND ")
 
     val totalCount = executeCount(
-        "SELECT count() as cnt FROM $db.security_events WHERE $where FORMAT JSONEachRow"
+        "SELECT count() as cnt FROM `$db`.security_events WHERE $where FORMAT JSONEachRow"
     )
 
     val rows = executeRows(
@@ -83,7 +83,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
             severity, event_type, process_name, file_path,
             host, env, tags,
             formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
-        FROM $db.security_events WHERE $where
+        FROM `$db`.security_events WHERE $where
         ORDER BY timestamp DESC LIMIT $limit OFFSET $offset
         FORMAT JSONEachRow"""
     ) { obj ->
@@ -126,7 +126,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
             severity, agent_rule_version, event_type,
             process_name, file_path, host, env, tags,
             formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
-        FROM $db.security_events WHERE $where LIMIT 1
+        FROM `$db`.security_events WHERE $where LIMIT 1
         FORMAT JSONEachRow"""
     ) { obj ->
         buildJsonObject {
@@ -171,14 +171,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
     val where = conditions.joinToString(" AND ")
 
     val totalCount = executeCount(
-        "SELECT count() as cnt FROM $db.compliance_findings WHERE $where FORMAT JSONEachRow"
+        "SELECT count() as cnt FROM `$db`.compliance_findings WHERE $where FORMAT JSONEachRow"
     )
 
     val rows = executeRows(
         """SELECT finding_id, framework, rule_id, rule_name,
             status, resource_type, resource_id, resource_name, tags,
             formatDateTime(evaluated_at, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
-        FROM $db.compliance_findings WHERE $where
+        FROM `$db`.compliance_findings WHERE $where
         ORDER BY evaluated_at DESC LIMIT $limit OFFSET $offset
         FORMAT JSONEachRow"""
     ) { obj ->
@@ -212,7 +212,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummar
 
     val rows = executeRows(
         """SELECT framework, status, count() as cnt
-        FROM $db.compliance_findings WHERE $where
+        FROM `$db`.compliance_findings WHERE $where
         GROUP BY framework, status
         ORDER BY framework, status
         FORMAT JSONEachRow"""

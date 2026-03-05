@@ -243,7 +243,7 @@ object DatadogInfraService {
         }
 
         val insert = """
-            INSERT INTO $db.processes (
+            INSERT INTO `$db`.processes (
                 organization_id, host, pid, name, command,
                 user, cpu_percent, mem_rss, mem_vms, state,
                 thread_count, open_fd_count, tags, timestamp
@@ -279,7 +279,7 @@ object DatadogInfraService {
         }
 
         val insert = """
-            INSERT INTO $db.containers (
+            INSERT INTO `$db`.containers (
                 organization_id, host, container_id, name,
                 image, state, cpu_percent, mem_usage, mem_limit,
                 net_rx_bytes, net_tx_bytes, tags, timestamp
@@ -323,7 +323,7 @@ object DatadogInfraService {
         }
 
         val insert = """
-            INSERT INTO $db.network_connections (
+            INSERT INTO `$db`.network_connections (
                 organization_id, host, pid, local_addr,
                 local_port, remote_addr, remote_port,
                 protocol, family, direction,

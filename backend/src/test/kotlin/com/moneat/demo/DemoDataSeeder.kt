@@ -312,7 +312,7 @@ object DemoDataSeeder {
         val db = ClickHouseClient.getDatabase()
         val issueCountResult =
             ClickHouseClient.executeWithFormat(
-                "SELECT count() as cnt FROM $db.issues",
+                "SELECT count() as cnt FROM `$db`.issues",
                 "TabSeparated"
             )
         val issueCount = issueCountResult.trim().toLongOrNull() ?: 0
@@ -329,7 +329,7 @@ object DemoDataSeeder {
         val feedbackCountResult =
             kotlinx.coroutines.runBlocking {
                 ClickHouseClient.executeWithFormat(
-                    "SELECT count() FROM $db.user_feedback WHERE project_id IN (${projects.values.map { it.first }.joinToString(
+                    "SELECT count() FROM `$db`.user_feedback WHERE project_id IN (${projects.values.map { it.first }.joinToString(
                         ","
                     )})",
                     "TabSeparated"
@@ -340,7 +340,7 @@ object DemoDataSeeder {
         val replayCountResult =
             kotlinx.coroutines.runBlocking {
                 ClickHouseClient.executeWithFormat(
-                    "SELECT count() FROM $db.replay_events WHERE project_id IN (${projects.values.map { it.first }.joinToString(
+                    "SELECT count() FROM `$db`.replay_events WHERE project_id IN (${projects.values.map { it.first }.joinToString(
                         ","
                     )})",
                     "TabSeparated"
@@ -366,7 +366,7 @@ object DemoDataSeeder {
         val transactionCountResult =
             kotlinx.coroutines.runBlocking {
                 ClickHouseClient.executeWithFormat(
-                    "SELECT count() FROM $db.events WHERE event_type = 'transaction' AND project_id IN (${projects.values.map { it.first }.joinToString(
+                    "SELECT count() FROM `$db`.events WHERE event_type = 'transaction' AND project_id IN (${projects.values.map { it.first }.joinToString(
                         ","
                     )})",
                     "TabSeparated"
@@ -1315,7 +1315,7 @@ object DemoDataSeeder {
         // Insert issue
         val issueQuery =
             """
-            INSERT INTO $db.issues (
+            INSERT INTO `$db`.issues (
                 issue_id, project_id, fingerprint, title, culprit, level,
                 first_seen, last_seen, event_count, user_count, status
             ) VALUES (
@@ -1440,7 +1440,7 @@ object DemoDataSeeder {
 
             val eventQuery =
                 """
-                INSERT INTO $db.events (
+                INSERT INTO `$db`.events (
                     event_id, project_id, issue_id, timestamp, received_at, event_type,
                     platform, level, message, exception_type, exception_value,
                     stack_trace, environment, release, user_id, user_email, user_username, user_ip_address,
@@ -1648,7 +1648,7 @@ object DemoDataSeeder {
 
             val logQuery =
                 """
-                INSERT INTO $db.logs (
+                INSERT INTO `$db`.logs (
                     log_id, organization_id, timestamp, received_at, level, message, body,
                     service, environment, host, source, trace_id, span_id, tags,
                     container_name, container_id, container_image, resource_attributes
@@ -1779,7 +1779,7 @@ object DemoDataSeeder {
 
                 val eventQuery =
                     """
-                    INSERT INTO $db.events (
+                    INSERT INTO `$db`.events (
                         event_id, project_id, timestamp, received_at, event_type,
                         level, platform, environment, release, 
                         transaction_name, transaction_op, duration_ms,
@@ -1951,7 +1951,7 @@ object DemoDataSeeder {
 
                 val replayQuery =
                     """
-                    INSERT INTO $db.replay_events (
+                    INSERT INTO `$db`.replay_events (
                         replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
                         urls, error_ids, trace_ids, environment, release, platform,
                         user_id, user_email, user_username, user_ip_address,
@@ -2048,7 +2048,7 @@ object DemoDataSeeder {
         val eventIdsQuery =
             """
             SELECT toString(event_id) as event_id
-            FROM $db.events
+            FROM `$db`.events
             WHERE project_id = $androidProjectId
                 AND event_type = 'error'
             LIMIT 8
@@ -2067,7 +2067,7 @@ object DemoDataSeeder {
         val replayIdsQuery =
             """
             SELECT DISTINCT toString(replay_id) as replay_id
-            FROM $db.replay_events
+            FROM `$db`.replay_events
             WHERE project_id = $androidProjectId
             LIMIT 5
             FORMAT TabSeparated
@@ -2129,7 +2129,7 @@ object DemoDataSeeder {
 
             val feedbackQuery =
                 """
-                INSERT INTO $db.user_feedback (
+                INSERT INTO `$db`.user_feedback (
                     feedback_id, project_id, timestamp, received_at,
                     message, contact_email, name, url,
                     associated_event_id, replay_id, environment, release,
@@ -2228,7 +2228,7 @@ object DemoDataSeeder {
 
                 val heartbeatQuery =
                     """
-                    INSERT INTO $db.uptime_heartbeats (
+                    INSERT INTO `$db`.uptime_heartbeats (
                         monitor_id, timestamp, status, response_time_ms, status_code, message, ping_ms
                     ) VALUES (
                         '$monitorId',
@@ -2331,7 +2331,7 @@ object DemoDataSeeder {
 
         // Delete existing container metrics for this organization to ensure fresh data
         try {
-            val deleteQuery = "ALTER TABLE $db.containers DELETE WHERE organization_id = $organizationId"
+            val deleteQuery = "ALTER TABLE `$db`.containers DELETE WHERE organization_id = $organizationId"
             ClickHouseClient.execute(deleteQuery)
             println("🗑️  Deleted old container metrics for fresh data")
         } catch (e: Exception) {
@@ -2430,7 +2430,7 @@ object DemoDataSeeder {
                     val tagsMap = "map('system_id','$systemId')"
                     val containerQuery =
                         """
-                        INSERT INTO $db.containers (
+                        INSERT INTO `$db`.containers (
                             organization_id, host, container_id, name, image, state,
                             cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes, tags, timestamp
                         ) VALUES (
@@ -2484,7 +2484,7 @@ object DemoDataSeeder {
 
         // Delete existing system metrics for this organization to ensure fresh data
         try {
-            val deleteQuery = "ALTER TABLE $db.metrics DELETE WHERE organization_id = $organizationId"
+            val deleteQuery = "ALTER TABLE `$db`.metrics DELETE WHERE organization_id = $organizationId"
             ClickHouseClient.execute(deleteQuery)
             println("🗑️  Deleted old system metrics for fresh data")
         } catch (e: Exception) {
@@ -2596,7 +2596,7 @@ object DemoDataSeeder {
                     }
                 val systemMetricsQuery =
                     """
-                    INSERT INTO $db.metrics (
+                    INSERT INTO `$db`.metrics (
                         organization_id, metric_name, metric_type, timestamp, value, host, tags, unit, source_type_name
                     ) VALUES $values
                     """.trimIndent()
@@ -3235,7 +3235,7 @@ object DemoDataSeeder {
             val cnt =
                 runCatching {
                     ClickHouseClient.executeWithFormat(
-                        "SELECT $agg FROM $db.$table WHERE $orgCol = $orgId",
+                        "SELECT $agg FROM `$db`.`$table` WHERE $orgCol = $orgId",
                         "TabSeparated",
                     ).trim().toLongOrNull() ?: 0L
                 }.getOrElse { 0L }
@@ -3377,7 +3377,7 @@ object DemoDataSeeder {
         // Batch insert spans
         val spanBatch =
             """
-            INSERT INTO $db.apm_spans (
+            INSERT INTO `$db`.apm_spans (
                 span_id, trace_id, parent_id, organization_id, name, service,
                 resource, type, start, duration, error, meta, metrics, host, env, version
             ) VALUES ${spanRows.joinToString(",\n")}
@@ -3408,7 +3408,7 @@ object DemoDataSeeder {
 
         val profileBatch =
             """
-            INSERT INTO $db.profiles (
+            INSERT INTO `$db`.profiles (
                 profile_id, organization_id, host, service, env, version,
                 runtime, language, profile_type, start_time, end_time, duration_ns,
                 storage_key, tags, size_bytes
@@ -3505,7 +3505,7 @@ object DemoDataSeeder {
 
         val eventBatch =
             """
-            INSERT INTO $db.infra_events (
+            INSERT INTO `$db`.infra_events (
                 event_id, organization_id, title, text, timestamp, priority, host,
                 tags, alert_type, aggregation_key, source_type_name, device_name
             ) VALUES ${eventRows.joinToString(",\n")}
@@ -3540,7 +3540,7 @@ object DemoDataSeeder {
 
         val checkBatch =
             """
-            INSERT INTO $db.service_checks (
+            INSERT INTO `$db`.service_checks (
                 check_id, organization_id, check_name, host, status,
                 timestamp, tags, message
             ) VALUES ${checkRows.joinToString(",\n")}
@@ -3595,7 +3595,7 @@ object DemoDataSeeder {
 
         val processBatch =
             """
-            INSERT INTO $db.processes (
+            INSERT INTO `$db`.processes (
                 process_id, organization_id, host, pid, name, command, user,
                 cpu_percent, mem_rss, mem_vms, state, thread_count, open_fd_count,
                 tags, timestamp
@@ -3648,7 +3648,7 @@ object DemoDataSeeder {
 
         val containerBatch =
             """
-            INSERT INTO $db.containers (
+            INSERT INTO `$db`.containers (
                 container_id_hash, organization_id, host, container_id, name, image, state,
                 cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes,
                 tags, timestamp
@@ -3687,7 +3687,7 @@ object DemoDataSeeder {
 
         val connBatch =
             """
-            INSERT INTO $db.network_connections (
+            INSERT INTO `$db`.network_connections (
                 connection_id, organization_id, host, pid, local_addr, local_port,
                 remote_addr, remote_port, protocol, family, direction,
                 bytes_sent, bytes_recv, tags, timestamp

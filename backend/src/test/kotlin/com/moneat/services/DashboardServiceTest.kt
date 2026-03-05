@@ -58,7 +58,7 @@ class DashboardServiceTest {
             MockHttpServer { exchange ->
                 val query = exchange.requestBodyText()
                 queries += query
-                if (query.contains("FROM test.events e") && query.contains("GROUP BY issue_id")) {
+                if (query.contains("FROM `test`.events e") && query.contains("GROUP BY issue_id")) {
                     exchange.respond(
                         200,
                         """
@@ -91,11 +91,11 @@ class DashboardServiceTest {
             MockHttpServer { exchange ->
                 val query = exchange.requestBodyText()
                 when {
-                    query.contains("FROM test.issues") && query.contains("WHERE issue_id = 'issue-1'") -> {
+                    query.contains("FROM `test`.issues") && query.contains("WHERE issue_id = 'issue-1'") -> {
                         exchange.respond(200, """{"project_id":-1}""", contentType = "text/plain")
                     }
 
-                    query.contains("FROM test.events e") && query.contains("fingerprint") -> {
+                    query.contains("FROM `test`.events e") && query.contains("fingerprint") -> {
                         exchange.respond(
                             200,
                             """
@@ -105,7 +105,7 @@ class DashboardServiceTest {
                         )
                     }
 
-                    query.contains("FROM test.events") && query.contains("ORDER BY timestamp DESC") -> {
+                    query.contains("FROM `test`.events") && query.contains("ORDER BY timestamp DESC") -> {
                         exchange.respond(
                             200,
                             """
@@ -142,7 +142,7 @@ class DashboardServiceTest {
         runBlocking {
             MockHttpServer { exchange ->
                 val query = exchange.requestBodyText()
-                if (query.contains("FROM test.spans") && query.contains("trace_id = 'trace-1'")) {
+                if (query.contains("FROM `test`.spans") && query.contains("trace_id = 'trace-1'")) {
                     exchange.respond(
                         200,
                         """
