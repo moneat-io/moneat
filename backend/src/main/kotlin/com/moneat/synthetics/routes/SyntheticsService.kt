@@ -59,6 +59,7 @@ class SyntheticsService {
         request: CreateSyntheticTestRequest
     ): SyntheticTestResponse {
         checkQuota(organizationId)
+        validateRetryParams(request.retryCount, request.retryIntervalMs)
 
         val testId = UUID.randomUUID()
         val now = Clock.System.now()
@@ -129,6 +130,17 @@ class SyntheticsService {
         organizationId: Int,
         request: UpdateSyntheticTestRequest
     ): SyntheticTestResponse? {
+        request.retryCount?.let { rc ->
+            request.retryIntervalMs?.let { ri ->
+                validateRetryParams(rc, ri)
+            } ?: validateRetryParams(rc, RETRY_INTERVAL_MS_DEFAULT)
+        }
+        request.retryIntervalMs?.let { ri ->
+            validateRetryParams(
+                request.retryCount ?: RETRY_COUNT_DEFAULT,
+                ri
+            )
+        }
         val updated = transaction {
             SyntheticTests
                 .selectAll()
@@ -257,7 +269,8 @@ class SyntheticsService {
         test: SyntheticTestData,
         executor: SyntheticsCheckExecutor = SyntheticsCheckExecutor()
     ) {
-        var result = executeWithRetries(test, executor)
+        val resolvedTest = resolveGlobalVariables(test)
+        val result = executeWithRetries(resolvedTest, executor)
 
         try {
             recordResult(test, result)
@@ -439,6 +452,36 @@ class SyntheticsService {
             .replace("'", "\\'")
     }
 
+    private fun resolveGlobalVariables(
+        test: SyntheticTestData
+    ): SyntheticTestData {
+        val vars = try {
+            getVariablesMap(test.organizationId)
+        } catch (e: Exception) {
+            logger.warn(e) {
+                "Failed to load global variables for org ${test.organizationId}"
+            }
+            return test
+        }
+        if (vars.isEmpty()) return test
+
+        fun sub(input: String?): String? {
+            if (input == null) return null
+            var result = input
+            vars.forEach { (name, value) ->
+                result = result!!.replace("{{global.$name}}", value)
+            }
+            return result
+        }
+
+        return test.copy(
+            url = sub(test.url),
+            headers = sub(test.headers),
+            body = sub(test.body),
+            steps = sub(test.steps)
+        )
+    }
+
     private fun checkQuota(organizationId: Int) {
         if (EnvConfig.SelfHost.enabled) return
 
@@ -476,6 +519,15 @@ class SyntheticsService {
 
         if (currentCount >= limit) {
             throw IllegalStateException("Synthetic test limit reached ($limit for $tier tier)")
+        }
+    }
+
+    private fun validateRetryParams(retryCount: Int, retryIntervalMs: Int) {
+        require(retryCount >= 0) {
+            "retryCount must be non-negative, got $retryCount"
+        }
+        require(retryIntervalMs >= 0) {
+            "retryIntervalMs must be non-negative, got $retryIntervalMs"
         }
     }
 
@@ -619,6 +671,13 @@ class SyntheticsService {
         val response = runCatching {
             ClickHouseClient.execute(query)
         }.getOrNull() ?: return null
+
+        if (response.status.value !in 200..299) {
+            logger.warn {
+                "ClickHouse summary query failed: ${response.status}"
+            }
+            return null
+        }
 
         val body = response.bodyAsText().trim()
         val parts = body.split('\t')

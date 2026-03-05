@@ -148,6 +148,10 @@ function SyntheticResults() {
       toast({title: 'Test updated'})
       queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
     },
+    onError: (error: Error) => {
+      toast({title: 'Failed to update test', description: error.message, variant: 'destructive'})
+      queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
+    },
   })
 
   const tests: SyntheticTestResponse[] = testsData ?? []
@@ -187,31 +191,67 @@ function SyntheticResults() {
   }
 
   const handleBulkDelete = async () => {
+    const total = selectedTests.size
+    let succeeded = 0
+    const failed: string[] = []
     for (const testId of selectedTests) {
-      await api.deleteSyntheticTest(testId)
+      try {
+        await api.deleteSyntheticTest(testId)
+        succeeded++
+      } catch {
+        failed.push(testId)
+      }
     }
     setSelectedTests(new Set())
     setBulkDeleteConfirm(false)
     queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
-    toast({title: `${selectedTests.size} tests deleted`})
+    if (failed.length > 0) {
+      toast({title: `Deleted ${succeeded}/${total} tests`, description: `${failed.length} failed`, variant: 'destructive'})
+    } else {
+      toast({title: `${succeeded} tests deleted`})
+    }
   }
 
   const handleBulkPause = async () => {
+    const total = selectedTests.size
+    let succeeded = 0
+    const failed: string[] = []
     for (const testId of selectedTests) {
-      await api.updateSyntheticTest(testId, {active: false})
+      try {
+        await api.updateSyntheticTest(testId, {active: false})
+        succeeded++
+      } catch {
+        failed.push(testId)
+      }
     }
     setSelectedTests(new Set())
     queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
-    toast({title: `${selectedTests.size} tests paused`})
+    if (failed.length > 0) {
+      toast({title: `Paused ${succeeded}/${total} tests`, description: `${failed.length} failed`, variant: 'destructive'})
+    } else {
+      toast({title: `${succeeded} tests paused`})
+    }
   }
 
   const handleBulkResume = async () => {
+    const total = selectedTests.size
+    let succeeded = 0
+    const failed: string[] = []
     for (const testId of selectedTests) {
-      await api.updateSyntheticTest(testId, {active: true})
+      try {
+        await api.updateSyntheticTest(testId, {active: true})
+        succeeded++
+      } catch {
+        failed.push(testId)
+      }
     }
     setSelectedTests(new Set())
     queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
-    toast({title: `${selectedTests.size} tests resumed`})
+    if (failed.length > 0) {
+      toast({title: `Resumed ${succeeded}/${total} tests`, description: `${failed.length} failed`, variant: 'destructive'})
+    } else {
+      toast({title: `${succeeded} tests resumed`})
+    }
   }
 
   if (testsLoading || resultsLoading) {
@@ -279,6 +319,7 @@ function SyntheticResults() {
                 <SelectItem value="ssl">SSL</SelectItem>
                 <SelectItem value="dns">DNS</SelectItem>
                 <SelectItem value="tcp">TCP</SelectItem>
+                <SelectItem value="udp">UDP</SelectItem>
               </SelectContent>
             </Select>
             {allTags.length > 0 && (

@@ -124,6 +124,7 @@ const STEP_DESCRIPTIONS: Record<DialogStep, string> = {
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 const BODY_METHODS = ['POST', 'PUT', 'PATCH']
+const RETRY_INTERVAL_MS_DEFAULT = 300
 
 function toCreateSyntheticTestPayload(form: FormState): CreateSyntheticTestPayload {
   const headers = form.headers
@@ -170,10 +171,14 @@ function toCreateSyntheticTestPayload(form: FormState): CreateSyntheticTestPaylo
   const config = ['ssl', 'dns', 'tcp'].includes(form.type)
     ? {
         hostname: form.hostname || null,
-        port: form.port ? parseInt(form.port) : null,
+        port: form.port ? (Number.isFinite(parseInt(form.port)) ? parseInt(form.port) : null) : null,
         protocol: form.type === 'tcp' ? 'tcp' : null,
       }
     : null
+
+  const retryIntervalMs = Number.isFinite(form.retryIntervalMs) && form.retryIntervalMs >= 0
+    ? form.retryIntervalMs
+    : RETRY_INTERVAL_MS_DEFAULT
 
   return {
     name: form.name.trim(),
@@ -190,8 +195,8 @@ function toCreateSyntheticTestPayload(form: FormState): CreateSyntheticTestPaylo
     assertions,
     steps,
     tags: form.tags,
-    retryCount: form.retryCount,
-    retryIntervalMs: form.retryIntervalMs,
+    retryCount: Math.max(0, form.retryCount),
+    retryIntervalMs,
     alertOnFailure: form.alertOnFailure,
     config,
   }

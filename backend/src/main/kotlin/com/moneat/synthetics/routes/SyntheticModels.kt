@@ -23,6 +23,10 @@ import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.datetime.timestamp
 import java.util.UUID
 
+const val RETRY_COUNT_DEFAULT = 0
+const val RETRY_INTERVAL_MS_DEFAULT = 300
+const val ALERT_ON_FAILURE_DEFAULT = false
+
 // Exposed Table Definition
 object SyntheticTests : Table("synthetic_tests") {
     val id = javaUUID("id")
@@ -45,9 +49,9 @@ object SyntheticTests : Table("synthetic_tests") {
     val lastRunAt = timestamp("last_run_at").nullable()
     val lastStatus = varchar("last_status", 20).nullable()
     val tags = text("tags").default("[]")
-    val retryCount = integer("retry_count").default(0)
-    val retryIntervalMs = integer("retry_interval_ms").default(300)
-    val alertOnFailure = bool("alert_on_failure").default(false)
+    val retryCount = integer("retry_count").default(RETRY_COUNT_DEFAULT)
+    val retryIntervalMs = integer("retry_interval_ms").default(RETRY_INTERVAL_MS_DEFAULT)
+    val alertOnFailure = bool("alert_on_failure").default(ALERT_ON_FAILURE_DEFAULT)
     val alertChannels = text("alert_channels").default("[]")
     val config = text("config").nullable()
     val previousStatus = varchar("previous_status", 20).nullable()
@@ -119,9 +123,9 @@ data class CreateSyntheticTestRequest(
     val assertions: List<SyntheticAssertion> = emptyList(),
     val steps: List<SyntheticStep> = emptyList(),
     val tags: List<String> = emptyList(),
-    val retryCount: Int = 0,
-    val retryIntervalMs: Int = 300,
-    val alertOnFailure: Boolean = false,
+    val retryCount: Int = RETRY_COUNT_DEFAULT,
+    val retryIntervalMs: Int = RETRY_INTERVAL_MS_DEFAULT,
+    val alertOnFailure: Boolean = ALERT_ON_FAILURE_DEFAULT,
     val alertChannels: List<String> = emptyList(),
     val config: SyntheticTestConfig? = null
 )
@@ -170,9 +174,9 @@ data class SyntheticTestResponse(
     val lastRunAt: Long? = null,
     val lastStatus: String? = null,
     val tags: List<String> = emptyList(),
-    val retryCount: Int = 0,
-    val retryIntervalMs: Int = 300,
-    val alertOnFailure: Boolean = false,
+    val retryCount: Int = RETRY_COUNT_DEFAULT,
+    val retryIntervalMs: Int = RETRY_INTERVAL_MS_DEFAULT,
+    val alertOnFailure: Boolean = ALERT_ON_FAILURE_DEFAULT,
     val alertChannels: List<String> = emptyList(),
     val config: SyntheticTestConfig? = null,
     val createdAt: Long,
@@ -200,9 +204,9 @@ data class SyntheticTestData(
     val lastRunAt: kotlin.time.Instant? = null,
     val lastStatus: String? = null,
     val tags: List<String> = emptyList(),
-    val retryCount: Int = 0,
-    val retryIntervalMs: Int = 300,
-    val alertOnFailure: Boolean = false,
+    val retryCount: Int = RETRY_COUNT_DEFAULT,
+    val retryIntervalMs: Int = RETRY_INTERVAL_MS_DEFAULT,
+    val alertOnFailure: Boolean = ALERT_ON_FAILURE_DEFAULT,
     val alertChannels: List<String> = emptyList(),
     val config: String? = null,
     val previousStatus: String? = null,

@@ -92,6 +92,9 @@ function SyntheticTestDetail() {
       queryClient.invalidateQueries({queryKey: ['synthetic-test-results', testId]})
       queryClient.invalidateQueries({queryKey: ['synthetic-test-summary', testId]})
     },
+    onError: (error: Error) => {
+      toast({title: 'Failed to run test', description: error.message, variant: 'destructive'})
+    },
   })
 
   const results = resultsData?.results ?? []
@@ -278,7 +281,9 @@ function SyntheticTestDetail() {
             {(test.retryCount ?? 0) > 0 && (
               <div>
                 <span className="text-muted-foreground">Retries</span>
-                <p className="mt-0.5">{test.retryCount}x every {test.retryIntervalMs}ms</p>
+                <p className="mt-0.5">
+                  {test.retryCount}x{test.retryIntervalMs != null ? ` every ${test.retryIntervalMs}ms` : ''}
+                </p>
               </div>
             )}
             {test.alertOnFailure && (

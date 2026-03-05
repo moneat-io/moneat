@@ -20,3 +20,9 @@ CREATE TABLE IF NOT EXISTS synthetic_variables (
     UNIQUE(organization_id, name)
 );
 CREATE INDEX IF NOT EXISTS idx_synthetic_variables_org ON synthetic_variables(organization_id);
+
+-- Ensure retry values are non-negative
+UPDATE synthetic_tests SET retry_count = 0 WHERE retry_count < 0;
+UPDATE synthetic_tests SET retry_interval_ms = 300 WHERE retry_interval_ms < 0;
+ALTER TABLE synthetic_tests ADD CONSTRAINT synthetic_tests_retry_count_nonneg CHECK (retry_count >= 0);
+ALTER TABLE synthetic_tests ADD CONSTRAINT synthetic_tests_retry_interval_nonneg CHECK (retry_interval_ms >= 0);

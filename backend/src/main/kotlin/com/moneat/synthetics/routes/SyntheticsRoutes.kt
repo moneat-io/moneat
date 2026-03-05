@@ -255,10 +255,13 @@ fun Route.syntheticsRoutes() {
                     )
                     return@get
                 }
-                val testId = call.parameters["id"] ?: run {
+                val testId = try {
+                    UUID.fromString(call.parameters["id"])
+                        .toString()
+                } catch (_: Exception) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Missing ID")
+                        mapOf("error" to "Invalid ID")
                     )
                     return@get
                 }
@@ -318,10 +321,13 @@ fun Route.syntheticsRoutes() {
                     )
                     return@get
                 }
-                val testId = call.parameters["id"] ?: run {
+                val testId = try {
+                    UUID.fromString(call.parameters["id"])
+                        .toString()
+                } catch (_: Exception) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Missing ID")
+                        mapOf("error" to "Invalid ID")
                     )
                     return@get
                 }

@@ -26,11 +26,17 @@ import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -41,6 +47,7 @@ private val logger = KotlinLogging.logger {}
 private const val SSL_DEFAULT_PORT = 443
 private const val DNS_TIMEOUT_MS = 5000L
 private const val TCP_TIMEOUT_MS = 10000
+private const val UDP_TIMEOUT_MS = 5000
 private const val DAYS_PER_MS = 86_400_000L
 
 data class SyntheticCheckResult(
@@ -57,7 +64,8 @@ open class SyntheticsCheckExecutor {
             "multistep" -> executeMultistepTest(test)
             "ssl" -> executeSslTest(test)
             "dns" -> executeDnsTest(test)
-            "tcp", "udp" -> executeTcpTest(test)
+            "tcp" -> executeTcpTest(test)
+            "udp" -> executeUdpTest(test)
             else -> executeApiTest(test)
         }
     }
@@ -232,7 +240,7 @@ open class SyntheticsCheckExecutor {
         }
     }
 
-    private fun executeDnsTest(
+    private suspend fun executeDnsTest(
         test: SyntheticTestData
     ): SyntheticCheckResult {
         val hostname = test.url
@@ -247,7 +255,11 @@ open class SyntheticsCheckExecutor {
         val startTime = System.currentTimeMillis()
         return try {
             val dnsStart = System.currentTimeMillis()
-            val addresses = InetAddress.getAllByName(hostname)
+            val addresses = withTimeout(DNS_TIMEOUT_MS) {
+                withContext(Dispatchers.IO) {
+                    InetAddress.getAllByName(hostname)
+                }
+            }
             val dnsMs = System.currentTimeMillis() - dnsStart
             val durationMs = System.currentTimeMillis() - startTime
 
@@ -280,6 +292,12 @@ open class SyntheticsCheckExecutor {
                     timings = timings
                 )
             }
+        } catch (_: TimeoutCancellationException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "DNS resolution timed out after ${DNS_TIMEOUT_MS}ms"
+            )
         } catch (e: Exception) {
             SyntheticCheckResult(
                 status = "failed",
@@ -352,6 +370,92 @@ open class SyntheticsCheckExecutor {
                 status = "failed",
                 durationMs = System.currentTimeMillis() - startTime,
                 errorMessage = "TCP connect failed: ${e.message}"
+            )
+        }
+    }
+
+    private fun executeUdpTest(
+        test: SyntheticTestData
+    ): SyntheticCheckResult {
+        val config: SyntheticTestConfig? = test.config?.let {
+            try {
+                Json.decodeFromString(it)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val hostname = config?.hostname
+            ?: test.url?.removePrefix("https://")
+                ?.removePrefix("http://")?.split("/")?.firstOrNull()
+            ?: return SyntheticCheckResult(
+                status = "failed", durationMs = 0,
+                errorMessage = "No hostname configured"
+            )
+        val port = config?.port ?: return SyntheticCheckResult(
+            status = "failed", durationMs = 0,
+            errorMessage = "No port configured"
+        )
+
+        val startTime = System.currentTimeMillis()
+        return try {
+            val address = InetAddress.getByName(hostname)
+            val sendData = ByteArray(1) { 0 }
+            val packet = DatagramPacket(
+                sendData,
+                sendData.size,
+                address,
+                port
+            )
+            val socket = DatagramSocket()
+            socket.soTimeout = UDP_TIMEOUT_MS
+
+            val connectStart = System.currentTimeMillis()
+            socket.send(packet)
+
+            val recvBuf = ByteArray(1)
+            val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
+            val portOpen = try {
+                socket.receive(recvPacket)
+                true
+            } catch (_: java.net.SocketTimeoutException) {
+                // No response is normal for many UDP services
+                true
+            } catch (_: java.net.PortUnreachableException) {
+                false
+            }
+            val connectMs = System.currentTimeMillis() - connectStart
+            socket.close()
+
+            val durationMs = System.currentTimeMillis() - startTime
+            val timings = mapOf(
+                "udp" to connectMs.toDouble(),
+                "total" to durationMs.toDouble()
+            )
+
+            val assertionList = parseAssertions(test.assertions)
+            val allPassed = assertionList.all { assertion ->
+                evaluateTcpAssertion(assertion, connectMs, portOpen)
+            }
+
+            if (allPassed) {
+                SyntheticCheckResult(
+                    status = "passed",
+                    durationMs = durationMs,
+                    timings = timings
+                )
+            } else {
+                SyntheticCheckResult(
+                    status = "failed",
+                    durationMs = durationMs,
+                    errorMessage = "UDP assertion failed",
+                    timings = timings
+                )
+            }
+        } catch (e: Exception) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "UDP check failed: ${e.message}"
             )
         }
     }
@@ -594,7 +698,10 @@ open class SyntheticsCheckExecutor {
                     )
                 }
             }
-            else -> true
+            else -> {
+                logger.warn { "Unknown SSL assertion type: '${assertion.type}'" }
+                false
+            }
         }
     }
 
@@ -620,7 +727,10 @@ open class SyntheticsCheckExecutor {
                     assertion.operator
                 )
             }
-            else -> true
+            else -> {
+                logger.warn { "Unknown DNS assertion type: '${assertion.type}'" }
+                false
+            }
         }
     }
 
@@ -644,7 +754,10 @@ open class SyntheticsCheckExecutor {
                     ?: true
                 portOpen == expected
             }
-            else -> true
+            else -> {
+                logger.warn { "Unknown TCP assertion type: '${assertion.type}'" }
+                false
+            }
         }
     }
 
