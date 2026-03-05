@@ -32,6 +32,7 @@ import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
 import com.moneat.shared.models.HostAlerts
 import com.moneat.shared.models.Hosts
+import com.moneat.shared.services.TaskLock
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.server.config.ApplicationConfig
@@ -102,10 +103,12 @@ class MonitorAlertService {
         evaluationJob =
             scope.launch {
                 while (isActive) {
-                    try {
+                    TaskLock.tryWithLock(
+                        "monitor-alert-evaluation",
+                        lockAtMostFor = 5.minutes,
+                        lockAtLeastFor = (EVALUATION_INTERVAL_SECONDS - 5).seconds
+                    ) {
                         evaluateAlerts()
-                    } catch (e: Exception) {
-                        logger.error(e) { "Error evaluating alerts" }
                     }
                     delay(EVALUATION_INTERVAL_SECONDS.seconds)
                 }
@@ -115,10 +118,12 @@ class MonitorAlertService {
         statusCheckJob =
             scope.launch {
                 while (isActive) {
-                    try {
+                    TaskLock.tryWithLock(
+                        "monitor-status-check",
+                        lockAtMostFor = 5.minutes,
+                        lockAtLeastFor = (STATUS_CHECK_INTERVAL_SECONDS - 5).seconds
+                    ) {
                         checkHostStatuses()
-                    } catch (e: Exception) {
-                        logger.error(e) { "Error checking host statuses" }
                     }
                     delay(STATUS_CHECK_INTERVAL_SECONDS.seconds)
                 }
@@ -128,10 +133,12 @@ class MonitorAlertService {
         cleanupJob =
             scope.launch {
                 while (isActive) {
-                    try {
+                    TaskLock.tryWithLock(
+                        "monitor-silence-cleanup",
+                        lockAtMostFor = 5.minutes,
+                        lockAtLeastFor = 4.minutes + 55.seconds
+                    ) {
                         cleanupExpiredSilencePeriods()
-                    } catch (e: Exception) {
-                        logger.error(e) { "Error cleaning up expired silence periods" }
                     }
                     delay(5.minutes)
                 }

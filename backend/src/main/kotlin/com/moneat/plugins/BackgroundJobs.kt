@@ -29,10 +29,12 @@ import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionBackgroundService
+import com.moneat.shared.services.TaskLock
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.uptime.services.UptimeScheduler
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
+import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,6 +54,9 @@ fun Application.configureBackgroundJobs() {
         logger.info { "All background jobs disabled via BACKGROUND_JOBS_ENABLED=false (API-only mode)" }
         return
     }
+
+    val database = attributes[ExposedDatabaseKey]
+    TaskLock.initialize(ExposedLockProvider(database))
 
     val monitorAlertService = MonitorAlertService()
     val dashboardAlertService = DashboardAlertService()

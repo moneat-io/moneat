@@ -6,6 +6,7 @@ package com.moneat.enterprise.oncall.services
 
 import com.moneat.config.RedisClient
 import com.moneat.shared.models.OnCallSchedules
+import com.moneat.shared.services.TaskLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -16,6 +17,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
+import kotlin.time.Duration.Companion.minutes
 
 class OnCallHandoffService(
     private val onCallScheduleService: OnCallScheduleService,
@@ -41,10 +43,8 @@ class OnCallHandoffService(
                 logger.info("OnCallHandoffService started")
 
                 while (isActive) {
-                    try {
+                    TaskLock.tryWithLock("oncall-handoff", lockAtMostFor = 5.minutes) {
                         checkAllSchedules()
-                    } catch (e: Exception) {
-                        logger.error("Error in handoff check loop", e)
                     }
 
                     delay(CHECK_INTERVAL_MS)

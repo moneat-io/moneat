@@ -9,6 +9,7 @@ import com.moneat.shared.models.OnCallParticipants
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.ShiftChangeNotificationsSent
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.TaskLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -48,10 +49,8 @@ class ShiftChangeNotifier(
         job = CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             logger.info("ShiftChangeNotifier started")
             while (isActive) {
-                try {
+                TaskLock.tryWithLock("oncall-shift-change", lockAtMostFor = 5.minutes) {
                     checkAllSchedules()
-                } catch (e: Exception) {
-                    logger.error("Error in shift change notifier loop", e)
                 }
                 delay(CHECK_INTERVAL_MS)
             }

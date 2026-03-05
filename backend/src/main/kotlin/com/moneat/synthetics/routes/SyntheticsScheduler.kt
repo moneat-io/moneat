@@ -23,9 +23,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.moneat.shared.services.TaskLock
 import mu.KotlinLogging
 import java.util.Collections
 import java.util.UUID
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 private val logger = KotlinLogging.logger {}
 
@@ -48,10 +51,8 @@ class SyntheticsScheduler(
 
         schedulerJob = scope.launch {
             while (isActive) {
-                try {
+                TaskLock.tryWithLock("synthetics-scheduler", lockAtMostFor = 5.minutes, lockAtLeastFor = 1.seconds) {
                     checkTests(this)
-                } catch (e: Exception) {
-                    logger.error(e) { "Error in synthetics scheduler loop: ${e.message}" }
                 }
                 delay(2000)
             }

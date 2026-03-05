@@ -30,6 +30,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.moneat.shared.services.TaskLock
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -39,6 +40,8 @@ import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 private val logger = KotlinLogging.logger {}
 
@@ -64,11 +67,9 @@ class BillingBackgroundService(
         meteredUsageJob =
             scope.launch(Dispatchers.IO) {
                 while (isActive) {
-                    try {
+                    TaskLock.tryWithLock("billing-metered-flush", lockAtMostFor = 5.minutes, lockAtLeastFor = 55.seconds) {
                         val flushed = stripeService.flushPendingMeteredUsage()
                         if (flushed > 0) logger.info { "Flushed pending metered usage for $flushed subscription(s)" }
-                    } catch (e: Exception) {
-                        logger.error(e) { "Metered usage flush job failed" }
                     }
                     delay(60_000L)
                 }
@@ -77,10 +78,8 @@ class BillingBackgroundService(
         dunningDowngradeJob =
             scope.launch(Dispatchers.IO) {
                 while (isActive) {
-                    try {
+                    TaskLock.tryWithLock("billing-dunning-downgrade", lockAtMostFor = 5.minutes, lockAtLeastFor = 55.seconds) {
                         stripeService.applyDunningDowngrade()
-                    } catch (e: Exception) {
-                        logger.error(e) { "Dunning downgrade job failed" }
                     }
                     delay(60_000L)
                 }
@@ -89,10 +88,12 @@ class BillingBackgroundService(
         quotaNotificationJob =
             scope.launch(Dispatchers.IO) {
                 while (isActive) {
-                    try {
+                    TaskLock.tryWithLock(
+                        "billing-quota-notifications",
+                        lockAtMostFor = 5.minutes,
+                        lockAtLeastFor = 55.seconds
+                    ) {
                         processQuotaThresholdNotifications()
-                    } catch (e: Exception) {
-                        logger.error(e) { "Quota notification job failed" }
                     }
                     delay(60_000L)
                 }
