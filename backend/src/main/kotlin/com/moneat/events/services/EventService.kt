@@ -284,7 +284,7 @@ class EventService(private val notificationService: NotificationService? = null)
 
         val transactionInsert =
             """
-            INSERT INTO $clickhouseDb.events (
+            INSERT INTO `$clickhouseDb`.events (
                 event_id, project_id, timestamp, event_type, level,
                 message, platform, environment, release, dist, server_name,
                 user_id, user_email, user_username, user_ip_address,
@@ -372,7 +372,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 if (spanRows.isNotEmpty()) {
                     val spansInsert =
                         """
-                        INSERT INTO $clickhouseDb.spans (
+                        INSERT INTO `$clickhouseDb`.spans (
                             span_id, parent_span_id, trace_id, transaction_id, project_id,
                             op, description, start_timestamp, end_timestamp, duration_ms, status, tags, data
                         ) VALUES
@@ -466,7 +466,7 @@ class EventService(private val notificationService: NotificationService? = null)
         // Build ClickHouse insert query
         val query =
             """
-            INSERT INTO $clickhouseDb.events (
+            INSERT INTO `$clickhouseDb`.events (
                 event_id, project_id, timestamp, event_type, level,
                 message, platform, environment, release, dist, server_name,
                 user_id, user_email, user_username, user_ip_address,
@@ -577,7 +577,7 @@ class EventService(private val notificationService: NotificationService? = null)
 
         val insertQuery =
             """
-            INSERT INTO $clickhouseDb.user_feedback (
+            INSERT INTO `$clickhouseDb`.user_feedback (
                 feedback_id, project_id, timestamp, message, contact_email, name, url,
                 associated_event_id, replay_id, environment, release, platform,
                 user_id, user_email, user_username, user_ip_address,
@@ -666,7 +666,7 @@ class EventService(private val notificationService: NotificationService? = null)
 
         val replayEventInsert =
             """
-            INSERT INTO $clickhouseDb.replay_events (
+            INSERT INTO `$clickhouseDb`.replay_events (
                 replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
                 urls, error_ids, trace_ids, environment, release, platform,
                 user_id, user_email, user_username, user_ip_address,
@@ -729,7 +729,7 @@ class EventService(private val notificationService: NotificationService? = null)
 
         val recordingInsert =
             """
-            INSERT INTO $clickhouseDb.replay_segments (
+            INSERT INTO `$clickhouseDb`.replay_segments (
                 replay_id, project_id, segment_id, timestamp, recording_data
             ) VALUES (
                 toUUID('$normalizedReplayId'),
@@ -775,7 +775,7 @@ class EventService(private val notificationService: NotificationService? = null)
 
         val replayEventInsert =
             """
-            INSERT INTO $clickhouseDb.replay_events (
+            INSERT INTO `$clickhouseDb`.replay_events (
                 replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
                 urls, error_ids, trace_ids, environment, release, platform,
                 user_id, user_email, user_username, user_ip_address,
@@ -1061,7 +1061,7 @@ class EventService(private val notificationService: NotificationService? = null)
 
             val query =
                 """
-                INSERT INTO $clickhouseDb.llm_generations (
+                INSERT INTO `$clickhouseDb`.llm_generations (
                     generation_id, project_id, trace_id, span_id, parent_span_id,
                     timestamp, duration_ms, name, model, provider, type,
                     input, output, input_tokens, output_tokens, total_tokens, cost_usd,
@@ -1160,7 +1160,7 @@ class EventService(private val notificationService: NotificationService? = null)
                 ?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                 ?: 0L
             val insert = """
-                INSERT INTO $clickhouseDb.profiles (
+                INSERT INTO `$clickhouseDb`.profiles (
                     profile_id, organization_id,
                     host, service, env, version,
                     runtime, language, profile_type,
@@ -1223,7 +1223,7 @@ class EventService(private val notificationService: NotificationService? = null)
         val query =
             """
             SELECT count() as cnt
-            FROM $clickhouseDb.events
+            FROM `$clickhouseDb`.events
             WHERE project_id = $projectId
               AND issue_id = '$issueId'
             FORMAT JSON

@@ -179,7 +179,7 @@ object DatadogEventService {
         }
 
         val insert = """
-            INSERT INTO $db.infra_events (
+            INSERT INTO `$db`.infra_events (
                 organization_id, title, text, timestamp,
                 priority, host, tags, alert_type,
                 aggregation_key, source_type_name, device_name
@@ -223,7 +223,7 @@ object DatadogEventService {
         }
 
         val insert = """
-            INSERT INTO $db.service_checks (
+            INSERT INTO `$db`.service_checks (
                 organization_id, check_name, host, status,
                 timestamp, tags, message
             ) VALUES $rows

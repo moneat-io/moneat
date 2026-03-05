@@ -176,7 +176,7 @@ object DebuggerIngestionService {
             )"""
         }
         val insert = """
-            INSERT INTO $clickhouseDb.debugger_logs (
+            INSERT INTO `$clickhouseDb`.debugger_logs (
                 organization_id, service, env, version, debugger_type,
                 probe_id, probe_location, message, snapshot, host,
                 timestamp, tags
@@ -205,7 +205,7 @@ object DebuggerIngestionService {
             )"""
         }
         val insert = """
-            INSERT INTO $clickhouseDb.debugger_diagnostics (
+            INSERT INTO `$clickhouseDb`.debugger_diagnostics (
                 organization_id, service, env, runtime_id, probe_id,
                 status, error_message, host, timestamp, tags
             ) VALUES $rows

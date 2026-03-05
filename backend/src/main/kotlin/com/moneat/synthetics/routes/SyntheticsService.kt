@@ -230,7 +230,7 @@ class SyntheticsService {
             "map($entries)"
         }
         val sql = """
-            INSERT INTO ${ClickHouseClient.getDatabase()}.synthetic_results
+            INSERT INTO `${ClickHouseClient.getDatabase()}`.synthetic_results
             (organization_id, test_id, test_name, test_type, status, probe_dc,
              duration_ms, error_message, timings, tags, timestamp)
             VALUES (

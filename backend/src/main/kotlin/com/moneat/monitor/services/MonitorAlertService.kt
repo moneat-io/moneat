@@ -452,7 +452,7 @@ class MonitorAlertService {
         val query =
             """
             SELECT $selectExpr as value
-            FROM $clickhouseDb.metrics
+            FROM `$clickhouseDb`.metrics
             WHERE organization_id = $organizationId
               AND tags['system_id'] = '$sysIdStr'
               AND $metricFilter
@@ -522,7 +522,7 @@ class MonitorAlertService {
                         SELECT count(*) as cnt FROM (
                             SELECT timestamp,
                                 $pctExpr as pct
-                            FROM $clickhouseDb.metrics
+                            FROM `$clickhouseDb`.metrics
                             WHERE $baseFilter AND $metricFilter
                             GROUP BY timestamp
                             HAVING $havingClause
@@ -555,7 +555,7 @@ class MonitorAlertService {
                     val q =
                         """
                         SELECT count(*) as cnt
-                        FROM $clickhouseDb.metrics
+                        FROM `$clickhouseDb`.metrics
                         WHERE $baseFilter AND metric_name = '$metricName' AND $conditionSql
                         FORMAT JSONCompact
                         """.trimIndent()

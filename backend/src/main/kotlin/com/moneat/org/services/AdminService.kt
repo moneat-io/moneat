@@ -784,18 +784,18 @@ class AdminService {
         @Suppress("UNUSED_PARAMETER") endDate: kotlinx.datetime.LocalDate
     ): Triple<Long, Long, List<AdminTimelinePoint>> {
         return try {
-            val totalQuery = "SELECT count() as c FROM $clickhouseDb.events"
+            val totalQuery = "SELECT count() as c FROM `$clickhouseDb`.events"
             val totalResp = ClickHouseClient.execute(totalQuery)
             val allTime = totalResp.bodyAsText().trim().toLongOrNull() ?: 0L
 
-            val last30Query = "SELECT count() as c FROM $clickhouseDb.events WHERE timestamp >= now() - INTERVAL 30 DAY"
+            val last30Query = "SELECT count() as c FROM `$clickhouseDb`.events WHERE timestamp >= now() - INTERVAL 30 DAY"
             val last30Resp = ClickHouseClient.execute(last30Query)
             val last30Count = last30Resp.bodyAsText().trim().toLongOrNull() ?: 0L
 
             val timelineQuery =
                 """
                 SELECT toDate(timestamp) as d, count() as cnt
-                FROM $clickhouseDb.events
+                FROM `$clickhouseDb`.events
                 WHERE timestamp >= now() - INTERVAL 30 DAY
                 GROUP BY d
                 ORDER BY d

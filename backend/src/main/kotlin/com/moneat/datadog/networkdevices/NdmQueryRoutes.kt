@@ -64,14 +64,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListDevices() {
     val where = ClickHouseQueryUtils.orgIdClause(orgId.toLong())
 
     val totalCount = executeCount(
-        "SELECT count() as cnt FROM $db.ndm_devices WHERE $where FORMAT JSONEachRow"
+        "SELECT count() as cnt FROM `$db`.ndm_devices WHERE $where FORMAT JSONEachRow"
     )
 
     val rows = executeRows(
         """SELECT device_id, ip_address, hostname, vendor, model,
             os_version, device_type, status, reachability, snmp_version,
             tags, formatDateTime(collected_at, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
-        FROM $db.ndm_devices WHERE $where
+        FROM `$db`.ndm_devices WHERE $where
         ORDER BY collected_at DESC LIMIT $limit OFFSET $offset
         FORMAT JSONEachRow"""
     ) { obj ->
@@ -113,7 +113,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeviceDetail() {
         """SELECT device_id, ip_address, hostname, vendor, model,
             os_version, device_type, status, reachability, snmp_version,
             tags, formatDateTime(collected_at, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
-        FROM $db.ndm_devices WHERE $where
+        FROM `$db`.ndm_devices WHERE $where
         ORDER BY collected_at DESC LIMIT 1
         FORMAT JSONEachRow"""
     ) { obj ->
@@ -149,13 +149,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListTraps() {
     val where = ClickHouseQueryUtils.orgIdClause(orgId.toLong())
 
     val totalCount = executeCount(
-        "SELECT count() as cnt FROM $db.ndm_traps WHERE $where FORMAT JSONEachRow"
+        "SELECT count() as cnt FROM `$db`.ndm_traps WHERE $where FORMAT JSONEachRow"
     )
 
     val rows = executeRows(
         """SELECT trap_id, device_ip, oid, severity, message, variables,
             formatDateTime(received_at, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
-        FROM $db.ndm_traps WHERE $where
+        FROM `$db`.ndm_traps WHERE $where
         ORDER BY received_at DESC LIMIT $limit OFFSET $offset
         FORMAT JSONEachRow"""
     ) { obj ->
@@ -187,14 +187,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFlows() {
     val where = ClickHouseQueryUtils.orgIdClause(orgId.toLong())
 
     val totalCount = executeCount(
-        "SELECT count() as cnt FROM $db.ndm_flows WHERE $where FORMAT JSONEachRow"
+        "SELECT count() as cnt FROM `$db`.ndm_flows WHERE $where FORMAT JSONEachRow"
     )
 
     val rows = executeRows(
         """SELECT flow_id, src_ip, dst_ip, src_port, dst_port,
             protocol, bytes, packets, direction, flow_type,
             tags, formatDateTime(sampled_at, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
-        FROM $db.ndm_flows WHERE $where
+        FROM `$db`.ndm_flows WHERE $where
         ORDER BY sampled_at DESC LIMIT $limit OFFSET $offset
         FORMAT JSONEachRow"""
     ) { obj ->
@@ -231,13 +231,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListPaths() {
     val where = ClickHouseQueryUtils.orgIdClause(orgId.toLong())
 
     val totalCount = executeCount(
-        "SELECT count() as cnt FROM $db.network_paths WHERE $where FORMAT JSONEachRow"
+        "SELECT count() as cnt FROM `$db`.network_paths WHERE $where FORMAT JSONEachRow"
     )
 
     val rows = executeRows(
         """SELECT path_id, source, destination, hops, hop_rtts,
             tags, formatDateTime(collected_at, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
-        FROM $db.network_paths WHERE $where
+        FROM `$db`.network_paths WHERE $where
         ORDER BY collected_at DESC LIMIT $limit OFFSET $offset
         FORMAT JSONEachRow"""
     ) { obj ->

@@ -328,7 +328,7 @@ class UptimeService(
 
         val sql =
             """
-            INSERT INTO $clickhouseDb.uptime_heartbeats 
+            INSERT INTO `$clickhouseDb`.uptime_heartbeats 
             (monitor_id, timestamp, status, response_time_ms, status_code, message, ping_ms)
             VALUES (
                 '$monitorId',
@@ -409,7 +409,7 @@ class UptimeService(
                 status_code,
                 message,
                 ping_ms
-            FROM $clickhouseDb.uptime_heartbeats
+            FROM `$clickhouseDb`.uptime_heartbeats
             WHERE monitor_id = '$monitorId'
               AND timestamp >= fromUnixTimestamp64Milli(${from.toEpochMilliseconds()})
               AND timestamp <= fromUnixTimestamp64Milli(${to.toEpochMilliseconds()})
@@ -462,7 +462,7 @@ class UptimeService(
                 countIf(status = 1) as up_count,
                 countIf(status = 0) as down_count,
                 count() as total_count
-            FROM $clickhouseDb.uptime_heartbeats
+            FROM `$clickhouseDb`.uptime_heartbeats
             WHERE monitor_id = '$monitorId'
               AND timestamp >= fromUnixTimestamp64Milli(${from.toEpochMilliseconds()})
             FORMAT JSONEachRow
@@ -498,7 +498,7 @@ class UptimeService(
         val query =
             """
             SELECT avg(response_time_ms) as avg_time
-            FROM $clickhouseDb.uptime_heartbeats
+            FROM `$clickhouseDb`.uptime_heartbeats
             WHERE monitor_id = '$monitorId'
               AND timestamp >= fromUnixTimestamp64Milli(${from.toEpochMilliseconds()})
               AND response_time_ms >= 0

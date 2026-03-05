@@ -164,7 +164,7 @@ class LogService {
 
         val insert =
             """
-            INSERT INTO $clickhouseDb.logs (
+            INSERT INTO `$clickhouseDb`.logs (
                 log_id,
                 organization_id,
                 system_id,
@@ -373,7 +373,7 @@ class LogService {
                 toJSONString(resource_attributes) AS resource_attributes,
                 toUnixTimestamp64Milli(timestamp) AS timestamp_ms,
                 toString(system_id) AS system_id_text
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause
             ORDER BY timestamp DESC, log_id DESC
             LIMIT ${limit + 1}
@@ -400,7 +400,7 @@ class LogService {
         val totalCountQuery =
             """
             SELECT count() as count
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause
             FORMAT JSONEachRow
             """.trimIndent()
@@ -542,7 +542,7 @@ class LogService {
             SELECT formatDateTime(toStartOfInterval(timestamp, INTERVAL $chInterval), '%Y-%m-%dT%H:%i:%SZ', 'UTC') AS bucket,
                    $validGroupBy AS group_value,
                    count() AS cnt
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause
             GROUP BY bucket, group_value
             ORDER BY bucket
@@ -552,7 +552,7 @@ class LogService {
                 """
             SELECT formatDateTime(toStartOfInterval(timestamp, INTERVAL $chInterval), '%Y-%m-%dT%H:%i:%SZ', 'UTC') AS bucket,
                    count() AS cnt
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause
             GROUP BY bucket
             ORDER BY bucket
@@ -689,7 +689,7 @@ class LogService {
         val sql =
             """
             SELECT $columnExpr AS field_value, count() AS cnt
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause AND $columnExpr != ''
             GROUP BY field_value
             ORDER BY cnt DESC
@@ -717,7 +717,7 @@ class LogService {
         // Get total count for percentage calculation
         val totalSql =
             """
-            SELECT count() AS cnt FROM $clickhouseDb.logs WHERE $whereClause
+            SELECT count() AS cnt FROM `$clickhouseDb`.logs WHERE $whereClause
             FORMAT JSONEachRow
             """.trimIndent()
         val totalResponse = ClickHouseClient.execute(totalSql)
@@ -805,7 +805,7 @@ class LogService {
                 level, service, environment, host, message, body,
                 container_name, trace_id, span_id,
                 toJSONString(tags) AS tags
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause
             ORDER BY timestamp DESC
             LIMIT $safeLimit
@@ -872,7 +872,7 @@ class LogService {
             queryValueCounts(
                 """
             SELECT service AS val, count() AS cnt
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause AND service != ''
             GROUP BY val ORDER BY cnt DESC LIMIT 200
             FORMAT JSONEachRow
@@ -883,7 +883,7 @@ class LogService {
             queryValueCounts(
                 """
             SELECT environment AS val, count() AS cnt
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause AND environment != ''
             GROUP BY val ORDER BY cnt DESC LIMIT 200
             FORMAT JSONEachRow
@@ -896,7 +896,7 @@ class LogService {
             SELECT DISTINCT tag_key
             FROM (
                 SELECT arrayJoin(mapKeys(tags)) AS tag_key
-                FROM $clickhouseDb.logs
+                FROM `$clickhouseDb`.logs
                 WHERE $whereClause
             )
             WHERE tag_key != ''
@@ -953,7 +953,7 @@ class LogService {
             queryDistinctLines(
                 """
             SELECT DISTINCT service
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause AND service != ''
             ORDER BY service
             LIMIT 200
@@ -965,7 +965,7 @@ class LogService {
             queryDistinctLines(
                 """
             SELECT DISTINCT environment
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause AND environment != ''
             ORDER BY environment
             LIMIT 200
@@ -979,7 +979,7 @@ class LogService {
             SELECT DISTINCT tag_key
             FROM (
                 SELECT arrayJoin(mapKeys(tags)) AS tag_key
-                FROM $clickhouseDb.logs
+                FROM `$clickhouseDb`.logs
                 WHERE $whereClause
             )
             WHERE tag_key != ''
@@ -1038,7 +1038,7 @@ class LogService {
                 val fieldRef = if (actualField in enumFields) "toString($actualField)" else actualField
                 """
             SELECT DISTINCT $fieldRef AS tag_value
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause AND $fieldRef != ''
             ORDER BY tag_value
             LIMIT ${limit.coerceIn(1, 200)}
@@ -1048,7 +1048,7 @@ class LogService {
                 // For tags, access the tags map
                 """
             SELECT DISTINCT tags['$escapedKey'] AS tag_value
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $whereClause AND tags['$escapedKey'] != ''
             ORDER BY tag_value
             LIMIT ${limit.coerceIn(1, 200)}

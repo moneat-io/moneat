@@ -178,7 +178,7 @@ object OrchestratorIngestionService {
         }
 
         val insert = """
-            INSERT INTO $clickhouseDb.k8s_resources (
+            INSERT INTO `$clickhouseDb`.k8s_resources (
                 organization_id, uid, resource_type, namespace, name,
                 cluster_name, cluster_id, status, tags, labels,
                 annotations, resource_version, creation_timestamp,
@@ -215,7 +215,7 @@ object OrchestratorIngestionService {
         }
 
         val insert = """
-            INSERT INTO $clickhouseDb.k8s_manifests (
+            INSERT INTO `$clickhouseDb`.k8s_manifests (
                 organization_id, uid, resource_type, namespace, name,
                 cluster_name, manifest, content_type, collected_at
             ) VALUES $rows

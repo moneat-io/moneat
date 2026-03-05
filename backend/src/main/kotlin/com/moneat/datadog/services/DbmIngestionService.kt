@@ -272,7 +272,7 @@ object DbmIngestionService {
             )"""
         }
         val insert = """
-            INSERT INTO $clickhouseDb.dbm_queries (
+            INSERT INTO `$clickhouseDb`.dbm_queries (
                 organization_id, db_host, db_system, db_name, db_user,
                 query_signature, resource_hash, statement, query_truncated,
                 duration_ns, rows_affected, error_code, error_message,
@@ -302,7 +302,7 @@ object DbmIngestionService {
             )"""
         }
         val insert = """
-            INSERT INTO $clickhouseDb.dbm_metrics (
+            INSERT INTO `$clickhouseDb`.dbm_metrics (
                 organization_id, db_host, db_system, db_name,
                 query_signature, timestamp, calls, total_time_ns, rows,
                 shared_blks_hit, shared_blks_read, host, env, tags
@@ -331,7 +331,7 @@ object DbmIngestionService {
             )"""
         }
         val insert = """
-            INSERT INTO $clickhouseDb.dbm_activity (
+            INSERT INTO `$clickhouseDb`.dbm_activity (
                 organization_id, db_host, db_system, db_name, db_user,
                 query_signature, statement, state, wait_event_type,
                 wait_event, blocking_pids, duration_ns, timestamp,
@@ -358,7 +358,7 @@ object DbmIngestionService {
             )"""
         }
         val insert = """
-            INSERT INTO $clickhouseDb.dbm_metadata (
+            INSERT INTO `$clickhouseDb`.dbm_metadata (
                 organization_id, host, db_system,
                 schema_json, explain_plan_hash, explain_plan,
                 collected_at
@@ -391,7 +391,7 @@ object DbmIngestionService {
             )"""
         }
         val insert = """
-            INSERT INTO $clickhouseDb.dbm_health (
+            INSERT INTO `$clickhouseDb`.dbm_health (
                 organization_id, host, db_system,
                 agent_version, status, checks_run,
                 checks_failed, host_name, timestamp

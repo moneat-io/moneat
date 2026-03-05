@@ -285,7 +285,7 @@ object MiscIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.symbol_db (
+            """INSERT INTO `$clickhouseDb`.symbol_db (
                 organization_id, service, env, language,
                 version, symbols, timestamp
             ) VALUES $rows""",
@@ -307,7 +307,7 @@ object MiscIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.pipeline_stats (
+            """INSERT INTO `$clickhouseDb`.pipeline_stats (
                 organization_id, pipeline_id, stage_name,
                 in_count, out_count, drop_count, error_count,
                 host, timestamp
@@ -332,7 +332,7 @@ object MiscIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.data_lineage (
+            """INSERT INTO `$clickhouseDb`.data_lineage (
                 organization_id, run_id, job_name, namespace,
                 inputs, outputs, event_type, facets, timestamp
             ) VALUES $rows""",
@@ -355,7 +355,7 @@ object MiscIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.data_streams (
+            """INSERT INTO `$clickhouseDb`.data_streams (
                 organization_id, pipeline_id, stage_name,
                 latency_ns, payload_size, direction,
                 tags, timestamp
@@ -397,7 +397,7 @@ object MiscIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.synthetic_results (
+            """INSERT INTO `$clickhouseDb`.synthetic_results (
                 organization_id, test_id, test_name,
                 test_type, status, probe_dc, duration_ms,
                 error_message, timings, tags, timestamp
@@ -420,7 +420,7 @@ object MiscIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.container_images (
+            """INSERT INTO `$clickhouseDb`.container_images (
                 organization_id, image_name, image_tag,
                 digest, registry, size_bytes, os,
                 architecture, layers, tags, collected_at
@@ -446,7 +446,7 @@ object MiscIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.sbom_packages (
+            """INSERT INTO `$clickhouseDb`.sbom_packages (
                 organization_id, host, container_id,
                 image_name, package_name, package_version,
                 package_type, cve_ids, tags, collected_at
