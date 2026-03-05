@@ -44,6 +44,25 @@ object SyntheticTests : Table("synthetic_tests") {
     val status = varchar("status", 20).default("pending")
     val lastRunAt = timestamp("last_run_at").nullable()
     val lastStatus = varchar("last_status", 20).nullable()
+    val tags = text("tags").default("[]")
+    val retryCount = integer("retry_count").default(0)
+    val retryIntervalMs = integer("retry_interval_ms").default(300)
+    val alertOnFailure = bool("alert_on_failure").default(false)
+    val alertChannels = text("alert_channels").default("[]")
+    val config = text("config").nullable()
+    val previousStatus = varchar("previous_status", 20).nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+object SyntheticVariables : Table("synthetic_variables") {
+    val id = integer("id").autoIncrement()
+    val organizationId = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val value = text("value").default("")
+    val isSecret = bool("is_secret").default(false)
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
 
@@ -77,6 +96,14 @@ data class SyntheticStep(
 )
 
 @Serializable
+data class SyntheticTestConfig(
+    val dnsServer: String? = null,
+    val port: Int? = null,
+    val protocol: String? = null,
+    val hostname: String? = null
+)
+
+@Serializable
 data class CreateSyntheticTestRequest(
     val name: String,
     val testType: String = "api",
@@ -90,7 +117,13 @@ data class CreateSyntheticTestRequest(
     val authUser: String? = null,
     val authPass: String? = null,
     val assertions: List<SyntheticAssertion> = emptyList(),
-    val steps: List<SyntheticStep> = emptyList()
+    val steps: List<SyntheticStep> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val retryCount: Int = 0,
+    val retryIntervalMs: Int = 300,
+    val alertOnFailure: Boolean = false,
+    val alertChannels: List<String> = emptyList(),
+    val config: SyntheticTestConfig? = null
 )
 
 @Serializable
@@ -107,7 +140,13 @@ data class UpdateSyntheticTestRequest(
     val authUser: String? = null,
     val authPass: String? = null,
     val assertions: List<SyntheticAssertion>? = null,
-    val steps: List<SyntheticStep>? = null
+    val steps: List<SyntheticStep>? = null,
+    val tags: List<String>? = null,
+    val retryCount: Int? = null,
+    val retryIntervalMs: Int? = null,
+    val alertOnFailure: Boolean? = null,
+    val alertChannels: List<String>? = null,
+    val config: SyntheticTestConfig? = null
 )
 
 @Serializable
@@ -130,6 +169,12 @@ data class SyntheticTestResponse(
     val status: String,
     val lastRunAt: Long? = null,
     val lastStatus: String? = null,
+    val tags: List<String> = emptyList(),
+    val retryCount: Int = 0,
+    val retryIntervalMs: Int = 300,
+    val alertOnFailure: Boolean = false,
+    val alertChannels: List<String> = emptyList(),
+    val config: SyntheticTestConfig? = null,
     val createdAt: Long,
     val updatedAt: Long
 )
@@ -154,6 +199,41 @@ data class SyntheticTestData(
     val status: String,
     val lastRunAt: kotlin.time.Instant? = null,
     val lastStatus: String? = null,
+    val tags: List<String> = emptyList(),
+    val retryCount: Int = 0,
+    val retryIntervalMs: Int = 300,
+    val alertOnFailure: Boolean = false,
+    val alertChannels: List<String> = emptyList(),
+    val config: String? = null,
+    val previousStatus: String? = null,
     val createdAt: kotlin.time.Instant,
     val updatedAt: kotlin.time.Instant
+)
+
+@Serializable
+data class SyntheticTestSummary(
+    val testId: String,
+    val uptimePercent: Double,
+    val avgResponseMs: Double,
+    val p95ResponseMs: Double,
+    val totalRuns: Long,
+    val failureCount: Long
+)
+
+@Serializable
+data class SyntheticVariableRequest(
+    val name: String,
+    val value: String,
+    val isSecret: Boolean = false
+)
+
+@Serializable
+data class SyntheticVariableResponse(
+    val id: Int,
+    val organizationId: Int,
+    val name: String,
+    val value: String,
+    val isSecret: Boolean,
+    val createdAt: Long,
+    val updatedAt: Long
 )

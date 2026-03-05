@@ -14,15 +14,29 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type SyntheticResultResponse, type SyntheticTestResponse} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {Input} from '@/components/ui/input'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
+import {Checkbox} from '@/components/ui/checkbox'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {cn} from '@/lib/utils'
-import {Play, Trash2} from 'lucide-react'
+import {Play, Trash2, Pause, Search, Filter} from 'lucide-react'
 import {useToast} from '@/hooks/use-toast'
+import {useState, useMemo} from 'react'
 
 export const Route = createFileRoute('/synthetics/')({
   component: SyntheticResults,
@@ -37,13 +51,19 @@ const resultStatusColors: Record<string, string> = {
 const testStatusColors: Record<string, string> = {
   pending: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
   running: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
+  passed: 'bg-green-500/15 text-green-500 border-green-500/30',
   passing: 'bg-green-500/15 text-green-500 border-green-500/30',
+  failed: 'bg-red-500/15 text-red-500 border-red-500/30',
   failing: 'bg-red-500/15 text-red-500 border-red-500/30',
 }
 
 const testTypeColors: Record<string, string> = {
   api: 'bg-violet-500/15 text-violet-500 border-violet-500/30',
   multistep: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
+  ssl: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
+  dns: 'bg-cyan-500/15 text-cyan-500 border-cyan-500/30',
+  tcp: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30',
+  udp: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30',
 }
 
 function formatLastRun(timestamp: number | null | undefined): string {
@@ -51,9 +71,41 @@ function formatLastRun(timestamp: number | null | undefined): string {
   return new Date(timestamp).toLocaleString()
 }
 
+function Sparkline({results, testId}: {results: SyntheticResultResponse[]; testId: string}) {
+  const testResults = results.filter((r) => r.testId === testId).slice(0, 20).reverse()
+  if (testResults.length === 0) return <span className="text-muted-foreground text-xs">—</span>
+  const max = Math.max(...testResults.map((r) => r.durationMs), 1)
+  return (
+    <div className="flex gap-px items-end h-5 w-20">
+      {testResults.map((r, i) => (
+        <div
+          key={i}
+          className={cn('flex-1 rounded-sm min-w-[2px]', r.status === 'passed' ? 'bg-green-500' : 'bg-red-500')}
+          style={{height: `${Math.max((r.durationMs / max) * 100, 10)}%`}}
+          title={`${r.durationMs}ms`}
+        />
+      ))}
+    </div>
+  )
+}
+
+function computeUptime(results: SyntheticResultResponse[], testId: string): string {
+  const testResults = results.filter((r) => r.testId === testId)
+  if (testResults.length === 0) return '—'
+  const passed = testResults.filter((r) => r.status === 'passed').length
+  return `${((passed / testResults.length) * 100).toFixed(1)}%`
+}
+
 function SyntheticResults() {
   const {toast} = useToast()
   const queryClient = useQueryClient()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [tagFilter, setTagFilter] = useState<string>('all')
+  const [selectedTests, setSelectedTests] = useState<Set<string>>(new Set())
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
 
   const {data: testsData, isLoading: testsLoading} = useQuery({
     queryKey: ['synthetic-tests'],
@@ -62,7 +114,7 @@ function SyntheticResults() {
 
   const {data: resultsData, isLoading: resultsLoading} = useQuery({
     queryKey: ['synthetic-results'],
-    queryFn: () => api.listSyntheticResults(50),
+    queryFn: () => api.listSyntheticResults(200),
   })
 
   const runMutation = useMutation({
@@ -82,19 +134,84 @@ function SyntheticResults() {
     onSuccess: () => {
       toast({title: 'Test deleted'})
       queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
+      setDeleteConfirm(null)
     },
     onError: (error: Error) => {
       toast({title: 'Failed to delete test', description: error.message, variant: 'destructive'})
     },
   })
 
+  const togglePauseMutation = useMutation({
+    mutationFn: ({testId, active}: {testId: string; active: boolean}) =>
+      api.updateSyntheticTest(testId, {active}),
+    onSuccess: () => {
+      toast({title: 'Test updated'})
+      queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
+    },
+  })
+
   const tests: SyntheticTestResponse[] = testsData ?? []
   const results: SyntheticResultResponse[] = resultsData?.results ?? []
 
-  const handleDelete = (testId: string) => {
-    if (window.confirm('Are you sure you want to delete this test?')) {
-      deleteMutation.mutate(testId)
+  const allTags = useMemo(() => {
+    const tags = new Set<string>()
+    tests.forEach((t) => t.tags?.forEach((tag) => tags.add(tag)))
+    return Array.from(tags).sort()
+  }, [tests])
+
+  const filteredTests = useMemo(() => {
+    return tests.filter((t) => {
+      if (searchQuery && !t.name.toLowerCase().includes(searchQuery.toLowerCase())) return false
+      if (statusFilter !== 'all' && t.lastStatus !== statusFilter && t.status !== statusFilter) return false
+      if (typeFilter !== 'all' && t.testType !== typeFilter) return false
+      if (tagFilter !== 'all' && !(t.tags ?? []).includes(tagFilter)) return false
+      return true
+    })
+  }, [tests, searchQuery, statusFilter, typeFilter, tagFilter])
+
+  const toggleSelect = (testId: string) => {
+    setSelectedTests((prev) => {
+      const next = new Set(prev)
+      if (next.has(testId)) next.delete(testId)
+      else next.add(testId)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedTests.size === filteredTests.length) {
+      setSelectedTests(new Set())
+    } else {
+      setSelectedTests(new Set(filteredTests.map((t) => t.id)))
     }
+  }
+
+  const handleBulkDelete = async () => {
+    for (const testId of selectedTests) {
+      await api.deleteSyntheticTest(testId)
+    }
+    setSelectedTests(new Set())
+    setBulkDeleteConfirm(false)
+    queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
+    toast({title: `${selectedTests.size} tests deleted`})
+  }
+
+  const handleBulkPause = async () => {
+    for (const testId of selectedTests) {
+      await api.updateSyntheticTest(testId, {active: false})
+    }
+    setSelectedTests(new Set())
+    queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
+    toast({title: `${selectedTests.size} tests paused`})
+  }
+
+  const handleBulkResume = async () => {
+    for (const testId of selectedTests) {
+      await api.updateSyntheticTest(testId, {active: true})
+    }
+    setSelectedTests(new Set())
+    queryClient.invalidateQueries({queryKey: ['synthetic-tests']})
+    toast({title: `${selectedTests.size} tests resumed`})
   }
 
   if (testsLoading || resultsLoading) {
@@ -108,33 +225,137 @@ function SyntheticResults() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle>Tests</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Tests</CardTitle>
+            {selectedTests.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">{selectedTests.size} selected</span>
+                <Button variant="outline" size="sm" onClick={handleBulkPause}>
+                  <Pause className="h-3.5 w-3.5 mr-1" />Pause
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleBulkResume}>
+                  <Play className="h-3.5 w-3.5 mr-1" />Resume
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => setBulkDeleteConfirm(true)}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardHeader>
         <CardContent>
+          {/* Filter bar */}
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <div className="relative flex-1 min-w-48">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search tests..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-32 h-9">
+                <Filter className="h-3.5 w-3.5 mr-1.5" />
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="passed">Passing</SelectItem>
+                <SelectItem value="failed">Failing</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-32 h-9">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="api">API</SelectItem>
+                <SelectItem value="multistep">Multistep</SelectItem>
+                <SelectItem value="ssl">SSL</SelectItem>
+                <SelectItem value="dns">DNS</SelectItem>
+                <SelectItem value="tcp">TCP</SelectItem>
+              </SelectContent>
+            </Select>
+            {allTags.length > 0 && (
+              <Select value={tagFilter} onValueChange={setTagFilter}>
+                <SelectTrigger className="w-32 h-9">
+                  <SelectValue placeholder="Tag" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Tags</SelectItem>
+                  {allTags.map((tag) => (
+                    <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
+                  <th className="pb-2 pr-2 w-8">
+                    <Checkbox
+                      checked={selectedTests.size === filteredTests.length && filteredTests.length > 0}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </th>
                   <th className="pb-2 pr-4 font-medium">Name</th>
                   <th className="pb-2 pr-4 font-medium">Type</th>
                   <th className="pb-2 pr-4 font-medium">Status</th>
+                  <th className="pb-2 pr-4 font-medium">Uptime</th>
+                  <th className="pb-2 pr-4 font-medium">Response</th>
                   <th className="pb-2 pr-4 font-medium">Last Run</th>
                   <th className="pb-2 pr-4 font-medium">Interval</th>
                   <th className="pb-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {tests.map((t) => (
+                {filteredTests.map((t) => (
                   <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="py-2 pr-4 font-medium">{t.name}</td>
+                    <td className="py-2 pr-2">
+                      <Checkbox
+                        checked={selectedTests.has(t.id)}
+                        onCheckedChange={() => toggleSelect(t.id)}
+                      />
+                    </td>
+                    <td className="py-2 pr-4">
+                      <Link
+                        to="/synthetics/$testId"
+                        params={{testId: t.id}}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
+                        {t.name}
+                      </Link>
+                      {t.tags && t.tags.length > 0 && (
+                        <div className="flex gap-1 mt-0.5">
+                          {t.tags.map((tag) => (
+                            <Badge key={tag} variant="secondary" className="text-[10px] px-1 py-0">{tag}</Badge>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td className="py-2 pr-4">
                       <Badge variant="outline" className={cn('text-xs', testTypeColors[t.testType] || '')}>
                         {t.testType}
                       </Badge>
                     </td>
                     <td className="py-2 pr-4">
-                      <Badge variant="outline" className={cn('text-xs', testStatusColors[t.status] || '')}>
-                        {t.status || 'pending'}
+                      <Badge variant="outline" className={cn('text-xs', testStatusColors[t.lastStatus ?? t.status] || '')}>
+                        {t.lastStatus || t.status || 'pending'}
                       </Badge>
+                    </td>
+                    <td className="py-2 pr-4 text-xs font-medium">
+                      {computeUptime(results, t.id)}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <Sparkline results={results} testId={t.id} />
                     </td>
                     <td className="py-2 pr-4 text-muted-foreground text-xs">{formatLastRun(t.lastRunAt)}</td>
                     <td className="py-2 pr-4 text-muted-foreground">Every {Math.round((t.intervalSeconds ?? 0) / 60)} min</td>
@@ -146,15 +367,26 @@ function SyntheticResults() {
                           className="h-7 w-7"
                           onClick={() => runMutation.mutate(t.id)}
                           disabled={runMutation.isPending}
+                          title="Run now"
                         >
                           <Play className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-7 w-7"
+                          onClick={() => togglePauseMutation.mutate({testId: t.id, active: !t.active})}
+                          title={t.active ? 'Pause' : 'Resume'}
+                        >
+                          <Pause className={cn('h-3.5 w-3.5', !t.active && 'text-amber-500')} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(t.id)}
+                          onClick={() => setDeleteConfirm(t.id)}
                           disabled={deleteMutation.isPending}
+                          title="Delete"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -162,10 +394,12 @@ function SyntheticResults() {
                     </td>
                   </tr>
                 ))}
-                {tests.length === 0 && (
+                {filteredTests.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
-                      No synthetic tests configured. Click "New Test" to create one.
+                    <td colSpan={9} className="py-8 text-center text-muted-foreground">
+                      {tests.length === 0
+                        ? 'No synthetic tests configured. Click "New Test" to create one.'
+                        : 'No tests match your filters.'}
                     </td>
                   </tr>
                 )}
@@ -176,7 +410,7 @@ function SyntheticResults() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Test Results</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Recent Results</CardTitle></CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -191,7 +425,7 @@ function SyntheticResults() {
                 </tr>
               </thead>
               <tbody>
-                {results.map((r) => (
+                {results.slice(0, 50).map((r) => (
                   <tr key={r.resultId} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="py-2 pr-4 font-medium">{r.testName}</td>
                     <td className="py-2 pr-4"><Badge variant="outline" className="text-xs">{r.testType}</Badge></td>
@@ -215,6 +449,48 @@ function SyntheticResults() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteConfirm !== null} onOpenChange={() => setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete synthetic test?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The test and its configuration will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk delete confirmation dialog */}
+      <AlertDialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedTests.size} tests?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. All selected tests will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleBulkDelete}
+            >
+              Delete All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

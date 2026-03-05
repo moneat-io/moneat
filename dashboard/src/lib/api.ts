@@ -862,7 +862,7 @@ export interface SyntheticStepPayload {
 
 export interface CreateSyntheticTestPayload {
   name: string
-  testType: 'api' | 'multistep'
+  testType: string
   intervalSeconds: number
   timeoutSeconds: number
   url?: string | null
@@ -874,6 +874,12 @@ export interface CreateSyntheticTestPayload {
   authPass?: string | null
   assertions?: SyntheticAssertionPayload[]
   steps?: SyntheticStepPayload[]
+  tags?: string[]
+  retryCount?: number
+  retryIntervalMs?: number
+  alertOnFailure?: boolean
+  alertChannels?: string[]
+  config?: SyntheticTestConfig | null
 }
 
 export interface UpdateSyntheticTestPayload {
@@ -890,6 +896,13 @@ export interface UpdateSyntheticTestPayload {
   authPass?: string | null
   assertions?: SyntheticAssertionPayload[]
   steps?: SyntheticStepPayload[]
+}
+
+export interface SyntheticTestConfig {
+  dnsServer?: string | null
+  port?: number | null
+  protocol?: string | null
+  hostname?: string | null
 }
 
 export interface SyntheticTestResponse {
@@ -911,6 +924,12 @@ export interface SyntheticTestResponse {
   status: string
   lastRunAt?: number | null
   lastStatus?: string | null
+  tags?: string[]
+  retryCount?: number
+  retryIntervalMs?: number
+  alertOnFailure?: boolean
+  alertChannels?: string[]
+  config?: SyntheticTestConfig | null
   createdAt: number
   updatedAt: number
 }
@@ -932,6 +951,31 @@ export interface SyntheticResultResponse {
 export interface SyntheticResultListResponse {
   results: SyntheticResultResponse[]
   totalCount: number
+}
+
+export interface SyntheticTestSummary {
+  testId: string
+  uptimePercent: number
+  avgResponseMs: number
+  p95ResponseMs: number
+  totalRuns: number
+  failureCount: number
+}
+
+export interface SyntheticVariableResponse {
+  id: number
+  organizationId: number
+  name: string
+  value: string
+  isSecret: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SyntheticVariableRequest {
+  name: string
+  value: string
+  isSecret?: boolean
 }
 
 interface RawLogResponse {
@@ -5810,6 +5854,40 @@ class ApiClient {
 
   async listSyntheticResults(limit = 50): Promise<SyntheticResultListResponse> {
     return this.request<SyntheticResultListResponse>(`${API_BASE}/synthetics/results?limit=${limit}`)
+  }
+
+  async getSyntheticTest(testId: string): Promise<SyntheticTestResponse> {
+    return this.request<SyntheticTestResponse>(`${API_BASE}/synthetics/tests/${testId}`)
+  }
+
+  async getSyntheticTestResults(testId: string, limit = 100): Promise<SyntheticResultListResponse> {
+    return this.request<SyntheticResultListResponse>(`${API_BASE}/synthetics/tests/${testId}/results?limit=${limit}`)
+  }
+
+  async getSyntheticTestSummary(testId: string): Promise<SyntheticTestSummary> {
+    return this.request<SyntheticTestSummary>(`${API_BASE}/synthetics/tests/${testId}/summary`)
+  }
+
+  async listSyntheticVariables(): Promise<SyntheticVariableResponse[]> {
+    return this.request<SyntheticVariableResponse[]>(`${API_BASE}/synthetics/variables`)
+  }
+
+  async createSyntheticVariable(request: SyntheticVariableRequest): Promise<SyntheticVariableResponse> {
+    return this.request<SyntheticVariableResponse>(`${API_BASE}/synthetics/variables`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async updateSyntheticVariable(id: number, request: SyntheticVariableRequest): Promise<SyntheticVariableResponse> {
+    return this.request<SyntheticVariableResponse>(`${API_BASE}/synthetics/variables/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteSyntheticVariable(id: number): Promise<void> {
+    await this.request(`${API_BASE}/synthetics/variables/${id}`, { method: 'DELETE' })
   }
 
   // --- Log Indexes ---

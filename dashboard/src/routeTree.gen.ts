@@ -73,6 +73,7 @@ import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
+import { Route as SyntheticsTestIdRouteImport } from './routes/synthetics.$testId'
 import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
 import { Route as SecurityComplianceRouteImport } from './routes/security.compliance'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
@@ -455,6 +456,11 @@ const UptimeMonitorIdRoute = UptimeMonitorIdRouteImport.update({
   id: '/uptime/$monitorId',
   path: '/uptime/$monitorId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SyntheticsTestIdRoute = SyntheticsTestIdRouteImport.update({
+  id: '/$testId',
+  path: '/$testId',
+  getParentRoute: () => SyntheticsRoute,
 } as any)
 const StatusPagesPageIdRoute = StatusPagesPageIdRouteImport.update({
   id: '/status-pages/$pageId',
@@ -869,6 +875,7 @@ export interface FileRoutesByFullPath {
   '/s/$slug': typeof SSlugRoute
   '/security/compliance': typeof SecurityComplianceRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
+  '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
@@ -982,6 +989,7 @@ export interface FileRoutesByTo {
   '/s/$slug': typeof SSlugRoute
   '/security/compliance': typeof SecurityComplianceRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
+  '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin': typeof AdminIndexRoute
   '/ai': typeof AiIndexRoute
@@ -1110,6 +1118,7 @@ export interface FileRoutesById {
   '/s/$slug': typeof SSlugRoute
   '/security/compliance': typeof SecurityComplianceRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
+  '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
@@ -1239,6 +1248,7 @@ export interface FileRouteTypes {
     | '/s/$slug'
     | '/security/compliance'
     | '/status-pages/$pageId'
+    | '/synthetics/$testId'
     | '/uptime/$monitorId'
     | '/admin/'
     | '/ai/'
@@ -1352,6 +1362,7 @@ export interface FileRouteTypes {
     | '/s/$slug'
     | '/security/compliance'
     | '/status-pages/$pageId'
+    | '/synthetics/$testId'
     | '/uptime/$monitorId'
     | '/admin'
     | '/ai'
@@ -1479,6 +1490,7 @@ export interface FileRouteTypes {
     | '/s/$slug'
     | '/security/compliance'
     | '/status-pages/$pageId'
+    | '/synthetics/$testId'
     | '/uptime/$monitorId'
     | '/admin/'
     | '/ai/'
@@ -2027,6 +2039,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/uptime/$monitorId'
       preLoaderRoute: typeof UptimeMonitorIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/synthetics/$testId': {
+      id: '/synthetics/$testId'
+      path: '/$testId'
+      fullPath: '/synthetics/$testId'
+      preLoaderRoute: typeof SyntheticsTestIdRouteImport
+      parentRoute: typeof SyntheticsRoute
     }
     '/status-pages/$pageId': {
       id: '/status-pages/$pageId'
@@ -2799,10 +2818,12 @@ const SecurityRouteWithChildren = SecurityRoute._addFileChildren(
 )
 
 interface SyntheticsRouteChildren {
+  SyntheticsTestIdRoute: typeof SyntheticsTestIdRoute
   SyntheticsIndexRoute: typeof SyntheticsIndexRoute
 }
 
 const SyntheticsRouteChildren: SyntheticsRouteChildren = {
+  SyntheticsTestIdRoute: SyntheticsTestIdRoute,
   SyntheticsIndexRoute: SyntheticsIndexRoute,
 }
 

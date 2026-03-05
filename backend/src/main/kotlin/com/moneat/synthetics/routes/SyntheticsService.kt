@@ -18,14 +18,21 @@ package com.moneat.synthetics.routes
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
+import com.moneat.notifications.services.AlertNotificationPreferencesService
+import com.moneat.notifications.services.DiscordService
+import com.moneat.notifications.services.EmailService
+import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
+
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
@@ -37,12 +44,14 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.util.UUID
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class SyntheticsService {
     companion object {
         private val logger = KotlinLogging.logger {}
         private val runScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        private const val SUMMARY_COLUMN_COUNT = 5
     }
 
     fun createTest(
@@ -71,10 +80,23 @@ class SyntheticsService {
                 it[authUser] = request.authUser
                 it[authPass] = request.authPass
                 it[assertions] = Json.encodeToString(request.assertions)
-                it[steps] = if (request.steps.isEmpty()) null else Json.encodeToString(request.steps)
+                it[steps] = if (request.steps.isEmpty()) {
+                    null
+                } else {
+                    Json.encodeToString(request.steps)
+                }
                 it[status] = "pending"
                 it[lastRunAt] = null
                 it[lastStatus] = null
+                it[tags] = Json.encodeToString(request.tags)
+                it[retryCount] = request.retryCount
+                it[retryIntervalMs] = request.retryIntervalMs
+                it[alertOnFailure] = request.alertOnFailure
+                it[alertChannels] = Json.encodeToString(request.alertChannels)
+                it[config] = request.config?.let { c ->
+                    Json.encodeToString(c)
+                }
+                it[previousStatus] = null
                 it[createdAt] = now
                 it[updatedAt] = now
             }
@@ -110,11 +132,17 @@ class SyntheticsService {
         val updated = transaction {
             SyntheticTests
                 .selectAll()
-                .where { (SyntheticTests.id eq testId) and (SyntheticTests.organizationId eq organizationId) }
+                .where {
+                    (SyntheticTests.id eq testId) and
+                        (SyntheticTests.organizationId eq organizationId)
+                }
                 .firstOrNull() ?: return@transaction false
 
             SyntheticTests.update(
-                { (SyntheticTests.id eq testId) and (SyntheticTests.organizationId eq organizationId) }
+                {
+                    (SyntheticTests.id eq testId) and
+                        (SyntheticTests.organizationId eq organizationId)
+                }
             ) {
                 request.name?.let { v -> it[name] = v }
                 request.active?.let { v -> it[active] = v }
@@ -122,13 +150,39 @@ class SyntheticsService {
                 request.timeoutSeconds?.let { v -> it[timeoutSeconds] = v }
                 request.url?.let { v -> it[url] = v }
                 request.method?.let { v -> it[method] = v }
-                request.headers?.let { v -> it[headers] = Json.encodeToString(v) }
+                request.headers?.let { v ->
+                    it[headers] = Json.encodeToString(v)
+                }
                 request.body?.let { v -> it[body] = v }
                 request.authMethod?.let { v -> it[authMethod] = v }
                 request.authUser?.let { v -> it[authUser] = v }
                 request.authPass?.let { v -> it[authPass] = v }
-                request.assertions?.let { v -> it[assertions] = Json.encodeToString(v) }
-                request.steps?.let { v -> it[steps] = if (v.isEmpty()) null else Json.encodeToString(v) }
+                request.assertions?.let { v ->
+                    it[assertions] = Json.encodeToString(v)
+                }
+                request.steps?.let { v ->
+                    it[steps] = if (v.isEmpty()) {
+                        null
+                    } else {
+                        Json.encodeToString(v)
+                    }
+                }
+                request.tags?.let { v ->
+                    it[tags] = Json.encodeToString(v)
+                }
+                request.retryCount?.let { v -> it[retryCount] = v }
+                request.retryIntervalMs?.let { v ->
+                    it[retryIntervalMs] = v
+                }
+                request.alertOnFailure?.let { v ->
+                    it[alertOnFailure] = v
+                }
+                request.alertChannels?.let { v ->
+                    it[alertChannels] = Json.encodeToString(v)
+                }
+                request.config?.let { v ->
+                    it[config] = Json.encodeToString(v)
+                }
                 it[updatedAt] = Clock.System.now()
             } > 0
         }
@@ -164,12 +218,20 @@ class SyntheticsService {
         }
     }
 
-    fun updateTestStatus(testId: UUID, status: String, lastStatus: String) {
+    fun updateTestStatus(
+        testId: UUID,
+        status: String,
+        lastStatus: String,
+        previousStatus: String? = null
+    ) {
         transaction {
             SyntheticTests.update({ SyntheticTests.id eq testId }) {
                 it[SyntheticTests.status] = status
                 it[SyntheticTests.lastRunAt] = Clock.System.now()
                 it[SyntheticTests.lastStatus] = lastStatus
+                if (previousStatus != null) {
+                    it[SyntheticTests.previousStatus] = previousStatus
+                }
                 it[updatedAt] = Clock.System.now()
             }
         }
@@ -195,29 +257,150 @@ class SyntheticsService {
         test: SyntheticTestData,
         executor: SyntheticsCheckExecutor = SyntheticsCheckExecutor()
     ) {
-        val result = try {
-            withTimeout(test.timeoutSeconds * 1000L + 5000) {
-                executor.executeTest(test)
-            }
-        } catch (e: Exception) {
-            logger.error(e) { "Synthetic test execution failed for ${test.id}: ${e.message}" }
-            SyntheticCheckResult(
-                status = "failed",
-                durationMs = 0,
-                errorMessage = "Test execution failed: ${e.message}"
-            )
-        }
+        var result = executeWithRetries(test, executor)
 
         try {
             recordResult(test, result)
         } catch (e: Exception) {
-            logger.error(e) { "Failed to record synthetic result for ${test.id}: ${e.message}" }
+            logger.error(e) {
+                "Failed to record synthetic result for ${test.id}"
+            }
         }
 
+        val oldStatus = test.lastStatus
         try {
-            updateTestStatus(test.id, result.status, result.status)
+            updateTestStatus(
+                test.id,
+                result.status,
+                result.status,
+                oldStatus
+            )
         } catch (e: Exception) {
-            logger.error(e) { "Failed to update synthetic test status for ${test.id}: ${e.message}" }
+            logger.error(e) {
+                "Failed to update synthetic test status for ${test.id}"
+            }
+        }
+
+        // Alert on transition from passing to failing
+        if (test.alertOnFailure &&
+            result.status == "failed" &&
+            oldStatus != "failed"
+        ) {
+            try {
+                sendFailureAlert(test, result)
+            } catch (e: Exception) {
+                logger.error(e) {
+                    "Failed to send alert for synthetic test ${test.id}"
+                }
+            }
+        }
+    }
+
+    private suspend fun executeWithRetries(
+        test: SyntheticTestData,
+        executor: SyntheticsCheckExecutor
+    ): SyntheticCheckResult {
+        val maxAttempts = test.retryCount + 1
+        var lastResult: SyntheticCheckResult? = null
+
+        for (attempt in 1..maxAttempts) {
+            lastResult = try {
+                withTimeout(test.timeoutSeconds * 1000L + 5000) {
+                    executor.executeTest(test)
+                }
+            } catch (e: Exception) {
+                logger.error(e) {
+                    "Synthetic test execution failed for ${test.id} " +
+                        "(attempt $attempt): ${e.message}"
+                }
+                SyntheticCheckResult(
+                    status = "failed",
+                    durationMs = 0,
+                    errorMessage = "Test execution failed: ${e.message}"
+                )
+            }
+
+            if (lastResult.status == "passed") return lastResult
+
+            if (attempt < maxAttempts) {
+                delay(test.retryIntervalMs.milliseconds)
+            }
+        }
+
+        return lastResult!!
+    }
+
+    private fun sendFailureAlert(
+        test: SyntheticTestData,
+        result: SyntheticCheckResult
+    ) {
+        val prefsService = AlertNotificationPreferencesService()
+        val emailService = EmailService()
+
+        val subject = "Synthetic test failed: ${test.name}"
+        val message = buildString {
+            append("Test '${test.name}' (${test.testType}) failed.")
+            if (result.errorMessage.isNotBlank()) {
+                append(" Error: ${result.errorMessage}")
+            }
+        }
+        val frontendUrl = EnvConfig.get(
+            "FRONTEND_URL",
+            "https://moneat.io"
+        )
+
+        val emailRecipients = prefsService.getUsersWithChannelEnabled(
+            organizationId = test.organizationId,
+            alertSource = "UPTIME_MONITOR",
+            channel = "email"
+        )
+        emailRecipients.forEach { (_, email) ->
+            emailService.sendUptimeAlertEmail(
+                to = email,
+                monitorName = test.name,
+                status = "down",
+                message = message,
+                monitorUrl = "$frontendUrl/synthetics/${test.id}"
+            )
+        }
+
+        val slackEnabled = prefsService.getUsersWithChannelEnabled(
+            organizationId = test.organizationId,
+            alertSource = "UPTIME_MONITOR",
+            channel = "slack"
+        ).isNotEmpty()
+        if (slackEnabled) {
+            runScope.launch {
+                SlackService().sendUptimeAlert(
+                    organizationId = test.organizationId,
+                    monitorName = test.name,
+                    oldStatus = "passing",
+                    newStatus = "failing",
+                    message = message,
+                    monitorId = test.id,
+                    baseUrl = frontendUrl
+                )
+            }
+        }
+
+        val discordEnabled = prefsService.getUsersWithChannelEnabled(
+            organizationId = test.organizationId,
+            alertSource = "UPTIME_MONITOR",
+            channel = "discord"
+        ).isNotEmpty()
+        if (discordEnabled) {
+            runScope.launch {
+                DiscordService().sendUptimeAlert(
+                    organizationId = test.organizationId,
+                    monitorUrl = test.url ?: test.name,
+                    isDown = true,
+                    statusCode = null,
+                    responseTime = result.durationMs,
+                    errorMessage = result.errorMessage,
+                    monitorId = test.id,
+                    baseUrl = frontendUrl
+                )
+            }
         }
     }
 
@@ -297,6 +480,16 @@ class SyntheticsService {
     }
 
     private fun rowToData(row: ResultRow): SyntheticTestData {
+        val tagsList: List<String> = try {
+            Json.decodeFromString(row[SyntheticTests.tags])
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val alertChannelsList: List<String> = try {
+            Json.decodeFromString(row[SyntheticTests.alertChannels])
+        } catch (_: Exception) {
+            emptyList()
+        }
         return SyntheticTestData(
             id = row[SyntheticTests.id],
             organizationId = row[SyntheticTests.organizationId],
@@ -317,6 +510,13 @@ class SyntheticsService {
             status = row[SyntheticTests.status],
             lastRunAt = row[SyntheticTests.lastRunAt],
             lastStatus = row[SyntheticTests.lastStatus],
+            tags = tagsList,
+            retryCount = row[SyntheticTests.retryCount],
+            retryIntervalMs = row[SyntheticTests.retryIntervalMs],
+            alertOnFailure = row[SyntheticTests.alertOnFailure],
+            alertChannels = alertChannelsList,
+            config = row[SyntheticTests.config],
+            previousStatus = row[SyntheticTests.previousStatus],
             createdAt = row[SyntheticTests.createdAt],
             updatedAt = row[SyntheticTests.updatedAt]
         )
@@ -329,12 +529,33 @@ class SyntheticsService {
             emptyList()
         }
         val stepsList: List<SyntheticStep> = try {
-            row[SyntheticTests.steps]?.let { Json.decodeFromString(it) } ?: emptyList()
+            row[SyntheticTests.steps]?.let {
+                Json.decodeFromString(it)
+            } ?: emptyList()
         } catch (_: Exception) {
             emptyList()
         }
         val headersMap: Map<String, String>? = try {
-            row[SyntheticTests.headers]?.let { Json.decodeFromString(it) }
+            row[SyntheticTests.headers]?.let {
+                Json.decodeFromString(it)
+            }
+        } catch (_: Exception) {
+            null
+        }
+        val tagsList: List<String> = try {
+            Json.decodeFromString(row[SyntheticTests.tags])
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val alertChannelsList: List<String> = try {
+            Json.decodeFromString(row[SyntheticTests.alertChannels])
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val testConfig: SyntheticTestConfig? = try {
+            row[SyntheticTests.config]?.let {
+                Json.decodeFromString(it)
+            }
         } catch (_: Exception) {
             null
         }
@@ -356,10 +577,178 @@ class SyntheticsService {
             assertions = assertionsList,
             steps = stepsList,
             status = row[SyntheticTests.status],
-            lastRunAt = row[SyntheticTests.lastRunAt]?.toEpochMilliseconds(),
+            lastRunAt = row[SyntheticTests.lastRunAt]
+                ?.toEpochMilliseconds(),
             lastStatus = row[SyntheticTests.lastStatus],
-            createdAt = row[SyntheticTests.createdAt].toEpochMilliseconds(),
-            updatedAt = row[SyntheticTests.updatedAt].toEpochMilliseconds()
+            tags = tagsList,
+            retryCount = row[SyntheticTests.retryCount],
+            retryIntervalMs = row[SyntheticTests.retryIntervalMs],
+            alertOnFailure = row[SyntheticTests.alertOnFailure],
+            alertChannels = alertChannelsList,
+            config = testConfig,
+            createdAt = row[SyntheticTests.createdAt]
+                .toEpochMilliseconds(),
+            updatedAt = row[SyntheticTests.updatedAt]
+                .toEpochMilliseconds()
+        )
+    }
+
+    // --- Summary Stats ---
+
+    suspend fun getTestSummary(
+        testId: String,
+        orgIds: List<Int>
+    ): SyntheticTestSummary? {
+        val orgCondition = orgIds.joinToString(",") {
+            "toUInt64($it)"
+        }
+        val query = """
+            SELECT
+                countIf(status = 'passed') * 100.0
+                    / greatest(count(), 1) AS uptime_percent,
+                avg(duration_ms) AS avg_response_ms,
+                quantile(0.95)(duration_ms) AS p95_response_ms,
+                count() AS total_runs,
+                countIf(status = 'failed') AS failure_count
+            FROM synthetic_results
+            WHERE test_id = '${escapeSql(testId)}'
+              AND organization_id IN ($orgCondition)
+              AND timestamp >= now() - INTERVAL 30 DAY
+        """.trimIndent()
+
+        val response = runCatching {
+            ClickHouseClient.execute(query)
+        }.getOrNull() ?: return null
+
+        val body = response.bodyAsText().trim()
+        val parts = body.split('\t')
+        if (parts.size < SUMMARY_COLUMN_COUNT) return null
+
+        return SyntheticTestSummary(
+            testId = testId,
+            uptimePercent = parts[0].toDoubleOrNull() ?: 0.0,
+            avgResponseMs = parts[1].toDoubleOrNull() ?: 0.0,
+            p95ResponseMs = parts[2].toDoubleOrNull() ?: 0.0,
+            totalRuns = parts[3].toLongOrNull() ?: 0L,
+            failureCount = parts[4].toLongOrNull() ?: 0L
+        )
+    }
+
+    // --- Global Variables ---
+
+    fun listVariables(organizationId: Int): List<SyntheticVariableResponse> {
+        return transaction {
+            SyntheticVariables
+                .selectAll()
+                .where {
+                    SyntheticVariables.organizationId eq organizationId
+                }
+                .map { variableRowToResponse(it) }
+        }
+    }
+
+    fun createVariable(
+        organizationId: Int,
+        request: SyntheticVariableRequest
+    ): SyntheticVariableResponse {
+        val id = transaction {
+            SyntheticVariables.insert {
+                it[SyntheticVariables.organizationId] = organizationId
+                it[name] = request.name
+                it[value] = request.value
+                it[isSecret] = request.isSecret
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            } get SyntheticVariables.id
+        }
+        return getVariable(id, organizationId)!!
+    }
+
+    fun getVariable(
+        variableId: Int,
+        organizationId: Int
+    ): SyntheticVariableResponse? {
+        return transaction {
+            SyntheticVariables
+                .selectAll()
+                .where {
+                    (SyntheticVariables.id eq variableId) and
+                        (SyntheticVariables.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.let { variableRowToResponse(it) }
+        }
+    }
+
+    fun updateVariable(
+        variableId: Int,
+        organizationId: Int,
+        request: SyntheticVariableRequest
+    ): SyntheticVariableResponse? {
+        val updated = transaction {
+            SyntheticVariables.update(
+                {
+                    (SyntheticVariables.id eq variableId) and
+                        (SyntheticVariables.organizationId eq organizationId)
+                }
+            ) {
+                it[name] = request.name
+                it[value] = request.value
+                it[isSecret] = request.isSecret
+                it[updatedAt] = Clock.System.now()
+            } > 0
+        }
+        return if (updated) {
+            getVariable(variableId, organizationId)
+        } else {
+            null
+        }
+    }
+
+    fun deleteVariable(
+        variableId: Int,
+        organizationId: Int
+    ): Boolean {
+        return transaction {
+            SyntheticVariables.deleteWhere {
+                (id eq variableId) and
+                    (SyntheticVariables.organizationId eq organizationId)
+            } > 0
+        }
+    }
+
+    fun getVariablesMap(organizationId: Int): Map<String, String> {
+        return transaction {
+            SyntheticVariables
+                .selectAll()
+                .where {
+                    SyntheticVariables.organizationId eq organizationId
+                }
+                .associate {
+                    it[SyntheticVariables.name] to
+                        it[SyntheticVariables.value]
+                }
+        }
+    }
+
+    private fun variableRowToResponse(
+        row: ResultRow
+    ): SyntheticVariableResponse {
+        val maskedValue = if (row[SyntheticVariables.isSecret]) {
+            "********"
+        } else {
+            row[SyntheticVariables.value]
+        }
+        return SyntheticVariableResponse(
+            id = row[SyntheticVariables.id],
+            organizationId = row[SyntheticVariables.organizationId],
+            name = row[SyntheticVariables.name],
+            value = maskedValue,
+            isSecret = row[SyntheticVariables.isSecret],
+            createdAt = row[SyntheticVariables.createdAt]
+                .toEpochMilliseconds(),
+            updatedAt = row[SyntheticVariables.updatedAt]
+                .toEpochMilliseconds()
         )
     }
 }
