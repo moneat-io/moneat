@@ -4,13 +4,12 @@ import remarkGfm from 'remark-gfm'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
 import type {Root} from 'mdast'
-import type {VFile} from 'vfile'
 import react from '@vitejs/plugin-react-swc'
 
 // Remark plugin: counts words in the document and injects readingTime into the YAML
 // frontmatter AST node before remark-mdx-frontmatter exports it.
 function remarkReadingTime() {
-  return (tree: Root, _file: VFile) => {
+  return (tree: Root) => {
     let wordCount = 0
     function walk(node: {type: string; value?: string; children?: unknown[]}) {
       if (node.type === 'text' && node.value) {
