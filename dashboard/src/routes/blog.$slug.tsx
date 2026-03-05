@@ -69,9 +69,11 @@ function BlogPost() {
       <Helmet>
         <title>{post.title} — Moneat Blog</title>
         <meta name="description" content={post.description} />
+        <link rel="canonical" href={`https://moneat.io/blog/${post.slug}`} />
         <meta property="og:type" content="article" />
         <meta property="og:title" content={post.title} />
         <meta property="og:description" content={post.description} />
+        <meta property="og:url" content={`https://moneat.io/blog/${post.slug}`} />
         <meta property="article:published_time" content={post.date} />
         <meta property="article:author" content={post.author} />
       </Helmet>
@@ -89,7 +91,7 @@ function BlogPost() {
             <span>{post.author}</span>
             <span>&middot;</span>
             <time dateTime={post.date}>
-              {new Date(post.date).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})}
+              {new Date(post.date).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC'})}
             </time>
             <span>&middot;</span>
             <span>{post.readingTime}</span>

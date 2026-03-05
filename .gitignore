@@ -63,6 +63,7 @@ Thumbs.db
 # Node (for dashboard)
 node_modules/
 dashboard/public/docs/
+dashboard/public/blog/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

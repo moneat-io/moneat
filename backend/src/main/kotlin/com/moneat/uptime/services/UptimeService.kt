@@ -59,6 +59,14 @@ class UptimeService(
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
 
+    companion object {
+        private const val FREE_TIER_QUOTA = 3
+        private const val PRO_TIER_QUOTA = 10
+        private const val TEAM_TIER_QUOTA = 25
+        private const val BUSINESS_TIER_QUOTA = Int.MAX_VALUE
+        private const val DEFAULT_TIER_QUOTA = 3
+    }
+
     /**
      * Create a new uptime monitor.
      */
@@ -558,11 +566,11 @@ class UptimeService(
 
         val limit =
             when (tier) {
-                "FREE" -> 3
-                "PRO" -> 10
-                "TEAM" -> 25
-                "BUSINESS" -> Int.MAX_VALUE
-                else -> 3
+                "FREE" -> FREE_TIER_QUOTA
+                "PRO" -> PRO_TIER_QUOTA
+                "TEAM" -> TEAM_TIER_QUOTA
+                "BUSINESS" -> BUSINESS_TIER_QUOTA
+                else -> DEFAULT_TIER_QUOTA
             }
 
         if (currentCount >= limit) {

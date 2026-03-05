@@ -16,7 +16,7 @@ function remarkReadingTime() {
       if (node.type === 'text' && node.value) {
         wordCount += node.value.trim().split(/\s+/).filter(Boolean).length
       }
-      node.children?.forEach((child) => walk(child as typeof node))
+      node.children?.forEach((child) => { walk(child as typeof node) })
     }
     walk(tree as unknown as {type: string; children: unknown[]})
     const minutes = Math.ceil(wordCount / 200) || 1

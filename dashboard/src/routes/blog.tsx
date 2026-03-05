@@ -9,11 +9,14 @@ export const Route = createFileRoute('/blog')({
 
 function BlogLayout() {
   useEffect(() => {
-    document.documentElement.classList.add('dark')
-    document.documentElement.style.colorScheme = 'dark'
+    const root = document.documentElement
+    const hadDark = root.classList.contains('dark')
+    const prevColorScheme = root.style.colorScheme
+    root.classList.add('dark')
+    root.style.colorScheme = 'dark'
     return () => {
-      document.documentElement.classList.remove('dark')
-      document.documentElement.style.colorScheme = ''
+      if (!hadDark) root.classList.remove('dark')
+      root.style.colorScheme = prevColorScheme
     }
   }, [])
 

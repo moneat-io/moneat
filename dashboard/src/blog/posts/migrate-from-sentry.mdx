@@ -57,7 +57,7 @@ Requirements: Docker, 2 GB+ RAM (4 GB recommended), a domain for SSL.
 
 ```bash
 # Clone the repo
-git clone https://github.com/moneat/moneat
+git clone https://github.com/moneat-io/moneat
 cd moneat
 
 # Copy and edit the environment file
@@ -248,11 +248,19 @@ After deploying with the new DSN:
 Moneat doesn't import historical Sentry data, but error monitoring data has a short half-life — teams rarely reference errors older than 30 days. Run both platforms in parallel for 1–2 weeks before canceling Sentry, migrating one service at a time since the DSN is per-project.
 
 ```javascript
-// Temporarily send to both during transition
+// Temporarily send to both Sentry and Moneat during transition
 Sentry.init({
-  dsn: "https://abc123@moneat.yourdomain.com/api/1",
+  dsn: "https://YOUR_KEY@sentry.io/YOUR_PROJECT_ID", // keep original Sentry DSN
+  beforeSend(event) {
+    // Forward each event to Moneat's Sentry-compatible endpoint
+    fetch("https://YOUR_MONEAT_KEY@moneat.yourdomain.com/api/YOUR_PROJECT_ID/envelope/", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(event),
+    }).catch(() => {});
+    return event; // still send to Sentry
+  },
 });
-// Keep old Sentry project active to catch anything you missed
 ```
 
 ---
