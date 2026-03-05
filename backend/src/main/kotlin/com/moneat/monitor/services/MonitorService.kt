@@ -32,14 +32,12 @@ import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.HistoricalMetricsResponse
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.MetricDataPoint
-import com.moneat.monitor.models.SystemData
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
 import com.moneat.shared.models.HostAlerts
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.OrganizationAlertTemplates
-import com.moneat.shared.models.Systems
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ClickHouseSqlUtils
@@ -58,7 +56,6 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import java.util.*
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Clock
@@ -1267,22 +1264,6 @@ class MonitorService {
             memoryTotalKb = row[Hosts.memory_total_kb].takeIf { it > 0 },
             firstSeenAt = row[Hosts.first_seen_at],
             createdAt = row[Hosts.first_seen_at]
-        )
-    }
-
-    private fun rowToSystemData(row: ResultRow): SystemData {
-        return SystemData(
-            id = row[Systems.id],
-            organizationId = row[Systems.organization_id],
-            name = row[Systems.name],
-            host = row[Systems.host],
-            status = row[Systems.status],
-            lastSeenAt = row[Systems.last_seen_at],
-            agentVersion = row[Systems.agent_version],
-            os = row[Systems.os],
-            arch = row[Systems.arch],
-            createdAt = row[Systems.created_at],
-            updatedAt = row[Systems.updated_at]
         )
     }
 }

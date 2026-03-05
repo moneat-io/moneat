@@ -46,6 +46,12 @@ import {useState, useMemo} from 'react'
 import {cn} from '@/lib/utils'
 import {formatRelativeTime} from '@/lib/utils'
 
+function parseTimestamp(ts: string | undefined): number {
+  if (!ts) return 0
+  const parsed = Date.parse(ts)
+  return isNaN(parsed) ? 0 : parsed
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const kb = bytes / 1024
@@ -138,7 +144,7 @@ export function ContainerList() {
       for (const c of mapped) {
         const key = `${c.host}::${c.containerId}`
         const existing = seen.get(key)
-        if (!existing || (c.timestamp ?? '') > (existing.timestamp ?? '')) {
+        if (!existing || parseTimestamp(c.timestamp) > parseTimestamp(existing.timestamp)) {
           seen.set(key, c)
         }
       }

@@ -81,7 +81,7 @@ class CreateAgentKeyTool : McpTool {
         )
         return textResult(
             "Agent API key created: ${response.name} " +
-                "(id=${response.id}, key=${response.key})"
+                "(id=${response.id}, key=${response.key.take(4)}***)"
         )
     }
 }

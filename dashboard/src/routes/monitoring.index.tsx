@@ -266,10 +266,28 @@ function AddHostDialog({
         installType === 'docker'
           ? getDockerRunCommand(createdKey, options)
           : getDockerComposeCommand(createdKey, options)
-      await navigator.clipboard.writeText(command)
-      setCopied(true)
-      toast({title: 'Copied!', description: 'Command copied to clipboard'})
-      setTimeout(() => setCopied(false), 2000)
+      try {
+        await navigator.clipboard.writeText(command)
+        setCopied(true)
+        toast({title: 'Copied!', description: 'Command copied to clipboard'})
+        setTimeout(() => setCopied(false), 2000)
+      } catch {
+        try {
+          const textarea = document.createElement('textarea')
+          textarea.value = command
+          textarea.style.position = 'fixed'
+          textarea.style.opacity = '0'
+          document.body.appendChild(textarea)
+          textarea.select()
+          document.execCommand('copy')
+          document.body.removeChild(textarea)
+          setCopied(true)
+          toast({title: 'Copied!', description: 'Command copied to clipboard'})
+          setTimeout(() => setCopied(false), 2000)
+        } catch {
+          toast({title: 'Copy failed', description: 'Please copy the command manually', variant: 'destructive'})
+        }
+      }
     }
   }
 
