@@ -587,7 +587,11 @@ class MonitorAlertService {
             val count = data[0].toString().replace("\"", "").toLongOrNull() ?: 0
 
             // Check if we have enough data points
-            val expectedDataPoints = alert.durationSeconds / POLL_INTERVAL_SECONDS
+            val expectedDataPoints = if (alert.durationSeconds == 0) {
+                0
+            } else {
+                kotlin.math.ceil(alert.durationSeconds.toDouble() / POLL_INTERVAL_SECONDS).toInt()
+            }
             count >= expectedDataPoints * MIN_DATA_POINT_RATIO
         } catch (e: Exception) {
             logger.error(e) { "Error checking sustained condition" }

@@ -16,6 +16,7 @@
 
 package com.moneat.enterprise
 
+import com.moneat.config.EnvConfig
 import com.moneat.enterprise.license.LicenseInfo
 import com.moneat.enterprise.license.LicenseValidator
 import io.ktor.server.application.*
@@ -74,7 +75,7 @@ object FeatureRegistry {
         if (initialized) return
         initialized = true
 
-        val licenseKey = System.getenv("MONEAT_LICENSE_KEY")
+        val licenseKey = EnvConfig.get("MONEAT_LICENSE_KEY")
         val resolvedLicense = licenseKey?.takeIf { it.isNotBlank() }?.let { key ->
             LicenseValidator.validate(key).also { info ->
                 if (info != null) {
