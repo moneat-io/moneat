@@ -52,6 +52,9 @@ class GetHostStatusTool : McpTool {
             ?: return errorResult("Invalid host_id format")
         val host = monitorService.getHostById(hostId)
             ?: return errorResult("Host not found: $hostIdRaw")
+        if (host.organizationId != context.organizationId) {
+            return errorResult("Host not found: $hostIdRaw")
+        }
         return jsonResult(host)
     }
 }

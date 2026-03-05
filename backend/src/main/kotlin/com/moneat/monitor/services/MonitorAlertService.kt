@@ -27,13 +27,11 @@ import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.AlertSilencePeriods
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
 import com.moneat.shared.models.HostAlerts
 import com.moneat.shared.models.Hosts
-import com.moneat.shared.models.Users
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.server.config.ApplicationConfig
@@ -64,6 +62,12 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 private val logger = KotlinLogging.logger {}
+
+private fun String.escapeHtml(): String =
+    replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
 
 class MonitorAlertService {
     private val config = ApplicationConfig("application.conf")
@@ -289,7 +293,8 @@ class MonitorAlertService {
         hostName: String,
         organizationId: Int
     ) {
-        val alertKey = "alert_state:${alert.hostId}:${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}"
+        val idPart = if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"
+        val alertKey = "alert_state:${alert.hostId}:$idPart"
 
         // Get recent metrics for the host
         val currentValue = getCurrentMetricValue(alert.hostId, alert.organizationId, alert.metric) ?: return
@@ -325,7 +330,7 @@ class MonitorAlertService {
                 sendRecoveryNotification(alert, hostName, organizationId)
                 // Resolve incident for metric alerts (same dedup key used when firing)
                 val dedupKey =
-                    "moneat-host-alert-${alert.hostId}-${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}"
+                    "moneat-host-alert-${alert.hostId}-$idPart"
                 try {
                     incidentService.resolveAlert(
                         organizationId = organizationId,
@@ -369,7 +374,8 @@ class MonitorAlertService {
 
         // Trigger the alert
         logger.info {
-            "Alert ${alert.id} triggered for host ${alert.hostId}: ${alert.metric} ${alert.condition} ${alert.threshold} (current: $currentValue)"
+            "Alert ${alert.id} triggered for host ${alert.hostId}: " +
+                "${alert.metric} ${alert.condition} ${alert.threshold} (current: $currentValue)"
         }
 
         // Update Redis state
@@ -735,11 +741,20 @@ class MonitorAlertService {
                 val incidentEvent =
                     com.moneat.incident.models.IncidentEvent(
                         title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
-                        description = "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold\nCurrent Value: $formattedValue",
+                        description =
+                            "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold" +
+                                "\nCurrent Value: $formattedValue",
                         severity = incidentSeverity,
                         status = com.moneat.incident.models.IncidentStatus.FIRING,
                         source = com.moneat.incident.models.AlertSource.HOST_ALERT,
-                        deduplicationKey = "moneat-host-alert-${alert.hostId}-${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}",
+                        deduplicationKey = run {
+                            val idPart = if (alert.templateAlertId != null) {
+                                "tpl_${alert.templateAlertId}"
+                            } else {
+                                "id_${alert.id}"
+                            }
+                            "moneat-host-alert-${alert.hostId}-$idPart"
+                        },
                         organizationId = organizationId,
                         metadata =
                         mapOf(
@@ -938,89 +953,70 @@ class MonitorAlertService {
         hostName: String,
         organizationId: Int
     ) {
-        val recipients =
-            transaction {
-                Users
-                    .innerJoin(Memberships)
-                    .selectAll()
-                    .where { Memberships.organization_id eq organizationId }
-                    .map { it[Users.email] }
-            }
+        val prefsService = AlertNotificationPreferencesService()
 
-        val subject = "✅ Host Recovered: $hostName"
+        val hostUrl = "${config.property("email.frontendUrl").getString()}/monitoring/hosts/$hostId"
 
-        // Send email notifications
-        for (recipient in recipients) {
+        // Get users with email enabled for HOST_DOWN (recovery uses the same source)
+        val emailRecipients =
+            prefsService.getUsersWithChannelEnabled(
+                organizationId = organizationId,
+                alertSource = "HOST_DOWN",
+                channel = "email"
+            )
+
+        for ((_, email) in emailRecipients) {
             try {
-                val htmlBody =
-                    """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    </head>
-                    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                        <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 30px; border-radius: 8px;">
-                            <h1 style="color: #16a34a; margin-bottom: 20px;">✅ Host Recovered</h1>
-                            <p><strong>Host:</strong> $hostName</p>
-                            <p>The host is now reporting metrics again.</p>
-                            <div style="margin: 30px 0;">
-                                <a href="${config.property(
-                        "email.frontendUrl"
-                    ).getString()}/monitoring/hosts/$hostId" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Host</a>
-                            </div>
-                            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                            <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
-                        </div>
-                    </body>
-                    </html>
-                    """.trimIndent()
-
-                val textBody =
-                    """
-                    ✅ Host Recovered
-                    
-                    Host: $hostName
-                    
-                    The host is now reporting metrics again.
-                    
-                    View host: ${config.property("email.frontendUrl").getString()}/monitoring/hosts/$hostId
-                    
-                    ---
-                    Moneat Server Monitoring
-                    """.trimIndent()
-
-                emailService.sendEmail(recipient, subject, htmlBody, textBody, "host_up")
+                emailService.sendHostUpEmail(email, hostName, hostUrl)
             } catch (e: Exception) {
-                logger.error(e) { "Failed to send host up notification to $recipient" }
+                logger.error(e) { "Failed to send host up notification to $email" }
             }
         }
 
-        // Send Slack notification
-        try {
-            val baseUrl = config.property("email.frontendUrl").getString()
-            slackService.sendHostUp(
-                organizationId = organizationId,
-                hostName = hostName,
-                hostId = hostId,
-                baseUrl = baseUrl
-            )
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to send Slack notification for host up" }
+        // Check if Slack is enabled for any user in the org
+        val slackEnabled =
+            prefsService
+                .getUsersWithChannelEnabled(
+                    organizationId = organizationId,
+                    alertSource = "HOST_DOWN",
+                    channel = "slack"
+                ).isNotEmpty()
+
+        if (slackEnabled) {
+            try {
+                val baseUrl = config.property("email.frontendUrl").getString()
+                slackService.sendHostUp(
+                    organizationId = organizationId,
+                    hostName = hostName,
+                    hostId = hostId,
+                    baseUrl = baseUrl
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send Slack notification for host up" }
+            }
         }
 
-        // Send Discord notification
-        try {
-            val baseUrl = config.property("email.frontendUrl").getString()
-            discordService.sendHostUp(
-                organizationId = organizationId,
-                hostName = hostName,
-                hostId = hostId,
-                baseUrl = baseUrl
-            )
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to send Discord notification for host up" }
+        // Check if Discord is enabled for any user in the org
+        val discordEnabled =
+            prefsService
+                .getUsersWithChannelEnabled(
+                    organizationId = organizationId,
+                    alertSource = "HOST_DOWN",
+                    channel = "discord"
+                ).isNotEmpty()
+
+        if (discordEnabled) {
+            try {
+                val baseUrl = config.property("email.frontendUrl").getString()
+                discordService.sendHostUp(
+                    organizationId = organizationId,
+                    hostName = hostName,
+                    hostId = hostId,
+                    baseUrl = baseUrl
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to send Discord notification for host up" }
+            }
         }
 
         // Resolve incident alert for host up
@@ -1080,11 +1076,12 @@ class MonitorAlertService {
     ): String {
         val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/host-alert-v1.html")
 
+        val safeHostName = hostName.escapeHtml()
         return if (templateResource != null) {
             templateResource
                 .bufferedReader()
                 .use { it.readText() }
-                .replace("{{ hostName }}", hostName)
+                .replace("{{ hostName }}", safeHostName)
                 .replace("{{ metric }}", metric)
                 .replace("{{ condition }}", condition)
                 .replace("{{ value }}", value)
@@ -1095,7 +1092,7 @@ class MonitorAlertService {
             """
             <div style="padding: 20px; background: #fff1f2; border: 1px solid #fecaca; border-radius: 8px;">
                 <h2 style="color: #991b1b;">Host Alert</h2>
-                <p><strong>$hostName</strong> reported <strong>$metric</strong> at <strong>$value</strong>.</p>
+                <p><strong>$safeHostName</strong> reported <strong>$metric</strong> at <strong>$value</strong>.</p>
                 <p>Threshold: $condition $threshold</p>
                 <a href="$dashboardUrl">View Dashboard</a>
             </div>
@@ -1111,11 +1108,12 @@ class MonitorAlertService {
     ): String {
         val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/host-recovered.html")
 
+        val safeHostName = hostName.escapeHtml()
         return if (templateResource != null) {
             templateResource
                 .bufferedReader()
                 .use { it.readText() }
-                .replace("{{ hostName }}", hostName)
+                .replace("{{ hostName }}", safeHostName)
                 .replace("{{ metric }}", metric)
                 .replace("{{ duration }}", duration)
                 .replace("{{ dashboardUrl }}", dashboardUrl)
@@ -1124,7 +1122,7 @@ class MonitorAlertService {
             """
             <div style="padding: 20px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
                 <h2 style="color: #166534;">Host Recovered</h2>
-                <p><strong>$hostName</strong> is back to normal.</p>
+                <p><strong>$safeHostName</strong> is back to normal.</p>
                 <p>Metric: $metric</p>
                 <a href="$dashboardUrl">View Dashboard</a>
             </div>

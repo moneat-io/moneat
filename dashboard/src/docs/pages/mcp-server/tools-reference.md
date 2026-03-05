@@ -362,8 +362,8 @@ Create an alert silence period.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `host_id` | integer | Yes | Host ID |
-| `duration_minutes` | number | Yes | Silence duration |
+| `starts_at` | integer | Yes | Silence start time (epoch milliseconds) |
+| `ends_at` | integer | Yes | Silence end time (epoch milliseconds) |
 | `reason` | string | No | Reason for silencing |
 
 ### ✏️ `delete_silence_period`

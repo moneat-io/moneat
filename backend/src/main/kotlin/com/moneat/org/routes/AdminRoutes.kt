@@ -341,6 +341,7 @@ fun Route.adminRoutes() {
                         try {
                             AlertSource.valueOf(request.source)
                         } catch (e: Exception) {
+                            logger.warn { "Invalid AlertSource '${request.source}', defaulting to HOST_ALERT: ${e.message}" }
                             AlertSource.HOST_ALERT
                         }
 

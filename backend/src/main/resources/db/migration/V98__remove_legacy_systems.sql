@@ -4,12 +4,14 @@ DROP TABLE IF EXISTS system_alert_settings;
 DROP TABLE IF EXISTS system_alerts;
 DROP TABLE IF EXISTS systems;
 
--- Remap SYSTEM_ALERT/SYSTEM_DOWN data before adding the new CHECK constraint
+-- Drop the old check constraint first so the UPDATEs below are not blocked by it
+ALTER TABLE alert_notification_preferences DROP CONSTRAINT IF EXISTS alert_notification_preferences_alert_source_check;
+
+-- Remap SYSTEM_ALERT/SYSTEM_DOWN data
 UPDATE alert_notification_preferences SET alert_source = 'HOST_ALERT' WHERE alert_source = 'SYSTEM_ALERT';
 UPDATE alert_notification_preferences SET alert_source = 'HOST_DOWN' WHERE alert_source = 'SYSTEM_DOWN';
 
--- Update check constraint on alert_notification_preferences (data already remapped above)
-ALTER TABLE alert_notification_preferences DROP CONSTRAINT IF EXISTS alert_notification_preferences_alert_source_check;
+-- Add the new check constraint after data has been remapped
 ALTER TABLE alert_notification_preferences ADD CONSTRAINT alert_notification_preferences_alert_source_check
     CHECK (alert_source IN ('HOST_ALERT', 'HOST_DOWN', 'UPTIME_MONITOR', 'ERROR_ALERT', 'DASHBOARD_ALERT'));
 

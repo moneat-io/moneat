@@ -22,7 +22,7 @@ class ListAlertsTool : McpTool {
         "List monitoring alerts for a specific host"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("host_id" to schemaString("Host ID (integer)"))
+            mapOf("host_id" to schemaInteger("Host ID (integer)"))
         ),
         required = listOf("host_id")
     )
