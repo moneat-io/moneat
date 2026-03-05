@@ -39,7 +39,7 @@ private val logger = KotlinLogging.logger {}
 class RedisHandler : DataSourceHandler {
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        val uri = buildRedisUri(request.host, request.port ?: 6379, request.password)
+        val uri = buildRedisUri(request.host, request.port ?: 6379, request.password ?: request.apiKey)
 
         return try {
             RedisClient.create(uri).use { client ->
@@ -65,7 +65,7 @@ class RedisHandler : DataSourceHandler {
         limit: Int,
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
-        val uri = buildRedisUri(host, port ?: 6379, credentials.password)
+        val uri = buildRedisUri(host, port ?: 6379, credentials.password ?: credentials.apiKey)
         val db = databaseName?.toIntOrNull() ?: 0
 
         return try {
@@ -196,7 +196,7 @@ class RedisHandler : DataSourceHandler {
         databaseName: String?,
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
-        val uri = buildRedisUri(host, port ?: 6379, credentials.password)
+        val uri = buildRedisUri(host, port ?: 6379, credentials.password ?: credentials.apiKey)
         val dbIndex = databaseName?.toIntOrNull() ?: 0
         return try {
             RedisClient.create(uri).use { client ->
