@@ -113,7 +113,7 @@ testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgr
 testcontainers-clickhouse = { module = "org.testcontainers:testcontainers-clickhouse", version.ref = "testcontainers" }
 
 # Datasource JDBC drivers
-mysql-connector-j = { module = "com.mysql:mysql-connector-j", version = "9.1.0" }
+mysql-connector-j = { module = "com.mysql:mysql-connector-j", version = "9.6.0" }
 mariadb-java-client = { module = "org.mariadb.jdbc:mariadb-java-client", version = "3.5.7" }
 mssql-jdbc = { module = "com.microsoft.sqlserver:mssql-jdbc", version = "12.8.1.jre11" }
 clickhouse-jdbc = { module = "com.clickhouse:clickhouse-jdbc", version = "0.9.7" }
