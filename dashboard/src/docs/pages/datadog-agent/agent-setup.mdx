@@ -15,10 +15,76 @@ The agent collects system metrics, processes, containers, APM traces, and logs.
 
 The generated Docker command covers basic metrics, APM, and logs. For full functionality — including container images, SBOM, database monitoring, synthetics, profiling, and other advanced tracks — the agent requires a `datadog.yaml` file that redirects each telemetry type to Moneat.
 
-Copy the full `datadog.yaml` from **Settings → Agent Keys** and save it to `/etc/datadog-agent/datadog.yaml` on your host (or mount it into the Docker container at that path):
+Copy the configuration below and save it to `/etc/datadog-agent/datadog.yaml` on your host (or mount it into the Docker container at that path):
+
+```yaml
+# Datadog Agent configuration for Moneat
+# Redirects each telemetry track to api.moneat.io
+
+# Increase Docker check timeout (default 5s is too short on loaded hosts)
+docker_query_timeout: 15
+
+# Container (contlcycle-intake, contimage-intake, sbom-intake)
+container_lifecycle:
+  dd_url: https://api.moneat.io
+container_image:
+  dd_url: https://api.moneat.io
+sbom:
+  dd_url: https://api.moneat.io
+
+# Network Device Monitoring
+network_devices:
+  metadata:
+    dd_url: https://api.moneat.io
+  snmp_traps:
+    forwarder:
+      dd_url: https://api.moneat.io
+  netflow:
+    forwarder:
+      dd_url: https://api.moneat.io
+
+# Network Config Management
+network_config_management:
+  forwarder:
+    dd_url: https://api.moneat.io
+
+# Network Path
+network_path:
+  forwarder:
+    dd_url: https://api.moneat.io
+
+# Synthetics
+synthetics:
+  forwarder:
+    dd_url: https://api.moneat.io
+
+# Data Streams
+data_streams:
+  forwarder:
+    dd_url: https://api.moneat.io
+
+# Event Management
+event_management:
+  forwarder:
+    dd_url: https://api.moneat.io
+
+# Database Monitoring
+database_monitoring:
+  metrics:
+    dd_url: https://api.moneat.io
+  samples:
+    dd_url: https://api.moneat.io
+  activity:
+    dd_url: https://api.moneat.io
+
+# Continuous Profiling — full URL required (agent uses it verbatim, no path appended)
+apm_config:
+  profiling_dd_url: https://api.moneat.io/dd/profiling/v1/input
+```
+
+Mount this file when running the agent in Docker:
 
 ```bash
-# Mount the config file when running the agent in Docker
 docker run \
   -e DD_API_KEY=<YOUR_KEY> \
   -v /path/to/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro \
@@ -29,7 +95,11 @@ docker run \
   gcr.io/datadoghq/agent:7
 ```
 
-Without the `datadog.yaml`, tracks like container images, SBOM, and DBM will attempt to send to Datadog's servers and fail.
+:::info[How dd_url routing works]
+The agent strips any path from `dd_url` and appends `/api/v2/{trackType}` itself — so `https://api.moneat.io` is the correct value for most tracks. The exception is `apm_config.profiling_dd_url`, which the agent uses verbatim (no path is appended), so the full path must be specified.
+:::
+
+Without this configuration, tracks like container images, SBOM, database monitoring, and profiling will attempt to send to Datadog's servers instead of Moneat.
 
 ## Verifying the Agent
 
