@@ -468,7 +468,7 @@ fun Route.adminRoutes() {
                                     emailSent = true
                                 }
 
-                                "system_up" -> {
+                                "system_up", "host_up" -> {
                                     emailService.sendHostUpEmail(
                                         userEmail,
                                         "[TEST] Production API",
@@ -477,7 +477,7 @@ fun Route.adminRoutes() {
                                     emailSent = true
                                 }
 
-                                "system_down" -> {
+                                "system_down", "host_down" -> {
                                     emailService.sendHostDownEmail(
                                         userEmail,
                                         "[TEST] Production API",
@@ -523,7 +523,7 @@ fun Route.adminRoutes() {
                                             )
                                     }
 
-                                    "system_up" -> {
+                                    "system_up", "host_up" -> {
                                         slackSent =
                                             slackService.sendHostUp(
                                                 organizationId = orgId,
@@ -533,7 +533,7 @@ fun Route.adminRoutes() {
                                             )
                                     }
 
-                                    "system_down" -> {
+                                    "system_down", "host_down" -> {
                                         slackSent =
                                             slackService.sendHostDown(
                                                 organizationId = orgId,
@@ -595,7 +595,7 @@ fun Route.adminRoutes() {
                                             )
                                     }
 
-                                    "system_up" -> {
+                                    "system_up", "host_up" -> {
                                         discordSent =
                                             discordService.sendHostUp(
                                                 organizationId = orgId,
@@ -605,7 +605,7 @@ fun Route.adminRoutes() {
                                             )
                                     }
 
-                                    "system_down" -> {
+                                    "system_down", "host_down" -> {
                                         discordSent =
                                             discordService.sendHostDown(
                                                 organizationId = orgId,

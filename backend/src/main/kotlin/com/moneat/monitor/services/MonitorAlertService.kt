@@ -798,11 +798,10 @@ class MonitorAlertService {
             if (currentStatus != newStatus) {
                 logger.info { "Host $hostId ($hostName) status changed: $currentStatus -> $newStatus" }
 
-                // Update status in database
+                // Update status in database (last_seen_at is only updated by heartbeat/metrics code)
                 transaction {
                     Hosts.update({ Hosts.id eq hostId }) {
                         it[status] = newStatus
-                        it[last_seen_at] = now
                     }
                 }
 

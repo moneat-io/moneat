@@ -4649,9 +4649,12 @@ class ApiClient {
       globalAlerts: (response.globalAlerts ?? response.global_alerts ?? []).map(
         (row) => ({...this.mapHostAlert(row), scope: 'global' as const})
       ),
-      hostAlerts: (response.hostAlerts ?? response.host_alerts ?? []).map(
-        (row) => this.mapHostAlert(row)
-      ),
+      hostAlerts: (
+        response.hostAlerts ?? response.host_alerts ??
+        (response as Record<string, unknown>).systemAlerts as Record<string, unknown>[] | undefined ??
+        (response as Record<string, unknown>).system_alerts as Record<string, unknown>[] | undefined ??
+        []
+      ).map((row) => this.mapHostAlert(row)),
       effectiveAlerts: (response.effectiveAlerts ?? response.effective_alerts ?? []).map(
         (row) => this.mapHostAlert(row)
       ),
@@ -4677,10 +4680,11 @@ class ApiClient {
     },
     scope: 'global' | 'host' = 'host'
   ) {
-    return this.request<HostAlert>(
+    const payload = await this.request<Record<string, unknown>>(
       `${API_BASE}/monitor/hosts/${hostId}/alerts?scope=${scope}`,
       { method: 'POST', body: JSON.stringify(alert) }
     )
+    return this.mapHostAlert(payload)
   }
 
   async updateHostAlert(
@@ -4689,10 +4693,11 @@ class ApiClient {
     updates: Partial<HostAlert>,
     scope: 'global' | 'host' = 'host'
   ) {
-    return this.request<HostAlert>(
+    const payload = await this.request<Record<string, unknown>>(
       `${API_BASE}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
       { method: 'PUT', body: JSON.stringify(updates) }
     )
+    return this.mapHostAlert(payload)
   }
 
   async deleteHostAlert(

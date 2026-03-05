@@ -54,7 +54,7 @@ function AdminIncidentsPage() {
   const { toast } = useToast()
   const [source, setSource] = useState('HOST_DOWN')
   const [severity, setSeverity] = useState('CRITICAL')
-  const [title, setTitle] = useState('Test Incident: System Unresponsive')
+  const [title, setTitle] = useState('Test Incident: Host Unresponsive')
   const [description, setDescription] = useState('This is a manually triggered test incident.')
   
   const triggerMutation = useMutation({

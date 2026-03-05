@@ -31,9 +31,9 @@ class ListAlertsTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["host_id"]?.jsonPrimitive?.content
+        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
             ?: return errorResult("host_id is required")
-        val hostId = systemId.toIntOrNull()
+        val hostId = hostIdRaw.toIntOrNull()
             ?: return errorResult("Invalid host_id format")
         val alerts = monitorService.listAlerts(hostId, context.organizationId)
         return jsonResult(alerts)

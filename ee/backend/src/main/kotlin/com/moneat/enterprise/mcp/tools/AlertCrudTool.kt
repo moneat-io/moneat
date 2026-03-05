@@ -27,7 +27,7 @@ class CreateAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaString("Host ID (integer)"),
+                "host_id" to schemaInteger("Host ID (integer)"),
                 "metric" to schemaEnum(
                     "Metric to monitor",
                     listOf(
@@ -53,9 +53,9 @@ class CreateAlertTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["host_id"]?.jsonPrimitive?.content
+        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
             ?: return errorResult("host_id is required")
-        val hostId = systemId.toIntOrNull()
+        val hostId = hostIdRaw.toIntOrNull()
             ?: return errorResult("Invalid host_id format")
         val metric = args["metric"]?.jsonPrimitive?.content
             ?: return errorResult("metric is required")
@@ -92,7 +92,7 @@ class UpdateAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaString("Host ID (integer)"),
+                "host_id" to schemaInteger("Host ID (integer)"),
                 "alert_id" to schemaNumber("Alert ID"),
                 "metric" to schemaString("Metric to monitor"),
                 "condition" to schemaEnum(
@@ -111,9 +111,9 @@ class UpdateAlertTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["host_id"]?.jsonPrimitive?.content
+        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
             ?: return errorResult("host_id is required")
-        val hostId = systemId.toIntOrNull()
+        val hostId = hostIdRaw.toIntOrNull()
             ?: return errorResult("Invalid host_id format")
         val alertId = args["alert_id"]?.jsonPrimitive?.intOrNull
             ?: return errorResult("alert_id is required")
@@ -149,7 +149,7 @@ class DeleteAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaString("Host ID (integer)"),
+                "host_id" to schemaInteger("Host ID (integer)"),
                 "alert_id" to schemaNumber("Alert ID")
             )
         ),
@@ -160,9 +160,9 @@ class DeleteAlertTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["host_id"]?.jsonPrimitive?.content
+        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
             ?: return errorResult("host_id is required")
-        val hostId = systemId.toIntOrNull()
+        val hostId = hostIdRaw.toIntOrNull()
             ?: return errorResult("Invalid host_id format")
         val alertId = args["alert_id"]?.jsonPrimitive?.intOrNull
             ?: return errorResult("alert_id is required")
@@ -262,7 +262,7 @@ class DeleteHostTool : McpTool {
     override val readOnly = false
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("host_id" to schemaString("Host ID (integer)"))
+            mapOf("host_id" to schemaInteger("Host ID (integer)"))
         ),
         required = listOf("host_id")
     )
@@ -271,9 +271,9 @@ class DeleteHostTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["host_id"]?.jsonPrimitive?.content
+        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
             ?: return errorResult("host_id is required")
-        val hostId = systemId.toIntOrNull()
+        val hostId = hostIdRaw.toIntOrNull()
             ?: return errorResult("Invalid host_id format")
 
         val deleted = alertMonitorService.deleteHost(
@@ -281,7 +281,7 @@ class DeleteHostTool : McpTool {
             context.organizationId
         )
         return if (deleted) {
-            textResult("Host $systemId deleted")
+            textResult("Host $hostIdRaw deleted")
         } else {
             errorResult("Host not found or delete failed")
         }

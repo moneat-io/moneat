@@ -1047,9 +1047,9 @@ class AdminService {
 
             // Delete host alerts and settings
             val hostIds = Hosts.selectAll().where { Hosts.organization_id eq orgId }.map { it[Hosts.id] }
-            hostIds.forEach { hostId ->
-                HostAlerts.deleteWhere { HostAlerts.host_id eq hostId }
-                HostAlertSettings.deleteWhere { HostAlertSettings.host_id eq hostId }
+            if (hostIds.isNotEmpty()) {
+                HostAlerts.deleteWhere { HostAlerts.host_id inList hostIds }
+                HostAlertSettings.deleteWhere { HostAlertSettings.host_id inList hostIds }
             }
             Hosts.deleteWhere { Hosts.organization_id eq orgId }
 

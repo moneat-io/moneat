@@ -37,7 +37,7 @@ class GetHostStatusTool : McpTool {
         "Get detailed status and info for a specific host"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("host_id" to schemaString("Host ID (integer)"))
+            mapOf("host_id" to schemaInteger("Host ID (integer)"))
         ),
         required = listOf("host_id")
     )
@@ -46,13 +46,13 @@ class GetHostStatusTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["host_id"]?.jsonPrimitive?.content
+        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
             ?: return errorResult("host_id is required")
-        val hostId = systemId.toIntOrNull()
+        val hostId = hostIdRaw.toIntOrNull()
             ?: return errorResult("Invalid host_id format")
-        val system = monitorService.getHostById(hostId)
-            ?: return errorResult("Host not found: $systemId")
-        return jsonResult(system)
+        val host = monitorService.getHostById(hostId)
+            ?: return errorResult("Host not found: $hostIdRaw")
+        return jsonResult(host)
     }
 }
 

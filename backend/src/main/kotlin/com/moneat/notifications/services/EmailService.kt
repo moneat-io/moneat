@@ -523,6 +523,9 @@ class EmailService {
         lastSeenText: String,
         hostUrl: String
     ) {
+        val safeHostName = hostName.escapeHtml()
+        val safeLastSeenText = lastSeenText.escapeHtml()
+        val safeHostUrl = hostUrl.escapeHtml()
         val subject = "🔴 Host Down: $hostName"
         val htmlBody =
             """
@@ -535,11 +538,11 @@ class EmailService {
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 30px; border-radius: 8px;">
                     <h1 style="color: #dc2626; margin-bottom: 20px;">🔴 Host Down</h1>
-                    <p><strong>Host:</strong> $hostName</p>
-                    <p><strong>Status:</strong> $lastSeenText</p>
+                    <p><strong>Host:</strong> $safeHostName</p>
+                    <p><strong>Status:</strong> $safeLastSeenText</p>
                     <p>The monitoring agent has stopped reporting metrics. Please check if the host is online and the agent is running.</p>
                     <div style="margin: 30px 0;">
-                        <a href="$hostUrl" style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Host</a>
+                        <a href="$safeHostUrl" style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Host</a>
                     </div>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
@@ -622,6 +625,8 @@ class EmailService {
         hostName: String,
         hostUrl: String
     ) {
+        val safeHostName = hostName.escapeHtml()
+        val safeHostUrl = hostUrl.escapeHtml()
         val subject = "✅ Host Recovered: $hostName"
         val htmlBody =
             """
@@ -634,10 +639,10 @@ class EmailService {
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 30px; border-radius: 8px;">
                     <h1 style="color: #16a34a; margin-bottom: 20px;">✅ Host Recovered</h1>
-                    <p><strong>Host:</strong> $hostName</p>
+                    <p><strong>Host:</strong> $safeHostName</p>
                     <p>The host is now reporting metrics again.</p>
                     <div style="margin: 30px 0;">
-                        <a href="$hostUrl" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Host</a>
+                        <a href="$safeHostUrl" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Host</a>
                     </div>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>

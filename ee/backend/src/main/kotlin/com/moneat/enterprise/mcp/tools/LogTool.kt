@@ -58,7 +58,7 @@ class QueryLogsTool : McpTool {
                 ),
                 "limit" to schemaNumber("Max results (default 100)"),
                 "cursor" to schemaString("Pagination cursor"),
-                "host_id" to schemaString("Host/system ID filter"),
+                "host_id" to schemaString("Host ID filter"),
                 "container_name" to schemaString("Container name filter")
             )
         )

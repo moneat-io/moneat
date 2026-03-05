@@ -2255,7 +2255,7 @@ object DemoDataSeeder {
                 Hosts
                     .selectAll()
                     .where { Hosts.organization_id eq organizationId }
-                    .map { it[Hosts.id] to (it[Hosts.display_name] ?: it[Hosts.hostname]) }
+                    .map { it[Hosts.id] to it[Hosts.hostname] }
             }
 
         if (existingHosts.isNotEmpty()) {
@@ -2315,7 +2315,7 @@ object DemoDataSeeder {
                 Hosts
                     .selectAll()
                     .where { Hosts.organization_id eq organizationId }
-                    .map { it[Hosts.id] to (it[Hosts.display_name] ?: it[Hosts.hostname]) }
+                    .map { it[Hosts.id] to it[Hosts.hostname] }
             }
 
         if (hosts.isEmpty()) {
@@ -2468,7 +2468,7 @@ object DemoDataSeeder {
                 Hosts
                     .selectAll()
                     .where { Hosts.organization_id eq organizationId }
-                    .map { it[Hosts.id] to (it[Hosts.display_name] ?: it[Hosts.hostname]) }
+                    .map { it[Hosts.id] to it[Hosts.hostname] }
             }
 
         if (hosts.isEmpty()) {

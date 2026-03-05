@@ -160,7 +160,7 @@ Get metrics for containers on a host.
 | `container_name` | string | No | Filter by container name |
 
 ### `get_host_logs`
-Get system-level logs for a host. Delegates to `query_logs` with system filter.
+Get system-level logs for a host. Delegates to `query_logs` with a host filter, filtering by `host_id`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

@@ -239,7 +239,7 @@ class DiscordService {
             sendMessage(
                 channelId = config.channelId,
                 embed = embed,
-                fallbackText = "🔴 Host Down: $hostName - Last seen $lastSeen"
+                fallbackText = "🔴 Host Down: $hostName - $lastSeen"
             )
         return success
     }
