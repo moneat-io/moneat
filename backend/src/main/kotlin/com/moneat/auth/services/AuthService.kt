@@ -59,6 +59,10 @@ data class SignupRequestContext(
 )
 
 class AuthService {
+    companion object {
+        private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
+    }
+
     private val config = ApplicationConfig("application.conf")
     private val jwtSecret = config.property("jwt.secret").getString()
     private val jwtIssuer = config.property("jwt.issuer").getString()
@@ -96,7 +100,7 @@ class AuthService {
         )
 
         val (userId, emailVerified, orgId, orgRole) =
-            transaction {
+            transaction(transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE) {
                 // Check if user exists
                 val existing = Users.selectAll().where { Users.email eq normalizedEmail }.firstOrNull()
                 if (existing != null) {
@@ -156,13 +160,15 @@ class AuthService {
 
                 // Detect first real user (excludes demo user which has id < 0)
                 val isFirstUser = Users.selectAll().where { Users.id greater 0 }.count() == 0L
+                val isSelfHosted = EnvConfig.get("SELF_HOSTED", "false").trim().lowercase() == "true"
                 val skipVerification =
-                    isFirstUser || EnvConfig.get("DISABLE_EMAIL_VERIFICATION", "false").trim().lowercase() == "true"
+                    isFirstUser ||
+                        (isSelfHosted && EnvConfig.get("DISABLE_EMAIL_VERIFICATION", "false").trim().lowercase() == "true")
 
                 // Generate verification token (only used if verification is required)
                 val verificationToken = if (!skipVerification) generateVerificationToken() else null
                 val expiresAt =
-                    if (!skipVerification) System.currentTimeMillis() + (24 * 60 * 60 * 1000) else null
+                    if (!skipVerification) System.currentTimeMillis() + VERIFICATION_TTL_MS else null
 
                 // Create user
                 val passwordHash = BCrypt.hashpw(request.password, BCrypt.gensalt())
@@ -337,7 +343,7 @@ class AuthService {
 
             // Generate new token
             val verificationToken = generateVerificationToken()
-            val expiresAt = System.currentTimeMillis() + (24 * 60 * 60 * 1000)
+            val expiresAt = System.currentTimeMillis() + VERIFICATION_TTL_MS
 
             Users.update({ Users.id eq user[Users.id] }) {
                 it[email_verification_token] = verificationToken
