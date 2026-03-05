@@ -25,7 +25,7 @@ class GetHostMetricsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaString("Host ID (integer)"),
+                "host_id" to schemaInteger("Host ID (integer)"),
                 "hours" to schemaNumber(
                     "Hours of history (default 24, max 168)"
                 )
@@ -64,7 +64,7 @@ class GetContainerMetricsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaString("Host ID (integer)"),
+                "host_id" to schemaInteger("Host ID (integer)"),
                 "container_name" to schemaString("Container name")
             )
         ),
@@ -98,11 +98,11 @@ class GetContainerMetricsTool : McpTool {
 class GetHostLogsTool : McpTool {
     override val name = "get_host_logs"
     override val description =
-        "Get system-level logs for a host"
+        "Get host-level logs for a host"
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaString("Host ID (integer)"),
+                "host_id" to schemaInteger("Host ID (integer)"),
                 "hours" to schemaNumber(
                     "Hours of history (default 24)"
                 ),
@@ -136,7 +136,7 @@ class GetAlertConfigTool : McpTool {
         "Get current alert configuration for a host"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("host_id" to schemaString("Host ID (integer)"))
+            mapOf("host_id" to schemaInteger("Host ID (integer)"))
         ),
         required = listOf("host_id")
     )

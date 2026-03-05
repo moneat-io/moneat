@@ -68,6 +68,7 @@ private fun String.escapeHtml(): String =
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
+        .replace("'", "&#39;")
 
 class MonitorAlertService {
     private val config = ApplicationConfig("application.conf")
@@ -87,6 +88,8 @@ class MonitorAlertService {
         const val STATUS_CHECK_INTERVAL_SECONDS = 60
         const val HOST_DOWN_THRESHOLD_SECONDS = 300 // 5 minutes
         const val MIN_ALERT_INTERVAL_MINUTES = 15 // Don't spam alerts
+        const val POLL_INTERVAL_SECONDS = 15
+        const val MIN_DATA_POINT_RATIO = 0.8
     }
 
     /**
@@ -584,8 +587,8 @@ class MonitorAlertService {
             val count = data[0].toString().replace("\"", "").toLongOrNull() ?: 0
 
             // Check if we have enough data points
-            val expectedDataPoints = alert.durationSeconds / 15 // Assuming 15s poll interval
-            count >= expectedDataPoints * 0.8 // Allow 20% missing data points
+            val expectedDataPoints = alert.durationSeconds / POLL_INTERVAL_SECONDS
+            count >= expectedDataPoints * MIN_DATA_POINT_RATIO
         } catch (e: Exception) {
             logger.error(e) { "Error checking sustained condition" }
             false

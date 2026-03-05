@@ -406,7 +406,7 @@ object DemoDataSeeder {
 
         // Seed monitoring systems (always check for duplicates inside the function)
         println("\nSeeding monitoring systems...")
-        seedMonitoringSystems(orgId)
+        seedMonitoringHosts(orgId)
 
         // Seed system metrics for monitoring systems
         println("\nSeeding system metrics...")
@@ -2248,7 +2248,7 @@ object DemoDataSeeder {
         println("✅ Seeded ${monitors.size} uptime monitors with heartbeat history")
     }
 
-    private suspend fun seedMonitoringSystems(organizationId: Int) {
+    private suspend fun seedMonitoringHosts(organizationId: Int) {
         // Check if hosts already exist
         val existingHosts =
             transaction {
@@ -3785,8 +3785,6 @@ object DemoDataSeeder {
                     // Organization child data
                     "DELETE FROM subscriptions WHERE organization_id = $orgId",
                     "DELETE FROM uptime_monitors WHERE organization_id = $orgId",
-                    "DELETE FROM systems WHERE organization_id = $orgId",
-                    "DELETE FROM status_pages WHERE organization_id = $orgId",
                     // Project-related data
                     "DELETE FROM release_files WHERE release_id IN (SELECT id FROM releases WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId))",
                     "DELETE FROM releases WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId)",

@@ -93,8 +93,7 @@ class UpdateAlertTool : McpTool {
         properties = JsonObject(
             mapOf(
                 "host_id" to schemaInteger("Host ID (integer)"),
-                "alert_id" to schemaNumber("Alert ID"),
-                "metric" to schemaString("Metric to monitor"),
+                "alert_id" to schemaInteger("Alert ID"),
                 "condition" to schemaEnum(
                     "Alert condition",
                     listOf("gt", "lt", "eq")
@@ -150,7 +149,7 @@ class DeleteAlertTool : McpTool {
         properties = JsonObject(
             mapOf(
                 "host_id" to schemaInteger("Host ID (integer)"),
-                "alert_id" to schemaNumber("Alert ID")
+                "alert_id" to schemaInteger("Alert ID")
             )
         ),
         required = listOf("host_id", "alert_id")

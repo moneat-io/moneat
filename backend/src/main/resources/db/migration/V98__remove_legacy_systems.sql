@@ -20,10 +20,10 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'escalation_policy_alert_sources' AND column_name = 'alert_source'
+        WHERE table_schema = 'public' AND table_name = 'escalation_policy_alert_sources' AND column_name = 'alert_source'
     ) THEN
-        UPDATE escalation_policy_alert_sources SET alert_source = 'HOST_ALERT' WHERE alert_source = 'SYSTEM_ALERT';
-        UPDATE escalation_policy_alert_sources SET alert_source = 'HOST_DOWN' WHERE alert_source = 'SYSTEM_DOWN';
+        UPDATE public.escalation_policy_alert_sources SET alert_source = 'HOST_ALERT' WHERE alert_source = 'SYSTEM_ALERT';
+        UPDATE public.escalation_policy_alert_sources SET alert_source = 'HOST_DOWN' WHERE alert_source = 'SYSTEM_DOWN';
     END IF;
 END $$;
 
@@ -32,21 +32,28 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'incident_routing_rules' AND column_name = 'alert_source'
+        WHERE table_schema = 'public' AND table_name = 'incident_routing_rules' AND column_name = 'alert_source'
     ) THEN
-        UPDATE incident_routing_rules SET alert_source = 'HOST_ALERT' WHERE alert_source = 'SYSTEM_ALERT';
-        UPDATE incident_routing_rules SET alert_source = 'HOST_DOWN' WHERE alert_source = 'SYSTEM_DOWN';
+        UPDATE public.incident_routing_rules SET alert_source = 'HOST_ALERT' WHERE alert_source = 'SYSTEM_ALERT';
+        UPDATE public.incident_routing_rules SET alert_source = 'HOST_DOWN' WHERE alert_source = 'SYSTEM_DOWN';
     END IF;
 END $$;
 
--- Update incident_event_log if the table and source column exist
+-- Update incident_event_log if the table and source or alert_source column exist
 DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'incident_event_log' AND column_name = 'source'
+        WHERE table_schema = 'public' AND table_name = 'incident_event_log' AND column_name = 'source'
     ) THEN
-        UPDATE incident_event_log SET source = 'HOST_ALERT' WHERE source = 'SYSTEM_ALERT';
-        UPDATE incident_event_log SET source = 'HOST_DOWN' WHERE source = 'SYSTEM_DOWN';
+        UPDATE public.incident_event_log SET source = 'HOST_ALERT' WHERE source = 'SYSTEM_ALERT';
+        UPDATE public.incident_event_log SET source = 'HOST_DOWN' WHERE source = 'SYSTEM_DOWN';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'incident_event_log' AND column_name = 'alert_source'
+    ) THEN
+        UPDATE public.incident_event_log SET alert_source = 'HOST_ALERT' WHERE alert_source = 'SYSTEM_ALERT';
+        UPDATE public.incident_event_log SET alert_source = 'HOST_DOWN' WHERE alert_source = 'SYSTEM_DOWN';
     END IF;
 END $$;

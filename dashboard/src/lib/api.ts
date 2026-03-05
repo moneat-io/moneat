@@ -4639,6 +4639,8 @@ class ApiClient {
       global_alerts?: Record<string, unknown>[]
       hostAlerts?: Record<string, unknown>[]
       host_alerts?: Record<string, unknown>[]
+      systemAlerts?: Record<string, unknown>[]
+      system_alerts?: Record<string, unknown>[]
       effectiveAlerts?: Record<string, unknown>[]
       effective_alerts?: Record<string, unknown>[]
     }>(
@@ -4651,8 +4653,7 @@ class ApiClient {
       ),
       hostAlerts: (
         response.hostAlerts ?? response.host_alerts ??
-        (response as Record<string, unknown>).systemAlerts as Record<string, unknown>[] | undefined ??
-        (response as Record<string, unknown>).system_alerts as Record<string, unknown>[] | undefined ??
+        response.systemAlerts ?? response.system_alerts ??
         []
       ).map((row) => this.mapHostAlert(row)),
       effectiveAlerts: (response.effectiveAlerts ?? response.effective_alerts ?? []).map(
