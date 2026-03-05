@@ -91,6 +91,6 @@ object SystemStatusTracker {
             logger.info { "Marked $downCount system(s) as down" }
         }
 
-        // Note: Systems are marked as "up" in MonitorService.ingestMetrics when they send data
+        // Note: Systems are marked as "up" by the Datadog agent intake when they send data
     }
 }

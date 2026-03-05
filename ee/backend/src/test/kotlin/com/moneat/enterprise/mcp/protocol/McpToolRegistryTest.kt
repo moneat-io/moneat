@@ -203,7 +203,7 @@ class McpToolRegistryTest {
         val toolsByName = registry.listTools().associateBy { it.name }
 
         val writeTools = setOf(
-            "create_host",
+            "create_agent_key",
             "delete_host",
             "create_uptime_monitor",
             "update_uptime_monitor",

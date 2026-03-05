@@ -16,21 +16,14 @@
 
 package com.moneat.monitor.routes
 
-import com.moneat.billing.services.BillingQuotaService
-import com.moneat.logs.models.AgentLogsRequest
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.services.LogService
-import com.moneat.monitor.models.AgentLogIngestResponse
 import com.moneat.monitor.models.AllContainersResponse
 import com.moneat.monitor.models.ContainerStatsResponse
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.CreateSilencePeriodRequest
-import com.moneat.monitor.models.CreateHostRequest
-import com.moneat.monitor.models.CreateHostResponse
 import com.moneat.monitor.models.HostResponse
-import com.moneat.monitor.models.IngestResponse
 import com.moneat.monitor.models.LatestMetrics
-import com.moneat.monitor.models.SystemMetricsPayload
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
 import com.moneat.monitor.services.MonitorAlertService
@@ -38,14 +31,12 @@ import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.models.HostData
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
-import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
-import io.ktor.server.request.header
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -54,26 +45,15 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.*
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_PROJECT_ID = 0L
-
-@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
-private val json =
-    Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        encodeDefaults = true
-        explicitNulls = false
-    }
 
 /**
  * Helper function to get organization IDs for a user from their memberships.
@@ -129,248 +109,8 @@ private suspend fun ensureHostAccessible(
 fun Route.monitorRoutes(
     monitorService: MonitorService = MonitorService(),
     logService: LogService = LogService(),
-    quotaService: BillingQuotaService = BillingQuotaService(),
 ) {
-    val usageTracking = UsageTrackingService.instance
-
     route("/v1/monitor") {
-        // Agent ingestion endpoints intentionally use agent-key auth (validateAgentKey),
-        // while dashboard endpoints remain inside authenticate("auth-jwt") below.
-        /**
-         * Agent-facing ingestion endpoint.
-         * Auth: Bearer token (agent key)
-         */
-        post("/ingest") {
-            var refundOrgId: Int? = null
-            var refundMetricCount = 0
-            var refundBytes: Long = 0
-            try {
-                // Extract and validate agent key
-                val authHeader = call.request.header("Authorization")
-                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid Authorization header"))
-                    return@post
-                }
-
-                val agentKey = authHeader.removePrefix("Bearer ").trim()
-                val (hostId, organizationId) =
-                    monitorService.validateAgentKey(agentKey) ?: run {
-                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid agent key"))
-                        return@post
-                    }
-
-                // Parse payload
-                val contentEncoding = call.request.header("Content-Encoding")
-                val bodyBytes = call.receive<ByteArray>()
-
-                val decompressedBytes =
-                    if (contentEncoding == "gzip") {
-                        java.util.zip
-                            .GZIPInputStream(bodyBytes.inputStream())
-                            .readBytes()
-                    } else {
-                        bodyBytes
-                    }
-
-                val payload =
-                    json.decodeFromString<SystemMetricsPayload>(
-                        decompressedBytes.decodeToString()
-                    )
-
-                logger.debug { "Received metrics from host $hostId (org $organizationId)" }
-
-                val metricCount = monitorService.countMetricsInPayload(payload)
-                val billableBytes = decompressedBytes.size.toLong()
-                if (quotaService.isEnforcementEnabled() && (metricCount > 0 || billableBytes > 0)) {
-                    val reservation =
-                        quotaService.reserveUnits(
-                            organizationId = organizationId,
-                            requestedUnits = metricCount,
-                            eventType = "custom_metric",
-                            requestedBytes = billableBytes
-                        )
-                    if (!reservation.allowed) {
-                        call.respond(
-                            HttpStatusCode.TooManyRequests,
-                            IngestResponse(
-                                success = false,
-                                interval_seconds = 60,
-                                message = "Custom metrics quota exceeded. Please upgrade your plan."
-                            )
-                        )
-                        return@post
-                    }
-                    refundOrgId = organizationId
-                    refundMetricCount = metricCount
-                    refundBytes = billableBytes
-                }
-
-                // Ingest metrics and get poll interval
-                val intervalSeconds = monitorService.ingestMetrics(hostId, organizationId, payload)
-
-                if (metricCount > 0) {
-                    usageTracking.recordOrgUsage(
-                        organizationId = organizationId,
-                        eventType = "custom_metric",
-                        count = metricCount
-                    )
-                }
-
-                call.respond(
-                    HttpStatusCode.OK,
-                    IngestResponse(
-                        success = true,
-                        interval_seconds = intervalSeconds
-                    )
-                )
-            } catch (e: Exception) {
-                if (quotaService.isEnforcementEnabled() &&
-                    (refundMetricCount > 0 || refundBytes > 0) && refundOrgId != null
-                ) {
-                    quotaService.refundUnits(
-                        organizationId = refundOrgId,
-                        units = refundMetricCount,
-                        eventType = "custom_metric",
-                        requestedBytes = refundBytes
-                    )
-                }
-                logger.error(e) { "Failed to ingest metrics: ${e.message}" }
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    IngestResponse(
-                        success = false,
-                        interval_seconds = 60,
-                        message = e.message
-                    )
-                )
-            }
-        }
-
-        /**
-         * Agent-facing log ingestion endpoint.
-         * Auth: Bearer token (agent key)
-         */
-        post("/logs") {
-            var refundOrgId: Int? = null
-            var refundLogCount = 0
-            var refundBytes: Long = 0
-            try {
-                val authHeader = call.request.header("Authorization")
-                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                    call.respond(
-                        HttpStatusCode.Unauthorized,
-                        AgentLogIngestResponse(error = "Missing or invalid Authorization header")
-                    )
-                    return@post
-                }
-
-                val agentKey = authHeader.removePrefix("Bearer ").trim()
-                val (hostId, organizationId) =
-                    monitorService.validateAgentKey(agentKey) ?: run {
-                        call.respond(
-                            HttpStatusCode.Unauthorized,
-                            AgentLogIngestResponse(error = "Invalid agent key")
-                        )
-                        return@post
-                    }
-
-                val contentEncoding = call.request.header("Content-Encoding")
-                val bodyBytes = call.receive<ByteArray>()
-
-                val decompressedBytes =
-                    if (contentEncoding == "gzip") {
-                        java.util.zip
-                            .GZIPInputStream(bodyBytes.inputStream())
-                            .readBytes()
-                    } else {
-                        bodyBytes
-                    }
-
-                val jsonString = decompressedBytes.decodeToString()
-                logger.debug { "Received log payload: ${jsonString.take(500)}" }
-                val payload = json.decodeFromString<AgentLogsRequest>(jsonString)
-                if (payload.logs.isEmpty()) {
-                    call.respond(HttpStatusCode.Accepted, AgentLogIngestResponse(accepted = 0))
-                    return@post
-                }
-
-                if (quotaService.isEnforcementEnabled()) {
-                    val billableBytes =
-                        payload.logs.sumOf { entry ->
-                            (entry.message?.toByteArray(Charsets.UTF_8)?.size ?: 0).toLong() +
-                                (entry.body?.toByteArray(Charsets.UTF_8)?.size ?: 0).toLong()
-                        }
-                    val reservation =
-                        quotaService.reserveUnits(
-                            organizationId = organizationId,
-                            requestedUnits = payload.logs.size,
-                            eventType = "log",
-                            requestedBytes = billableBytes
-                        )
-                    if (!reservation.allowed) {
-                        call.respond(
-                            HttpStatusCode.TooManyRequests,
-                            AgentLogIngestResponse(
-                                error = "Quota exceeded",
-                                reason = reservation.reason,
-                                usage = reservation.usage
-                            )
-                        )
-                        return@post
-                    }
-                    refundOrgId = organizationId
-                    refundLogCount = payload.logs.size
-                    refundBytes = billableBytes
-                }
-
-                val queueKey =
-                    call.application.environment.config
-                        .propertyOrNull("logs.queueKey")
-                        ?.getString()
-                        ?: "moneat:logs:queue"
-                val accepted = logService.enqueueAgentLogs(
-                    organizationId.toLong(),
-                    hostId,
-                    payload.logs,
-                    queueKey
-                )
-                if (quotaService.isEnforcementEnabled() && accepted <= 0 && refundOrgId != null) {
-                    quotaService.refundUnits(
-                        organizationId = refundOrgId,
-                        units = refundLogCount,
-                        eventType = "log",
-                        requestedBytes = refundBytes
-                    )
-                }
-                refundOrgId = null
-                refundLogCount = 0
-                refundBytes = 0
-                call.respond(
-                    HttpStatusCode.Accepted,
-                    AgentLogIngestResponse(accepted = accepted, hostId = hostId.toString())
-                )
-            } catch (e: Exception) {
-                if (quotaService.isEnforcementEnabled() && refundOrgId != null &&
-                    (refundLogCount > 0 || refundBytes > 0)
-                ) {
-                    quotaService.refundUnits(
-                        organizationId = refundOrgId,
-                        units = refundLogCount,
-                        eventType = "log",
-                        requestedBytes = refundBytes
-                    )
-                }
-                logger.error(e) { "Failed to ingest agent logs: ${e.message}" }
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    AgentLogIngestResponse(
-                        error = "Invalid log payload",
-                        message = e.message ?: "Unknown error"
-                    )
-                )
-            }
-        }
-
         /**
          * Dashboard-facing endpoints (JWT auth required).
          */
@@ -442,68 +182,6 @@ fun Route.monitorRoutes(
 
                 val containers = monitorService.getLatestContainersForOrganizations(organizationIds)
                 call.respond(HttpStatusCode.OK, AllContainersResponse(containers = containers))
-            }
-
-            // Create a new host (Moneat Agent)
-            post("/hosts") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                val organizationIds = getOrganizationIdsForUser(userId)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@post
-                }
-
-                val organizationId = organizationIds.first()
-
-                if (!monitorService.checkHostQuota(organizationId)) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        ErrorResponse("Host limit reached for your plan")
-                    )
-                    return@post
-                }
-
-                val request = call.receive<CreateHostRequest>()
-                val (host, agentKey) = monitorService.createHost(organizationId, request.name)
-
-                val dockerCommand =
-                    """
-                    docker run -d --name moneat-agent \
-                      --restart always \
-                      --network host \
-                      -v /var/run/docker.sock:/var/run/docker.sock:ro \
-                      -e MONEAT_KEY="$agentKey" \
-                      adrianelder/moneat-agent:latest
-                    """.trimIndent()
-
-                call.respond(
-                    HttpStatusCode.Created,
-                    CreateHostResponse(
-                        host =
-                        HostResponse(
-                            id = host.id,
-                            projectId = DEFAULT_PROJECT_ID,
-                            name = host.displayName ?: host.hostname,
-                            hostname = host.hostname,
-                            status = host.status,
-                            last_seen_at = host.lastSeenAt?.toEpochMilliseconds(),
-                            firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
-                            agent_version = host.agentVersion,
-                            os = host.os,
-                            arch = host.arch,
-                            platform = host.platform,
-                            processor = host.processor,
-                            cpuCores = host.cpuCores,
-                            memoryTotalKb = host.memoryTotalKb,
-                            created_at = host.createdAt.toEpochMilliseconds(),
-                            latest_metrics = null
-                        ),
-                        agent_key = agentKey,
-                        docker_command = dockerCommand
-                    )
-                )
             }
 
             // Get host details

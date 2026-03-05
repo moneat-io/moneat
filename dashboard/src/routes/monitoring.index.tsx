@@ -16,7 +16,7 @@
 
 import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, type DdHostResponse, mapMonitorHostToDdHost} from '@/lib/api'
+import {api, type DdHostResponse} from '@/lib/api'
 import {cn, formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -62,7 +62,7 @@ import {
   Zap,
 } from 'lucide-react'
 import {useEffect, useMemo, useState} from 'react'
-import {hasEnterpriseModule, useEnterpriseFeatures, useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
+import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
 import {useToast} from '@/hooks/use-toast'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -83,45 +83,7 @@ export const Route = createFileRoute('/monitoring/')({
 })
 
 
-// ─── Moneat Agent (Add Host dialog) ────────────────────────────────────────
-
-const DOCKER_SOCKET_REFERENCE_REGEX = /\/var\/run\/docker\.sock/
-
-function getInstallCommand(baseCommand: string, enableContainerMonitoring: boolean): string {
-  if (enableContainerMonitoring) {
-    return baseCommand
-  }
-
-  // Remove docker socket mount when container monitoring is disabled
-  const lines = baseCommand.split('\n')
-  return lines.filter((line) => !DOCKER_SOCKET_REFERENCE_REGEX.test(line)).join('\n')
-}
-
-function getMoneatDockerComposeCommand(baseCommand: string, enableContainerMonitoring: boolean): string {
-  // Extract the MONEAT_KEY from the docker run command
-  const keyMatch = baseCommand.match(/-e MONEAT_KEY="([^"]+)"/)
-  const key = keyMatch ? keyMatch[1] : 'YOUR_KEY_HERE'
-
-  const volumes = enableContainerMonitoring
-    ? `    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro`
-    : ''
-
-  return `cat > docker-compose.yml <<'EOF'
-services:
-  moneat-agent:
-    image: adrianelder/moneat-agent:latest
-    container_name: moneat-agent
-    restart: always
-    network_mode: host
-${volumes}
-    environment:
-      - MONEAT_KEY=${key}
-EOF
-
-docker compose up -d`
-}
-
+// ─── Add Host (Datadog Agent) ────────────────────────────────────────
 
 function formatBytes(kb: number): string {
   if (kb < 1024) return `${kb} KB`
@@ -219,21 +181,14 @@ docker compose up -d`
 function AddHostDialog({
   isOpen,
   setIsOpen,
-  isEnterprise,
 }: {
   isOpen: boolean
   setIsOpen: (v: boolean) => void
-  isEnterprise: boolean
 }) {
   const {toast} = useToast()
   const queryClient = useQueryClient()
   const [keyName, setKeyName] = useState('')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
-  const [createdMoneatHost, setCreatedMoneatHost] = useState<{
-    id: number
-    dockerCommand: string
-  } | null>(null)
-  const [containerMonitoringEnabled, setContainerMonitoringEnabled] = useState(true)
   const [options, setOptions] = useState<AgentOptions>({
     container: true,
     apm: true,
@@ -283,45 +238,10 @@ function AddHostDialog({
     },
   })
 
-  const createMonitorHostMutation = useMutation({
-    mutationFn: (name: string) => api.createMonitorHost(name),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({queryKey: ['monitor-hosts']})
-      setCreatedMoneatHost({id: data.host.id, dockerCommand: data.docker_command})
-      setKeyName('')
-    },
-    onError: (error: Error) => {
-      if (error.message.includes('limit') || error.message.includes('Host limit')) {
-        toast({
-          title: 'Host Limit Reached',
-          description: (
-            <>
-              You&apos;ve reached the maximum number of hosts for your plan.{' '}
-              <Link to="/settings" search={{tab: 'billing'}} className="underline font-medium">
-                Upgrade your plan
-              </Link>{' '}
-              to add more hosts.
-            </>
-          ),
-          variant: 'destructive',
-        })
-      } else {
-        toast({
-          title: 'Error',
-          description: 'Failed to create host. Please try again.',
-          variant: 'destructive',
-        })
-      }
-    },
-  })
-
-  const createMutation = isEnterprise ? createAgentKeyMutation : createMonitorHostMutation
-  const showSuccess = isEnterprise ? !!createdKey : !!createdMoneatHost
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (keyName.trim()) {
-      createMutation.mutate(keyName.trim())
+      createAgentKeyMutation.mutate(keyName.trim())
     }
   }
 
@@ -329,9 +249,7 @@ function AddHostDialog({
     setIsOpen(false)
     setTimeout(() => {
       setCreatedKey(null)
-      setCreatedMoneatHost(null)
       setKeyName('')
-      setContainerMonitoringEnabled(true)
       setOptions({
         container: true,
         apm: true,
@@ -343,24 +261,33 @@ function AddHostDialog({
   }
 
   const handleCopyCommand = async () => {
-    if (isEnterprise && createdKey) {
+    if (createdKey) {
       const command =
         installType === 'docker'
           ? getDockerRunCommand(createdKey, options)
           : getDockerComposeCommand(createdKey, options)
-      await navigator.clipboard.writeText(command)
-      setCopied(true)
-      toast({title: 'Copied!', description: 'Command copied to clipboard'})
-      setTimeout(() => setCopied(false), 2000)
-    } else if (!isEnterprise && createdMoneatHost) {
-      const command =
-        installType === 'docker'
-          ? getInstallCommand(createdMoneatHost.dockerCommand, containerMonitoringEnabled)
-          : getMoneatDockerComposeCommand(createdMoneatHost.dockerCommand, containerMonitoringEnabled)
-      await navigator.clipboard.writeText(command)
-      setCopied(true)
-      toast({title: 'Copied!', description: 'Command copied to clipboard'})
-      setTimeout(() => setCopied(false), 2000)
+      try {
+        await navigator.clipboard.writeText(command)
+        setCopied(true)
+        toast({title: 'Copied!', description: 'Command copied to clipboard'})
+        setTimeout(() => setCopied(false), 2000)
+      } catch {
+        try {
+          const textarea = document.createElement('textarea')
+          textarea.value = command
+          textarea.style.position = 'fixed'
+          textarea.style.opacity = '0'
+          document.body.appendChild(textarea)
+          textarea.select()
+          document.execCommand('copy')
+          document.body.removeChild(textarea)
+          setCopied(true)
+          toast({title: 'Copied!', description: 'Command copied to clipboard'})
+          setTimeout(() => setCopied(false), 2000)
+        } catch {
+          toast({title: 'Copy failed', description: 'Please copy the command manually', variant: 'destructive'})
+        }
+      }
     }
   }
 
@@ -373,7 +300,7 @@ function AddHostDialog({
       }
     }}>
       <DialogContent className="max-w-2xl">
-        {!showSuccess ? (
+        {!createdKey ? (
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -381,15 +308,13 @@ function AddHostDialog({
                 Add New Host
               </DialogTitle>
               <DialogDescription>
-                {isEnterprise
-                  ? 'Enter a name for the agent key, then deploy the agent on your server.'
-                  : 'Enter a name for your host to get started with monitoring.'}
+                Enter a name for the agent key, then deploy the agent on your server.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit}>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">{isEnterprise ? 'Key Name' : 'Host Name'}</Label>
+                  <Label htmlFor="name">Key Name</Label>
                   <Input
                     id="name"
                     placeholder="e.g., Production Server, Dev Machine"
@@ -403,17 +328,15 @@ function AddHostDialog({
                 <Button type="button" variant="outline" onClick={handleClose}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createMutation.isPending || !keyName.trim()}>
-                  {createMutation.isPending
+                <Button type="submit" disabled={createAgentKeyMutation.isPending || !keyName.trim()}>
+                  {createAgentKeyMutation.isPending
                     ? 'Creating...'
-                    : isEnterprise
-                      ? 'Create Key & Continue'
-                      : 'Create Host'}
+                    : 'Create Key & Continue'}
                 </Button>
               </DialogFooter>
             </form>
           </>
-        ) : isEnterprise ? (
+        ) : (
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -602,168 +525,6 @@ function AddHostDialog({
                   <li className="flex items-start gap-2.5">
                     <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0 mt-0.5">4</span>
                     <span>Host metrics will appear within minutes</span>
-                  </li>
-                </ol>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleClose} className="w-full sm:w-auto">
-                Done
-              </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                Host Created Successfully
-              </DialogTitle>
-              <DialogDescription>
-                Install the Moneat agent on your server using Docker or Docker Compose.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-5 py-4">
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 text-sm font-medium">
-                  <Terminal className="h-3.5 w-3.5 text-blue-500" />
-                  Installation Command
-                </Label>
-                <div className="flex items-start justify-between gap-4 rounded-lg border bg-muted/20 px-3 py-2.5">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">Enable container monitoring</p>
-                    <p className="text-xs text-muted-foreground">
-                      Mounts Docker socket for container metrics and stats.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={containerMonitoringEnabled}
-                    onCheckedChange={setContainerMonitoringEnabled}
-                    aria-label="Toggle container monitoring"
-                  />
-                </div>
-                <Tabs value={installType} onValueChange={(v) => setInstallType(v as 'docker' | 'compose')} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="docker">Docker</TabsTrigger>
-                    <TabsTrigger value="compose">Docker Compose</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="docker" className="mt-3">
-                    <div className="relative group">
-                      <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
-                        <SyntaxHighlighter
-                          language="bash"
-                          style={isDark ? oneDark : oneLight}
-                          customStyle={{
-                            margin: 0,
-                            padding: '1rem',
-                            paddingRight: '5rem',
-                            fontSize: '0.8125rem',
-                            lineHeight: 1.6,
-                            background: 'transparent',
-                          }}
-                          codeTagProps={{
-                            style: {
-                              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                            },
-                          }}
-                          showLineNumbers={false}
-                          wrapLongLines={false}
-                        >
-                          {createdMoneatHost
-                            ? getInstallCommand(createdMoneatHost.dockerCommand, containerMonitoringEnabled)
-                            : ''}
-                        </SyntaxHighlighter>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="absolute top-2.5 right-2.5 h-8 gap-1.5 text-xs"
-                        onClick={handleCopyCommand}
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="h-3.5 w-3.5 text-emerald-500" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            Copy
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="compose" className="mt-3">
-                    <div className="relative group">
-                      <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
-                        <SyntaxHighlighter
-                          language="bash"
-                          style={isDark ? oneDark : oneLight}
-                          customStyle={{
-                            margin: 0,
-                            padding: '1rem',
-                            paddingRight: '5rem',
-                            fontSize: '0.8125rem',
-                            lineHeight: 1.6,
-                            background: 'transparent',
-                          }}
-                          codeTagProps={{
-                            style: {
-                              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                            },
-                          }}
-                          showLineNumbers={false}
-                          wrapLongLines={false}
-                        >
-                          {createdMoneatHost
-                            ? getMoneatDockerComposeCommand(createdMoneatHost.dockerCommand, containerMonitoringEnabled)
-                            : ''}
-                        </SyntaxHighlighter>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="absolute top-2.5 right-2.5 h-8 gap-1.5 text-xs"
-                        onClick={handleCopyCommand}
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="h-3.5 w-3.5 text-emerald-500" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            Copy
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </div>
-              <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-4 space-y-3">
-                <h4 className="font-medium text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                  <Zap className="h-4 w-4" />
-                  Quick Start
-                </h4>
-                <ol className="text-sm text-blue-600 dark:text-blue-300/80 space-y-2 list-none">
-                  <li className="flex items-start gap-2.5">
-                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0 mt-0.5">1</span>
-                    <span>Copy the command above</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0 mt-0.5">2</span>
-                    <span>SSH into your server</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0 mt-0.5">3</span>
-                    <span>Paste and run the command</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0 mt-0.5">4</span>
-                    <span>Metrics will appear within seconds</span>
                   </li>
                 </ol>
               </div>
@@ -982,30 +743,16 @@ function MonitoringHostsPage() {
   const [sortField, setSortField] = useState<SortField>('hostname')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-  const {data: features} = useEnterpriseFeatures()
-  const isEnterprise = hasEnterpriseModule(features, 'datadog')
-
-  const {data: monitorHosts, isLoading} = useQuery({
-    queryKey: ['monitor-hosts'],
-    queryFn: () => api.getMonitorHosts(),
-    enabled: api.isAuthenticated() && !isEnterprise,
-    refetchInterval: 30000,
-  })
-
-  const {data: ddHostsData, isLoading: isLoadingDd} = useQuery({
+  const {data: ddHostsData, isLoading: isLoadingHosts} = useQuery({
     queryKey: ['hosts'],
     queryFn: () => api.getHosts(),
-    enabled: api.isAuthenticated() && isEnterprise,
+    enabled: api.isAuthenticated(),
     refetchInterval: 30000,
   })
 
   const hosts: DdHostResponse[] = useMemo(() => {
-    if (isEnterprise && ddHostsData?.hosts) return ddHostsData.hosts
-    if (!isEnterprise && monitorHosts) return monitorHosts.map(mapMonitorHostToDdHost)
-    return []
-  }, [isEnterprise, monitorHosts, ddHostsData?.hosts])
-
-  const isLoadingHosts = isLoading || (isEnterprise && isLoadingDd)
+    return ddHostsData?.hosts ?? []
+  }, [ddHostsData?.hosts])
 
   const {data: billingUsage} = useQuery({
     queryKey: ['billingUsage'],
@@ -1073,11 +820,9 @@ function MonitoringHostsPage() {
   }
 
   const deleteMutation = useMutation({
-    mutationFn: (hostId: number) =>
-      isEnterprise ? api.deleteHost(hostId) : api.deleteMonitorHost(hostId),
+    mutationFn: (hostId: number) => api.deleteHost(hostId),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['hosts']})
-      queryClient.invalidateQueries({queryKey: ['monitor-hosts']})
       toast({
         title: 'Host deleted',
         description: 'The host has been removed from monitoring.',
@@ -1103,7 +848,6 @@ function MonitoringHostsPage() {
       <AddHostDialog
         isOpen={addDialogOpen}
         setIsOpen={setAddDialogOpen}
-        isEnterprise={isEnterprise}
       />
 
       <div className="border-b bg-card/50">

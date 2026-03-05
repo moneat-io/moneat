@@ -19,7 +19,6 @@ package com.moneat.routes
 import com.moneat.monitor.routes.monitorRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.billing.services.BillingQuotaService
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.models.AlertConfigResponse
@@ -74,7 +73,6 @@ class MonitorRoutesMockTest {
 
     private val mockMonitorService = mockk<MonitorService>(relaxed = true)
     private val mockLogService = mockk<LogService>(relaxed = true)
-    private val mockQuotaService = mockk<BillingQuotaService>(relaxed = true)
 
     @BeforeTest
     fun setupDatabase() {
@@ -142,7 +140,6 @@ class MonitorRoutesMockTest {
             organizationId = organizationId,
             hostname = "localhost",
             displayName = "test-system",
-            agentKeyHash = "hash",
             status = "online",
             lastSeenAt = now,
             agentVersion = "1.0.0",
@@ -176,7 +173,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -186,67 +182,6 @@ class MonitorRoutesMockTest {
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("test-system"))
-        }
-
-    // ─── POST /systems ─────────────────────────────────────────────────────────
-
-    @Test
-    fun `POST systems returns 201 with created system`() =
-        testApplication {
-            val userId = seedUser()
-            val orgId = seedOrg()
-            seedMembership(userId, orgId)
-            val system = makeHostData(orgId)
-
-            every { mockMonitorService.checkHostQuota(orgId) } returns true
-            every { mockMonitorService.createHost(orgId, "new-system") } returns Pair(system, "agent-key-123")
-
-            application {
-                installAuth()
-                routing {
-                    monitorRoutes(
-                        monitorService = mockMonitorService,
-                        logService = mockLogService,
-                        quotaService = mockQuotaService
-                    )
-                }
-            }
-
-            val response = client.post("/v1/monitor/hosts") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
-                contentType(ContentType.Application.Json)
-                setBody("""{"name":"new-system"}""")
-            }
-            assertEquals(HttpStatusCode.Created, response.status)
-            assertTrue(response.bodyAsText().contains("agent-key-123"))
-        }
-
-    @Test
-    fun `POST systems returns 403 when quota exceeded`() =
-        testApplication {
-            val userId = seedUser()
-            val orgId = seedOrg()
-            seedMembership(userId, orgId)
-
-            every { mockMonitorService.checkHostQuota(orgId) } returns false
-
-            application {
-                installAuth()
-                routing {
-                    monitorRoutes(
-                        monitorService = mockMonitorService,
-                        logService = mockLogService,
-                        quotaService = mockQuotaService
-                    )
-                }
-            }
-
-            val response = client.post("/v1/monitor/hosts") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
-                contentType(ContentType.Application.Json)
-                setBody("""{"name":"new-system"}""")
-            }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
     // ─── GET /systems/{id} ────────────────────────────────────────────────────
@@ -268,7 +203,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -296,7 +230,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -326,7 +259,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -363,7 +295,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -405,7 +336,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -437,7 +367,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -479,7 +408,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -516,7 +444,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -543,7 +470,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -573,7 +499,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -602,7 +527,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -646,7 +570,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -679,7 +602,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -709,7 +631,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -741,7 +662,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -780,7 +700,6 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
-                        quotaService = mockQuotaService
                     )
                 }
             }
@@ -791,99 +710,5 @@ class MonitorRoutesMockTest {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
-        }
-
-    // ─── POST /ingest (agent-facing) ──────────────────────────────────────────
-
-    @Test
-    fun `POST ingest returns 401 when no auth header`() =
-        testApplication {
-            application {
-                installAuth()
-                routing {
-                    monitorRoutes(
-                        monitorService = mockMonitorService,
-                        logService = mockLogService,
-                        quotaService = mockQuotaService
-                    )
-                }
-            }
-
-            val response = client.post("/v1/monitor/ingest") {
-                contentType(ContentType.Application.Json)
-                setBody("{}")
-            }
-            assertEquals(HttpStatusCode.Unauthorized, response.status)
-        }
-
-    @Test
-    fun `POST ingest returns 401 for invalid agent key`() =
-        testApplication {
-            every { mockMonitorService.validateAgentKey(any()) } returns null
-
-            application {
-                installAuth()
-                routing {
-                    monitorRoutes(
-                        monitorService = mockMonitorService,
-                        logService = mockLogService,
-                        quotaService = mockQuotaService
-                    )
-                }
-            }
-
-            val response = client.post("/v1/monitor/ingest") {
-                header(HttpHeaders.Authorization, "Bearer invalid-key")
-                contentType(ContentType.Application.Json)
-                setBody("{}")
-            }
-            assertEquals(HttpStatusCode.Unauthorized, response.status)
-        }
-
-    // ─── POST /logs (agent-facing) ────────────────────────────────────────────
-
-    @Test
-    fun `POST logs returns 401 when no auth header`() =
-        testApplication {
-            application {
-                installAuth()
-                routing {
-                    monitorRoutes(
-                        monitorService = mockMonitorService,
-                        logService = mockLogService,
-                        quotaService = mockQuotaService
-                    )
-                }
-            }
-
-            val response = client.post("/v1/monitor/logs") {
-                contentType(ContentType.Application.Json)
-                setBody("""{"logs":[]}""")
-            }
-            assertEquals(HttpStatusCode.Unauthorized, response.status)
-        }
-
-    @Test
-    fun `POST logs returns 401 for invalid agent key`() =
-        testApplication {
-            every { mockMonitorService.validateAgentKey(any()) } returns null
-
-            application {
-                installAuth()
-                routing {
-                    monitorRoutes(
-                        monitorService = mockMonitorService,
-                        logService = mockLogService,
-                        quotaService = mockQuotaService
-                    )
-                }
-            }
-
-            val response = client.post("/v1/monitor/logs") {
-                header(HttpHeaders.Authorization, "Bearer invalid-key")
-                contentType(ContentType.Application.Json)
-                setBody("""{"logs":[]}""")
-            }
-            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 }

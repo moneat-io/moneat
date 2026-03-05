@@ -16,7 +16,6 @@
 
 package com.moneat.monitor.models
 
-import com.moneat.billing.models.BillingUsageResponse
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -53,71 +52,6 @@ object KotlinInstantSerializer : KSerializer<Instant> {
         return Instant.fromEpochMilliseconds(decoder.decodeLong())
     }
 }
-
-// Agent-facing models
-@Serializable
-data class SystemMetricsPayload(
-    val timestamp: Long,
-    val cpu_percent: Float,
-    val mem_total: Long,
-    val mem_used: Long,
-    val mem_available: Long,
-    val swap_total: Long,
-    val swap_used: Long,
-    val disk_total: Long,
-    val disk_used: Long,
-    val disk_read_bytes: Long,
-    val disk_write_bytes: Long,
-    val net_recv_bytes: Long,
-    val net_sent_bytes: Long,
-    val load_1: Float,
-    val load_5: Float,
-    val load_15: Float,
-    val temp_max: Float? = null,
-    val gpu_percent: Float? = null,
-    val gpu_mem_percent: Float? = null,
-    val gpu_power: Float? = null,
-    val battery_percent: Float? = null,
-    val containers: List<ContainerMetricsPayload>? = null,
-    val agent_version: String? = null,
-    val os: String? = null,
-    val arch: String? = null,
-    val host: String? = null,
-    val platform: String? = null,
-    val processor: String? = null,
-    val cpu_cores: Int? = null,
-    val memory_total_kb: Long? = null
-)
-
-@Serializable
-data class ContainerMetricsPayload(
-    val name: String,
-    val id: String,
-    val image: String,
-    val status: String,
-    val cpu_percent: Float,
-    val mem_used: Long,
-    val mem_limit: Long,
-    val net_recv_bytes: Long,
-    val net_sent_bytes: Long
-)
-
-@Serializable
-data class IngestResponse(
-    val success: Boolean,
-    val interval_seconds: Int,
-    val message: String? = null
-)
-
-@Serializable
-data class AgentLogIngestResponse(
-    val accepted: Int? = null,
-    @SerialName("host_id") val hostId: String? = null,
-    val error: String? = null,
-    val message: String? = null,
-    val reason: String? = null,
-    val usage: BillingUsageResponse? = null
-)
 
 // Dashboard-facing models
 @Serializable
@@ -182,18 +116,6 @@ data class CreateSystemRequest(
 @Serializable
 data class CreateSystemResponse(
     val system: SystemResponse,
-    val agent_key: String,
-    val docker_command: String
-)
-
-@Serializable
-data class CreateHostRequest(
-    val name: String
-)
-
-@Serializable
-data class CreateHostResponse(
-    val host: HostResponse,
     val agent_key: String,
     val docker_command: String
 )
@@ -337,7 +259,6 @@ data class HostData(
     val organizationId: Int,
     val hostname: String,
     val displayName: String?,
-    val agentKeyHash: String?,
     val status: String,
     @Serializable(with = KotlinInstantSerializer::class)
     val lastSeenAt: kotlin.time.Instant?,
@@ -361,7 +282,6 @@ data class SystemData(
     val organizationId: Int,
     val name: String,
     val host: String?,
-    val agentKeyHash: String,
     val status: String,
     @Serializable(with = KotlinInstantSerializer::class)
     val lastSeenAt: kotlin.time.Instant?,

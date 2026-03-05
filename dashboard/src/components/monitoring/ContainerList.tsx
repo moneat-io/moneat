@@ -6,9 +6,8 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {useQueries} from '@tanstack/react-query'
+import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 
 export interface MergedContainer {
   id: string
@@ -22,7 +21,7 @@ export interface MergedContainer {
   memLimit: number
   netRxBytes: number
   netTxBytes: number
-  source: 'moneat-agent' | 'datadog-agent'
+  source: 'datadog-agent'
   timestamp?: string
 }
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
@@ -46,6 +45,12 @@ import {
 import {useState, useMemo} from 'react'
 import {cn} from '@/lib/utils'
 import {formatRelativeTime} from '@/lib/utils'
+
+function parseTimestamp(ts: string | undefined): number {
+  if (!ts) return 0
+  const parsed = Date.parse(ts)
+  return isNaN(parsed) ? 0 : parsed
+}
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -114,81 +119,42 @@ function stateBadgeClasses(state: string): string {
 export function ContainerList() {
   const [searchQuery, setSearchQuery] = useState('')
   const [stateFilter, setStateFilter] = useState<StateFilter>('all')
-  const {data: features} = useEnterpriseFeatures()
-  const hasDatadog = hasEnterpriseModule(features, 'datadog')
 
-  const [moneatResult, datadogResult] = useQueries({
-    queries: [
-      {
-        queryKey: ['monitor-containers'],
-        queryFn: async () => {
-          try {
-            const res = await api.getAllSystemContainers()
-            return res.containers.map((c) => ({
-            id: `moneat-${c.system_id}-${c.id}`,
-            host: c.system_name,
-            containerId: c.id,
-            name: c.name,
-            image: c.image,
-            state: c.status,
-            cpuPercent: c.cpu_percent,
-            memUsage: c.mem_used,
-            memLimit: c.mem_limit,
-            netRxBytes: c.net_recv_bytes,
-            netTxBytes: c.net_sent_bytes,
-            source: 'moneat-agent' as const,
-          } satisfies MergedContainer))
-          } catch {
-            return []
-          }
-        },
-        enabled: api.isAuthenticated(),
-        refetchInterval: 10000,
-      },
-      {
-        queryKey: ['containers', hasDatadog],
-        queryFn: async () => {
-          try {
-            const res = await api.getContainers({limit: 200})
-            const mapped = res.containers.map((c) => ({
-            id: `dd-${c.host}-${c.containerId}`,
-            host: c.host,
-            containerId: c.containerId,
-            name: c.name,
-            image: c.image,
-            state: c.state,
-            cpuPercent: c.cpuPercent,
-            memUsage: c.memUsage,
-            memLimit: c.memLimit,
-            netRxBytes: c.netRxBytes,
-            netTxBytes: c.netTxBytes,
-            source: 'datadog-agent' as const,
-            timestamp: c.timestamp,
-          } satisfies MergedContainer))
-            // Deduplicate by (host, containerId), keeping the most recent entry
-            const seen = new Map<string, MergedContainer>()
-            for (const c of mapped) {
-              const key = `${c.host}::${c.containerId}`
-              const existing = seen.get(key)
-              if (!existing || (c.timestamp ?? '') > (existing.timestamp ?? '')) {
-                seen.set(key, c)
-              }
-            }
-            return Array.from(seen.values())
-          } catch {
-            return []
-          }
-        },
-        enabled: api.isAuthenticated() && hasDatadog,
-        refetchInterval: 10000,
-      },
-    ],
+  const {data: containerData, isLoading} = useQuery({
+    queryKey: ['containers'],
+    queryFn: async () => {
+      const res = await api.getContainers({limit: 200})
+      const mapped = res.containers.map((c) => ({
+        id: `dd-${c.host}-${c.containerId}`,
+        host: c.host,
+        containerId: c.containerId,
+        name: c.name,
+        image: c.image,
+        state: c.state,
+        cpuPercent: c.cpuPercent,
+        memUsage: c.memUsage,
+        memLimit: c.memLimit,
+        netRxBytes: c.netRxBytes,
+        netTxBytes: c.netTxBytes,
+        source: 'datadog-agent' as const,
+        timestamp: c.timestamp,
+      } satisfies MergedContainer))
+      // Deduplicate by (host, containerId), keeping the most recent entry
+      const seen = new Map<string, MergedContainer>()
+      for (const c of mapped) {
+        const key = `${c.host}::${c.containerId}`
+        const existing = seen.get(key)
+        if (!existing || parseTimestamp(c.timestamp) > parseTimestamp(existing.timestamp)) {
+          seen.set(key, c)
+        }
+      }
+      return Array.from(seen.values())
+    },
+    enabled: api.isAuthenticated(),
+    refetchInterval: 10000,
   })
 
-  const moneatContainers = moneatResult.data ?? []
-  const datadogContainers = datadogResult.data ?? []
-  const containers: MergedContainer[] = [...moneatContainers, ...datadogContainers]
-  const isLoading = moneatResult.isLoading || (hasDatadog && datadogResult.isLoading)
+  const containers: MergedContainer[] = containerData ?? []
 
   const filtered = useMemo(() => {
     let result = containers
@@ -416,12 +382,10 @@ export function ContainerList() {
                           variant="outline"
                           className={cn(
                             'text-[10px] font-medium',
-                            c.source === 'moneat-agent'
-                              ? 'border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/5'
-                              : 'border-violet-500/30 text-violet-600 dark:text-violet-400 bg-violet-500/5'
+                            'border-violet-500/30 text-violet-600 dark:text-violet-400 bg-violet-500/5'
                           )}
                         >
-                          {c.source === 'moneat-agent' ? 'Moneat' : 'Datadog'}
+                          Datadog
                         </Badge>
                       </TableCell>
 
