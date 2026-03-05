@@ -51,11 +51,14 @@ services:
     container_name: moneat-redis
     ports:
       - "6379:6379"
+    environment:
+      # ⚠️ DEVELOPMENT ONLY — change before deploying to production
+      REDIS_PASSWORD: moneat_dev_password
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass moneat_dev_password
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD --no-auth-warning ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -75,7 +78,7 @@ services:
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: moneat
       CLICKHOUSE_PASSWORD: moneat_dev_password
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:moneat_dev_password@redis:6379
       # ⚠️ DEVELOPMENT ONLY — use a strong random secret in production
       JWT_SECRET: dev-jwt-secret-change-in-production
       FRONTEND_URL: http://localhost:3000
