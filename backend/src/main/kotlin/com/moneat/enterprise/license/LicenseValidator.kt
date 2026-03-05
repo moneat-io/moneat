@@ -52,25 +52,20 @@ data class LicenseInfo(
  * The signature is computed over the exact bytes of the base64url-encoded payload.
  *
  * To issue a key, sign with scripts/sign-license.sh using the Moneat private key.
+ *
+ * @param publicKeyPem PEM-encoded RSA public key (with or without -----BEGIN/END----- headers).
+ *   Defaults to the production Moneat signing key. Override in tests to use a test key pair.
  */
-object LicenseValidator {
-
-    // Public key corresponding to the Moneat license signing private key.
-    // The private key is held only by Moneat and is never distributed.
-    private val PUBLIC_KEY_PEM = """
------BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0HN6RtHQG3iX2h7gua64
-zSsSAgXl8p5eNzCjXqKabwN5jUXjupQ35zTxOIOjBMPcQ4/VsEACStYu0LqzcKgT
-RWAB1tLQyj69LykA9fDtRnyhG8NxppVlMHTQcOynbWMMlJQFyjYF5vLIFkQ5/u58
-s0ucVvOMRH0BvvQPo+PN7EON7iLCiid/GGj9gpF7uMRLhu2+rP/uAODRTqo16qmQ
-wiXvsl4kcuc2tKAjQK89DE2WYyEnNNjCZIsPmNIGBUkgndz2cNHnvXAlqmvNXecU
-EcLgKwrzDafmttqSyuKzXBXoGOrnj5d3Gl9Je/Oo3jZmUJt7ntdCWJsj4pBf0h0o
-RwIDAQAB
------END PUBLIC KEY-----
-    """.trimIndent().replace("\n", "").replace(" ", "")
+class LicenseValidator(publicKeyPem: String = PRODUCTION_PUBLIC_KEY_PEM) {
 
     private val publicKey by lazy {
-        val decoded = Base64.getDecoder().decode(PUBLIC_KEY_PEM)
+        // Strip PEM headers/footers and whitespace, then decode the base64 DER body
+        val der = publicKeyPem
+            .replace("-----BEGIN PUBLIC KEY-----", "")
+            .replace("-----END PUBLIC KEY-----", "")
+            .replace("\n", "")
+            .replace(" ", "")
+        val decoded = Base64.getDecoder().decode(der)
         KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(decoded))
     }
 
@@ -119,5 +114,26 @@ RwIDAQAB
     private fun padBase64Url(s: String): String {
         val pad = (4 - s.length % 4) % 4
         return s + "=".repeat(pad)
+    }
+
+    companion object {
+        // Public key corresponding to the Moneat license signing private key.
+        // The private key is held only by Moneat and is never distributed.
+        private val PRODUCTION_PUBLIC_KEY_PEM = """
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0HN6RtHQG3iX2h7gua64
+zSsSAgXl8p5eNzCjXqKabwN5jUXjupQ35zTxOIOjBMPcQ4/VsEACStYu0LqzcKgT
+RWAB1tLQyj69LykA9fDtRnyhG8NxppVlMHTQcOynbWMMlJQFyjYF5vLIFkQ5/u58
+s0ucVvOMRH0BvvQPo+PN7EON7iLCiid/GGj9gpF7uMRLhu2+rP/uAODRTqo16qmQ
+wiXvsl4kcuc2tKAjQK89DE2WYyEnNNjCZIsPmNIGBUkgndz2cNHnvXAlqmvNXecU
+EcLgKwrzDafmttqSyuKzXBXoGOrnj5d3Gl9Je/Oo3jZmUJt7ntdCWJsj4pBf0h0o
+RwIDAQAB
+-----END PUBLIC KEY-----
+        """.trimIndent()
+
+        private val defaultInstance by lazy { LicenseValidator() }
+
+        /** Validates using the production public key. Used by [FeatureRegistry]. */
+        fun validate(key: String): LicenseInfo? = defaultInstance.validate(key)
     }
 }
