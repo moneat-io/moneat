@@ -1,0 +1,50 @@
+---
+hostName: "Production-DB-01"
+metric: "CPU Usage"
+duration: "5m 23s"
+dashboardUrl: "https://moneat.io/monitoring/123"
+---
+<x-main>
+  <table class="w-full max-w-[600px]" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border-top: 6px solid #16a34a;">
+    
+    <!-- Header -->
+    <tr>
+      <td class="bg-white p-8 text-center">
+        <div style="display: inline-block; background-color: #dcfce7; border-radius: 50%; padding: 12px; margin-bottom: 16px;">
+          <span style="font-size: 32px; line-height: 1;">✅</span>
+        </div>
+        <h1 class="text-2xl font-bold text-green-700 m-0 mb-2">Issue Resolved</h1>
+        <p class="text-gray-500 m-0 text-lg"><strong>{{ hostName }}</strong> has recovered.</p>
+      </td>
+    </tr>
+
+    <!-- Info -->
+    <tr>
+      <td class="bg-white px-8 pb-6 text-center">
+        <p class="text-gray-600 m-0 mb-4">
+          The alert for <strong>{{ metric }}</strong> is no longer active. The metric has returned to normal levels.
+        </p>
+        <!-- Duration pill -->
+        <div style="display: inline-block; background-color: #f3f4f6; padding: 6px 16px; border-radius: 20px; font-size: 14px; color: #4b5563;">
+          Alert Duration: <strong>{{ duration }}</strong>
+        </div>
+      </td>
+    </tr>
+
+    <!-- CTA -->
+    <tr>
+      <td class="bg-white px-8 pb-8 text-center">
+        <a href="{{ dashboardUrl }}" class="inline-block bg-green-600 text-white font-semibold py-3 px-6 rounded-md no-underline hover:bg-green-700 transition-colors">
+          View Dashboard
+        </a>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td>
+        <component src="src/components/footer.html"></component>
+      </td>
+    </tr>
+  </table>
+</x-main>

@@ -20,19 +20,15 @@ import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
-import com.moneat.shared.models.Systems
 import com.moneat.shared.services.RetentionPolicyService
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.security.MessageDigest
-import java.util.*
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import kotlin.time.Clock
 import com.moneat.testsupport.TestDatabaseHelper
 
 class RetentionPolicyServiceTest {
@@ -55,7 +51,7 @@ class RetentionPolicyServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        TestDatabaseHelper.resetSchema(Organizations, Projects, Subscriptions, Systems, PricingTierConfigs)
+        TestDatabaseHelper.resetSchema(Organizations, Projects, Subscriptions, PricingTierConfigs)
     }
 
     private fun seedOrg(name: String = "Test Org"): Int =
@@ -109,31 +105,6 @@ class RetentionPolicyServiceTest {
             } get Projects.id
         }
 
-    private fun seedSystem(orgId: Int, name: String = "test-server"): UUID {
-        val systemId = UUID.randomUUID()
-        val keyHash = MessageDigest.getInstance(
-            "SHA-256"
-        ).digest("key".toByteArray()).joinToString("") { "%02x".format(it) }
-        val now = Clock.System.now()
-        transaction {
-            Systems.insert {
-                it[id] = systemId
-                it[organization_id] = orgId
-                it[Systems.name] = name
-                it[host] = null
-                it[agent_key_hash] = keyHash
-                it[status] = "pending"
-                it[last_seen_at] = null
-                it[agent_version] = null
-                it[os] = null
-                it[arch] = null
-                it[created_at] = now
-                it[updated_at] = now
-            }
-        }
-        return systemId
-    }
-
     private fun seedSubscription(orgId: Int, tierId: Int, plan: String = "PRO"): Int =
         transaction {
             Subscriptions.insert {
@@ -185,27 +156,6 @@ class RetentionPolicyServiceTest {
     fun `getRetentionDaysForProject returns null when project not found`() =
         runBlocking {
             val days = service.getRetentionDaysForProject(99_999L)
-
-            assertNull(days)
-        }
-
-    @Test
-    fun `getRetentionDaysForSystem returns org retention when system exists`() =
-        runBlocking {
-            val proTierId = seedProTier(retentionDays = 7)
-            val orgId = seedOrg()
-            seedSubscription(orgId, proTierId)
-            val systemId = seedSystem(orgId)
-
-            val days = service.getRetentionDaysForSystem(systemId)
-
-            assertEquals(7, days)
-        }
-
-    @Test
-    fun `getRetentionDaysForSystem returns null when system not found`() =
-        runBlocking {
-            val days = service.getRetentionDaysForSystem(UUID.randomUUID())
 
             assertNull(days)
         }

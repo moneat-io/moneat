@@ -517,13 +517,13 @@ class EmailService {
         sendEmail(to, subject, htmlBody, textBody, "weekly_summary")
     }
 
-    fun sendSystemDownEmail(
+    fun sendHostDownEmail(
         to: String,
-        systemName: String,
+        hostName: String,
         lastSeenText: String,
-        systemUrl: String
+        hostUrl: String
     ) {
-        val subject = "🔴 System Down: $systemName"
+        val subject = "🔴 Host Down: $hostName"
         val htmlBody =
             """
             <!DOCTYPE html>
@@ -534,12 +534,12 @@ class EmailService {
             </head>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 30px; border-radius: 8px;">
-                    <h1 style="color: #dc2626; margin-bottom: 20px;">🔴 System Down</h1>
-                    <p><strong>System:</strong> $systemName</p>
+                    <h1 style="color: #dc2626; margin-bottom: 20px;">🔴 Host Down</h1>
+                    <p><strong>Host:</strong> $hostName</p>
                     <p><strong>Status:</strong> $lastSeenText</p>
-                    <p>The monitoring agent has stopped reporting metrics. Please check if the system is online and the agent is running.</p>
+                    <p>The monitoring agent has stopped reporting metrics. Please check if the host is online and the agent is running.</p>
                     <div style="margin: 30px 0;">
-                        <a href="$systemUrl" style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View System</a>
+                        <a href="$hostUrl" style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Host</a>
                     </div>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
@@ -550,20 +550,20 @@ class EmailService {
 
         val textBody =
             """
-            🔴 System Down
+            🔴 Host Down
             
-            System: $systemName
+            Host: $hostName
             Status: $lastSeenText
             
-            The monitoring agent has stopped reporting metrics. Please check if the system is online and the agent is running.
+            The monitoring agent has stopped reporting metrics. Please check if the host is online and the agent is running.
             
-            View system: $systemUrl
+            View host: $hostUrl
             
             ---
             Moneat Server Monitoring
             """.trimIndent()
 
-        sendEmail(to, subject, htmlBody, textBody, "system_down")
+        sendEmail(to, subject, htmlBody, textBody, "host_down")
     }
 
     fun sendUptimeAlertEmail(
@@ -617,12 +617,12 @@ class EmailService {
         sendEmail(to, subject, htmlBody, textBody, "uptime_alert")
     }
 
-    fun sendSystemUpEmail(
+    fun sendHostUpEmail(
         to: String,
-        systemName: String,
-        systemUrl: String
+        hostName: String,
+        hostUrl: String
     ) {
-        val subject = "✅ System Recovered: $systemName"
+        val subject = "✅ Host Recovered: $hostName"
         val htmlBody =
             """
             <!DOCTYPE html>
@@ -633,11 +633,11 @@ class EmailService {
             </head>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 30px; border-radius: 8px;">
-                    <h1 style="color: #16a34a; margin-bottom: 20px;">✅ System Recovered</h1>
-                    <p><strong>System:</strong> $systemName</p>
-                    <p>The system is now reporting metrics again.</p>
+                    <h1 style="color: #16a34a; margin-bottom: 20px;">✅ Host Recovered</h1>
+                    <p><strong>Host:</strong> $hostName</p>
+                    <p>The host is now reporting metrics again.</p>
                     <div style="margin: 30px 0;">
-                        <a href="$systemUrl" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View System</a>
+                        <a href="$hostUrl" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Host</a>
                     </div>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
@@ -648,19 +648,19 @@ class EmailService {
 
         val textBody =
             """
-            ✅ System Recovered
+            ✅ Host Recovered
             
-            System: $systemName
+            Host: $hostName
             
-            The system is now reporting metrics again.
+            The host is now reporting metrics again.
             
-            View system: $systemUrl
+            View host: $hostUrl
             
             ---
             Moneat Server Monitoring
             """.trimIndent()
 
-        sendEmail(to, subject, htmlBody, textBody, "system_up")
+        sendEmail(to, subject, htmlBody, textBody, "host_up")
     }
 
     private fun loadErrorAlertTemplate(data: ErrorAlertData): String {

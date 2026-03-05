@@ -27,7 +27,7 @@ class CreateAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "system_id" to schemaString("Host/system UUID"),
+                "host_id" to schemaString("Host ID (integer)"),
                 "metric" to schemaEnum(
                     "Metric to monitor",
                     listOf(
@@ -46,17 +46,17 @@ class CreateAlertTool : McpTool {
                 "enabled" to schemaBoolean("Enable alert (default true)")
             )
         ),
-        required = listOf("system_id", "metric", "condition", "threshold")
+        required = listOf("host_id", "metric", "condition", "threshold")
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["system_id"]?.jsonPrimitive?.content
-            ?: return errorResult("system_id is required")
+        val systemId = args["host_id"]?.jsonPrimitive?.content
+            ?: return errorResult("host_id is required")
         val hostId = systemId.toIntOrNull()
-            ?: return errorResult("Invalid system_id format")
+            ?: return errorResult("Invalid host_id format")
         val metric = args["metric"]?.jsonPrimitive?.content
             ?: return errorResult("metric is required")
         val condition = args["condition"]?.jsonPrimitive?.content
@@ -92,7 +92,7 @@ class UpdateAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "system_id" to schemaString("Host/system UUID"),
+                "host_id" to schemaString("Host ID (integer)"),
                 "alert_id" to schemaNumber("Alert ID"),
                 "metric" to schemaString("Metric to monitor"),
                 "condition" to schemaEnum(
@@ -104,17 +104,17 @@ class UpdateAlertTool : McpTool {
                 "enabled" to schemaBoolean("Enable/disable alert")
             )
         ),
-        required = listOf("system_id", "alert_id")
+        required = listOf("host_id", "alert_id")
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["system_id"]?.jsonPrimitive?.content
-            ?: return errorResult("system_id is required")
+        val systemId = args["host_id"]?.jsonPrimitive?.content
+            ?: return errorResult("host_id is required")
         val hostId = systemId.toIntOrNull()
-            ?: return errorResult("Invalid system_id format")
+            ?: return errorResult("Invalid host_id format")
         val alertId = args["alert_id"]?.jsonPrimitive?.intOrNull
             ?: return errorResult("alert_id is required")
 
@@ -149,21 +149,21 @@ class DeleteAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "system_id" to schemaString("Host/system UUID"),
+                "host_id" to schemaString("Host ID (integer)"),
                 "alert_id" to schemaNumber("Alert ID")
             )
         ),
-        required = listOf("system_id", "alert_id")
+        required = listOf("host_id", "alert_id")
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["system_id"]?.jsonPrimitive?.content
-            ?: return errorResult("system_id is required")
+        val systemId = args["host_id"]?.jsonPrimitive?.content
+            ?: return errorResult("host_id is required")
         val hostId = systemId.toIntOrNull()
-            ?: return errorResult("Invalid system_id format")
+            ?: return errorResult("Invalid host_id format")
         val alertId = args["alert_id"]?.jsonPrimitive?.intOrNull
             ?: return errorResult("alert_id is required")
 
@@ -262,19 +262,19 @@ class DeleteHostTool : McpTool {
     override val readOnly = false
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("system_id" to schemaString("Host/system UUID"))
+            mapOf("host_id" to schemaString("Host ID (integer)"))
         ),
-        required = listOf("system_id")
+        required = listOf("host_id")
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["system_id"]?.jsonPrimitive?.content
-            ?: return errorResult("system_id is required")
+        val systemId = args["host_id"]?.jsonPrimitive?.content
+            ?: return errorResult("host_id is required")
         val hostId = systemId.toIntOrNull()
-            ?: return errorResult("Invalid system_id format")
+            ?: return errorResult("Invalid host_id format")
 
         val deleted = alertMonitorService.deleteHost(
             hostId,

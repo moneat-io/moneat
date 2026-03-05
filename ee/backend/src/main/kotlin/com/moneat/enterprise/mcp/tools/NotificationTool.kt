@@ -18,7 +18,7 @@ private val alertNotifService = AlertNotificationPreferencesService()
 private val notifPrefsService = NotificationPreferencesService()
 
 private val ALERT_SOURCES = listOf(
-    "system_alert",
+    "host_alert",
     "uptime_alert",
     "dashboard_alert"
 )

@@ -24,7 +24,7 @@ import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Releases
 import com.moneat.shared.models.Subscriptions
-import com.moneat.shared.models.Systems
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Users
 import com.moneat.statuspage.models.StatusPageIncidentUpdates
 import com.moneat.statuspage.models.StatusPageIncidents
@@ -2249,33 +2249,32 @@ object DemoDataSeeder {
     }
 
     private suspend fun seedMonitoringSystems(organizationId: Int) {
-        // Check if systems already exist
-        val existingSystems =
+        // Check if hosts already exist
+        val existingHosts =
             transaction {
-                Systems
+                Hosts
                     .selectAll()
-                    .where { Systems.organization_id eq organizationId }
-                    .map { it[Systems.id] to it[Systems.name] }
+                    .where { Hosts.organization_id eq organizationId }
+                    .map { it[Hosts.id] to (it[Hosts.display_name] ?: it[Hosts.hostname]) }
             }
 
-        if (existingSystems.isNotEmpty()) {
-            println("Monitoring systems already exist (${existingSystems.size} found).")
+        if (existingHosts.isNotEmpty()) {
+            println("Monitoring hosts already exist (${existingHosts.size} found).")
 
-            // Update last_seen_at to now for all systems so they appear online
+            // Update last_seen_at to now for all hosts so they appear online
             transaction {
-                existingSystems.forEach { (systemId, _) ->
-                    Systems.update({ Systems.id eq systemId }) {
-                        it[Systems.last_seen_at] = Clock.System.now()
-                        it[Systems.status] = "online"
-                        it[Systems.updated_at] = Clock.System.now()
+                existingHosts.forEach { (hostId, _) ->
+                    Hosts.update({ Hosts.id eq hostId }) {
+                        it[Hosts.last_seen_at] = Clock.System.now()
+                        it[Hosts.status] = "up"
                     }
                 }
             }
-            println("✅ Updated ${existingSystems.size} systems to appear online with current timestamps")
+            println("✅ Updated ${existingHosts.size} hosts to appear online with current timestamps")
             return
         }
 
-        val systemsList =
+        val hostsList =
             listOf(
                 Triple("api-prod-1.acme.com", "Ubuntu 22.04 LTS", "x86_64"),
                 Triple("api-prod-2.acme.com", "Ubuntu 22.04 LTS", "x86_64"),
@@ -2285,47 +2284,42 @@ object DemoDataSeeder {
             )
 
         transaction {
-            // Create realistic monitoring systems
-            systemsList.forEach { (hostname, osInfo, arch) ->
-                val systemId = UUID.randomUUID()
+            val now = Clock.System.now()
+            hostsList.forEach { (hostname, osInfo, arch) ->
                 val agentKeyHash = BCrypt.hashpw(UUID.randomUUID().toString(), BCrypt.gensalt())
-                val createdAt = Instant.now().minus(random.nextInt(7, 60).toLong(), ChronoUnit.DAYS)
-                val lastSeenAt = Instant.now().minus(random.nextInt(0, 60).toLong(), ChronoUnit.SECONDS)
 
-                Systems.insert {
-                    it[Systems.id] = systemId
-                    it[Systems.organization_id] = organizationId
-                    it[Systems.name] = hostname
-                    it[Systems.host] = "10.0.${random.nextInt(1, 10)}.${random.nextInt(1, 255)}"
-                    it[Systems.agent_key_hash] = agentKeyHash
-                    it[Systems.status] = "online"
-                    it[Systems.last_seen_at] = kotlin.time.Instant.fromEpochMilliseconds(lastSeenAt.toEpochMilli())
-                    it[Systems.agent_version] = "1.2.${random.nextInt(0, 10)}"
-                    it[Systems.os] = osInfo
-                    it[Systems.arch] = arch
-                    it[Systems.created_at] = kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
-                    it[Systems.updated_at] = kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
+                Hosts.insert {
+                    it[Hosts.organization_id] = organizationId
+                    it[Hosts.hostname] = hostname
+                    it[Hosts.display_name] = hostname
+                    it[Hosts.agent_key_hash] = agentKeyHash
+                    it[Hosts.status] = "up"
+                    it[Hosts.last_seen_at] = now
+                    it[Hosts.agent_version] = "1.2.${random.nextInt(0, 10)}"
+                    it[Hosts.os] = osInfo
+                    it[Hosts.arch] = arch
+                    it[Hosts.first_seen_at] = now
                 }
             }
         }
 
-        println("✅ Seeded ${systemsList.size} monitoring systems")
+        println("✅ Seeded ${hostsList.size} monitoring hosts")
     }
 
     private suspend fun seedContainerMetrics(organizationId: Int) {
         val db = ClickHouseClient.getDatabase()
 
-        // Get seeded systems
-        val systems =
+        // Get seeded hosts
+        val hosts =
             transaction {
-                Systems
+                Hosts
                     .selectAll()
-                    .where { Systems.organization_id eq organizationId }
-                    .map { it[Systems.id] to it[Systems.name] }
+                    .where { Hosts.organization_id eq organizationId }
+                    .map { it[Hosts.id] to (it[Hosts.display_name] ?: it[Hosts.hostname]) }
             }
 
-        if (systems.isEmpty()) {
-            println("⚠️  No monitoring systems found. Skipping container metrics seeding.")
+        if (hosts.isEmpty()) {
+            println("⚠️  No monitoring hosts found. Skipping container metrics seeding.")
             return
         }
 
@@ -2375,8 +2369,8 @@ object DemoDataSeeder {
         var totalContainers = 0
         var totalMetrics = 0
 
-        systems.forEach { (systemId, systemName) ->
-            val containers = containerConfigs[systemName] ?: emptyList()
+        hosts.forEach { (hostId, hostName) ->
+            val containers = containerConfigs[hostName] ?: emptyList()
 
             containers.forEach { (containerName, image, status) ->
                 val containerId = UUID.randomUUID().toString().take(12) // Docker-style short ID
@@ -2427,7 +2421,7 @@ object DemoDataSeeder {
                     val netSent = if (isRunning) random.nextLong(512L * 1024L, 50L * 1024L * 1024L) else 0L
 
                     val ts = "fromUnixTimestamp64Milli(${timestamp.toEpochMilli()})"
-                    val tagsMap = "map('system_id','$systemId')"
+                    val tagsMap = "map('host_id','$hostId')"
                     val containerQuery =
                         """
                         INSERT INTO `$db`.containers (
@@ -2435,7 +2429,7 @@ object DemoDataSeeder {
                             cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes, tags, timestamp
                         ) VALUES (
                             $organizationId,
-                            '$systemName',
+                            '$hostName',
                             '$containerId',
                             '$containerName',
                             '$image',
@@ -2468,17 +2462,17 @@ object DemoDataSeeder {
     private suspend fun seedSystemMetrics(organizationId: Int) {
         val db = ClickHouseClient.getDatabase()
 
-        // Get seeded systems
-        val systems =
+        // Get seeded hosts
+        val hosts =
             transaction {
-                Systems
+                Hosts
                     .selectAll()
-                    .where { Systems.organization_id eq organizationId }
-                    .map { it[Systems.id] to it[Systems.name] }
+                    .where { Hosts.organization_id eq organizationId }
+                    .map { it[Hosts.id] to (it[Hosts.display_name] ?: it[Hosts.hostname]) }
             }
 
-        if (systems.isEmpty()) {
-            println("⚠️  No monitoring systems found. Skipping system metrics seeding.")
+        if (hosts.isEmpty()) {
+            println("⚠️  No monitoring hosts found. Skipping metrics seeding.")
             return
         }
 
@@ -2493,7 +2487,7 @@ object DemoDataSeeder {
 
         var totalMetrics = 0
 
-        systems.forEach { (systemId, systemName) ->
+        hosts.forEach { (hostId, hostName) ->
             // Generate metrics for last 24 hours with 5-minute intervals (288 points)
             val now = Instant.now()
             val metricsCount = 288
@@ -2501,10 +2495,10 @@ object DemoDataSeeder {
             // Base resource usage patterns per system type
             val (baseCpu, memTotalGB, baseDiskGB) =
                 when {
-                    systemName.contains("api") -> Triple(35.0f, 8, 100)
-                    systemName.contains("worker") -> Triple(55.0f, 16, 200)
-                    systemName.contains("db") -> Triple(25.0f, 32, 500)
-                    systemName.contains("cache") -> Triple(15.0f, 8, 50)
+                    hostName.contains("api") -> Triple(35.0f, 8, 100)
+                    hostName.contains("worker") -> Triple(55.0f, 16, 200)
+                    hostName.contains("db") -> Triple(25.0f, 32, 500)
+                    hostName.contains("cache") -> Triple(15.0f, 8, 50)
                     else -> Triple(30.0f, 8, 100)
                 }
 
@@ -2552,7 +2546,7 @@ object DemoDataSeeder {
 
                 // Optional: GPU metrics (only for some systems)
                 val (gpuPercent, gpuMemPercent, gpuPower) =
-                    if (systemName.contains("worker") && random.nextDouble() < 0.3) {
+                    if (hostName.contains("worker") && random.nextDouble() < 0.3) {
                         Triple(
                             random.nextDouble(20.0, 90.0).toFloat(),
                             random.nextDouble(30.0, 85.0).toFloat(),
@@ -2566,7 +2560,7 @@ object DemoDataSeeder {
                 val batteryPercent = 0.0f
 
                 val ts = "fromUnixTimestamp64Milli(${timestamp.toEpochMilli()})"
-                val tagsMap = "map('system_id','$systemId')"
+                val tagsMap = "map('host_id','$hostId')"
                 val metricRows =
                     listOf(
                         Triple("system.cpu.percent", cpuPercent.toDouble(), 1),
@@ -2592,7 +2586,7 @@ object DemoDataSeeder {
                     )
                 val values =
                     metricRows.joinToString(",") { (name, value, mtype) ->
-                        "($organizationId,'$name',$mtype,$ts,$value,'$systemName',$tagsMap,'','')"
+                        "($organizationId,'$name',$mtype,$ts,$value,'$hostName',$tagsMap,'','')"
                     }
                 val systemMetricsQuery =
                     """
@@ -2605,12 +2599,12 @@ object DemoDataSeeder {
                     ClickHouseClient.execute(systemMetricsQuery)
                     totalMetrics += metricRows.size
                 } catch (e: Exception) {
-                    if (i == 0) println("❌ Error inserting system metric for $systemName: ${e.message}")
+                    if (i == 0) println("❌ Error inserting metric for $hostName: ${e.message}")
                 }
             }
         }
 
-        println("✅ Seeded ${systems.size} systems with $totalMetrics metric points")
+        println("✅ Seeded ${hosts.size} hosts with $totalMetrics metric points")
     }
 
     private suspend fun seedStatusPages(organizationId: Int) {

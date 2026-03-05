@@ -38,9 +38,6 @@ import com.moneat.shared.models.ReleaseFiles
 import com.moneat.shared.models.Releases
 import com.moneat.shared.models.SsoConfigurations
 import com.moneat.shared.models.Subscriptions
-import com.moneat.shared.models.SystemAlertSettings
-import com.moneat.shared.models.SystemAlerts
-import com.moneat.shared.models.Systems
 import com.moneat.shared.models.UsageRecords
 import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.Users
@@ -87,7 +84,7 @@ class AdminServiceTest {
             NotificationPreferences, AlertNotificationPreferences, EmailsSent,
             PromotionalCreditGrants, SsoConfigurations, OrgInvitations, PricingTierConfigs,
             OrganizationIntegrations, AlertSilencePeriods, AiConversations, AiMessages,
-            OrganizationAlertTemplates, Systems, SystemAlerts, SystemAlertSettings
+            OrganizationAlertTemplates
         )
     }
 

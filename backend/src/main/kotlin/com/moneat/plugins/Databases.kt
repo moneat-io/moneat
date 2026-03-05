@@ -17,7 +17,6 @@
 package com.moneat.plugins
 
 import com.moneat.config.configureClickHouseMigrations
-import com.moneat.shared.services.SystemStatusTracker
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.server.application.Application
@@ -198,7 +197,6 @@ fun Application.configureDatabases() {
         // Register shutdown hook
         monitor.subscribe(ApplicationStopping) {
             log.info("Stopping background services...")
-            SystemStatusTracker.stop()
         }
     } catch (e: Exception) {
         if (e.message?.contains("ClickHouse") == true) {

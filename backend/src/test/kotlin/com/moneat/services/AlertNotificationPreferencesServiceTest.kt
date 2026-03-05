@@ -106,29 +106,29 @@ class AlertNotificationPreferencesServiceTest {
         service.updatePreference(
             userId = userId,
             organizationId = orgId,
-            alertSource = "SYSTEM_ALERT",
+            alertSource = "HOST_ALERT",
             emailEnabled = false,
             slackEnabled = true,
             discordEnabled = false
         )
 
-        assertFalse(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "email"))
-        assertTrue(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "slack"))
-        assertFalse(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "discord"))
+        assertFalse(service.isChannelEnabled(userId, orgId, "HOST_ALERT", "email"))
+        assertTrue(service.isChannelEnabled(userId, orgId, "HOST_ALERT", "slack"))
+        assertFalse(service.isChannelEnabled(userId, orgId, "HOST_ALERT", "discord"))
 
         // Update same row to verify upsert path.
         service.updatePreference(
             userId = userId,
             organizationId = orgId,
-            alertSource = "SYSTEM_ALERT",
+            alertSource = "HOST_ALERT",
             emailEnabled = true,
             slackEnabled = false,
             discordEnabled = true
         )
 
-        assertTrue(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "email"))
-        assertFalse(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "slack"))
-        assertTrue(service.isChannelEnabled(userId, orgId, "SYSTEM_ALERT", "discord"))
+        assertTrue(service.isChannelEnabled(userId, orgId, "HOST_ALERT", "email"))
+        assertFalse(service.isChannelEnabled(userId, orgId, "HOST_ALERT", "slack"))
+        assertTrue(service.isChannelEnabled(userId, orgId, "HOST_ALERT", "discord"))
     }
 
     @Test
@@ -162,7 +162,7 @@ class AlertNotificationPreferencesServiceTest {
         service.updatePreference(
             userId = disabledUser,
             organizationId = orgId,
-            alertSource = "SYSTEM_DOWN",
+            alertSource = "HOST_DOWN",
             emailEnabled = false,
             slackEnabled = true,
             discordEnabled = true
@@ -171,7 +171,7 @@ class AlertNotificationPreferencesServiceTest {
         val recipients =
             service.getUsersWithChannelEnabled(
                 organizationId = orgId,
-                alertSource = "SYSTEM_DOWN",
+                alertSource = "HOST_DOWN",
                 channel = "email"
             )
 

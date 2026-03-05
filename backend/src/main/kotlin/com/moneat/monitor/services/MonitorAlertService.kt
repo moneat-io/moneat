@@ -29,10 +29,10 @@ import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationAlertTemplates
-import com.moneat.shared.models.SystemAlertSettings
-import com.moneat.shared.models.SystemAlertTemplateStates
-import com.moneat.shared.models.SystemAlerts
-import com.moneat.shared.models.Systems
+import com.moneat.shared.models.HostAlertSettings
+import com.moneat.shared.models.HostAlertTemplateStates
+import com.moneat.shared.models.HostAlerts
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Users
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -58,7 +58,6 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import java.util.*
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -82,7 +81,7 @@ class MonitorAlertService {
     companion object {
         const val EVALUATION_INTERVAL_SECONDS = 30
         const val STATUS_CHECK_INTERVAL_SECONDS = 60
-        const val SYSTEM_DOWN_THRESHOLD_SECONDS = 300 // 5 minutes
+        const val HOST_DOWN_THRESHOLD_SECONDS = 300 // 5 minutes
         const val MIN_ALERT_INTERVAL_MINUTES = 15 // Don't spam alerts
     }
 
@@ -105,14 +104,14 @@ class MonitorAlertService {
                 }
             }
 
-        // System status check job
+        // Host status check job
         statusCheckJob =
             scope.launch {
                 while (isActive) {
                     try {
-                        checkSystemStatuses()
+                        checkHostStatuses()
                     } catch (e: Exception) {
-                        logger.error(e) { "Error checking system statuses" }
+                        logger.error(e) { "Error checking host statuses" }
                     }
                     delay(STATUS_CHECK_INTERVAL_SECONDS.seconds)
                 }
@@ -152,53 +151,54 @@ class MonitorAlertService {
             transaction {
                 val results = mutableListOf<Triple<AlertData, String, Int>>()
 
-                val globalScopeSystemIds =
-                    SystemAlertSettings
+                val globalScopeHostIds =
+                    HostAlertSettings
                         .selectAll()
                         .where {
-                            SystemAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL
-                        }.map { it[SystemAlertSettings.system_id] }
+                            HostAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL
+                        }.map { it[HostAlertSettings.host_id] }
 
-                val systemScopedAlerts =
-                    if (globalScopeSystemIds.isEmpty()) {
-                        SystemAlerts
-                            .innerJoin(Systems)
+                val hostScopedAlerts =
+                    if (globalScopeHostIds.isEmpty()) {
+                        HostAlerts
+                            .innerJoin(Hosts)
                             .selectAll()
-                            .where { SystemAlerts.enabled eq true }
+                            .where { HostAlerts.enabled eq true }
                             .toList()
                     } else {
-                        SystemAlerts
-                            .innerJoin(Systems)
+                        HostAlerts
+                            .innerJoin(Hosts)
                             .selectAll()
                             .where {
-                                (SystemAlerts.enabled eq true) and
-                                    (SystemAlerts.system_id notInList globalScopeSystemIds)
+                                (HostAlerts.enabled eq true) and
+                                    (HostAlerts.host_id notInList globalScopeHostIds)
                             }.toList()
                     }
 
-                systemScopedAlerts.forEach { row ->
+                hostScopedAlerts.forEach { row ->
+                    val hostName = row[Hosts.display_name] ?: row[Hosts.hostname]
                     results +=
                         Triple(
                             AlertData(
-                                id = row[SystemAlerts.id],
-                                systemId = row[SystemAlerts.system_id],
-                                organizationId = row[SystemAlerts.organization_id],
-                                metric = row[SystemAlerts.metric],
-                                condition = row[SystemAlerts.condition],
-                                threshold = row[SystemAlerts.threshold],
-                                durationSeconds = row[SystemAlerts.duration_seconds],
-                                enabled = row[SystemAlerts.enabled],
-                                lastTriggeredAt = row[SystemAlerts.last_triggered_at],
-                                createdAt = row[SystemAlerts.created_at],
-                                scope = MonitorService.ALERT_SCOPE_SYSTEM,
+                                id = row[HostAlerts.id],
+                                hostId = row[HostAlerts.host_id],
+                                organizationId = row[HostAlerts.organization_id],
+                                metric = row[HostAlerts.metric],
+                                condition = row[HostAlerts.condition],
+                                threshold = row[HostAlerts.threshold],
+                                durationSeconds = row[HostAlerts.duration_seconds],
+                                enabled = row[HostAlerts.enabled],
+                                lastTriggeredAt = row[HostAlerts.last_triggered_at],
+                                createdAt = row[HostAlerts.created_at],
+                                scope = MonitorService.ALERT_SCOPE_HOST,
                                 templateAlertId = null
                             ),
-                            row[Systems.name],
-                            row[Systems.organization_id]
+                            hostName,
+                            row[Hosts.organization_id]
                         )
                 }
 
-                if (globalScopeSystemIds.isNotEmpty()) {
+                if (globalScopeHostIds.isNotEmpty()) {
                     val globalTemplates =
                         OrganizationAlertTemplates
                             .selectAll()
@@ -207,13 +207,13 @@ class MonitorAlertService {
                             }.toList()
 
                     if (globalTemplates.isNotEmpty()) {
-                        val globalSystems =
-                            Systems
-                                .innerJoin(SystemAlertSettings)
+                        val globalHosts =
+                            Hosts
+                                .innerJoin(HostAlertSettings)
                                 .selectAll()
                                 .where {
-                                    (SystemAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL) and
-                                        (SystemAlertSettings.system_id inList globalScopeSystemIds)
+                                    (HostAlertSettings.scope eq MonitorService.ALERT_SCOPE_GLOBAL) and
+                                        (HostAlertSettings.host_id inList globalScopeHostIds)
                                 }.toList()
 
                         val templateIds = globalTemplates.map { it[OrganizationAlertTemplates.id] }
@@ -221,23 +221,23 @@ class MonitorAlertService {
                             if (templateIds.isEmpty()) {
                                 emptyMap()
                             } else {
-                                SystemAlertTemplateStates
+                                HostAlertTemplateStates
                                     .selectAll()
                                     .where {
-                                        (SystemAlertTemplateStates.template_alert_id inList templateIds) and
-                                            (SystemAlertTemplateStates.system_id inList globalScopeSystemIds)
+                                        (HostAlertTemplateStates.template_alert_id inList templateIds) and
+                                            (HostAlertTemplateStates.host_id inList globalScopeHostIds)
                                     }.associate {
                                         Pair(
-                                            it[SystemAlertTemplateStates.template_alert_id],
-                                            it[SystemAlertTemplateStates.system_id]
-                                        ) to it[SystemAlertTemplateStates.last_triggered_at]
+                                            it[HostAlertTemplateStates.template_alert_id],
+                                            it[HostAlertTemplateStates.host_id]
+                                        ) to it[HostAlertTemplateStates.last_triggered_at]
                                     }
                             }
 
-                        globalSystems.forEach { systemRow ->
-                            val systemId = systemRow[Systems.id]
-                            val systemName = systemRow[Systems.name]
-                            val orgId = systemRow[Systems.organization_id]
+                        globalHosts.forEach { hostRow ->
+                            val hostId = hostRow[Hosts.id]
+                            val hostName = hostRow[Hosts.display_name] ?: hostRow[Hosts.hostname]
+                            val orgId = hostRow[Hosts.organization_id]
 
                             globalTemplates
                                 .filter { template -> template[OrganizationAlertTemplates.organization_id] == orgId }
@@ -247,19 +247,19 @@ class MonitorAlertService {
                                         Triple(
                                             AlertData(
                                                 id = templateId,
-                                                systemId = systemId,
+                                                hostId = hostId,
                                                 organizationId = orgId,
                                                 metric = template[OrganizationAlertTemplates.metric],
                                                 condition = template[OrganizationAlertTemplates.condition],
                                                 threshold = template[OrganizationAlertTemplates.threshold],
                                                 durationSeconds = template[OrganizationAlertTemplates.duration_seconds],
                                                 enabled = template[OrganizationAlertTemplates.enabled],
-                                                lastTriggeredAt = stateMap[Pair(templateId, systemId)],
+                                                lastTriggeredAt = stateMap[Pair(templateId, hostId)],
                                                 createdAt = template[OrganizationAlertTemplates.created_at],
                                                 scope = MonitorService.ALERT_SCOPE_GLOBAL,
                                                 templateAlertId = templateId
                                             ),
-                                            systemName,
+                                            hostName,
                                             orgId
                                         )
                                 }
@@ -272,9 +272,9 @@ class MonitorAlertService {
 
         logger.debug { "Evaluating ${alerts.size} alerts" }
 
-        for ((alert, systemName, orgId) in alerts) {
+        for ((alert, hostName, orgId) in alerts) {
             try {
-                evaluateAlert(alert, systemName, orgId)
+                evaluateAlert(alert, hostName, orgId)
             } catch (e: Exception) {
                 logger.error(e) { "Error evaluating alert ${alert.id}" }
             }
@@ -286,13 +286,13 @@ class MonitorAlertService {
      */
     private suspend fun evaluateAlert(
         alert: AlertData,
-        systemName: String,
+        hostName: String,
         organizationId: Int
     ) {
-        val alertKey = "alert_state:${alert.systemId}:${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}"
+        val alertKey = "alert_state:${alert.hostId}:${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}"
 
-        // Get recent metrics for the system
-        val currentValue = getCurrentMetricValue(alert.systemId, alert.organizationId, alert.metric) ?: return
+        // Get recent metrics for the host
+        val currentValue = getCurrentMetricValue(alert.hostId, alert.organizationId, alert.metric) ?: return
 
         // Check if alert condition is met
         val triggered = isThresholdTriggered(alert.condition, currentValue, alert.threshold)
@@ -322,20 +322,20 @@ class MonitorAlertService {
                 }
 
                 // Send recovery notification
-                sendRecoveryNotification(alert, systemName, organizationId)
+                sendRecoveryNotification(alert, hostName, organizationId)
                 // Resolve incident for metric alerts (same dedup key used when firing)
                 val dedupKey =
-                    "moneat-system-alert-${alert.systemId}-${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}"
+                    "moneat-host-alert-${alert.hostId}-${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}"
                 try {
                     incidentService.resolveAlert(
                         organizationId = organizationId,
-                        source = com.moneat.incident.models.AlertSource.SYSTEM_ALERT,
+                        source = com.moneat.incident.models.AlertSource.HOST_ALERT,
                         deduplicationKey = dedupKey
                     )
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
                 }
-                logger.info { "Alert ${alert.id} recovered for system ${alert.systemId}" }
+                logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
             }
             return
         }
@@ -369,7 +369,7 @@ class MonitorAlertService {
 
         // Trigger the alert
         logger.info {
-            "Alert ${alert.id} triggered for system ${alert.systemId}: ${alert.metric} ${alert.condition} ${alert.threshold} (current: $currentValue)"
+            "Alert ${alert.id} triggered for host ${alert.hostId}: ${alert.metric} ${alert.condition} ${alert.threshold} (current: $currentValue)"
         }
 
         // Update Redis state
@@ -385,50 +385,48 @@ class MonitorAlertService {
         if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
             transaction {
                 val existing =
-                    SystemAlertTemplateStates
+                    HostAlertTemplateStates
                         .selectAll()
                         .where {
-                            (SystemAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
-                                (SystemAlertTemplateStates.system_id eq alert.systemId)
+                            (HostAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
+                                (HostAlertTemplateStates.host_id eq alert.hostId)
                         }.firstOrNull()
 
                 if (existing != null) {
-                    SystemAlertTemplateStates.update({
-                        (SystemAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
-                            (SystemAlertTemplateStates.system_id eq alert.systemId)
+                    HostAlertTemplateStates.update({
+                        (HostAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
+                            (HostAlertTemplateStates.host_id eq alert.hostId)
                     }) {
                         it[last_triggered_at] = now
                     }
                 } else {
-                    SystemAlertTemplateStates.insert {
-                        it[SystemAlertTemplateStates.template_alert_id] = alert.templateAlertId
-                        it[SystemAlertTemplateStates.system_id] = alert.systemId
-                        it[SystemAlertTemplateStates.last_triggered_at] = now
+                    HostAlertTemplateStates.insert {
+                        it[HostAlertTemplateStates.template_alert_id] = alert.templateAlertId
+                        it[HostAlertTemplateStates.host_id] = alert.hostId
+                        it[HostAlertTemplateStates.last_triggered_at] = now
                     }
                 }
             }
         } else {
             transaction {
-                SystemAlerts.update({ SystemAlerts.id eq alert.id }) {
+                HostAlerts.update({ HostAlerts.id eq alert.id }) {
                     it[last_triggered_at] = now
                 }
             }
         }
 
         // Send notification
-        sendAlertNotification(alert, systemName, organizationId, currentValue)
+        sendAlertNotification(alert, hostName, organizationId, currentValue)
     }
 
     /**
-     * Get the current value of a metric for a system from metrics table.
+     * Get the current value of a metric for a host from metrics table.
      */
     private suspend fun getCurrentMetricValue(
-        systemId: UUID,
+        hostId: Int,
         organizationId: Int,
         metric: String
     ): Double? {
-        val sysIdStr = systemId.toString()
-
         val (selectExpr, metricFilter) =
             when (metric) {
                 "cpu_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.cpu.percent'"
@@ -454,7 +452,7 @@ class MonitorAlertService {
             SELECT $selectExpr as value
             FROM `$clickhouseDb`.metrics
             WHERE organization_id = $organizationId
-              AND tags['system_id'] = '$sysIdStr'
+              AND tags['host_id'] = '$hostId'
               AND $metricFilter
             FORMAT JSONCompact
             """.trimIndent()
@@ -485,9 +483,8 @@ class MonitorAlertService {
      * Check if the alert condition has been sustained for the required duration.
      */
     private suspend fun checkSustainedCondition(alert: AlertData): Boolean {
-        val sysIdStr = alert.systemId.toString()
         val baseFilter =
-            "organization_id = ${alert.organizationId} AND tags['system_id'] = '$sysIdStr' " +
+            "organization_id = ${alert.organizationId} AND tags['host_id'] = '${alert.hostId}' " +
                 "AND timestamp >= now64(3) - INTERVAL ${alert.durationSeconds} SECOND"
 
         val (query, usesDerived) =
@@ -594,34 +591,34 @@ class MonitorAlertService {
      */
     private suspend fun sendAlertNotification(
         alert: AlertData,
-        systemName: String,
+        hostName: String,
         organizationId: Int,
         currentValue: Double
     ) {
         val prefsService = AlertNotificationPreferencesService()
 
-        // Get users with email enabled for SYSTEM_ALERT
+        // Get users with email enabled for HOST_ALERT
         val emailRecipients =
             prefsService.getUsersWithChannelEnabled(
                 organizationId = organizationId,
-                alertSource = "SYSTEM_ALERT",
+                alertSource = "HOST_ALERT",
                 channel = "email"
             )
 
         val metricLabel = getMetricLabel(alert.metric)
         val conditionText = getConditionText(alert.condition)
-        val subject = "⚠️ Alert: $systemName - $metricLabel $conditionText ${alert.threshold}"
+        val subject = "⚠️ Alert: $hostName - $metricLabel $conditionText ${alert.threshold}"
 
         val formattedValue = formatMetricValue(alert.metric, currentValue)
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
-        val dashboardUrl = "${config.property("email.frontendUrl").getString()}/monitoring/${alert.systemId}"
+        val dashboardUrl = "${config.property("email.frontendUrl").getString()}/monitoring/hosts/${alert.hostId}"
 
         // Send email notifications
         for ((_, email) in emailRecipients) {
             try {
                 val htmlBody =
-                    loadSystemAlertTemplate(
-                        systemName = systemName,
+                    loadHostAlertTemplate(
+                        hostName = hostName,
                         metric = metricLabel,
                         condition = conditionText,
                         value = formattedValue,
@@ -631,16 +628,16 @@ class MonitorAlertService {
 
                 val textBody =
                     """
-                    ⚠️ System Alert
+                    ⚠️ Host Alert
                     
                     Heads up, something needs attention.
                     
-                    We noticed that $metricLabel on $systemName has $conditionText the threshold of $formattedThreshold.
+                    We noticed that $metricLabel on $hostName has $conditionText the threshold of $formattedThreshold.
                     
                     Current Value: $formattedValue
                     ${if (alert.durationSeconds > 0) "Duration setting: ${alert.durationSeconds}s" else ""}
                     
-                    Check System Health: $dashboardUrl
+                    Check Host Health: $dashboardUrl
                     
                     ---
                     Moneat Server Monitoring
@@ -657,25 +654,25 @@ class MonitorAlertService {
             prefsService
                 .getUsersWithChannelEnabled(
                     organizationId = organizationId,
-                    alertSource = "SYSTEM_ALERT",
+                    alertSource = "HOST_ALERT",
                     channel = "slack"
                 ).isNotEmpty()
 
         if (slackEnabled) {
             try {
                 val baseUrl = config.property("email.frontendUrl").getString()
-                slackService.sendSystemAlert(
+                slackService.sendHostAlert(
                     organizationId = organizationId,
-                    systemName = systemName,
+                    hostName = hostName,
                     metric = metricLabel,
                     condition = alert.condition,
                     threshold = formattedThreshold,
                     currentValue = formattedValue,
-                    systemId = alert.systemId,
+                    hostId = alert.hostId,
                     baseUrl = baseUrl
                 )
             } catch (e: Exception) {
-                logger.error(e) { "Failed to send Slack notification for system alert" }
+                logger.error(e) { "Failed to send Slack notification for host alert" }
             }
         }
 
@@ -684,25 +681,25 @@ class MonitorAlertService {
             prefsService
                 .getUsersWithChannelEnabled(
                     organizationId = organizationId,
-                    alertSource = "SYSTEM_ALERT",
+                    alertSource = "HOST_ALERT",
                     channel = "discord"
                 ).isNotEmpty()
 
         if (discordEnabled) {
             try {
                 val baseUrl = config.property("email.frontendUrl").getString()
-                discordService.sendSystemAlert(
+                discordService.sendHostAlert(
                     organizationId = organizationId,
-                    systemName = systemName,
+                    hostName = hostName,
                     metric = metricLabel,
                     condition = alert.condition,
                     threshold = formattedThreshold,
                     currentValue = formattedValue,
-                    systemId = alert.systemId,
+                    hostId = alert.hostId,
                     baseUrl = baseUrl
                 )
             } catch (e: Exception) {
-                logger.error(e) { "Failed to send Discord notification for system alert" }
+                logger.error(e) { "Failed to send Discord notification for host alert" }
             }
         }
 
@@ -722,11 +719,11 @@ class MonitorAlertService {
                     }
                 } else {
                     transaction {
-                        SystemAlerts
+                        HostAlerts
                             .selectAll()
-                            .where { SystemAlerts.id eq alert.id }
+                            .where { HostAlerts.id eq alert.id }
                             .firstOrNull()
-                            ?.get(SystemAlerts.incident_severity)
+                            ?.get(HostAlerts.incident_severity)
                             ?.let {
                                 com.moneat.incident.models.IncidentSeverity.fromString(it)
                             }
@@ -737,22 +734,22 @@ class MonitorAlertService {
                 val frontendUrl = config.property("email.frontendUrl").getString()
                 val incidentEvent =
                     com.moneat.incident.models.IncidentEvent(
-                        title = "$systemName - $metricLabel ${alert.condition} ${alert.threshold}",
+                        title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
                         description = "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold\nCurrent Value: $formattedValue",
                         severity = incidentSeverity,
                         status = com.moneat.incident.models.IncidentStatus.FIRING,
-                        source = com.moneat.incident.models.AlertSource.SYSTEM_ALERT,
-                        deduplicationKey = "moneat-system-alert-${alert.systemId}-${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}",
+                        source = com.moneat.incident.models.AlertSource.HOST_ALERT,
+                        deduplicationKey = "moneat-host-alert-${alert.hostId}-${if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"}",
                         organizationId = organizationId,
                         metadata =
                         mapOf(
-                            "system_id" to JsonPrimitive(alert.systemId.toString()),
-                            "system_name" to JsonPrimitive(systemName),
+                            "host_id" to JsonPrimitive(alert.hostId.toString()),
+                            "host_name" to JsonPrimitive(hostName),
                             "metric" to JsonPrimitive(alert.metric),
                             "current_value" to JsonPrimitive(formattedValue),
                             "threshold" to JsonPrimitive(formattedThreshold)
                         ),
-                        moneatUrl = "$frontendUrl/monitoring/${alert.systemId}"
+                        moneatUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
                     )
                 incidentService.fireAlert(incidentEvent)
             }
@@ -762,36 +759,36 @@ class MonitorAlertService {
     }
 
     /**
-     * Check system statuses and send down/up notifications.
+     * Check host statuses and send down/up notifications.
      */
-    private suspend fun checkSystemStatuses() {
+    private suspend fun checkHostStatuses() {
         val now = Clock.System.now()
-        val downThreshold = now - SYSTEM_DOWN_THRESHOLD_SECONDS.seconds
+        val downThreshold = now - HOST_DOWN_THRESHOLD_SECONDS.seconds
 
-        // Get all systems and check their last_seen_at
-        val systems =
+        // Get all hosts and check their last_seen_at
+        val hosts =
             transaction {
-                Systems.selectAll().map { row ->
+                Hosts.selectAll().map { row ->
                     Triple(
-                        row[Systems.id],
-                        row[Systems.name],
-                        row[Systems.organization_id]
+                        row[Hosts.id],
+                        row[Hosts.display_name] ?: row[Hosts.hostname],
+                        row[Hosts.organization_id]
                     ) to
                         Pair(
-                            row[Systems.status],
-                            row[Systems.last_seen_at]
+                            row[Hosts.status],
+                            row[Hosts.last_seen_at]
                         )
                 }
             }
 
-        for ((systemInfo, statusInfo) in systems) {
-            val (systemId, systemName, organizationId) = systemInfo
+        for ((hostInfo, statusInfo) in hosts) {
+            val (hostId, hostName, organizationId) = hostInfo
             val (currentStatus, lastSeenAt) = statusInfo
 
-            val isDown = lastSeenAt == null || lastSeenAt < downThreshold
+            val isDown = lastSeenAt < downThreshold
 
-            // Skip pending systems that have never reported
-            if (lastSeenAt == null && currentStatus == "pending") {
+            // Skip pending hosts that have never reported
+            if (currentStatus == "pending") {
                 continue
             }
 
@@ -799,13 +796,13 @@ class MonitorAlertService {
 
             // Only send notification if status changed
             if (currentStatus != newStatus) {
-                logger.info { "System $systemId ($systemName) status changed: $currentStatus -> $newStatus" }
+                logger.info { "Host $hostId ($hostName) status changed: $currentStatus -> $newStatus" }
 
                 // Update status in database
                 transaction {
-                    Systems.update({ Systems.id eq systemId }) {
+                    Hosts.update({ Hosts.id eq hostId }) {
                         it[status] = newStatus
-                        it[updated_at] = now
+                        it[last_seen_at] = now
                     }
                 }
 
@@ -816,49 +813,47 @@ class MonitorAlertService {
 
                 // Send notification
                 if (newStatus == "down") {
-                    sendSystemDownNotification(systemId, systemName, organizationId, lastSeenAt)
+                    sendHostDownNotification(hostId, hostName, organizationId, lastSeenAt)
                 } else {
-                    sendSystemUpNotification(systemId, systemName, organizationId)
+                    sendHostUpNotification(hostId, hostName, organizationId)
                 }
             }
         }
     }
 
     /**
-     * Send system down notification.
+     * Send host down notification.
      */
-    private suspend fun sendSystemDownNotification(
-        systemId: UUID,
-        systemName: String,
+    private suspend fun sendHostDownNotification(
+        hostId: Int,
+        hostName: String,
         organizationId: Int,
-        lastSeenAt: Instant?
+        lastSeenAt: Instant
     ) {
         val prefsService = AlertNotificationPreferencesService()
 
-        // Get users with email enabled for SYSTEM_DOWN
+        // Get users with email enabled for HOST_DOWN
         val emailRecipients =
             prefsService.getUsersWithChannelEnabled(
                 organizationId = organizationId,
-                alertSource = "SYSTEM_DOWN",
+                alertSource = "HOST_DOWN",
                 channel = "email"
             )
 
         val lastSeenText =
-            if (lastSeenAt != null) {
+            run {
                 val minutesAgo = ((Clock.System.now() - lastSeenAt).inWholeSeconds / 60).toInt()
                 "Last seen $minutesAgo minutes ago"
-            } else {
-                "Never reported metrics"
             }
 
-        val systemUrl = "${config.property("email.frontendUrl").getString()}/monitoring/$systemId"
+        val hostUrl = "${config.property("email.frontendUrl").getString()}/monitoring/hosts/$hostId"
 
         // Send email notifications
         for ((_, email) in emailRecipients) {
             try {
-                emailService.sendSystemDownEmail(email, systemName, lastSeenText, systemUrl)
+                emailService.sendHostDownEmail(email, hostName, lastSeenText, hostUrl)
             } catch (e: Exception) {
-                logger.error(e) { "Failed to send system down notification to $email" }
+                logger.error(e) { "Failed to send host down notification to $email" }
             }
         }
 
@@ -867,22 +862,22 @@ class MonitorAlertService {
             prefsService
                 .getUsersWithChannelEnabled(
                     organizationId = organizationId,
-                    alertSource = "SYSTEM_DOWN",
+                    alertSource = "HOST_DOWN",
                     channel = "slack"
                 ).isNotEmpty()
 
         if (slackEnabled) {
             try {
                 val baseUrl = config.property("email.frontendUrl").getString()
-                slackService.sendSystemDown(
+                slackService.sendHostDown(
                     organizationId = organizationId,
-                    systemName = systemName,
+                    hostName = hostName,
                     lastSeen = lastSeenText,
-                    systemId = systemId,
+                    hostId = hostId,
                     baseUrl = baseUrl
                 )
             } catch (e: Exception) {
-                logger.error(e) { "Failed to send Slack notification for system down" }
+                logger.error(e) { "Failed to send Slack notification for host down" }
             }
         }
 
@@ -891,57 +886,57 @@ class MonitorAlertService {
             prefsService
                 .getUsersWithChannelEnabled(
                     organizationId = organizationId,
-                    alertSource = "SYSTEM_DOWN",
+                    alertSource = "HOST_DOWN",
                     channel = "discord"
                 ).isNotEmpty()
 
         if (discordEnabled) {
             try {
                 val baseUrl = config.property("email.frontendUrl").getString()
-                discordService.sendSystemDown(
+                discordService.sendHostDown(
                     organizationId = organizationId,
-                    systemName = systemName,
+                    hostName = hostName,
                     lastSeen = lastSeenText,
-                    systemId = systemId,
+                    hostId = hostId,
                     baseUrl = baseUrl
                 )
             } catch (e: Exception) {
-                logger.error(e) { "Failed to send Discord notification for system down" }
+                logger.error(e) { "Failed to send Discord notification for host down" }
             }
         }
 
-        // Fire incident alert for system down
+        // Fire incident alert for host down
         try {
             val frontendUrl = config.property("email.frontendUrl").getString()
             val incidentEvent =
                 com.moneat.incident.models.IncidentEvent(
-                    title = "System Down: $systemName",
+                    title = "Host Down: $hostName",
                     description = "The monitoring agent has stopped reporting metrics.\nStatus: $lastSeenText",
                     severity = com.moneat.incident.models.IncidentSeverity.CRITICAL,
                     status = com.moneat.incident.models.IncidentStatus.FIRING,
-                    source = com.moneat.incident.models.AlertSource.SYSTEM_DOWN,
-                    deduplicationKey = "moneat-system-down-$systemId",
+                    source = com.moneat.incident.models.AlertSource.HOST_DOWN,
+                    deduplicationKey = "moneat-host-down-$hostId",
                     organizationId = organizationId,
                     metadata =
                     mapOf(
-                        "system_id" to JsonPrimitive(systemId.toString()),
-                        "system_name" to JsonPrimitive(systemName),
+                        "host_id" to JsonPrimitive(hostId.toString()),
+                        "host_name" to JsonPrimitive(hostName),
                         "last_seen" to JsonPrimitive(lastSeenText)
                     ),
-                    moneatUrl = "$frontendUrl/monitoring/$systemId"
+                    moneatUrl = "$frontendUrl/monitoring/hosts/$hostId"
                 )
             incidentService.fireAlert(incidentEvent)
         } catch (e: Exception) {
-            logger.error(e) { "Failed to fire incident alert for system down" }
+            logger.error(e) { "Failed to fire incident alert for host down" }
         }
     }
 
     /**
-     * Send system up notification.
+     * Send host up notification.
      */
-    private suspend fun sendSystemUpNotification(
-        systemId: UUID,
-        systemName: String,
+    private suspend fun sendHostUpNotification(
+        hostId: Int,
+        hostName: String,
         organizationId: Int
     ) {
         val recipients =
@@ -953,7 +948,7 @@ class MonitorAlertService {
                     .map { it[Users.email] }
             }
 
-        val subject = "✅ System Recovered: $systemName"
+        val subject = "✅ Host Recovered: $hostName"
 
         // Send email notifications
         for (recipient in recipients) {
@@ -968,13 +963,13 @@ class MonitorAlertService {
                     </head>
                     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                         <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 30px; border-radius: 8px;">
-                            <h1 style="color: #16a34a; margin-bottom: 20px;">✅ System Recovered</h1>
-                            <p><strong>System:</strong> $systemName</p>
-                            <p>The system is now reporting metrics again.</p>
+                            <h1 style="color: #16a34a; margin-bottom: 20px;">✅ Host Recovered</h1>
+                            <p><strong>Host:</strong> $hostName</p>
+                            <p>The host is now reporting metrics again.</p>
                             <div style="margin: 30px 0;">
                                 <a href="${config.property(
                         "email.frontendUrl"
-                    ).getString()}/monitoring/$systemId" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View System</a>
+                    ).getString()}/monitoring/hosts/$hostId" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Host</a>
                             </div>
                             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                             <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
@@ -985,59 +980,59 @@ class MonitorAlertService {
 
                 val textBody =
                     """
-                    ✅ System Recovered
+                    ✅ Host Recovered
                     
-                    System: $systemName
+                    Host: $hostName
                     
-                    The system is now reporting metrics again.
+                    The host is now reporting metrics again.
                     
-                    View system: ${config.property("email.frontendUrl").getString()}/monitoring/$systemId
+                    View host: ${config.property("email.frontendUrl").getString()}/monitoring/hosts/$hostId
                     
                     ---
                     Moneat Server Monitoring
                     """.trimIndent()
 
-                emailService.sendEmail(recipient, subject, htmlBody, textBody, "system_up")
+                emailService.sendEmail(recipient, subject, htmlBody, textBody, "host_up")
             } catch (e: Exception) {
-                logger.error(e) { "Failed to send system up notification to $recipient" }
+                logger.error(e) { "Failed to send host up notification to $recipient" }
             }
         }
 
         // Send Slack notification
         try {
             val baseUrl = config.property("email.frontendUrl").getString()
-            slackService.sendSystemUp(
+            slackService.sendHostUp(
                 organizationId = organizationId,
-                systemName = systemName,
-                systemId = systemId,
+                hostName = hostName,
+                hostId = hostId,
                 baseUrl = baseUrl
             )
         } catch (e: Exception) {
-            logger.error(e) { "Failed to send Slack notification for system up" }
+            logger.error(e) { "Failed to send Slack notification for host up" }
         }
 
         // Send Discord notification
         try {
             val baseUrl = config.property("email.frontendUrl").getString()
-            discordService.sendSystemUp(
+            discordService.sendHostUp(
                 organizationId = organizationId,
-                systemName = systemName,
-                systemId = systemId,
+                hostName = hostName,
+                hostId = hostId,
                 baseUrl = baseUrl
             )
         } catch (e: Exception) {
-            logger.error(e) { "Failed to send Discord notification for system up" }
+            logger.error(e) { "Failed to send Discord notification for host up" }
         }
 
-        // Resolve incident alert for system up
+        // Resolve incident alert for host up
         try {
             incidentService.resolveAlert(
                 organizationId = organizationId,
-                source = com.moneat.incident.models.AlertSource.SYSTEM_DOWN,
-                deduplicationKey = "moneat-system-down-$systemId"
+                source = com.moneat.incident.models.AlertSource.HOST_DOWN,
+                deduplicationKey = "moneat-host-down-$hostId"
             )
         } catch (e: Exception) {
-            logger.error(e) { "Failed to resolve incident alert for system up" }
+            logger.error(e) { "Failed to resolve incident alert for host up" }
         }
     }
 
@@ -1076,21 +1071,21 @@ class MonitorAlertService {
         return timeSinceLastTrigger < MIN_ALERT_INTERVAL_MINUTES.minutes
     }
 
-    private fun loadSystemAlertTemplate(
-        systemName: String,
+    private fun loadHostAlertTemplate(
+        hostName: String,
         metric: String,
         condition: String,
         value: String,
         threshold: String,
         dashboardUrl: String
     ): String {
-        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/system-alert-v1.html")
+        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/host-alert-v1.html")
 
         return if (templateResource != null) {
             templateResource
                 .bufferedReader()
                 .use { it.readText() }
-                .replace("{{ systemName }}", systemName)
+                .replace("{{ hostName }}", hostName)
                 .replace("{{ metric }}", metric)
                 .replace("{{ condition }}", condition)
                 .replace("{{ value }}", value)
@@ -1100,8 +1095,8 @@ class MonitorAlertService {
             // Fallback inline HTML
             """
             <div style="padding: 20px; background: #fff1f2; border: 1px solid #fecaca; border-radius: 8px;">
-                <h2 style="color: #991b1b;">System Alert</h2>
-                <p><strong>$systemName</strong> reported <strong>$metric</strong> at <strong>$value</strong>.</p>
+                <h2 style="color: #991b1b;">Host Alert</h2>
+                <p><strong>$hostName</strong> reported <strong>$metric</strong> at <strong>$value</strong>.</p>
                 <p>Threshold: $condition $threshold</p>
                 <a href="$dashboardUrl">View Dashboard</a>
             </div>
@@ -1109,19 +1104,19 @@ class MonitorAlertService {
         }
     }
 
-    private fun loadSystemRecoveredTemplate(
-        systemName: String,
+    private fun loadHostRecoveredTemplate(
+        hostName: String,
         metric: String,
         duration: String,
         dashboardUrl: String
     ): String {
-        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/system-recovered.html")
+        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/host-recovered.html")
 
         return if (templateResource != null) {
             templateResource
                 .bufferedReader()
                 .use { it.readText() }
-                .replace("{{ systemName }}", systemName)
+                .replace("{{ hostName }}", hostName)
                 .replace("{{ metric }}", metric)
                 .replace("{{ duration }}", duration)
                 .replace("{{ dashboardUrl }}", dashboardUrl)
@@ -1129,8 +1124,8 @@ class MonitorAlertService {
             // Fallback inline HTML
             """
             <div style="padding: 20px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
-                <h2 style="color: #166534;">System Recovered</h2>
-                <p><strong>$systemName</strong> is back to normal.</p>
+                <h2 style="color: #166534;">Host Recovered</h2>
+                <p><strong>$hostName</strong> is back to normal.</p>
                 <p>Metric: $metric</p>
                 <a href="$dashboardUrl">View Dashboard</a>
             </div>
@@ -1140,29 +1135,29 @@ class MonitorAlertService {
 
     private suspend fun sendRecoveryNotification(
         alert: AlertData,
-        systemName: String,
+        hostName: String,
         organizationId: Int
     ) {
         val prefsService = AlertNotificationPreferencesService()
 
-        // Get users with email enabled for SYSTEM_ALERT
+        // Get users with email enabled for HOST_ALERT
         val emailRecipients =
             prefsService.getUsersWithChannelEnabled(
                 organizationId = organizationId,
-                alertSource = "SYSTEM_ALERT",
+                alertSource = "HOST_ALERT",
                 channel = "email"
             )
 
         val metricLabel = getMetricLabel(alert.metric)
-        val subject = "✅ Recovered: $systemName - $metricLabel"
-        val dashboardUrl = "${config.property("email.frontendUrl").getString()}/monitoring/${alert.systemId}"
+        val subject = "✅ Recovered: $hostName - $metricLabel"
+        val dashboardUrl = "${config.property("email.frontendUrl").getString()}/monitoring/hosts/${alert.hostId}"
         val durationText = if (alert.durationSeconds > 0) "${alert.durationSeconds}s setting" else "N/A"
 
         for ((_, email) in emailRecipients) {
             try {
                 val htmlBody =
-                    loadSystemRecoveredTemplate(
-                        systemName = systemName,
+                    loadHostRecoveredTemplate(
+                        hostName = hostName,
                         metric = metricLabel,
                         duration = durationText,
                         dashboardUrl = dashboardUrl
@@ -1172,7 +1167,7 @@ class MonitorAlertService {
                     """
                     ✅ Issue Resolved
                     
-                    $systemName has recovered.
+                    $hostName has recovered.
                     
                     The alert for $metricLabel is no longer active. The metric has returned to normal levels.
                     

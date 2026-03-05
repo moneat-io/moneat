@@ -2517,17 +2517,17 @@ function NotificationsTab() {
 
   const getSourceLabel = (source: AlertSource) => {
     switch (source) {
-      case 'SYSTEM_ALERT':
+      case 'HOST_ALERT':
         return { 
-          label: 'System Alerts', 
+          label: 'Host Alerts', 
           desc: 'Metric threshold breaches (CPU, memory, disk)', 
           icon: Zap,
           color: 'text-yellow-600',
           bgColor: 'bg-yellow-500/10'
         }
-      case 'SYSTEM_DOWN':
+      case 'HOST_DOWN':
         return { 
-          label: 'System Down', 
+          label: 'Host Down', 
           desc: 'Server stops reporting', 
           icon: Server,
           color: 'text-red-600',
@@ -2661,7 +2661,7 @@ function NotificationsTab() {
             </div>
           </div>
           
-          {['SYSTEM_ALERT', 'SYSTEM_DOWN', 'UPTIME_MONITOR', 'ERROR_ALERT', 'DASHBOARD_ALERT'].map((s) => renderRow(s as AlertSource))}
+          {['HOST_ALERT', 'HOST_DOWN', 'UPTIME_MONITOR', 'ERROR_ALERT', 'DASHBOARD_ALERT'].map((s) => renderRow(s as AlertSource))}
 
           {(!slackConfigured || !discordConfigured) && (
             <div className="mt-6 p-3 bg-muted/50 rounded-md text-sm text-muted-foreground flex items-center gap-2">

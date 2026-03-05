@@ -34,8 +34,8 @@ private val logger = KotlinLogging.logger {}
 class AlertNotificationPreferencesService {
 
     enum class AlertSource(val value: String) {
-        SYSTEM_ALERT("SYSTEM_ALERT"),
-        SYSTEM_DOWN("SYSTEM_DOWN"),
+        HOST_ALERT("HOST_ALERT"),
+        HOST_DOWN("HOST_DOWN"),
         UPTIME_MONITOR("UPTIME_MONITOR"),
         ERROR_ALERT("ERROR_ALERT"),
         DASHBOARD_ALERT("DASHBOARD_ALERT");

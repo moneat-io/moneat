@@ -37,10 +37,10 @@ export const Route = createFileRoute('/admin/incidents')({
 })
 
 const alertSources = [
-  { value: 'SYSTEM_DOWN', label: 'System Down', icon: Server, description: 'Simulate a system outage' },
+  { value: 'HOST_DOWN', label: 'Host Down', icon: Server, description: 'Simulate a host outage' },
   { value: 'UPTIME_MONITOR', label: 'Uptime Monitor', icon: Activity, description: 'Simulate an uptime check failure' },
   { value: 'ERROR_ALERT', label: 'Error Alert', icon: AlertCircle, description: 'Simulate a critical error spike' },
-  { value: 'SYSTEM_ALERT', label: 'System Alert', icon: AlertTriangle, description: 'Generic system alert' },
+  { value: 'HOST_ALERT', label: 'Host Alert', icon: AlertTriangle, description: 'Generic host alert' },
 ]
 
 const severities = [
@@ -52,7 +52,7 @@ const severities = [
 
 function AdminIncidentsPage() {
   const { toast } = useToast()
-  const [source, setSource] = useState('SYSTEM_DOWN')
+  const [source, setSource] = useState('HOST_DOWN')
   const [severity, setSeverity] = useState('CRITICAL')
   const [title, setTitle] = useState('Test Incident: System Unresponsive')
   const [description, setDescription] = useState('This is a manually triggered test incident.')
