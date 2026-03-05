@@ -50,9 +50,9 @@ data class SyntheticCheckResult(
     val timings: Map<String, Double> = emptyMap()
 )
 
-class SyntheticsCheckExecutor {
+open class SyntheticsCheckExecutor {
 
-    suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult {
+    open suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult {
         return when (test.testType.lowercase()) {
             "multistep" -> executeMultistepTest(test)
             "ssl" -> executeSslTest(test)
