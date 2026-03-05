@@ -4,6 +4,7 @@ import {Helmet} from 'react-helmet-async'
 import {isValidElement, type ReactElement} from 'react'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark} from 'react-syntax-highlighter/dist/esm/styles/prism'
+import {BlogPostFeedback} from '@/components/BlogPostFeedback'
 
 export const Route = createFileRoute('/blog/$slug')({
   loader: ({params}) => {
@@ -97,6 +98,7 @@ function BlogPost() {
         <div className="prose prose-invert prose-sky max-w-none prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white prose-th:text-slate-200 prose-td:text-slate-300 prose-table:border-collapse prose-th:border prose-th:border-slate-700 prose-td:border prose-td:border-slate-700 prose-th:px-3 prose-th:py-2 prose-td:px-3 prose-td:py-2">
           <Component components={mdxComponents} />
         </div>
+        <BlogPostFeedback slug={post.slug} />
         <footer className="mt-16 pt-8 border-t border-slate-800">
           <Link to="/blog" className="text-sm text-sky-400 hover:text-sky-300 transition-colors">
             &larr; Back to all posts
