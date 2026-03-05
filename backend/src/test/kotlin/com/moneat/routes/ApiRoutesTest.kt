@@ -78,7 +78,7 @@ class ApiRoutesTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             queries += query
-            if (query.contains("FROM test.events e") && query.contains("GROUP BY issue_id")) {
+            if (query.contains("FROM `test`.events e") && query.contains("GROUP BY issue_id")) {
                 exchange.respond(
                     200,
                     """

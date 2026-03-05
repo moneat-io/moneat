@@ -70,6 +70,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
+    "@mdx-js/rollup": "^3.1.1",
     "@tailwindcss/vite": "^4.0.0",
     "@tanstack/router-devtools": "^1.15.15",
     "@tanstack/router-vite-plugin": "^1.15.14",
@@ -95,6 +96,9 @@
     "jsdom": "^28.0.0",
     "msw": "^2.12.10",
     "postcss": "^8.4.33",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-mdx-frontmatter": "^5.2.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.3.3",
     "vite": "^7.0.0",

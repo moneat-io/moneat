@@ -49,6 +49,7 @@ import { Route as ErrorTrackingRouteImport } from './routes/error-tracking'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as CustomDashboardsRouteImport } from './routes/custom-dashboards'
+import { Route as BlogRouteImport } from './routes/blog'
 import { Route as ApmTracesRouteImport } from './routes/apm-traces'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AlertingRouteImport } from './routes/alerting'
@@ -66,6 +67,7 @@ import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
+import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
@@ -101,6 +103,7 @@ import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
 import { Route as DashboardsDatasourcesRouteImport } from './routes/dashboards.datasources'
 import { Route as DashboardsDashboardIdRouteImport } from './routes/dashboards.$dashboardId'
+import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as ApmTracesTraceIdRouteImport } from './routes/apm-traces.$traceId'
 import { Route as AiGenerationsRouteImport } from './routes/ai.generations'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
@@ -333,6 +336,11 @@ const CustomDashboardsRoute = CustomDashboardsRouteImport.update({
   path: '/custom-dashboards',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BlogRoute = BlogRouteImport.update({
+  id: '/blog',
+  path: '/blog',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApmTracesRoute = ApmTracesRouteImport.update({
   id: '/apm-traces',
   path: '/apm-traces',
@@ -417,6 +425,11 @@ const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DashboardsRoute,
+} as any)
+const BlogIndexRoute = BlogIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => BlogRoute,
 } as any)
 const ApmTracesIndexRoute = ApmTracesIndexRouteImport.update({
   id: '/',
@@ -596,6 +609,11 @@ const DashboardsDashboardIdRoute = DashboardsDashboardIdRouteImport.update({
   path: '/$dashboardId',
   getParentRoute: () => DashboardsRoute,
 } as any)
+const BlogSlugRoute = BlogSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => BlogRoute,
+} as any)
 const ApmTracesTraceIdRoute = ApmTracesTraceIdRouteImport.update({
   id: '/$traceId',
   path: '/$traceId',
@@ -766,6 +784,7 @@ export interface FileRoutesByFullPath {
   '/alerting': typeof AlertingRoute
   '/analytics': typeof AnalyticsRouteWithChildren
   '/apm-traces': typeof ApmTracesRouteWithChildren
+  '/blog': typeof BlogRouteWithChildren
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/demo': typeof DemoRoute
@@ -819,6 +838,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
   '/apm-traces/$traceId': typeof ApmTracesTraceIdRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
@@ -854,6 +874,7 @@ export interface FileRoutesByFullPath {
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
+  '/blog/': typeof BlogIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
@@ -932,6 +953,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
   '/apm-traces/$traceId': typeof ApmTracesTraceIdRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
@@ -965,6 +987,7 @@ export interface FileRoutesByTo {
   '/ai': typeof AiIndexRoute
   '/analytics': typeof AnalyticsIndexRoute
   '/apm-traces': typeof ApmTracesIndexRoute
+  '/blog': typeof BlogIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
@@ -1002,6 +1025,7 @@ export interface FileRoutesById {
   '/alerting': typeof AlertingRoute
   '/analytics': typeof AnalyticsRouteWithChildren
   '/apm-traces': typeof ApmTracesRouteWithChildren
+  '/blog': typeof BlogRouteWithChildren
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/demo': typeof DemoRoute
@@ -1055,6 +1079,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/ai/generations': typeof AiGenerationsRoute
   '/apm-traces/$traceId': typeof ApmTracesTraceIdRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
@@ -1090,6 +1115,7 @@ export interface FileRoutesById {
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
   '/apm-traces/': typeof ApmTracesIndexRoute
+  '/blog/': typeof BlogIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
@@ -1128,6 +1154,7 @@ export interface FileRouteTypes {
     | '/alerting'
     | '/analytics'
     | '/apm-traces'
+    | '/blog'
     | '/custom-dashboards'
     | '/dashboards'
     | '/demo'
@@ -1181,6 +1208,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/ai/generations'
     | '/apm-traces/$traceId'
+    | '/blog/$slug'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
     | '/feedback/$feedbackId'
@@ -1216,6 +1244,7 @@ export interface FileRouteTypes {
     | '/ai/'
     | '/analytics/'
     | '/apm-traces/'
+    | '/blog/'
     | '/dashboards/'
     | '/issues/'
     | '/monitoring/'
@@ -1294,6 +1323,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/ai/generations'
     | '/apm-traces/$traceId'
+    | '/blog/$slug'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
     | '/feedback/$feedbackId'
@@ -1327,6 +1357,7 @@ export interface FileRouteTypes {
     | '/ai'
     | '/analytics'
     | '/apm-traces'
+    | '/blog'
     | '/dashboards'
     | '/issues'
     | '/monitoring'
@@ -1363,6 +1394,7 @@ export interface FileRouteTypes {
     | '/alerting'
     | '/analytics'
     | '/apm-traces'
+    | '/blog'
     | '/custom-dashboards'
     | '/dashboards'
     | '/demo'
@@ -1416,6 +1448,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/ai/generations'
     | '/apm-traces/$traceId'
+    | '/blog/$slug'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
     | '/feedback/$feedbackId'
@@ -1451,6 +1484,7 @@ export interface FileRouteTypes {
     | '/ai/'
     | '/analytics/'
     | '/apm-traces/'
+    | '/blog/'
     | '/dashboards/'
     | '/issues/'
     | '/monitoring/'
@@ -1488,6 +1522,7 @@ export interface RootRouteChildren {
   AlertingRoute: typeof AlertingRoute
   AnalyticsRoute: typeof AnalyticsRouteWithChildren
   ApmTracesRoute: typeof ApmTracesRouteWithChildren
+  BlogRoute: typeof BlogRouteWithChildren
   CustomDashboardsRoute: typeof CustomDashboardsRoute
   DashboardsRoute: typeof DashboardsRouteWithChildren
   DemoRoute: typeof DemoRoute
@@ -1825,6 +1860,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CustomDashboardsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/blog': {
+      id: '/blog'
+      path: '/blog'
+      fullPath: '/blog'
+      preLoaderRoute: typeof BlogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/apm-traces': {
       id: '/apm-traces'
       path: '/apm-traces'
@@ -1943,6 +1985,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboards/'
       preLoaderRoute: typeof DashboardsIndexRouteImport
       parentRoute: typeof DashboardsRoute
+    }
+    '/blog/': {
+      id: '/blog/'
+      path: '/'
+      fullPath: '/blog/'
+      preLoaderRoute: typeof BlogIndexRouteImport
+      parentRoute: typeof BlogRoute
     }
     '/apm-traces/': {
       id: '/apm-traces/'
@@ -2188,6 +2237,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboards/$dashboardId'
       preLoaderRoute: typeof DashboardsDashboardIdRouteImport
       parentRoute: typeof DashboardsRoute
+    }
+    '/blog/$slug': {
+      id: '/blog/$slug'
+      path: '/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof BlogSlugRouteImport
+      parentRoute: typeof BlogRoute
     }
     '/apm-traces/$traceId': {
       id: '/apm-traces/$traceId'
@@ -2471,6 +2527,18 @@ const ApmTracesRouteWithChildren = ApmTracesRoute._addFileChildren(
   ApmTracesRouteChildren,
 )
 
+interface BlogRouteChildren {
+  BlogSlugRoute: typeof BlogSlugRoute
+  BlogIndexRoute: typeof BlogIndexRoute
+}
+
+const BlogRouteChildren: BlogRouteChildren = {
+  BlogSlugRoute: BlogSlugRoute,
+  BlogIndexRoute: BlogIndexRoute,
+}
+
+const BlogRouteWithChildren = BlogRoute._addFileChildren(BlogRouteChildren)
+
 interface DashboardsRouteChildren {
   DashboardsDashboardIdRoute: typeof DashboardsDashboardIdRoute
   DashboardsDatasourcesRoute: typeof DashboardsDatasourcesRoute
@@ -2750,6 +2818,7 @@ const rootRouteChildren: RootRouteChildren = {
   AlertingRoute: AlertingRoute,
   AnalyticsRoute: AnalyticsRouteWithChildren,
   ApmTracesRoute: ApmTracesRouteWithChildren,
+  BlogRoute: BlogRouteWithChildren,
   CustomDashboardsRoute: CustomDashboardsRoute,
   DashboardsRoute: DashboardsRouteWithChildren,
   DemoRoute: DemoRoute,

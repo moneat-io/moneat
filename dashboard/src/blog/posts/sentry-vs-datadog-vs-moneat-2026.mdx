@@ -1,0 +1,158 @@
+---
+title: "Sentry vs Datadog vs Moneat: The 2026 Error Monitoring Comparison"
+description: "An honest feature and pricing comparison of Sentry, Datadog, and Moneat for error monitoring, session replays, logs, and more."
+date: 2026-02-25
+author: "Adrian Elder"
+tags: ["comparison", "sentry", "datadog", "pricing"]
+published: true
+---
+
+If you're searching for an error monitoring comparison, you're trying to answer: "Is what I'm paying worth it?" or "Is there something better?" This post compares Sentry, Datadog, and Moneat honestly — features, pricing, and real-world costs.
+
+---
+
+## The Short Version
+
+| | Sentry | Datadog | Moneat |
+|---|---|---|---|
+| **Error tracking** | ✅ Best-in-class | ✅ Good (via APM) | ✅ Full (Sentry SDK-compatible) |
+| **Session replays** | ✅ Web + mobile | ✅ Browser RUM | ✅ Web + mobile |
+| **Logs** | ✅ | ✅ | ✅ |
+| **Uptime monitoring** | ✅ Basic | ✅ Synthetics | ✅ 10+ check types |
+| **Status pages** | ❌ | ✅ | ✅ |
+| **On-call / incident management** | ❌ | ✅ (add-on) | ✅ ($5/user/mo) |
+| **Infrastructure monitoring** | ❌ | ✅ | ✅ |
+| **LLM / AI observability** | ✅ | ✅ (add-on) | ✅ |
+| **Self-hostable** | ✅ (BSL license) | ❌ | ✅ (AGPL) |
+| **Datadog Agent compatible** | ❌ | ✅ Native | ✅ |
+| **Sentry SDK compatible** | ✅ Native | ❌ | ✅ |
+| **Starting price** | $29/mo | ~$31/host/mo | $29/mo |
+
+---
+
+## Sentry: The Gold Standard (With Caveats)
+
+Sentry built the error monitoring category. Its SDK ecosystem is unmatched, and the $29/month Team plan is genuinely good for small teams. The problems emerge at scale.
+
+Sentry uses per-category pay-as-you-go budgets — errors, replays, spans, and logs each have separate overage rates. A startup burning 500K errors/month, 200 replays, and 50 GB logs sees the Team plan balloon from $29 to ~$145/month. At 5M errors/month, the Business plan exceeds **$1,100/month** with overages.
+
+Sentry also lacks capabilities modern teams need:
+- **No status pages** — requires a separate tool
+- **No on-call / incident management** — requires PagerDuty or OpsGenie
+- **No infrastructure monitoring** — requires Datadog or Grafana
+- **Seer AI debugger costs $40/active contributor/month extra**
+
+---
+
+## Datadog: The Enterprise Swiss Army Knife
+
+Datadog covers everything — APM, logs, infrastructure, synthetics, RUM, security, CI visibility. The problem: you pay for every product separately, and bills are notoriously unpredictable.
+
+Pricing is host-based, per-product:
+
+| Product | Rate | 10 hosts/month |
+|---|---|---|
+| Infrastructure monitoring | $15/host/mo | $150 |
+| APM + tracing | $31/host/mo | $310 |
+| Log ingestion | $0.10/GB | varies |
+| Log indexing (15-day retention) | $1.70/million events | varies |
+| Session Replay (Browser RUM) | $1.80/1,000 sessions | varies |
+| Synthetics (uptime) | $5/10K test runs | varies |
+
+**Just infrastructure + APM = $460/month for 10 hosts.** Add logs and RUM and you're past $1,000/month. Powerful, but priced for enterprises with procurement teams.
+
+What Datadog lacks:
+- **No self-hosting** — data lives in Datadog's cloud only
+- **No Sentry SDK compatibility** — switching means rewriting instrumentation
+- **Vendor lock-in** — proprietary agents make switching painful
+
+---
+
+## Moneat: The Self-Hosted, Sentry-Compatible Alternative
+
+Moneat delivers Sentry's developer experience and Datadog's feature breadth — while you own your data and control costs.
+
+### Zero-Migration Sentry Compatibility
+
+Moneat is a **drop-in Sentry replacement**. Update your DSN — that's it:
+
+```javascript
+// Before
+Sentry.init({ dsn: "https://key@o123.ingest.sentry.io/456" })
+
+// After (zero other changes)
+Sentry.init({ dsn: "https://key@your-moneat.example.com/api/456" })
+```
+
+Every SDK call works identically. No new SDK to learn, no code changes.
+
+### Pricing That Doesn't Punish Scale
+
+- **Pro ($29/mo):** 50 GB unified ingestion (errors, replays, logs, transactions, LLM events share one pool), 10 uptime monitors, status pages included
+- **Team ($79/mo):** 200 GB ingestion — the same usage costing $1,100+ on Sentry
+
+### Self-Hosting
+
+Run Moneat on your own infrastructure (AGPL license) for GDPR, HIPAA, or data residency compliance. Docker-based, deployable in minutes.
+
+### Full Feature List
+
+- Error tracking (Sentry SDK compatible) + Datadog Agent compatible
+- Session replays (web + mobile), logs (OTLP), distributed tracing / APM
+- Continuous profiling, infrastructure / database / network / Kubernetes monitoring
+- Synthetic testing, SBOM / security scanning, dynamic instrumentation
+- Uptime monitoring (HTTP, TCP, Ping, DNS, SSL, WebSocket, DB, Docker, push)
+- Status pages, on-call ($5/user/mo), LLM observability
+- MCP Server (Enterprise), product analytics (funnels, retention)
+
+---
+
+## Side-by-Side Cost Scenarios
+
+### Scenario: 10-person startup (500K errors, 200 replays, 50 GB logs)
+
+| Platform | Monthly Cost | Notes |
+|---|---|---|
+| **Moneat Pro** | **$44/mo** | Base $29 + $15 on-call (3 users) |
+| **Sentry Team** | **~$145/mo** | Massive overages on errors, replays, logs |
+| **Datadog** | **$600-800/mo** | APM + infra + logs + RUM |
+
+### Scenario: Mid-size app (5M errors, 1K replays, 200 GB logs)
+
+| Platform | Monthly Cost | Notes |
+|---|---|---|
+| **Moneat Team** | **~$104/mo** | Base $79 + on-call |
+| **Sentry Business** | **~$1,129/mo** | Per-event overages dominate |
+| **Datadog** | **$2,000-4,000/mo** | Multiple products, host-based pricing |
+
+At scale, Moneat is 10–30× cheaper for equivalent coverage.
+
+---
+
+## Which One Should You Choose?
+
+**Choose Sentry if:**
+- You're a small team with < $200/mo budget
+- Sentry SDK-native profiling is critical
+- You don't need status pages, on-call, or infrastructure monitoring
+
+**Choose Datadog if:**
+- You're an enterprise with a dedicated platform engineering team
+- You have existing contracts and negotiated pricing
+- Deep APM traces justify the cost
+
+**Choose Moneat if:**
+- You're hitting Sentry overage costs and want predictable billing
+- You need data ownership (GDPR, HIPAA, data residency)
+- You want error monitoring + status pages + on-call + infrastructure in one platform
+- You're already using Sentry SDKs and want zero migration effort
+
+---
+
+## Get Started with Moneat
+
+Moneat's free plan includes 1 GB unified ingestion and 3 uptime monitors. Paid plans start at $29/month. Self-hosting is free forever under AGPL.
+
+If you're on Sentry, you can switch in under 10 minutes — no code changes required.
+
+[Try Moneat Free →](https://moneat.io) | [Self-Hosting Docs →](https://moneat.io/docs)

@@ -1,5 +1,32 @@
 import {defineConfig} from 'vite'
+import mdx from '@mdx-js/rollup'
+import remarkGfm from 'remark-gfm'
+import remarkFrontmatter from 'remark-frontmatter'
+import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
+import type {Root} from 'mdast'
 import react from '@vitejs/plugin-react-swc'
+
+// Remark plugin: counts words in the document and injects readingTime into the YAML
+// frontmatter AST node before remark-mdx-frontmatter exports it.
+function remarkReadingTime() {
+  return (tree: Root) => {
+    let wordCount = 0
+    function walk(node: {type: string; value?: string; children?: unknown[]}) {
+      if (node.type === 'text' && node.value) {
+        wordCount += node.value.trim().split(/\s+/).filter(Boolean).length
+      }
+      node.children?.forEach((child) => { walk(child as typeof node) })
+    }
+    walk(tree as unknown as {type: string; children: unknown[]})
+    const minutes = Math.ceil(wordCount / 200) || 1
+    // Mutate the YAML node so remark-mdx-frontmatter picks up readingTime when it runs next.
+    const rootChildren = (tree as unknown as {children: Array<{type: string; value?: string}>}).children
+    const yamlNode = rootChildren.find((n) => n.type === 'yaml')
+    if (yamlNode) {
+      yamlNode.value = (yamlNode.value ?? '') + `\nreadingTime: "${minutes} min read"`
+    }
+  }
+}
 import tailwindcss from '@tailwindcss/vite'
 import {TanStackRouterVite} from '@tanstack/router-vite-plugin'
 import path from 'path'
@@ -12,6 +39,17 @@ const docsDir = path.join(__dirname, 'public', 'docs')
 
 export default defineConfig({
   plugins: [
+    {
+      enforce: 'pre',
+      ...mdx({
+        remarkPlugins: [
+          remarkGfm,
+          remarkFrontmatter,
+          remarkReadingTime,
+          [remarkMdxFrontmatter, {name: 'frontmatter'}],
+        ],
+      }),
+    },
     tailwindcss(),
     react(),
     TanStackRouterVite(),
