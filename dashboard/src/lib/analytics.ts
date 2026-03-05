@@ -43,13 +43,16 @@ function sendEvent(payload: Record<string, unknown>): void {
   const body = JSON.stringify(payload)
 
   if (navigator.sendBeacon) {
-    const blob = new Blob([body], { type: 'application/json' })
-    if (navigator.sendBeacon(url, blob)) return
+    // Pass body as a plain string (text/plain) to avoid a CORS preflight.
+    // The browser sends text/plain as a "simple" cross-origin request, so no
+    // OPTIONS round-trip is needed. The backend parses it as JSON.
+    if (navigator.sendBeacon(url, body)) return
   }
 
   fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // No Content-Type header → browser defaults to text/plain, which is a
+    // CORS simple content type and skips the preflight.
     body,
     keepalive: true,
   }).catch(() => {})

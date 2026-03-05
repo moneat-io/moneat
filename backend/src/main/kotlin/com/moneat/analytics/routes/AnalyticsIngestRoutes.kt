@@ -31,8 +31,10 @@ import com.moneat.shared.models.ProjectKeys
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.request.contentType
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
+import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
@@ -126,7 +128,16 @@ private suspend fun processAndEnqueueEvent(
     enqueueEvent: (String) -> Unit,
 ) {
     val payload = try {
-        call.receive<AnalyticsEventPayload>()
+        // Accept both application/json (API clients) and text/plain (browser tracking
+        // script / sendBeacon). text/plain avoids a CORS preflight, which means the
+        // request succeeds even when the browser can't verify the preflight first.
+        val contentType = call.request.contentType()
+        if (contentType.match(ContentType.Text.Plain)) {
+            val text = call.receiveText()
+            json.decodeFromString<AnalyticsEventPayload>(text)
+        } else {
+            call.receive<AnalyticsEventPayload>()
+        }
     } catch (e: Exception) {
         logger.debug { "Invalid analytics payload: ${e.message}" }
         call.respond(HttpStatusCode.BadRequest, "Invalid payload")
@@ -226,5 +237,5 @@ private const val REALTIME_TTL_SECONDS = 300L
  */
 @Suppress("MaxLineLength")
 private val TRACKING_SCRIPT = """
-!function(){"use strict";var t=document.currentScript,a=t&&t.getAttribute("data-domain"),o=t&&(t.getAttribute("data-api")||new URL(t.src).origin);function e(e,n){if(!window._phantom&&!window.__nightmare&&!window.navigator.webdriver&&!window.__puppeteer&&("doNotTrack"in navigator&&"1"!==navigator.doNotTrack||!0)){var r={n:e,u:location.href,d:a,r:document.referrer,w:window.innerWidth};n&&(r.p=n);var i=new XMLHttpRequest;i.open("POST",o+"/api/"+a+"/analytics/event?sentry_key="+t.getAttribute("data-key"),!0),i.setRequestHeader("Content-Type","application/json"),i.send(JSON.stringify(r))}}function n(){e("pageview")}var r=history.pushState;history.pushState=function(){r.apply(this,arguments),n()};var i=history.replaceState;history.replaceState=function(){i.apply(this,arguments),n()},window.addEventListener("popstate",n),"prerender"===document.visibilityState?document.addEventListener("visibilitychange",function(){r||"visible"!==document.visibilityState||(r=!0,n())}):n(),window.moneat={track:function(t,a){e(t,a)}}}();
+!function(){"use strict";var t=document.currentScript,a=t&&t.getAttribute("data-domain"),o=t&&(t.getAttribute("data-api")||new URL(t.src).origin);function e(e,n){if(!window._phantom&&!window.__nightmare&&!window.navigator.webdriver&&!window.__puppeteer&&("doNotTrack"in navigator&&"1"!==navigator.doNotTrack||!0)){var r={n:e,u:location.href,d:a,r:document.referrer,w:window.innerWidth};n&&(r.p=n);var i=new XMLHttpRequest;i.open("POST",o+"/api/"+a+"/analytics/event?sentry_key="+t.getAttribute("data-key"),!0),i.send(JSON.stringify(r))}}function n(){e("pageview")}var r=history.pushState;history.pushState=function(){r.apply(this,arguments),n()};var i=history.replaceState;history.replaceState=function(){i.apply(this,arguments),n()},window.addEventListener("popstate",n),"prerender"===document.visibilityState?document.addEventListener("visibilitychange",function(){r||"visible"!==document.visibilityState||(r=!0,n())}):n(),window.moneat={track:function(t,a){e(t,a)}}}();
 """.trimIndent()
