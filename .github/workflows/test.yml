@@ -149,7 +149,7 @@ jobs:
           --health-retries 5
 
       clickhouse:
-        image: clickhouse/clickhouse-server:26.1-alpine
+        image: clickhouse/clickhouse-server:26.2-alpine
         env:
           CLICKHOUSE_USER: moneat
           CLICKHOUSE_PASSWORD: moneat_test_password
@@ -315,7 +315,7 @@ jobs:
           --health-retries 5
 
       clickhouse:
-        image: clickhouse/clickhouse-server:26.1-alpine
+        image: clickhouse/clickhouse-server:26.2-alpine
         env:
           CLICKHOUSE_USER: moneat
           CLICKHOUSE_PASSWORD: moneat_test_password
