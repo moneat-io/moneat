@@ -80,6 +80,21 @@ const PUBLIC_ROUTES = new Set([
   '/terms',
   '/privacy',
   '/demo',
+  '/error-tracking',
+  '/log-management',
+  '/infrastructure-monitoring',
+  '/uptime-monitoring',
+  '/session-replay',
+  '/performance-monitoring',
+  '/profiling',
+  '/on-call-management',
+  '/public-status-pages',
+  '/alerting',
+  '/ai-observability',
+  '/mcp-server',
+  '/custom-dashboards',
+  '/security-sbom',
+  '/pricing',
 ])
 
 function normalizePath(pathname: string): string {
@@ -227,7 +242,8 @@ function RootComponent() {
   const isAuthPage = ['/login', '/signup', '/verify-email', '/verify-email-required', '/forgot-password', '/reset-password', '/onboarding'].includes(currentPath)
   const isLandingPage = currentPath === '/' && !isAuthenticated
   const isPublicStatusPage = currentPath.startsWith('/s/')
-  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage
+  const isFeaturePage = ['/error-tracking', '/log-management', '/infrastructure-monitoring', '/uptime-monitoring', '/session-replay', '/performance-monitoring', '/profiling', '/on-call-management', '/public-status-pages', '/alerting', '/ai-observability', '/mcp-server', '/custom-dashboards', '/security-sbom', '/pricing'].includes(currentPath)
+  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage && !isFeaturePage
   const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
 
   // Show loading state while checking auth and onboarding
