@@ -1,0 +1,92 @@
+---
+title: On-Call & Incidents
+description: Set up on-call schedules, escalation policies, and manage incidents from alert to resolution.
+---
+
+# On-Call & Incidents
+
+## Overview
+
+Moneat includes a built-in on-call and incident management system. When critical errors or uptime failures are detected, Moneat can automatically create incidents and notify the right people through configurable escalation policies. Notifications are sent via push notifications (mobile app), Slack DMs, and email.
+
+## On-Call Schedules
+
+### Creating a Schedule
+
+On-call schedules define who is responsible for responding to incidents at any given time. Navigate to **On-Call → Schedules** to create and manage schedules.
+
+- Name your schedule (e.g., "Backend Team Primary")
+- Add team members as participants
+- Configure rotation period (daily, weekly, or custom)
+- Set rotation start time and timezone
+
+### Rotations
+
+Rotations automatically cycle through participants on the schedule. When the rotation period ends, the next person in the list becomes the primary on-call responder. You can set up multiple rotation layers for backup coverage.
+
+### Overrides
+
+Need to swap shifts? Overrides let you temporarily assign a different person to be on-call for a specific time period without modifying the underlying rotation schedule.
+
+## Escalation Policies
+
+Escalation policies define what happens when an incident is created. They consist of ordered steps that are executed in sequence until the incident is acknowledged.
+
+### Priority Levels
+
+| Level | Description |
+|-------|-------------|
+| **P0 - Critical** | Immediate escalation. Production is down. |
+| **P1 - High** | Urgent. Major functionality impacted. |
+| **P2 - Medium** | Important. Degraded service or workaround needed. |
+| **P3 - Low** | Minor issue. No immediate user impact. |
+| **P4 - Informational** | Tracked for awareness. |
+
+### Escalation Steps
+
+Each step specifies who to notify and how long to wait before escalating. For example:
+
+1. Notify the primary on-call via push notification and Slack
+2. If not acknowledged within 5 minutes, notify the secondary on-call
+3. If still not acknowledged after 10 minutes, notify the engineering manager
+
+### Business Hours
+
+You can configure business hours for your team. Escalation policies can behave differently during and outside of business hours — for example, using less aggressive timeouts during working hours.
+
+## Incident Management
+
+### Incident Lifecycle
+
+- **Triggered** — Incident created, notifications being sent
+- **Acknowledged** — A responder has acknowledged and is investigating
+- **Resolved** — The incident has been resolved
+
+### Incident Actions
+
+While an incident is active, responders can:
+
+- **Acknowledge** — Stop escalation and indicate you're working on it
+- **Resolve** — Mark the incident as resolved
+- **Reassign** — Transfer the incident to another team member
+- **Add notes** — Document findings and actions taken
+
+### Timeline
+
+Every incident has a full audit timeline showing all actions taken — when it was created, who was notified, when it was acknowledged, notes added, and when it was resolved. This is invaluable for post-incident reviews.
+
+## Notification Channels
+
+Moneat supports multiple notification channels for on-call alerts:
+
+- **Push Notifications** — Via the Moneat mobile app (iOS & Android). Responders can acknowledge and resolve directly from the notification.
+- **Slack DMs** — Direct messages with interactive buttons for acknowledge/resolve actions.
+- **Email** — Notification emails with incident details and action links.
+
+:::tip Mobile App
+Install the Moneat mobile app to receive push notifications for on-call alerts. You can acknowledge and resolve incidents directly from your phone.
+:::
+
+## Slack Usergroup Sync
+
+You can link an on-call schedule to a Slack usergroup. When the on-call rotation changes, Moneat automatically updates the Slack usergroup membership so that `@on-call` always mentions the current responder.

@@ -1,0 +1,148 @@
+---
+title: AI Observability
+description: Monitor your LLM applications, trace agent executions, and track token usage and costs.
+---
+
+# AI Observability
+
+## Overview
+
+Moneat provides full observability for AI-powered applications. Whether you're building chatbots, AI agents, RAG pipelines, or tool-calling workflows, Moneat captures every LLM call, traces multi-step agent executions, and tracks token usage and costs across all your models and providers.
+
+- **Trace LLM calls** — See every generation with full input/output, model, latency, and token counts
+- **Agent tracing** — Visualize multi-step agent executions as trace waterfalls with parent/child relationships
+- **Cost tracking** — Monitor spend per model, provider, and over time
+- **Error monitoring** — Catch LLM failures, timeouts, and rate limits in real-time
+- **Model analytics** — Compare performance, cost, and error rates across models
+
+## Getting Started with Sentry SDKs
+
+Moneat is fully compatible with Sentry SDKs. If your application already uses a Sentry SDK with AI integrations, you can start sending LLM observability data to Moneat immediately — just point your DSN to your Moneat instance.
+
+<StepList
+  steps={[
+    {
+      title: 'Choose your platform',
+      content: <>Visit the <a href="https://sentry.io/solutions/ai-observability/" target="_blank" rel="noopener noreferrer">Sentry AI Observability page</a> and select your platform. Sentry supports OpenAI Agents, Vercel AI, LangChain, and many more frameworks out of the box.</>,
+    },
+    {
+      title: 'Install the Sentry SDK',
+      content: 'Follow the official Sentry setup instructions for your platform to install and configure the SDK with AI integrations enabled.',
+    },
+    {
+      title: 'Point the DSN to Moneat',
+      content: 'Instead of using a Sentry DSN, configure the SDK to point to your Moneat instance. You can find your project DSN in your project settings. It follows this format:',
+    },
+  ]}
+/>
+
+```text
+https://<public_key>@<your-moneat-host>/api/<project_id>
+```
+
+:::info Automatic detection
+Moneat automatically detects `ai.*` spans from Sentry SDK transactions (such as `ai.chat_completion`, `ai.embedding`, and `ai.tool_call`) and records them as LLM generations. No additional configuration is required beyond pointing your DSN to Moneat.
+:::
+
+## Direct Ingestion API
+
+If you're not using a Sentry SDK, you can send LLM generation events directly to Moneat's ingestion API.
+
+### Endpoint
+
+```text
+POST /api/{projectId}/llm/
+```
+
+Authenticate using either the `X-Sentry-Auth` header or the `sentry_key` query parameter with your project's public key. The endpoint accepts gzip-compressed payloads via the `Content-Encoding: gzip` header.
+
+### Payload Format
+
+Send a JSON object containing a `generations` array. Each generation represents a single LLM call:
+
+```json
+{
+  "generations": [
+    {
+      "trace_id": "abc123",
+      "span_id": "span1",
+      "parent_span_id": "",
+      "name": "chat_completion",
+      "model": "gpt-4o",
+      "provider": "openai",
+      "type": "chat",
+      "input": [{"role": "user", "content": "Hello"}],
+      "output": {"role": "assistant", "content": "Hi there!"},
+      "input_tokens": 10,
+      "output_tokens": 5,
+      "cost_usd": 0.0003,
+      "duration_ms": 450,
+      "status": "success",
+      "timestamp": "2026-02-17T10:00:00Z",
+      "tags": {"user_id": "u123"},
+      "metadata": {}
+    }
+  ]
+}
+```
+
+### Generation Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trace_id` | string | Groups related generations into a single trace |
+| `span_id` | string | Unique identifier for this generation |
+| `parent_span_id` | string | Parent span for building trace trees |
+| `name` | string | Operation name (e.g. "chat_completion") |
+| `model` | string | Model identifier (e.g. "gpt-4o") |
+| `provider` | string | Provider name (e.g. "openai", "anthropic") |
+| `type` | string | Generation type (chat, completion, embedding, etc.) |
+| `input` | JSON | Input messages or prompt |
+| `output` | JSON | Model response or completion |
+| `input_tokens` | integer | Number of input/prompt tokens |
+| `output_tokens` | integer | Number of output/completion tokens |
+| `cost_usd` | number | Cost of this generation in USD |
+| `duration_ms` | number | Duration in milliseconds |
+| `status` | string | "success" or "error" |
+| `timestamp` | string | ISO 8601 timestamp |
+| `tags` | object | Key-value pairs for filtering |
+| `metadata` | JSON | Arbitrary extra data |
+
+:::tip Batch ingestion
+You can send multiple generations in a single request. The endpoint returns the count of accepted events in the response.
+:::
+
+## Supported Generation Types
+
+The `type` field categorizes each generation. Moneat supports: **chat**, **completion**, **embedding**, **tool_call**, **agent**, **chain**, **retriever**.
+
+The `model` and `provider` fields accept any string value — Moneat does not restrict which models or providers you can use.
+
+## Dashboard Features
+
+### Overview Dashboard
+
+The AI overview page shows key metrics: total generations, total tokens, total cost, average latency, and error rate. Time-series charts show LLM call volume and breakdowns by model.
+
+### Generations Browser
+
+Browse all individual LLM calls with filters for model, provider, type, status, and time range. Each generation shows its timestamp, model, token usage, cost, and latency.
+
+### Trace Detail
+
+For multi-step agent executions, click a trace to view the full trace waterfall with parent/child relationships. Click any span to see its full details.
+
+## Cost Tracking
+
+Track your LLM spend across models and providers. Set the `cost_usd` field on each generation. When using Sentry SDKs with AI integrations, cost data is typically populated automatically. The cost dashboard shows total spend over time with breakdowns by model and provider.
+
+## Data Retention
+
+LLM generation data is stored in ClickHouse with a 90-day retention period. Check your plan details under [Billing & Plans](/docs/billing) for specific retention limits.
+
+## Next Steps
+
+- [Getting Started](/docs/getting-started) — Set up your Moneat account and first project
+- [SDK Setup](/docs/sdk-setup) — Platform-specific SDK configuration guides
+- [Error Monitoring](/docs/error-monitoring) — Learn about error capture and issue grouping
+- [Billing & Plans](/docs/billing) — Understand usage quotas and billing

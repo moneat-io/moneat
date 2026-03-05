@@ -1,0 +1,90 @@
+---
+title: SBOM (Software Bill of Materials)
+description: Inventory all software packages across your infrastructure and track known vulnerabilities (CVEs).
+---
+
+# SBOM (Software Bill of Materials)
+
+## What is SBOM?
+
+A **Software Bill of Materials** (SBOM) is a complete inventory of every software package, library, and dependency running in your infrastructure. Think of it as an ingredients list for your software — it tells you exactly what's installed, what version it is, and where it's running.
+
+SBOMs are critical for:
+
+- **Security** — Quickly identify which hosts or containers are affected when a new CVE (Common Vulnerabilities and Exposure) is disclosed
+- **Compliance** — Meet regulatory requirements (e.g., executive orders, supply chain security mandates) that require organizations to maintain software inventories
+- **License management** — Track open-source licenses across your stack
+- **Incident response** — When a vulnerability like Log4Shell hits, instantly answer "are we affected?" instead of manually auditing every system
+
+## Overview
+
+Moneat's SBOM feature automatically inventories software packages across your hosts and containers. The Datadog Agent scans installed packages and container images, reports them to Moneat, and the dashboard surfaces packages alongside known CVE counts so you can prioritize remediation.
+
+:::info Enterprise feature
+SBOM requires the Datadog Agent integration, available on Enterprise plans.
+:::
+
+## Prerequisites
+
+- The Datadog Agent deployed on your hosts or as a DaemonSet in Kubernetes (see [Agent Setup](/docs/datadog-agent/agent-setup))
+- The Enterprise `datadog` module enabled
+- Container scanning requires access to the container runtime socket
+
+## Enable SBOM Collection
+
+Add SBOM configuration to your agent:
+
+```yaml
+# datadog.yaml
+sbom:
+  enabled: true
+  container_image:
+    enabled: true
+  host:
+    enabled: true
+```
+
+For container image scanning, ensure the agent has access to the container runtime:
+
+```bash
+docker run -d \
+  --name dd-agent \
+  -e DD_DD_URL="https://api.moneat.io/dd" \
+  -e DD_API_KEY="YOUR_AGENT_API_KEY" \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v /proc/:/host/proc/:ro \
+  -v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
+  datadog/agent:latest
+```
+
+After adding the configuration, restart the agent:
+
+```bash
+docker restart dd-agent
+```
+
+## Dashboard View
+
+Navigate to **Monitoring → SBOM** in the dashboard to see your software inventory:
+
+| Column | Description |
+|---|---|
+| **Package** | Package or library name |
+| **Version** | Installed version |
+| **Type** | Package type (deb, rpm, npm, pip, go, jar, etc.) |
+| **Host** | The host where the package is installed |
+| **Image** | Container image name (if scanned from a container) |
+| **CVEs** | Number of known vulnerabilities associated with this package version |
+
+Packages with known CVEs are highlighted so you can prioritize updates.
+
+## Use Cases
+
+- **Vulnerability response** — When a new CVE is announced, search your SBOM to instantly see every host and container running the affected package and version
+- **Patch prioritization** — Sort by CVE count to focus on the most vulnerable packages first
+- **Audit and compliance** — Export your software inventory for security audits or compliance reporting
+- **Drift detection** — Compare package versions across hosts to identify inconsistent environments
+
+:::tip
+Enable both `container_image` and `host` scanning for complete coverage. Container images often contain different packages than the host OS.
+:::

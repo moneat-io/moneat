@@ -3,6 +3,8 @@ import mdx from '@mdx-js/rollup'
 import remarkGfm from 'remark-gfm'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
+import remarkDirective from 'remark-directive'
+import remarkAdmonitions from './src/docs/remark-admonitions'
 import type {Root} from 'mdast'
 import react from '@vitejs/plugin-react-swc'
 
@@ -31,11 +33,9 @@ import tailwindcss from '@tailwindcss/vite'
 import {TanStackRouterVite} from '@tanstack/router-vite-plugin'
 import path from 'path'
 import {fileURLToPath} from 'url'
-import sirv from 'sirv'
 import type { ProxyOptions } from 'vite'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const docsDir = path.join(__dirname, 'public', 'docs')
 
 export default defineConfig({
   plugins: [
@@ -45,6 +45,8 @@ export default defineConfig({
         remarkPlugins: [
           remarkGfm,
           remarkFrontmatter,
+          remarkDirective,
+          remarkAdmonitions,
           remarkReadingTime,
           [remarkMdxFrontmatter, {name: 'frontmatter'}],
         ],
@@ -53,31 +55,6 @@ export default defineConfig({
     tailwindcss(),
     react(),
     TanStackRouterVite(),
-    {
-      name: 'serve-docs',
-      configureServer(server) {
-        const serveDocs = sirv(docsDir, { dev: true })
-        // Run before SPA fallback so /docs/* serves static files, not dashboard index.html
-        server.middlewares.stack.unshift({
-          route: '',
-          handle: (req: import('http').IncomingMessage, res: import('http').ServerResponse, next: () => void) => {
-            if (req.url === '/docs' || req.url?.startsWith('/docs?')) {
-              const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
-              res.writeHead(301, { Location: `/docs/${q}` })
-              res.end()
-              return
-            }
-            if (!req.url?.startsWith('/docs/')) return next()
-            const originalUrl = req.url
-            req.url = req.url.slice(5) || '/' // /docs/foo -> /foo
-            serveDocs(req, res, () => {
-              req.url = originalUrl
-              next()
-            })
-          },
-        })
-      },
-    },
   ],
   resolve: {
     alias: {

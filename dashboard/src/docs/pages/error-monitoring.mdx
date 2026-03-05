@@ -1,0 +1,70 @@
+---
+title: Error Monitoring
+description: Capture, track, and analyze errors in real-time using Sentry-compatible ingestion.
+---
+
+# Error Monitoring
+
+## How It Works
+
+Moneat receives error events through a Sentry-compatible ingestion API. When your application encounters an error, the SDK packages it into an envelope and sends it to Moneat's ingestion endpoint. Moneat processes the event, extracts metadata, generates a fingerprint for grouping, and stores it for analysis.
+
+## Ingestion Endpoint
+
+Events are sent to the envelope endpoint using the Sentry protocol. The SDK handles this automatically — you don't need to call this directly.
+
+```http
+POST /api/{projectId}/envelope/
+Content-Type: application/x-sentry-envelope
+X-Sentry-Auth: Sentry sentry_key=<public_key>,sentry_version=7
+```
+
+The endpoint also supports `gzip` compression for reduced bandwidth. Events are processed asynchronously and typically appear in the dashboard within seconds.
+
+## Event Data
+
+Each error event contains rich context that helps you diagnose issues quickly:
+
+- **Exception details** — Type, message, and full stack trace
+- **Breadcrumbs** — Trail of events leading up to the error
+- **Tags** — Key-value pairs for filtering (e.g., environment, release)
+- **User context** — User ID, email, IP address
+- **Device/OS info** — Platform, browser, OS version
+- **Request data** — URL, method, headers (for web apps)
+- **Custom context** — Any additional data you attach via the SDK
+
+## Error Grouping
+
+### Automatic Fingerprinting
+
+Moneat automatically groups similar errors into issues using fingerprinting. The fingerprint is generated from a combination of:
+
+- Exception type and message
+- Top 3 stack trace frames
+- Platform identifier
+
+This means the same error occurring multiple times across different users will be grouped into a single issue, making it easy to see how widespread a problem is.
+
+### Custom Fingerprinting
+
+You can override the default grouping by providing a custom fingerprint in the SDK:
+
+```javascript
+Sentry.captureException(error, {
+  fingerprint: ["custom-group-key"],
+});
+```
+
+## Quota & Rate Limiting
+
+Moneat enforces quotas based on your plan tier. When your event quota is exceeded, new events are dropped with a `429 Too Many Requests` response. The SDK automatically handles rate limiting and will retry when capacity is available.
+
+:::info Usage tracking
+Monitor your event usage in the dashboard under Settings & Billing. You can set up budget alerts to get notified before reaching your quota.
+:::
+
+## Supported Platforms
+
+Since Moneat is Sentry-compatible, any platform with a Sentry SDK is supported. Popular platforms include:
+
+JavaScript, TypeScript, Python, Java, Kotlin, Swift, Go, Ruby, PHP, .NET, Rust, Elixir, React, Vue, Angular, Next.js, Django, Flask, Spring, Android, iOS, React Native, Flutter, Node.js

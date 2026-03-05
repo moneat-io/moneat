@@ -1,0 +1,148 @@
+---
+title: Kubernetes Monitoring
+description: Monitor Kubernetes cluster resources including pods, nodes, services, deployments, DaemonSets, and ReplicaSets.
+---
+
+# Kubernetes Monitoring
+
+## Overview
+
+Moneat's Kubernetes monitoring gives you visibility into your cluster resources and workloads. View the status of pods, nodes, services, deployments, DaemonSets, and ReplicaSets — all collected automatically by the Datadog Agent running inside your cluster.
+
+:::info Enterprise feature
+Kubernetes monitoring requires the Datadog Agent integration, available on Enterprise plans.
+:::
+
+## Prerequisites
+
+- A running Kubernetes cluster
+- The Datadog Agent deployed as a DaemonSet (see [Agent Setup](/docs/datadog-agent/agent-setup))
+- The Enterprise `datadog` module enabled
+
+## Enable Kubernetes Monitoring
+
+Deploy the Datadog Agent as a DaemonSet in your cluster with Kubernetes resource collection enabled:
+
+```yaml
+# datadog-agent-daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: datadog-agent
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: datadog-agent
+  template:
+    metadata:
+      labels:
+        app: datadog-agent
+    spec:
+      serviceAccountName: datadog-agent
+      containers:
+        - name: agent
+          image: datadog/agent:latest
+          env:
+            - name: DD_DD_URL
+              value: "https://api.moneat.io/dd"
+            - name: DD_API_KEY
+              value: "YOUR_AGENT_API_KEY"
+            - name: DD_KUBERNETES_KUBELET_NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DD_LEADER_ELECTION
+              value: "true"
+            - name: DD_COLLECT_KUBERNETES_EVENTS
+              value: "true"
+          volumeMounts:
+            - name: dockersocket
+              mountPath: /var/run/docker.sock
+              readOnly: true
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+      volumes:
+        - name: dockersocket
+          hostPath:
+            path: /var/run/docker.sock
+        - name: proc
+          hostPath:
+            path: /proc
+```
+
+You'll also need a `ClusterRole` and `ClusterRoleBinding` so the agent can read Kubernetes resources:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: datadog-agent
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "services", "endpoints", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: datadog-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: datadog-agent
+subjects:
+  - kind: ServiceAccount
+    name: datadog-agent
+    namespace: default
+```
+
+## Resource Types
+
+Navigate to **Monitoring → Kubernetes** in the dashboard to view your cluster resources. The following tabs are available:
+
+### Pods
+
+Lists all pods in your cluster with:
+
+- **Name** — Pod name
+- **Namespace** — Kubernetes namespace
+- **Cluster** — Cluster identifier
+- **Status** — Current pod status (Running, Pending, Failed, etc.)
+- **Age** — When the pod was last collected
+
+### Nodes
+
+Shows cluster nodes with their status and resource capacity.
+
+### Services
+
+Displays Kubernetes services and their routing configuration.
+
+### Deployments
+
+Lists deployments with replica counts and rollout status.
+
+### DaemonSets
+
+Shows DaemonSets and their scheduling status across nodes.
+
+### ReplicaSets
+
+Lists ReplicaSets with current and desired replica counts.
+
+## Filtering
+
+Each resource view supports filtering by:
+
+- **Namespace** — Focus on resources in a specific namespace
+- **Cluster** — Filter by cluster when monitoring multiple clusters
+- **Status** — Show only resources in a specific state
+
+:::tip
+Deploy the Datadog Agent with `DD_LEADER_ELECTION=true` to ensure only one agent instance collects cluster-level resources, avoiding duplicate data.
+:::

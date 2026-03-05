@@ -63,6 +63,7 @@
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",
     "recharts": "^3.0.0",
+    "remark-directive": "^4.0.0",
     "rrweb": "^2.0.0-alpha.4",
     "rrweb-player": "^1.0.0-alpha.4",
     "tailwind-merge": "^3.0.0",

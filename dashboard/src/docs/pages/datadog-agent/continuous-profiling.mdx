@@ -1,0 +1,504 @@
+---
+title: Continuous Profiling
+description: Enable continuous profiling with the Datadog Agent to collect CPU, heap, and other application profiles.
+---
+
+# Continuous Profiling
+
+## Overview
+
+Continuous profiling captures real-time performance data from your applications — CPU usage, memory allocations, wall-clock time, and more. Moneat ingests profiles from both the Sentry SDK and the Datadog Agent, so you can use whichever fits your stack.
+
+## Enable Profiling with the Datadog Agent
+
+`datadog.yaml` is the main configuration file for the Datadog Agent. Its default location depends on your platform:
+
+| Platform | Path |
+|---|---|
+| Linux | `/etc/datadog-agent/datadog.yaml` |
+| macOS | `/opt/datadog-agent/etc/datadog.yaml` |
+| Windows | `C:\ProgramData\Datadog\datadog.yaml` |
+| Docker | Pass configuration via environment variables (see below) |
+
+Add the following to your `datadog.yaml`:
+
+```yaml
+# datadog.yaml
+apm_config:
+  enabled: true
+  profiling_dd_url: "https://api.moneat.io/dd/profiling/v1/input"
+
+# Point to your Moneat instance
+dd_url: "https://api.moneat.io/dd"
+```
+
+:::note Docker
+If you're running the Agent in Docker, pass the profiling endpoint as an environment variable. The EPForwarder redirects require a `datadog.yaml` file (see [Agent Setup](/docs/datadog-agent/agent-setup)):
+
+```bash
+docker run -e DD_APM_ENABLED=true \
+           -e DD_DD_URL=https://api.moneat.io/dd \
+           -e DD_APM_PROFILING_DD_URL=https://api.moneat.io/dd/profiling/v1/input \
+           datadog/agent:latest
+```
+:::
+
+Then restart the Datadog Agent:
+
+```bash
+# Linux / macOS (systemd)
+sudo systemctl restart datadog-agent
+
+# Docker
+docker restart dd-agent
+```
+
+Once the Agent is running, instrument your applications as described below.
+
+## How profiling works
+
+Configuring `datadog.yaml` tells the Agent to **accept and forward profiles** — it does not automatically profile every process on the host. Each application you want to profile must be individually instrumented with the Datadog language-specific profiler, which handles the actual data collection and sends it to the Agent.
+
+The Agent then forwards those profiles to Moneat.
+
+## Instrumenting your application
+
+Each profiler sends data to the Agent at `localhost:8126` by default. In Docker environments, set `DD_AGENT_HOST` to the Agent container's hostname instead.
+
+:::tip
+`DD_SERVICE` controls how your app appears in the Profiles dashboard — use something descriptive like `payments-service` or `user-api`.
+:::
+
+### Java
+
+**Standalone:**
+
+Download the Datadog Java agent JAR:
+
+```bash
+wget -O dd-java-agent.jar 'https://dtdg.co/latest-java-tracer'
+```
+
+Attach it at JVM startup:
+
+```bash
+DD_SERVICE=my-java-app \
+DD_ENV=production \
+DD_PROFILING_ENABLED=true \
+java -javaagent:/path/to/dd-java-agent.jar -jar my-app.jar
+```
+
+**Docker:**
+
+Add the agent JAR to your image and set `DD_AGENT_HOST` to reach the Agent container:
+
+```dockerfile
+FROM eclipse-temurin:21-jre
+
+RUN apt-get update && apt-get install -y wget && \
+    wget -O /dd-java-agent.jar 'https://dtdg.co/latest-java-tracer'
+
+COPY target/my-app.jar /app.jar
+
+ENTRYPOINT ["java", "-javaagent:/dd-java-agent.jar", "-jar", "/app.jar"]
+```
+
+Then in your `docker-compose.yaml`:
+
+```yaml
+services:
+  datadog-agent:
+    image: datadog/agent:latest
+    environment:
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_DD_URL=https://api.moneat.io/dd
+      - DD_APM_PROFILING_DD_URL=https://api.moneat.io/dd/profiling/v1/input
+      - DD_API_KEY=<YOUR_MONEAT_AGENT_KEY>
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+    pid: host
+
+  my-java-app:
+    build: .
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_SERVICE=my-java-app
+      - DD_ENV=production
+      - DD_PROFILING_ENABLED=true
+      # DD_API_KEY must be a 32-character hex string for the Java profiler's
+      # format check. It is only validated locally — the agent uses its own key.
+      - DD_API_KEY=00000000000000000000000000000000
+    depends_on:
+      - datadog-agent
+```
+
+`DD_AGENT_HOST=datadog-agent` tells the Java profiler to send profiles to the Agent container rather than `localhost`.
+
+---
+
+### Python
+
+**Standalone:**
+
+```bash
+pip install ddtrace
+
+DD_SERVICE=my-python-app \
+DD_ENV=production \
+DD_PROFILING_ENABLED=true \
+ddtrace-run python my_app.py
+```
+
+**Docker:**
+
+```dockerfile
+FROM python:3.12-slim
+
+RUN pip install ddtrace
+COPY . /app
+WORKDIR /app
+
+CMD ["ddtrace-run", "python", "my_app.py"]
+```
+
+```yaml
+# docker-compose.yaml
+services:
+  my-python-app:
+    build: .
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_SERVICE=my-python-app
+      - DD_ENV=production
+      - DD_PROFILING_ENABLED=true
+```
+
+---
+
+### Node.js
+
+**Standalone:**
+
+```bash
+npm install dd-trace
+```
+
+Initialize at the very top of your entry file, before any other imports:
+
+```javascript
+// Must be the first line
+require('dd-trace').init({
+  service: 'my-node-app',
+  env: 'production',
+  profiling: true,
+});
+```
+
+**Docker:**
+
+```dockerfile
+FROM node:20-slim
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+
+CMD ["node", "server.js"]
+```
+
+```yaml
+# docker-compose.yaml
+services:
+  my-node-app:
+    build: .
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_SERVICE=my-node-app
+      - DD_ENV=production
+      - DD_PROFILING_ENABLED=true
+```
+
+:::note React and other browser apps
+React runs in the browser, not on a server, so the Datadog Agent cannot profile it — there is no process for the Agent to attach to. If you have a **Node.js backend** serving your React app, you can profile that using the setup above.
+
+For profiling browser-side JavaScript (React, Vue, Angular, etc.), use the **Sentry SDK** instead — see the [Profiling with the Sentry SDK](#profiling-with-the-sentry-sdk) section below.
+:::
+
+---
+
+### Go
+
+Add the profiler to your application:
+
+```bash
+go get gopkg.in/DataDog/dd-trace-go.v1/profiler
+```
+
+```go
+package main
+
+import (
+    "log"
+    "time"
+
+    "gopkg.in/DataDog/dd-trace-go.v1/profiler"
+)
+
+func main() {
+    err := profiler.Start(
+        profiler.WithService("my-go-app"),
+        profiler.WithEnv("production"),
+        profiler.WithProfileTypes(
+            profiler.CPUProfile,
+            profiler.HeapProfile,
+            profiler.GoroutineProfile,
+        ),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer profiler.Stop()
+
+    // your application code
+}
+```
+
+**Docker:** Set `DD_AGENT_HOST` in your container environment (no JAR or binary download needed — the profiler is linked into your binary):
+
+```yaml
+# docker-compose.yaml
+services:
+  my-go-app:
+    build: .
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_SERVICE=my-go-app
+      - DD_ENV=production
+```
+
+---
+
+### Ruby
+
+Add the gem to your `Gemfile`:
+
+```ruby
+gem 'datadog'
+```
+
+Then enable profiling in your app initializer:
+
+```ruby
+require 'datadog/profiling/preload'
+
+Datadog.configure do |c|
+  c.service = 'my-ruby-app'
+  c.env = 'production'
+  c.profiling.enabled = true
+end
+```
+
+**Docker:**
+
+```dockerfile
+FROM ruby:3.3-slim
+
+WORKDIR /app
+COPY Gemfile* ./
+RUN bundle install
+COPY . .
+
+CMD ["ruby", "app.rb"]
+```
+
+```yaml
+# docker-compose.yaml
+services:
+  my-ruby-app:
+    build: .
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_SERVICE=my-ruby-app
+      - DD_ENV=production
+      - DD_PROFILING_ENABLED=true
+```
+
+---
+
+### .NET
+
+Install the Datadog .NET tracer. On Linux:
+
+```bash
+wget https://github.com/DataDog/dd-trace-dotnet/releases/latest/download/datadog-dotnet-apm_amd64.deb
+dpkg -i datadog-dotnet-apm_amd64.deb
+/opt/datadog/createLogPath.sh
+```
+
+Set environment variables before running your app:
+
+```bash
+export CORECLR_ENABLE_PROFILING=1
+export CORECLR_PROFILER={846F5F1C-F9AE-4B07-969E-05C26BC060D8}
+export CORECLR_PROFILER_PATH=/opt/datadog/Datadog.Trace.ClrProfiler.Native.so
+export DD_DOTNET_TRACER_HOME=/opt/datadog
+export DD_SERVICE=my-dotnet-app
+export DD_ENV=production
+export DD_PROFILING_ENABLED=true
+
+dotnet my-app.dll
+```
+
+**Docker:**
+
+```dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+
+RUN apt-get update && apt-get install -y wget && \
+    wget https://github.com/DataDog/dd-trace-dotnet/releases/latest/download/datadog-dotnet-apm_amd64.deb && \
+    dpkg -i datadog-dotnet-apm_amd64.deb && \
+    /opt/datadog/createLogPath.sh
+
+COPY --from=build /app/publish /app
+WORKDIR /app
+
+ENV CORECLR_ENABLE_PROFILING=1
+ENV CORECLR_PROFILER={846F5F1C-F9AE-4B07-969E-05C26BC060D8}
+ENV CORECLR_PROFILER_PATH=/opt/datadog/Datadog.Trace.ClrProfiler.Native.so
+ENV DD_DOTNET_TRACER_HOME=/opt/datadog
+
+ENTRYPOINT ["dotnet", "my-app.dll"]
+```
+
+```yaml
+# docker-compose.yaml
+services:
+  my-dotnet-app:
+    build: .
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_SERVICE=my-dotnet-app
+      - DD_ENV=production
+      - DD_PROFILING_ENABLED=true
+```
+
+---
+
+### PHP
+
+Install the Datadog PHP tracer extension:
+
+```bash
+wget https://github.com/DataDog/dd-trace-php/releases/latest/download/datadog-setup.php
+php datadog-setup.php --php-bin=all --enable-profiling
+```
+
+Set the environment before starting PHP-FPM or your web server:
+
+```bash
+DD_SERVICE=my-php-app \
+DD_ENV=production \
+DD_PROFILING_ENABLED=true \
+php-fpm
+```
+
+**Docker:**
+
+```dockerfile
+FROM php:8.3-fpm
+
+RUN apt-get update && apt-get install -y wget && \
+    wget https://github.com/DataDog/dd-trace-php/releases/latest/download/datadog-setup.php && \
+    php datadog-setup.php --php-bin=all --enable-profiling
+
+CMD ["php-fpm"]
+```
+
+```yaml
+# docker-compose.yaml
+services:
+  my-php-app:
+    build: .
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_SERVICE=my-php-app
+      - DD_ENV=production
+      - DD_PROFILING_ENABLED=true
+```
+
+## Supported Profile Types
+
+Moneat supports the following profile types from the Datadog Agent:
+
+| Profile Type | Description |
+|---|---|
+| **cpu** | CPU time consumed by your application |
+| **wall** | Wall-clock time (real elapsed time) |
+| **heap** | Current heap memory usage |
+| **alloc** | Memory allocation rate |
+| **goroutine** | Active goroutines (Go applications) |
+| **mutex** | Mutex contention and wait times |
+| **block** | Blocking operations and wait times |
+
+:::tip
+The available profile types depend on your application's language and runtime. Go applications support all types listed above, while other languages may support a subset.
+:::
+
+## Viewing Profiles
+
+Navigate to **Profiles** in the dashboard and select the **Datadog Agent** tab.
+
+### Filtering
+
+- **Service** — Search by service name to focus on a specific application
+- **Type** — Filter by profile type (CPU, heap, wall, etc.)
+
+### Profile Details
+
+Each profile entry shows:
+
+- **Service** — The application or service that generated the profile
+- **Type** — The kind of profile (CPU, heap, wall, etc.)
+- **Environment** — The deployment environment (production, staging)
+- **Host** — The host where the profile was collected
+- **Duration** — How long the profiling session lasted
+- **Size** — The profile data size
+- **Time** — When the profile was captured
+
+Click on any profile to view its detailed flamegraph and drill into specific functions.
+
+## Profiling with the Sentry SDK
+
+You can also collect profiles using the Sentry SDK by setting `profilesSampleRate` in your SDK configuration. See the **Profiles → Sentry SDK** tab in the dashboard for platform-specific setup instructions.
+
+**JavaScript / TypeScript:**
+
+```javascript
+import * as Sentry from "@sentry/node";
+
+Sentry.init({
+  dsn: "YOUR_DSN_HERE",
+  tracesSampleRate: 1.0,
+  profilesSampleRate: 1.0,
+});
+```
+
+**Python:**
+
+```python
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn="YOUR_DSN_HERE",
+    traces_sample_rate=1.0,
+    profiles_sample_rate=1.0,
+)
+```
+
+:::info
+Profiles from both sources (Sentry SDK and Datadog Agent) are stored and queried separately. Use the tabs on the Profiles page to switch between them.
+:::

@@ -1,0 +1,101 @@
+---
+title: Releases & Source Maps
+description: Track deployments, associate errors with releases, and upload source maps for readable stack traces.
+---
+
+# Releases & Source Maps
+
+## Overview
+
+Releases let you track which version of your code is deployed and correlate errors with specific deployments. When you create a release in Moneat, errors captured by the SDK are automatically tagged with the release version, giving you visibility into which deployments introduced new issues.
+
+## Creating Releases
+
+Create releases using the Sentry-compatible release API. This is typically done in your CI/CD pipeline after a successful build.
+
+**Create a Release (cURL)**
+
+```bash
+curl -X POST https://api.moneat.io/api/0/organizations/{org_slug}/releases/ \
+  -H "Authorization: Bearer <auth_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "version": "1.2.3",
+    "projects": ["my-project"]
+  }'
+```
+
+You can also use the `sentry-cli` tool, which works with Moneat out of the box. Just set the `SENTRY_URL` environment variable to your Moneat instance:
+
+**Using sentry-cli**
+
+```bash
+export SENTRY_URL=https://api.moneat.io
+export SENTRY_AUTH_TOKEN=<your_auth_token>
+export SENTRY_ORG=<your_org_slug>
+
+sentry-cli releases new 1.2.3
+sentry-cli releases set-commits 1.2.3 --auto
+sentry-cli releases finalize 1.2.3
+```
+
+## Source Maps
+
+### Why Source Maps?
+
+JavaScript and other transpiled/minified languages produce unreadable stack traces in production. Source maps allow Moneat to map minified code back to your original source, giving you readable file names, line numbers, and code context in error reports.
+
+### Uploading Source Maps
+
+Upload source maps as part of your release process. Use the release API or `sentry-cli`:
+
+**Upload with sentry-cli**
+
+```bash
+sentry-cli releases files 1.2.3 upload-sourcemaps ./dist \
+  --url-prefix '~/static/js'
+```
+
+Or upload via the API directly:
+
+**Upload via API (cURL)**
+
+```bash
+curl -X POST https://api.moneat.io/api/0/organizations/{org_slug}/releases/1.2.3/files/ \
+  -H "Authorization: Bearer <auth_token>" \
+  -F file=@./dist/app.js.map \
+  -F name="~/static/js/app.js.map"
+```
+
+:::tip Build tool plugins
+Most build tools have Sentry plugins that automatically upload source maps during the build process. Look for `@sentry/webpack-plugin`, `@sentry/vite-plugin`, or `@sentry/rollup-plugin` for seamless integration.
+:::
+
+## Release Tracking
+
+Once releases are created, you can view them in the **Releases** section of the dashboard. Each release shows:
+
+- **Version** — The release identifier
+- **New issues** — Issues first seen in this release
+- **Resolved issues** — Issues resolved in this release
+- **Date** — When the release was created and finalized
+
+## SDK Configuration
+
+Make sure your SDK is configured with the release version so events are tagged correctly:
+
+```javascript
+Sentry.init({
+  dsn: "https://<key>@api.moneat.io/api/<project_id>",
+  release: "1.2.3",
+});
+```
+
+## Auth Token Scopes
+
+API tokens used for release management need the following scopes:
+
+- `releases:write` — Create and update releases
+- `releases:read` — List and view releases
+
+See [API Tokens](/docs/api-tokens) for how to create tokens with the right scopes.

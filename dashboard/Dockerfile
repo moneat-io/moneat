@@ -1,19 +1,10 @@
 # syntax=docker/dockerfile:1.21
-FROM node:24-alpine AS docs-build
-WORKDIR /app
-COPY docs/package.json docs/package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --prefer-offline --no-audit
-COPY docs/ .
-RUN npm run build
-
 FROM node:24-alpine AS dashboard-build
 WORKDIR /app
 COPY dashboard/package.json dashboard/package-lock.json dashboard/.npmrc ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit
 COPY dashboard/ .
-COPY --from=docs-build /app/build ./public/docs
 ARG VITE_BACKEND_URL=""
 ARG VITE_API_URL=""
 ARG VITE_SENTRY_DSN=""

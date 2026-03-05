@@ -1,0 +1,40 @@
+---
+title: Agent Setup
+description: Deploy the Datadog-compatible agent to start collecting infrastructure telemetry.
+---
+
+# Agent Setup
+
+## Deploy the Agent
+
+Go to **Monitoring → Hosts** in the dashboard and click **Add Host**. Moneat will generate a ready-to-run Docker command with your API key and endpoint already filled in — just paste it on your server.
+
+The agent collects system metrics, processes, containers, APM traces, and logs.
+
+## Full Configuration (datadog.yaml)
+
+The generated Docker command covers basic metrics, APM, and logs. For full functionality — including container images, SBOM, database monitoring, synthetics, profiling, and other advanced tracks — the agent requires a `datadog.yaml` file that redirects each telemetry type to Moneat.
+
+Copy the full `datadog.yaml` from **Settings → Agent Keys** and save it to `/etc/datadog-agent/datadog.yaml` on your host (or mount it into the Docker container at that path):
+
+```bash
+# Mount the config file when running the agent in Docker
+docker run \
+  -e DD_API_KEY=<YOUR_KEY> \
+  -v /path/to/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v /proc/:/host/proc/:ro \
+  -v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
+  --pid host \
+  gcr.io/datadoghq/agent:7
+```
+
+Without the `datadog.yaml`, tracks like container images, SBOM, and DBM will attempt to send to Datadog's servers and fail.
+
+## Verifying the Agent
+
+After deploying, the host appears in **Monitoring → Hosts** within a few minutes with CPU, memory, platform info, and agent version.
+
+## Managing API Keys
+
+Agent keys live in **Settings → Agent Keys**. You can see when each key was last used or revoke one to immediately block that agent from sending data.

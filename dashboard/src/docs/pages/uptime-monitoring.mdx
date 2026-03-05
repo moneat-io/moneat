@@ -1,0 +1,59 @@
+---
+title: Uptime Monitoring
+description: Monitor your endpoints and services with HTTP checks and heartbeat monitors.
+---
+
+# Uptime Monitoring
+
+## Overview
+
+Moneat's uptime monitoring lets you track the availability of your websites, APIs, and background services. Get alerted instantly when something goes down, and track uptime history and response times over time.
+
+## Monitor Types
+
+### HTTP Monitors
+
+HTTP monitors send periodic requests to a URL and check the response. You can configure:
+
+- **URL** — The endpoint to check
+- **Check interval** — How often to check (e.g., every 1, 5, or 10 minutes)
+- **Expected status code** — The HTTP status code that indicates success (default: 200)
+- **Timeout** — How long to wait before marking the check as failed
+- **HTTP method** — GET, POST, HEAD, etc.
+
+### Push / Heartbeat Monitors
+
+Heartbeat monitors work in reverse — instead of Moneat checking your service, your service sends a "heartbeat" ping to Moneat at regular intervals. If Moneat doesn't receive a ping within the expected window, it marks the service as down. Ideal for cron jobs, background workers, and scheduled tasks.
+
+**Heartbeat Ping (cURL)**
+
+```bash
+# Add to the end of your cron job or scheduled task
+curl -s https://api.moneat.io/v1/uptime/push/<monitor_token>
+```
+
+:::tip Easy integration
+Just add a `curl` call to the end of your cron job script. If the job fails or hangs, the ping won't be sent and Moneat will alert you.
+:::
+
+## Managing Monitors
+
+Navigate to **Uptime** in the sidebar to view and manage your monitors. From there you can:
+
+- Create new HTTP or heartbeat monitors
+- View current status and uptime percentage
+- See response time history and trends
+- Pause and resume monitors temporarily
+- Delete monitors you no longer need
+
+## Alerting
+
+When a monitor detects a failure, Moneat can create an incident and notify your team through the configured escalation policy. This integrates with the on-call system — so the right person gets paged when your service goes down.
+
+:::info
+Connect your monitors to escalation policies in the monitor settings to enable automatic incident creation on downtime.
+:::
+
+## Status Page Integration
+
+Monitors can be linked to status page components. When a monitor goes down, the corresponding component on your public status page is automatically updated. See the [Status Pages](/docs/status-pages) documentation for more details.

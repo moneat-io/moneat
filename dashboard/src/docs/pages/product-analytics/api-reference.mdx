@@ -1,0 +1,352 @@
+---
+title: API Reference
+description: Complete reference for all Product Analytics API endpoints.
+---
+
+# API Reference
+
+All analytics API endpoints are under `/v1/analytics/{projectId}/` and require JWT authentication via the `Authorization: Bearer {token}` header.
+
+## Authentication
+
+Include your JWT token in every request:
+
+```http
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+See [API Tokens](/docs/api-tokens) for how to generate tokens.
+
+## Common Parameters
+
+These query parameters are accepted by all endpoints (unless noted otherwise):
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `period` | `string` | `30d` | Date range preset: `today`, `7d`, `30d`, `month`, `6mo`, `12mo`, `custom` |
+| `date_from` | `string` | — | Start date in `YYYY-MM-DD` format. Required when `period=custom`. |
+| `date_to` | `string` | — | End date in `YYYY-MM-DD` format. Required when `period=custom`. |
+| `comparison` | `string` | `previous_period` | Comparison mode: `previous_period`, `year_over_year`, `none` |
+| `filters[]` | `string[]` | — | Filter expressions in `property:operator:value` format. See [Filtering](./filtering). |
+| `limit` | `integer` | `100` | Maximum number of results for breakdown endpoints. |
+
+---
+
+## Endpoints
+
+### GET `/overview`
+
+Returns top-level KPI metrics for the selected period.
+
+**Response:**
+
+```json
+{
+  "uniqueVisitors": 12450,
+  "totalPageviews": 34200,
+  "bounceRate": 42.5,
+  "avgVisitDuration": 185,
+  "viewsPerVisit": 2.75,
+  "comparison": {
+    "uniqueVisitors": 11200,
+    "totalPageviews": 30100,
+    "bounceRate": 45.1,
+    "avgVisitDuration": 170,
+    "viewsPerVisit": 2.69
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `uniqueVisitors` | `integer` | Distinct visitors in the period |
+| `totalPageviews` | `integer` | Total page loads |
+| `bounceRate` | `float` | Percentage of single-pageview sessions (0–100) |
+| `avgVisitDuration` | `integer` | Average session duration in seconds |
+| `viewsPerVisit` | `float` | Average pageviews per session |
+| `comparison` | `object` | Same fields for the comparison period (absent if `comparison=none`) |
+
+---
+
+### GET `/timeseries`
+
+Returns time-bucketed data for charting visitors and pageviews over time.
+
+**Response:**
+
+```json
+[
+  { "timestamp": "2025-01-01T00:00:00Z", "visitors": 142, "pageviews": 380 },
+  { "timestamp": "2025-01-02T00:00:00Z", "visitors": 156, "pageviews": 425 },
+  ...
+]
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | `string` | ISO 8601 timestamp for the start of the bucket |
+| `visitors` | `integer` | Unique visitors in this bucket |
+| `pageviews` | `integer` | Total pageviews in this bucket |
+
+Bucket size is determined automatically by the period (hourly for `today`, daily for `7d`/`30d`, weekly for `6mo`, monthly for `12mo`).
+
+---
+
+### GET `/pages`
+
+Top pages ranked by visitor count.
+
+**Response:**
+
+```json
+[
+  {
+    "name": "/pricing",
+    "visitors": 3200,
+    "pageviews": 4100,
+    "bounceRate": 35.2,
+    "avgDuration": 210,
+    "percentage": 25.7
+  },
+  ...
+]
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | Page URL path |
+| `visitors` | `integer` | Unique visitors |
+| `pageviews` | `integer` | Total views |
+| `bounceRate` | `float` | Bounce rate for sessions entering on this page |
+| `avgDuration` | `integer` | Average session duration in seconds |
+| `percentage` | `float` | Share of total visitors (0–100) |
+
+---
+
+### GET `/entry-pages`
+
+Top entry (landing) pages — the first page visitors see when they arrive.
+
+**Response:** Same structure as `/pages`.
+
+---
+
+### GET `/exit-pages`
+
+Top exit pages — the last page visitors see before leaving.
+
+**Response:**
+
+```json
+[
+  {
+    "name": "/checkout",
+    "visitors": 1800,
+    "pageviews": 2400,
+    "percentage": 14.5
+  },
+  ...
+]
+```
+
+---
+
+### GET `/sources`
+
+Traffic sources (referrers) ranked by visitor count.
+
+**Response:**
+
+```json
+[
+  { "name": "Google", "visitors": 5400, "pageviews": 14200, "percentage": 43.4 },
+  { "name": "Direct", "visitors": 3100, "pageviews": 7800, "percentage": 24.9 },
+  { "name": "twitter.com", "visitors": 1200, "pageviews": 2800, "percentage": 9.6 },
+  ...
+]
+```
+
+---
+
+### GET `/utm/{param}`
+
+Breakdown by a specific UTM parameter.
+
+**Path Parameters:**
+
+| Parameter | Values |
+|-----------|--------|
+| `param` | `source`, `medium`, `campaign`, `term`, `content` |
+
+**Example:**
+
+```http
+GET /v1/analytics/1/utm/campaign?period=30d
+```
+
+**Response:**
+
+```json
+[
+  { "name": "spring-sale", "visitors": 2400, "pageviews": 5600, "percentage": 38.0 },
+  { "name": "newsletter-jan", "visitors": 1100, "pageviews": 2300, "percentage": 17.5 },
+  ...
+]
+```
+
+---
+
+### GET `/locations`
+
+Geographic breakdown of visitors by country.
+
+**Response:**
+
+```json
+[
+  { "name": "US", "visitors": 5200, "pageviews": 14000, "percentage": 41.8 },
+  { "name": "GB", "visitors": 1800, "pageviews": 4200, "percentage": 14.5 },
+  { "name": "DE", "visitors": 1400, "pageviews": 3600, "percentage": 11.2 },
+  ...
+]
+```
+
+The `name` field contains the ISO 3166-1 alpha-2 country code. Requires GeoIP database to be configured.
+
+---
+
+### GET `/devices`
+
+Device, browser, or OS breakdown.
+
+**Query Parameters:**
+
+| Parameter | Required | Values |
+|-----------|----------|--------|
+| `type` | Yes | `browser`, `os`, `device` |
+
+**Example:**
+
+```http
+GET /v1/analytics/1/devices?type=browser&period=30d
+```
+
+**Response:**
+
+```json
+[
+  { "name": "Chrome", "visitors": 6800, "pageviews": 18400, "percentage": 54.6 },
+  { "name": "Safari", "visitors": 2400, "pageviews": 5800, "percentage": 19.3 },
+  { "name": "Firefox", "visitors": 1600, "pageviews": 4200, "percentage": 12.9 },
+  ...
+]
+```
+
+---
+
+### GET `/events`
+
+Custom event names and occurrence counts.
+
+**Response:**
+
+```json
+[
+  { "name": "Signup", "visitors": 840, "pageviews": 920, "percentage": 6.7 },
+  { "name": "Download", "visitors": 420, "pageviews": 580, "percentage": 3.4 },
+  ...
+]
+```
+
+:::note
+The `pageviews` field represents total occurrences of the event (not actual pageviews) for custom events.
+:::
+
+---
+
+### GET `/realtime`
+
+Current number of active visitors (last 5 minutes).
+
+**No query parameters** — this endpoint does not accept period or filter parameters.
+
+**Response:**
+
+```json
+{
+  "currentVisitors": 24
+}
+```
+
+---
+
+### GET `/funnel`
+
+Funnel analysis for ordered event sequences.
+
+**Query Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `steps[]` | Yes | Ordered funnel steps. Use `pageview:/path` for pageviews or `EventName` for custom events. |
+
+**Example:**
+
+```http
+GET /v1/analytics/1/funnel?steps[]=pageview:/pricing&steps[]=Start Trial&steps[]=Complete Signup&period=30d
+```
+
+**Response:**
+
+```json
+{
+  "steps": [
+    { "name": "pageview:/pricing", "visitors": 1200, "conversionRate": 100.0, "dropoffRate": 0.0 },
+    { "name": "Start Trial", "visitors": 840, "conversionRate": 70.0, "dropoffRate": 30.0 },
+    { "name": "Complete Signup", "visitors": 504, "conversionRate": 42.0, "dropoffRate": 40.0 }
+  ],
+  "overallConversionRate": 42.0
+}
+```
+
+See [Funnel Analysis](./funnels) for detailed usage.
+
+---
+
+## Error Responses
+
+| Status Code | Description |
+|-------------|-------------|
+| `401 Unauthorized` | Missing or invalid JWT token |
+| `403 Forbidden` | User does not have access to this project |
+| `404 Not Found` | Project not found |
+| `422 Unprocessable Entity` | Invalid parameters (e.g., bad date format, unknown filter property) |
+| `429 Too Many Requests` | Rate limit exceeded |
+
+Error responses include a JSON body:
+
+```json
+{
+  "error": "Invalid filter property: unknown_prop"
+}
+```
+
+---
+
+## Rate Limits
+
+Analytics API endpoints are rate-limited per organization. Current limits:
+
+| Tier | Requests per minute |
+|------|---------------------|
+| Free | 60 |
+| Pro | 300 |
+| Enterprise | 1000 |
+
+Rate limit headers are included in every response:
+
+```http
+X-RateLimit-Limit: 300
+X-RateLimit-Remaining: 298
+X-RateLimit-Reset: 1706745600
+```

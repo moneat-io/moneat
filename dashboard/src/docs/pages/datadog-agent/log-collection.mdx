@@ -1,0 +1,124 @@
+---
+title: Log Collection
+description: Collect and search logs using the Datadog Agent with Datadog-compatible query syntax.
+---
+
+# Log Collection
+
+## Overview
+
+The Datadog Agent can forward logs from your applications and hosts to Moneat. Once ingested, logs are searchable using Datadog-compatible query syntax in the Moneat dashboard.
+
+## Enable Log Collection
+
+Add log configuration to your `datadog.yaml`:
+
+```yaml
+# datadog.yaml
+logs_enabled: true
+logs_config:
+  logs_dd_url: "https://api.moneat.io/dd"
+```
+
+Then restart the agent:
+
+```bash
+docker restart dd-agent
+```
+
+## Configure Log Sources
+
+To collect logs from specific applications, create a configuration file in the agent's `conf.d` directory. For example, to collect logs from a file:
+
+```yaml
+# /etc/datadog-agent/conf.d/myapp.d/conf.yaml
+logs:
+  - type: file
+    path: /var/log/myapp/*.log
+    service: my-application
+    source: python
+```
+
+Mount the log directory into the agent container:
+
+```bash
+-v /var/log/myapp:/var/log/myapp:ro
+```
+
+## Query Syntax
+
+Moneat supports Datadog-compatible log query syntax for searching and filtering. Use these queries in the log search bar in the dashboard.
+
+### Full-Text Search
+
+Search across all log messages:
+
+```text
+error connecting to database
+```
+
+### Attribute Search
+
+Filter by specific log attributes using the `@` prefix:
+
+```text
+@user_id:12345
+@request_id:abc-123
+@duration:>500
+```
+
+### Reserved Attributes
+
+These attributes have special handling and don't need the `@` prefix:
+
+| Attribute | Description |
+|---|---|
+| `service` | The service that generated the log |
+| `status` | Log level (debug, info, warn, error, fatal) |
+| `host` | The originating host |
+| `source` | Log source (e.g., python, java, nginx) |
+| `environment` | Deployment environment |
+| `message` | The log message body |
+| `trace_id` | Correlated trace identifier |
+| `span_id` | Correlated span identifier |
+
+**Example:**
+
+```text
+service:api-gateway status:error
+```
+
+### Boolean Operators
+
+Combine conditions with `AND`, `OR`, and `NOT`:
+
+```text
+service:api-gateway AND status:error
+status:warn OR status:error
+NOT source:healthcheck
+```
+
+### Wildcards and Ranges
+
+```text
+service:user-*
+@duration:[100 TO 500]
+@response_code:>=400
+```
+
+### Tag Search
+
+Filter by tags attached to logs:
+
+```text
+env:production
+region:us-east-1
+```
+
+:::tip Combine with time ranges
+Use the time picker in the dashboard alongside queries to narrow results to a specific window. This dramatically improves query performance on large log volumes.
+:::
+
+## Log Retention
+
+Logs ingested via the Datadog Agent are stored in ClickHouse alongside logs from other sources. Retention periods depend on your plan tier — check [Billing & Plans](/docs/billing) for details.
