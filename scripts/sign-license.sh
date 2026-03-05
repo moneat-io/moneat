@@ -2,23 +2,21 @@
 # sign-license.sh — Issue a signed Moneat license key.
 #
 # Usage:
-#   ./scripts/sign-license.sh --key <private.pem> --customer <name> --plan <plan> \
-#       --features <feature1,feature2> [--expires <yyyy-MM-dd>]
+#   ./scripts/sign-license.sh --key <private.pem> --customer <name> \
+#       [--plan <plan>] [--features <feature1,feature2>] [--expires <yyyy-MM-dd>]
 #
 # Output:
 #   Prints the license key to stdout. Give this string to the customer as
 #   their MONEAT_LICENSE_KEY value.
 #
 # Examples:
-#   # SSO + On-Call, expires end of 2027
+#   # All features, enterprise plan (defaults), expires end of 2027
 #   ./scripts/sign-license.sh \
 #       --key ~/moneat-license-private.pem \
 #       --customer "Acme Corp" \
-#       --plan enterprise \
-#       --features sso,oncall \
 #       --expires 2027-12-31
 #
-#   # On-Call only, no expiry
+#   # On-Call only, pro plan, no expiry
 #   ./scripts/sign-license.sh \
 #       --key ~/moneat-license-private.pem \
 #       --customer "Startup Inc" \
@@ -49,12 +47,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Defaults
+[[ -z "$PLAN" ]] && PLAN="enterprise"
+[[ -z "$FEATURES" ]] && FEATURES="sso,oncall"
+
 # Validate required args
 missing=()
 [[ -z "$PRIVATE_KEY" ]] && missing+=("--key")
 [[ -z "$CUSTOMER" ]]    && missing+=("--customer")
-[[ -z "$PLAN" ]]        && missing+=("--plan")
-[[ -z "$FEATURES" ]]    && missing+=("--features")
 if [[ ${#missing[@]} -gt 0 ]]; then
   echo "Missing required arguments: ${missing[*]}" >&2
   exit 1

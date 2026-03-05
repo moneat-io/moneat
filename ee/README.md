@@ -42,37 +42,12 @@ Payload fields:
 
 ## Issuing a License Key
 
-### Prerequisites
-
-```bash
-brew install jq   # macOS; or: apt install jq
-# openssl comes with macOS/Linux
-```
-
-### The private key
-
-The signing private key is **not in this repository**. Store it in 1Password (or your team's secret manager) under `Moneat License Signing Key (Private)`.
-
-To generate a new key pair from scratch (only needed once):
-
-```bash
-# Generate private key — keep this secret, never commit it
-openssl genrsa -out moneat-license-private.pem 2048
-
-# Derive the public key — embed this in LicenseValidator.kt
-openssl rsa -in moneat-license-private.pem -pubout
-```
-
-Copy the public key output (everything between and including the `-----` lines) into `backend/src/main/kotlin/com/moneat/enterprise/license/LicenseValidator.kt`, replacing the `PUBLIC_KEY_PEM` constant. Strip the header/footer lines and newlines — only the base64 body goes in the constant.
-
 ### Signing a key
 
 ```bash
 ./scripts/sign-license.sh \
   --key ~/moneat-license-private.pem \
   --customer "Acme Corp" \
-  --plan enterprise \
-  --features sso,oncall \
   --expires 2027-12-31
 ```
 
@@ -82,8 +57,8 @@ Copy the public key output (everything between and including the `-----` lines) 
 |------|----------|-------------|
 | `--key` | ✅ | Path to the private key PEM file |
 | `--customer` | ✅ | Customer name (informational, embedded in key) |
-| `--plan` | ✅ | Plan name, e.g. `pro` or `enterprise` |
-| `--features` | ✅ | Comma-separated feature names: `sso`, `oncall`, or `sso,oncall` |
+| `--plan` | | Plan name. Defaults to `enterprise`. |
+| `--features` | | Comma-separated feature names: `sso`, `oncall`, or `sso,oncall`. Defaults to all features. |
 | `--expires` | | Expiry date `yyyy-MM-dd`. Omit for no expiry. |
 
 Output is the license key string. Give it to the customer to set as:

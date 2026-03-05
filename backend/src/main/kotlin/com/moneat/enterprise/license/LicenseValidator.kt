@@ -58,13 +58,15 @@ object LicenseValidator {
     // Public key corresponding to the Moneat license signing private key.
     // The private key is held only by Moneat and is never distributed.
     private val PUBLIC_KEY_PEM = """
-        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkF4TXH+JjeaHHtMZDbNN
-        11PjLuxg/4RWDfdSc2FpQ1iPOIThzj7nO62Yk3yvDotsB/dqxIZdP72kRlEfy8Gg
-        VQnhcKXOJP+t4wOqGCkfl4zah1NvAKm5pvbmokNyFbLeEIhDuxK+J+tVe+Si5ChF
-        fKjy3D8lPHxERAyJuFMY6m9v4KM99AfkUlmffJM3BYn+iz27kEihRn2+H2E4vNYv
-        CLq/u+Oqnb7BrDyz6ZbkKKPURPduL+uflsim410sS40te63LWldZ/BX+WzSZfR+Q
-        mwHqp3zbotWrKhbG3YqLXF7Zb83Vbwd6Wcv0Uyu2qWB/dOfqb2AHHVnXU181wSMO
-        gwIDAQAB
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0HN6RtHQG3iX2h7gua64
+zSsSAgXl8p5eNzCjXqKabwN5jUXjupQ35zTxOIOjBMPcQ4/VsEACStYu0LqzcKgT
+RWAB1tLQyj69LykA9fDtRnyhG8NxppVlMHTQcOynbWMMlJQFyjYF5vLIFkQ5/u58
+s0ucVvOMRH0BvvQPo+PN7EON7iLCiid/GGj9gpF7uMRLhu2+rP/uAODRTqo16qmQ
+wiXvsl4kcuc2tKAjQK89DE2WYyEnNNjCZIsPmNIGBUkgndz2cNHnvXAlqmvNXecU
+EcLgKwrzDafmttqSyuKzXBXoGOrnj5d3Gl9Je/Oo3jZmUJt7ntdCWJsj4pBf0h0o
+RwIDAQAB
+-----END PUBLIC KEY-----
     """.trimIndent().replace("\n", "").replace(" ", "")
 
     private val publicKey by lazy {
