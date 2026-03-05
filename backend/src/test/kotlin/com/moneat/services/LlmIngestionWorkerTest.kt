@@ -104,7 +104,7 @@ class LlmIngestionWorkerTest {
                 LlmIngestionWorker("llm:q", "llm:dlq", 1).insertGenerations(9, listOf(generation))
 
                 val insertQuery = queries.single()
-                assertTrue(insertQuery.contains("INSERT INTO test.llm_generations"))
+                assertTrue(insertQuery.contains("INSERT INTO `test`.llm_generations"))
                 assertTrue(insertQuery.contains("'chat'"), insertQuery)
                 assertTrue(insertQuery.contains("'success'"), insertQuery)
                 assertTrue(insertQuery.contains("O\\'Reilly"), insertQuery)
