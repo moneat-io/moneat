@@ -77,7 +77,7 @@ fun Route.datadogInfraQueryRoutes() {
 
                 val countSql = """
                     SELECT count() as cnt
-                    FROM $db.processes
+                    FROM `$db`.processes
                     WHERE $where
                     FORMAT JSONEachRow
                 """.trimIndent()
@@ -95,7 +95,7 @@ fun Route.datadogInfraQueryRoutes() {
                             '%Y-%m-%dT%H:%i:%S.000Z',
                             'UTC'
                         ) as ts
-                    FROM $db.processes
+                    FROM `$db`.processes
                     WHERE $where
                     ORDER BY timestamp DESC
                     LIMIT $limit OFFSET $offset
@@ -160,7 +160,7 @@ fun Route.datadogInfraQueryRoutes() {
 
                 val countSql = """
                     SELECT count() as cnt
-                    FROM $db.containers
+                    FROM `$db`.containers
                     WHERE $where
                     FORMAT JSONEachRow
                 """.trimIndent()
@@ -178,7 +178,7 @@ fun Route.datadogInfraQueryRoutes() {
                             '%Y-%m-%dT%H:%i:%S.000Z',
                             'UTC'
                         ) as ts
-                    FROM $db.containers
+                    FROM `$db`.containers
                     WHERE $where
                     ORDER BY timestamp DESC
                     LIMIT $limit OFFSET $offset
@@ -243,7 +243,7 @@ fun Route.datadogInfraQueryRoutes() {
 
                 val countSql = """
                     SELECT count() as cnt
-                    FROM $db.network_connections
+                    FROM `$db`.network_connections
                     WHERE $where
                     FORMAT JSONEachRow
                 """.trimIndent()
@@ -262,7 +262,7 @@ fun Route.datadogInfraQueryRoutes() {
                             '%Y-%m-%dT%H:%i:%S.000Z',
                             'UTC'
                         ) as ts
-                    FROM $db.network_connections
+                    FROM `$db`.network_connections
                     WHERE $where
                     ORDER BY timestamp DESC
                     LIMIT $limit OFFSET $offset

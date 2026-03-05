@@ -104,7 +104,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
             argMax(event_count, received_at)     AS event_count,
             argMax(issue_count, received_at)     AS issue_count,
             argMax(ssl_enabled, received_at)     AS ssl_enabled
-        FROM $db.telemetry_pulses
+        FROM `$db`.telemetry_pulses
         GROUP BY deployment_id
         ORDER BY last_seen DESC
         LIMIT 500

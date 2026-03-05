@@ -215,7 +215,7 @@ object NdmIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.ndm_devices (
+            """INSERT INTO `$clickhouseDb`.ndm_devices (
                 organization_id, device_id, ip_address, hostname,
                 vendor, model, os_version, device_type, status,
                 reachability, snmp_version, tags, collected_at
@@ -236,7 +236,7 @@ object NdmIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.ndm_traps (
+            """INSERT INTO `$clickhouseDb`.ndm_traps (
                 organization_id, device_ip, oid, severity,
                 message, variables, received_at
             ) VALUES $rows""",
@@ -264,7 +264,7 @@ object NdmIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.ndm_flows (
+            """INSERT INTO `$clickhouseDb`.ndm_flows (
                 organization_id, src_ip, dst_ip, src_port, dst_port,
                 protocol, bytes, packets, direction, flow_type,
                 tags, sampled_at
@@ -287,7 +287,7 @@ object NdmIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.network_paths (
+            """INSERT INTO `$clickhouseDb`.network_paths (
                 organization_id, source, destination,
                 hops, hop_rtts, tags, collected_at
             ) VALUES $rows""",
@@ -307,7 +307,7 @@ object NdmIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.ndm_configs (
+            """INSERT INTO `$clickhouseDb`.ndm_configs (
                 organization_id, device_id, config_type,
                 content, tags, collected_at
             ) VALUES $rows""",

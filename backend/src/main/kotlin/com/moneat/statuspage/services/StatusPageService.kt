@@ -729,7 +729,7 @@ class StatusPageService(
         val query =
             """
             SELECT status
-            FROM $clickhouseDb.uptime_heartbeats
+            FROM `$clickhouseDb`.uptime_heartbeats
             WHERE monitor_id = '$monitorId'
               AND timestamp >= fromUnixTimestamp64Milli(${from.toEpochMilliseconds()})
             ORDER BY timestamp DESC
@@ -771,7 +771,7 @@ class StatusPageService(
                 toDate(timestamp) as date,
                 countIf(status = 1) as up_count,
                 count() as total_count
-            FROM $clickhouseDb.uptime_heartbeats
+            FROM `$clickhouseDb`.uptime_heartbeats
             WHERE monitor_id = '$monitorId'
               AND timestamp >= fromUnixTimestamp64Milli(${from.toEpochMilliseconds()})
             GROUP BY date

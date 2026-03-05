@@ -157,7 +157,7 @@ class DashboardQueryEngine {
             "Data source not allowed: ${dsl.dataSource}"
         }
 
-        val table = "$clickhouseDb.${dataSource.tableName}"
+        val table = "`$clickhouseDb`.${dataSource.tableName}"
         val tsCol = TIMESTAMP_COLUMNS[dataSource.tableName] ?: "timestamp"
 
         val selectClauses = buildSelectClauses(dsl, tsCol)

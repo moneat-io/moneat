@@ -159,7 +159,7 @@ class LlmIngestionWorker(
 
         val query =
             """
-            INSERT INTO $clickhouseDb.llm_generations (
+            INSERT INTO `$clickhouseDb`.llm_generations (
                 generation_id, project_id, trace_id, span_id, parent_span_id,
                 timestamp, duration_ms, name, model, provider, type,
                 input, output, input_tokens, output_tokens, total_tokens, cost_usd,

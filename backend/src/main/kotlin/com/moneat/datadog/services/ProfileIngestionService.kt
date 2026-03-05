@@ -164,7 +164,7 @@ object ProfileIngestionService {
         val durationNs = (endMs - startMs) * 1_000_000
 
         val insert = """
-            INSERT INTO $clickhouseDb.profiles (
+            INSERT INTO `$clickhouseDb`.profiles (
                 profile_id, organization_id,
                 host, service, env, version,
                 runtime, language, profile_type,
@@ -232,7 +232,7 @@ object ProfileIngestionService {
 
         val countQuery = """
             SELECT count()
-            FROM $clickhouseDb.profiles
+            FROM `$clickhouseDb`.profiles
             WHERE $whereClause
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
@@ -250,7 +250,7 @@ object ProfileIngestionService {
                 toString(end_time) as end_time,
                 duration_ns, storage_key,
                 tags, size_bytes, source
-            FROM $clickhouseDb.profiles
+            FROM `$clickhouseDb`.profiles
             WHERE $whereClause
             ORDER BY start_time DESC
             LIMIT $limit OFFSET $offset
@@ -321,7 +321,7 @@ object ProfileIngestionService {
     ): String? {
         val query = """
             SELECT storage_key
-            FROM $clickhouseDb.profiles
+            FROM `$clickhouseDb`.profiles
             WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
               AND toString(profile_id) = '${escapeSql(profileId)}'
             LIMIT 1
@@ -347,7 +347,7 @@ object ProfileIngestionService {
     ): ProfileMeta? {
         val query = """
             SELECT storage_key, profile_type, source
-            FROM $clickhouseDb.profiles
+            FROM `$clickhouseDb`.profiles
             WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
               AND toString(profile_id) = '${escapeSql(profileId)}'
             LIMIT 1
@@ -386,7 +386,7 @@ object ProfileIngestionService {
         if (runtimeId.isBlank()) return null
         val query = """
             SELECT toString(profile_id), storage_key
-            FROM $clickhouseDb.profiles
+            FROM `$clickhouseDb`.profiles
             WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
               AND (tags['runtime_id'] = '${escapeSql(runtimeId)}'
                 OR tags['runtime-id'] = '${escapeSql(runtimeId)}')

@@ -184,7 +184,7 @@ object SecurityIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.security_events (
+            """INSERT INTO `$clickhouseDb`.security_events (
                 organization_id, rule_id, rule_name, rule_category,
                 severity, agent_rule_version, event_type,
                 process_name, file_path, host, env, tags, timestamp
@@ -208,7 +208,7 @@ object SecurityIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.security_dumps (
+            """INSERT INTO `$clickhouseDb`.security_dumps (
                 organization_id, activity_type, process_name,
                 host, duration_ns, dump_data, tags, timestamp
             ) VALUES $rows""",
@@ -238,7 +238,7 @@ object SecurityIngestionService {
             )"""
         }
         executeInsert(
-            """INSERT INTO $clickhouseDb.compliance_findings (
+            """INSERT INTO `$clickhouseDb`.compliance_findings (
                 organization_id, framework, rule_id, rule_name,
                 status, resource_type, resource_id, resource_name,
                 tags, evaluated_at

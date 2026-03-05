@@ -421,7 +421,7 @@ class NotificationService(private val emailService: EmailService) {
                 count() as total_events,
                 uniq(issue_id) as unique_issues,
                 uniq(user_id) as unique_users
-            FROM $clickhouseDb.events
+            FROM `$clickhouseDb`.events
             WHERE project_id IN (${projectIds.joinToString(",")})
               AND timestamp >= fromUnixTimestamp64Milli($startMs)
               AND timestamp < fromUnixTimestamp64Milli($endMs)
@@ -461,7 +461,7 @@ class NotificationService(private val emailService: EmailService) {
                 any(culprit) as culprit,
                 any(project_id) as project_id,
                 count() as event_count
-            FROM $clickhouseDb.events
+            FROM `$clickhouseDb`.events
             WHERE project_id IN (${projectIds.joinToString(",")})
               AND timestamp >= fromUnixTimestamp64Milli($startMs)
               AND timestamp < fromUnixTimestamp64Milli($endMs)

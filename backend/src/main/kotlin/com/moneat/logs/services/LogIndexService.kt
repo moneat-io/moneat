@@ -225,7 +225,7 @@ class LogIndexService {
 
         val totalSql = """
             SELECT count() AS cnt
-            FROM $clickhouseDb.logs
+            FROM `$clickhouseDb`.logs
             WHERE $orgClause AND $timeClause
             FORMAT JSONEachRow
         """.trimIndent()
@@ -246,7 +246,7 @@ class LogIndexService {
                     )
                     val matchSql = """
                         SELECT count() AS cnt
-                        FROM $clickhouseDb.logs
+                        FROM `$clickhouseDb`.logs
                         WHERE $orgClause AND $timeClause
                           AND ($filterSql)
                         FORMAT JSONEachRow

@@ -144,7 +144,7 @@ fun Route.securityRoutes() {
                 if (host != null) conditions.add("host = '$host'")
 
                 val query = """
-                    SELECT * FROM $db.security_events
+                    SELECT * FROM `$db`.security_events
                     WHERE ${conditions.joinToString(" AND ")}
                     ORDER BY timestamp DESC
                     LIMIT $limit
@@ -152,7 +152,7 @@ fun Route.securityRoutes() {
                 """.trimIndent()
 
                 val countQuery = """
-                    SELECT count() FROM $db.security_events
+                    SELECT count() FROM `$db`.security_events
                     WHERE ${conditions.joinToString(" AND ")}
                 """.trimIndent()
 
@@ -205,7 +205,7 @@ fun Route.securityRoutes() {
                 if (status != null) conditions.add("status = '$status'")
 
                 val query = """
-                    SELECT * FROM $db.compliance_findings
+                    SELECT * FROM `$db`.compliance_findings
                     WHERE ${conditions.joinToString(" AND ")}
                     ORDER BY evaluated_at DESC
                     LIMIT $limit
@@ -213,7 +213,7 @@ fun Route.securityRoutes() {
                 """.trimIndent()
 
                 val countQuery = """
-                    SELECT count() FROM $db.compliance_findings
+                    SELECT count() FROM `$db`.compliance_findings
                     WHERE ${conditions.joinToString(" AND ")}
                 """.trimIndent()
 

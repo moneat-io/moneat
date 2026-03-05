@@ -121,7 +121,7 @@ class LlmDashboardService {
                 sum(cost_usd) as total_cost,
                 avg(duration_ms) as avg_duration_ms,
                 countIf(status = 'error') * 100.0 / greatest(count(), 1) as error_rate
-            FROM $clickhouseDb.llm_generations
+            FROM `$clickhouseDb`.llm_generations
             WHERE $projectFilter
               AND $timeFilter
             FORMAT JSONEachRow
@@ -136,7 +136,7 @@ class LlmDashboardService {
                 sum(total_tokens) as tokens,
                 sum(cost_usd) as cost,
                 countIf(status = 'error') as errors
-            FROM $clickhouseDb.llm_generations
+            FROM `$clickhouseDb`.llm_generations
             WHERE $projectFilter
               AND $timeFilter
             GROUP BY ts
@@ -155,7 +155,7 @@ class LlmDashboardService {
                 sum(cost_usd) as total_cost,
                 avg(duration_ms) as avg_duration_ms,
                 countIf(status = 'error') * 100.0 / greatest(count(), 1) as error_rate
-            FROM $clickhouseDb.llm_generations
+            FROM `$clickhouseDb`.llm_generations
             WHERE $projectFilter
               AND $timeFilter
             GROUP BY model, provider
@@ -237,7 +237,7 @@ class LlmDashboardService {
 
         val countQuery =
             """
-            SELECT count() as total FROM $clickhouseDb.llm_generations WHERE $where FORMAT JSONEachRow
+            SELECT count() as total FROM `$clickhouseDb`.llm_generations WHERE $where FORMAT JSONEachRow
             """.trimIndent()
 
         val dataQuery =
@@ -251,7 +251,7 @@ class LlmDashboardService {
                 input_tokens, output_tokens, total_tokens, cost_usd,
                 toString(status) as status, error_message,
                 user_id, environment, release
-            FROM $clickhouseDb.llm_generations
+            FROM `$clickhouseDb`.llm_generations
             WHERE $where
             ORDER BY timestamp DESC
             LIMIT $pageSize OFFSET $offset
@@ -325,7 +325,7 @@ class LlmDashboardService {
                 toString(status) as status, error_message, status_code,
                 user_id, session_id, environment, release,
                 tags, metadata
-            FROM $clickhouseDb.llm_generations
+            FROM `$clickhouseDb`.llm_generations
             WHERE $projectFilter AND toString(generation_id) = '$escapedId'
             LIMIT 1
             FORMAT JSONEachRow
@@ -391,7 +391,7 @@ class LlmDashboardService {
                 toString(status) as status, error_message, status_code,
                 user_id, session_id, environment, release,
                 tags, metadata
-            FROM $clickhouseDb.llm_generations
+            FROM `$clickhouseDb`.llm_generations
             WHERE $projectFilter AND trace_id = '$escapedTraceId'
             ORDER BY timestamp ASC
             FORMAT JSONEachRow
@@ -465,7 +465,7 @@ class LlmDashboardService {
                 sum(cost_usd) as total_cost,
                 sum(total_tokens) as total_tokens,
                 count() as call_count
-            FROM $clickhouseDb.llm_generations
+            FROM `$clickhouseDb`.llm_generations
             WHERE $projectFilter AND $timeFilter
             GROUP BY model, provider
             ORDER BY total_cost DESC
@@ -480,7 +480,7 @@ class LlmDashboardService {
                 sum(total_tokens) as tokens,
                 sum(cost_usd) as cost,
                 countIf(status = 'error') as errors
-            FROM $clickhouseDb.llm_generations
+            FROM `$clickhouseDb`.llm_generations
             WHERE $projectFilter AND $timeFilter
             GROUP BY ts
             ORDER BY ts
@@ -537,7 +537,7 @@ class LlmDashboardService {
                 sum(cost_usd) as total_cost,
                 avg(duration_ms) as avg_duration_ms,
                 countIf(status = 'error') * 100.0 / greatest(count(), 1) as error_rate
-            FROM $clickhouseDb.llm_generations
+            FROM `$clickhouseDb`.llm_generations
             WHERE $projectFilter AND $timeFilter
             GROUP BY model, provider
             ORDER BY call_count DESC
