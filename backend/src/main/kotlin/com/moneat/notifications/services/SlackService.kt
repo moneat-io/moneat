@@ -245,14 +245,14 @@ class SlackService {
         }
     }
 
-    suspend fun sendSystemAlert(
+    suspend fun sendHostAlert(
         organizationId: Int,
-        systemName: String,
+        hostName: String,
         metric: String,
         condition: String,
         threshold: String,
         currentValue: String,
-        systemId: UUID,
+        hostId: Int,
         baseUrl: String
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
@@ -264,7 +264,7 @@ class SlackService {
                     text =
                     SlackText(
                         type = "plain_text",
-                        text = "⚠️ System Alert",
+                        text = "⚠️ Host Alert",
                         emoji = true
                     )
                 )
@@ -276,7 +276,7 @@ class SlackService {
                     type = "section",
                     fields =
                     listOf(
-                        SlackText(type = "mrkdwn", text = "*System:*\n$systemName"),
+                        SlackText(type = "mrkdwn", text = "*Host:*\n$hostName"),
                         SlackText(type = "mrkdwn", text = "*Metric:*\n$metric"),
                         SlackText(type = "mrkdwn", text = "*Condition:*\n$condition $threshold"),
                         SlackText(type = "mrkdwn", text = "*Current Value:*\n$currentValue")
@@ -288,8 +288,8 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View System"),
-                            url = "$baseUrl/monitoring?system=$systemId"
+                            text = SlackText(type = "plain_text", text = "View Host"),
+                            url = "$baseUrl/monitoring/hosts/$hostId"
                         )
                     )
                 )
@@ -300,7 +300,7 @@ class SlackService {
                 SlackAttachment(
                     color = "#ECB22E", // Warning yellow
                     blocks = attachmentBlocks,
-                    fallback = "⚠️ System Alert: $systemName"
+                    fallback = "⚠️ Host Alert: $hostName"
                 )
             )
 
@@ -310,16 +310,16 @@ class SlackService {
                 channel = config.channelId,
                 blocks = mainBlocks,
                 attachments = attachments,
-                fallbackText = "⚠️ System Alert: $systemName - $metric $condition $threshold (current: $currentValue)"
+                fallbackText = "⚠️ Host Alert: $hostName - $metric $condition $threshold (current: $currentValue)"
             )
         return success
     }
 
-    suspend fun sendSystemDown(
+    suspend fun sendHostDown(
         organizationId: Int,
-        systemName: String,
+        hostName: String,
         lastSeen: String,
-        systemId: UUID,
+        hostId: Int,
         baseUrl: String
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
@@ -331,7 +331,7 @@ class SlackService {
                     text =
                     SlackText(
                         type = "plain_text",
-                        text = "🔴 System Down",
+                        text = "🔴 Host Down",
                         emoji = true
                     )
                 )
@@ -343,7 +343,7 @@ class SlackService {
                     type = "section",
                     fields =
                     listOf(
-                        SlackText(type = "mrkdwn", text = "*System:*\n$systemName"),
+                        SlackText(type = "mrkdwn", text = "*Host:*\n$hostName"),
                         SlackText(type = "mrkdwn", text = "*Last Seen:*\n$lastSeen")
                     )
                 ),
@@ -353,8 +353,8 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View System"),
-                            url = "$baseUrl/monitoring?system=$systemId"
+                            text = SlackText(type = "plain_text", text = "View Host"),
+                            url = "$baseUrl/monitoring/hosts/$hostId"
                         )
                     )
                 )
@@ -365,7 +365,7 @@ class SlackService {
                 SlackAttachment(
                     color = "#E01E5A", // Error red
                     blocks = attachmentBlocks,
-                    fallback = "🔴 System Down: $systemName"
+                    fallback = "🔴 Host Down: $hostName"
                 )
             )
 
@@ -375,15 +375,15 @@ class SlackService {
                 channel = config.channelId,
                 blocks = mainBlocks,
                 attachments = attachments,
-                fallbackText = "🔴 System Down: $systemName - $lastSeen"
+                fallbackText = "🔴 Host Down: $hostName - $lastSeen"
             )
         return success
     }
 
-    suspend fun sendSystemUp(
+    suspend fun sendHostUp(
         organizationId: Int,
-        systemName: String,
-        systemId: UUID,
+        hostName: String,
+        hostId: Int,
         baseUrl: String
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
@@ -395,7 +395,7 @@ class SlackService {
                     text =
                     SlackText(
                         type = "plain_text",
-                        text = "🟢 System Recovered",
+                        text = "🟢 Host Recovered",
                         emoji = true
                     )
                 )
@@ -408,7 +408,7 @@ class SlackService {
                     text =
                     SlackText(
                         type = "mrkdwn",
-                        text = "*System:* $systemName\n\nThe system is now reporting data again."
+                        text = "*Host:* $hostName\n\nThe host is now reporting data again."
                     )
                 ),
                 SlackBlock(
@@ -417,8 +417,8 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View System"),
-                            url = "$baseUrl/monitoring?system=$systemId"
+                            text = SlackText(type = "plain_text", text = "View Host"),
+                            url = "$baseUrl/monitoring/hosts/$hostId"
                         )
                     )
                 )
@@ -429,7 +429,7 @@ class SlackService {
                 SlackAttachment(
                     color = "#2EB67D", // Success green
                     blocks = attachmentBlocks,
-                    fallback = "🟢 System Recovered: $systemName"
+                    fallback = "🟢 Host Recovered: $hostName"
                 )
             )
 
@@ -439,7 +439,7 @@ class SlackService {
                 channel = config.channelId,
                 blocks = mainBlocks,
                 attachments = attachments,
-                fallbackText = "🟢 System Recovered: $systemName"
+                fallbackText = "🟢 Host Recovered: $hostName"
             )
         return success
     }

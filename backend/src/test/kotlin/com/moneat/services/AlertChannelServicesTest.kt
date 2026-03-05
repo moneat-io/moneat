@@ -28,7 +28,6 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.*
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -90,14 +89,14 @@ class AlertChannelServicesTest {
             val slackService = SlackService()
 
             val sent =
-                slackService.sendSystemAlert(
+                slackService.sendHostAlert(
                     organizationId = orgId,
-                    systemName = "api-prod",
+                    hostName = "api-prod",
                     metric = "CPU Usage",
                     condition = ">",
                     threshold = "80%",
                     currentValue = "95%",
-                    systemId = UUID.randomUUID(),
+                    hostId = 1,
                     baseUrl = "https://app.moneat.io"
                 )
 
@@ -111,14 +110,14 @@ class AlertChannelServicesTest {
             val discordService = DiscordService()
 
             val sent =
-                discordService.sendSystemAlert(
+                discordService.sendHostAlert(
                     organizationId = orgId,
-                    systemName = "api-prod",
+                    hostName = "api-prod",
                     metric = "CPU Usage",
                     condition = ">",
                     threshold = "80%",
                     currentValue = "95%",
-                    systemId = UUID.randomUUID(),
+                    hostId = 1,
                     baseUrl = "https://app.moneat.io"
                 )
 

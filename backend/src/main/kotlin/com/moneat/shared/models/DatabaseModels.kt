@@ -18,7 +18,6 @@ package com.moneat.shared.models
 
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
-import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -409,22 +408,6 @@ object Hosts : Table("hosts") {
     override val primaryKey = PrimaryKey(id)
 }
 
-object Systems : Table("systems") {
-    val id = javaUUID("id")
-    val organization_id = integer("organization_id").references(Organizations.id)
-    val name = varchar("name", 255)
-    val host = varchar("host", 255).nullable()
-    val agent_key_hash = varchar("agent_key_hash", 255)
-    val status = varchar("status", 20)
-    val last_seen_at = timestamp("last_seen_at").nullable()
-    val agent_version = varchar("agent_version", 20).nullable()
-    val os = varchar("os", 100).nullable()
-    val arch = varchar("arch", 20).nullable()
-    val created_at = timestamp("created_at")
-    val updated_at = timestamp("updated_at")
-    override val primaryKey = PrimaryKey(id)
-}
-
 object HostAlerts : Table("host_alerts") {
     val id = integer("id").autoIncrement()
     val host_id = integer("host_id").references(Hosts.id)
@@ -455,21 +438,6 @@ object HostAlertTemplateStates : Table("host_alert_template_states") {
     override val primaryKey = PrimaryKey(template_alert_id, host_id)
 }
 
-object SystemAlerts : Table("system_alerts") {
-    val id = integer("id").autoIncrement()
-    val system_id = javaUUID("system_id").references(Systems.id)
-    val organization_id = integer("organization_id").references(Organizations.id)
-    val metric = varchar("metric", 50)
-    val condition = varchar("condition", 20)
-    val threshold = double("threshold")
-    val duration_seconds = integer("duration_seconds")
-    val enabled = bool("enabled")
-    val last_triggered_at = timestamp("last_triggered_at").nullable()
-    val incident_severity = varchar("incident_severity", 20).nullable()
-    val created_at = timestamp("created_at")
-    override val primaryKey = PrimaryKey(id)
-}
-
 object OrganizationAlertTemplates : Table("organization_alert_templates") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)
@@ -482,21 +450,6 @@ object OrganizationAlertTemplates : Table("organization_alert_templates") {
     val created_at = timestamp("created_at")
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
-}
-
-object SystemAlertSettings : Table("system_alert_settings") {
-    val system_id = javaUUID("system_id").references(Systems.id)
-    val organization_id = integer("organization_id").references(Organizations.id)
-    val scope = varchar("scope", 20).default("system")
-    val updated_at = timestamp("updated_at")
-    override val primaryKey = PrimaryKey(system_id)
-}
-
-object SystemAlertTemplateStates : Table("system_alert_template_states") {
-    val template_alert_id = integer("template_alert_id").references(OrganizationAlertTemplates.id)
-    val system_id = javaUUID("system_id").references(Systems.id)
-    val last_triggered_at = timestamp("last_triggered_at").nullable()
-    override val primaryKey = PrimaryKey(template_alert_id, system_id)
 }
 
 object AlertSilencePeriods : Table("alert_silence_periods") {

@@ -43,8 +43,8 @@ enum class IncidentStatus {
 }
 
 enum class AlertSource {
-    SYSTEM_ALERT,
-    SYSTEM_DOWN,
+    HOST_ALERT,
+    HOST_DOWN,
     UPTIME_MONITOR,
     ERROR_ALERT,
     DASHBOARD_ALERT

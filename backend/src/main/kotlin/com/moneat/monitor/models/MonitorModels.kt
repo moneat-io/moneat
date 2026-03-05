@@ -75,21 +75,6 @@ data class HostResponse(
 )
 
 @Serializable
-data class SystemResponse(
-    val id: String,
-    @SerialName("project_id") val projectId: Long,
-    val name: String,
-    val host: String?,
-    val status: String,
-    val last_seen_at: Long?,
-    val agent_version: String?,
-    val os: String?,
-    val arch: String?,
-    val created_at: Long,
-    val latest_metrics: LatestMetrics?
-)
-
-@Serializable
 data class LatestMetrics(
     val cpu_percent: Float,
     val mem_total: Long,
@@ -106,18 +91,6 @@ data class LatestMetrics(
     val temp_max: Float?,
     val gpu_percent: Float?,
     val battery_percent: Float?
-)
-
-@Serializable
-data class CreateSystemRequest(
-    val name: String
-)
-
-@Serializable
-data class CreateSystemResponse(
-    val system: SystemResponse,
-    val agent_key: String,
-    val docker_command: String
 )
 
 @Serializable
@@ -276,25 +249,6 @@ data class HostData(
 )
 
 @Serializable
-data class SystemData(
-    @Serializable(with = UUIDSerializer::class)
-    val id: UUID,
-    val organizationId: Int,
-    val name: String,
-    val host: String?,
-    val status: String,
-    @Serializable(with = KotlinInstantSerializer::class)
-    val lastSeenAt: kotlin.time.Instant?,
-    val agentVersion: String?,
-    val os: String?,
-    val arch: String?,
-    @Serializable(with = KotlinInstantSerializer::class)
-    val createdAt: kotlin.time.Instant,
-    @Serializable(with = KotlinInstantSerializer::class)
-    val updatedAt: kotlin.time.Instant
-)
-
-@Serializable
 data class CreateSilencePeriodRequest(
     val reason: String? = null,
     @SerialName("starts_at") val startsAt: Long,
@@ -314,7 +268,7 @@ data class SilencePeriodResponse(
 
 data class AlertData(
     val id: Int,
-    val systemId: UUID,
+    val hostId: Int,
     val organizationId: Int,
     val metric: String,
     val condition: String,
@@ -323,7 +277,7 @@ data class AlertData(
     val enabled: Boolean,
     val lastTriggeredAt: kotlin.time.Instant?,
     val createdAt: kotlin.time.Instant,
-    val scope: String = "system",
+    val scope: String = "host",
     val templateAlertId: Int? = null
 )
 

@@ -75,7 +75,7 @@ class IncidentServiceTest {
 
             IncidentRoutingRules.insert {
                 it[IncidentRoutingRules.providerConfigId] = this@IncidentServiceTest.providerConfigId
-                it[alertSource] = AlertSource.SYSTEM_ALERT.name
+                it[alertSource] = AlertSource.HOST_ALERT.name
                 it[alertType] = null
                 it[incidentSeverity] = "medium"
                 it[createdAt] = Clock.System.now()
@@ -91,7 +91,7 @@ class IncidentServiceTest {
         val severity =
             service.resolveIncidentSeverity(
                 providerConfigId = providerConfigId,
-                alertSource = AlertSource.SYSTEM_ALERT,
+                alertSource = AlertSource.HOST_ALERT,
                 monitorSeverityOverride = "critical"
             )
 
@@ -105,7 +105,7 @@ class IncidentServiceTest {
         val severity =
             service.resolveIncidentSeverity(
                 providerConfigId = providerConfigId,
-                alertSource = AlertSource.SYSTEM_ALERT,
+                alertSource = AlertSource.HOST_ALERT,
                 monitorSeverityOverride = null
             )
 
@@ -119,7 +119,7 @@ class IncidentServiceTest {
         val severity =
             service.resolveIncidentSeverity(
                 providerConfigId = providerConfigId,
-                alertSource = AlertSource.SYSTEM_ALERT,
+                alertSource = AlertSource.HOST_ALERT,
                 monitorSeverityOverride = "not-a-severity"
             )
 

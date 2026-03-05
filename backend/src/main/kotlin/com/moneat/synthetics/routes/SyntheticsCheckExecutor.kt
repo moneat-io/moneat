@@ -60,13 +60,24 @@ data class SyntheticCheckResult(
 open class SyntheticsCheckExecutor {
 
     private fun extractHostname(url: String): String? {
+        fun extractFromAuthority(authority: String): String? =
+            if (authority.startsWith("[")) {
+                authority.substringAfter("[").substringBefore("]").takeIf { it.isNotBlank() }
+            } else {
+                authority.split(":").firstOrNull()?.takeIf { it.isNotBlank() }
+            }
+
         return try {
             java.net.URI(url).host?.takeIf { it.isNotBlank() }
-                ?: url.removePrefix("https://").removePrefix("http://")
-                    .split("/").firstOrNull()?.split(":")?.firstOrNull()?.takeIf { it.isNotBlank() }
+                ?: extractFromAuthority(
+                    url.removePrefix("https://").removePrefix("http://")
+                        .split("/").firstOrNull() ?: ""
+                )
         } catch (_: Exception) {
-            url.removePrefix("https://").removePrefix("http://")
-                .split("/").firstOrNull()?.split(":")?.firstOrNull()
+            extractFromAuthority(
+                url.removePrefix("https://").removePrefix("http://")
+                    .split("/").firstOrNull() ?: ""
+            )
         }
     }
 

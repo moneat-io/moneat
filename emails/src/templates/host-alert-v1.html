@@ -1,0 +1,54 @@
+---
+hostName: "Production-DB-01"
+metric: "CPU Usage"
+condition: "exceeded"
+value: "92.5%"
+threshold: "90%"
+dashboardUrl: "https://moneat.io/monitoring/123"
+---
+<x-main>
+  <table class="w-full max-w-[600px]" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border-top: 6px solid #dc2626;">
+    
+    <!-- Header -->
+    <tr>
+      <td class="bg-white p-8 text-center">
+        <div style="display: inline-block; background-color: #fee2e2; border-radius: 50%; padding: 12px; margin-bottom: 16px;">
+          <span style="font-size: 32px; line-height: 1;">🚨</span>
+        </div>
+        <h1 class="text-2xl font-bold text-red-600 m-0 mb-2">Host Alert Triggered</h1>
+        <p class="text-gray-500 m-0 text-lg">Action required on <strong>{{ hostName }}</strong></p>
+      </td>
+    </tr>
+
+    <!-- Metric Card -->
+    <tr>
+      <td class="bg-white px-8 pb-8">
+        <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;">
+          <tr>
+            <td class="p-6 text-center">
+              <p class="text-xs uppercase tracking-wider font-semibold text-red-800 m-0 mb-2">{{ metric }}</p>
+              <p class="text-4xl font-bold text-red-600 m-0">{{ value }}</p>
+              <p class="text-sm text-red-800 m-0 mt-2 font-medium">Threshold: {{ condition }} {{ threshold }}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- CTA -->
+    <tr>
+      <td class="bg-white px-8 pb-8 text-center">
+        <a href="{{ dashboardUrl }}" class="inline-block bg-red-600 text-white font-semibold py-3 px-6 rounded-md no-underline hover:bg-red-700 transition-colors">
+          View Host Status
+        </a>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td>
+        <component src="src/components/footer.html"></component>
+      </td>
+    </tr>
+  </table>
+</x-main>

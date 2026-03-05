@@ -173,27 +173,27 @@ class DiscordService {
         }
     }
 
-    suspend fun sendSystemAlert(
+    suspend fun sendHostAlert(
         organizationId: Int,
-        systemName: String,
+        hostName: String,
         metric: String,
         condition: String,
         threshold: String,
         currentValue: String,
-        systemId: UUID,
+        hostId: Int,
         baseUrl: String
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
         val embed =
             DiscordEmbed(
-                title = "⚠️ System Alert",
-                description = "**$systemName** triggered an alert",
-                url = "$baseUrl/monitoring?system=$systemId",
+                title = "⚠️ Host Alert",
+                description = "**$hostName** triggered an alert",
+                url = "$baseUrl/monitoring/hosts/$hostId",
                 color = 0xECB22E, // Warning yellow
                 fields =
                 listOf(
-                    DiscordField("System", systemName, true),
+                    DiscordField("Host", hostName, true),
                     DiscordField("Metric", metric, true),
                     DiscordField("Condition", "$condition $threshold", true),
                     DiscordField("Current Value", currentValue, true)
@@ -206,29 +206,29 @@ class DiscordService {
             sendMessage(
                 channelId = config.channelId,
                 embed = embed,
-                fallbackText = "⚠️ System Alert: $systemName - $metric $condition $threshold (current: $currentValue)"
+                fallbackText = "⚠️ Host Alert: $hostName - $metric $condition $threshold (current: $currentValue)"
             )
         return success
     }
 
-    suspend fun sendSystemDown(
+    suspend fun sendHostDown(
         organizationId: Int,
-        systemName: String,
+        hostName: String,
         lastSeen: String,
-        systemId: UUID,
+        hostId: Int,
         baseUrl: String
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
         val embed =
             DiscordEmbed(
-                title = "🔴 System Down",
-                description = "**$systemName** is not responding",
-                url = "$baseUrl/monitoring?system=$systemId",
+                title = "🔴 Host Down",
+                description = "**$hostName** is not responding",
+                url = "$baseUrl/monitoring/hosts/$hostId",
                 color = 0xE01E5A, // Error red
                 fields =
                 listOf(
-                    DiscordField("System", systemName, true),
+                    DiscordField("Host", hostName, true),
                     DiscordField("Last Seen", lastSeen, true)
                 ),
                 footer = DiscordFooter("Moneat Alert"),
@@ -239,28 +239,28 @@ class DiscordService {
             sendMessage(
                 channelId = config.channelId,
                 embed = embed,
-                fallbackText = "🔴 System Down: $systemName - Last seen $lastSeen"
+                fallbackText = "🔴 Host Down: $hostName - $lastSeen"
             )
         return success
     }
 
-    suspend fun sendSystemUp(
+    suspend fun sendHostUp(
         organizationId: Int,
-        systemName: String,
-        systemId: UUID,
+        hostName: String,
+        hostId: Int,
         baseUrl: String
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
         val embed =
             DiscordEmbed(
-                title = "✅ System Recovered",
-                description = "**$systemName** is back online",
-                url = "$baseUrl/monitoring?system=$systemId",
+                title = "✅ Host Recovered",
+                description = "**$hostName** is back online",
+                url = "$baseUrl/monitoring/hosts/$hostId",
                 color = 0x2EB67D, // Success green
                 fields =
                 listOf(
-                    DiscordField("System", systemName, true),
+                    DiscordField("Host", hostName, true),
                     DiscordField("Status", "Online", true)
                 ),
                 footer = DiscordFooter("Moneat Alert"),
@@ -271,7 +271,7 @@ class DiscordService {
             sendMessage(
                 channelId = config.channelId,
                 embed = embed,
-                fallbackText = "✅ System Recovered: $systemName"
+                fallbackText = "✅ Host Recovered: $hostName"
             )
         return success
     }

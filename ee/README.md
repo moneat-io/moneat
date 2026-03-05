@@ -58,7 +58,7 @@ Payload fields:
 | `--key` | ✅ | Path to the private key PEM file |
 | `--customer` | ✅ | Customer name (informational, embedded in key) |
 | `--plan` | | Plan name. Defaults to `enterprise`. |
-| `--features` | | Comma-separated feature names: `sso`, `oncall`, or `sso,oncall`. Defaults to all features. |
+| `--features` | | Comma-separated feature names: `sso`, `oncall`, or `sso,oncall`. Defaults to all licensed features (`sso,oncall`). |
 | `--expires` | | Expiry date `yyyy-MM-dd`. Omit for no expiry. |
 
 Output is the license key string. Give it to the customer to set as:

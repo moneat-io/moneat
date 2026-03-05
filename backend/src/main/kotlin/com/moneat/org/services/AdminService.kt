@@ -23,6 +23,9 @@ import com.moneat.shared.models.AlertNotificationPreferences
 import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.AuthTokens
 import com.moneat.shared.models.EmailsSent
+import com.moneat.shared.models.HostAlertSettings
+import com.moneat.shared.models.HostAlerts
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.OrgInvitations
@@ -36,9 +39,6 @@ import com.moneat.shared.models.ReleaseFiles
 import com.moneat.shared.models.Releases
 import com.moneat.shared.models.SsoConfigurations
 import com.moneat.shared.models.Subscriptions
-import com.moneat.shared.models.SystemAlertSettings
-import com.moneat.shared.models.SystemAlerts
-import com.moneat.shared.models.Systems
 import com.moneat.shared.models.UsageRecords
 import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.UserSsoLinks
@@ -1045,21 +1045,13 @@ class AdminService {
             // Delete alert templates
             OrganizationAlertTemplates.deleteWhere { OrganizationAlertTemplates.organization_id eq orgId }
 
-            // Delete systems
-            val systemIds =
-                Systems
-                    .selectAll()
-                    .where { Systems.organization_id eq orgId }
-                    .map { it[Systems.id] }
-
-            // Delete system alerts (through system relationship)
-            systemIds.forEach { systemId ->
-                SystemAlerts.deleteWhere { SystemAlerts.system_id eq systemId }
-                SystemAlertSettings.deleteWhere { SystemAlertSettings.system_id eq systemId }
+            // Delete host alerts and settings
+            val hostIds = Hosts.selectAll().where { Hosts.organization_id eq orgId }.map { it[Hosts.id] }
+            if (hostIds.isNotEmpty()) {
+                HostAlerts.deleteWhere { HostAlerts.host_id inList hostIds }
+                HostAlertSettings.deleteWhere { HostAlertSettings.host_id inList hostIds }
             }
-
-            // Now delete systems
-            Systems.deleteWhere { Systems.organization_id eq orgId }
+            Hosts.deleteWhere { Hosts.organization_id eq orgId }
 
             // Delete the organization itself
             Organizations.deleteWhere { Organizations.id eq orgId }

@@ -82,7 +82,7 @@ Search logs with filters.
 | `to` | string | No | End time (ISO 8601) |
 | `limit` | number | No | Max results (default 100) |
 | `cursor` | string | No | Pagination cursor |
-| `system_id` | string | No | Host/system ID |
+| `host_id` | integer | No | Host ID |
 | `container_name` | string | No | Container name |
 
 ### `aggregate_logs`
@@ -127,7 +127,7 @@ Get status for a specific host.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
+| `host_id` | integer | Yes | Host ID |
 
 ### ✏️ `create_host`
 Register a new monitored host.
@@ -141,14 +141,14 @@ Delete a monitored host.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
+| `host_id` | integer | Yes | Host ID |
 
 ### `get_host_metrics`
 Get historical metrics for a host (CPU, memory, disk, network).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
+| `host_id` | integer | Yes | Host ID |
 | `hours` | number | No | Hours of history (default 24, max 168) |
 
 ### `get_container_metrics`
@@ -156,15 +156,15 @@ Get metrics for containers on a host.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
+| `host_id` | integer | Yes | Host ID |
 | `container_name` | string | No | Filter by container name |
 
 ### `get_host_logs`
-Get system-level logs for a host. Delegates to `query_logs` with system filter.
+Get host-level logs for a host. Delegates to `query_logs` with a host filter, filtering by `host_id`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
+| `host_id` | integer | Yes | Host ID |
 | `hours` | number | No | Hours of history (default 24) |
 | `level` | string | No | `error`, `warn`, `info`, `debug` |
 
@@ -173,7 +173,7 @@ Get current alert thresholds for a host.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
+| `host_id` | integer | Yes | Host ID |
 
 ## APM Tools
 
@@ -320,14 +320,14 @@ List monitoring alerts for a host.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
+| `host_id` | integer | Yes | Host ID |
 
 ### ✏️ `create_alert`
 Create a monitoring alert on a host.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
+| `host_id` | integer | Yes | Host ID |
 | `metric` | string | Yes | `cpu`, `memory`, `disk`, `network_in`, `network_out` |
 | `condition` | string | Yes | `gt`, `lt`, `eq` |
 | `threshold` | number | Yes | Threshold value |
@@ -339,7 +339,7 @@ Update a monitoring alert.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
+| `host_id` | integer | Yes | Host ID |
 | `alert_id` | string | Yes | Alert UUID |
 | `metric` | string | No | Metric name |
 | `condition` | string | No | `gt`, `lt`, `eq` |
@@ -351,7 +351,7 @@ Delete a monitoring alert.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
+| `host_id` | integer | Yes | Host ID |
 | `alert_id` | string | Yes | Alert UUID |
 
 ### `list_silence_periods`
@@ -362,8 +362,8 @@ Create an alert silence period.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `system_id` | string | Yes | Host/system UUID |
-| `duration_minutes` | number | Yes | Silence duration |
+| `starts_at` | integer | Yes | Silence start time (epoch milliseconds) |
+| `ends_at` | integer | Yes | Silence end time (epoch milliseconds) |
 | `reason` | string | No | Reason for silencing |
 
 ### ✏️ `delete_silence_period`
@@ -577,7 +577,7 @@ Update alert notification channel preferences.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `alert_source` | string | Yes | `system_alert`, `uptime_alert`, `dashboard_alert` |
+| `alert_source` | string | Yes | `host_alert`, `uptime_alert`, `dashboard_alert` |
 | `email_enabled` | boolean | Yes | Enable email notifications |
 | `slack_enabled` | boolean | Yes | Enable Slack notifications |
 | `discord_enabled` | boolean | Yes | Enable Discord notifications |

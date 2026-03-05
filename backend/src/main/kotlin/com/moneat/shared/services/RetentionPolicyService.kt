@@ -21,7 +21,6 @@ import com.moneat.billing.services.PricingTierService
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
-import com.moneat.shared.models.Systems
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -49,20 +48,6 @@ class RetentionPolicyService(
                         .where { Projects.id eq projectId }
                         .firstOrNull()
                         ?.get(Projects.organization_id)
-                }
-            organizationId?.let { getRetentionDaysForOrganization(it) }
-        }
-    }
-
-    suspend fun getRetentionDaysForSystem(systemId: UUID): Int? {
-        return CacheService.cached("cache:retention:system:$systemId", RETENTION_CACHE_TTL_SECONDS) {
-            val organizationId =
-                transaction {
-                    Systems
-                        .selectAll()
-                        .where { Systems.id eq systemId }
-                        .firstOrNull()
-                        ?.get(Systems.organization_id)
                 }
             organizationId?.let { getRetentionDaysForOrganization(it) }
         }

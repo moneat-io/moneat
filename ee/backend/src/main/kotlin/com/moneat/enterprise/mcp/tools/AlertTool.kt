@@ -22,19 +22,19 @@ class ListAlertsTool : McpTool {
         "List monitoring alerts for a specific host"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("system_id" to schemaString("Host/system UUID"))
+            mapOf("host_id" to schemaInteger("Host ID (integer)"))
         ),
-        required = listOf("system_id")
+        required = listOf("host_id")
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["system_id"]?.jsonPrimitive?.content
-            ?: return errorResult("system_id is required")
-        val hostId = systemId.toIntOrNull()
-            ?: return errorResult("Invalid system_id format")
+        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
+            ?: return errorResult("host_id is required")
+        val hostId = hostIdRaw.toIntOrNull()
+            ?: return errorResult("Invalid host_id format")
         val alerts = monitorService.listAlerts(hostId, context.organizationId)
         return jsonResult(alerts)
     }

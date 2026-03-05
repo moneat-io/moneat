@@ -17,7 +17,7 @@
 import {useMemo, useState} from 'react'
 import {Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, type SystemAlert} from '@/lib/api'
+import {api, type HostAlert} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {
@@ -67,7 +67,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const queryClient = useQueryClient()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [editingAlert, setEditingAlert] = useState<SystemAlert | null>(null)
+  const [editingAlert, setEditingAlert] = useState<HostAlert | null>(null)
   const [createEnabled, setCreateEnabled] = useState(false)
 
   const {data: alertConfig, isLoading} = useQuery({
@@ -120,7 +120,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({alert, updates}: {alert: SystemAlert; updates: Partial<SystemAlert>}) =>
+    mutationFn: ({alert, updates}: {alert: HostAlert; updates: Partial<HostAlert>}) =>
       api.updateHostAlert(hostId, alert.id, updates, alert.scope as HostAlertScope),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
@@ -130,14 +130,14 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (alert: SystemAlert) => api.deleteHostAlert(hostId, alert.id, alert.scope as HostAlertScope),
+    mutationFn: (alert: HostAlert) => api.deleteHostAlert(hostId, alert.id, alert.scope as HostAlertScope),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
     },
   })
 
   const toggleMutation = useMutation({
-    mutationFn: ({alert, enabled}: {alert: SystemAlert; enabled: boolean}) =>
+    mutationFn: ({alert, enabled}: {alert: HostAlert; enabled: boolean}) =>
       api.updateHostAlert(hostId, alert.id, {enabled}, alert.scope as HostAlertScope),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})

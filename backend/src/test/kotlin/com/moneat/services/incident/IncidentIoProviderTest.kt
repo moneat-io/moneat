@@ -35,7 +35,7 @@ class IncidentIoProviderTest {
             description = "Primary database is unavailable",
             severity = IncidentSeverity.HIGH,
             status = IncidentStatus.FIRING,
-            source = AlertSource.SYSTEM_DOWN,
+            source = AlertSource.HOST_DOWN,
             deduplicationKey = "db-down-1",
             organizationId = 1,
             moneatUrl = "https://moneat.test/issues/1"

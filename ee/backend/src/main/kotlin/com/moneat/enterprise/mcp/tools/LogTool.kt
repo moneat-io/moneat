@@ -58,7 +58,7 @@ class QueryLogsTool : McpTool {
                 ),
                 "limit" to schemaNumber("Max results (default 100)"),
                 "cursor" to schemaString("Pagination cursor"),
-                "system_id" to schemaString("Host/system ID filter"),
+                "host_id" to schemaString("Host ID filter"),
                 "container_name" to schemaString("Container name filter")
             )
         )
@@ -95,7 +95,7 @@ class QueryLogsTool : McpTool {
             environment = args["environment"]?.jsonPrimitive?.content,
             from = args["from"]?.jsonPrimitive?.content ?: defaultFrom,
             to = args["to"]?.jsonPrimitive?.content ?: defaultTo,
-            systemId = args["system_id"]?.jsonPrimitive?.content,
+            systemId = args["host_id"]?.jsonPrimitive?.content,
             containerName = args["container_name"]?.jsonPrimitive?.content
         )
 

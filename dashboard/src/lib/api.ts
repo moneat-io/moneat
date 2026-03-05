@@ -373,7 +373,7 @@ interface NotificationPreferences {
   projects: ProjectNotificationPreference[]
 }
 
-export type AlertSource = 'SYSTEM_ALERT' | 'SYSTEM_DOWN' | 'UPTIME_MONITOR' | 'ERROR_ALERT' | 'DASHBOARD_ALERT'
+export type AlertSource = 'HOST_ALERT' | 'HOST_DOWN' | 'UPTIME_MONITOR' | 'ERROR_ALERT' | 'DASHBOARD_ALERT'
 
 export interface AlertNotificationPreference {
   alertSource: AlertSource
@@ -1010,16 +1010,6 @@ interface RawLogTopResponse {
   totalCount?: number
 }
 
-interface RawSystemAlertConfigResponse {
-  scope?: string
-  globalAlerts?: Record<string, unknown>[]
-  global_alerts?: Record<string, unknown>[]
-  systemAlerts?: Record<string, unknown>[]
-  system_alerts?: Record<string, unknown>[]
-  effectiveAlerts?: Record<string, unknown>[]
-  effective_alerts?: Record<string, unknown>[]
-}
-
 interface SdkVersionsResponse {
   fetchedAt: string
   cacheTtlSeconds: number
@@ -1435,10 +1425,10 @@ interface ContainerMetricsHistory {
   data_points: ContainerHistoricalDataPoint[]
 }
 
-interface SystemAlert {
+export interface HostAlert {
   id: number
-  systemId?: string
-  scope: 'global' | 'system' | 'host'
+  hostId?: number
+  scope: 'global' | 'host'
   metric: string
   condition: string
   threshold: number
@@ -1449,11 +1439,11 @@ interface SystemAlert {
   createdAt: number
 }
 
-interface SystemAlertConfig {
-  scope: 'global' | 'system'
-  globalAlerts: SystemAlert[]
-  systemAlerts: SystemAlert[]
-  effectiveAlerts: SystemAlert[]
+interface HostAlertConfig {
+  scope: 'global' | 'host'
+  globalAlerts: HostAlert[]
+  hostAlerts: HostAlert[]
+  effectiveAlerts: HostAlert[]
 }
 
 // Alert Silence Period Interfaces
@@ -3032,11 +3022,12 @@ class ApiClient {
     return response
   }
 
-  private mapSystemAlert(row: Record<string, unknown>): SystemAlert {
+  private mapHostAlert(row: Record<string, unknown>): HostAlert {
+    const rawScope = ((row.scope as string | undefined) ?? '').toLowerCase()
     return {
       id: row.id as number,
-      systemId: (row.systemId ?? row.system_id) as string | undefined,
-      scope: (row.scope ?? 'system') as 'global' | 'system',
+      hostId: (row.hostId ?? row.host_id) as number | undefined,
+      scope: rawScope === 'global' ? 'global' : 'host',
       metric: row.metric as string,
       condition: row.condition as string,
       threshold: row.threshold as number,
@@ -3045,15 +3036,6 @@ class ApiClient {
       incidentSeverity: (row.incidentSeverity ?? row.incident_severity ?? null) as string | null,
       lastTriggeredAt: (row.lastTriggeredAt ?? row.last_triggered_at) as number | undefined,
       createdAt: (row.createdAt ?? row.created_at) as number,
-    }
-  }
-
-  private mapHostAlert(row: Record<string, unknown>): SystemAlert {
-    const alert = this.mapSystemAlert(row)
-    const rawScope = ((row.scope as string | undefined) ?? '').toLowerCase()
-    return {
-      ...alert,
-      scope: rawScope === 'global' ? 'global' : 'host',
     }
   }
 
@@ -4648,67 +4630,20 @@ class ApiClient {
     )
   }
 
-  async getSystemAlerts(systemId: string) {
-    const config = await this.getSystemAlertConfig(systemId)
-    return config.effectiveAlerts
-  }
-
-  async getSystemAlertConfig(systemId: string) {
-    const response = await this.request<RawSystemAlertConfigResponse>(`${API_BASE}/monitor/systems/${systemId}/alerts/config`)
-    return {
-      scope: (response.scope ?? 'system') as 'global' | 'system',
-      globalAlerts: (response.globalAlerts ?? response.global_alerts ?? []).map((row) => this.mapSystemAlert(row)),
-      systemAlerts: (response.systemAlerts ?? response.system_alerts ?? []).map((row) => this.mapSystemAlert(row)),
-      effectiveAlerts: (response.effectiveAlerts ?? response.effective_alerts ?? []).map((row) => this.mapSystemAlert(row)),
-    } as SystemAlertConfig
-  }
-
-  async updateSystemAlertScope(systemId: string, scope: 'global' | 'system') {
-    return this.request<void>(`${API_BASE}/monitor/systems/${systemId}/alerts/scope`, {
-      method: 'PUT',
-      body: JSON.stringify({scope}),
-    })
-  }
-
-  async createSystemAlert(
-    systemId: string,
-    alert: {
-      metric: string
-      condition: string
-      threshold: number
-      durationSeconds?: number
-      enabled?: boolean
-    },
-    scope: 'global' | 'system' = 'system'
-  ) {
-    return this.request<SystemAlert>(`${API_BASE}/monitor/systems/${systemId}/alerts?scope=${scope}`, {
-      method: 'POST',
-      body: JSON.stringify(alert),
-    })
-  }
-
-  async updateSystemAlert(
-    systemId: string,
-    alertId: number,
-    updates: Partial<SystemAlert>,
-    scope: 'global' | 'system' = 'system'
-  ) {
-    return this.request<SystemAlert>(`${API_BASE}/monitor/systems/${systemId}/alerts/${alertId}?scope=${scope}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    })
-  }
-
-  async deleteSystemAlert(systemId: string, alertId: number, scope: 'global' | 'system' = 'system') {
-    return this.request<void>(`${API_BASE}/monitor/systems/${systemId}/alerts/${alertId}?scope=${scope}`, {
-      method: 'DELETE',
-    })
-  }
-
   // Host-based alert methods (using /monitor/hosts/{hostId}/alerts endpoints)
 
   async getHostAlertConfig(hostId: number) {
-    const response = await this.request<RawSystemAlertConfigResponse>(
+    const response = await this.request<{
+      scope?: string
+      globalAlerts?: Record<string, unknown>[]
+      global_alerts?: Record<string, unknown>[]
+      hostAlerts?: Record<string, unknown>[]
+      host_alerts?: Record<string, unknown>[]
+      systemAlerts?: Record<string, unknown>[]
+      system_alerts?: Record<string, unknown>[]
+      effectiveAlerts?: Record<string, unknown>[]
+      effective_alerts?: Record<string, unknown>[]
+    }>(
       `${API_BASE}/monitor/hosts/${hostId}/alerts/config`
     )
     return {
@@ -4716,9 +4651,11 @@ class ApiClient {
       globalAlerts: (response.globalAlerts ?? response.global_alerts ?? []).map(
         (row) => ({...this.mapHostAlert(row), scope: 'global' as const})
       ),
-      hostAlerts: (response.systemAlerts ?? response.system_alerts ?? []).map(
-        (row) => this.mapHostAlert(row)
-      ),
+      hostAlerts: (
+        response.hostAlerts ?? response.host_alerts ??
+        response.systemAlerts ?? response.system_alerts ??
+        []
+      ).map((row) => this.mapHostAlert(row)),
       effectiveAlerts: (response.effectiveAlerts ?? response.effective_alerts ?? []).map(
         (row) => this.mapHostAlert(row)
       ),
@@ -4744,22 +4681,24 @@ class ApiClient {
     },
     scope: 'global' | 'host' = 'host'
   ) {
-    return this.request<SystemAlert>(
+    const payload = await this.request<Record<string, unknown>>(
       `${API_BASE}/monitor/hosts/${hostId}/alerts?scope=${scope}`,
       { method: 'POST', body: JSON.stringify(alert) }
     )
+    return this.mapHostAlert(payload)
   }
 
   async updateHostAlert(
     hostId: number,
     alertId: number,
-    updates: Partial<SystemAlert>,
+    updates: Partial<HostAlert>,
     scope: 'global' | 'host' = 'host'
   ) {
-    return this.request<SystemAlert>(
+    const payload = await this.request<Record<string, unknown>>(
       `${API_BASE}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
       { method: 'PUT', body: JSON.stringify(updates) }
     )
+    return this.mapHostAlert(payload)
   }
 
   async deleteHostAlert(
@@ -5981,8 +5920,8 @@ export type {
   ContainerStats,
   ContainerHistoricalDataPoint,
   ContainerMetricsHistory,
-  SystemAlert,
-  SystemAlertConfig,
+  HostAlert,
+  HostAlertConfig,
   UptimeMonitor,
   CreateUptimeMonitorRequest,
   UpdateUptimeMonitorRequest,

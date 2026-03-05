@@ -341,7 +341,9 @@ fun Route.adminRoutes() {
                         try {
                             AlertSource.valueOf(request.source)
                         } catch (e: Exception) {
-                            AlertSource.SYSTEM_ALERT
+                            val msg = "Invalid AlertSource '${request.source}', defaulting to HOST_ALERT: ${e.message}"
+                            logger.warn { msg }
+                            AlertSource.HOST_ALERT
                         }
 
                     val event =
@@ -468,21 +470,21 @@ fun Route.adminRoutes() {
                                     emailSent = true
                                 }
 
-                                "system_up" -> {
-                                    emailService.sendSystemUpEmail(
+                                "system_up", "host_up" -> {
+                                    emailService.sendHostUpEmail(
                                         userEmail,
                                         "[TEST] Production API",
-                                        "$frontendUrl/monitoring"
+                                        "$frontendUrl/monitoring/hosts/1"
                                     )
                                     emailSent = true
                                 }
 
-                                "system_down" -> {
-                                    emailService.sendSystemDownEmail(
+                                "system_down", "host_down" -> {
+                                    emailService.sendHostDownEmail(
                                         userEmail,
                                         "[TEST] Production API",
                                         "2 minutes ago",
-                                        "$frontendUrl/monitoring"
+                                        "$frontendUrl/monitoring/hosts/1"
                                     )
                                     emailSent = true
                                 }
@@ -523,23 +525,23 @@ fun Route.adminRoutes() {
                                             )
                                     }
 
-                                    "system_up" -> {
+                                    "system_up", "host_up" -> {
                                         slackSent =
-                                            slackService.sendSystemUp(
+                                            slackService.sendHostUp(
                                                 organizationId = orgId,
-                                                systemName = "[TEST] Production API",
-                                                systemId = java.util.UUID.randomUUID(),
+                                                hostName = "[TEST] Production API",
+                                                hostId = 1,
                                                 baseUrl = frontendUrl
                                             )
                                     }
 
-                                    "system_down" -> {
+                                    "system_down", "host_down" -> {
                                         slackSent =
-                                            slackService.sendSystemDown(
+                                            slackService.sendHostDown(
                                                 organizationId = orgId,
-                                                systemName = "[TEST] Production API",
+                                                hostName = "[TEST] Production API",
                                                 lastSeen = "2 minutes ago",
-                                                systemId = java.util.UUID.randomUUID(),
+                                                hostId = 1,
                                                 baseUrl = frontendUrl
                                             )
                                     }
@@ -595,23 +597,23 @@ fun Route.adminRoutes() {
                                             )
                                     }
 
-                                    "system_up" -> {
+                                    "system_up", "host_up" -> {
                                         discordSent =
-                                            discordService.sendSystemUp(
+                                            discordService.sendHostUp(
                                                 organizationId = orgId,
-                                                systemName = "[TEST] Production API",
-                                                systemId = java.util.UUID.randomUUID(),
+                                                hostName = "[TEST] Production API",
+                                                hostId = 1,
                                                 baseUrl = frontendUrl
                                             )
                                     }
 
-                                    "system_down" -> {
+                                    "system_down", "host_down" -> {
                                         discordSent =
-                                            discordService.sendSystemDown(
+                                            discordService.sendHostDown(
                                                 organizationId = orgId,
-                                                systemName = "[TEST] Production API",
+                                                hostName = "[TEST] Production API",
                                                 lastSeen = "2 minutes ago",
-                                                systemId = java.util.UUID.randomUUID(),
+                                                hostId = 1,
                                                 baseUrl = frontendUrl
                                             )
                                     }
