@@ -13,7 +13,7 @@ import com.moneat.enterprise.mcp.tools.CreateAlertTool
 import com.moneat.enterprise.mcp.tools.CreateDashboardAlertTool
 import com.moneat.enterprise.mcp.tools.CreateDashboardTool
 import com.moneat.enterprise.mcp.tools.CreateDataSourceTool
-import com.moneat.enterprise.mcp.tools.CreateHostTool
+import com.moneat.enterprise.mcp.tools.CreateAgentKeyTool
 import com.moneat.enterprise.mcp.tools.CreateProjectTool
 import com.moneat.enterprise.mcp.tools.CreateSilencePeriodTool
 import com.moneat.enterprise.mcp.tools.CreateStatusPageIncidentTool
@@ -119,7 +119,7 @@ object McpToolRegistrar {
         // Monitor tools
         toolRegistry.register(ListHostsTool())
         toolRegistry.register(GetHostStatusTool())
-        toolRegistry.register(CreateHostTool())
+        toolRegistry.register(CreateAgentKeyTool())
         toolRegistry.register(DeleteHostTool())
 
         // APM tools

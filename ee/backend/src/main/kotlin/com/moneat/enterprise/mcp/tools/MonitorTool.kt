@@ -8,11 +8,13 @@ import com.moneat.enterprise.mcp.models.McpContext
 import com.moneat.enterprise.mcp.protocol.InputSchema
 import com.moneat.enterprise.mcp.protocol.McpTool
 import com.moneat.enterprise.mcp.protocol.ToolCallResult
+import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.monitor.services.MonitorService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 private val monitorService = MonitorService()
+private val agentApiKeyService = AgentApiKeyService()
 
 class ListHostsTool : McpTool {
     override val name = "list_hosts"
@@ -54,13 +56,14 @@ class GetHostStatusTool : McpTool {
     }
 }
 
-class CreateHostTool : McpTool {
-    override val name = "create_host"
-    override val description = "Register a new monitored host"
+class CreateAgentKeyTool : McpTool {
+    override val name = "create_agent_key"
+    override val description =
+        "Create a Datadog-compatible agent API key for monitoring"
     override val readOnly = false
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("name" to schemaString("Host name"))
+            mapOf("name" to schemaString("Key name"))
         ),
         required = listOf("name")
     )
@@ -71,13 +74,14 @@ class CreateHostTool : McpTool {
     ): ToolCallResult {
         val name = args["name"]?.jsonPrimitive?.content
             ?: return errorResult("name is required")
-        val (system, agentKey) = monitorService.createHost(
-            context.organizationId,
-            name
+        val response = agentApiKeyService.createKey(
+            organizationId = context.organizationId,
+            name = name,
+            createdBy = null
         )
         return textResult(
-            "Host created: ${system.displayName ?: system.hostname} " +
-                "(id=${system.id}, agentKey=$agentKey)"
+            "Agent API key created: ${response.name} " +
+                "(id=${response.id}, key=${response.key})"
         )
     }
 }

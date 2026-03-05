@@ -163,23 +163,6 @@ class MonitorRoutesTest {
 
     // ─── POST /systems ────────────────────────────────────────────────────────
 
-    @Test
-    fun `POST systems returns 403 when user has no org`() =
-        testApplication {
-            application {
-                install(ContentNegotiation) { json() }
-                installAuth()
-                routing { monitorRoutes() }
-            }
-
-            val userId = seedUser()
-            val response =
-                client.post("/v1/monitor/hosts") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
-                }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
-        }
-
     // ─── GET /systems/{id} ────────────────────────────────────────────────────
 
     @Test

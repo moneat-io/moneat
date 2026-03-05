@@ -733,7 +733,7 @@ export function VariantA() {
                     <div className="mt-3">
                       <span className="text-sky-300">api_key</span>
                       <span className="text-white/40">: </span>
-                      <span className="text-emerald-400">&quot;your-moneat-agent-key&quot;</span>
+                      <span className="text-emerald-400">&quot;your-api-key&quot;</span>
                     </div>
                     <div className="mt-4">
                       <span className="text-slate-500">{'# Enable the features you need'}</span>

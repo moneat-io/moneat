@@ -1293,20 +1293,6 @@ interface UpdateStripePriceIdsRequest {
 }
 
 // Monitoring types
-interface MonitorSystem {
-  id: string
-  projectId?: number
-  name: string
-  host?: string
-  status: 'up' | 'down' | 'pending'
-  lastSeenAt?: string | number
-  agentVersion?: string
-  os?: string
-  arch?: string
-  createdAt?: string | number
-  updatedAt?: string | number
-}
-
 interface LatestMetrics {
   cpu_percent: number
   mem_total: number
@@ -1323,45 +1309,6 @@ interface LatestMetrics {
   temp_max?: number | null
   gpu_percent?: number | null
   battery_percent?: number | null
-}
-
-interface MonitorSystemWithMetrics extends MonitorSystem {
-  cpuPercent?: number
-  memTotal?: number
-  memUsed?: number
-  memAvailable?: number
-  diskTotal?: number
-  diskUsed?: number
-  load1?: number
-  load5?: number
-  load15?: number
-  netRecvBytes?: number
-  netSentBytes?: number
-  tempMax?: number
-  gpuPercent?: number
-  batteryPercent?: number
-  latest_metrics?: LatestMetrics
-}
-
-interface MonitorSystemDetail extends MonitorSystemWithMetrics {
-  agentKey?: string
-}
-
-interface CreateMonitorSystemResponse {
-  system: {
-    id: string
-    name: string
-    host?: string
-    status: string
-    last_seen_at?: number
-    agent_version?: string
-    os?: string
-    arch?: string
-    created_at: number
-    latest_metrics?: LatestMetrics
-  }
-  agent_key: string
-  docker_command: string
 }
 
 export interface MonitorHostResponse {
@@ -1381,44 +1328,6 @@ export interface MonitorHostResponse {
   memory_total_kb?: number | null
   created_at: number
   latest_metrics?: LatestMetrics | null
-}
-
-export interface CreateMonitorHostResponse {
-  host: MonitorHostResponse
-  agent_key: string
-  docker_command: string
-}
-
-/** Maps MonitorHostResponse to DdHostResponse shape for unified UI */
-export function mapMonitorHostToDdHost(h: MonitorHostResponse): DdHostResponse {
-  const status = (h.status ?? '').toLowerCase()
-  const isOnline = status === 'up' || status === 'online'
-  const toIsoTimestamp = (value: number | string | null | undefined): string => {
-    if (value === null || value === undefined || value === '') return ''
-
-    const numeric = Number(value)
-    const normalized = Number.isFinite(numeric)
-      ? (Math.abs(numeric) < 1_000_000_000_000 ? numeric * 1000 : numeric)
-      : value
-    const date = new Date(normalized)
-
-    return Number.isNaN(date.getTime()) ? '' : date.toISOString()
-  }
-
-  return {
-    id: h.id,
-    hostname: h.hostname ?? h.name ?? '',
-    os: h.os ?? '',
-    platform: h.platform ?? h.arch ?? '',
-    processor: h.processor ?? '',
-    cpuCores: h.cpu_cores ?? 0,
-    memoryTotalKb: h.memory_total_kb ?? (h.latest_metrics?.mem_total ? Math.round(h.latest_metrics.mem_total / 1024) : 0),
-    agentVersion: h.agent_version ?? '',
-    tags: {},
-    firstSeenAt: toIsoTimestamp(h.first_seen_at),
-    lastSeenAt: toIsoTimestamp(h.last_seen_at),
-    isOnline,
-  }
 }
 
 interface HistoricalDataPoint {
@@ -3079,39 +2988,6 @@ class ApiClient {
     return response
   }
 
-  private mapMonitorSystem(row: Record<string, unknown>): MonitorSystemWithMetrics {
-    const latest = (row.latest_metrics ?? {}) as Record<string, unknown>
-
-    return {
-      id: row.id as string,
-      projectId: (row.projectId ?? row.project_id) as number | undefined,
-      name: row.name as string,
-      host: row.host as string | undefined,
-      status: row.status as 'up' | 'down' | 'pending',
-      lastSeenAt: (row.lastSeenAt ?? row.last_seen_at) as string | number | undefined,
-      agentVersion: (row.agentVersion ?? row.agent_version) as string | undefined,
-      os: row.os as string | undefined,
-      arch: row.arch as string | undefined,
-      createdAt: (row.createdAt ?? row.created_at) as string | number | undefined,
-      updatedAt: (row.updatedAt ?? row.updated_at) as string | number | undefined,
-      cpuPercent: (row.cpuPercent ?? latest.cpu_percent) as number | undefined,
-      memTotal: (row.memTotal ?? latest.mem_total) as number | undefined,
-      memUsed: (row.memUsed ?? latest.mem_used) as number | undefined,
-      memAvailable: (row.memAvailable ?? latest.mem_available) as number | undefined,
-      diskTotal: (row.diskTotal ?? latest.disk_total) as number | undefined,
-      diskUsed: (row.diskUsed ?? latest.disk_used) as number | undefined,
-      load1: (row.load1 ?? latest.load_1) as number | undefined,
-      load5: (row.load5 ?? latest.load_5) as number | undefined,
-      load15: (row.load15 ?? latest.load_15) as number | undefined,
-      netRecvBytes: (row.netRecvBytes ?? latest.net_recv_bytes) as number | undefined,
-      netSentBytes: (row.netSentBytes ?? latest.net_sent_bytes) as number | undefined,
-      tempMax: (row.tempMax ?? latest.temp_max) as number | undefined,
-      gpuPercent: (row.gpuPercent ?? latest.gpu_percent) as number | undefined,
-      batteryPercent: (row.batteryPercent ?? latest.battery_percent) as number | undefined,
-      latest_metrics: row.latest_metrics as LatestMetrics | undefined,
-    }
-  }
-
   private mapSystemAlert(row: Record<string, unknown>): SystemAlert {
     return {
       id: row.id as number,
@@ -4669,26 +4545,13 @@ class ApiClient {
     })
   }
 
-  // Monitoring API (hosts - unified for Moneat Agent and Datadog Agent)
+  // Monitoring API (hosts)
   async getMonitorHosts(): Promise<MonitorHostResponse[]> {
     return this.request<MonitorHostResponse[]>(`${API_BASE}/monitor/hosts`)
   }
 
   async getMonitorHost(hostId: number): Promise<MonitorHostResponse> {
     return this.request<MonitorHostResponse>(`${API_BASE}/monitor/hosts/${hostId}`)
-  }
-
-  async createMonitorHost(name: string): Promise<CreateMonitorHostResponse> {
-    return this.request<CreateMonitorHostResponse>(`${API_BASE}/monitor/hosts`, {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    })
-  }
-
-  async deleteMonitorHost(hostId: number): Promise<void> {
-    return this.request<void>(`${API_BASE}/monitor/hosts/${hostId}`, {
-      method: 'DELETE',
-    })
   }
 
   async getMonitorHostMetrics(
@@ -4722,96 +4585,6 @@ class ApiClient {
       netRecvBytes: row.netRecvBytes ?? row.net_recv_bytes,
       netSentBytes: row.netSentBytes ?? row.net_sent_bytes,
     }))
-  }
-
-  /** @deprecated Use getMonitorHosts instead */
-  async getMonitorSystems() {
-    const rows = await this.request<Record<string, unknown>[]>(`${API_BASE}/monitor/systems`)
-    return rows.map((row) => this.mapMonitorSystem(row))
-  }
-
-  /** @deprecated Use getMonitorHost instead */
-  async getMonitorSystem(systemId: string) {
-    const row = await this.request<Record<string, unknown>>(`${API_BASE}/monitor/systems/${systemId}`)
-    return this.mapMonitorSystem(row) as MonitorSystemDetail
-  }
-
-  /** @deprecated Use createMonitorHost instead */
-  async createMonitorSystem(name: string) {
-    return this.request<CreateMonitorSystemResponse>(`${API_BASE}/monitor/systems`, {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    })
-  }
-
-  /** @deprecated Use deleteMonitorHost instead */
-  async deleteMonitorSystem(systemId: string) {
-    return this.request<void>(`${API_BASE}/monitor/systems/${systemId}`, {
-      method: 'DELETE',
-    })
-  }
-
-  async getSystemMetrics(systemId: string, from?: string, to?: string, interval?: string) {
-    const params = new URLSearchParams()
-    if (from) params.append('from', from)
-    if (to) params.append('to', to)
-    if (interval) params.append('interval', interval)
-    const query = params.toString()
-    return this.request<SystemMetricsHistory>(
-      `${API_BASE}/monitor/systems/${systemId}/metrics${query ? `?${query}` : ''}`
-    )
-  }
-
-  async getSystemContainers(systemId: string) {
-    const response = await this.request<{containers: RawContainerStats[]}>(
-      `${API_BASE}/monitor/systems/${systemId}/containers`
-    )
-    return response.containers.map((row) => ({
-      name: row.name,
-      id: row.id,
-      image: row.image,
-      status: row.status,
-      cpuPercent: row.cpuPercent ?? row.cpu_percent,
-      memUsed: row.memUsed ?? row.mem_used,
-      memLimit: row.memLimit ?? row.mem_limit,
-      netRecvBytes: row.netRecvBytes ?? row.net_recv_bytes,
-      netSentBytes: row.netSentBytes ?? row.net_sent_bytes,
-    }))
-  }
-
-  async getAllSystemContainers(): Promise<{
-    containers: Array<{
-      system_id: string
-      system_name: string
-      name: string
-      id: string
-      image: string
-      status: string
-      cpu_percent: number
-      mem_used: number
-      mem_limit: number
-      net_recv_bytes: number
-      net_sent_bytes: number
-      mem_percent: number
-    }>
-  }> {
-    const response = await this.request<{
-      containers: Array<{
-        system_id: string
-        system_name: string
-        name: string
-        id: string
-        image: string
-        status: string
-        cpu_percent: number
-        mem_used: number
-        mem_limit: number
-        net_recv_bytes: number
-        net_sent_bytes: number
-        mem_percent: number
-      }>
-    }>(`${API_BASE}/monitor/containers`)
-    return response
   }
 
   async getContainerMetrics(
@@ -6125,9 +5898,6 @@ export type {
   NotificationPreference,
   ProjectNotificationPreference,
   NotificationPreferences,
-  MonitorSystem,
-  MonitorSystemWithMetrics,
-  MonitorSystemDetail,
   HistoricalDataPoint,
   SystemMetricsHistory,
   ContainerStats,

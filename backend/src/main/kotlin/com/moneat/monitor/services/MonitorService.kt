@@ -24,7 +24,6 @@ import com.moneat.config.EnvConfig
 import com.moneat.monitor.models.AlertConfigResponse
 import com.moneat.monitor.models.AlertResponse
 import com.moneat.monitor.models.ContainerMetricDataPoint
-import com.moneat.monitor.models.ContainerMetricsPayload
 import com.moneat.monitor.models.ContainerMetricsResponse
 import com.moneat.monitor.models.ContainerStats
 import com.moneat.monitor.models.ContainerWithSystem
@@ -34,7 +33,6 @@ import com.moneat.monitor.models.HistoricalMetricsResponse
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.MetricDataPoint
 import com.moneat.monitor.models.SystemData
-import com.moneat.monitor.models.SystemMetricsPayload
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
@@ -60,8 +58,6 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import java.security.MessageDigest
-import java.security.SecureRandom
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
@@ -101,73 +97,6 @@ class MonitorService {
         )
 
     /**
-     * Create a new host (Moneat Agent) and generate an agent key.
-     */
-    fun createHost(
-        organizationId: Int,
-        name: String
-    ): Pair<HostData, String> {
-        val agentKey = generateAgentKey()
-        val agentKeyHash = hashAgentKey(agentKey)
-        val now = Clock.System.now()
-        val placeholderHostname = "pending-${UUID.randomUUID()}"
-
-        ensureOrganizationAlertTemplates(organizationId)
-
-        val hostId =
-            transaction {
-                Hosts.insert {
-                    it[Hosts.organization_id] = organizationId
-                    it[Hosts.hostname] = placeholderHostname
-                    it[Hosts.display_name] = name
-                    it[Hosts.agent_key_hash] = agentKeyHash
-                    it[Hosts.status] = "pending"
-                    it[Hosts.os] = ""
-                    it[Hosts.platform] = ""
-                    it[Hosts.arch] = null
-                    it[Hosts.agent_version] = ""
-                    it[Hosts.gohai] = ""
-                    it[Hosts.tags] = "{}"
-                    it[Hosts.first_seen_at] = now
-                    it[Hosts.last_seen_at] = now
-                } get Hosts.id
-            }
-
-        transaction {
-            HostAlertSettings.insert {
-                it[HostAlertSettings.host_id] = hostId
-                it[HostAlertSettings.organization_id] = organizationId
-                it[HostAlertSettings.scope] = ALERT_SCOPE_GLOBAL
-                it[HostAlertSettings.updated_at] = now
-            }
-        }
-
-        ensureHostAlertsSeeded(hostId, organizationId)
-
-        val host = getHostById(hostId)!!
-        return Pair(host, agentKey)
-    }
-
-    /**
-     * Validate agent key and return host ID + organization ID (for Moneat Agent).
-     */
-    fun validateAgentKey(agentKey: String): Pair<Int, Int>? {
-        val keyHash = hashAgentKey(agentKey)
-        return transaction {
-            Hosts
-                .selectAll()
-                .where { Hosts.agent_key_hash eq keyHash }
-                .firstOrNull()
-                ?.let {
-                    Pair(
-                        it[Hosts.id],
-                        it[Hosts.organization_id]
-                    )
-                }
-        }
-    }
-
-    /**
      * Check if organization can add more hosts.
      */
     fun checkHostQuota(organizationId: Int): Boolean {
@@ -179,179 +108,6 @@ class MonitorService {
                 Hosts.selectAll().where { Hosts.organization_id eq organizationId }.count()
             }
         return currentCount < maxHosts
-    }
-
-    /**
-     * Ingest metrics from agent and store in ClickHouse.
-     */
-    suspend fun ingestMetrics(
-        hostId: Int,
-        organizationId: Int,
-        payload: SystemMetricsPayload
-    ): Int {
-        val now = Clock.System.now()
-        val hostnameFromPayload = payload.host ?: hostId.toString()
-
-        // Verify the host belongs to the claimed organization (prevent cross-tenant writes)
-        val hostOrgId =
-            transaction {
-                Hosts
-                    .selectAll()
-                    .where { Hosts.id eq hostId }
-                    .firstOrNull()
-                    ?.get(Hosts.organization_id)
-            }
-        if (hostOrgId == null || hostOrgId != organizationId) {
-            logger.warn { "Organization mismatch for hostId=$hostId: expected $organizationId, got $hostOrgId" }
-            throw IllegalArgumentException("Host $hostId does not belong to organization $organizationId")
-        }
-
-        // Update host metadata and last_seen_at
-        transaction {
-            Hosts.update({ Hosts.id eq hostId }) {
-                it[Hosts.last_seen_at] = now
-                it[Hosts.status] = "up"
-                it[Hosts.agent_version] = payload.agent_version ?: ""
-                it[Hosts.os] = payload.os ?: ""
-                it[Hosts.arch] = payload.arch
-                it[Hosts.hostname] = hostnameFromPayload
-                payload.platform?.takeIf { p -> p.isNotBlank() }?.let { p -> it[Hosts.platform] = p }
-                payload.processor?.takeIf { p -> p.isNotBlank() }?.let { p -> it[Hosts.processor] = p }
-                payload.cpu_cores?.takeIf { c -> c > 0 }?.let { c -> it[Hosts.cpu_cores] = c }
-                payload.memory_total_kb?.takeIf { m -> m > 0 }?.let { m -> it[Hosts.memory_total_kb] = m }
-            }
-        }
-
-        // Insert metrics into ClickHouse with host_id tag
-        val timestamp = payload.timestamp
-        val host = hostnameFromPayload
-        val escapedHost = escapeSql(host)
-        val tagsMap = "map('host_id','$hostId')"
-        val ts = "fromUnixTimestamp64Milli(${timestamp * 1000})"
-
-        val metricRows: List<Triple<String, Double, String>> =
-            buildList {
-                add(Triple("system.cpu.percent", payload.cpu_percent.toDouble(), ts))
-                add(Triple("system.mem.total", payload.mem_total.toDouble(), ts))
-                add(Triple("system.mem.used", payload.mem_used.toDouble(), ts))
-                add(Triple("system.mem.available", payload.mem_available.toDouble(), ts))
-                add(Triple("system.swap.total", payload.swap_total.toDouble(), ts))
-                add(Triple("system.swap.used", payload.swap_used.toDouble(), ts))
-                add(Triple("system.disk.total", payload.disk_total.toDouble(), ts))
-                add(Triple("system.disk.used", payload.disk_used.toDouble(), ts))
-                add(Triple("system.disk.read_bytes", payload.disk_read_bytes.toDouble(), ts))
-                add(Triple("system.disk.write_bytes", payload.disk_write_bytes.toDouble(), ts))
-                add(Triple("system.net.recv_bytes", payload.net_recv_bytes.toDouble(), ts))
-                add(Triple("system.net.sent_bytes", payload.net_sent_bytes.toDouble(), ts))
-                add(Triple("system.load.1", payload.load_1.toDouble(), ts))
-                add(Triple("system.load.5", payload.load_5.toDouble(), ts))
-                add(Triple("system.load.15", payload.load_15.toDouble(), ts))
-                payload.temp_max?.let { add(Triple("system.temp.max", it.toDouble(), ts)) }
-                payload.gpu_percent?.let { add(Triple("system.gpu.percent", it.toDouble(), ts)) }
-                payload.gpu_mem_percent?.let { add(Triple("system.gpu.mem_percent", it.toDouble(), ts)) }
-                payload.gpu_power?.let { add(Triple("system.gpu.power", it.toDouble(), ts)) }
-                payload.battery_percent?.let { add(Triple("system.battery.percent", it.toDouble(), ts)) }
-            }
-
-        val values =
-            metricRows
-                .joinToString(",") { (name, value, tsVal) ->
-                    "($organizationId,'${escapeSql(name)}',1,$tsVal,$value,'$escapedHost',$tagsMap,'','')"
-                }
-
-        val query =
-            """
-            INSERT INTO $clickhouseDb.metrics (
-                organization_id, metric_name, metric_type, timestamp, value, host, tags, unit, source_type_name
-            ) VALUES $values
-            """.trimIndent()
-
-        val response = ClickHouseClient.execute(query)
-
-        if (!response.status.isSuccess()) {
-            val errorBody = response.bodyAsText()
-            logger.error { "Failed to insert system metrics: $errorBody" }
-            throw Exception("Failed to insert metrics: $errorBody")
-        }
-
-        // Insert container metrics if present
-        payload.containers?.forEach { container ->
-            insertContainerMetric(hostId, organizationId, timestamp, container, host)
-        }
-
-        // Return the poll interval for this organization's tier
-        if (EnvConfig.SelfHost.enabled) return 10
-        val tier = getTierConfig(organizationId)
-        return tier.monitorIntervalSeconds
-    }
-
-    /**
-     * Count metric rows that would be inserted into the metrics table (for usage tracking).
-     * System metrics only; container data goes to the containers table.
-     */
-    fun countMetricsInPayload(payload: SystemMetricsPayload): Int {
-        var count = 15
-        if (payload.temp_max != null) count++
-        if (payload.gpu_percent != null) count++
-        if (payload.gpu_mem_percent != null) count++
-        if (payload.gpu_power != null) count++
-        if (payload.battery_percent != null) count++
-        return count
-    }
-
-    private suspend fun insertContainerMetric(
-        hostId: Int,
-        organizationId: Int,
-        timestamp: Long,
-        container: ContainerMetricsPayload,
-        host: String
-    ) {
-        val fullQuery =
-            buildContainerInsertQuery(
-                hostId = hostId,
-                organizationId = organizationId,
-                timestamp = timestamp,
-                container = container,
-                host = host
-            )
-        val response = ClickHouseClient.execute(fullQuery)
-        if (!response.status.isSuccess()) {
-            val errorBody = response.bodyAsText()
-            logger.warn {
-                "Failed to insert container metrics for host=$hostId container=${container.name}: $errorBody"
-            }
-        }
-    }
-
-    private fun buildContainerInsertQuery(
-        hostId: Int,
-        organizationId: Int,
-        timestamp: Long,
-        container: ContainerMetricsPayload,
-        host: String
-    ): String {
-        val ts = "fromUnixTimestamp64Milli(${timestamp * 1000})"
-        val tagsMap = "map('host_id','$hostId')"
-        return """
-            INSERT INTO $clickhouseDb.containers (
-                organization_id, host, container_id, name, image, state,
-                cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes, tags, timestamp
-            ) VALUES (
-                $organizationId,
-                '${escapeSql(host)}',
-                '${escapeSql(container.id)}',
-                '${escapeSql(container.name)}',
-                '${escapeSql(container.image)}',
-                '${escapeSql(container.status)}',
-                ${container.cpu_percent},
-                ${container.mem_used},
-                ${container.mem_limit},
-                ${container.net_recv_bytes},
-                ${container.net_sent_bytes},
-                $tagsMap,
-                $ts
-            )
-        """.trimIndent()
     }
 
     /**
@@ -1299,7 +1055,7 @@ class MonitorService {
         return scope == ALERT_SCOPE_GLOBAL || scope == ALERT_SCOPE_SYSTEM || scope == ALERT_SCOPE_HOST
     }
 
-    private fun ensureOrganizationAlertTemplates(organizationId: Int) {
+    internal fun ensureOrganizationAlertTemplates(organizationId: Int) {
         transaction {
             val existingCount =
                 OrganizationAlertTemplates
@@ -1327,7 +1083,7 @@ class MonitorService {
         }
     }
 
-    private fun ensureHostAlertsSeeded(
+    internal fun ensureHostAlertsSeeded(
         hostId: Int,
         organizationId: Int
     ) {
@@ -1476,19 +1232,6 @@ class MonitorService {
         return ClickHouseSqlUtils.escapeSql(value)
     }
 
-    private fun generateAgentKey(): String {
-        val random = SecureRandom()
-        val bytes = ByteArray(32)
-        random.nextBytes(bytes)
-        return "mk_" + bytes.joinToString("") { "%02x".format(it) }
-    }
-
-    private fun hashAgentKey(key: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val hash = digest.digest(key.toByteArray())
-        return hash.joinToString("") { "%02x".format(it) }
-    }
-
     private fun getTierConfig(organizationId: Int): PricingTierConfigResponse {
         return pricingTierService.getEffectiveTierForOrganization(organizationId).tier
     }
@@ -1513,7 +1256,6 @@ class MonitorService {
             organizationId = row[Hosts.organization_id],
             hostname = row[Hosts.hostname],
             displayName = row[Hosts.display_name],
-            agentKeyHash = row[Hosts.agent_key_hash],
             status = row[Hosts.status],
             lastSeenAt = row[Hosts.last_seen_at],
             agentVersion = row[Hosts.agent_version].takeIf { it.isNotBlank() },
@@ -1534,7 +1276,6 @@ class MonitorService {
             organizationId = row[Systems.organization_id],
             name = row[Systems.name],
             host = row[Systems.host],
-            agentKeyHash = row[Systems.agent_key_hash],
             status = row[Systems.status],
             lastSeenAt = row[Systems.last_seen_at],
             agentVersion = row[Systems.agent_version],

@@ -96,9 +96,28 @@ class MonitorServiceAlertTest {
             } get PricingTierConfigs.id
         }
 
-    private fun seedSystem(orgId: Int, name: String = "test-server"): Pair<Int, String> {
-        val (host, returnedKey) = service.createHost(orgId, name)
-        return host.id to returnedKey
+    private fun seedHost(orgId: Int, name: String = "test-server"): Int {
+        service.ensureOrganizationAlertTemplates(orgId)
+        val hostId = transaction {
+            val now = kotlin.time.Clock.System.now()
+            val id = Hosts.insert {
+                it[organization_id] = orgId
+                it[display_name] = name
+                it[hostname] = name
+                it[status] = "pending"
+                it[first_seen_at] = now
+                it[last_seen_at] = now
+            } get Hosts.id
+            HostAlertSettings.insert {
+                it[host_id] = id
+                it[organization_id] = orgId
+                it[scope] = "global"
+                it[updated_at] = now
+            }
+            id
+        }
+        service.ensureHostAlertsSeeded(hostId, orgId)
+        return hostId
     }
 
     // ==================== createAlert ====================
@@ -107,7 +126,7 @@ class MonitorServiceAlertTest {
     fun `createAlert creates system-scoped alert`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         val request = CreateAlertRequest(
             metric = "cpu_percent",
@@ -131,7 +150,7 @@ class MonitorServiceAlertTest {
     fun `createAlert creates global-scoped alert`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         val request = CreateAlertRequest(
             metric = "mem_percent",
@@ -151,7 +170,7 @@ class MonitorServiceAlertTest {
     fun `createAlert defaults to system scope`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         val request = CreateAlertRequest(metric = "disk_percent", condition = ">", threshold = 95.0)
         val alert = service.createAlert(systemId, orgId, request)
@@ -162,7 +181,7 @@ class MonitorServiceAlertTest {
     fun `createAlert system alert has positive id`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         val request = CreateAlertRequest(metric = "load_1", condition = ">", threshold = 2.0)
         val alert = service.createAlert(systemId, orgId, request, ALERT_SCOPE_SYSTEM)
@@ -175,7 +194,7 @@ class MonitorServiceAlertTest {
     fun `listAlerts returns seeded default alerts when system is created`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         val alerts = service.listAlerts(systemId, orgId)
         // createSystem auto-seeds default alerts (cpu, mem, disk, etc.)
@@ -186,7 +205,7 @@ class MonitorServiceAlertTest {
     fun `listAlerts includes custom alerts alongside seeded defaults`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         val beforeCount = service.listAlerts(systemId, orgId).size
         service.createAlert(systemId, orgId, CreateAlertRequest("cpu_percent", ">", 90.0))
@@ -203,8 +222,8 @@ class MonitorServiceAlertTest {
     fun `listAlerts does not return alerts from other systems`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (system1, _) = seedSystem(orgId, "server-1")
-        val (system2, _) = seedSystem(orgId, "server-2")
+        val system1 = seedHost(orgId, "server-1")
+        val system2 = seedHost(orgId, "server-2")
 
         val before1 = service.listAlerts(system1, orgId).size
         service.createAlert(system1, orgId, CreateAlertRequest("cpu_percent", ">", 90.0))
@@ -222,7 +241,7 @@ class MonitorServiceAlertTest {
     fun `updateAlert returns false for non-existent alert`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         val result = service.updateAlert(
             alertId = 99999,
@@ -238,7 +257,7 @@ class MonitorServiceAlertTest {
     fun `updateAlert modifies threshold for system alert`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
         val created = service.createAlert(systemId, orgId, CreateAlertRequest("cpu_percent", ">", 90.0))
 
         val result = service.updateAlert(
@@ -259,7 +278,7 @@ class MonitorServiceAlertTest {
     fun `updateAlert modifies enabled flag`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
         val created = service.createAlert(systemId, orgId, CreateAlertRequest("mem_percent", ">", 80.0, enabled = true))
 
         service.updateAlert(
@@ -279,7 +298,7 @@ class MonitorServiceAlertTest {
     fun `updateAlert modifies metric and condition`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
         val created = service.createAlert(systemId, orgId, CreateAlertRequest("cpu_percent", ">", 90.0))
 
         service.updateAlert(
@@ -300,7 +319,7 @@ class MonitorServiceAlertTest {
     fun `updateAlert global-scoped updates organization template`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
         val created = service.createAlert(
             systemId,
             orgId,
@@ -322,8 +341,8 @@ class MonitorServiceAlertTest {
     fun `updateAlert returns false when alert belongs to different system`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (system1, _) = seedSystem(orgId, "server-1")
-        val (system2, _) = seedSystem(orgId, "server-2")
+        val system1 = seedHost(orgId, "server-1")
+        val system2 = seedHost(orgId, "server-2")
         val created = service.createAlert(system1, orgId, CreateAlertRequest("cpu_percent", ">", 90.0))
 
         val result = service.updateAlert(
@@ -346,7 +365,7 @@ class MonitorServiceAlertTest {
     fun `deleteAlert removes system alert`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
         val created = service.createAlert(systemId, orgId, CreateAlertRequest("cpu_percent", ">", 90.0))
 
         val result = service.deleteAlert(created.id, systemId, orgId, ALERT_SCOPE_SYSTEM)
@@ -360,7 +379,7 @@ class MonitorServiceAlertTest {
     fun `deleteAlert returns false for non-existent alert`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         val result = service.deleteAlert(99999, systemId, orgId, ALERT_SCOPE_SYSTEM)
         assertFalse(result)
@@ -371,7 +390,7 @@ class MonitorServiceAlertTest {
         val org1 = seedOrg("Org 1")
         val org2 = seedOrg("Org 2")
         seedFreeTier()
-        val (systemId, _) = seedSystem(org1)
+        val systemId = seedHost(org1)
         val created = service.createAlert(systemId, org1, CreateAlertRequest("cpu_percent", ">", 90.0))
 
         val result = service.deleteAlert(created.id, systemId, org2, ALERT_SCOPE_SYSTEM)
@@ -385,7 +404,7 @@ class MonitorServiceAlertTest {
     fun `deleteAlert global-scoped removes organization template`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
         val created = service.createAlert(
             systemId,
             orgId,
@@ -403,7 +422,7 @@ class MonitorServiceAlertTest {
     fun `getAlertConfig returns global scope when system is newly created`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         // createSystem sets ALERT_SCOPE_GLOBAL as the default scope
         val config = service.getAlertConfig(systemId, orgId)
@@ -414,7 +433,7 @@ class MonitorServiceAlertTest {
     fun `getAlertConfig returns default alert templates seeded for system`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         val config = service.getAlertConfig(systemId, orgId)
         // Default templates should be seeded
@@ -425,7 +444,7 @@ class MonitorServiceAlertTest {
     fun `getAlertConfig shows effective alerts for global scope by default`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
         // System scope is GLOBAL by default from createSystem
         service.createAlert(systemId, orgId, CreateAlertRequest("cpu_percent", ">", 90.0), ALERT_SCOPE_GLOBAL)
 
@@ -439,7 +458,7 @@ class MonitorServiceAlertTest {
     fun `getAlertConfig shows effective alerts equals systemAlerts when scope is system`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
         service.updateAlertScope(systemId, orgId, ALERT_SCOPE_SYSTEM)
         service.createAlert(systemId, orgId, CreateAlertRequest("cpu_percent", ">", 90.0), ALERT_SCOPE_SYSTEM)
 
@@ -454,7 +473,7 @@ class MonitorServiceAlertTest {
     fun `updateAlertScope returns false for invalid scope`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         assertFalse(service.updateAlertScope(systemId, orgId, "invalid-scope"))
     }
@@ -463,7 +482,7 @@ class MonitorServiceAlertTest {
     fun `updateAlertScope accepts system scope`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         assertTrue(service.updateAlertScope(systemId, orgId, ALERT_SCOPE_SYSTEM))
         assertEquals(ALERT_SCOPE_SYSTEM, service.getAlertConfig(systemId, orgId).scope)
@@ -473,7 +492,7 @@ class MonitorServiceAlertTest {
     fun `updateAlertScope accepts global scope`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         assertTrue(service.updateAlertScope(systemId, orgId, ALERT_SCOPE_GLOBAL))
         assertEquals(ALERT_SCOPE_GLOBAL, service.getAlertConfig(systemId, orgId).scope)
@@ -483,7 +502,7 @@ class MonitorServiceAlertTest {
     fun `updateAlertScope can toggle between system and global`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         service.updateAlertScope(systemId, orgId, ALERT_SCOPE_GLOBAL)
         assertEquals(ALERT_SCOPE_GLOBAL, service.getAlertConfig(systemId, orgId).scope)
@@ -496,7 +515,7 @@ class MonitorServiceAlertTest {
     fun `getAlertConfig effective alerts reflects global scope`() {
         val orgId = seedOrg()
         seedFreeTier()
-        val (systemId, _) = seedSystem(orgId)
+        val systemId = seedHost(orgId)
 
         service.updateAlertScope(systemId, orgId, ALERT_SCOPE_GLOBAL)
         val config = service.getAlertConfig(systemId, orgId)
