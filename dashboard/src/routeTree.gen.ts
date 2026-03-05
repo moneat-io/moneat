@@ -46,6 +46,7 @@ import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-ca
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as ErrorTrackingRouteImport } from './routes/error-tracking'
+import { Route as DocsRouteImport } from './routes/docs'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as CustomDashboardsRouteImport } from './routes/custom-dashboards'
@@ -66,6 +67,7 @@ import { Route as PerformanceIndexRouteImport } from './routes/performance.index
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
 import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
+import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
 import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
@@ -101,6 +103,7 @@ import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
 import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
 import { Route as IssuesIssueIdRouteImport } from './routes/issues.$issueId'
 import { Route as FeedbackFeedbackIdRouteImport } from './routes/feedback.$feedbackId'
+import { Route as DocsSplatRouteImport } from './routes/docs.$'
 import { Route as DashboardsDatasourcesRouteImport } from './routes/dashboards.datasources'
 import { Route as DashboardsDashboardIdRouteImport } from './routes/dashboards.$dashboardId'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
@@ -321,6 +324,11 @@ const ErrorTrackingRoute = ErrorTrackingRouteImport.update({
   path: '/error-tracking',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DemoRoute = DemoRouteImport.update({
   id: '/demo',
   path: '/demo',
@@ -420,6 +428,11 @@ const IssuesIndexRoute = IssuesIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => IssuesRoute,
+} as any)
+const DocsIndexRoute = DocsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DocsRoute,
 } as any)
 const DashboardsIndexRoute = DashboardsIndexRouteImport.update({
   id: '/',
@@ -598,6 +611,11 @@ const FeedbackFeedbackIdRoute = FeedbackFeedbackIdRouteImport.update({
   id: '/$feedbackId',
   path: '/$feedbackId',
   getParentRoute: () => FeedbackRoute,
+} as any)
+const DocsSplatRoute = DocsSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => DocsRoute,
 } as any)
 const DashboardsDatasourcesRoute = DashboardsDatasourcesRouteImport.update({
   id: '/datasources',
@@ -788,6 +806,7 @@ export interface FileRoutesByFullPath {
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/demo': typeof DemoRoute
+  '/docs': typeof DocsRouteWithChildren
   '/error-tracking': typeof ErrorTrackingRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -841,6 +860,7 @@ export interface FileRoutesByFullPath {
   '/blog/$slug': typeof BlogSlugRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
+  '/docs/$': typeof DocsSplatRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -876,6 +896,7 @@ export interface FileRoutesByFullPath {
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/blog/': typeof BlogIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
+  '/docs/': typeof DocsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
@@ -956,6 +977,7 @@ export interface FileRoutesByTo {
   '/blog/$slug': typeof BlogSlugRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
+  '/docs/$': typeof DocsSplatRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -989,6 +1011,7 @@ export interface FileRoutesByTo {
   '/apm-traces': typeof ApmTracesIndexRoute
   '/blog': typeof BlogIndexRoute
   '/dashboards': typeof DashboardsIndexRoute
+  '/docs': typeof DocsIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
@@ -1029,6 +1052,7 @@ export interface FileRoutesById {
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/demo': typeof DemoRoute
+  '/docs': typeof DocsRouteWithChildren
   '/error-tracking': typeof ErrorTrackingRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
@@ -1082,6 +1106,7 @@ export interface FileRoutesById {
   '/blog/$slug': typeof BlogSlugRoute
   '/dashboards/$dashboardId': typeof DashboardsDashboardIdRoute
   '/dashboards/datasources': typeof DashboardsDatasourcesRoute
+  '/docs/$': typeof DocsSplatRoute
   '/feedback/$feedbackId': typeof FeedbackFeedbackIdRoute
   '/issues/$issueId': typeof IssuesIssueIdRoute
   '/legal/privacy': typeof LegalPrivacyRoute
@@ -1117,6 +1142,7 @@ export interface FileRoutesById {
   '/apm-traces/': typeof ApmTracesIndexRoute
   '/blog/': typeof BlogIndexRoute
   '/dashboards/': typeof DashboardsIndexRoute
+  '/docs/': typeof DocsIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
@@ -1158,6 +1184,7 @@ export interface FileRouteTypes {
     | '/custom-dashboards'
     | '/dashboards'
     | '/demo'
+    | '/docs'
     | '/error-tracking'
     | '/feedback'
     | '/forgot-password'
@@ -1211,6 +1238,7 @@ export interface FileRouteTypes {
     | '/blog/$slug'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
+    | '/docs/$'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -1246,6 +1274,7 @@ export interface FileRouteTypes {
     | '/apm-traces/'
     | '/blog/'
     | '/dashboards/'
+    | '/docs/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
@@ -1326,6 +1355,7 @@ export interface FileRouteTypes {
     | '/blog/$slug'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
+    | '/docs/$'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -1359,6 +1389,7 @@ export interface FileRouteTypes {
     | '/apm-traces'
     | '/blog'
     | '/dashboards'
+    | '/docs'
     | '/issues'
     | '/monitoring'
     | '/on-call'
@@ -1398,6 +1429,7 @@ export interface FileRouteTypes {
     | '/custom-dashboards'
     | '/dashboards'
     | '/demo'
+    | '/docs'
     | '/error-tracking'
     | '/feedback'
     | '/forgot-password'
@@ -1451,6 +1483,7 @@ export interface FileRouteTypes {
     | '/blog/$slug'
     | '/dashboards/$dashboardId'
     | '/dashboards/datasources'
+    | '/docs/$'
     | '/feedback/$feedbackId'
     | '/issues/$issueId'
     | '/legal/privacy'
@@ -1486,6 +1519,7 @@ export interface FileRouteTypes {
     | '/apm-traces/'
     | '/blog/'
     | '/dashboards/'
+    | '/docs/'
     | '/issues/'
     | '/monitoring/'
     | '/on-call/'
@@ -1526,6 +1560,7 @@ export interface RootRouteChildren {
   CustomDashboardsRoute: typeof CustomDashboardsRoute
   DashboardsRoute: typeof DashboardsRouteWithChildren
   DemoRoute: typeof DemoRoute
+  DocsRoute: typeof DocsRouteWithChildren
   ErrorTrackingRoute: typeof ErrorTrackingRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -1839,6 +1874,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ErrorTrackingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/demo': {
       id: '/demo'
       path: '/demo'
@@ -1978,6 +2020,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/issues/'
       preLoaderRoute: typeof IssuesIndexRouteImport
       parentRoute: typeof IssuesRoute
+    }
+    '/docs/': {
+      id: '/docs/'
+      path: '/'
+      fullPath: '/docs/'
+      preLoaderRoute: typeof DocsIndexRouteImport
+      parentRoute: typeof DocsRoute
     }
     '/dashboards/': {
       id: '/dashboards/'
@@ -2223,6 +2272,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/feedback/$feedbackId'
       preLoaderRoute: typeof FeedbackFeedbackIdRouteImport
       parentRoute: typeof FeedbackRoute
+    }
+    '/docs/$': {
+      id: '/docs/$'
+      path: '/$'
+      fullPath: '/docs/$'
+      preLoaderRoute: typeof DocsSplatRouteImport
+      parentRoute: typeof DocsRoute
     }
     '/dashboards/datasources': {
       id: '/dashboards/datasources'
@@ -2555,6 +2611,18 @@ const DashboardsRouteWithChildren = DashboardsRoute._addFileChildren(
   DashboardsRouteChildren,
 )
 
+interface DocsRouteChildren {
+  DocsSplatRoute: typeof DocsSplatRoute
+  DocsIndexRoute: typeof DocsIndexRoute
+}
+
+const DocsRouteChildren: DocsRouteChildren = {
+  DocsSplatRoute: DocsSplatRoute,
+  DocsIndexRoute: DocsIndexRoute,
+}
+
+const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
+
 interface FeedbackRouteChildren {
   FeedbackFeedbackIdRoute: typeof FeedbackFeedbackIdRoute
 }
@@ -2822,6 +2890,7 @@ const rootRouteChildren: RootRouteChildren = {
   CustomDashboardsRoute: CustomDashboardsRoute,
   DashboardsRoute: DashboardsRouteWithChildren,
   DemoRoute: DemoRoute,
+  DocsRoute: DocsRouteWithChildren,
   ErrorTrackingRoute: ErrorTrackingRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,

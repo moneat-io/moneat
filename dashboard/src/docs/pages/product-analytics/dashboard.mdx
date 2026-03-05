@@ -1,0 +1,147 @@
+---
+title: Dashboard Guide
+description: Understand the analytics dashboard — KPIs, time series charts, breakdown tables, and real-time visitor tracking.
+---
+
+# Dashboard Guide
+
+The analytics dashboard gives you a complete view of your website's traffic and user behavior. Access it by navigating to **Analytics** in the Moneat sidebar.
+
+## Real-Time Visitors
+
+A live badge in the dashboard header shows the number of active visitors on your site right now. This count reflects unique visitors in the last 5 minutes and updates automatically every 30 seconds.
+
+Real-time counting uses Redis HyperLogLog — a probabilistic data structure that provides approximate counts without storing any visitor identifiers.
+
+## KPI Cards
+
+The top of the dashboard displays five key performance indicators:
+
+| Metric | Description |
+|--------|-------------|
+| **Unique Visitors** | Distinct visitors in the selected period (based on anonymous session IDs) |
+| **Total Pageviews** | Total number of page loads, including repeat views by the same visitor |
+| **Bounce Rate** | Percentage of sessions with only a single pageview |
+| **Visit Duration** | Average time between the first and last pageview in a session |
+| **Views per Visit** | Average number of pages viewed per session |
+
+### Comparison Indicators
+
+Each KPI card shows a trend indicator comparing the current period to the previous one:
+
+- **Green arrow up** — Metric improved (or increased for visitors/pageviews)
+- **Red arrow down** — Metric declined
+- **Bounce rate is inverted** — A decrease in bounce rate shows as green (improvement)
+
+The comparison period is automatically determined based on your selected date range:
+
+| Selected Period | Compared Against |
+|-----------------|------------------|
+| Today | Yesterday |
+| Last 7 days | Previous 7 days |
+| Last 30 days | Previous 30 days |
+| This month | Last month |
+| Last 6 months | Previous 6 months |
+| Last 12 months | Previous 12 months |
+| Custom range | Same-length period immediately before |
+
+You can also switch to **year-over-year** comparison using the comparison selector.
+
+## Time Series Chart
+
+Below the KPI cards, an area chart visualizes **visitors** and **pageviews** over time. The chart automatically adjusts its time bucketing based on the selected period:
+
+| Period | Bucket Size |
+|--------|-------------|
+| Today | Hourly |
+| 7 days | Daily |
+| 30 days | Daily |
+| 6 months | Weekly |
+| 12 months | Monthly |
+
+Hover over any data point to see the exact timestamp and values in a tooltip.
+
+## Breakdown Tables
+
+The lower section of the dashboard contains tabbed breakdown tables that let you analyze your traffic from different angles.
+
+### Pages
+
+Top pages ranked by visitor count. Each row shows:
+
+- **Path** — The page URL path
+- **Visitors** — Unique visitors to that page
+- **Pageviews** — Total views (including repeat visits)
+- **Bounce Rate** — Percentage of single-page sessions entering on this page
+- **Duration** — Average session duration for visitors who viewed this page
+
+Click any page to add it as a filter and see all metrics scoped to that page.
+
+### Entry Pages
+
+The first page visitors land on when they arrive at your site. Useful for understanding which content attracts new visitors and how effective your landing pages are.
+
+### Exit Pages
+
+The last page visitors view before leaving your site. High exit rates on key pages (like checkout) may indicate friction points.
+
+### Sources
+
+Where your traffic comes from. Shows the referrer domain for each visitor. Common values include:
+
+- **Direct / None** — Visitors who typed your URL directly or used a bookmark
+- **Google, Bing, DuckDuckGo** — Search engine traffic
+- **twitter.com, linkedin.com** — Social media referrals
+- **Custom referrers** — Links from other websites
+
+### Locations
+
+Geographic distribution of your visitors by country. Requires the GeoLite2 database to be configured (see [Setup](./setup#geoip-database)).
+
+### Devices
+
+Three-column breakdown of your visitors' technology:
+
+| Column | Examples |
+|--------|----------|
+| **Browsers** | Chrome, Firefox, Safari, Edge, Arc |
+| **Operating Systems** | Windows, macOS, Linux, Android, iOS |
+| **Device Types** | Desktop, Mobile, Tablet |
+
+### UTM Campaigns
+
+Track marketing campaign performance using UTM parameters. Available breakdowns:
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `utm_source` | Traffic source | `google`, `newsletter`, `twitter` |
+| `utm_medium` | Marketing medium | `cpc`, `email`, `social` |
+| `utm_campaign` | Campaign name | `spring-sale`, `launch-2024` |
+| `utm_term` | Paid search keyword | `error monitoring tool` |
+| `utm_content` | Ad variation | `hero-cta`, `sidebar-banner` |
+
+### Custom Events
+
+Lists all custom events tracked via `moneat.track()` or `trackEvent()`, with visitor and occurrence counts. See [Custom Events](./custom-events) for how to instrument them.
+
+## Sorting & Expanding
+
+All breakdown tables support:
+
+- **Column sorting** — Click any column header to sort ascending/descending
+- **Expand rows** — Tables show 10 rows by default; click "Show all" to see the full list
+- **Visual bars** — Each row includes a proportional bar showing its share of the maximum value
+
+## Date Range Picker
+
+The date picker in the top-right corner controls the time period for all dashboard data:
+
+| Preset | Range |
+|--------|-------|
+| Today | Current day (midnight to now) |
+| 7d | Last 7 complete days |
+| 30d | Last 30 complete days |
+| Month | Current calendar month |
+| 6mo | Last 6 months |
+| 12mo | Last 12 months |
+| Custom | Pick any start and end date |

@@ -1,0 +1,90 @@
+---
+title: Database Monitoring
+description: Track slow queries and database performance across your infrastructure with the Datadog Agent.
+---
+
+# Database Monitoring
+
+## Overview
+
+Database Monitoring (DBM) surfaces slow and resource-intensive queries from your databases. The Datadog Agent collects query samples and execution metrics, and Moneat displays them in a single view so you can quickly identify performance bottlenecks.
+
+:::info[Enterprise feature]
+Database Monitoring requires the Datadog Agent integration, available on Enterprise plans.
+:::
+
+## Prerequisites
+
+- A supported database (PostgreSQL, MySQL, SQL Server, or Oracle)
+- The Datadog Agent deployed on a host with network access to the database (see [Agent Setup](/docs/datadog-agent/agent-setup))
+- The Enterprise `datadog` module enabled
+
+## Enable Database Monitoring
+
+### PostgreSQL
+
+Create a configuration file for the PostgreSQL integration:
+
+```yaml
+# /etc/datadog-agent/conf.d/postgres.d/conf.yaml
+init_config:
+
+instances:
+  - host: localhost
+    port: 5432
+    username: datadog
+    password: "<PASSWORD>"
+    dbm: true
+    collect_activity: true
+```
+
+Create a dedicated monitoring user in your database:
+
+```sql
+CREATE USER datadog WITH PASSWORD '<PASSWORD>';
+GRANT pg_monitor TO datadog;
+GRANT SELECT ON pg_stat_activity TO datadog;
+```
+
+### MySQL
+
+```yaml
+# /etc/datadog-agent/conf.d/mysql.d/conf.yaml
+init_config:
+
+instances:
+  - host: localhost
+    port: 3306
+    username: datadog
+    password: "<PASSWORD>"
+    dbm: true
+```
+
+After adding the configuration, restart the agent:
+
+```bash
+docker restart dd-agent
+```
+
+## Dashboard View
+
+Navigate to **Monitoring → Databases** to see your collected query data. The dashboard shows:
+
+| Column | Description |
+|---|---|
+| **Query** | The SQL statement (normalized to remove literal values) |
+| **Host** | The database host the query was executed on |
+| **Database** | The specific database name |
+| **Duration** | Query execution time in milliseconds |
+| **Timestamp** | When the query was sampled |
+
+Queries are sorted by duration so the slowest queries appear first, making it easy to spot performance issues.
+
+## Use Cases
+
+- **Identify slow queries** — Find queries taking the longest to execute and optimize them with indexes or query rewrites
+- **Track query patterns** — See which queries run most frequently and consume the most resources
+- **Correlate with errors** — Cross-reference slow database queries with application errors in Moneat's error tracking
+
+:::tip[Set `dbm: true` in the agent configuration to enable deep query monitoring. Without this flag, only basic connection metrics are collected.]
+:::

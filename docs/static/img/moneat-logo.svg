@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48" aria-label="Moneat">
-  <circle cx="24" cy="24" r="18" fill="none" stroke="#38bdf8" stroke-width="2.5" />
-  <polyline points="10,24 14,24 18,15 24,31 30,15 34,24 38,24" fill="none" stroke="#38bdf8" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
-  <text x="52" y="31" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="600" fill="currentColor" letter-spacing="-0.5">moneat</text>
-</svg>

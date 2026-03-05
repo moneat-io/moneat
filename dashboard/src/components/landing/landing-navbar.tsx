@@ -236,13 +236,13 @@ function MobileNav() {
           >
             Pricing
           </Link>
-          <a
-            href="/docs"
+          <Link
+            to="/docs"
             onClick={() => setOpen(false)}
             className="rounded-md px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-white/[0.05] transition-colors"
           >
             Docs
-          </a>
+          </Link>
           <Link
             to="/demo"
             onClick={() => setOpen(false)}
@@ -299,12 +299,12 @@ export function LandingNavbar() {
           >
             Pricing
           </Link>
-          <a
-            href="/docs"
+          <Link
+            to="/docs"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             Docs
-          </a>
+          </Link>
           <Link
             to="/demo"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -378,7 +378,7 @@ export function LandingFooter() {
           <div>
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Resources</h4>
             <ul className="space-y-2.5">
-              <li><a href="/docs" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Documentation</a></li>
+              <li><Link to="/docs" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Documentation</Link></li>
               <li><a href="/blog" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Blog</a></li>
               <li><Link to="/pricing" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Pricing</Link></li>
               <li><Link to="/demo" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Live Demo</Link></li>

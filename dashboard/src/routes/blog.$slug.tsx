@@ -1,10 +1,9 @@
 import {createFileRoute, Link, notFound} from '@tanstack/react-router'
 import {getPost} from '@/blog/loader'
 import {Helmet} from 'react-helmet-async'
-import {isValidElement, type ReactElement} from 'react'
-import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
-import {oneDark} from 'react-syntax-highlighter/dist/esm/styles/prism'
+import {MdxPre} from '@/docs/mdx-components'
 import {BlogPostFeedback} from '@/components/BlogPostFeedback'
+import {SITE_ORIGIN} from '@/lib/site'
 
 export const Route = createFileRoute('/blog/$slug')({
   loader: ({params}) => {
@@ -42,22 +41,6 @@ function BlogNotFound() {
   )
 }
 
-function MdxPre(props: React.ComponentPropsWithoutRef<'pre'>) {
-  const child = props.children
-  if (isValidElement(child)) {
-    const {className, children} = (child as ReactElement<{className?: string; children?: string}>).props
-    const match = /language-(\w+)/.exec(className || '')
-    if (match) {
-      return (
-        <SyntaxHighlighter language={match[1]} style={oneDark} customStyle={{borderRadius: '0.375rem'}}>
-          {String(children).replace(/\n$/, '')}
-        </SyntaxHighlighter>
-      )
-    }
-  }
-  return <pre {...props} />
-}
-
 const mdxComponents = {pre: MdxPre}
 
 function BlogPost() {
@@ -69,11 +52,11 @@ function BlogPost() {
       <Helmet>
         <title>{post.title} — Moneat Blog</title>
         <meta name="description" content={post.description} />
-        <link rel="canonical" href={`https://moneat.io/blog/${post.slug}`} />
+        <link rel="canonical" href={`${SITE_ORIGIN}/blog/${post.slug}`} />
         <meta property="og:type" content="article" />
         <meta property="og:title" content={post.title} />
         <meta property="og:description" content={post.description} />
-        <meta property="og:url" content={`https://moneat.io/blog/${post.slug}`} />
+        <meta property="og:url" content={`${SITE_ORIGIN}/blog/${post.slug}`} />
         <meta property="article:published_time" content={post.date} />
         <meta property="article:author" content={post.author} />
       </Helmet>

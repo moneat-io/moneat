@@ -1,0 +1,107 @@
+---
+title: Getting Started
+description: Create your account, set up a project, and capture your first error in minutes.
+---
+
+# Getting Started
+
+## Create Your Account
+
+<StepList
+  steps={[
+    {
+      title: 'Sign up',
+      content: <>Visit <a href="https://moneat.io/signup">moneat.io/signup</a> to create your account. You can sign up with email/password, GitHub, or Apple.</>,
+    },
+    {
+      title: 'Complete onboarding',
+      content: 'After signing up, follow the onboarding flow to create your organization and first project.',
+    },
+    {
+      title: 'Get your DSN',
+      content: "Once your project is created, you'll receive a DSN (Data Source Name). This is the connection string your SDK uses to send events to Moneat. It looks like:",
+    },
+  ]}
+/>
+
+```text
+https://<public_key>@api.moneat.io/api/<project_id>
+```
+
+## Install an SDK
+
+Moneat is fully compatible with Sentry SDKs. Use the official Sentry SDK for your platform — over 90 platforms are supported including JavaScript, Python, Java, Kotlin, Swift, Go, Ruby, and more.
+
+**JavaScript / Node.js**
+
+```bash
+npm install @sentry/node
+```
+
+**Python**
+
+```bash
+pip install sentry-sdk
+```
+
+**Kotlin / Android**
+
+```groovy
+// build.gradle.kts
+implementation("io.sentry:sentry-android:7.0.0")
+```
+
+## Configure the SDK
+
+Point the SDK to your Moneat instance by setting the DSN from your project settings.
+
+**JavaScript**
+
+```javascript
+import * as Sentry from "@sentry/node";
+
+Sentry.init({
+  dsn: "https://<public_key>@api.moneat.io/api/<project_id>",
+  tracesSampleRate: 1.0,
+});
+```
+
+**Python**
+
+```python
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn="https://<public_key>@api.moneat.io/api/<project_id>",
+    traces_sample_rate=1.0,
+)
+```
+
+## Capture Your First Error
+
+Once the SDK is initialized, errors are automatically captured. You can also manually capture exceptions and messages.
+
+**JavaScript**
+
+```javascript
+// Automatic - unhandled errors are captured
+throw new Error("Something went wrong!");
+
+// Manual capture
+Sentry.captureException(new Error("Manual error"));
+Sentry.captureMessage("Something noteworthy happened");
+```
+
+:::tip[Verify your setup]
+After initializing the SDK, trigger a test error and check the Moneat dashboard. Your error should appear within seconds under the Issues tab.
+:::
+
+## Next Steps
+
+Now that you're capturing errors, explore these features to get the most out of Moneat:
+
+- [Error Monitoring](/docs/error-monitoring) — Learn about event ingestion, grouping, and context
+- [Issue Tracking](/docs/issue-tracking) — Triage and resolve issues efficiently
+- [On-Call & Incidents](/docs/on-call) — Set up alerting and escalation policies
+- [SDK Setup](/docs/sdk-setup) — Platform-specific SDK configuration guides
+- [Integrations](/docs/integrations) — Connect Slack, Discord, and more

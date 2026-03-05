@@ -1,0 +1,161 @@
+---
+title: Filtering & Segmentation
+description: Slice analytics data by page, source, country, browser, device, UTM parameters, and more.
+---
+
+# Filtering & Segmentation
+
+Filters let you segment your analytics data by any dimension — view traffic from a specific country, analyze mobile-only visitors, or isolate a particular UTM campaign.
+
+## Adding Filters
+
+### In the Dashboard
+
+1. Click the **Add Filter** button in the filter bar
+2. Select a property (e.g., Country, Browser, Page)
+3. Choose an operator (e.g., `is`, `contains`)
+4. Enter a value
+5. The dashboard updates immediately with filtered data
+
+Active filters appear as badges in the filter bar. Click the **×** on any badge to remove it.
+
+You can also click any row in a breakdown table to quickly add it as a filter. For example, clicking "Chrome" in the Devices table automatically adds a `browser:is:Chrome` filter.
+
+### In the API
+
+Pass filters as query parameters using the `filters[]` array:
+
+```
+GET /v1/analytics/{projectId}/overview?period=30d&filters[]=country_code:is:US
+```
+
+Multiple filters can be combined (AND logic):
+
+```
+GET /v1/analytics/{projectId}/pages
+  ?period=30d
+  &filters[]=country_code:is:US
+  &filters[]=browser:is:Chrome
+  &filters[]=device_type:is:Desktop
+```
+
+## Filter Syntax
+
+Each filter follows the format:
+
+```
+property:operator:value
+```
+
+### Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `is` | Exact match | `country_code:is:US` |
+| `is_not` | Exclude exact match | `browser:is_not:Safari` |
+| `contains` | Substring match | `page:contains:/blog` |
+| `not_contains` | Exclude substring | `source:not_contains:google` |
+
+### Available Properties
+
+| Property | Description | Example Values |
+|----------|-------------|----------------|
+| `page` | Page URL path | `/pricing`, `/docs/setup` |
+| `entry_page` | First page in session | `/`, `/blog/intro` |
+| `exit_page` | Last page in session | `/signup`, `/checkout` |
+| `source` | Referrer source | `Google`, `twitter.com`, `Direct` |
+| `country_code` | ISO 3166-1 alpha-2 country code | `US`, `GB`, `DE` |
+| `subdivision` | Region/state | `California`, `London` |
+| `city` | City name | `San Francisco`, `Berlin` |
+| `browser` | Browser name | `Chrome`, `Firefox`, `Safari` |
+| `os` | Operating system | `Windows`, `macOS`, `Android` |
+| `device_type` | Device category | `Desktop`, `Mobile`, `Tablet` |
+| `utm_source` | UTM source parameter | `google`, `newsletter` |
+| `utm_medium` | UTM medium parameter | `cpc`, `email`, `social` |
+| `utm_campaign` | UTM campaign parameter | `spring-sale`, `launch` |
+| `utm_term` | UTM term parameter | `error monitoring` |
+| `utm_content` | UTM content parameter | `hero-cta`, `sidebar` |
+| `event_name` | Custom event name | `Signup`, `Purchase` |
+
+## Filter Combinations
+
+Filters are combined with **AND** logic — all conditions must be true for a record to match.
+
+```
+filters[]=country_code:is:US&filters[]=browser:is:Chrome
+```
+
+This returns data where the country is US **and** the browser is Chrome.
+
+## Segmentation Examples
+
+### Geographic Analysis
+
+Compare traffic from different regions:
+
+```
+# US traffic only
+filters[]=country_code:is:US
+
+# European traffic (use multiple requests)
+filters[]=country_code:is:DE
+filters[]=country_code:is:FR
+filters[]=country_code:is:GB
+```
+
+### Mobile vs Desktop
+
+Analyze device-specific behavior:
+
+```
+# Mobile visitors
+filters[]=device_type:is:Mobile
+
+# Desktop visitors
+filters[]=device_type:is:Desktop
+```
+
+Compare bounce rates and visit durations between segments to identify device-specific UX issues.
+
+### Campaign Performance
+
+Isolate traffic from a specific marketing campaign:
+
+```
+filters[]=utm_campaign:is:spring-sale&filters[]=utm_medium:is:email
+```
+
+### Content Analysis
+
+Focus on blog traffic:
+
+```
+filters[]=page:contains:/blog
+```
+
+Or exclude documentation pages:
+
+```
+filters[]=page:not_contains:/docs
+```
+
+### Source-Specific Landing Page Analysis
+
+See which pages organic search visitors land on:
+
+```
+filters[]=source:is:Google
+```
+
+Then check the **Entry Pages** tab to see their landing pages.
+
+## Filters Apply Globally
+
+When a filter is active, it applies to **all** dashboard components:
+
+- KPI cards show filtered metrics
+- Time series chart shows filtered trends
+- All breakdown tables show filtered data
+- Comparisons use the filter for both periods
+
+This makes it easy to build a complete picture of any audience segment.

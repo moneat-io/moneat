@@ -1,0 +1,617 @@
+---
+title: Migrate from Highlight.io
+description: Step-by-step guide to migrate from highlight.io to Moneat using an AI-assisted migration prompt.
+---
+
+# Migrate from Highlight.io
+
+Moneat is Sentry-protocol compatible, which means migrating from highlight.io is straightforward — you swap the SDK and point your DSN at Moneat. This guide provides a copy-paste AI prompt you can use to automate the migration across your codebase.
+
+## Overview
+
+The migration involves:
+
+1. **Replacing packages** — swap `@highlight-run/*` / `highlight.io` packages for the equivalent `@sentry/*` packages
+2. **Updating initialization** — convert `H.init(projectID, opts)` to `Sentry.init({ dsn, ... })`
+3. **Converting API calls** — map highlight.io methods to their Sentry equivalents
+4. **Updating environment variables** — replace `HIGHLIGHT_PROJECT_ID` with a Sentry DSN
+
+## Finding Your DSN
+
+Before running the migration, grab your Moneat DSN from **Projects → [Your Project] → Settings**:
+
+```text
+https://<public_key>@api.moneat.io/api/<project_id>
+```
+
+You'll pass this as `YOUR_MONEAT_DSN` in the prompt below.
+
+## AI Migration Prompt
+
+Copy the prompt below into your AI assistant (Claude, Copilot, ChatGPT, etc.) along with your codebase context. The prompt instructs the AI to perform the full migration automatically.
+
+:::tip[Best practices]
+For best results, run this prompt with access to your entire codebase (e.g. via GitHub Copilot Workspace, Cursor, or Claude Projects with your repo attached). Replace `YOUR_MONEAT_DSN` with your actual DSN before running.
+:::
+
+---
+
+````
+You are performing a migration from highlight.io to Sentry (or a Sentry-compatible platform such as Moneat).
+The target DSN is: YOUR_MONEAT_DSN
+
+Follow these instructions precisely and completely:
+
+---
+
+## STEP 1 — SCAN THE CODEBASE
+
+Search for all files that reference highlight.io. Look for:
+- Import statements: `@highlight-run`, `highlight.io`, `highlight_io`, `github.com/highlight/highlight`
+- Package files: `package.json`, `requirements.txt`, `Pipfile`, `go.mod`, `pyproject.toml`
+- Environment variable references: `HIGHLIGHT_PROJECT_ID`, `NEXT_PUBLIC_HIGHLIGHT_PROJECT_ID`
+- Configuration files: `next.config.js`, `next.config.ts`, `vite.config.ts`, `instrumentation.ts`
+- Middleware and route files that use `H.parseHeaders`, `withHighlightConfig`, `highlightMiddleware`
+
+List every file found before making any changes.
+
+---
+
+## STEP 2 — REPLACE PACKAGES
+
+### JavaScript / TypeScript
+
+In `package.json`, replace:
+
+| Remove                          | Add                                        |
+|---------------------------------|--------------------------------------------|
+| `@highlight-run/react`          | `@sentry/react`                            |
+| `@highlight-run/next`           | `@sentry/nextjs`                           |
+| `@highlight-run/remix`          | `@sentry/remix`                            |
+| `@highlight-run/node`           | `@sentry/node`                             |
+| `@highlight-run/cloudflare`     | `@sentry/cloudflare`                       |
+| `@highlight-run/hono`           | `@sentry/node` (Hono middleware included)  |
+| `highlight.run`                 | `@sentry/browser`                          |
+| `@highlight-run/opentelemetry`  | `@sentry/opentelemetry`                    |
+
+After editing `package.json`, run the appropriate install command (`npm install`, `yarn`, or `pnpm install`).
+
+### Python
+
+In `requirements.txt` or `pyproject.toml`, replace:
+
+| Remove       | Add          |
+|--------------|--------------|
+| `highlight-io` | `sentry-sdk[flask]` (or `sentry-sdk[django]`, `sentry-sdk[fastapi]` as appropriate) |
+
+### Go
+
+In `go.mod`, replace:
+
+| Remove                              | Add                                   |
+|-------------------------------------|---------------------------------------|
+| `github.com/highlight/highlight/sdk/highlight-go` | `github.com/getsentry/sentry-go` |
+
+Also add framework-specific packages as needed:
+- Chi: `github.com/getsentry/sentry-go/http`
+- Gin: `github.com/getsentry/sentry-go/gin`
+- Echo: `github.com/getsentry/sentry-go/echo`
+- Fiber/Fasthttp: `github.com/getsentry/sentry-go/fasthttp`
+
+---
+
+## STEP 3 — CONVERT ENVIRONMENT VARIABLES
+
+Replace all references to `HIGHLIGHT_PROJECT_ID` (and `NEXT_PUBLIC_HIGHLIGHT_PROJECT_ID`) with a Sentry DSN variable:
+
+| Old variable                        | New variable  | New value              |
+|-------------------------------------|---------------|------------------------|
+| `HIGHLIGHT_PROJECT_ID`              | `SENTRY_DSN`  | `YOUR_MONEAT_DSN`      |
+| `NEXT_PUBLIC_HIGHLIGHT_PROJECT_ID`  | `NEXT_PUBLIC_SENTRY_DSN` | `YOUR_MONEAT_DSN` |
+
+Update `.env`, `.env.local`, `.env.example`, and any CI/CD configuration files that set these variables.
+
+---
+
+## STEP 4 — CONVERT INITIALIZATION
+
+### Browser / React
+
+Old:
+```ts
+import { H } from 'highlight.run';
+
+H.init('<YOUR_PROJECT_ID>', {
+  environment: 'production',
+  version: '1.0.0',
+  tracingOrigins: ['localhost', 'example.com'],
+  networkRecording: { enabled: true, recordHeadersAndBody: true },
+});
+```
+
+New:
+```ts
+import * as Sentry from '@sentry/browser'; // or '@sentry/react'
+import { replayIntegration, browserTracingIntegration } from '@sentry/browser';
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: 'production',
+  release: '1.0.0',
+  integrations: [
+    browserTracingIntegration(),
+    replayIntegration({ networkDetailAllowUrls: ['localhost', 'example.com'] }),
+  ],
+  tracesSampleRate: 1.0,
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1.0,
+});
+```
+
+### React ErrorBoundary
+
+Old:
+```tsx
+import { ErrorBoundary } from '@highlight-run/react';
+<ErrorBoundary showDialog>...</ErrorBoundary>
+```
+
+New:
+```tsx
+import { ErrorBoundary } from '@sentry/react';
+<ErrorBoundary showDialog>...</ErrorBoundary>
+```
+
+### Next.js
+
+Old (`next.config.js`):
+```js
+const { withHighlightConfig } = require('@highlight-run/next/config');
+module.exports = withHighlightConfig({ /* next config */ });
+```
+
+New (`next.config.js`):
+```js
+const { withSentryConfig } = require('@sentry/nextjs');
+module.exports = withSentryConfig({ /* next config */ }, {
+  org: 'your-org',
+  project: 'your-project',
+  silent: true,
+});
+```
+
+Create `instrumentation.ts` at the root:
+```ts
+export async function register() {
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    await import('./sentry.server.config');
+  }
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    await import('./sentry.edge.config');
+  }
+}
+```
+
+Create `sentry.client.config.ts`:
+```ts
+import * as Sentry from '@sentry/nextjs';
+Sentry.init({ dsn: process.env.NEXT_PUBLIC_SENTRY_DSN, tracesSampleRate: 1.0 });
+```
+
+Create `sentry.server.config.ts` and `sentry.edge.config.ts` with the same pattern using `SENTRY_DSN`.
+
+### Node.js
+
+Old:
+```ts
+import { H } from '@highlight-run/node';
+H.init({ projectID: '<YOUR_PROJECT_ID>' });
+```
+
+New:
+```ts
+import * as Sentry from '@sentry/node';
+Sentry.init({ dsn: process.env.SENTRY_DSN, tracesSampleRate: 1.0 });
+```
+
+Note: `Sentry.init()` must be called **before** any other imports that you want to instrument.
+
+### Remix
+
+Old:
+```ts
+import { HandleError } from '@highlight-run/remix/server';
+export const handleError = HandleError({ projectID: '<YOUR_PROJECT_ID>' });
+```
+
+New:
+```ts
+import * as Sentry from '@sentry/remix';
+export const handleError = Sentry.wrapHandleErrorWithSentry(
+  (error, { request }) => { /* your error handling */ }
+);
+```
+
+Initialize Sentry in `entry.server.tsx`:
+```ts
+Sentry.init({ dsn: process.env.SENTRY_DSN });
+```
+
+### NestJS
+
+Old:
+```ts
+import { HighlightModule } from '@highlight-run/nest';
+@Module({ imports: [HighlightModule.forRoot({ projectID: '<YOUR_PROJECT_ID>' })] })
+```
+
+New:
+```ts
+import { SentryModule } from '@sentry/nestjs/setup';
+@Module({ imports: [SentryModule.forRoot()] })
+```
+
+Initialize Sentry before bootstrapping the app:
+```ts
+import * as Sentry from '@sentry/nestjs';
+Sentry.init({ dsn: process.env.SENTRY_DSN });
+```
+
+### Python — Flask
+
+Old:
+```python
+import highlight_io
+from highlight_io.integrations.flask import FlaskIntegration
+
+H = highlight_io.H('<YOUR_PROJECT_ID>', integrations=[FlaskIntegration()])
+```
+
+New:
+```python
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
+
+sentry_sdk.init(
+    dsn=os.environ['SENTRY_DSN'],
+    integrations=[FlaskIntegration()],
+    traces_sample_rate=1.0,
+)
+```
+
+### Python — Django
+
+Old:
+```python
+H = highlight_io.H('<YOUR_PROJECT_ID>', integrations=[DjangoIntegration()])
+```
+
+New:
+```python
+sentry_sdk.init(
+    dsn=os.environ['SENTRY_DSN'],
+    integrations=[sentry_sdk.integrations.django.DjangoIntegration()],
+    traces_sample_rate=1.0,
+)
+```
+
+### Python — FastAPI
+
+Old:
+```python
+from highlight_io.integrations.fastapi import FastAPIMiddleware
+app.add_middleware(FastAPIMiddleware)
+```
+
+New:
+```python
+sentry_sdk.init(dsn=os.environ['SENTRY_DSN'],
+    integrations=[sentry_sdk.integrations.fastapi.FastApiIntegration()])
+```
+
+### Go
+
+Old:
+```go
+import "github.com/highlight/highlight/sdk/highlight-go"
+
+highlight.Start(
+  highlight.WithProjectID("<YOUR_PROJECT_ID>"),
+  highlight.WithServiceName("my-service"),
+)
+defer highlight.Stop()
+```
+
+New:
+```go
+import "github.com/getsentry/sentry-go"
+
+err := sentry.Init(sentry.ClientOptions{
+  Dsn:              os.Getenv("SENTRY_DSN"),
+  TracesSampleRate: 1.0,
+})
+if err != nil { log.Fatalf("sentry.Init: %s", err) }
+defer sentry.Flush(2 * time.Second)
+```
+
+### Cloudflare Workers
+
+Old:
+```ts
+import { H } from '@highlight-run/cloudflare';
+H.init(env.HIGHLIGHT_PROJECT_ID, request, ctx);
+```
+
+New:
+```ts
+import * as Sentry from '@sentry/cloudflare';
+// Wrap your handler:
+export default Sentry.withSentry(
+  (env) => ({ dsn: env.SENTRY_DSN }),
+  { fetch: yourHandler }
+);
+```
+
+### Hono
+
+Old:
+```ts
+import { highlightMiddleware } from '@highlight-run/hono';
+app.use('*', highlightMiddleware({ projectID: '<YOUR_PROJECT_ID>' }));
+```
+
+New:
+```ts
+import * as Sentry from '@sentry/node';
+Sentry.init({ dsn: process.env.SENTRY_DSN });
+// Use Sentry.setupHonoErrorHandler(app) after defining routes
+import { setupHonoErrorHandler } from '@sentry/node';
+setupHonoErrorHandler(app);
+```
+
+---
+
+## STEP 5 — CONVERT API CALLS
+
+### Browser / JS API
+
+For every file that uses `H.*` methods, apply the following replacements:
+
+**User identification:**
+```ts
+// Old
+H.identify('user@example.com', { name: 'Jane', plan: 'pro' });
+
+// New
+Sentry.setUser({ id: 'user@example.com', name: 'Jane', plan: 'pro' });
+```
+
+**Error capture:**
+```ts
+// Old
+H.consumeError(err, 'Something failed', { orderId: 123 });
+
+// New
+Sentry.captureException(err, { extra: { message: 'Something failed', orderId: 123 } });
+```
+
+**Message capture:**
+```ts
+// Old
+H.error('Payment declined', { userId: 'u_123' });
+
+// New
+Sentry.captureMessage('Payment declined', { level: 'error', extra: { userId: 'u_123' } });
+```
+
+**Feedback:**
+```ts
+// Old
+H.addSessionFeedback({ verbatim: 'Great app!', userName: 'Jane', userEmail: 'jane@example.com' });
+
+// New
+Sentry.captureFeedback({ message: 'Great app!', name: 'Jane', email: 'jane@example.com' });
+```
+
+**Spans / Tracing:**
+```ts
+// Old
+H.startSpan('my-span', {}, ctx, async () => { /* work */ });
+
+// New
+Sentry.startSpan({ name: 'my-span' }, async () => { /* work */ });
+```
+
+**No direct equivalent — add TODO comments:**
+```ts
+// Old
+H.track('button_clicked', { buttonId: 'cta' });
+// TODO: No direct Sentry equivalent. Use a custom analytics tool or Sentry.captureMessage() as a workaround.
+
+// Old
+const url = await H.getSessionURL();
+// TODO: Sentry does not expose a session URL. Remove or replace with your own session tracking.
+
+// Old
+H.recordMetric('latency', 42);
+H.recordCount('requests', 1);
+H.recordHistogram('response_size', 1024);
+// TODO: Sentry does not have a built-in metrics API equivalent for these calls. Consider using a dedicated metrics service.
+
+// Old
+H.start();
+H.stop();
+// TODO: Sentry Replay manages its own lifecycle. Use replay.start() / replay.stop() only if you have a reference to the replay integration instance.
+```
+
+### Node.js API
+
+**Error capture:**
+```ts
+// Old
+H.consumeError(err, sessionId, requestId, { extra: 'data' });
+
+// New
+Sentry.captureException(err, { extra: { extra: 'data' } });
+```
+
+**Logging:**
+```ts
+// Old
+H.log('user signed in', 'info', { userId: 'u_123' });
+
+// New — enable logs in init: { _experiments: { enableLogs: true } }
+Sentry.logger.info('user signed in', { userId: 'u_123' });
+```
+
+**Header propagation:**
+```ts
+// Old
+const { sessionId, requestId } = H.parseHeaders(request.headers);
+
+// New
+const sentryTrace = request.headers['sentry-trace'];
+const baggage = request.headers['baggage'];
+const ctx = Sentry.continueTrace({ sentryTrace, baggage }, () => Sentry.getActiveSpan());
+// NOTE: sessionId / requestId have no equivalent; remove downstream usages or replace with Sentry trace IDs.
+```
+
+**Flush:**
+```ts
+// Old
+await H.flush();
+
+// New
+await Sentry.flush();
+```
+
+### Go API
+
+**Error capture:**
+```go
+// Old
+highlight.RecordError(ctx, err)
+
+// New
+sentry.CaptureException(err)
+```
+
+**HTTP middleware:**
+```go
+// Old — Chi
+r.Use(highlightChi.NewMiddleware())
+
+// New
+import sentryhttp "github.com/getsentry/sentry-go/http"
+sentryHandler := sentryhttp.New(sentryhttp.Options{})
+r.Use(sentryHandler.Handle)
+
+// Old — Gin
+r.Use(highlightGin.Middleware())
+
+// New
+import sentrygin "github.com/getsentry/sentry-go/gin"
+r.Use(sentrygin.New(sentrygin.Options{}))
+
+// Old — Echo
+e.Use(highlightEcho.Middleware())
+
+// New
+import sentryecho "github.com/getsentry/sentry-go/echo"
+e.Use(sentryecho.New(sentryecho.Options{}))
+```
+
+### Python API
+
+**Exception capture:**
+```python
+# Old
+H.record_exception(err)
+
+# New
+sentry_sdk.capture_exception(err)
+```
+
+**Tracing context manager:**
+```python
+# Old
+with H.trace():
+    do_work()
+
+# New
+with sentry_sdk.start_span(op='task', description='do_work'):
+    do_work()
+```
+
+---
+
+## STEP 6 — CLEANUP
+
+1. Remove all remaining `import { H } from 'highlight.run'` (and equivalent) statements that are no longer used.
+2. Remove any highlight.io-specific configuration files (e.g. `highlight.config.ts`).
+3. Delete `HIGHLIGHT_PROJECT_ID` from all `.env*` files (keep `SENTRY_DSN`).
+4. Search for any remaining references to `highlight` in import paths and flag them for review.
+5. Run the project's linter and test suite to catch any missed references or type errors.
+
+---
+
+## GAPS AND KNOWN LIMITATIONS
+
+Add the following TODO comments wherever these features were used, as they have no direct Sentry equivalent:
+
+- **`H.track(event, metadata)`** — Sentry does not have a client-side event tracking API. Use `Sentry.captureMessage()` as a rough substitute, or integrate a dedicated analytics tool (e.g. PostHog, Amplitude).
+- **`H.getSessionURL()`** — Sentry Replay does not expose a public URL for the current session. Remove or replace.
+- **`H.recordMetric()` / `H.recordCount()` / `H.recordHistogram()`** — No direct SDK equivalent. Consider StatsD, Prometheus, or a dedicated metrics service.
+- **`H.parseHeaders()` `sessionId` / `requestId`** — Sentry uses trace IDs instead of highlight-specific session/request IDs. Update downstream code to use `Sentry.getActiveSpan()` if needed.
+- **Session replay network body recording** — Configure via `replayIntegration({ networkDetailAllowUrls, networkCaptureBodies: true })` in the browser SDK.
+````
+
+---
+
+## API Reference
+
+Quick-reference tables for the most common migrations.
+
+### Browser / JavaScript
+
+| highlight.io | Sentry |
+|---|---|
+| `H.init(projectID, opts)` | `Sentry.init({ dsn, integrations: [replayIntegration(), browserTracingIntegration()], ... })` |
+| `H.identify(id, metadata)` | `Sentry.setUser({ id, ...metadata })` |
+| `H.track(event, metadata)` | ⚠️ No direct equivalent — see TODO note above |
+| `H.consumeError(err, msg, payload)` | `Sentry.captureException(err, { extra: { message: msg, ...payload } })` |
+| `H.error(msg, payload)` | `Sentry.captureMessage(msg, { level: 'error', extra: payload })` |
+| `H.addSessionFeedback({...})` | `Sentry.captureFeedback({...})` |
+| `H.startSpan(name, opts, ctx, fn)` | `Sentry.startSpan({ name, ...opts }, fn)` |
+| `H.getSessionURL()` | ⚠️ No equivalent |
+| `H.recordMetric/Count/Histogram()` | ⚠️ No equivalent |
+
+### Node.js
+
+| highlight.io | Sentry |
+|---|---|
+| `H.init({ projectID, ... })` | `Sentry.init({ dsn, ... })` |
+| `H.consumeError(err, sessionId, reqId, meta)` | `Sentry.captureException(err, { extra: meta })` |
+| `H.log(msg, level, ...)` | `Sentry.logger[level](msg)` |
+| `H.parseHeaders(headers)` | `Sentry.continueTrace({ sentryTrace, baggage })` |
+| `H.flush()` | `Sentry.flush()` |
+
+### Python
+
+| highlight.io | Sentry |
+|---|---|
+| `highlight_io.H(project_id, integrations=[...])` | `sentry_sdk.init(dsn, integrations=[...])` |
+| `H.record_exception(err)` | `sentry_sdk.capture_exception(err)` |
+| `H.trace()` context manager | `sentry_sdk.start_span()` |
+| `FlaskIntegration()` | `sentry_sdk.integrations.flask.FlaskIntegration()` |
+| `DjangoIntegration()` | `sentry_sdk.integrations.django.DjangoIntegration()` |
+| `FastAPIMiddleware` | `sentry_sdk.integrations.fastapi.FastApiIntegration()` |
+
+### Go
+
+| highlight.io | Sentry |
+|---|---|
+| `highlight.Start(opts...)` | `sentry.Init(sentry.ClientOptions{...})` |
+| `highlight.Stop()` | `sentry.Flush(timeout)` |
+| `highlight.RecordError(ctx, err)` | `sentry.CaptureException(err)` |
+| Chi/Gin/Echo/Fiber middleware | `sentryhttp` / `sentrygin` / `sentryecho` / `sentryfasthttp` |

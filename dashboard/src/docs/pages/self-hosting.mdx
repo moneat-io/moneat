@@ -1,0 +1,290 @@
+---
+title: Self-Hosting
+description: Deploy Moneat on your own infrastructure with Docker Compose.
+---
+
+# Self-Hosting
+
+Moneat can be self-hosted on your own infrastructure using Docker Compose. The self-hosted edition includes all core features — error monitoring, issue tracking, uptime monitoring, structured logging, and status pages — with no event limits.
+
+:::info[Enterprise features]
+Features like On-Call and SSO require an enterprise license. [Contact us](mailto:support@moneat.io) for details.
+:::
+
+## Requirements
+
+- **Docker** v20.10+ and **Docker Compose** v2.0+
+- **2 CPU cores** and **2 GB RAM** minimum (4 GB recommended)
+- **20 GB disk** for databases (scales with data volume)
+- A Linux server (Ubuntu 22.04+, Debian 12+, or similar)
+- A domain name with DNS configured (for HTTPS)
+
+## Quick Start
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/moneat/moneat.git
+cd moneat
+```
+
+### 2. Configure Environment Variables
+
+Create a `.env` file in the project root. Start from the example and update the critical values:
+
+```bash
+cp .env.example .env
+```
+
+At minimum, you **must** change these values:
+
+```ini
+# Generate a strong secret: openssl rand -base64 64
+JWT_SECRET=your-secure-random-secret
+
+# Database passwords — use strong, unique passwords
+DATABASE_PASSWORD=your-postgres-password
+CLICKHOUSE_PASSWORD=your-clickhouse-password
+
+# Your public-facing URLs
+FRONTEND_URL=https://moneat.example.com
+BACKEND_URL=https://api.moneat.example.com
+
+# Self-host mode (required)
+SELF_HOST=true
+```
+
+:::danger[Use strong secrets]
+Never use the default development passwords in production. Generate unique passwords for `JWT_SECRET`, `DATABASE_PASSWORD`, and `CLICKHOUSE_PASSWORD`.
+:::
+
+### 3. Update Docker Compose
+
+Edit `docker-compose.yml` to use your passwords and URLs. The key values to update:
+
+```yaml
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: your-postgres-password  # Match DATABASE_PASSWORD
+
+  clickhouse:
+    environment:
+      CLICKHOUSE_PASSWORD: your-clickhouse-password  # Match CLICKHOUSE_PASSWORD
+
+  backend:
+    environment:
+      DATABASE_PASSWORD: your-postgres-password
+      CLICKHOUSE_PASSWORD: your-clickhouse-password
+      JWT_SECRET: your-secure-random-secret
+      FRONTEND_URL: https://moneat.example.com
+      BACKEND_URL: https://api.moneat.example.com
+      SELF_HOST: "true"
+
+  frontend:
+    build:
+      args:
+        VITE_API_URL: https://api.moneat.example.com
+        VITE_BACKEND_URL: https://api.moneat.example.com
+```
+
+### 4. Build and Start
+
+```bash
+./scripts/docker-build.sh
+docker compose up -d
+```
+
+The build script prepares the Docker context and builds both the backend and frontend images. This may take several minutes on first run.
+
+### 5. Verify
+
+Once the containers are running, verify the deployment:
+
+```bash
+# Check all services are healthy
+docker compose ps
+
+# Test the backend health endpoint
+curl http://localhost:8080/health
+
+# Frontend should be available on port 3000
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
+```
+
+Visit your frontend URL to create your first account and organization.
+
+## Architecture
+
+The self-hosted deployment consists of five services:
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| **Frontend** | 3000 (HTTP) | React dashboard served by Nginx |
+| **Backend** | 8080 | Kotlin/Ktor API server |
+| **PostgreSQL** | 5432 | Users, organizations, projects, keys |
+| **ClickHouse** | 8123 / 9000 | Events, issues, sessions, spans, logs |
+| **Redis** | 6379 | Caching, rate limiting, job queues |
+
+```text
+                    ┌──────────────┐
+  SDKs ────────────▶│   Backend    │──────▶ PostgreSQL
+                    │  (Ktor :8080)│──────▶ ClickHouse
+  Browser ────────▶ │              │──────▶ Redis
+       │            └──────────────┘
+       │
+       ▼
+  ┌──────────────┐
+  │   Frontend   │
+  │ (Nginx :3000)│
+  └──────────────┘
+```
+
+## Environment Variables
+
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `JWT_SECRET` | Secret key for signing JWT tokens. Generate with `openssl rand -base64 64`. |
+| `DATABASE_PASSWORD` | PostgreSQL password. Must match `POSTGRES_PASSWORD` in the postgres service. |
+| `CLICKHOUSE_PASSWORD` | ClickHouse password. Must match the clickhouse service config. |
+| `FRONTEND_URL` | Public URL of the dashboard (e.g. `https://moneat.example.com`). |
+| `BACKEND_URL` | Public URL of the API (e.g. `https://api.moneat.example.com`). |
+| `SELF_HOST` | Set to `true` to enable self-hosted mode. |
+
+### Email / SMTP
+
+Configure SMTP to enable email notifications (alerts, invitations, password resets):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EMAIL_FROM` | `noreply@moneat.app` | Sender address for outgoing emails. |
+| `SMTP_HOST` | — | SMTP server hostname. |
+| `SMTP_PORT` | `587` | SMTP server port. |
+| `SMTP_USERNAME` | — | SMTP authentication username. |
+| `SMTP_PASSWORD` | — | SMTP authentication password. |
+| `SMTP_AUTH` | `true` | Enable SMTP authentication. |
+| `SMTP_STARTTLS` | `true` | Enable STARTTLS encryption. |
+
+### Optional Integrations
+
+| Variable | Description |
+|----------|-------------|
+| `SLACK_ENABLED` | Set to `true` to enable Slack notifications. Requires `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, and `SLACK_REDIRECT_URI`. |
+| `DISCORD_ENABLED` | Set to `true` to enable Discord notifications. Requires `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `DISCORD_REDIRECT_URI`. |
+| `OPENAI_API_KEY` | Enable AI-powered chat assistant for admin users. |
+| `SENTRY_DSN` | Enable self-monitoring by sending backend errors to a Moneat project (or Sentry). |
+
+### OAuth Providers
+
+Enable social login by configuring one or more OAuth providers:
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth app client ID. |
+| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth app client secret. |
+| `APPLE_CLIENT_ID` | Apple Sign In service ID. |
+| `APPLE_TEAM_ID` | Apple Developer team ID. |
+| `APPLE_KEY_ID` | Apple Sign In key ID. |
+| `APPLE_PRIVATE_KEY` | Base64-encoded Apple `.p8` private key. |
+
+## Data Persistence
+
+All data is stored in Docker volumes:
+
+| Volume | Service | Contains |
+|--------|---------|----------|
+| `postgres_data` | PostgreSQL | Users, orgs, projects, keys, subscriptions |
+| `clickhouse_data` | ClickHouse | Events, issues, sessions, spans, logs |
+| `redis_data` | Redis | Cache and queue state |
+| `backend_storage` | Backend | Source maps, debug files, artifact bundles |
+
+:::warning[Back up your data]
+Docker volumes are **not** automatically backed up. Set up regular backups for `postgres_data` and `clickhouse_data` to prevent data loss.
+:::
+
+### Backup Example
+
+```bash
+# PostgreSQL
+docker exec moneat-postgres pg_dump -U moneat moneat > backup_pg_$(date +%Y%m%d).sql
+
+# ClickHouse
+docker exec moneat-clickhouse clickhouse-client \
+  --user moneat --password "$CLICKHOUSE_PASSWORD" \
+  --query "SELECT * FROM events FORMAT Native" > backup_ch_events_$(date +%Y%m%d).bin
+```
+
+## Upgrading
+
+To upgrade to a new version of Moneat:
+
+```bash
+# Pull latest changes
+git pull origin main
+
+# Rebuild images
+./scripts/docker-build.sh
+
+# Restart with new images
+docker compose up -d
+```
+
+Database migrations run automatically on backend startup — both PostgreSQL (via Flyway) and ClickHouse migrations are applied when the backend container starts.
+
+## Telemetry
+
+When `SELF_HOST=true`, Moneat collects anonymous usage metrics to help improve the product for self-hosters. This includes aggregate counts (number of events ingested, active users) and never includes any event data, user information, or personally identifiable information.
+
+To opt out, set in your `.env`:
+
+```ini
+TELEMETRY_ENABLED=false
+```
+
+## Troubleshooting
+
+### Backend won't start
+
+Check the logs for environment validation errors:
+
+```bash
+docker compose logs backend
+```
+
+The backend validates all critical environment variables on startup and will exit with a clear error message if any are missing. Common issues:
+
+- `JWT_SECRET` not set or using the default development value
+- `DATABASE_PASSWORD` doesn't match the PostgreSQL container's `POSTGRES_PASSWORD`
+- `CLICKHOUSE_PASSWORD` doesn't match the ClickHouse container's password
+
+### ClickHouse connection errors
+
+Ensure ClickHouse is healthy before the backend starts. The Docker Compose file includes health checks, but on slower machines the backend may start before ClickHouse is ready:
+
+```bash
+# Check ClickHouse health
+docker compose exec clickhouse wget -q -O - http://localhost:8123/ping
+```
+
+### Frontend shows "Network Error"
+
+This usually means `VITE_API_URL` or `VITE_BACKEND_URL` was not set correctly at build time. These are baked into the frontend at build time, so you need to rebuild the frontend after changing them:
+
+```bash
+./scripts/docker-build.sh
+docker compose up -d frontend
+```
+
+### CORS errors
+
+Make sure `FRONTEND_URL` in the backend matches the exact URL your browser uses to access the dashboard (including protocol and port). If you use additional origins, set them in `ALLOWED_ORIGINS` as a comma-separated list.
+
+### Running out of disk space
+
+ClickHouse stores event data and can grow quickly with high event volume. Monitor disk usage and consider:
+
+- Setting up [data retention](https://clickhouse.com/docs/en/guides/developer/ttl) policies in ClickHouse
+- Using a separate volume or disk for `clickhouse_data`
+- Increasing disk capacity on your server
