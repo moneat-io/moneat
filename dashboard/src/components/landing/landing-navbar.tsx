@@ -251,7 +251,7 @@ function MobileNav() {
             Live Demo
           </Link>
           <a
-            href="https://blog.moneat.io"
+            href="/blog"
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setOpen(false)}
@@ -314,7 +314,7 @@ export function LandingNavbar() {
             Live Demo
           </Link>
           <a
-            href="https://blog.moneat.io"
+            href="/blog"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -383,7 +383,7 @@ export function LandingFooter() {
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Resources</h4>
             <ul className="space-y-2.5">
               <li><a href="/docs" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Documentation</a></li>
-              <li><a href="https://blog.moneat.io" target="_blank" rel="noopener noreferrer" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Blog</a></li>
+              <li><a href="/blog" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Blog</a></li>
               <li><Link to="/pricing" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Pricing</Link></li>
               <li><Link to="/demo" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Live Demo</Link></li>
             </ul>

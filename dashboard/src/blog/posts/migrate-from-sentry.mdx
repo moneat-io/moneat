@@ -1,0 +1,280 @@
+---
+title: "We Replaced Sentry in 10 Minutes — Here's How (Drop-In Migration Guide)"
+description: "A step-by-step guide to migrating from Sentry to Moneat. One line of code per service, no re-instrumentation, no new SDKs."
+date: 2026-02-22
+author: "Adrian Elder"
+tags: ["migration", "sentry", "guide"]
+published: true
+---
+
+If you're looking to migrate from Sentry, it's the fastest platform migration you'll ever do. You change one line of code per service — the DSN — and you're done.
+
+---
+
+## Why Teams Migrate
+
+Teams switch for cost savings, data ownership, or to consolidate tools. Moneat handles error monitoring, status pages, on-call, and infrastructure monitoring in one platform — while remaining fully compatible with every Sentry SDK.
+
+---
+
+## How the Compatibility Works
+
+Moneat implements the **Sentry envelope ingestion protocol** — the same HTTP API that every Sentry SDK uses. The only thing that changes is where the SDK sends data.
+
+| SDK feature | Works with Moneat? |
+|---|---|
+| `captureException()` | ✅ |
+| `captureMessage()` | ✅ |
+| Breadcrumbs | ✅ |
+| User context (`setUser`) | ✅ |
+| Tags and extra data | ✅ |
+| Performance tracing (`startTransaction`) | ✅ |
+| Session replays (`@sentry/replay`) | ✅ |
+| Release tracking | ✅ |
+| Source maps | ✅ |
+| User feedback widget | ✅ |
+| Profiling | ⚠️ Sentry SDK profiling not supported — Moneat uses Datadog Agent (pprof/JFR, flamegraphs) instead |
+
+Nothing in your application code changes.
+
+---
+
+## Step 1: Set Up Your Moneat Instance (5 minutes)
+
+### Option A: Moneat Cloud
+
+Sign up at [moneat.io](https://moneat.io), create an organization and project, and copy your DSN:
+
+```
+https://{public_key}@app.moneat.io/api/{project_id}
+```
+
+Done. Skip to Step 2.
+
+### Option B: Self-Hosted
+
+Requirements: Docker, 2 GB+ RAM (4 GB recommended), a domain for SSL.
+
+```bash
+# Clone the repo
+git clone https://github.com/moneat/moneat
+cd moneat
+
+# Copy and edit the environment file
+cp .env.example .env
+```
+
+Edit `.env` with your values:
+
+```bash
+# Required
+JWT_SECRET=your-long-random-secret-here
+DATABASE_PASSWORD=your-postgres-password
+CLICKHOUSE_PASSWORD=your-clickhouse-password
+FRONTEND_URL=https://moneat.yourdomain.com
+BACKEND_URL=https://api.yourdomain.com
+
+# Optional: SMTP for email alerts
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=alerts@yourdomain.com
+SMTP_PASS=your-smtp-password
+```
+
+```bash
+# Start the stack
+docker-compose up -d
+
+# Check that everything's running
+docker-compose ps
+```
+
+Point DNS at your server, configure SSL, and you're live. Full guide: [moneat.io/docs/self-hosting](https://moneat.io/docs/self-hosting).
+
+---
+
+## Step 2: Create Projects and Get DSNs (2 minutes)
+
+In the Moneat dashboard, go to **Settings → Projects → New Project**, select your platform, and copy the DSN. Create one project per Sentry project you're migrating.
+
+---
+
+## Step 3: Update Your SDKs (The Only Code Change)
+
+Find your Sentry initialization and update the `dsn` value. That's it.
+
+### JavaScript / TypeScript
+
+```javascript
+// Before
+import * as Sentry from "@sentry/browser";
+
+Sentry.init({
+  dsn: "https://abc123@o456789.ingest.sentry.io/123456",
+  tracesSampleRate: 1.0,
+  replaysSessionSampleRate: 0.1,
+});
+
+// After — only this line changes
+Sentry.init({
+  dsn: "https://abc123@moneat.yourdomain.com/api/1",
+  tracesSampleRate: 1.0,
+  replaysSessionSampleRate: 0.1,
+});
+```
+
+### Python
+
+```python
+# Before
+import sentry_sdk
+sentry_sdk.init(
+    dsn="https://abc123@o456789.ingest.sentry.io/123456",
+    traces_sample_rate=1.0,
+)
+
+# After
+sentry_sdk.init(
+    dsn="https://abc123@moneat.yourdomain.com/api/1",
+    traces_sample_rate=1.0,
+)
+```
+
+### Kotlin / Android
+
+```kotlin
+// Before
+SentryAndroid.init(context) { options ->
+    options.dsn = "https://abc123@o456789.ingest.sentry.io/123456"
+    options.tracesSampleRate = 1.0
+}
+
+// After
+SentryAndroid.init(context) { options ->
+    options.dsn = "https://abc123@moneat.yourdomain.com/api/1"
+    options.tracesSampleRate = 1.0
+}
+```
+
+### Swift / iOS
+
+```swift
+// Before
+SentrySDK.start { options in
+    options.dsn = "https://abc123@o456789.ingest.sentry.io/123456"
+    options.tracesSampleRate = 1.0
+}
+
+// After
+SentrySDK.start { options in
+    options.dsn = "https://abc123@moneat.yourdomain.com/api/1"
+    options.tracesSampleRate = 1.0
+}
+```
+
+### Ruby
+
+```ruby
+# Before
+Sentry.init do |config|
+  config.dsn = 'https://abc123@o456789.ingest.sentry.io/123456'
+  config.traces_sample_rate = 1.0
+end
+
+# After
+Sentry.init do |config|
+  config.dsn = 'https://abc123@moneat.yourdomain.com/api/1'
+  config.traces_sample_rate = 1.0
+end
+```
+
+### Go
+
+```go
+// Before
+sentry.Init(sentry.ClientOptions{
+    Dsn: "https://abc123@o456789.ingest.sentry.io/123456",
+    TracesSampleRate: 1.0,
+})
+
+// After
+sentry.Init(sentry.ClientOptions{
+    Dsn: "https://abc123@moneat.yourdomain.com/api/1",
+    TracesSampleRate: 1.0,
+})
+```
+
+---
+
+## Step 4: Configure Source Maps (Optional)
+
+If you upload source maps to Sentry, the same CLI works with Moneat:
+
+```bash
+# Install sentry-cli if you haven't already
+npm install -g @sentry/cli
+
+# Configure to point at Moneat instead of Sentry
+export SENTRY_URL=https://moneat.yourdomain.com
+export SENTRY_AUTH_TOKEN=your-moneat-auth-token
+export SENTRY_ORG=your-org-slug
+export SENTRY_PROJECT=your-project-slug
+
+# Upload source maps (same command as before)
+sentry-cli releases files "$RELEASE" upload-sourcemaps ./dist
+```
+
+---
+
+## Step 5: Set Up Alerts (5 minutes)
+
+In **Settings → Alerts**, create rules for new issues, error rate spikes, and uptime checks. Connect to Slack, email, PagerDuty, or Moneat's built-in on-call.
+
+---
+
+## Step 6: Validate
+
+After deploying with the new DSN:
+
+1. Trigger a test error in your app
+2. Check the **Moneat Issues dashboard** — it should appear within seconds
+3. Verify stack traces, user context, tags, and breadcrumbs
+4. If using session replay, check the **Replays** tab
+
+---
+
+## What About Historical Data?
+
+Moneat doesn't import historical Sentry data, but error monitoring data has a short half-life — teams rarely reference errors older than 30 days. Run both platforms in parallel for 1–2 weeks before canceling Sentry, migrating one service at a time since the DSN is per-project.
+
+```javascript
+// Temporarily send to both during transition
+Sentry.init({
+  dsn: "https://abc123@moneat.yourdomain.com/api/1",
+});
+// Keep old Sentry project active to catch anything you missed
+```
+
+---
+
+## Total Migration Time Estimate
+
+| Step | Time |
+|---|---|
+| Set up Moneat instance | 5-10 minutes |
+| Create projects and copy DSNs | 2 minutes |
+| Update DSN in each service | 1 minute per service |
+| Configure source maps | 5-10 minutes |
+| Set up alerts | 5-10 minutes |
+| Validation | 10-15 minutes |
+| **Total** | **30-45 minutes for most apps** |
+
+For a single-service app, 10 minutes is realistic. For microservices with 10 services, budget an afternoon.
+
+---
+
+## Ready to Migrate?
+
+The migration is fully reversible — update the DSN back if you change your mind.
+
+[Get started with Moneat →](https://moneat.io) | [Self-hosting guide →](https://moneat.io/docs/self-hosting)

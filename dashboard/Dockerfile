@@ -7,14 +7,6 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY docs/ .
 RUN npm run build
 
-FROM node:24-alpine AS blog-build
-WORKDIR /app
-COPY blog/package.json blog/package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --prefer-offline --no-audit
-COPY blog/ .
-RUN npm run build
-
 FROM node:24-alpine AS dashboard-build
 WORKDIR /app
 COPY dashboard/package.json dashboard/package-lock.json dashboard/.npmrc ./
@@ -22,7 +14,6 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit
 COPY dashboard/ .
 COPY --from=docs-build /app/build ./public/docs
-COPY --from=blog-build /app/out ./public/blog
 ARG VITE_BACKEND_URL=""
 ARG VITE_API_URL=""
 ARG VITE_SENTRY_DSN=""

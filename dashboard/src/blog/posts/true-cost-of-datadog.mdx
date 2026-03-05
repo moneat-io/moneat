@@ -1,0 +1,125 @@
+---
+title: "The True Cost of Datadog: How Observability Billing Surprises Kill Budgets"
+description: "A breakdown of how Datadog's per-product, per-host, per-volume pricing model creates unpredictable bills — and what teams are doing instead."
+date: 2026-02-15
+author: "Adrian Elder"
+tags: ["datadog", "pricing", "observability"]
+published: true
+---
+
+"Datadog pricing" is one of the most-searched terms in the DevOps space. People don't Google "Sentry pricing" at 11pm — but they do Google "why is my datadog bill so high" because Datadog's billing model generates genuine surprises.
+
+This post breaks down how Datadog pricing works, what a realistic bill looks like, and what alternatives exist.
+
+---
+
+## How Datadog Pricing Works
+
+Datadog sells a catalog of products, each with independent pricing. Understanding your bill means understanding how each is metered.
+
+### Infrastructure Monitoring
+
+The Datadog agent on your servers. **Pro: $15/host/month. Enterprise: $23/host/month.** "Per host" sounds simple until you count VMs, containers, ECS tasks, and serverless invocations. For 10 app servers: **$150/month just for infrastructure metrics.**
+
+### APM and Distributed Tracing
+
+A separate product with separate per-host pricing. **Pro: $31/host/month. Enterprise: $40/host/month.** For those same 10 servers: **$310/month for APM.** Combined with infrastructure: $460/month before touching logs.
+
+### Log Management
+
+Logs are where bills get surprising. **Ingestion:** $0.10/GB. **Indexing:** $1.70-2.50/million events — separate from ingestion. A busy app generating 10 million log events/day pays ~$30/month for ingestion but ~$5,100/month for indexing. **$5,130/month for logs alone.**
+
+### Session Replay and RUM
+
+**RUM: $1.50/1,000 sessions. Session Replay: $1.80/1,000 sessions.** For 100,000 monthly sessions: **$150-330/month.**
+
+### Synthetic Monitoring
+
+**API tests: $5/10,000 runs. Browser tests: $12/1,000 runs.** 50 endpoints checked every minute = 2.16 million runs/month = **$1,080/month for uptime monitoring.**
+
+---
+
+## A Realistic Datadog Bill
+
+Let's price a 20-person SaaS startup:
+
+**Infrastructure:**
+- 15 app servers × $15/host = $225/month
+- 5 database/cache servers × $15/host = $75/month
+
+**APM:**
+- 15 app servers × $31/host = $465/month
+
+**Logs:**
+- 5 million log events/day × 30 days = 150M events/month
+- Ingestion: 150 GB @ $0.10/GB = $15/month
+- Indexing (30-day): 150M events @ $2.50/million = $375/month
+
+**Session Replay:**
+- 50,000 sessions/month × $1.80/1,000 = $90/month
+
+**Synthetics:**
+- 20 uptime monitors, 1-minute checks = 864,000 test runs
+- 864K @ $5/10K = $432/month
+
+**Total: ~$1,677/month**
+
+This doesn't include NPM, security monitoring, profiling, or database monitoring. A fully-instrumented setup realistically runs **$2,000-3,500/month** — that's $24,000-42,000/year.
+
+---
+
+## Why Bills Spike
+
+- **Cardinality explosions:** A single metric tagged with high-cardinality values (user IDs, request IDs) can create millions of unique combinations at ~$0.05/100 metrics/month. One misconfigured metric has generated six-figure bills.
+- **Log volume spikes:** A bug with verbose logging or a DDoS attack translates directly into costs with no built-in cap.
+- **Auto-scaling hosts:** Every new instance counts as a new host. A traffic spike spinning up 50 extra EC2 instances adds $750/month instantly.
+
+---
+
+## What Teams Are Doing Instead
+
+Forward-thinking teams instrument with OpenTelemetry for vendor neutrality. For teams already running Datadog Agents, the fastest path is a compatible backend — Moneat accepts Datadog Agent data natively by changing the `dd_url` endpoint, with zero re-instrumentation.
+
+Moneat (open source, AGPL) replaces the entire Datadog stack:
+
+| Datadog product | Moneat equivalent | Cost difference |
+|---|---|---|
+| Infrastructure monitoring | ✅ Container + host metrics | Included in flat pricing |
+| APM / Distributed tracing | ✅ Full tracing support | Included |
+| Log Management | ✅ OTLP log ingestion | $0.40/GB vs. $0.10/GB ingestion + $2.50/million indexing |
+| Session Replay | ✅ Web + mobile replays | Included in GB ingestion pool |
+| Synthetics / Uptime | ✅ 10+ monitor types + synthetics | Included in plan |
+| Error Tracking | ✅ Native (Sentry SDK-compatible) | Included |
+| On-Call / Incident Mgmt | ✅ Full on-call system | $5/user/month |
+| Profiling | ✅ Via Datadog Agent (pprof/JFR) | Included |
+| Database Monitoring | ✅ Via Datadog Agent | Included |
+| Network Monitoring | ✅ NPM + NDM via Datadog Agent | Included |
+| Kubernetes Monitoring | ✅ Via Datadog Agent | Included |
+| SBOM / Security | ✅ Package inventory, CVE tracking | Included |
+| Dynamic Instrumentation | ✅ Debugger via Datadog Agent | Included |
+
+**For our 20-person startup:**
+
+| Platform | Monthly cost |
+|---|---|
+| Datadog (fully instrumented) | $2,000-3,500/month |
+| Moneat Team ($79/mo) + on-call (5 users) | $104/month |
+| **Savings** | **$1,900-3,400/month** |
+
+That's **$23,000-40,000/year in savings.**
+
+---
+
+## Summary
+
+Datadog's pricing is expensive and unpredictable for three reasons:
+
+1. **Per-product pricing** — the bill grows with every feature you adopt
+2. **Per-host and per-volume metering** — the bill grows with your infrastructure
+3. **No spend caps** — misconfigurations and traffic spikes become unexpected invoices
+
+For large enterprises with negotiated contracts and dedicated platform teams, Datadog makes sense. For startups and growth-stage companies, the cost-to-value ratio is poor. The observability stack you need exists for a fraction of the price.
+
+---
+
+[Try Moneat Free →](https://moneat.io) | [Self-Hosting Guide →](https://moneat.io/docs/self-hosting) | [Pricing →](https://moneat.io/pricing)

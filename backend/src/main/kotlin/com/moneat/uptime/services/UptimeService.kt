@@ -558,11 +558,11 @@ class UptimeService(
 
         val limit =
             when (tier) {
-                "FREE" -> 5
-                "PRO" -> 20
-                "TEAM" -> 50
+                "FREE" -> 3
+                "PRO" -> 10
+                "TEAM" -> 25
                 "BUSINESS" -> Int.MAX_VALUE
-                else -> 5
+                else -> 3
             }
 
         if (currentCount >= limit) {

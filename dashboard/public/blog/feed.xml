@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Moneat Blog</title>
+    <link>https://moneat.io/blog</link>
+    <description>Engineering deep-dives, observability best practices, and product updates from the Moneat team.</description>
+    <language>en-us</language>
+    <atom:link href="https://moneat.io/blog/feed.xml" rel="self" type="application/rss+xml"/>
+    
+    <item>
+      <title><![CDATA[Sentry vs Datadog vs Moneat: The 2026 Error Monitoring Comparison]]></title>
+      <link>https://moneat.io/blog/sentry-vs-datadog-vs-moneat-2026</link>
+      <guid>https://moneat.io/blog/sentry-vs-datadog-vs-moneat-2026</guid>
+      <pubDate>Wed, 25 Feb 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[An honest feature and pricing comparison of Sentry, Datadog, and Moneat for error monitoring, session replays, logs, and more.]]></description>
+      <author>Adrian Elder</author>
+    </item>
+    <item>
+      <title><![CDATA[We Replaced Sentry in 10 Minutes — Here's How (Drop-In Migration Guide)]]></title>
+      <link>https://moneat.io/blog/migrate-from-sentry</link>
+      <guid>https://moneat.io/blog/migrate-from-sentry</guid>
+      <pubDate>Sun, 22 Feb 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[A step-by-step guide to migrating from Sentry to Moneat. One line of code per service, no re-instrumentation, no new SDKs.]]></description>
+      <author>Adrian Elder</author>
+    </item>
+    <item>
+      <title><![CDATA[All-in-One Observability: Errors, Replays, Logs, Uptime & Analytics in a Single Platform]]></title>
+      <link>https://moneat.io/blog/all-in-one-observability</link>
+      <guid>https://moneat.io/blog/all-in-one-observability</guid>
+      <pubDate>Fri, 20 Feb 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[The average engineering team pays for 4–6 monitoring tools. Here's why a unified observability platform saves money, reduces debugging time, and eliminates cognitive fragmentation.]]></description>
+      <author>Adrian Elder</author>
+    </item>
+    <item>
+      <title><![CDATA[How to Self-Host Your Observability Stack (and Why You Should)]]></title>
+      <link>https://moneat.io/blog/self-host-observability</link>
+      <guid>https://moneat.io/blog/self-host-observability</guid>
+      <pubDate>Wed, 18 Feb 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Self-hosting observability used to mean significant complexity. In 2026, a Docker Compose deploy gives you data ownership, cost control, and feature completeness.]]></description>
+      <author>Adrian Elder</author>
+    </item>
+    <item>
+      <title><![CDATA[The True Cost of Datadog: How Observability Billing Surprises Kill Budgets]]></title>
+      <link>https://moneat.io/blog/true-cost-of-datadog</link>
+      <guid>https://moneat.io/blog/true-cost-of-datadog</guid>
+      <pubDate>Sun, 15 Feb 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[A breakdown of how Datadog's per-product, per-host, per-volume pricing model creates unpredictable bills — and what teams are doing instead.]]></description>
+      <author>Adrian Elder</author>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,139 @@
+---
+title: "All-in-One Observability: Errors, Replays, Logs, Uptime & Analytics in a Single Platform"
+description: "The average engineering team pays for 4–6 monitoring tools. Here's why a unified observability platform saves money, reduces debugging time, and eliminates cognitive fragmentation."
+date: 2026-02-20
+author: "Adrian Elder"
+tags: ["observability", "monitoring", "product"]
+published: true
+---
+
+The average engineering team pays for four to six monitoring tools — error tracker, log aggregator, uptime monitor, session replay, status page, on-call system. Each has a separate login, alert configuration, billing relationship, and debugging context.
+
+It doesn't have to be this way.
+
+---
+
+## The "Observability Sprawl" Problem
+
+The typical tool stack for a mid-size SaaS team:
+
+| Need | Tool | Typical Cost |
+|---|---|---|
+| Error tracking | Sentry | $29-89/mo |
+| Uptime monitoring | Pingdom / BetterStack | $15-50/mo |
+| Status pages | Statuspage.io | $29-79/mo |
+| Session replay | LogRocket / FullStory | $99-299/mo |
+| Log management | Datadog Logs / Logtail | $50-500/mo |
+| On-call / incident | PagerDuty / OpsGenie | $20-40/user/mo |
+| Product analytics | Mixpanel / Amplitude | $99-599/mo |
+
+**Total: easily $500-1,500/month** — before volume overages.
+
+The bigger issue is **cognitive fragmentation.** Debugging one bug means opening Sentry for the error, LogRocket for the replay, Datadog for logs, Pingdom for uptime, and PagerDuty for alerting — six context switches with different UIs, query languages, and time formats.
+
+---
+
+## The Five Pillars of Complete Observability
+
+### 1. Error Tracking
+
+Every exception captured with full context: stack trace, user info, breadcrumbs, device, and release version. Sentry-compatible means you change the DSN and keep everything else.
+
+### 2. Session Replays
+
+Video-like playback of user interactions for bug reproduction, UX analysis, and support. Privacy controls ensure PII is never recorded. Neither BetterStack nor SigNoz offer session replay at any price.
+
+### 3. Logs
+
+ClickHouse-backed structured log ingestion with sub-second queries across billions of lines. Log lines link directly to the trace and error event that generated them — no manual timestamp cross-referencing.
+
+### 4. Uptime Monitoring
+
+External checks (HTTP, SSL, TCP, Ping, DNS, WebSocket, database, Docker, push monitors) from multiple regions. When a monitor fires, you see it on the same timeline as your error rate spike.
+
+### 5. Status Pages and Incident Management
+
+Status pages communicate service health to customers. Integrated on-call automatically creates incidents from alerts, pages the right engineer, and updates your status page — replacing the Sentry → PagerDuty → Statuspage.io chain.
+
+---
+
+## The Unified Debugging Workflow
+
+**Scenario: Uptime monitor detects a latency spike on `/api/checkout`.**
+
+In one dashboard:
+- Error rate spikes at 14:32 — correlation visible immediately
+- Click the spike → top error: `PaymentGatewayTimeoutException` with full stack trace
+- Click "View Session Replays" → 12 affected users in the last 30 minutes
+- Click "View Logs" → gateway timeout visible at the HTTP level
+- Infrastructure metrics → database CPU spiked two minutes before the errors
+- Root cause: DB load caused gateway slowdowns causing checkout timeouts
+
+**Time to root cause: ~5 minutes** vs. 20-30 minutes with disconnected tools.
+
+---
+
+## Moneat: An Open Source All-in-One Platform
+
+| Capability | Status |
+|---|---|
+| **Error tracking** | ✅ Sentry SDK-compatible |
+| **Session replays** | ✅ Web + mobile |
+| **Logs** | ✅ OTLP ingestion, ClickHouse-backed |
+| **Distributed tracing / APM** | ✅ Count-based span limits |
+| **Uptime monitoring** | ✅ HTTP, TCP, Ping, DNS, SSL, WebSocket, DB, Docker, Push |
+| **Status pages** | ✅ Custom domain |
+| **On-call / incident management** | ✅ $5/user/month |
+| **Infrastructure monitoring** | ✅ Container + host metrics |
+| **LLM / AI observability** | ✅ Token usage, cost analytics |
+| **Product analytics** | ✅ Events, funnels, retention cohorts |
+| **Self-hostable** | ✅ AGPL, Docker Compose deployment |
+
+### Pricing: One Bill Instead of Five
+
+| Moneat Plan | Monthly | What's included |
+|---|---|---|
+| **Free** | $0 | 1 GB unified ingestion, 3 monitors, 1 project, 3-day retention |
+| **Pro** | $29 | 50 GB ingestion, 10 monitors, unlimited projects, 30-day retention |
+| **Team** | $79 | 200 GB ingestion, 25 monitors, status pages, SSO, 30-day retention |
+| **Business** | $199 | 1 TB ingestion, unlimited monitors, 90-day retention |
+| **On-call** | +$5/user/mo | Schedules, escalation policies, push notifications, Slack DM |
+
+Compare to the sprawl alternative:
+
+| Tool | Monthly |
+|---|---|
+| Sentry Team | $29 |
+| Pingdom | $15 |
+| Statuspage.io Starter | $29 |
+| LogRocket Starter | $99 |
+| BetterStack Logs | $25 |
+| PagerDuty (5 users) | $100 |
+| **Total** | **$297/month** |
+
+Moneat Team + on-call for 5 users = **$104/month** — with more features and 30-day retention across all signals.
+
+---
+
+## Getting Started: 15 Minutes
+
+1. **Error tracking:** Update your Sentry DSN to point at Moneat. No other code changes.
+2. **Uptime monitors:** Add endpoints in Settings → Monitors.
+3. **Status page:** Configure with your custom domain.
+4. **Logs:** Point your OTLP exporter at Moneat's endpoint.
+5. **Session replay:** Already works via `@sentry/replay`.
+6. **On-call:** Set up schedules and escalation policies.
+
+Cancel your old tools. One bill, one login, one dashboard.
+
+---
+
+## Summary
+
+Observability tool sprawl is expensive, cognitively taxing, and increasingly unnecessary. A single open source platform can handle error tracking, session replays, logs, uptime, status pages, on-call, and product analytics — with one deployment and one billing relationship.
+
+The savings are real ($500-1,500/month vs. $79-199/month), but the bigger gain is operational velocity. When an incident hits, your team should spend time on the problem — not navigating between six browser tabs.
+
+---
+
+[Try Moneat Free →](https://moneat.io) | [View the Platform →](https://moneat.io) | [Deploy Self-Hosted →](https://moneat.io/docs/self-hosting)
