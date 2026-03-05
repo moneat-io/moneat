@@ -24,7 +24,8 @@ function SidebarItemView({item, currentSlug, depth = 0}: {item: SidebarItem; cur
     const isActive = currentSlug === item
     return (
       <Link
-        to={item === 'intro' ? '/docs' : `/docs/${item}`}
+        to={item === 'intro' ? '/docs' : '/docs/$'}
+        params={item === 'intro' ? {} : {_splat: item}}
         className={`block rounded-md px-3 py-1.5 text-sm transition-colors ${
           isActive
             ? 'bg-sky-500/15 text-sky-400 font-medium'
@@ -42,30 +43,43 @@ function SidebarItemView({item, currentSlug, depth = 0}: {item: SidebarItem; cur
 
 function CategoryView({category, currentSlug, depth = 0}: {category: SidebarCategory; currentSlug: string; depth?: number}) {
   const hasActive = isActiveOrAncestor(currentSlug, category)
-  const [open, setOpen] = useState(hasActive || !category.collapsed)
+  // Track user-toggled state separately; hasActive always forces open
+  const [userOpen, setUserOpen] = useState(!category.collapsed)
+  const open = hasActive || userOpen
 
   return (
     <div>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-white/[0.05] transition-colors"
+      <div
+        className="flex items-center rounded-md text-sm font-medium text-slate-300 hover:text-white transition-colors"
         style={{paddingLeft: `${12 + depth * 12}px`}}
       >
-        <ChevronRight
-          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
-        />
+        <button
+          onClick={() => setUserOpen((v) => !v)}
+          className="flex items-center justify-center p-1.5 shrink-0 hover:bg-white/[0.05] rounded"
+          aria-label={open ? 'Collapse section' : 'Expand section'}
+        >
+          <ChevronRight
+            className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+          />
+        </button>
         {category.link ? (
           <Link
-            to={`/docs/${category.link}`}
-            className={`flex-1 text-left ${currentSlug === category.link ? 'text-sky-400' : ''}`}
-            onClick={(e) => e.stopPropagation()}
+            to="/docs/$"
+            params={{_splat: category.link}}
+            className={`flex-1 py-1.5 pr-3 text-left ${
+              currentSlug === category.link || currentSlug.startsWith(`${category.link}/`)
+                ? 'text-sky-400'
+                : ''
+            }`}
           >
             {category.label}
           </Link>
         ) : (
-          <span className="flex-1 text-left">{category.label}</span>
+          <button onClick={() => setUserOpen((v) => !v)} className="flex-1 py-1.5 pr-3 text-left">
+            {category.label}
+          </button>
         )}
-      </button>
+      </div>
       {open && (
         <div className="mt-0.5">
           {category.items.map((child, i) => (

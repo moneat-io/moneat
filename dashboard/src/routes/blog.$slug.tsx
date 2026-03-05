@@ -1,9 +1,7 @@
 import {createFileRoute, Link, notFound} from '@tanstack/react-router'
 import {getPost} from '@/blog/loader'
 import {Helmet} from 'react-helmet-async'
-import {isValidElement, type ReactElement} from 'react'
-import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
-import {oneDark} from 'react-syntax-highlighter/dist/esm/styles/prism'
+import {MdxPre} from '@/docs/mdx-components'
 import {BlogPostFeedback} from '@/components/BlogPostFeedback'
 
 export const Route = createFileRoute('/blog/$slug')({
@@ -40,22 +38,6 @@ function BlogNotFound() {
       </div>
     </div>
   )
-}
-
-function MdxPre(props: React.ComponentPropsWithoutRef<'pre'>) {
-  const child = props.children
-  if (isValidElement(child)) {
-    const {className, children} = (child as ReactElement<{className?: string; children?: string}>).props
-    const match = /language-(\w+)/.exec(className || '')
-    if (match) {
-      return (
-        <SyntaxHighlighter language={match[1]} style={oneDark} customStyle={{borderRadius: '0.375rem'}}>
-          {String(children).replace(/\n$/, '')}
-        </SyntaxHighlighter>
-      )
-    }
-  }
-  return <pre {...props} />
 }
 
 const mdxComponents = {pre: MdxPre}

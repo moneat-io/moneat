@@ -35,6 +35,19 @@ export const allDocs: Doc[] = Object.entries(modules).map(([path, mod]) => ({
   Component: mod.default,
 }))
 
+// Detect duplicate slugs before building the map
+const slugCounts = new Map<string, string[]>()
+for (const doc of allDocs) {
+  const titles = slugCounts.get(doc.slug) ?? []
+  titles.push(doc.title)
+  slugCounts.set(doc.slug, titles)
+}
+for (const [slug, titles] of slugCounts) {
+  if (titles.length > 1) {
+    console.error(`[docs/loader] Duplicate slug "${slug}": ${titles.join(', ')}`)
+  }
+}
+
 const docMap = new Map(allDocs.map((d) => [d.slug, d]))
 
 export function getDoc(slug: string): Doc | undefined {
