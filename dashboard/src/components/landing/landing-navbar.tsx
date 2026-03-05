@@ -113,7 +113,7 @@ const PLATFORM_CATEGORIES: PlatformCategory[] = [
 
 function PlatformMegaMenu() {
   const [open, setOpen] = useState(false)
-  const closeTimeout = useRef<ReturnType<typeof setTimeout>>()
+  const closeTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const handleEnter = () => {

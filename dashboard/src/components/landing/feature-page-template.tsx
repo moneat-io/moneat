@@ -49,9 +49,9 @@ export interface FeaturePageConfig {
 export function FeaturePageTemplate({config}: {config: FeaturePageConfig}) {
   useEffect(() => {
     const root = document.documentElement
-    const prev = root.className
-    root.classList.add('dark')
-    return () => { root.className = prev }
+    const addedDark = !root.classList.contains('dark')
+    if (addedDark) root.classList.add('dark')
+    return () => { if (addedDark) root.classList.remove('dark') }
   }, [])
 
   return (
