@@ -154,9 +154,15 @@ class AuthService {
                             .singleOrNull()
                     }
 
-                // Generate verification token
-                val verificationToken = generateVerificationToken()
-                val expiresAt = System.currentTimeMillis() + (24 * 60 * 60 * 1000) // 24 hours
+                // Detect first real user (excludes demo user which has id < 0)
+                val isFirstUser = Users.selectAll().where { Users.id greater 0 }.count() == 0L
+                val skipVerification =
+                    isFirstUser || EnvConfig.get("DISABLE_EMAIL_VERIFICATION", "false").trim().lowercase() == "true"
+
+                // Generate verification token (only used if verification is required)
+                val verificationToken = if (!skipVerification) generateVerificationToken() else null
+                val expiresAt =
+                    if (!skipVerification) System.currentTimeMillis() + (24 * 60 * 60 * 1000) else null
 
                 // Create user
                 val passwordHash = BCrypt.hashpw(request.password, BCrypt.gensalt())
@@ -165,7 +171,8 @@ class AuthService {
                         it[email] = normalizedEmail
                         it[password_hash] = passwordHash
                         it[name] = request.name
-                        it[email_verified] = false
+                        it[email_verified] = skipVerification
+                        it[is_admin] = isFirstUser
                         it[email_verification_token] = verificationToken
                         it[email_verification_expires_at] = expiresAt
                     }[Users.id]
@@ -265,15 +272,17 @@ class AuthService {
                     )
                 )
 
-                // Send verification email
-                try {
-                    emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
-                } catch (e: Exception) {
-                    // Log but don't fail signup if email fails
-                    println("Failed to send verification email: ${e.message}")
+                // Send verification email only if verification is required
+                if (!skipVerification && verificationToken != null) {
+                    try {
+                        emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
+                    } catch (e: Exception) {
+                        // Log but don't fail signup if email fails
+                        println("Failed to send verification email: ${e.message}")
+                    }
                 }
 
-                Quadruple(id, false, finalOrgId, finalOrgRole)
+                Quadruple(id, skipVerification, finalOrgId, finalOrgRole)
             }
 
         val tokenPair = refreshTokenService.generateRefreshToken(userId, normalizedEmail, orgId, orgRole)
