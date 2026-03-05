@@ -20,7 +20,7 @@ SBOMs are critical for:
 
 Moneat's SBOM feature automatically inventories software packages across your hosts and containers. The Datadog Agent scans installed packages and container images, reports them to Moneat, and the dashboard surfaces packages alongside known CVE counts so you can prioritize remediation.
 
-:::info Enterprise feature
+:::info[Enterprise feature]
 SBOM requires the Datadog Agent integration, available on Enterprise plans.
 :::
 
@@ -85,6 +85,5 @@ Packages with known CVEs are highlighted so you can prioritize updates.
 - **Audit and compliance** — Export your software inventory for security audits or compliance reporting
 - **Drift detection** — Compare package versions across hosts to identify inconsistent environments
 
-:::tip
-Enable both `container_image` and `host` scanning for complete coverage. Container images often contain different packages than the host OS.
+:::tip[Enable both `container_image` and `host` scanning for complete coverage. Container images often contain different packages than the host OS.]
 :::

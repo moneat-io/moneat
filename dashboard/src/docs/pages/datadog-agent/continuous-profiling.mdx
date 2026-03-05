@@ -32,7 +32,7 @@ apm_config:
 dd_url: "https://api.moneat.io/dd"
 ```
 
-:::note Docker
+:::note[Docker]
 If you're running the Agent in Docker, pass the profiling endpoint as an environment variable. The EPForwarder redirects require a `datadog.yaml` file (see [Agent Setup](/docs/datadog-agent/agent-setup)):
 
 ```bash
@@ -65,8 +65,7 @@ The Agent then forwards those profiles to Moneat.
 
 Each profiler sends data to the Agent at `localhost:8126` by default. In Docker environments, set `DD_AGENT_HOST` to the Agent container's hostname instead.
 
-:::tip
-`DD_SERVICE` controls how your app appears in the Profiles dashboard — use something descriptive like `payments-service` or `user-api`.
+:::tip[`DD_SERVICE` controls how your app appears in the Profiles dashboard — use something descriptive like `payments-service` or `user-api`.]
 :::
 
 ### Java
@@ -222,7 +221,7 @@ services:
       - DD_PROFILING_ENABLED=true
 ```
 
-:::note React and other browser apps
+:::note[React and other browser apps]
 React runs in the browser, not on a server, so the Datadog Agent cannot profile it — there is no process for the Agent to attach to. If you have a **Node.js backend** serving your React app, you can profile that using the setup above.
 
 For profiling browser-side JavaScript (React, Vue, Angular, etc.), use the **Sentry SDK** instead — see the [Profiling with the Sentry SDK](#profiling-with-the-sentry-sdk) section below.
@@ -444,8 +443,7 @@ Moneat supports the following profile types from the Datadog Agent:
 | **mutex** | Mutex contention and wait times |
 | **block** | Blocking operations and wait times |
 
-:::tip
-The available profile types depend on your application's language and runtime. Go applications support all types listed above, while other languages may support a subset.
+:::tip[The available profile types depend on your application's language and runtime. Go applications support all types listed above, while other languages may support a subset.]
 :::
 
 ## Viewing Profiles
@@ -499,6 +497,5 @@ sentry_sdk.init(
 )
 ```
 
-:::info
-Profiles from both sources (Sentry SDK and Datadog Agent) are stored and queried separately. Use the tabs on the Profiles page to switch between them.
+:::info[Profiles from both sources (Sentry SDK and Datadog Agent) are stored and queried separately. Use the tabs on the Profiles page to switch between them.]
 :::

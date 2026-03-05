@@ -32,7 +32,7 @@ Heartbeat monitors work in reverse — instead of Moneat checking your service, 
 curl -s https://api.moneat.io/v1/uptime/push/<monitor_token>
 ```
 
-:::tip Easy integration
+:::tip[Easy integration]
 Just add a `curl` call to the end of your cron job script. If the job fails or hangs, the ping won't be sent and Moneat will alert you.
 :::
 
@@ -50,8 +50,7 @@ Navigate to **Uptime** in the sidebar to view and manage your monitors. From the
 
 When a monitor detects a failure, Moneat can create an incident and notify your team through the configured escalation policy. This integrates with the on-call system — so the right person gets paged when your service goes down.
 
-:::info
-Connect your monitors to escalation policies in the monitor settings to enable automatic incident creation on downtime.
+:::info[Connect your monitors to escalation policies in the monitor settings to enable automatic incident creation on downtime.]
 :::
 
 ## Status Page Integration

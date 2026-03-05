@@ -9,7 +9,7 @@ description: Monitor Kubernetes cluster resources including pods, nodes, service
 
 Moneat's Kubernetes monitoring gives you visibility into your cluster resources and workloads. View the status of pods, nodes, services, deployments, DaemonSets, and ReplicaSets — all collected automatically by the Datadog Agent running inside your cluster.
 
-:::info Enterprise feature
+:::info[Enterprise feature]
 Kubernetes monitoring requires the Datadog Agent integration, available on Enterprise plans.
 :::
 
@@ -143,6 +143,5 @@ Each resource view supports filtering by:
 - **Cluster** — Filter by cluster when monitoring multiple clusters
 - **Status** — Show only resources in a specific state
 
-:::tip
-Deploy the Datadog Agent with `DD_LEADER_ELECTION=true` to ensure only one agent instance collects cluster-level resources, avoiding duplicate data.
+:::tip[Deploy the Datadog Agent with `DD_LEADER_ELECTION=true` to ensure only one agent instance collects cluster-level resources, avoiding duplicate data.]
 :::

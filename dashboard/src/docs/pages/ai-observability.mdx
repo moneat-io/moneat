@@ -40,7 +40,7 @@ Moneat is fully compatible with Sentry SDKs. If your application already uses a 
 https://<public_key>@<your-moneat-host>/api/<project_id>
 ```
 
-:::info Automatic detection
+:::info[Automatic detection]
 Moneat automatically detects `ai.*` spans from Sentry SDK transactions (such as `ai.chat_completion`, `ai.embedding`, and `ai.tool_call`) and records them as LLM generations. No additional configuration is required beyond pointing your DSN to Moneat.
 :::
 
@@ -108,7 +108,7 @@ Send a JSON object containing a `generations` array. Each generation represents 
 | `tags` | object | Key-value pairs for filtering |
 | `metadata` | JSON | Arbitrary extra data |
 
-:::tip Batch ingestion
+:::tip[Batch ingestion]
 You can send multiple generations in a single request. The endpoint returns the count of accepted events in the response.
 :::
 

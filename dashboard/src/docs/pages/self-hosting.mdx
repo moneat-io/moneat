@@ -7,7 +7,7 @@ description: Deploy Moneat on your own infrastructure with Docker Compose.
 
 Moneat can be self-hosted on your own infrastructure using Docker Compose. The self-hosted edition includes all core features — error monitoring, issue tracking, uptime monitoring, structured logging, and status pages — with no event limits.
 
-:::info Enterprise features
+:::info[Enterprise features]
 Features like On-Call and SSO require an enterprise license. [Contact us](mailto:support@moneat.io) for details.
 :::
 
@@ -54,7 +54,7 @@ BACKEND_URL=https://api.moneat.example.com
 SELF_HOST=true
 ```
 
-:::danger Use strong secrets
+:::danger[Use strong secrets]
 Never use the default development passwords in production. Generate unique passwords for `JWT_SECRET`, `DATABASE_PASSWORD`, and `CLICKHOUSE_PASSWORD`.
 :::
 
@@ -200,7 +200,7 @@ All data is stored in Docker volumes:
 | `redis_data` | Redis | Cache and queue state |
 | `backend_storage` | Backend | Source maps, debug files, artifact bundles |
 
-:::warning Back up your data
+:::warning[Back up your data]
 Docker volumes are **not** automatically backed up. Set up regular backups for `postgres_data` and `clickhouse_data` to prevent data loss.
 :::
 

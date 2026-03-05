@@ -9,7 +9,7 @@ description: Track slow queries and database performance across your infrastruct
 
 Database Monitoring (DBM) surfaces slow and resource-intensive queries from your databases. The Datadog Agent collects query samples and execution metrics, and Moneat displays them in a single view so you can quickly identify performance bottlenecks.
 
-:::info Enterprise feature
+:::info[Enterprise feature]
 Database Monitoring requires the Datadog Agent integration, available on Enterprise plans.
 :::
 
@@ -86,6 +86,5 @@ Queries are sorted by duration so the slowest queries appear first, making it ea
 - **Track query patterns** — See which queries run most frequently and consume the most resources
 - **Correlate with errors** — Cross-reference slow database queries with application errors in Moneat's error tracking
 
-:::tip
-Set `dbm: true` in the agent configuration to enable deep query monitoring. Without this flag, only basic connection metrics are collected.
+:::tip[Set `dbm: true` in the agent configuration to enable deep query monitoring. Without this flag, only basic connection metrics are collected.]
 :::

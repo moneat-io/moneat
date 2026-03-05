@@ -9,7 +9,7 @@ description: Debug live applications without redeploying using dynamic probes fo
 
 Dynamic Instrumentation (also called the Debugger) lets you add observability probes to your running applications without restarting or redeploying them. Insert log probes, metric probes, or snapshot probes at any method or line of code, and the agent captures the data in real time.
 
-:::info Enterprise feature
+:::info[Enterprise feature]
 Dynamic Instrumentation requires the Datadog Agent integration, available on Enterprise plans.
 :::
 
@@ -122,6 +122,5 @@ Displays log output captured by active log probes:
 - **Validate fixes** — Instrument a code path to confirm a bug fix is working before removing the probe
 - **Ad-hoc metrics** — Create metric probes to count method invocations or measure execution time for specific code paths
 
-:::tip
-Start with log probes to capture context around a known issue. Once you identify the root cause, remove the probe to avoid unnecessary overhead.
+:::tip[Start with log probes to capture context around a known issue. Once you identify the root cause, remove the probe to avoid unnecessary overhead.]
 :::
