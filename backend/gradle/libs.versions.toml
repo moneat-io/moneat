@@ -1,6 +1,6 @@
 [versions]
 kotlin = "2.3.10"
-ktor = "3.4.0"
+ktor = "3.4.1"
 exposed = "1.1.1"
 logback = "1.5.32"
 hikari = "7.0.2"
@@ -13,7 +13,7 @@ jacoco = "0.8.14"
 opentelemetry = "1.59.0"
 opentelemetry-instrumentation = "2.1.0-alpha"
 sentry = "8.33.0"
-flyway = "12.0.2"
+flyway = "12.0.3"
 h2 = "2.4.240"
 mockk = "1.14.9"
 
@@ -116,7 +116,7 @@ testcontainers-clickhouse = { module = "org.testcontainers:testcontainers-clickh
 mysql-connector-j = { module = "com.mysql:mysql-connector-j", version = "9.1.0" }
 mariadb-java-client = { module = "org.mariadb.jdbc:mariadb-java-client", version = "3.4.0" }
 mssql-jdbc = { module = "com.microsoft.sqlserver:mssql-jdbc", version = "12.8.1.jre11" }
-clickhouse-jdbc = { module = "com.clickhouse:clickhouse-jdbc", version = "0.9.0" }
+clickhouse-jdbc = { module = "com.clickhouse:clickhouse-jdbc", version = "0.9.7" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version = "3.46.1.0" }
 snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "3.24.2" }
 
