@@ -1,0 +1,280 @@
+---
+title: "The True Cost of Datadog: How Observability Billing Surprises Kill Budgets"
+description: "A breakdown of how Datadog's per-product, per-host, per-volume pricing model creates unpredictable bills — and what teams are doing instead."
+date: 2026-02-15
+author: "Adrian Elder"
+tags: ["datadog", "pricing", "observability"]
+published: true
+---
+
+"Datadog pricing" is one of the most-searched terms in the entire DevOps space. That tells you something.
+
+People don't Google "Sentry pricing" at 11pm. But they do Google "datadog pricing calculator" and "why is my datadog bill so high" — because Datadog's billing model has a way of generating genuine surprises that show up in the finance team's inbox.
+
+This post breaks down how Datadog's pricing actually works, why bills escalate the way they do, and what a realistic monthly cost looks like for teams of different sizes. Then we'll cover the alternatives.
+
+---
+
+## How Datadog Pricing Works (The Technical Reality)
+
+Datadog doesn't sell one product. They sell a catalog of products, each with independent pricing, that you assemble into a stack. Understanding your bill requires understanding how each product is metered.
+
+### Infrastructure Monitoring: Per Host
+
+The base of most Datadog deployments is infrastructure monitoring — the Datadog agent running on your servers.
+
+- **Pro:** $15/host/month
+- **Enterprise:** $23/host/month
+
+"Per host" sounds simple until you realize what counts as a host. Virtual machines, EC2 instances, ECS tasks, GKE nodes, serverless function invocations — the definition of "host" can surprise you. Containerized environments in particular can inflate host counts significantly.
+
+For a startup with 10 app servers: **$150/month just to see your infrastructure metrics.**
+
+### APM and Distributed Tracing: Per Host (Again)
+
+APM is a separate product with separate per-host pricing on top of infrastructure:
+
+- **APM Pro:** $31/host/month
+- **APM Enterprise:** $40/host/month
+
+For those same 10 servers: **$310/month for APM.** Combined with infrastructure, you're at $460/month before touching logs, replays, or any other product.
+
+### Log Management: Per Volume, Per Indexing Event
+
+Logs are where Datadog bills start to get genuinely surprising.
+
+**Ingestion:** $0.10/GB. Sounds cheap until you realize modern applications generate logs aggressively.
+
+**Indexing:** $1.70/million log events (15-day retention) or $2.50/million log events (30-day retention). This is separate from ingestion. You pay to ingest logs AND you pay separately to make them searchable.
+
+A busy application generating 10 million log events per day:
+- Ingestion: ~$30/month (300 GB @ $0.10/GB)
+- Indexing (15-day retention): ~$5,100/month (3 billion events @ $1.70/million)
+
+That's **$5,130/month for logs alone.** This is why "datadog log cost" is its own search category.
+
+### Session Replay and RUM: Per Session
+
+Datadog's Browser RUM (Real User Monitoring) captures user sessions.
+
+- **RUM:** $1.50/1,000 sessions
+- **Session Replay:** $1.80/1,000 sessions (typically added on top of RUM)
+
+For an app with 100,000 monthly sessions: **$150-330/month for RUM + replays.**
+
+### Synthetic Monitoring: Per Test Run
+
+Uptime and synthetic tests are priced per test run:
+
+- **API tests:** $5/10,000 test runs
+- **Browser tests:** $12/1,000 test runs
+
+A simple setup with 50 endpoints checked every minute: 50 × 43,200 (checks/month) = 2.16 million test runs. At $5/10K = **$1,080/month for uptime monitoring.**
+
+### On-Call and Incident Management
+
+Datadog acquired PagerDuty's competitor space and offers incident management. It's available in the Enterprise tier, but requires a separate commercial conversation. There's no simple self-serve pricing — it's bundled into enterprise contracts.
+
+---
+
+## Building a Realistic Datadog Bill
+
+Let's price a 20-person SaaS startup with a typical production setup:
+
+**Infrastructure:**
+- 15 app servers × $15/host = $225/month
+- 5 database/cache servers × $15/host = $75/month
+
+**APM:**
+- 15 app servers × $31/host = $465/month
+
+**Logs:**
+- 5 million log events/day × 30 days = 150M events/month
+- Ingestion: 150 GB @ $0.10/GB = $15/month
+- Indexing (30-day): 150M events @ $2.50/million = $375/month
+
+**Session Replay:**
+- 50,000 sessions/month × $1.80/1,000 = $90/month
+
+**Synthetics:**
+- 20 uptime monitors, 1-minute checks = 864,000 test runs
+- 864K @ $5/10K = $432/month
+
+**Total: ~$1,677/month**
+
+And this doesn't include:
+- Datadog NPM (network performance monitoring): $5-10/host
+- Datadog Security Monitoring: additional
+- Datadog Error Tracking: additional (often bundled in APM but varies)
+- Datadog Profiling: $4/Profiled Container/month
+- Datadog Database Monitoring: $70/database/month
+
+A fully-instrumented setup for this 20-person team realistically runs **$2,000-3,500/month.** That's $24,000-42,000/year.
+
+---
+
+## Why Datadog Bills Spike (The Failure Modes)
+
+### Cardinality Explosions in Metrics
+
+Datadog charges for custom metrics — and the definition of "custom metric" can catch teams off guard. A custom metric is any metric with unique tag combinations.
+
+If you have a metric `http.request.count` tagged with `endpoint`, `status_code`, `user_id`, and `region`, and your app has 1,000 endpoints × 10 status codes × 10,000 active users × 5 regions — you've just created **500 million unique metric combinations.** Custom metrics are priced at ~$0.05/100 metrics/month. That's $250,000/month for one poorly-tagged metric.
+
+This is not hypothetical. Engineering teams have received six-figure Datadog bills from a single metric misconfiguration.
+
+### Log Volume Spikes
+
+A bug that causes excessive logging, a deployment with verbose debug logging left on, or a DDoS attack that spikes request rates — all of these translate directly into Datadog log costs. There's no built-in cap. Logs flow until you notice the bill.
+
+### Auto-Scaling Hosts
+
+If your infrastructure auto-scales (which it should), every new instance counts as a new host. A traffic spike that spins up 50 extra EC2 instances adds $750/month to your infrastructure monitoring bill for that month. Auto-scaling is designed to handle load efficiently; Datadog pricing works against this.
+
+### Free Tier → Paid Tier Transitions
+
+Datadog offers a free trial and free tier for some features. Teams build workflows on free features, then get surprised when those features require a paid tier as usage grows. The transition is often abrupt.
+
+---
+
+## The Locked-In Problem
+
+Once a team is fully instrumented with Datadog agents, the switching cost is real. The Datadog agent is proprietary. Their SDKs use Datadog-specific tracing libraries. Getting off Datadog means:
+
+1. Removing Datadog agents from every server
+2. Replacing Datadog-specific tracing instrumentation
+3. Rebuilding dashboards and alert configurations
+4. Retraining the team on a new platform
+
+This lock-in is intentional. Datadog's pricing model depends on it.
+
+---
+
+## What Teams Are Doing Instead
+
+### OpenTelemetry-First Architecture
+
+Forward-thinking teams instrument with OpenTelemetry instead of vendor-specific SDKs. OTel is vendor-neutral — you configure where telemetry is sent at the infrastructure level, not the code level. This means switching backends is a configuration change, not a re-instrumentation project.
+
+### Self-Hosted Observability Platforms
+
+The economics of self-hosting at scale are compelling. The infrastructure cost to run a ClickHouse database storing a billion events is a few hundred dollars per month — not tens of thousands.
+
+Platforms like Moneat (open source, AGPL) replace the entire Datadog stack with a self-hosted alternative:
+
+| Datadog product | Moneat equivalent | Cost difference |
+|---|---|---|
+| Infrastructure monitoring | ✅ Container + host metrics | Included in flat pricing |
+| APM / Distributed tracing | ✅ Full tracing support | Included |
+| Log Management | ✅ OTLP log ingestion | $0.40/GB vs. $0.10/GB ingestion + $2.50/million indexing |
+| Session Replay | ✅ Web + mobile replays | 300 included, then $0.40/GB |
+| Synthetics / Uptime | ✅ 10+ monitor types | Included in plan |
+| Error Tracking | ✅ Native (Sentry SDK-compatible) | Included |
+| On-Call / Incident Mgmt | ✅ Full on-call system | $5/user/month |
+
+**For the 20-person startup in our example above:**
+
+| Platform | Monthly cost |
+|---|---|
+| Datadog (fully instrumented) | $2,000-3,500/month |
+| Moneat Team ($79/mo) + on-call (5 users) | $104/month |
+| **Savings** | **$1,900-3,400/month** |
+
+That's **$23,000-40,000/year in savings.** For a startup, that's a meaningful runway extension.
+
+---
+
+## The Self-Hosting Math
+
+Self-hosting Moneat on a $40/month DigitalOcean droplet (4 CPU, 8 GB RAM) handles millions of events per day comfortably. At scale, a $200/month server handles hundreds of millions of events.
+
+Even if you factor in:
+- Server costs: $40-200/month
+- Engineering time to maintain: 2-4 hours/month
+- Backup storage: $10-20/month
+
+**Total: $70-250/month — vs. $2,000-3,500/month on Datadog.** The ROI is overwhelming for teams with any DevOps capability at all.
+
+---
+
+## What People Get Wrong About Datadog's Pricing
+
+- **"We'll stay on the free tier / low tier and it'll be cheap."** Datadog's pricing inflects hard once you cross the free tier boundaries. The jump from free to paid, combined with per-host-per-product metering, means your first "real" bill is often 5-10x what you expected.
+
+- **"Per-host pricing is predictable."** It's predictable for static infrastructure. The moment you adopt auto-scaling, Kubernetes, or serverless, the definition of "host" becomes fluid and your bill becomes unpredictable.
+
+- **"Log ingestion at $0.10/GB is cheap."** Ingestion is cheap. Indexing is not. The $1.70-2.50/million-events indexing fee is where the real cost hides. Teams focus on the ingestion rate and miss that searchable logs cost 10-20x more than raw ingestion.
+
+- **"We can control costs with sampling and filtering."** You can — but it requires ongoing engineering effort to maintain sampling rules, exclusion filters, and retention policies. That engineering time has a cost, and misconfigured filters create blind spots during incidents.
+
+- **"Switching off Datadog is too painful, so we'll just optimize."** Optimization helps at the margin, but it doesn't change the fundamental pricing model. A 20% reduction on a $3,000/month bill still leaves you at $2,400 — which may still be 10x what you'd pay on an alternative.
+
+---
+
+## Practical Playbook: Evaluating and Reducing Your Datadog Costs
+
+1. **Do this first:** Pull your last 3 months of Datadog invoices. Break down the cost by product (infrastructure, APM, logs, RUM, synthetics, custom metrics). Identify the top 3 line items by cost.
+
+2. Check for log indexing costs specifically — if log indexing exceeds $200/month, you're likely a strong candidate for an alternative.
+
+3. Audit your host count. Compare the number of hosts Datadog reports against your actual infrastructure.
+
+4. Review custom metrics for cardinality explosions. Look for any metric with high-cardinality tags (user IDs, request IDs, UUIDs).
+
+5. Identify Datadog products you're paying for but not actively using. The catalog is wide, and teams often enable features during setup that go unused.
+
+6. **Avoid this trap:** Don't negotiate an annual contract before understanding your true usage trajectory. Committing to a spend level based on current usage locks you in if your infrastructure grows.
+
+7. Instrument with OpenTelemetry instead of Datadog-specific SDKs for all new services. This preserves optionality.
+
+8. Estimate what your stack would cost on alternatives. Use the cost scenarios in this post as a starting point, then plug in your actual numbers.
+
+9. If considering self-hosting, run a proof-of-concept on a single non-critical service. Send the same telemetry to both Datadog and the alternative, and compare coverage.
+
+10. Set billing alerts and spend caps where Datadog allows them. This won't reduce costs, but it prevents surprise invoices from runaway log volumes or metric cardinality.
+
+11. Factor in the cost of supplementary tools. If Datadog doesn't cover status pages or on-call, add those vendor costs to your true Datadog total.
+
+---
+
+## Tradeoffs, Caveats, and Second-Order Effects
+
+- **Datadog's breadth is genuinely hard to replicate.** If you use Datadog's CI Visibility, Security Monitoring, Database Monitoring, and Network Performance Monitoring in addition to core observability, finding a single replacement that covers all of those is difficult.
+
+- **Enterprise negotiation can reduce costs significantly.** Companies spending $5,000+/month can typically negotiate 20-40% discounts with annual commitments.
+
+- **Migration from Datadog is non-trivial.** Datadog's proprietary agents and SDKs create real lock-in. Budget 2-4 weeks of engineering time for a full migration.
+
+- **Datadog's hiring pipeline is a signal.** Large companies choose Datadog partly because new hires are likely to already know it.
+
+- **Self-hosted alternatives trade money for operational responsibility.** You save on SaaS fees but take on infrastructure management.
+
+- **Usage-based pricing aligns incentives poorly.** You pay more precisely when your application is under stress — the moments when you most need your observability tools and least want to worry about cost.
+
+---
+
+## A Word on Negotiating with Datadog
+
+Datadog has significant negotiating flexibility, especially for annual commitments. If you're spending $2,000+/month, you can likely negotiate 20-40% discounts with an annual contract and committed spend. Enterprise contracts routinely include discounts, dedicated support, and rate lock-ins.
+
+But negotiating doesn't change the fundamental pricing model — it just makes the per-unit costs slightly lower. You still pay per host, per GB, per million events. The billing unpredictability remains.
+
+---
+
+## Summary
+
+Datadog's pricing model has three characteristics that make it expensive and unpredictable:
+
+1. **Per-product pricing** means the bill grows with every feature you adopt
+2. **Per-host and per-volume metering** means the bill grows with your infrastructure
+3. **Lack of spend caps** means a misconfiguration or traffic spike translates directly to an unexpected invoice
+
+For teams at the scale where Datadog's premium makes sense (large enterprises with dedicated platform engineering, negotiated contracts, and complex observability needs), Datadog is genuinely powerful.
+
+For everyone else — startups, growth-stage companies, mid-market engineering teams — the cost-to-value ratio is poor. The observability stack you need exists for a fraction of the price, either through simpler SaaS alternatives or self-hosted open source platforms.
+
+The observability category has matured. You no longer need to pay Datadog prices to get Datadog-quality observability.
+
+---
+
+[Try Moneat Free →](https://moneat.io) | [Self-Hosting Guide →](https://moneat.io/docs/self-hosting) | [Pricing →](https://moneat.io/pricing)

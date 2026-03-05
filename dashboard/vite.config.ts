@@ -9,6 +9,7 @@ import type { ProxyOptions } from 'vite'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const docsDir = path.join(__dirname, 'public', 'docs')
+const blogDir = path.join(__dirname, 'public', 'blog')
 
 export default defineConfig({
   plugins: [
@@ -33,6 +34,30 @@ export default defineConfig({
             const originalUrl = req.url
             req.url = req.url.slice(5) || '/' // /docs/foo -> /foo
             serveDocs(req, res, () => {
+              req.url = originalUrl
+              next()
+            })
+          },
+        })
+      },
+    },
+    {
+      name: 'serve-blog',
+      configureServer(server) {
+        const serveBlog = sirv(blogDir, { dev: true })
+        server.middlewares.stack.unshift({
+          route: '',
+          handle: (req: import('http').IncomingMessage, res: import('http').ServerResponse, next: () => void) => {
+            if (req.url === '/blog' || req.url?.startsWith('/blog?')) {
+              const q = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
+              res.writeHead(301, { Location: `/blog/${q}` })
+              res.end()
+              return
+            }
+            if (!req.url?.startsWith('/blog/')) return next()
+            const originalUrl = req.url
+            req.url = req.url.slice(5) || '/' // /blog/foo -> /foo
+            serveBlog(req, res, () => {
               req.url = originalUrl
               next()
             })
