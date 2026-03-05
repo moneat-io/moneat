@@ -29,7 +29,7 @@ import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Textarea} from '@/components/ui/textarea'
-import {FlaskConical, GitMerge, Plus, X} from 'lucide-react'
+import {FlaskConical, GitMerge, Plus, X, Shield, Globe, Wifi} from 'lucide-react'
 import {useState} from 'react'
 import {useToast} from '@/hooks/use-toast'
 
@@ -66,7 +66,7 @@ interface TestStep {
 }
 
 interface FormState {
-  type: 'api' | 'multistep'
+  type: 'api' | 'multistep' | 'ssl' | 'dns' | 'tcp'
   name: string
   url: string
   method: string
@@ -80,6 +80,13 @@ interface FormState {
   assertions: Assertion[]
   intervalMinutes: number
   timeoutSeconds: number
+  tags: string[]
+  tagInput: string
+  retryCount: number
+  retryIntervalMs: number
+  alertOnFailure: boolean
+  hostname: string
+  port: string
 }
 
 const DEFAULT_FORM: FormState = {
@@ -97,6 +104,13 @@ const DEFAULT_FORM: FormState = {
   assertions: [{type: 'status_code', operator: 'equals', value: '200', target: ''}],
   intervalMinutes: 5,
   timeoutSeconds: 30,
+  tags: [],
+  tagInput: '',
+  retryCount: 0,
+  retryIntervalMs: 300,
+  alertOnFailure: false,
+  hostname: '',
+  port: '',
 }
 
 type DialogStep = 1 | 2 | 3 | 4
@@ -110,6 +124,7 @@ const STEP_DESCRIPTIONS: Record<DialogStep, string> = {
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 const BODY_METHODS = ['POST', 'PUT', 'PATCH']
+const RETRY_INTERVAL_MS_DEFAULT = 300
 
 function toCreateSyntheticTestPayload(form: FormState): CreateSyntheticTestPayload {
   const headers = form.headers
@@ -153,12 +168,24 @@ function toCreateSyntheticTestPayload(form: FormState): CreateSyntheticTestPaylo
         }))
       : []
 
+  const config = ['ssl', 'dns', 'tcp'].includes(form.type)
+    ? {
+        hostname: form.hostname || null,
+        port: form.port ? (Number.isFinite(parseInt(form.port)) ? parseInt(form.port) : null) : null,
+        protocol: form.type === 'tcp' ? 'tcp' : null,
+      }
+    : null
+
+  const retryIntervalMs = Number.isFinite(form.retryIntervalMs) && form.retryIntervalMs >= 0
+    ? form.retryIntervalMs
+    : RETRY_INTERVAL_MS_DEFAULT
+
   return {
     name: form.name.trim(),
     testType: form.type,
     intervalSeconds: form.intervalMinutes * 60,
     timeoutSeconds: form.timeoutSeconds,
-    url: form.type === 'api' ? form.url.trim() : null,
+    url: ['api', 'dns'].includes(form.type) ? form.url.trim() || null : null,
     method: form.method,
     headers: Object.keys(headers).length > 0 ? headers : null,
     body: BODY_METHODS.includes(form.method) && form.body ? form.body : null,
@@ -167,6 +194,11 @@ function toCreateSyntheticTestPayload(form: FormState): CreateSyntheticTestPaylo
     authPass,
     assertions,
     steps,
+    tags: form.tags,
+    retryCount: Math.max(0, form.retryCount),
+    retryIntervalMs,
+    alertOnFailure: form.alertOnFailure,
+    config,
   }
 }
 
@@ -208,6 +240,18 @@ export default function CreateSyntheticTestDialog({
     }
     if (form.type === 'multistep' && form.steps.some((s) => !s.url)) {
       toast({title: 'All steps must have a URL', variant: 'destructive'})
+      return
+    }
+    if (form.type === 'ssl' && !form.hostname) {
+      toast({title: 'Hostname is required for SSL tests', variant: 'destructive'})
+      return
+    }
+    if (form.type === 'dns' && !form.url) {
+      toast({title: 'Hostname is required for DNS tests', variant: 'destructive'})
+      return
+    }
+    if (form.type === 'tcp' && (!form.hostname || !form.port)) {
+      toast({title: 'Hostname and port are required for TCP tests', variant: 'destructive'})
       return
     }
     createMutation.mutate(toCreateSyntheticTestPayload(form))
@@ -315,6 +359,51 @@ export default function CreateSyntheticTestDialog({
               <div>
                 <div className="font-semibold mb-1">Multistep API Test</div>
                 <div className="text-sm text-muted-foreground">Chain of HTTP requests with variable extraction</div>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setForm((f) => ({...f, type: 'ssl', assertions: [{type: 'certificate_expiry_days', operator: 'greater_than', value: '30', target: ''}]}))
+                setStep(2)
+              }}
+              className="flex items-start p-4 border rounded-xl hover:bg-accent hover:border-primary/50 transition-all text-left group"
+            >
+              <div className="p-2 rounded-lg mr-4 bg-amber-500/10 text-amber-500 group-hover:scale-110 transition-transform">
+                <Shield className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="font-semibold mb-1">SSL Certificate</div>
+                <div className="text-sm text-muted-foreground">Monitor certificate validity and expiry</div>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setForm((f) => ({...f, type: 'dns', assertions: [{type: 'resolution_time', operator: 'less_than', value: '1000', target: ''}]}))
+                setStep(2)
+              }}
+              className="flex items-start p-4 border rounded-xl hover:bg-accent hover:border-primary/50 transition-all text-left group"
+            >
+              <div className="p-2 rounded-lg mr-4 bg-cyan-500/10 text-cyan-500 group-hover:scale-110 transition-transform">
+                <Globe className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="font-semibold mb-1">DNS Check</div>
+                <div className="text-sm text-muted-foreground">Validate DNS resolution and records</div>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setForm((f) => ({...f, type: 'tcp', assertions: [{type: 'port_open', operator: 'equals', value: 'true', target: ''}]}))
+                setStep(2)
+              }}
+              className="flex items-start p-4 border rounded-xl hover:bg-accent hover:border-primary/50 transition-all text-left group"
+            >
+              <div className="p-2 rounded-lg mr-4 bg-emerald-500/10 text-emerald-500 group-hover:scale-110 transition-transform">
+                <Wifi className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="font-semibold mb-1">TCP Check</div>
+                <div className="text-sm text-muted-foreground">Test port connectivity and response time</div>
               </div>
             </button>
           </div>
@@ -549,6 +638,112 @@ export default function CreateSyntheticTestDialog({
                 ))}
               </div>
             )}
+
+            {form.type === 'ssl' && (
+              <div>
+                <Label htmlFor="hostname">Hostname</Label>
+                <Input
+                  id="hostname"
+                  value={form.hostname}
+                  onChange={(e) => setForm((f) => ({...f, hostname: e.target.value}))}
+                  placeholder="example.com"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Domain to check SSL certificate for</p>
+              </div>
+            )}
+
+            {form.type === 'dns' && (
+              <div>
+                <Label htmlFor="dns-url">Hostname</Label>
+                <Input
+                  id="dns-url"
+                  value={form.url}
+                  onChange={(e) => setForm((f) => ({...f, url: e.target.value}))}
+                  placeholder="example.com"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Hostname to resolve</p>
+              </div>
+            )}
+
+            {form.type === 'tcp' && (
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="tcp-host">Hostname</Label>
+                  <Input
+                    id="tcp-host"
+                    value={form.hostname}
+                    onChange={(e) => setForm((f) => ({...f, hostname: e.target.value}))}
+                    placeholder="example.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="tcp-port">Port</Label>
+                  <Input
+                    id="tcp-port"
+                    type="number"
+                    value={form.port}
+                    onChange={(e) => setForm((f) => ({...f, port: e.target.value}))}
+                    placeholder="443"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Tags */}
+            <div>
+              <Label>Tags</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  placeholder="Add tag..."
+                  value={form.tagInput}
+                  onChange={(e) => setForm((f) => ({...f, tagInput: e.target.value}))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && form.tagInput.trim()) {
+                      e.preventDefault()
+                      setForm((f) => ({
+                        ...f,
+                        tags: [...f.tags, f.tagInput.trim()],
+                        tagInput: '',
+                      }))
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => {
+                    if (form.tagInput.trim()) {
+                      setForm((f) => ({
+                        ...f,
+                        tags: [...f.tags, f.tagInput.trim()],
+                        tagInput: '',
+                      }))
+                    }
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+              {form.tags.length > 0 && (
+                <div className="flex gap-1 mt-2 flex-wrap">
+                  {form.tags.map((tag, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-secondary text-secondary-foreground rounded-md text-xs"
+                    >
+                      {tag}
+                      <button
+                        onClick={() => setForm((f) => ({...f, tags: f.tags.filter((_, idx) => idx !== i)}))}
+                        className="hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -575,6 +770,12 @@ export default function CreateSyntheticTestDialog({
                       <SelectItem value="body_contains">Body Contains</SelectItem>
                       <SelectItem value="response_time">Response Time</SelectItem>
                       <SelectItem value="header">Header</SelectItem>
+                      <SelectItem value="certificate_expiry_days">Cert Expiry (days)</SelectItem>
+                      <SelectItem value="certificate_valid">Cert Valid</SelectItem>
+                      <SelectItem value="resolved_ip">Resolved IP</SelectItem>
+                      <SelectItem value="resolution_time">Resolution Time</SelectItem>
+                      <SelectItem value="connection_time">Connection Time</SelectItem>
+                      <SelectItem value="port_open">Port Open</SelectItem>
                     </SelectContent>
                   </Select>
                   {assertion.type === 'header' && (
@@ -645,6 +846,58 @@ export default function CreateSyntheticTestDialog({
                 onChange={(e) => setForm((f) => ({...f, timeoutSeconds: parseInt(e.target.value)}))}
               />
               <p className="text-xs text-muted-foreground mt-1">Between 10 and 60 seconds</p>
+            </div>
+            <div className="border-t pt-4 mt-4">
+              <Label className="text-sm font-medium">Retry Policy</Label>
+              <div className="flex gap-3 mt-2">
+                <div className="flex-1">
+                  <Label htmlFor="retry-count" className="text-xs text-muted-foreground">Retries</Label>
+                  <Select
+                    value={String(form.retryCount)}
+                    onValueChange={(v) => setForm((f) => ({...f, retryCount: parseInt(v)}))}
+                  >
+                    <SelectTrigger id="retry-count">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">None</SelectItem>
+                      <SelectItem value="1">1 retry</SelectItem>
+                      <SelectItem value="2">2 retries</SelectItem>
+                      <SelectItem value="3">3 retries</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {form.retryCount > 0 && (
+                  <div className="flex-1">
+                    <Label htmlFor="retry-interval" className="text-xs text-muted-foreground">Interval (ms)</Label>
+                    <Input
+                      id="retry-interval"
+                      type="number"
+                      min={100}
+                      max={5000}
+                      value={form.retryIntervalMs}
+                      onChange={(e) => setForm((f) => ({...f, retryIntervalMs: parseInt(e.target.value)}))}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="alert-on-failure"
+                  checked={form.alertOnFailure}
+                  onChange={(e) => setForm((f) => ({...f, alertOnFailure: e.target.checked}))}
+                  className="rounded border-input"
+                />
+                <Label htmlFor="alert-on-failure" className="text-sm">
+                  Alert on failure
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Send notifications when this test transitions from passing to failing
+              </p>
             </div>
           </div>
         )}

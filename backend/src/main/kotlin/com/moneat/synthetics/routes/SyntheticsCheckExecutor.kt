@@ -26,12 +26,29 @@ import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
+
+private const val SSL_DEFAULT_PORT = 443
+private const val DNS_TIMEOUT_MS = 5000L
+private const val TCP_TIMEOUT_MS = 10000
+private const val UDP_TIMEOUT_MS = 5000
+private const val DAYS_PER_MS = 86_400_000L
 
 data class SyntheticCheckResult(
     val status: String, // "passed" or "failed"
@@ -40,16 +57,31 @@ data class SyntheticCheckResult(
     val timings: Map<String, Double> = emptyMap()
 )
 
-class SyntheticsCheckExecutor {
+open class SyntheticsCheckExecutor {
 
-    suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult {
+    private fun extractHostname(url: String): String? {
+        return try {
+            java.net.URI(url).host?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            url.removePrefix("https://").removePrefix("http://")
+                .split("/").firstOrNull()?.split(":")?.firstOrNull()
+        }
+    }
+
+    open suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult {
         return when (test.testType.lowercase()) {
             "multistep" -> executeMultistepTest(test)
+            "ssl" -> executeSslTest(test)
+            "dns" -> executeDnsTest(test)
+            "tcp" -> executeTcpTest(test)
+            "udp" -> executeUdpTest(test)
             else -> executeApiTest(test)
         }
     }
 
-    private suspend fun executeApiTest(test: SyntheticTestData): SyntheticCheckResult {
+    private suspend fun executeApiTest(
+        test: SyntheticTestData
+    ): SyntheticCheckResult {
         val url = test.url ?: return SyntheticCheckResult(
             status = "failed",
             durationMs = 0,
@@ -59,41 +91,63 @@ class SyntheticsCheckExecutor {
         val timeoutMs = test.timeoutSeconds * 1000L
         val client = buildClient(timeoutMs)
 
-        val startTime = System.currentTimeMillis()
+        val totalStart = System.nanoTime()
         return try {
             val headersMap: Map<String, String> = parseHeaders(test.headers)
-            val assertionList: List<SyntheticAssertion> = parseAssertions(test.assertions)
+            val assertionList = parseAssertions(test.assertions)
 
             val response = client.request(url) {
                 method = resolveHttpMethod(test.method)
                 headersMap.forEach { (k, v) -> header(k, v) }
                 when (test.authMethod?.lowercase()) {
-                    "basic" -> basicAuth(test.authUser ?: "", test.authPass ?: "")
+                    "basic" -> basicAuth(
+                        test.authUser ?: "",
+                        test.authPass ?: ""
+                    )
                     "bearer" -> bearerAuth(test.authPass ?: "")
                 }
                 test.body?.let { b -> setBody(b) }
             }
 
-            val durationMs = System.currentTimeMillis() - startTime
+            val ttfbNs = System.nanoTime() - totalStart
             val statusCode = response.status.value
             val body = response.bodyAsText()
-            val responseHeaders = response.headers.entries().associate { (k, v) -> k to v.firstOrNull().orEmpty() }
+            val totalNs = System.nanoTime() - totalStart
+            val responseHeaders = response.headers.entries()
+                .associate { (k, v) -> k to v.firstOrNull().orEmpty() }
+
+            val durationMs = totalNs / NS_PER_MS
+            val timings = mutableMapOf(
+                "ttfb" to (ttfbNs.toDouble() / NS_PER_MS),
+                "total" to (totalNs.toDouble() / NS_PER_MS)
+            )
 
             val allPassed = assertionList.all { assertion ->
-                evaluateAssertion(assertion, statusCode, body, durationMs, responseHeaders)
+                evaluateAssertion(
+                    assertion,
+                    statusCode,
+                    body,
+                    durationMs,
+                    responseHeaders
+                )
             }
 
             if (allPassed) {
-                SyntheticCheckResult(status = "passed", durationMs = durationMs)
+                SyntheticCheckResult(
+                    status = "passed",
+                    durationMs = durationMs,
+                    timings = timings
+                )
             } else {
                 SyntheticCheckResult(
                     status = "failed",
                     durationMs = durationMs,
-                    errorMessage = "One or more assertions failed"
+                    errorMessage = "One or more assertions failed",
+                    timings = timings
                 )
             }
         } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - startTime
+            val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
             logger.warn { "API test failed for ${test.id}: ${e.message}" }
             SyntheticCheckResult(
                 status = "failed",
@@ -102,6 +156,310 @@ class SyntheticsCheckExecutor {
             )
         } finally {
             client.close()
+        }
+    }
+
+    private fun executeSslTest(
+        test: SyntheticTestData
+    ): SyntheticCheckResult {
+        val config: SyntheticTestConfig? = test.config?.let {
+            try {
+                Json.decodeFromString(it)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val hostname = config?.hostname
+            ?: test.url?.let { extractHostname(it) }
+            ?: return SyntheticCheckResult(
+                status = "failed", durationMs = 0,
+                errorMessage = "No hostname configured"
+            )
+
+        val port = config?.port ?: SSL_DEFAULT_PORT
+        val startTime = System.currentTimeMillis()
+
+        return try {
+            val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
+            val tlsStart = System.currentTimeMillis()
+            val socket = factory.createSocket(
+                hostname,
+                port
+            ) as SSLSocket
+            socket.use { sslSocket ->
+                sslSocket.startHandshake()
+                val tlsMs = System.currentTimeMillis() - tlsStart
+                val session = sslSocket.session
+                val cert = session.peerCertificates.firstOrNull()
+                    as? java.security.cert.X509Certificate
+
+                val durationMs = System.currentTimeMillis() - startTime
+                val timings = mutableMapOf(
+                    "tls" to tlsMs.toDouble(),
+                    "total" to durationMs.toDouble()
+                )
+
+                if (cert == null) {
+                    return SyntheticCheckResult(
+                        status = "failed",
+                        durationMs = durationMs,
+                        errorMessage = "No certificate found",
+                        timings = timings
+                    )
+                }
+
+                val expiryMs = cert.notAfter.time -
+                    System.currentTimeMillis()
+                val expiryDays = expiryMs / DAYS_PER_MS
+
+                val assertionList = parseAssertions(test.assertions)
+                val allPassed = assertionList.all { assertion ->
+                    evaluateSslAssertion(
+                        assertion,
+                        cert,
+                        expiryDays
+                    )
+                }
+
+                timings["certificate_expiry_days"] =
+                    expiryDays.toDouble()
+
+                if (allPassed) {
+                    SyntheticCheckResult(
+                        status = "passed",
+                        durationMs = durationMs,
+                        timings = timings
+                    )
+                } else {
+                    SyntheticCheckResult(
+                        status = "failed",
+                        durationMs = durationMs,
+                        errorMessage = "SSL assertion failed",
+                        timings = timings
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "SSL check failed: ${e.message}"
+            )
+        }
+    }
+
+    private suspend fun executeDnsTest(
+        test: SyntheticTestData
+    ): SyntheticCheckResult {
+        val hostname = test.url?.let { extractHostname(it) }
+            ?: return SyntheticCheckResult(
+                status = "failed", durationMs = 0,
+                errorMessage = "No hostname configured"
+            )
+
+        val startTime = System.currentTimeMillis()
+        return try {
+            val dnsStart = System.currentTimeMillis()
+            val addresses = withTimeout(DNS_TIMEOUT_MS) {
+                withContext(Dispatchers.IO) {
+                    InetAddress.getAllByName(hostname)
+                }
+            }
+            val dnsMs = System.currentTimeMillis() - dnsStart
+            val durationMs = System.currentTimeMillis() - startTime
+
+            val resolvedIps = addresses.map { it.hostAddress }
+            val timings = mapOf(
+                "dns" to dnsMs.toDouble(),
+                "total" to durationMs.toDouble()
+            )
+
+            val assertionList = parseAssertions(test.assertions)
+            val allPassed = assertionList.all { assertion ->
+                evaluateDnsAssertion(
+                    assertion,
+                    resolvedIps,
+                    dnsMs
+                )
+            }
+
+            if (allPassed) {
+                SyntheticCheckResult(
+                    status = "passed",
+                    durationMs = durationMs,
+                    timings = timings
+                )
+            } else {
+                SyntheticCheckResult(
+                    status = "failed",
+                    durationMs = durationMs,
+                    errorMessage = "DNS assertion failed",
+                    timings = timings
+                )
+            }
+        } catch (_: TimeoutCancellationException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "DNS resolution timed out after ${DNS_TIMEOUT_MS}ms"
+            )
+        } catch (e: Exception) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "DNS resolution failed: ${e.message}"
+            )
+        }
+    }
+
+    private fun executeTcpTest(
+        test: SyntheticTestData
+    ): SyntheticCheckResult {
+        val config: SyntheticTestConfig? = test.config?.let {
+            try {
+                Json.decodeFromString(it)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val hostname = config?.hostname
+            ?: test.url?.let { extractHostname(it) }
+            ?: return SyntheticCheckResult(
+                status = "failed", durationMs = 0,
+                errorMessage = "No hostname configured"
+            )
+        val port = config?.port ?: return SyntheticCheckResult(
+            status = "failed", durationMs = 0,
+            errorMessage = "No port configured"
+        )
+
+        val startTime = System.currentTimeMillis()
+        return try {
+            val socket = Socket()
+            val connectStart = System.currentTimeMillis()
+            socket.connect(
+                InetSocketAddress(hostname, port),
+                TCP_TIMEOUT_MS
+            )
+            val connectMs = System.currentTimeMillis() - connectStart
+            socket.close()
+
+            val durationMs = System.currentTimeMillis() - startTime
+            val timings = mapOf(
+                "tcp" to connectMs.toDouble(),
+                "total" to durationMs.toDouble()
+            )
+
+            val assertionList = parseAssertions(test.assertions)
+            val allPassed = assertionList.all { assertion ->
+                evaluateTcpAssertion(assertion, connectMs, true)
+            }
+
+            if (allPassed) {
+                SyntheticCheckResult(
+                    status = "passed",
+                    durationMs = durationMs,
+                    timings = timings
+                )
+            } else {
+                SyntheticCheckResult(
+                    status = "failed",
+                    durationMs = durationMs,
+                    errorMessage = "TCP assertion failed",
+                    timings = timings
+                )
+            }
+        } catch (e: Exception) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "TCP connect failed: ${e.message}"
+            )
+        }
+    }
+
+    private fun executeUdpTest(
+        test: SyntheticTestData
+    ): SyntheticCheckResult {
+        val config: SyntheticTestConfig? = test.config?.let {
+            try {
+                Json.decodeFromString(it)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val hostname = config?.hostname
+            ?: test.url?.let { extractHostname(it) }
+            ?: return SyntheticCheckResult(
+                status = "failed", durationMs = 0,
+                errorMessage = "No hostname configured"
+            )
+        val port = config?.port ?: return SyntheticCheckResult(
+            status = "failed", durationMs = 0,
+            errorMessage = "No port configured"
+        )
+
+        val startTime = System.currentTimeMillis()
+        return try {
+            val address = InetAddress.getByName(hostname)
+            val sendData = ByteArray(1) { 0 }
+            val packet = DatagramPacket(
+                sendData,
+                sendData.size,
+                address,
+                port
+            )
+            val socket = DatagramSocket()
+            socket.soTimeout = UDP_TIMEOUT_MS
+
+            val connectStart = System.currentTimeMillis()
+            socket.send(packet)
+
+            val recvBuf = ByteArray(1)
+            val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
+            val portOpen = try {
+                socket.receive(recvPacket)
+                true
+            } catch (_: java.net.SocketTimeoutException) {
+                // No response is normal for many UDP services
+                true
+            } catch (_: java.net.PortUnreachableException) {
+                false
+            }
+            val connectMs = System.currentTimeMillis() - connectStart
+            socket.close()
+
+            val durationMs = System.currentTimeMillis() - startTime
+            val timings = mapOf(
+                "udp" to connectMs.toDouble(),
+                "total" to durationMs.toDouble()
+            )
+
+            val assertionList = parseAssertions(test.assertions)
+            val allPassed = assertionList.all { assertion ->
+                evaluateTcpAssertion(assertion, connectMs, portOpen)
+            }
+
+            if (allPassed) {
+                SyntheticCheckResult(
+                    status = "passed",
+                    durationMs = durationMs,
+                    timings = timings
+                )
+            } else {
+                SyntheticCheckResult(
+                    status = "failed",
+                    durationMs = durationMs,
+                    errorMessage = "UDP assertion failed",
+                    timings = timings
+                )
+            }
+        } catch (e: Exception) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "UDP check failed: ${e.message}"
+            )
         }
     }
 
@@ -258,10 +616,14 @@ class SyntheticsCheckExecutor {
         }
     }
 
-    private fun substituteVariables(input: String, variables: Map<String, String>): String {
+    private fun substituteVariables(
+        input: String,
+        variables: Map<String, String>
+    ): String {
         var result = input
         variables.forEach { (name, value) ->
             result = result.replace("{{$name}}", value)
+            result = result.replace("{{global.$name}}", value)
         }
         return result
     }
@@ -303,5 +665,106 @@ class SyntheticsCheckExecutor {
                 socketTimeoutMillis = timeoutMs
             }
         }
+    }
+
+    private fun evaluateSslAssertion(
+        assertion: SyntheticAssertion,
+        cert: java.security.cert.X509Certificate,
+        expiryDays: Long
+    ): Boolean {
+        return when (assertion.type) {
+            "certificate_expiry_days" -> {
+                val threshold = assertion.value.toLongOrNull() ?: return false
+                compareValues(expiryDays, threshold, assertion.operator)
+            }
+            "certificate_valid" -> {
+                val expected = assertion.value.toBooleanStrictOrNull()
+                    ?: true
+                val valid = try {
+                    cert.checkValidity()
+                    true
+                } catch (_: Exception) {
+                    false
+                }
+                valid == expected
+            }
+            "certificate_issuer" -> {
+                val issuer = cert.issuerX500Principal.name
+                when (assertion.operator) {
+                    "contains" -> issuer.contains(
+                        assertion.value,
+                        ignoreCase = true
+                    )
+                    else -> issuer.contains(
+                        assertion.value,
+                        ignoreCase = true
+                    )
+                }
+            }
+            else -> {
+                logger.warn { "Unknown SSL assertion type: '${assertion.type}'" }
+                false
+            }
+        }
+    }
+
+    private fun evaluateDnsAssertion(
+        assertion: SyntheticAssertion,
+        resolvedIps: List<String>,
+        resolutionTimeMs: Long
+    ): Boolean {
+        return when (assertion.type) {
+            "resolved_ip" -> when (assertion.operator) {
+                "contains" -> resolvedIps.any {
+                    it.contains(assertion.value)
+                }
+                "equals" -> resolvedIps.contains(assertion.value)
+                else -> resolvedIps.contains(assertion.value)
+            }
+            "resolution_time" -> {
+                val threshold = assertion.value.toLongOrNull()
+                    ?: return false
+                compareValues(
+                    resolutionTimeMs,
+                    threshold,
+                    assertion.operator
+                )
+            }
+            else -> {
+                logger.warn { "Unknown DNS assertion type: '${assertion.type}'" }
+                false
+            }
+        }
+    }
+
+    private fun evaluateTcpAssertion(
+        assertion: SyntheticAssertion,
+        connectionTimeMs: Long,
+        portOpen: Boolean
+    ): Boolean {
+        return when (assertion.type) {
+            "connection_time" -> {
+                val threshold = assertion.value.toLongOrNull()
+                    ?: return false
+                compareValues(
+                    connectionTimeMs,
+                    threshold,
+                    assertion.operator
+                )
+            }
+            "port_open" -> {
+                val expected = assertion.value.toBooleanStrictOrNull()
+                    ?: true
+                portOpen == expected
+            }
+            else -> {
+                logger.warn { "Unknown TCP assertion type: '${assertion.type}'" }
+                false
+            }
+        }
+    }
+
+    companion object {
+        private const val NS_PER_MS = 1_000_000L
     }
 }

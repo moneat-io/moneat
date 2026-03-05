@@ -117,7 +117,7 @@ fun Route.syntheticsRoutes() {
         authenticate("auth-jwt") {
             // --- Synthetic Test Results ---
 
-            get("/synthetics") {
+            get("/synthetics/results") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val orgIds = getOrgIdsForUser(userId)
@@ -137,9 +137,19 @@ fun Route.syntheticsRoutes() {
                 val conditions = mutableListOf(
                     "organization_id IN (${orgIdsToChCondition(orgIds)})"
                 )
-                if (!testType.isNullOrBlank()) conditions.add("test_type = '${escapeSql(testType)}'")
-                if (!status.isNullOrBlank()) conditions.add("status = '${escapeSql(status)}'")
-                if (!probeDc.isNullOrBlank()) conditions.add("probe_dc = '${escapeSql(probeDc)}'")
+                if (!testType.isNullOrBlank()) {
+                    conditions.add(
+                        "test_type = '${escapeSql(testType)}'"
+                    )
+                }
+                if (!status.isNullOrBlank()) {
+                    conditions.add("status = '${escapeSql(status)}'")
+                }
+                if (!probeDc.isNullOrBlank()) {
+                    conditions.add(
+                        "probe_dc = '${escapeSql(probeDc)}'"
+                    )
+                }
 
                 val query = """
                     SELECT * FROM synthetic_results
@@ -172,7 +182,10 @@ fun Route.syntheticsRoutes() {
                     put("totalCount", JsonPrimitive(totalCount))
                 }
                 call.respondText(
-                    json.encodeToString(JsonObject.serializer(), responseJson),
+                    json.encodeToString(
+                        JsonObject.serializer(),
+                        responseJson
+                    ),
                     ContentType.Application.Json
                 )
             }
@@ -181,29 +194,180 @@ fun Route.syntheticsRoutes() {
 
             get("/synthetics/tests") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
                 val orgIds = getOrgIdsForUser(userId)
                 if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization"))
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
                     return@get
                 }
                 val tests = SyntheticsService().listTests(orgIds.first())
                 call.respond(HttpStatusCode.OK, tests)
             }
 
-            post("/synthetics/tests") {
+            get("/synthetics/tests/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
                 val orgIds = getOrgIdsForUser(userId)
                 if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization"))
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
+                    return@get
+                }
+                val testId = try {
+                    UUID.fromString(call.parameters["id"])
+                } catch (_: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid ID")
+                    )
+                    return@get
+                }
+                val test = SyntheticsService().getTest(
+                    testId,
+                    orgIds.first()
+                )
+                if (test == null) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Test not found")
+                    )
+                } else {
+                    call.respond(HttpStatusCode.OK, test)
+                }
+            }
+
+            get("/synthetics/tests/{id}/results") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId)
+                if (orgIds.isEmpty()) {
+                    call.respondText(
+                        """{"results":[],"totalCount":0}""",
+                        ContentType.Application.Json
+                    )
+                    return@get
+                }
+                val testId = try {
+                    UUID.fromString(call.parameters["id"])
+                        .toString()
+                } catch (_: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid ID")
+                    )
+                    return@get
+                }
+                val limit = parseLimit(call.parameters["limit"])
+
+                val conditions = listOf(
+                    "organization_id IN " +
+                        "(${orgIdsToChCondition(orgIds)})",
+                    "test_id = '${escapeSql(testId)}'"
+                )
+                val query = """
+                    SELECT * FROM synthetic_results
+                    WHERE ${conditions.joinToString(" AND ")}
+                    ORDER BY timestamp DESC
+                    LIMIT $limit
+                    FORMAT JSONEachRow
+                """.trimIndent()
+                val countQuery = """
+                    SELECT count() FROM synthetic_results
+                    WHERE ${conditions.joinToString(" AND ")}
+                """.trimIndent()
+
+                val results = executeChQuery(query) ?: run {
+                    call.respondText(
+                        """{"results":[],"totalCount":0}""",
+                        ContentType.Application.Json
+                    )
+                    return@get
+                }
+                val totalCount = runCatching {
+                    val response = ClickHouseClient.execute(countQuery)
+                    response.bodyAsText().trim().toLongOrNull() ?: 0L
+                }.getOrElse { 0L }
+
+                val responseJson = buildJsonObject {
+                    put("results", JsonArray(results))
+                    put("totalCount", JsonPrimitive(totalCount))
+                }
+                call.respondText(
+                    json.encodeToString(
+                        JsonObject.serializer(),
+                        responseJson
+                    ),
+                    ContentType.Application.Json
+                )
+            }
+
+            get("/synthetics/tests/{id}/summary") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
+                    return@get
+                }
+                val testId = try {
+                    UUID.fromString(call.parameters["id"])
+                        .toString()
+                } catch (_: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid ID")
+                    )
+                    return@get
+                }
+                val summary = SyntheticsService().getTestSummary(
+                    testId,
+                    orgIds
+                )
+                if (summary == null) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "No data found")
+                    )
+                } else {
+                    call.respond(HttpStatusCode.OK, summary)
+                }
+            }
+
+            post("/synthetics/tests") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
                     return@post
                 }
                 val request = call.receive<CreateSyntheticTestRequest>()
                 val test = try {
-                    SyntheticsService().createTest(orgIds.first(), request)
+                    SyntheticsService().createTest(
+                        orgIds.first(),
+                        request
+                    )
                 } catch (e: IllegalStateException) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to e.message)
+                    )
                     return@post
                 }
                 call.respond(HttpStatusCode.Created, test)
@@ -211,22 +375,36 @@ fun Route.syntheticsRoutes() {
 
             put("/synthetics/tests/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
                 val orgIds = getOrgIdsForUser(userId)
                 if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization"))
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
                     return@put
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                 } catch (_: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid ID"))
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid ID")
+                    )
                     return@put
                 }
                 val request = call.receive<UpdateSyntheticTestRequest>()
-                val test = SyntheticsService().updateTest(testId, orgIds.first(), request)
+                val test = SyntheticsService().updateTest(
+                    testId,
+                    orgIds.first(),
+                    request
+                )
                 if (test == null) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Test not found"))
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Test not found")
+                    )
                 } else {
                     call.respond(HttpStatusCode.OK, test)
                 }
@@ -234,46 +412,185 @@ fun Route.syntheticsRoutes() {
 
             delete("/synthetics/tests/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
                 val orgIds = getOrgIdsForUser(userId)
                 if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization"))
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
                     return@delete
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                 } catch (_: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid ID"))
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid ID")
+                    )
                     return@delete
                 }
-                val deleted = SyntheticsService().deleteTest(testId, orgIds.first())
+                val deleted = SyntheticsService().deleteTest(
+                    testId,
+                    orgIds.first()
+                )
                 if (deleted) {
                     call.respond(HttpStatusCode.OK, mapOf("ok" to true))
                 } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Test not found"))
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Test not found")
+                    )
                 }
             }
 
             post("/synthetics/tests/{id}/run") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
                 val orgIds = getOrgIdsForUser(userId)
                 if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "No organization"))
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
                     return@post
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                 } catch (_: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid ID"))
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid ID")
+                    )
                     return@post
                 }
-                val started = SyntheticsService().runTestNow(testId, orgIds.first())
+                val started = SyntheticsService().runTestNow(
+                    testId,
+                    orgIds.first()
+                )
                 if (!started) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Test not found"))
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Test not found")
+                    )
                     return@post
                 }
-                call.respond(HttpStatusCode.Accepted, mapOf("ok" to true))
+                call.respond(
+                    HttpStatusCode.Accepted,
+                    mapOf("ok" to true)
+                )
+            }
+
+            // --- Synthetic Variables ---
+
+            get("/synthetics/variables") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
+                    return@get
+                }
+                val variables = SyntheticsService().listVariables(
+                    orgIds.first()
+                )
+                call.respond(HttpStatusCode.OK, variables)
+            }
+
+            post("/synthetics/variables") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
+                    return@post
+                }
+                val request = call.receive<SyntheticVariableRequest>()
+                val variable = SyntheticsService().createVariable(
+                    orgIds.first(),
+                    request
+                )
+                call.respond(HttpStatusCode.Created, variable)
+            }
+
+            put("/synthetics/variables/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
+                    return@put
+                }
+                val varId = call.parameters["id"]?.toIntOrNull()
+                if (varId == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid ID")
+                    )
+                    return@put
+                }
+                val request = call.receive<SyntheticVariableRequest>()
+                val variable = SyntheticsService().updateVariable(
+                    varId,
+                    orgIds.first(),
+                    request
+                )
+                if (variable == null) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Variable not found")
+                    )
+                } else {
+                    call.respond(HttpStatusCode.OK, variable)
+                }
+            }
+
+            delete("/synthetics/variables/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "No organization")
+                    )
+                    return@delete
+                }
+                val varId = call.parameters["id"]?.toIntOrNull()
+                if (varId == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid ID")
+                    )
+                    return@delete
+                }
+                val deleted = SyntheticsService().deleteVariable(
+                    varId,
+                    orgIds.first()
+                )
+                if (deleted) {
+                    call.respond(HttpStatusCode.OK, mapOf("ok" to true))
+                } else {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Variable not found")
+                    )
+                }
             }
         }
     }
