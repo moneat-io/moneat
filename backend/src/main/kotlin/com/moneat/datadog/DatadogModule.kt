@@ -40,7 +40,6 @@ import com.moneat.datadog.networkdevices.ndmIngestRoutes
 import com.moneat.datadog.networkdevices.ndmQueryRoutes
 import com.moneat.datadog.networkdevices.NdmIngestionWorker
 import com.moneat.datadog.security.securityIngestRoutes
-import com.moneat.datadog.security.securityQueryRoutes
 import com.moneat.datadog.security.SecurityIngestionWorker
 import com.moneat.datadog.services.ProfileStorageService
 import com.moneat.datadog.workers.DatadogEventIngestionWorker
@@ -115,7 +114,6 @@ class DatadogModule : EnterpriseModule {
             ndmQueryRoutes()
             // Phase 10: Security
             securityIngestRoutes()
-            securityQueryRoutes()
         }
     }
 
