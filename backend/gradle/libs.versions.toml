@@ -115,7 +115,7 @@ testcontainers-clickhouse = { module = "org.testcontainers:testcontainers-clickh
 # Datasource JDBC drivers
 mysql-connector-j = { module = "com.mysql:mysql-connector-j", version = "9.6.0" }
 mariadb-java-client = { module = "org.mariadb.jdbc:mariadb-java-client", version = "3.5.7" }
-mssql-jdbc = { module = "com.microsoft.sqlserver:mssql-jdbc", version = "12.10.2.jre11" }
+mssql-jdbc = { module = "com.microsoft.sqlserver:mssql-jdbc", version = "13.2.1.jre11" }
 clickhouse-jdbc = { module = "com.clickhouse:clickhouse-jdbc", version = "0.9.7" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version = "3.46.1.0" }
 snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "3.28.0" }
