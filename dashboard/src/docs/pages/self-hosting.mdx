@@ -51,7 +51,7 @@ FRONTEND_URL=https://moneat.example.com
 BACKEND_URL=https://api.moneat.example.com
 
 # Self-host mode (required)
-SELF_HOST=true
+SELF_HOSTED=true
 ```
 
 :::danger[Use strong secrets]
@@ -79,7 +79,7 @@ services:
       JWT_SECRET: your-secure-random-secret
       FRONTEND_URL: https://moneat.example.com
       BACKEND_URL: https://api.moneat.example.com
-      SELF_HOST: "true"
+      SELF_HOSTED: "true"
 
   frontend:
     build:
@@ -151,7 +151,7 @@ The self-hosted deployment consists of five services:
 | `CLICKHOUSE_PASSWORD` | ClickHouse password. Must match the clickhouse service config. |
 | `FRONTEND_URL` | Public URL of the dashboard (e.g. `https://moneat.example.com`). |
 | `BACKEND_URL` | Public URL of the API (e.g. `https://api.moneat.example.com`). |
-| `SELF_HOST` | Set to `true` to enable self-hosted mode. |
+| `SELF_HOSTED` | Set to `true` to enable self-hosted mode. |
 
 ### Email / SMTP
 
@@ -235,7 +235,7 @@ Database migrations run automatically on backend startup — both PostgreSQL (vi
 
 ## Telemetry
 
-When `SELF_HOST=true`, Moneat collects anonymous usage metrics to help improve the product for self-hosters. This includes aggregate counts (number of events ingested, active users) and never includes any event data, user information, or personally identifiable information.
+When `SELF_HOSTED=true`, Moneat collects anonymous usage metrics to help improve the product for self-hosters. This includes aggregate counts (number of events ingested, active users) and never includes any event data, user information, or personally identifiable information.
 
 To opt out, set in your `.env`:
 

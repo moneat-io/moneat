@@ -79,7 +79,7 @@ object EnvConfig {
     // Self-host mode configuration
     object SelfHost {
         val enabled: Boolean
-            get() = get("SELF_HOST", "false").toBoolean()
+            get() = get("SELF_HOSTED", "false").toBoolean()
     }
 
     // Demo mode configuration
