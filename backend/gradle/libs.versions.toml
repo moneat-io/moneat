@@ -16,6 +16,7 @@ sentry = "8.33.0"
 flyway = "12.0.3"
 h2 = "2.4.240"
 mockk = "1.14.9"
+shedlock = "7.6.0"
 
 [libraries]
 # Ktor Server
@@ -49,6 +50,8 @@ postgresql = { module = "org.postgresql:postgresql", version = "42.7.10" }
 hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
+shedlock-core = { module = "net.javacrumbs.shedlock:shedlock-core", version.ref = "shedlock" }
+shedlock-provider-exposed = { module = "net.javacrumbs.shedlock:shedlock-provider-exposed", version.ref = "shedlock" }
 
 # Kotlin ecosystem
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }

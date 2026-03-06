@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.shared.services.TaskLock
 import com.moneat.config.RedisClient
 import com.moneat.enterprise.oncall.models.Incident
 import com.moneat.enterprise.oncall.models.IncidentTimeline
@@ -75,11 +76,9 @@ class EscalationEngine(
         timeoutPollingJob =
             scope.launch {
                 while (isActive) {
-                    try {
+                    TaskLock.tryWithLock("oncall-escalation", lockAtMostFor = 5.minutes, lockAtLeastFor = 5.seconds) {
                         checkTimeouts()
                         checkSmsFallbackTimeouts()
-                    } catch (e: Exception) {
-                        logger.error("Error checking escalation timeouts", e)
                     }
                     delay(10.seconds)
                 }

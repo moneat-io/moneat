@@ -10,6 +10,7 @@ import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.SlackUserMappings
+import com.moneat.shared.services.TaskLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,6 +23,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Background service that syncs on-call schedules to Slack user groups.
@@ -55,10 +57,8 @@ class SlackUserGroupSyncService(
                 logger.info("SlackUserGroupSyncService started")
 
                 while (isActive) {
-                    try {
+                    TaskLock.tryWithLock("oncall-slack-sync", lockAtMostFor = 5.minutes) {
                         syncAllSchedules()
-                    } catch (e: Exception) {
-                        logger.error("Error in sync loop", e)
                     }
 
                     delay(SYNC_INTERVAL_MS)

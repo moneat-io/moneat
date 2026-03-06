@@ -27,9 +27,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import com.moneat.shared.services.TaskLock
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
 import java.util.*
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 private val logger = KotlinLogging.logger {}
 
@@ -64,10 +67,8 @@ class UptimeScheduler(
         schedulerJob =
             scope.launch {
                 while (isActive) {
-                    try {
+                    TaskLock.tryWithLock("uptime-scheduler", lockAtMostFor = 2.minutes, lockAtLeastFor = 55.seconds) {
                         checkMonitors()
-                    } catch (e: Exception) {
-                        logger.error(e) { "Error in uptime scheduler loop: ${e.message}" }
                     }
 
                     // Check every second

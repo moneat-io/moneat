@@ -86,6 +86,8 @@ dependencies {
     implementation(libs.hikaricp)
     implementation(libs.flyway.core)
     implementation(libs.flyway.postgresql)
+    implementation(libs.shedlock.core)
+    implementation(libs.shedlock.provider.exposed)
 
     // Date/Time
     implementation(libs.kotlinx.datetime)

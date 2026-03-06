@@ -22,6 +22,7 @@ import com.zaxxer.hikari.HikariDataSource
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.log
+import io.ktor.util.AttributeKey
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -29,6 +30,8 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.sql.Connection
 
 private const val CLICKHOUSE_MIGRATION_LOCK_KEY = 8675309L
+
+val ExposedDatabaseKey = AttributeKey<org.jetbrains.exposed.v1.jdbc.Database>("ExposedDatabase")
 private const val CLICKHOUSE_MIGRATION_LOCK_WAIT_TIMEOUT_MS = 120_000L
 private const val CLICKHOUSE_MIGRATION_LOCK_POLL_INTERVAL_MS = 1_000L
 
@@ -148,7 +151,8 @@ fun Application.configureDatabases() {
             log.info("Test database detected (H2), skipping PostgreSQL migrations")
         }
 
-        Database.connect(dataSource)
+        val database = Database.connect(dataSource)
+        attributes.put(ExposedDatabaseKey, database)
         TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_READ_COMMITTED
 
         log.info("PostgreSQL database connected")

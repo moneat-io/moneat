@@ -35,6 +35,7 @@ import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.RetentionPolicyService
+import com.moneat.shared.services.TaskLock
 import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -88,10 +89,12 @@ class DashboardAlertService {
         logger.info { "Starting DashboardAlertService background job" }
         evaluationJob = scope.launch {
             while (isActive) {
-                try {
+                TaskLock.tryWithLock(
+                    "dashboard-alert-evaluation",
+                    lockAtMostFor = 5.minutes,
+                    lockAtLeastFor = (EVALUATION_INTERVAL_SECONDS - 5).seconds
+                ) {
                     evaluateAlerts()
-                } catch (e: Exception) {
-                    logger.error(e) { "Error evaluating dashboard alerts" }
                 }
                 delay(EVALUATION_INTERVAL_SECONDS.seconds)
             }
