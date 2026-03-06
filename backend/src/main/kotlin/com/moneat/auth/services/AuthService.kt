@@ -53,6 +53,8 @@ import kotlin.time.Clock
 
 data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
+data class Quintuple<A, B, C, D, E>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E)
+
 data class SignupRequestContext(
     val ipAddress: String? = null,
     val userAgent: String? = null
@@ -72,6 +74,22 @@ class AuthService {
     private val emailService = EmailService()
     private val secureRandom = SecureRandom()
     private val refreshTokenService = RefreshTokenService()
+
+    private fun <T> retryOnSerializationFailure(maxRetries: Int, block: () -> T): T {
+        var lastException: java.sql.SQLException? = null
+        repeat(maxRetries) {
+            try {
+                return block()
+            } catch (e: java.sql.SQLException) {
+                if (e.sqlState == "40001") {
+                    lastException = e
+                } else {
+                    throw e
+                }
+            }
+        }
+        throw lastException!!
+    }
 
     fun signup(
         request: SignupRequest,
@@ -99,7 +117,8 @@ class AuthService {
             )
         )
 
-        val (userId, emailVerified, orgId, orgRole) =
+        val (userId, emailVerified, verificationToken, orgId, orgRole) =
+            retryOnSerializationFailure(maxRetries = 3) {
             transaction(transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE) {
                 // Check if user exists
                 val existing = Users.selectAll().where { Users.email eq normalizedEmail }.firstOrNull()
@@ -278,18 +297,18 @@ class AuthService {
                     )
                 )
 
-                // Send verification email only if verification is required
-                if (!skipVerification && verificationToken != null) {
-                    try {
-                        emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
-                    } catch (e: Exception) {
-                        // Log but don't fail signup if email fails
-                        println("Failed to send verification email: ${e.message}")
-                    }
-                }
-
-                Quadruple(id, skipVerification, finalOrgId, finalOrgRole)
+                Quintuple(id, skipVerification, verificationToken, finalOrgId, finalOrgRole)
             }
+        }
+
+        if (!emailVerified && verificationToken != null) {
+            try {
+                emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
+            } catch (e: Exception) {
+                // Log but don't fail signup if email fails
+                println("Failed to send verification email: ${e.message}")
+            }
+        }
 
         val tokenPair = refreshTokenService.generateRefreshToken(userId, normalizedEmail, orgId, orgRole)
         SentryUtils.breadcrumb("auth", "Signup completed", mapOf("user_id" to userId))
