@@ -51,12 +51,13 @@ import java.security.SecureRandom
 import java.util.*
 import kotlin.time.Clock
 
-data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
-
-data class Quintuple<A, B, C, D, E>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E)
-
-data class Sextuple<A, B, C, D, E, F>(
-    val first: A, val second: B, val third: C, val fourth: D, val fifth: E, val sixth: F
+data class SignupResult(
+    val userId: Int,
+    val emailVerified: Boolean,
+    val verificationToken: String?,
+    val orgId: Int,
+    val orgRole: String,
+    val isAdmin: Boolean,
 )
 
 data class SignupRequestContext(
@@ -284,7 +285,7 @@ class AuthService {
                     )
                 )
 
-                Sextuple(id, skipVerification, verificationToken, finalOrgId, finalOrgRole, isFirstUser)
+                SignupResult(id, skipVerification, verificationToken, finalOrgId, finalOrgRole, isFirstUser)
             }
 
         if (!emailVerified && verificationToken != null) {
