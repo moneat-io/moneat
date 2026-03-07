@@ -91,7 +91,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
             type=sha,format=long
 
       - name: Build and push backend image
@@ -136,7 +136,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
             type=sha,format=long
 
       - name: Build and push dashboard image
@@ -193,11 +193,16 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout main
+
+          TARGET_BRANCH=$(git branch -r --contains "$GITHUB_SHA" | grep -v 'HEAD' | sed 's|origin/||' | head -n1 | tr -d ' ')
+          TARGET_BRANCH="${TARGET_BRANCH:-main}"
+          echo "Committing CHANGELOG.md to branch: $TARGET_BRANCH"
+
+          git checkout "$TARGET_BRANCH"
           git add CHANGELOG.md
           if git diff --cached --quiet; then
             echo "No changelog changes to commit"
           else
             git commit -m "chore(release): update CHANGELOG.md for ${{ github.ref_name }} [skip ci]"
-            git push origin main
+            git push origin "$TARGET_BRANCH"
           fi
