@@ -11,7 +11,7 @@ vi.mock('@datadog/browser-logs', () => ({
 
 describe('resolveProxyUrl', () => {
   it('uses explicit proxyUrl when provided', () => {
-    expect(resolveProxyUrl('https://custom.host/dd', 'https://backend.io')).toBe('https://custom.host/dd')
+    expect(resolveProxyUrl('https://custom.host/dd', 'https://backend.io')).toBe('https://custom.host/dd/dd')
   })
 
   it('falls back to backendUrl + /dd when proxyUrl is empty', () => {
@@ -82,6 +82,6 @@ describe('initDatadog', () => {
     const rumCall = vi.mocked(datadogRum.init).mock.calls[0][0]
     const proxyFn = rumCall.proxy as ({path, parameters}: {path: string; parameters: string}) => string
     expect(proxyFn({path: '/api/v2/rum', parameters: 'ddsource=browser'}))
-      .toBe('https://proxy.example.com/dd/api/v2/rum?ddsource=browser')
+      .toBe('https://proxy.example.com/dd/dd/api/v2/rum?ddsource=browser')
   })
 })

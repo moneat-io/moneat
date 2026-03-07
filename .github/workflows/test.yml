@@ -115,6 +115,10 @@ jobs:
 
       - name: Run frontend tests
         working-directory: dashboard
+        run: npm run test
+
+      - name: Run frontend coverage
+        working-directory: dashboard
         run: npm run test:coverage
         env:
           COVERAGE_GATE_PHASE: ${{ env.COVERAGE_GATE_PHASE }}

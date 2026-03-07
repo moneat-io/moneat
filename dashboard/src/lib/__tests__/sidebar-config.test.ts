@@ -33,16 +33,16 @@ describe('sidebar-config', () => {
   })
 
   describe('ALWAYS_VISIBLE_ITEMS', () => {
-    it('includes dashboard, admin, and settings', () => {
-      expect(ALWAYS_VISIBLE_ITEMS).toContain('dashboard')
+    it('includes overview, admin, and settings', () => {
+      expect(ALWAYS_VISIBLE_ITEMS).toContain('overview')
       expect(ALWAYS_VISIBLE_ITEMS).toContain('admin')
       expect(ALWAYS_VISIBLE_ITEMS).toContain('settings')
     })
   })
 
   describe('isSidebarItemVisible', () => {
-    it('always shows dashboard regardless of hidden items', () => {
-      expect(isSidebarItemVisible('dashboard', ['dashboard'])).toBe(true)
+    it('always shows overview regardless of hidden items', () => {
+      expect(isSidebarItemVisible('overview', ['overview'])).toBe(true)
     })
 
     it('always shows admin regardless of hidden items', () => {
