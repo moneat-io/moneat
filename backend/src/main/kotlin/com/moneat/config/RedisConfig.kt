@@ -20,6 +20,8 @@ import io.ktor.events.*
 import io.ktor.server.application.*
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
+import io.lettuce.core.resource.ClientResources
+import io.netty.resolver.DefaultAddressResolverGroup
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.async.RedisAsyncCommands
 import io.lettuce.core.api.reactive.RedisReactiveCommands
@@ -42,7 +44,10 @@ object RedisConfig {
     fun init(redisUrl: String) {
         if (connection != null) return
         val uri = RedisURI.create(redisUrl)
-        client = RedisClient.create(uri)
+        val resources = ClientResources.builder()
+            .addressResolverGroup(DefaultAddressResolverGroup.INSTANCE)
+            .build()
+        client = RedisClient.create(resources, uri)
         connection = client!!.connect()
     }
 
