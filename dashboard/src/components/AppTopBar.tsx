@@ -167,7 +167,7 @@ export function AppTopBar({sidebarWidth, isSidebarExpanded}: AppTopBarProps) {
         <Button
           size="sm"
           variant="outline"
-          onClick={() => navigate({to: '/projects'})}
+          onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}
           className="gap-1.5"
         >
           <Plus className="h-4 w-4" />

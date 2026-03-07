@@ -119,6 +119,10 @@ class AuthServiceTest {
 
     @Test
     fun `signup creates new user`() {
+        // Pre-insert a user so the signup below is not treated as the first user
+        // (first user gets email_verified=true automatically)
+        insertTestUser(email = "existing@test.com")
+
         val result =
             authService.signup(
                 SignupRequest(

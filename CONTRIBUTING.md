@@ -4,7 +4,7 @@ Thank you for your interest in contributing to Moneat! This document outlines ho
 
 ## License
 
-All code in this repository is licensed under the [GNU Affero General Public License v3.0](LICENSE). Enterprise features live in a separate private repository ([moneat-enterprise](https://github.com/moneat-io/moneat-enterprise)).
+This repository uses a dual-license model. All code **outside** of `ee/` is licensed under the [GNU Affero General Public License v3.0](LICENSE). The `ee/` directory contains enterprise modules licensed under the [Moneat Enterprise License](ee/LICENSE) — source-available, but production use requires a paid subscription. See the root [LICENSE](LICENSE) file for full details.
 
 ## Contributor License Agreement (CLA)
 
@@ -72,65 +72,36 @@ cd dashboard && npm install && npm run dev
 
 ### Working on Enterprise Features
 
-Enterprise modules (Analytics, On-Call, SSO) live in a separate private repository. To work with enterprise features locally:
+Enterprise modules (On-Call, SSO) live in the `ee/` directory and are licensed under the [Moneat Enterprise License](ee/LICENSE). The `ee/` directory is a Gradle subproject included as a `runtimeOnly` dependency — enterprise classes are on the classpath at runtime but never referenced at compile time from core code (except the `EnterpriseModule` interface in `FeatureRegistry`).
+
+Enterprise modules are always built with the project. At runtime, the `FeatureRegistry` uses Java `ServiceLoader` to discover `EnterpriseModule` implementations. Licensed modules (SSO, On-Call) only activate when a valid `MONEAT_LICENSE_KEY` is set.
 
 ```bash
-# 1. Clone the enterprise repo as a sibling directory
-git clone git@github.com:moneat-io/moneat-enterprise.git ../moneat-enterprise
-
-# 2. Start databases
+# 1. Start databases
 docker compose up -d postgres clickhouse redis
 
-# 3. Run backend with enterprise modules loaded
-#    Gradle auto-discovers ../moneat-enterprise/backend via settings.gradle.kts
-cd backend && ./gradlew run -Penterprise
+# 2. Run backend (enterprise modules are included automatically)
+cd backend && ./gradlew run
 
-# 4. Run dashboard
+# 3. Run dashboard
 cd dashboard && npm install && npm run dev
 ```
-
-**Custom paths:** If your enterprise checkout is not at `../moneat-enterprise`:
-
-```bash
-# Backend — override Gradle enterprise path
-cd backend && ./gradlew run -Penterprise -PenterprisePath=/path/to/enterprise/backend
-```
-
-**How it works:** The `-Penterprise` flag adds the `:enterprise` subproject as a `runtimeOnly` dependency. The backend's `FeatureRegistry` uses Java `ServiceLoader` to auto-discover all `EnterpriseModule` implementations at startup — no additional configuration needed.
 
 **Enterprise-specific environment variables** (add to `.env` as needed):
 
 | Variable | Required for |
 |----------|-------------|
+| `MONEAT_LICENSE_KEY` | Activating licensed enterprise modules (SSO, On-Call) |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | On-Call voice alerts |
 | `SAML_CERT` / `SAML_KEY` / `SAML_ENTITY_ID` | SSO (SAML) |
 
-#### Docker with enterprise features
+See [ee/README.md](ee/README.md) for full enterprise module documentation.
 
-```bash
-# Build with enterprise backend modules (uses ../moneat-enterprise by default)
-./scripts/docker-build.sh --enterprise
+## Contribution Licensing
 
-# Note: Enterprise overlay now applies to backend only. All UI is open source.
-
-# Or with a custom enterprise path
-ENTERPRISE_PATH=/path/to/enterprise ./scripts/docker-build.sh --enterprise
-
-# Run with enterprise features (set MONEAT_LICENSE_KEY in your .env)
-docker compose up -d
-
-# Optionally include the Datadog agent
-docker compose --profile datadog up -d
-
-# Enterprise-specific secrets (Twilio, SAML, etc.) go in your .env file
-```
-
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup instructions.
-
-## License
-
-- All contributions to this repository are licensed under the [GNU Affero General Public License v3.0](LICENSE).
-- All contributors must sign the [Contributor License Agreement](CLA.md).
+- Contributions to code **outside** `ee/` are licensed under the [GNU Affero General Public License v3.0](LICENSE).
+- Contributions to code **inside** `ee/` are licensed under the [Moneat Enterprise License](ee/LICENSE).
+- All contributors must sign the [Contributor License Agreement](CLA.md), which grants Moneat the right to include contributions in both the open-source core and the enterprise edition.
 
 ## Code of Conduct
 

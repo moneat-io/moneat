@@ -53,12 +53,27 @@ import kotlin.time.Clock
 
 data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
+data class Quintuple<A, B, C, D, E>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E)
+
+data class Sextuple<A, B, C, D, E, F>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D,
+    val fifth: E,
+    val sixth: F
+)
+
 data class SignupRequestContext(
     val ipAddress: String? = null,
     val userAgent: String? = null
 )
 
 class AuthService {
+    companion object {
+        private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
+    }
+
     private val config = ApplicationConfig("application.conf")
     private val jwtSecret = config.property("jwt.secret").getString()
     private val jwtIssuer = config.property("jwt.issuer").getString()
@@ -95,8 +110,8 @@ class AuthService {
             )
         )
 
-        val (userId, emailVerified, orgId, orgRole) =
-            transaction {
+        val (userId, emailVerified, verificationToken, orgId, orgRole, isAdmin) =
+            transaction(transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE) {
                 // Check if user exists
                 val existing = Users.selectAll().where { Users.email eq normalizedEmail }.firstOrNull()
                 if (existing != null) {
@@ -154,9 +169,17 @@ class AuthService {
                             .singleOrNull()
                     }
 
-                // Generate verification token
-                val verificationToken = generateVerificationToken()
-                val expiresAt = System.currentTimeMillis() + (24 * 60 * 60 * 1000) // 24 hours
+                // Detect first real user (excludes demo user which has id < 0)
+                val isFirstUser = Users.selectAll().where { Users.id greater 0 }.count() == 0L
+                val isSelfHosted = EnvConfig.get("SELF_HOSTED", "false").trim().lowercase() == "true"
+                val skipVerification =
+                    isFirstUser ||
+                        (isSelfHosted && EnvConfig.get("DISABLE_EMAIL_VERIFICATION", "false").trim().lowercase() == "true")
+
+                // Generate verification token (only used if verification is required)
+                val verificationToken = if (!skipVerification) generateVerificationToken() else null
+                val expiresAt =
+                    if (!skipVerification) System.currentTimeMillis() + VERIFICATION_TTL_MS else null
 
                 // Create user
                 val passwordHash = BCrypt.hashpw(request.password, BCrypt.gensalt())
@@ -165,7 +188,8 @@ class AuthService {
                         it[email] = normalizedEmail
                         it[password_hash] = passwordHash
                         it[name] = request.name
-                        it[email_verified] = false
+                        it[email_verified] = skipVerification
+                        it[is_admin] = isFirstUser
                         it[email_verification_token] = verificationToken
                         it[email_verification_expires_at] = expiresAt
                     }[Users.id]
@@ -265,16 +289,17 @@ class AuthService {
                     )
                 )
 
-                // Send verification email
-                try {
-                    emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
-                } catch (e: Exception) {
-                    // Log but don't fail signup if email fails
-                    println("Failed to send verification email: ${e.message}")
-                }
-
-                Quadruple(id, false, finalOrgId, finalOrgRole)
+                Sextuple(id, skipVerification, verificationToken, finalOrgId, finalOrgRole, isFirstUser)
             }
+
+        if (!emailVerified && verificationToken != null) {
+            try {
+                emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
+            } catch (e: Exception) {
+                // Log but don't fail signup if email fails
+                println("Failed to send verification email: ${e.message}")
+            }
+        }
 
         val tokenPair = refreshTokenService.generateRefreshToken(userId, normalizedEmail, orgId, orgRole)
         SentryUtils.breadcrumb("auth", "Signup completed", mapOf("user_id" to userId))
@@ -282,7 +307,7 @@ class AuthService {
             token = tokenPair.accessToken,
             refreshToken = tokenPair.refreshToken,
             expiresIn = tokenPair.expiresIn,
-            user = UserResponse(userId, normalizedEmail, request.name, emailVerified, false, false)
+            user = UserResponse(userId, normalizedEmail, request.name, emailVerified, false, isAdmin)
         )
     }
 
@@ -328,7 +353,7 @@ class AuthService {
 
             // Generate new token
             val verificationToken = generateVerificationToken()
-            val expiresAt = System.currentTimeMillis() + (24 * 60 * 60 * 1000)
+            val expiresAt = System.currentTimeMillis() + VERIFICATION_TTL_MS
 
             Users.update({ Users.id eq user[Users.id] }) {
                 it[email_verification_token] = verificationToken

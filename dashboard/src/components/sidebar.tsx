@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 import {Link, useNavigate, useRouterState} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -87,6 +87,12 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
   // Create project dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+
+  useEffect(() => {
+    const handler = () => setShowCreateDialog(true)
+    window.addEventListener('open-create-project-dialog', handler)
+    return () => window.removeEventListener('open-create-project-dialog', handler)
+  }, [])
   const [newProjectName, setNewProjectName] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
   const [selectedTargets, setSelectedTargets] = useState<string[]>([])

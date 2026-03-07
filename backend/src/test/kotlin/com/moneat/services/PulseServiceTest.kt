@@ -27,7 +27,7 @@ import kotlin.test.assertTrue
 /**
  * PulseService collects telemetry for self-hosted deployments.
  * getStatus() returns configuration and optionally metrics.
- * In typical test env SELF_HOST is false, so enabled=false and metrics=null.
+ * In typical test env SELF_HOSTED is false, so enabled=false and metrics=null.
  */
 class PulseServiceTest {
 
@@ -52,7 +52,7 @@ class PulseServiceTest {
     fun `isEnabled returns boolean`() {
         val enabled = PulseService.isEnabled()
 
-        // In test env SELF_HOST typically false, so enabled should be false
+        // In test env SELF_HOSTED typically false, so enabled should be false
         assertFalse(enabled)
     }
 
@@ -61,7 +61,7 @@ class PulseServiceTest {
         runBlocking {
             val status = PulseService.getStatus()
 
-            // When SELF_HOST=false (typical in tests), enabled=false
+            // When SELF_HOSTED=false (typical in tests), enabled=false
             assertEquals(PulseService.isEnabled(), status.enabled)
         }
 }

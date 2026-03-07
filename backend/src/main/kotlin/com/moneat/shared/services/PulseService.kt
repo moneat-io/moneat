@@ -47,7 +47,7 @@ private val logger = KotlinLogging.logger {}
  * deployments. This helps us understand how Moneat is used in the wild so we can
  * prioritise features, resource requirements, and compatibility.
  *
- * - Only active when SELF_HOST=true and TELEMETRY_ENABLED=true (the default).
+ * - Only active when SELF_HOSTED=true and TELEMETRY_ENABLED=true (the default).
  * - No personally-identifiable information is ever collected.
  * - Set TELEMETRY_ENABLED=false to disable.
  *
