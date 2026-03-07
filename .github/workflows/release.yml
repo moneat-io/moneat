@@ -194,8 +194,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          TARGET_BRANCH=$(git branch -r --contains "$GITHUB_SHA" | grep -v 'HEAD' | sed 's|origin/||' | head -n1 | tr -d ' ')
-          TARGET_BRANCH="${TARGET_BRANCH:-main}"
+          CANDIDATES=$(git branch -r --contains "$GITHUB_SHA" | grep -v 'HEAD' | sed 's|origin/||' | tr -d ' ')
+          COUNT=$(echo "$CANDIDATES" | grep -c .)
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No branch found containing commit $GITHUB_SHA"
+            exit 1
+          elif [ "$COUNT" -gt 1 ]; then
+            echo "::error::Multiple branches contain commit $GITHUB_SHA — resolve manually:"
+            echo "$CANDIDATES"
+            exit 1
+          fi
+
+          TARGET_BRANCH="$CANDIDATES"
           echo "TARGET_BRANCH=$TARGET_BRANCH" >> "$GITHUB_ENV"
           echo "Checking out branch: $TARGET_BRANCH"
           git checkout "$TARGET_BRANCH"
