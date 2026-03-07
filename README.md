@@ -78,16 +78,18 @@ Moneat is a self-hostable observability platform with Sentry SDK and Datadog Age
 
 ### Self-Hosted
 
-Deploy Moneat on any VPS with Docker Compose. The self-hosted image includes the open-source core (AGPLv3). Enterprise modules (SSO, On-Call) are present but **inactive by default** — they require a valid `MONEAT_LICENSE_KEY` and are subject to the [Moneat Enterprise License](ee/LICENSE), not the AGPL. See [License](#license) for details.
+Deploy Moneat with Docker Compose using pre-built images from GitHub Container Registry. See the [deployment repository](https://github.com/moneat-io/moneat-deploy) for production compose files and setup instructions.
 
-```bash
-git clone -b main https://github.com/moneat-io/moneat.git
-cd moneat-deploy
-cp .env.example .env   # then edit .env with your production secrets
-docker-compose up -d
-```
+The self-hosted image includes the open-source core (AGPLv3). Enterprise modules (SSO, On-Call) are present but **inactive by default** — they require a valid `MONEAT_LICENSE_KEY` and are subject to the [Moneat Enterprise License](ee/LICENSE), not the AGPL. See [License](#license) for details.
 
-> **Note:** Always use the `main` branch for self-hosting — it tracks the current production release. The `develop` branch is unstable and intended for active development only.
+Multi-architecture Docker images (amd64 + arm64) are published on every release:
+
+| Image | Registry |
+|-------|----------|
+| Backend | `ghcr.io/moneat-io/moneat-backend` |
+| Dashboard | `ghcr.io/moneat-io/moneat-dashboard` |
+
+Versioned releases and changelogs are available on the [Releases page](https://github.com/moneat-io/moneat/releases).
 
 ### Telemetry
 
