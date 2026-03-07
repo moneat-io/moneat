@@ -226,6 +226,8 @@ jobs:
 
       - name: Commit updated CHANGELOG.md
         run: |
+          git fetch origin
+          git reset --hard "origin/$TARGET_BRANCH"
           git add CHANGELOG.md
           if git diff --cached --quiet; then
             echo "No changelog changes to commit"
