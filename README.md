@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-blue.svg?style=flat-square" alt="License: AGPL v3"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/License-AGPLv3%20%2B%20Enterprise-blue.svg?style=flat-square" alt="License: AGPLv3 + Enterprise"></a>
   <a href="https://github.com/moneat-io/moneat/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome"></a>
   <a href="https://discord.gg/Fanh3mem"><img src="https://img.shields.io/badge/Discord-community-5865F2.svg?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/moneat-io/moneat/commits"><img src="https://img.shields.io/github/commit-activity/m/moneat-io/moneat?style=flat-square" alt="Commit Activity"></a>
@@ -78,7 +78,7 @@ Moneat is a self-hostable observability platform with Sentry SDK and Datadog Age
 
 ### Self-Hosted
 
-Deploy Moneat on any VPS with Docker Compose.
+Deploy Moneat on any VPS with Docker Compose. The self-hosted image includes the open-source core (AGPLv3). Enterprise modules (SSO, On-Call) are present but **inactive by default** — they require a valid `MONEAT_LICENSE_KEY` and are subject to the [Moneat Enterprise License](ee/LICENSE), not the AGPL. See [License](#license) for details.
 
 ```bash
 git clone -b main https://github.com/moneat-io/moneat.git
@@ -401,6 +401,7 @@ Any SDK that sends to the standard Sentry envelope endpoint should work out of t
 moneat/
 ├── backend/                 # Kotlin/Ktor backend (AGPLv3)
 ├── dashboard/               # React frontend (AGPLv3)
+├── ee/                      # Enterprise modules (Moneat Enterprise License — see ee/LICENSE)
 ├── docs/                    # Docusaurus documentation (served at /docs/)
 ├── emails/                  # Maizzle email templates
 ├── e2e/                     # E2E test apps (web, Android, KMP)
@@ -468,7 +469,14 @@ We welcome contributions! Whether it's a bug fix, feature, or documentation impr
 
 Copyright © 2026 Moneat
 
-All code in this repository is licensed under the [GNU Affero General Public License v3.0](LICENSE). Self-host, modify, and redistribute freely — modifications must be shared under the same license when used to provide a network service.
+This repository uses a **dual-license model**:
+
+| Directory | License | Details |
+|-----------|---------|---------|
+| `ee/` | [Moneat Enterprise License](ee/LICENSE) | Source-available; production use requires a paid subscription |
+| Everything else | [GNU Affero General Public License v3.0](LICENSE) | Free to self-host, modify, and redistribute; modifications must be shared under the same license when used to provide a network service |
+
+The enterprise modules (`ee/`) are loaded at runtime via Java ServiceLoader and are gated by a signed license key (`MONEAT_LICENSE_KEY`). Without a valid key, only the open-source core is active. The two codebases are separate works — the AGPL does not apply to files in `ee/`.
 
 For licensing questions, contact [licensing@moneat.io](mailto:licensing@moneat.io).
 
