@@ -89,7 +89,7 @@ describe('utils', () => {
     it('returns localized date for >= 1 week', () => {
       const twoWeeksAgo = new Date('2024-01-28T12:00:00Z').getTime()
       const result = formatRelativeTime(twoWeeksAgo)
-      expect(result).toMatch(/1\/28\/2024/)
+      expect(result).toMatch(/Jan 28, 2024/)
     })
 
     it('handles ISO 8601 string format with T', () => {

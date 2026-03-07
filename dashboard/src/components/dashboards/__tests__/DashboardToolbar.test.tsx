@@ -56,12 +56,12 @@ describe('DashboardToolbar', () => {
     expect(backLink).toBeInTheDocument()
   })
 
-  it('shows Edit and Export buttons when not editing', () => {
+  it('shows icon action buttons when not editing', () => {
     render(<DashboardToolbar {...defaultProps} />)
-    expect(screen.getByText('Edit')).toBeInTheDocument()
-    expect(screen.getByText('Export')).toBeInTheDocument()
     expect(screen.queryByText('Done')).not.toBeInTheDocument()
     expect(screen.queryByText('Widget')).not.toBeInTheDocument()
+    // Time range controls still present
+    expect(screen.getByText('1h')).toBeInTheDocument()
   })
 
   it('shows Widget and Done buttons when editing', () => {
@@ -72,11 +72,13 @@ describe('DashboardToolbar', () => {
     expect(screen.queryByText('Export')).not.toBeInTheDocument()
   })
 
-  it('calls onToggleEdit when Edit button clicked', async () => {
+  it('calls onToggleEdit when edit button clicked', async () => {
     const user = userEvent.setup()
     const onToggleEdit = vi.fn()
     render(<DashboardToolbar {...defaultProps} onToggleEdit={onToggleEdit} />)
-    await user.click(screen.getByText('Edit'))
+    // Edit is the last button (icon-only pencil): [presets×6, refresh, export, edit]
+    const buttons = screen.getAllByRole('button')
+    await user.click(buttons[buttons.length - 1])
     expect(onToggleEdit).toHaveBeenCalled()
   })
 
@@ -96,11 +98,13 @@ describe('DashboardToolbar', () => {
     expect(onAddWidget).toHaveBeenCalled()
   })
 
-  it('calls onExport when Export button clicked', async () => {
+  it('calls onExport when export button clicked', async () => {
     const user = userEvent.setup()
     const onExport = vi.fn()
     render(<DashboardToolbar {...defaultProps} onExport={onExport} />)
-    await user.click(screen.getByText('Export'))
+    // Export is second-to-last button (icon-only download): [presets×6, refresh, export, edit]
+    const buttons = screen.getAllByRole('button')
+    await user.click(buttons[buttons.length - 2])
     expect(onExport).toHaveBeenCalled()
   })
 
@@ -125,7 +129,7 @@ describe('DashboardToolbar', () => {
   it('highlights active time range', () => {
     render(<DashboardToolbar {...defaultProps} timeRange={{from: 'now-1h', to: 'now'}} />)
     const btn1h = screen.getByText('1h')
-    expect(btn1h.className).toContain('bg-primary')
+    expect(btn1h.className).toContain('bg-background')
   })
 
   it('calls onAutoRefreshChange when refresh button clicked', async () => {

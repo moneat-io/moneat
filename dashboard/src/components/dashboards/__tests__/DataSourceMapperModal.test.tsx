@@ -71,7 +71,7 @@ describe('DataSourceMapperModal', () => {
     )
 
     expect(screen.getByText('Unknown Data Source')).toBeTruthy()
-    expect(screen.getByText('mysql')).toBeTruthy()
+    expect(screen.getByText('MySQL')).toBeTruthy()
   })
 
   it('shows widget info', () => {

@@ -59,19 +59,11 @@ describe('ImportExportModal', () => {
       expect(screen.getByText('Import Dashboard')).toBeInTheDocument()
     })
 
-    it('renders format selector buttons', () => {
-      renderWithQuery(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      expect(screen.getByText('DataDog')).toBeInTheDocument()
-      expect(screen.getByText('Grafana')).toBeInTheDocument()
-    })
-
     it('renders file upload button', () => {
       renderWithQuery(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      expect(screen.getByText('Upload JSON File')).toBeInTheDocument()
+      expect(screen.getByText('Upload Grafana JSON File')).toBeInTheDocument()
     })
 
     it('renders paste JSON textarea', () => {
@@ -111,15 +103,11 @@ describe('ImportExportModal', () => {
       expect(onOpenChange).toHaveBeenCalledWith(false)
     })
 
-    it('switches format when clicking format buttons', async () => {
-      const user = userEvent.setup()
+    it('switches format when clicking Grafana import', async () => {
       renderWithQuery(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const grafanaBtn = screen.getByText('Grafana')
-      await user.click(grafanaBtn)
-      // Grafana should now be "active" (has border-primary class)
-      expect(grafanaBtn.className).toContain('border-primary')
+      expect(screen.getByText('Grafana Dashboard Import')).toBeInTheDocument()
     })
 
     it('shows datasource mapper when Grafana JSON has __inputs with datasources', async () => {
@@ -154,12 +142,11 @@ describe('ImportExportModal', () => {
       expect(screen.getByText('Export Dashboard')).toBeInTheDocument()
     })
 
-    it('renders three export format buttons', () => {
+    it('renders two export format buttons', () => {
       renderWithQuery(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
       )
       expect(screen.getByText('Export as Moneat JSON')).toBeInTheDocument()
-      expect(screen.getByText('Export as DataDog JSON')).toBeInTheDocument()
       expect(screen.getByText('Export as Grafana JSON')).toBeInTheDocument()
     })
 

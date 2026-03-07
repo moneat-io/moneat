@@ -165,10 +165,9 @@ describe('pricing-display', () => {
   })
 
   describe('APM and metrics limits', () => {
-    it('APM spans no longer shown as separate limit in unified model', () => {
+    it('APM spans shown as separate limit in unified model', () => {
       const model = buildPricingCardModel(makeTier({ monthlyApmSpanLimit: 10_000_000 }), 'monthly')
-      // APM spans are folded into unified ingestion GB
-      expect(model.includedLimits.some(l => l.includes('APM spans'))).toBe(false)
+      expect(model.includedLimits.some(l => l.includes('APM spans'))).toBe(true)
     })
 
     it('includes custom metric limit in included limits', () => {
