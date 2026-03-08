@@ -429,12 +429,12 @@ build_and_start() {
     local healthy=0
     for svc in moneat-postgres moneat-clickhouse moneat-redis; do
       if docker inspect --format='{{.State.Health.Status}}' "$svc" 2>/dev/null | grep -q healthy; then
-        ((healthy++))
+        healthy=$((healthy + 1))
       fi
     done
     [[ $healthy -ge 3 ]] && break
     sleep 2
-    ((retries--))
+    retries=$((retries - 1))
   done
 
   if [[ $retries -eq 0 ]]; then
@@ -471,7 +471,7 @@ health_check() {
     fi
     [[ "$backend_ok" == true && "$frontend_ok" == true ]] && break
     sleep 2
-    ((retries--))
+    retries=$((retries - 1))
   done
 
   [[ "$backend_ok" == false ]] && warn "Backend did not respond — check: docker compose logs backend"
