@@ -170,9 +170,10 @@ setup_install_dir() {
     info "Created directory: ${INSTALL_DIR}"
   fi
 
-  local compose_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${MONEAT_VERSION}/docker-compose.yml"
+  local base_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${MONEAT_VERSION}"
+
   local tmp="docker-compose.yml.tmp"
-  if ! fetch_url "$compose_url" "$tmp"; then
+  if ! fetch_url "${base_url}/docker-compose.yml" "$tmp"; then
     rm -f "$tmp"
     error "Failed to download docker-compose.yml"
     exit 1
@@ -183,7 +184,21 @@ setup_install_dir() {
     mv "docker-compose.yml" "$backup"
   fi
   mv "$tmp" "docker-compose.yml"
-  success "Downloaded docker-compose.yml (${MONEAT_VERSION})"
+  success "Downloaded docker-compose.yml"
+
+  local files=(
+    "backend/src/main/resources/db/init.sql"
+    "backend/src/main/resources/db/clickhouse_init.sql"
+    "clickhouse-config/logging.xml"
+  )
+  for f in "${files[@]}"; do
+    mkdir -p "$(dirname "$f")"
+    if fetch_url "${base_url}/${f}" "$f" 2>/dev/null; then
+      success "Downloaded ${f##*/}"
+    else
+      warn "Could not download ${f} — container may handle init internally"
+    fi
+  done
 }
 
 # ── Port allocation ──
