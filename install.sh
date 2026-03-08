@@ -167,12 +167,18 @@ setup_install_dir() {
   fi
 
   local compose_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${MONEAT_VERSION}/docker-compose.yml"
+  local tmp="docker-compose.yml.tmp"
+  if ! fetch_url "$compose_url" "$tmp"; then
+    rm -f "$tmp"
+    error "Failed to download docker-compose.yml"
+    exit 1
+  fi
   if [[ -f "docker-compose.yml" ]]; then
     local backup="docker-compose.yml.bak.$(date +%Y%m%d%H%M%S)"
     info "Existing docker-compose.yml found — backing up to ${backup}"
     mv "docker-compose.yml" "$backup"
   fi
-  fetch_url "$compose_url" "docker-compose.yml"
+  mv "$tmp" "docker-compose.yml"
   success "Downloaded docker-compose.yml (${MONEAT_VERSION})"
 }
 
