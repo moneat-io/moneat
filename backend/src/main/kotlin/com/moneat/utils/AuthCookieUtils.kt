@@ -78,7 +78,7 @@ object AuthCookieUtils {
                 value = token,
                 httpOnly = true,
                 secure = secure,
-                path = "/auth/refresh",
+                path = "/auth",
                 maxAge = REFRESH_COOKIE_TTL,
                 extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
             )
@@ -93,7 +93,7 @@ object AuthCookieUtils {
                 value = "",
                 httpOnly = true,
                 secure = secure,
-                path = "/auth/refresh",
+                path = "/auth",
                 maxAge = 0,
                 extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
             )

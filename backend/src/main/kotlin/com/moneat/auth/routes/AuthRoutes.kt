@@ -231,6 +231,7 @@ fun Route.authRoutes() {
                     }
                     call.respond(result.copy(refreshToken = null))
                 } else {
+                    AuthCookieUtils.clearAuthCookie(call)
                     AuthCookieUtils.clearRefreshCookie(call)
                     call.respond(
                         HttpStatusCode.Unauthorized,
@@ -238,6 +239,7 @@ fun Route.authRoutes() {
                     )
                 }
             } catch (e: IllegalArgumentException) {
+                AuthCookieUtils.clearAuthCookie(call)
                 AuthCookieUtils.clearRefreshCookie(call)
                 call.respond(
                     HttpStatusCode.Unauthorized,

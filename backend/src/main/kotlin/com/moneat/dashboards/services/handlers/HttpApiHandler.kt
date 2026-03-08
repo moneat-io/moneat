@@ -24,8 +24,13 @@ import kotlinx.serialization.json.Json
 
 abstract class HttpApiHandler : DataSourceHandler {
 
+    companion object {
+        internal const val DEFAULT_HTTP_PORT = 80
+        internal const val DEFAULT_HTTPS_PORT = 443
+    }
+
     protected val json = Json { ignoreUnknownKeys = true }
-    protected open val defaultPort: Int = 80
+    protected open val defaultPort: Int = DEFAULT_HTTP_PORT
     protected val httpClient = HttpClient(CIO) {
         engine {
             requestTimeout = 30_000
@@ -47,8 +52,8 @@ abstract class HttpApiHandler : DataSourceHandler {
         }
         if (port == null || hostHasPort) return "$scheme$cleanHost"
         val isDefaultPort =
-            (scheme == "http://" && port == 80) ||
-                (scheme == "https://" && port == 443)
+            (scheme == "http://" && port == DEFAULT_HTTP_PORT) ||
+                (scheme == "https://" && port == DEFAULT_HTTPS_PORT)
         return if (isDefaultPort) "$scheme$cleanHost" else "$scheme$cleanHost:$port"
     }
 

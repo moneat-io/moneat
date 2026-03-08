@@ -132,14 +132,27 @@ class AuthCookieUtilsTest {
         )
 
     @Test
-    fun `setAuthCookie uses Strict SameSite for HTTPS backend`() =
-        cookieTest(
-            handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-token") },
-            assertions = { cookie ->
-                assertTrue(
-                    cookie.contains("SameSite=Strict"),
-                    "HTTPS backend should use Strict SameSite"
-                )
+    fun `setAuthCookie uses Strict SameSite for HTTPS backend`() {
+        val previousBackendUrl = System.getProperty("BACKEND_URL")
+        System.setProperty("BACKEND_URL", "https://api.moneat.io")
+        try {
+            cookieTest(
+                handler = { call ->
+                    AuthCookieUtils.setAuthCookie(call, "test-token")
+                },
+                assertions = { cookie ->
+                    assertTrue(
+                        cookie.contains("SameSite=Strict"),
+                        "HTTPS backend should use Strict SameSite"
+                    )
+                }
+            )
+        } finally {
+            if (previousBackendUrl != null) {
+                System.setProperty("BACKEND_URL", previousBackendUrl)
+            } else {
+                System.clearProperty("BACKEND_URL")
             }
-        )
+        }
+    }
 }

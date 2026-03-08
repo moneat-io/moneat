@@ -38,10 +38,24 @@ object UrlValidator {
      * allowed so operators can monitor co-located services.
      */
     fun validateExternalUrl(url: String) {
+        validateAndResolve(url)
+    }
+
+    /**
+     * Validates that a URL does not target blocked addresses and
+     * returns the validated [InetAddress] list so callers can pin
+     * connections to those addresses, avoiding DNS-rebinding.
+     */
+    fun validateAndResolve(url: String): List<InetAddress> {
         val uri = try {
             URI(url)
         } catch (e: Exception) {
             throw SsrfException("Invalid URL: $url")
+        }
+
+        val scheme = uri.scheme?.lowercase()
+        if (scheme == null || (scheme != "http" && scheme != "https")) {
+            throw SsrfException("Disallowed scheme: $url")
         }
 
         val host = uri.host
@@ -62,6 +76,22 @@ object UrlValidator {
                     "URL resolves to a blocked address: $host"
                 )
             }
+        }
+        return addresses.toList()
+    }
+
+    /**
+     * Validates that an already-resolved [InetAddress] is safe.
+     * Use this to re-check addresses during redirects or when
+     * a custom DNS resolver re-resolves a hostname.
+     */
+    fun validateAddress(addr: InetAddress) {
+        val normalized = unwrapMappedIPv4(addr)
+        val allowInternal = EnvConfig.SelfHost.enabled
+        if (isBlockedAddress(normalized, allowInternal)) {
+            throw SsrfException(
+                "Resolved to a blocked address: ${addr.hostAddress}"
+            )
         }
     }
 

@@ -340,7 +340,25 @@ class UptimeCheckExecutor {
     private suspend fun checkWebSocket(monitor: UptimeMonitorData): CheckResult {
         val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
 
-        val httpUrl = url.replace("ws://", "http://").replace("wss://", "https://")
+        val httpUrl = try {
+            val uri = java.net.URI(url)
+            val httpScheme = when (uri.scheme?.lowercase()) {
+                "ws" -> "http"
+                "wss" -> "https"
+                else -> uri.scheme
+            }
+            java.net.URI(
+                httpScheme,
+                uri.userInfo,
+                uri.host,
+                uri.port,
+                uri.path,
+                uri.query,
+                uri.fragment
+            ).toString()
+        } catch (_: Exception) {
+            return CheckResult(0, -1, 0, "Invalid URL: $url")
+        }
         try {
             UrlValidator.validateExternalUrl(httpUrl)
         } catch (e: UrlValidator.SsrfException) {

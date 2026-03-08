@@ -27,58 +27,66 @@ import kotlin.test.assertTrue
 
 class UrlValidatorTest {
 
-    @Test
-    fun `public URL passes validation`() {
-        UrlValidator.validateExternalUrl("https://example.com/api")
+    private inline fun withSelfHosted(
+        value: String?,
+        block: () -> Unit
+    ) {
+        val prev = System.getProperty("SELF_HOSTED")
+        if (value != null) {
+            System.setProperty("SELF_HOSTED", value)
+        } else {
+            System.clearProperty("SELF_HOSTED")
+        }
+        try {
+            block()
+        } finally {
+            if (prev != null) {
+                System.setProperty("SELF_HOSTED", prev)
+            } else {
+                System.clearProperty("SELF_HOSTED")
+            }
+        }
     }
 
     @Test
-    fun `loopback is blocked when not self-hosted`() {
-        System.clearProperty("SELF_HOSTED")
+    fun `public URL passes validation`() {
+        // Use IP-based URL to avoid external DNS lookups in tests
+        UrlValidator.validateExternalUrl("https://93.184.216.34/api")
+    }
+
+    @Test
+    fun `loopback is blocked when not self-hosted`() = withSelfHosted(null) {
         assertFailsWith<UrlValidator.SsrfException> {
             UrlValidator.validateExternalUrl("http://127.0.0.1/test")
         }
     }
 
     @Test
-    fun `loopback is allowed when self-hosted`() {
-        System.setProperty("SELF_HOSTED", "true")
-        try {
-            UrlValidator.validateExternalUrl("http://127.0.0.1:9090/test")
-        } finally {
-            System.clearProperty("SELF_HOSTED")
-        }
+    fun `loopback is allowed when self-hosted`() = withSelfHosted("true") {
+        UrlValidator.validateExternalUrl("http://127.0.0.1:9090/test")
     }
 
     @Test
-    fun `metadata address 169_254_169_254 is always blocked`() {
-        System.setProperty("SELF_HOSTED", "true")
-        try {
-            assertFailsWith<UrlValidator.SsrfException> {
-                UrlValidator.validateExternalUrl("http://169.254.169.254/latest/meta-data/")
-            }
-        } finally {
-            System.clearProperty("SELF_HOSTED")
+    fun `metadata address 169_254_169_254 is always blocked`() = withSelfHosted("true") {
+        assertFailsWith<UrlValidator.SsrfException> {
+            UrlValidator.validateExternalUrl("http://169.254.169.254/latest/meta-data/")
         }
     }
 
     @Test
     fun `RFC1918 10-x is blocked when not self-hosted`() {
-        System.clearProperty("SELF_HOSTED")
         val addr = InetAddress.getByName("10.0.0.1")
         assertTrue(UrlValidator.isBlockedAddress(addr, false))
     }
 
     @Test
     fun `RFC1918 172_16 is blocked when not self-hosted`() {
-        System.clearProperty("SELF_HOSTED")
         val addr = InetAddress.getByName("172.16.0.1")
         assertTrue(UrlValidator.isBlockedAddress(addr, false))
     }
 
     @Test
     fun `RFC1918 192_168 is blocked when not self-hosted`() {
-        System.clearProperty("SELF_HOSTED")
         val addr = InetAddress.getByName("192.168.1.1")
         assertTrue(UrlValidator.isBlockedAddress(addr, false))
     }

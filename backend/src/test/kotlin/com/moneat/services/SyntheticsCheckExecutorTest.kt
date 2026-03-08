@@ -32,17 +32,20 @@ import kotlin.time.Clock
 class SyntheticsCheckExecutorTest {
     private val executor = SyntheticsCheckExecutor()
 
-    companion object {
-        @JvmStatic
-        @org.junit.jupiter.api.BeforeAll
-        fun setup() {
-            // Tests use MockHttpServer on localhost; allow loopback
-            System.setProperty("SELF_HOSTED", "true")
-        }
+    private var previousSelfHosted: String? = null
 
-        @JvmStatic
-        @org.junit.jupiter.api.AfterAll
-        fun teardown() {
+    @org.junit.jupiter.api.BeforeEach
+    fun setup() {
+        // Tests use MockHttpServer on localhost; allow loopback
+        previousSelfHosted = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", "true")
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    fun teardown() {
+        if (previousSelfHosted != null) {
+            System.setProperty("SELF_HOSTED", previousSelfHosted!!)
+        } else {
             System.clearProperty("SELF_HOSTED")
         }
     }
