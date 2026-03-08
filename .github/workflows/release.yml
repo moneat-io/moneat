@@ -81,7 +81,7 @@ jobs:
         uses: docker/setup-qemu-action@72cd56508471caa31aa98bca67440b2dc2f355c0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        uses: docker/setup-buildx-action@8f54c6f8864eed1921d50086061f664945fcc305
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
@@ -129,7 +129,7 @@ jobs:
         uses: docker/setup-qemu-action@72cd56508471caa31aa98bca67440b2dc2f355c0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        uses: docker/setup-buildx-action@8f54c6f8864eed1921d50086061f664945fcc305
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
