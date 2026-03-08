@@ -270,6 +270,17 @@ function DashboardPage() {
     }
   }, [selectedProjectId, projects, setSelectedProjectId])
 
+  // Reset selection and page when the visible dataset changes (React-recommended
+  // "adjusting state during rendering" pattern avoids cascading effect renders).
+  const [prevProjectId, setPrevProjectId] = useState(projectId)
+  const [prevStatusFilter, setPrevStatusFilter] = useState(statusFilter)
+  if (projectId !== prevProjectId || statusFilter !== prevStatusFilter) {
+    setPrevProjectId(projectId)
+    setPrevStatusFilter(statusFilter)
+    setSelectedIssues(new Set())
+    setPage(1)
+  }
+
   const { data: issues = [], isError: issuesError, error: issuesErrorObj } = useQuery({
     queryKey: ['issues', projectId, statusFilter, page, pageSize],
     queryFn: () => (projectId ? api.getIssues(projectId, page, pageSize, statusFilter === 'all' ? undefined : statusFilter) : []),
@@ -282,6 +293,7 @@ function DashboardPage() {
         issueIds.map(id => api.updateIssue(id, { status: 'resolved' }))
       )
       const successCount = results.filter(r => r.status === 'fulfilled').length
+      if (successCount === 0) throw new Error('All requests failed')
       return { submitted: issueIds.length, successCount }
     },
     onSuccess: ({ submitted, successCount }) => {
@@ -317,6 +329,7 @@ function DashboardPage() {
         issueIds.map(id => api.updateIssue(id, { status: 'ignored' }))
       )
       const successCount = results.filter(r => r.status === 'fulfilled').length
+      if (successCount === 0) throw new Error('All requests failed')
       return { submitted: issueIds.length, successCount }
     },
     onSuccess: ({ submitted, successCount }) => {
@@ -347,6 +360,7 @@ function DashboardPage() {
         issueIds.map(id => api.updateIssue(id, { status: 'resolvedInNextRelease' }))
       )
       const successCount = results.filter(r => r.status === 'fulfilled').length
+      if (successCount === 0) throw new Error('All requests failed')
       return { submitted: issueIds.length, successCount }
     },
     onSuccess: ({ submitted, successCount }) => {
@@ -703,7 +717,7 @@ function DashboardPage() {
                     </div>
                   ))}
                 </div>
-                {(page > 1 || filteredIssues.length === pageSize) && (
+                {(page > 1 || issues.length === pageSize) && (
                   <div className="flex justify-end gap-2 px-4 py-2 border-t border-border/40">
                     <Button
                       size="sm"
@@ -719,7 +733,7 @@ function DashboardPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={filteredIssues.length < pageSize}
+                      disabled={issues.length < pageSize}
                       onClick={() => setPage(p => p + 1)}
                     >
                       Next
