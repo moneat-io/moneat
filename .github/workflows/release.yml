@@ -175,7 +175,7 @@ jobs:
 
       - name: Generate changelog for this release
         id: changelog
-        uses: orhun/git-cliff-action@c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72
+        uses: orhun/git-cliff-action@07dda386992489f0a6151dee53f3a137713644de
         with:
           config: cliff.toml
           args: --latest --strip header
@@ -216,7 +216,7 @@ jobs:
           git checkout "$TARGET_BRANCH"
 
       - name: Generate full changelog
-        uses: orhun/git-cliff-action@c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72
+        uses: orhun/git-cliff-action@07dda386992489f0a6151dee53f3a137713644de
         with:
           config: cliff.toml
           args: --verbose
