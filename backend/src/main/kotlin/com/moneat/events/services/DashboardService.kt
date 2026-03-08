@@ -60,8 +60,10 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.sentry.ISpan
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -3863,12 +3865,13 @@ class DashboardService {
         val statusDetail: JsonObject?
     )
 
-    private fun buildIssueIdFilterClause(
+    private suspend fun buildIssueIdFilterClause(
         projectId: Long,
         status: String?
     ): String {
         if (status == null) return ""
-        return transaction {
+        return withContext(Dispatchers.IO) {
+            transaction {
             if (status == "unresolved") {
                 val excludeIds = IssueStatuses
                     .selectAll()
@@ -3901,6 +3904,7 @@ class DashboardService {
                     }
                     "AND e.issue_id IN ($escaped)"
                 }
+            }
             }
         }
     }

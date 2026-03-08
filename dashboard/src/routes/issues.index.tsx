@@ -335,6 +335,7 @@ function DashboardPage() {
     onSuccess: ({ submitted, successCount }) => {
       trackEvent('Issue Ignore', { count: String(successCount) })
       queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['stats', projectId] })
       if (successCount === submitted) {
         toast({
           title: 'Success',
@@ -366,6 +367,7 @@ function DashboardPage() {
     onSuccess: ({ submitted, successCount }) => {
       trackEvent('Issue ResolveInNextRelease', { count: String(successCount) })
       queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['stats', projectId] })
       if (successCount === submitted) {
         toast({
           title: 'Success',
