@@ -261,7 +261,7 @@ function SignupPage() {
                       variant="outline"
                       className="w-full"
                       onClick={() => {
-                        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+                        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
                         window.location.href = `${backendUrl}/auth/github`
                       }}
                     >

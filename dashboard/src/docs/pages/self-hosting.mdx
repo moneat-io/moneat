@@ -82,10 +82,9 @@ services:
       SELF_HOSTED: "true"
 
   frontend:
-    build:
-      args:
-        VITE_API_URL: https://api.moneat.example.com
-        VITE_BACKEND_URL: https://api.moneat.example.com
+    image: ghcr.io/moneat-io/moneat-dashboard:latest
+    environment:
+      VITE_BACKEND_URL: https://api.moneat.example.com
 ```
 
 ### 4. Build and Start
@@ -270,10 +269,9 @@ docker compose exec clickhouse wget -q -O - http://localhost:8123/ping
 
 ### Frontend shows "Network Error"
 
-This usually means `VITE_API_URL` or `VITE_BACKEND_URL` was not set correctly at build time. These are baked into the frontend at build time, so you need to rebuild the frontend after changing them:
+This usually means `VITE_BACKEND_URL` was not set correctly. Set it in the `environment` section of the `frontend` service in your `docker-compose.yml` and restart:
 
 ```bash
-./scripts/docker-build.sh
 docker compose up -d frontend
 ```
 
