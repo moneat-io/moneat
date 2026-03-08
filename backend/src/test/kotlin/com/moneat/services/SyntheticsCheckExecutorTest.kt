@@ -32,6 +32,24 @@ import kotlin.time.Clock
 class SyntheticsCheckExecutorTest {
     private val executor = SyntheticsCheckExecutor()
 
+    private var previousSelfHosted: String? = null
+
+    @org.junit.jupiter.api.BeforeEach
+    fun setup() {
+        // Tests use MockHttpServer on localhost; allow loopback
+        previousSelfHosted = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", "true")
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    fun teardown() {
+        if (previousSelfHosted != null) {
+            System.setProperty("SELF_HOSTED", previousSelfHosted!!)
+        } else {
+            System.clearProperty("SELF_HOSTED")
+        }
+    }
+
     private fun makeTestData(
         testType: String = "api",
         url: String? = null,

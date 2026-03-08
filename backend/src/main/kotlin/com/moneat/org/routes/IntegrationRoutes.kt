@@ -223,16 +223,13 @@ fun Route.integrationRoutes() {
         // List all integrations for the organization
         get {
             try {
-                println("DEBUG: Fetching integrations - start")
                 val principal = call.principal<JWTPrincipal>()
-                println("DEBUG: Principal: $principal")
                 if (principal == null) {
                     logger.error("No JWT principal found")
                     return@get call.respond(HttpStatusCode.Unauthorized, MessageResponse("Unauthorized"))
                 }
 
                 val userId = principal.payload.getClaim("userId").asInt()
-                println("DEBUG: UserId: $userId")
                 logger.info("Fetching integrations for user $userId")
 
                 val organizationId =
@@ -243,7 +240,6 @@ fun Route.integrationRoutes() {
                             .firstOrNull()
                             ?.get(Memberships.organization_id)
                     }
-                println("DEBUG: OrganizationId: $organizationId")
 
                 if (organizationId == null) {
                     return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
@@ -267,12 +263,9 @@ fun Route.integrationRoutes() {
                             }
                     }
 
-                println("DEBUG: Returning ${integrations.size} integrations")
                 logger.info("Returning ${integrations.size} integrations")
                 call.respond(integrations)
             } catch (e: Exception) {
-                println("DEBUG ERROR: ${e.message}")
-                e.printStackTrace()
                 logger.error("Error fetching integrations", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -281,10 +274,8 @@ fun Route.integrationRoutes() {
         // Start Slack OAuth flow
         get("/slack/oauth/start") {
             try {
-                println("DEBUG: Starting Slack OAuth")
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                println("DEBUG: UserId: $userId")
 
                 val organizationId =
                     transaction {
@@ -296,21 +287,11 @@ fun Route.integrationRoutes() {
                     }
 
                 if (organizationId == null) {
-                    println("DEBUG: No organization found")
                     return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
                 }
 
-                println("DEBUG: OrganizationId: $organizationId")
-
-                // Debug env loading
-                println("DEBUG: EnvConfig.isLoaded(): ${EnvConfig.isLoaded()}")
-                println("DEBUG: System.getProperty('user.dir'): ${System.getProperty("user.dir")}")
-                println("DEBUG: Checking for SLACK_CLIENT_ID in EnvConfig: ${EnvConfig.get("SLACK_CLIENT_ID")}")
-
                 val clientId = EnvConfig.get("SLACK_CLIENT_ID")
-                println("DEBUG: EnvConfig.get('SLACK_CLIENT_ID'): $clientId")
                 if (clientId == null) {
-                    println("DEBUG: SLACK_CLIENT_ID not configured")
                     return@get call.respond(
                         HttpStatusCode.InternalServerError,
                         MessageResponse("Slack client ID not configured")
@@ -319,15 +300,11 @@ fun Route.integrationRoutes() {
 
                 val redirectUri = EnvConfig.get("SLACK_REDIRECT_URI")
                 if (redirectUri == null) {
-                    println("DEBUG: SLACK_REDIRECT_URI not configured")
                     return@get call.respond(
                         HttpStatusCode.InternalServerError,
                         MessageResponse("Slack redirect URI not configured")
                     )
                 }
-
-                println("DEBUG: ClientId: $clientId")
-                println("DEBUG: RedirectUri: $redirectUri")
 
                 val scopes = "chat:write,channels:read,channels:join,groups:read,groups:write,usergroups:read,usergroups:write"
 
@@ -341,11 +318,8 @@ fun Route.integrationRoutes() {
                         "redirect_uri=${URLEncoder.encode(redirectUri, "UTF-8")}&" +
                         "state=$state"
 
-                println("DEBUG: Generated authUrl: $authUrl")
                 call.respond(SlackOAuthStartResponse(authUrl))
             } catch (e: Exception) {
-                println("DEBUG ERROR in OAuth start: ${e.message}")
-                e.printStackTrace()
                 logger.error("Error starting Slack OAuth", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }

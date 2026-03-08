@@ -16,6 +16,7 @@
 
 package com.moneat.synthetics.routes
 
+import com.moneat.utils.UrlValidator
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -100,6 +101,16 @@ open class SyntheticsCheckExecutor {
             durationMs = 0,
             errorMessage = "No URL configured"
         )
+
+        try {
+            UrlValidator.validateExternalUrl(url)
+        } catch (e: UrlValidator.SsrfException) {
+            return SyntheticCheckResult(
+                status = "failed",
+                durationMs = 0,
+                errorMessage = "Blocked: ${e.message}"
+            )
+        }
 
         val timeoutMs = test.timeoutSeconds * 1000L
         val client = buildClient(timeoutMs)
@@ -495,6 +506,16 @@ open class SyntheticsCheckExecutor {
         return try {
             for (step in steps) {
                 val stepUrl = substituteVariables(step.url, variables)
+                try {
+                    UrlValidator.validateExternalUrl(stepUrl)
+                } catch (e: UrlValidator.SsrfException) {
+                    val durationMs = System.currentTimeMillis() - startTime
+                    return SyntheticCheckResult(
+                        status = "failed",
+                        durationMs = durationMs,
+                        errorMessage = "Step '${step.name}' blocked: ${e.message}"
+                    )
+                }
                 val stepBody = step.body?.let { substituteVariables(it, variables) }
                 val stepHeaders = step.headers?.mapValues { (_, v) -> substituteVariables(v, variables) }
 

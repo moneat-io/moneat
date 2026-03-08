@@ -83,7 +83,7 @@ fun Route.ssoRoutes() {
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "SAML ACS failed: ${e.message}" }
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/login?error=sso_failed&message=${e.message}")
+                call.respondRedirect("$dashboardUrl/login?error=sso_failed")
             } catch (e: Exception) {
                 logger.error(e) { "SAML ACS error" }
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
@@ -104,7 +104,7 @@ fun Route.ssoRoutes() {
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "OIDC callback failed: ${e.message}" }
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/login?error=sso_failed&message=${e.message}")
+                call.respondRedirect("$dashboardUrl/login?error=sso_failed")
             } catch (e: Exception) {
                 logger.error(e) { "OIDC callback error" }
                 val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")

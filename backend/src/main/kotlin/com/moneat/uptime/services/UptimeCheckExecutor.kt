@@ -19,6 +19,7 @@ package com.moneat.uptime.services
 import com.jayway.jsonpath.JsonPath
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.UptimeMonitorData
+import com.moneat.utils.UrlValidator
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -94,6 +95,12 @@ class UptimeCheckExecutor {
      */
     private suspend fun checkHttp(monitor: UptimeMonitorData): CheckResult {
         val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
+
+        try {
+            UrlValidator.validateExternalUrl(url)
+        } catch (e: UrlValidator.SsrfException) {
+            return CheckResult(0, -1, 0, "Blocked: ${e.message}")
+        }
 
         val startTime = System.currentTimeMillis()
 
@@ -333,13 +340,35 @@ class UptimeCheckExecutor {
     private suspend fun checkWebSocket(monitor: UptimeMonitorData): CheckResult {
         val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
 
+        val httpUrl = try {
+            val uri = java.net.URI(url)
+            val httpScheme = when (uri.scheme?.lowercase()) {
+                "ws" -> "http"
+                "wss" -> "https"
+                else -> uri.scheme
+            }
+            java.net.URI(
+                httpScheme,
+                uri.userInfo,
+                uri.host,
+                uri.port,
+                uri.path,
+                uri.query,
+                uri.fragment
+            ).toString()
+        } catch (_: Exception) {
+            return CheckResult(0, -1, 0, "Invalid URL: $url")
+        }
+        try {
+            UrlValidator.validateExternalUrl(httpUrl)
+        } catch (e: UrlValidator.SsrfException) {
+            return CheckResult(0, -1, 0, "Blocked: ${e.message}")
+        }
+
         // Basic WebSocket connection test via HTTP upgrade
         return try {
             val startTime = System.currentTimeMillis()
 
-            // For now, just check if WS endpoint is reachable via HTTP
-            // A full WebSocket implementation would require ws:// protocol handling
-            val httpUrl = url.replace("ws://", "http://").replace("wss://", "https://")
             val response = httpClient.get(httpUrl)
 
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
@@ -368,7 +397,13 @@ class UptimeCheckExecutor {
 
             // For HTTP-based Docker API
             if (dockerHost.startsWith("http")) {
-                val response = httpClient.get("$dockerHost/containers/$containerName/json")
+                val dockerUrl = "$dockerHost/containers/$containerName/json"
+                try {
+                    UrlValidator.validateExternalUrl(dockerUrl)
+                } catch (e: UrlValidator.SsrfException) {
+                    return CheckResult(0, -1, 0, "Blocked: ${e.message}")
+                }
+                val response = httpClient.get(dockerUrl)
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
 
                 if (response.status.value == 200) {
