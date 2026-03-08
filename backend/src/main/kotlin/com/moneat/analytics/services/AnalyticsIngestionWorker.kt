@@ -19,6 +19,7 @@ package com.moneat.analytics.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.analytics.models.EnrichedAnalyticsEvent
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
@@ -151,6 +152,6 @@ class AnalyticsIngestionWorker(
         private const val BRPOP_TIMEOUT = 5L
         private const val ERROR_BACKOFF_MS = 1000L
 
-        fun escapeCH(s: String): String = s.replace("\\", "\\\\").replace("'", "\\'")
+        fun escapeCH(s: String): String = ClickHouseSqlUtils.escapeSql(s)
     }
 }

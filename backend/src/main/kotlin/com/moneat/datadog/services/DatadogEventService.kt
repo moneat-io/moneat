@@ -20,6 +20,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogEvent
 import com.moneat.datadog.models.DatadogServiceCheck
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
@@ -247,11 +248,5 @@ object DatadogEventService {
         encoded: String
     ): QueuedServiceCheckBatch {
         return json.decodeFromString(encoded)
-    }
-
-    private fun escapeSql(value: String): String {
-        return value
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
     }
 }

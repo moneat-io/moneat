@@ -37,6 +37,7 @@ import com.moneat.logs.models.QueuedLogEntry
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
@@ -1445,10 +1446,6 @@ class LogService {
                     "'${escapeSql(key)}', '${escapeSql(mapValue)}'"
                 }
         return "map($pairs)"
-    }
-
-    private fun escapeSql(value: String?): String {
-        return ClickHouseSqlUtils.escapeSql(value)
     }
 
     private fun buildSimpleSearchCondition(term: String): String {

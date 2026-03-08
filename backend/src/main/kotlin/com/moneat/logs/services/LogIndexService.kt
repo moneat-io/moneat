@@ -24,6 +24,7 @@ import com.moneat.logs.models.UpdateLogIndexRequest
 import com.moneat.shared.models.LogIndexes
 import com.moneat.shared.services.CacheService
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
@@ -393,11 +394,5 @@ class LogIndexService {
 
     private fun invalidateCache(organizationId: Int) {
         CacheService.invalidate("logindex:active:$organizationId")
-    }
-
-    private fun escapeSql(text: String): String {
-        return text
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
     }
 }

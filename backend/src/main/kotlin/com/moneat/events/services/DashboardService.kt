@@ -56,6 +56,7 @@ import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
@@ -2404,10 +2405,6 @@ class DashboardService {
         }
 
         return null
-    }
-
-    private fun escapeSql(value: String): String {
-        return ClickHouseSqlUtils.escapeSql(value)
     }
 
     private suspend fun getProjectRetentionDays(projectId: Long): Int {

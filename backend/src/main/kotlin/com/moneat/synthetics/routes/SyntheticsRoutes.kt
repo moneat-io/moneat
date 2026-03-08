@@ -18,6 +18,7 @@ package com.moneat.synthetics.routes
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Memberships
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -69,12 +70,6 @@ private fun orgIdsToChCondition(orgIds: List<Int>): String {
 private fun parseLimit(limitParam: String?): Int {
     val limit = limitParam?.toIntOrNull() ?: DEFAULT_LIMIT
     return limit.coerceIn(1, MAX_LIMIT)
-}
-
-private fun escapeSql(value: String): String {
-    return value
-        .replace("\\", "\\\\")
-        .replace("'", "\\'")
 }
 
 private fun snakeToCamel(snake: String): String {

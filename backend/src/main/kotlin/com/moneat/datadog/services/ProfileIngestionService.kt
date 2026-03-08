@@ -22,6 +22,7 @@ import com.moneat.datadog.models.DdProfileListResponse
 import com.moneat.datadog.models.DdProfileResponse
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -475,9 +476,6 @@ object ProfileIngestionService {
             emptyMap()
         }
     }
-
-    private fun escapeSql(value: String): String =
-        value.replace("\\", "\\\\").replace("'", "\\'")
 
     private fun mapToSqlMap(map: Map<String, String>): String {
         if (map.isEmpty()) return "map()"
