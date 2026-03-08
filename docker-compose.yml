@@ -64,9 +64,7 @@ services:
       retries: 5
 
   backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    image: ghcr.io/moneat-io/moneat-backend:latest
     container_name: moneat-backend
     restart: unless-stopped
     ports:
@@ -104,21 +102,14 @@ services:
       start_period: 30s
 
   frontend:
-    build:
-      context: .
-      dockerfile: dashboard/Dockerfile
-      args:
-        VITE_API_URL: http://localhost:8080
-        VITE_BACKEND_URL: http://localhost:8080
-        VITE_DD_APPLICATION_ID: ${DD_RUM_APPLICATION_ID:-}
-        VITE_DD_CLIENT_TOKEN: ${DD_RUM_CLIENT_TOKEN:-}
-        VITE_DD_PROXY_URL: ${VITE_DD_PROXY_URL:-}
-        VITE_DD_SERVICE: moneat-dashboard
-        VITE_DD_ENV: ${DD_ENV:-production}
+    image: ghcr.io/moneat-io/moneat-dashboard:latest
     container_name: moneat-frontend
     restart: unless-stopped
     ports:
       - "3000:80"
+    environment:
+      VITE_BACKEND_URL: http://localhost:8080
+      VITE_API_URL: http://localhost:8080
     depends_on:
       backend:
         condition: service_healthy
