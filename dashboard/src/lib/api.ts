@@ -3231,7 +3231,7 @@ class ApiClient {
     )
   }
 
-  async updateIssue(issueId: string, updates: { status?: string }): Promise<void> {
+  async updateIssue(issueId: string, updates: { status?: string; substatus?: string; statusDetail?: Record<string, string> }): Promise<void> {
     await this.request(`${API_BASE}/issues/${issueId}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),

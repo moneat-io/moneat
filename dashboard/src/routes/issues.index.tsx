@@ -28,17 +28,21 @@ import {Input} from '@/components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {Card} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
+import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from '@/components/ui/dropdown-menu'
 import {
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Cpu,
+  EyeOff,
   FolderKanban,
   Plus,
   Search,
   Server,
   Settings,
+  Timer,
 } from 'lucide-react'
 import {useEffect, useMemo, useState} from 'react'
 import {useToast} from '@/hooks/use-toast'
@@ -293,6 +297,44 @@ function DashboardPage() {
     },
   })
 
+  const ignoreMutation = useMutation({
+    mutationFn: async (issueIds: string[]) => {
+      await Promise.all(issueIds.map(id => api.updateIssue(id, { status: 'ignored' })))
+    },
+    onSuccess: () => {
+      trackEvent('Issue Ignore', { count: String(selectedIssues.size) })
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+      toast({
+        title: 'Success',
+        description: `${selectedIssues.size} issue${selectedIssues.size === 1 ? '' : 's'} ignored`,
+      })
+      setSelectedIssues(new Set())
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to ignore issues', variant: 'destructive' })
+    },
+  })
+
+  const resolveNextReleaseMutation = useMutation({
+    mutationFn: async (issueIds: string[]) => {
+      await Promise.all(issueIds.map(id => api.updateIssue(id, { status: 'resolvedInNextRelease' })))
+    },
+    onSuccess: () => {
+      trackEvent('Issue ResolveInNextRelease', { count: String(selectedIssues.size) })
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+      toast({
+        title: 'Success',
+        description: `${selectedIssues.size} issue${selectedIssues.size === 1 ? '' : 's'} marked to resolve in next release`,
+      })
+      setSelectedIssues(new Set())
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update issues', variant: 'destructive' })
+    },
+  })
+
+  const bulkPending = resolveMutation.isPending || ignoreMutation.isPending || resolveNextReleaseMutation.isPending
+
   const handleToggleIssue = (issueId: string) => {
     const newSelected = new Set(selectedIssues)
     if (newSelected.has(issueId)) {
@@ -313,6 +355,14 @@ function DashboardPage() {
 
   const handleResolveSelected = () => {
     resolveMutation.mutate(Array.from(selectedIssues))
+  }
+
+  const handleIgnoreSelected = () => {
+    ignoreMutation.mutate(Array.from(selectedIssues))
+  }
+
+  const handleResolveNextReleaseSelected = () => {
+    resolveNextReleaseMutation.mutate(Array.from(selectedIssues))
   }
 
   const safeIssues = useMemo<SafeIssue[]>(() => {
@@ -435,14 +485,32 @@ function DashboardPage() {
                   <span className="text-sm font-medium whitespace-nowrap">
                     {selectedIssues.size} selected
                   </span>
-                  <Button
-                    onClick={handleResolveSelected}
-                    disabled={resolveMutation.isPending}
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 h-7 ml-2"
-                  >
-                    {resolveMutation.isPending ? 'Resolving...' : 'Resolve'}
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        disabled={bulkPending}
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 h-7 ml-2"
+                      >
+                        {bulkPending ? 'Updating...' : 'Actions'}
+                        <ChevronDown className="h-3 w-3 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleResolveSelected}>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Resolve
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleIgnoreSelected}>
+                        <EyeOff className="h-4 w-4 mr-2" />
+                        Ignore
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleResolveNextReleaseSelected}>
+                        <Timer className="h-4 w-4 mr-2" />
+                        Resolve in Next Release
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               )}
 
@@ -463,6 +531,8 @@ function DashboardPage() {
                   <SelectItem value="all">All Issues</SelectItem>
                   <SelectItem value="unresolved">Unresolved</SelectItem>
                   <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="ignored">Ignored</SelectItem>
+                  <SelectItem value="resolvedInNextRelease">Resolve in Next Release</SelectItem>
                 </SelectContent>
               </Select>
               <span className="text-sm text-muted-foreground whitespace-nowrap hidden lg:inline">
@@ -551,6 +621,18 @@ function DashboardPage() {
                                 {issue.status === 'resolved' && (
                                   <Badge variant="default" className="bg-green-600 text-[11px] px-1.5 py-0">
                                     Resolved
+                                  </Badge>
+                                )}
+                                {issue.status === 'ignored' && (
+                                  <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+                                    <EyeOff className="h-3 w-3 mr-0.5" />
+                                    Ignored
+                                  </Badge>
+                                )}
+                                {issue.status === 'resolvedInNextRelease' && (
+                                  <Badge variant="outline" className="border-blue-500 text-blue-600 dark:text-blue-400 text-[11px] px-1.5 py-0">
+                                    <Timer className="h-3 w-3 mr-0.5" />
+                                    Next Release
                                   </Badge>
                                 )}
                               </div>

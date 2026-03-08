@@ -21,11 +21,13 @@ import com.moneat.events.models.ReleaseResponse
 import com.moneat.events.models.SourceMapFileResponse
 import com.moneat.shared.models.ArtifactBundles
 import com.moneat.shared.models.FileBlobs
+import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.ReleaseFiles
 import com.moneat.shared.models.Releases
+import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -43,6 +45,7 @@ import java.util.*
 
 class ReleaseService {
     private val dateFormatter = DateTimeFormatter.ISO_INSTANT
+    private val logger = KotlinLogging.logger {}
 
     /**
      * Create a new release for a project
@@ -182,6 +185,9 @@ class ReleaseService {
                     it[Releases.event_count] = 1
                     it[Releases.is_auto_detected] = true
                 }
+
+                // Auto-resolve issues marked resolvedInNextRelease
+                resolveNextReleaseIssues(projectId, version)
             }
         }
     }
@@ -491,6 +497,42 @@ class ReleaseService {
                     it[ArtifactBundles.storage_path] = storageKey
                     it[ArtifactBundles.created_at] = System.currentTimeMillis()
                 }
+            }
+        }
+    }
+
+    /**
+     * Resolve issues marked as resolvedInNextRelease for this project.
+     * Called inside an existing transaction when a new release is created.
+     */
+    private fun resolveNextReleaseIssues(
+        projectId: Long,
+        newVersion: String
+    ) {
+        try {
+            val now = kotlin.time.Clock.System.now()
+            val count = IssueStatuses.update(
+                where = {
+                    (IssueStatuses.project_id eq projectId) and
+                        (IssueStatuses.status eq "resolvedInNextRelease")
+                }
+            ) {
+                it[status] = "resolved"
+                it[substatus] = "resolvedViaRelease"
+                it[status_detail] =
+                    """{"resolvedInRelease":"$newVersion"}"""
+                it[updated_at] = now
+            }
+            if (count > 0) {
+                logger.info {
+                    "Auto-resolved $count issues for project " +
+                        "$projectId via release $newVersion"
+                }
+            }
+        } catch (e: Exception) {
+            logger.error(e) {
+                "Failed to auto-resolve issues for project " +
+                    "$projectId on release $newVersion"
             }
         }
     }

@@ -18,12 +18,15 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.services.DashboardService
+import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Projects
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.*
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -48,7 +51,7 @@ class DashboardServiceTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        TestDatabaseHelper.resetSchema(Projects)
+        TestDatabaseHelper.resetSchema(Projects, IssueStatuses)
     }
 
     @Test
@@ -62,7 +65,7 @@ class DashboardServiceTest {
                     exchange.respond(
                         200,
                         """
-                    {"issue_id":"issue-1","title":"Null pointer","culprit":"Main.kt","level":"error","platform":"kotlin","first_seen":"2026-02-01T01:00:00.000Z","last_seen":"2026-02-02T01:00:00.000Z","event_count":12,"user_count":4,"status":"resolved"}
+                    {"issue_id":"issue-1","title":"Null pointer","culprit":"Main.kt","level":"error","platform":"kotlin","first_seen":"2026-02-01T01:00:00.000Z","last_seen":"2026-02-02T01:00:00.000Z","event_count":12,"user_count":4}
                         """.trimIndent(),
                         contentType = "text/plain"
                     )
@@ -74,6 +77,16 @@ class DashboardServiceTest {
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
                 org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
 
+                // Insert PG status row so the overlay returns "resolved"
+                transaction {
+                    IssueStatuses.insert {
+                        it[issue_id] = "issue-1"
+                        it[project_id] = -1
+                        it[status] = "resolved"
+                        it[updated_at] = kotlin.time.Clock.System.now()
+                    }
+                }
+
                 val service = DashboardService()
                 val issues = service.getIssues(projectId = -1, page = 3, limit = 10, status = "resolved")
 
@@ -81,7 +94,6 @@ class DashboardServiceTest {
                 assertEquals("issue-1", issues.first().id)
                 assertEquals("resolved", issues.first().status)
                 assertTrue(queries.any { it.contains("LIMIT 10 OFFSET 20") })
-                assertTrue(queries.any { it.contains("AND status = 'resolved'") })
             }
         }
 
@@ -99,7 +111,7 @@ class DashboardServiceTest {
                         exchange.respond(
                             200,
                             """
-                        {"issue_id":"issue-1","title":"Crash","culprit":"Api.kt","level":"fatal","platform":"android","first_seen":"2026-02-01T00:00:00.000Z","last_seen":"2026-02-03T00:00:00.000Z","event_count":8,"user_count":2,"status":"unresolved","fingerprint":["NullPointerException","Api.kt"]}
+                        {"issue_id":"issue-1","title":"Crash","culprit":"Api.kt","level":"fatal","platform":"android","first_seen":"2026-02-01T00:00:00.000Z","last_seen":"2026-02-03T00:00:00.000Z","event_count":8,"user_count":2,"fingerprint":["NullPointerException","Api.kt"]}
                             """.trimIndent(),
                             contentType = "text/plain"
                         )

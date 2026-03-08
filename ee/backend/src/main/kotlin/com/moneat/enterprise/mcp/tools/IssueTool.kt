@@ -35,7 +35,10 @@ class ListIssuesTool : McpTool {
                 "project_id" to schemaNumber("Project ID"),
                 "status" to schemaEnum(
                     "Filter by status",
-                    listOf("unresolved", "resolved", "ignored")
+                    listOf(
+                        "unresolved", "resolved", "ignored",
+                        "resolvedInNextRelease"
+                    )
                 ),
                 "page" to schemaNumber("Page number (default 1)"),
                 "limit" to schemaNumber("Results per page (default 25)")
@@ -118,7 +121,10 @@ class UpdateIssueStatusTool : McpTool {
                 "issue_id" to schemaString("Issue ID"),
                 "status" to schemaEnum(
                     "New status",
-                    listOf("resolved", "ignored", "unresolved")
+                    listOf(
+                        "resolved", "ignored", "unresolved",
+                        "resolvedInNextRelease"
+                    )
                 )
             )
         ),
@@ -133,7 +139,10 @@ class UpdateIssueStatusTool : McpTool {
             ?: return errorResult("issue_id is required")
         val status = args["status"]?.jsonPrimitive?.content
             ?: return errorResult("status is required")
-        val allowedStatuses = setOf("resolved", "ignored", "unresolved")
+        val allowedStatuses = setOf(
+            "resolved", "ignored", "unresolved",
+            "resolvedInNextRelease"
+        )
         if (status !in allowedStatuses) {
             return errorResult(
                 "Invalid status: $status. Must be one of: ${allowedStatuses.joinToString(", ")}"

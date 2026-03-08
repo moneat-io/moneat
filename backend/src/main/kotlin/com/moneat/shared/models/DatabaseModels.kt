@@ -499,3 +499,15 @@ object OrgInvitations : Table("org_invitations") {
     val created_at = timestamp("created_at")
     override val primaryKey = PrimaryKey(id)
 }
+
+object IssueStatuses : Table("issue_statuses") {
+    val id = integer("id").autoIncrement()
+    val issue_id = varchar("issue_id", 64).uniqueIndex()
+    val project_id = long("project_id")
+    val status = varchar("status", 32).default("unresolved")
+    val substatus = varchar("substatus", 64).nullable()
+    val status_detail = text("status_detail").nullable()
+    val updated_at = timestamp("updated_at")
+    val updated_by = integer("updated_by").references(Users.id).nullable()
+    override val primaryKey = PrimaryKey(id)
+}

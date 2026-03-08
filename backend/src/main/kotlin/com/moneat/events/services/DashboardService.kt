@@ -49,6 +49,7 @@ import com.moneat.events.models.TransactionSummaryResponse
 import com.moneat.events.models.TransactionWithSpansResponse
 import com.moneat.events.models.UserInfo
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.CacheService
@@ -723,17 +724,10 @@ class DashboardService {
         CacheService.cached("cache:issues:$projectId:$page:$limit:${status ?: ""}:${demoEpochMs ?: 0}", 30) {
             val offset = (page - 1) * limit
             val retentionDays = getProjectRetentionDays(projectId)
-            val validStatuses = setOf("unresolved", "resolved", "ignored")
-            val statusFilter =
-                if (status != null && status in validStatuses) {
-                    "AND status = '${escapeSql(status)}'"
-                } else {
-                    ""
-                }
 
             val projectIdClause = if (projectId < 0) "toInt64(e.project_id) = $projectId" else "e.project_id = $projectId"
 
-            // Query events table directly and aggregate
+            // Query events without ClickHouse issues join; status comes from PG
             val query =
                 """
             SELECT 
@@ -745,18 +739,11 @@ class DashboardService {
                 formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
                 formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
                 count() as event_count,
-                uniq(user_id) as user_count,
-                any(i.status) as status
+                uniq(user_id) as user_count
             FROM `$clickhouseDb`.events e
-            LEFT JOIN (
-                SELECT issue_id, status 
-                FROM `$clickhouseDb`.issues FINAL
-                WHERE ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
-            ) i USING issue_id
             WHERE $projectIdClause 
                 AND e.event_type = 'error'
                 AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
-                $statusFilter
             GROUP BY issue_id
             ORDER BY last_seen DESC
             LIMIT $limit OFFSET $offset
@@ -774,7 +761,7 @@ class DashboardService {
                     }
                     return@cached emptyList<IssueResponse>()
                 }
-                body
+                val rawIssues = body
                     .lines()
                     .filter { it.isNotBlank() }
                     .map { line ->
@@ -790,9 +777,38 @@ class DashboardService {
                             lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
                             eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
                             userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
-                            status = obj["status"]?.jsonPrimitive?.content ?: "unresolved"
+                            status = "unresolved"
                         )
                     }
+
+                // Overlay PG statuses
+                val issueIds = rawIssues.map { it.id }
+                val pgStatuses = lookupIssueStatuses(issueIds)
+                val issues = rawIssues.map { issue ->
+                    val pgRow = pgStatuses[issue.id]
+                    if (pgRow != null) {
+                        issue.copy(
+                            status = pgRow.status,
+                            substatus = pgRow.substatus,
+                            statusDetail = pgRow.statusDetail
+                        )
+                    } else {
+                        issue
+                    }
+                }
+
+                // Filter by status (PG-derived)
+                val validStatuses = setOf(
+                    "unresolved",
+                    "resolved",
+                    "ignored",
+                    "resolvedInNextRelease"
+                )
+                if (status != null && status in validStatuses) {
+                    issues.filter { it.status == status }
+                } else {
+                    issues
+                }
             } catch (e: Exception) {
                 logger.error(e) { "Failed to fetch issues" }
                 emptyList()
@@ -808,7 +824,7 @@ class DashboardService {
         val escapedIssueId = escapeSql(issueId)
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
 
-        // Query events table directly and aggregate
+        // Query events without ClickHouse issues join; status comes from PG
         val query =
             """
             SELECT 
@@ -821,14 +837,8 @@ class DashboardService {
                 formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
                 count() as event_count,
                 uniq(user_id) as user_count,
-                any(i.status) as status,
                 any(fingerprint) as fingerprint
             FROM `$clickhouseDb`.events e
-            LEFT JOIN (
-                SELECT issue_id, status 
-                FROM `$clickhouseDb`.issues FINAL
-                WHERE ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
-            ) i USING issue_id
             WHERE e.issue_id = '$escapedIssueId'
                 AND $projectIdClause
                 AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
@@ -937,6 +947,11 @@ class DashboardService {
                     }
                 }
 
+            // Lookup PG status for this issue
+            val pgRow = lookupIssueStatuses(
+                listOf(obj["issue_id"]?.jsonPrimitive?.content ?: "")
+            )[obj["issue_id"]?.jsonPrimitive?.content ?: ""]
+
             IssueDetailResponse(
                 id = obj["issue_id"]?.jsonPrimitive?.content ?: "",
                 projectId = projectId,
@@ -949,7 +964,9 @@ class DashboardService {
                 lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
                 eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
                 userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
-                status = obj["status"]?.jsonPrimitive?.content ?: "unresolved",
+                status = pgRow?.status ?: "unresolved",
+                substatus = pgRow?.substatus,
+                statusDetail = pgRow?.statusDetail,
                 fingerprint = obj["fingerprint"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
                 latestEvent = latestEvent
             )
@@ -3812,31 +3829,87 @@ class DashboardService {
         }
     }
 
+    private data class PgIssueStatus(
+        val status: String,
+        val substatus: String?,
+        val statusDetail: JsonObject?
+    )
+
+    private fun lookupIssueStatuses(
+        issueIds: List<String>
+    ): Map<String, PgIssueStatus> {
+        if (issueIds.isEmpty()) return emptyMap()
+        return transaction {
+            IssueStatuses
+                .selectAll()
+                .where { IssueStatuses.issue_id inList issueIds }
+                .associate { row ->
+                    val detail = row[IssueStatuses.status_detail]
+                    val detailObj = if (detail != null) {
+                        try {
+                            json.parseToJsonElement(detail).jsonObject
+                        } catch (_: Exception) {
+                            null
+                        }
+                    } else {
+                        null
+                    }
+                    row[IssueStatuses.issue_id] to PgIssueStatus(
+                        status = row[IssueStatuses.status],
+                        substatus = row[IssueStatuses.substatus],
+                        statusDetail = detailObj
+                    )
+                }
+        }
+    }
+
     suspend fun updateIssue(
         issueId: String,
         update: com.moneat.events.models.IssueUpdateRequest
     ) {
         if (update.status != null) {
-            val validStatuses = setOf("unresolved", "resolved", "ignored")
+            val validStatuses = setOf(
+                "unresolved",
+                "resolved",
+                "ignored",
+                "resolvedInNextRelease"
+            )
             if (update.status !in validStatuses) {
                 throw IllegalArgumentException("Invalid status value")
             }
 
-            val escapedIssueId = escapeSql(issueId)
-            val escapedStatus = escapeSql(update.status)
+            val projectId = getProjectIdForIssue(issueId)
+                ?: throw IllegalArgumentException("Issue not found")
 
-            val query =
-                """
-                ALTER TABLE `$clickhouseDb`.issues
-                UPDATE status = '$escapedStatus'
-                WHERE issue_id = '$escapedIssueId'
-                """.trimIndent()
+            val detailJson = update.statusDetail?.toString()
 
-            try {
-                ClickHouseClient.execute(query)
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to update issue" }
-                throw e
+            transaction {
+                val existing = IssueStatuses
+                    .selectAll()
+                    .where { IssueStatuses.issue_id eq issueId }
+                    .firstOrNull()
+
+                val now = kotlin.time.Clock.System.now()
+
+                if (existing != null) {
+                    IssueStatuses.update(
+                        where = { IssueStatuses.issue_id eq issueId }
+                    ) {
+                        it[status] = update.status
+                        it[substatus] = update.substatus
+                        it[status_detail] = detailJson
+                        it[updated_at] = now
+                    }
+                } else {
+                    IssueStatuses.insert {
+                        it[issue_id] = issueId
+                        it[IssueStatuses.project_id] = projectId
+                        it[status] = update.status
+                        it[substatus] = update.substatus
+                        it[status_detail] = detailJson
+                        it[updated_at] = now
+                    }
+                }
             }
         }
     }
