@@ -8,6 +8,7 @@ kotlinx-datetime = "0.7.1-0.6.x-compat"
 junit = "6.0.3"
 testcontainers = "2.0.3"
 detekt = "1.23.8"
+sonarqube = "7.1.0.6387"
 shadow = "9.3.2"
 jacoco = "0.8.14"
 opentelemetry = "1.59.0"
@@ -137,3 +138,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 ktor = { id = "io.ktor.plugin", version.ref = "ktor" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+sonarqube = { id = "org.sonarqube", version.ref = "sonarqube" }
