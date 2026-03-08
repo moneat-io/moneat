@@ -109,7 +109,6 @@ services:
       - "3000:80"
     environment:
       VITE_BACKEND_URL: http://localhost:8080
-      VITE_API_URL: http://localhost:8080
     depends_on:
       backend:
         condition: service_healthy

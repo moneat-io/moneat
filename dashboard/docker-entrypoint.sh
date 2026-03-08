@@ -5,7 +5,6 @@ JS_DIR=/usr/share/nginx/html
 
 find "$JS_DIR" -name '*.js' -exec sed -i \
   -e "s|__MONEAT_BACKEND_URL__|${VITE_BACKEND_URL:-}|g" \
-  -e "s|__MONEAT_API_URL__|${VITE_API_URL:-}|g" \
   -e "s|__MONEAT_SENTRY_DSN__|${VITE_SENTRY_DSN:-}|g" \
   -e "s|__MONEAT_SENTRY_ENVIRONMENT__|${VITE_SENTRY_ENVIRONMENT:-production}|g" \
   -e "s|__MONEAT_SENTRY_TRACES_SAMPLE_RATE__|${VITE_SENTRY_TRACES_SAMPLE_RATE:-0.1}|g" \
@@ -16,5 +15,3 @@ find "$JS_DIR" -name '*.js' -exec sed -i \
   -e "s|__MONEAT_DD_SERVICE__|${VITE_DD_SERVICE:-moneat-dashboard}|g" \
   -e "s|__MONEAT_DD_ENV__|${VITE_DD_ENV:-production}|g" \
   {} +
-
-exec nginx -g 'daemon off;'

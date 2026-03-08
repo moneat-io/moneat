@@ -6,7 +6,7 @@ interface FeaturesResponse {
   selfHost: boolean
 }
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || ''
+const API_BASE = import.meta.env.VITE_BACKEND_URL || ''
 const FEATURES_URL = `${API_BASE.replace(/\/$/, '')}/v1/features`
 
 function normalizeModuleName(value: string): string {

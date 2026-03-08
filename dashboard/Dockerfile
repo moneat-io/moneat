@@ -6,7 +6,6 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit
 COPY dashboard/ .
 ARG VITE_BACKEND_URL="__MONEAT_BACKEND_URL__"
-ARG VITE_API_URL="__MONEAT_API_URL__"
 ARG VITE_SENTRY_DSN="__MONEAT_SENTRY_DSN__"
 ARG VITE_SENTRY_ENVIRONMENT="__MONEAT_SENTRY_ENVIRONMENT__"
 ARG VITE_SENTRY_TRACES_SAMPLE_RATE="__MONEAT_SENTRY_TRACES_SAMPLE_RATE__"
@@ -17,7 +16,6 @@ ARG VITE_DD_PROXY_URL="__MONEAT_DD_PROXY_URL__"
 ARG VITE_DD_SERVICE="__MONEAT_DD_SERVICE__"
 ARG VITE_DD_ENV="__MONEAT_DD_ENV__"
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
-ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 ENV VITE_SENTRY_ENVIRONMENT=$VITE_SENTRY_ENVIRONMENT
 ENV VITE_SENTRY_TRACES_SAMPLE_RATE=$VITE_SENTRY_TRACES_SAMPLE_RATE
@@ -32,7 +30,6 @@ RUN npx vite build
 FROM nginx:alpine
 COPY --from=dashboard-build /app/dist /usr/share/nginx/html
 COPY dashboard/nginx.conf /etc/nginx/conf.d/default.conf
-COPY dashboard/docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+COPY dashboard/docker-entrypoint.sh /docker-entrypoint.d/40-substitute-env.sh
+RUN chmod +x /docker-entrypoint.d/40-substitute-env.sh
 EXPOSE 80
-ENTRYPOINT ["/docker-entrypoint.sh"]
