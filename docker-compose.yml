@@ -8,10 +8,10 @@ services:
       # ⚠️ DEVELOPMENT ONLY — change all passwords before deploying to production
       POSTGRES_DB: moneat
       POSTGRES_USER: moneat
-      POSTGRES_PASSWORD: moneat_dev_password
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-moneat_dev_password}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5499:5432"
+      - "${POSTGRES_PORT:-5499}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/src/main/resources/db/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -27,11 +27,11 @@ services:
     environment:
       CLICKHOUSE_DB: moneat
       CLICKHOUSE_USER: moneat
-      CLICKHOUSE_PASSWORD: moneat_dev_password
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-moneat_dev_password}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ports:
-      - "8123:8123"  # HTTP interface
-      - "9000:9000"  # Native interface
+      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"  # HTTP interface
+      - "${CLICKHOUSE_NATIVE_PORT:-9000}:9000"  # Native interface
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./backend/src/main/resources/db/clickhouse_init.sql:/docker-entrypoint-initdb.d/clickhouse_init.sql
@@ -50,13 +50,12 @@ services:
     image: redis:8-alpine
     container_name: moneat-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     environment:
-      # ⚠️ DEVELOPMENT ONLY — change before deploying to production
-      REDIS_PASSWORD: moneat_dev_password
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-moneat_dev_password}
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --requirepass moneat_dev_password
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-moneat_dev_password}
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD --no-auth-warning ping"]
       interval: 10s
@@ -68,19 +67,18 @@ services:
     container_name: moneat-backend
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
     environment:
       DATABASE_URL: jdbc:postgresql://postgres:5432/moneat
       DATABASE_USER: moneat
-      DATABASE_PASSWORD: moneat_dev_password
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-moneat_dev_password}
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: moneat
-      CLICKHOUSE_PASSWORD: moneat_dev_password
-      REDIS_URL: redis://:moneat_dev_password@redis:6379
-      # ⚠️ DEVELOPMENT ONLY — use a strong random secret in production
-      JWT_SECRET: dev-jwt-secret-change-in-production
-      FRONTEND_URL: http://localhost:3000
-      BACKEND_URL: http://localhost:8080
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-moneat_dev_password}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-moneat_dev_password}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:8080}
       STRIPE_ENABLED: "false"
       SELF_HOSTED: "true"
       # Set MONEAT_LICENSE_KEY to enable enterprise features (SSO, On-Call)
@@ -106,9 +104,9 @@ services:
     container_name: moneat-frontend
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3000}:80"
     environment:
-      VITE_BACKEND_URL: http://localhost:8080
+      VITE_BACKEND_URL: ${BACKEND_URL:-http://localhost:8080}
     depends_on:
       backend:
         condition: service_healthy
