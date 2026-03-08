@@ -29,13 +29,24 @@
 
 ## Self-Hosting
 
+The interactive installer handles secrets, port allocation, and Docker setup:
+
 ```bash
 git clone https://github.com/moneat-io/moneat.git
 cd moneat
+bash install.sh
+```
+
+<details>
+<summary><b>Manual Setup</b></summary>
+
+```bash
 cp .env.example .env
 # Edit .env — set JWT_SECRET, DATABASE_PASSWORD, CLICKHOUSE_PASSWORD, FRONTEND_URL, BACKEND_URL
 docker compose up -d
 ```
+
+</details>
 
 <details>
 <summary><b>Local Development</b></summary>
