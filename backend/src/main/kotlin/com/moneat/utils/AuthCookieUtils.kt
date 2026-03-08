@@ -16,26 +16,35 @@
 
 package com.moneat.utils
 
-import io.ktor.http.*
+import com.moneat.config.EnvConfig
+import io.ktor.http.Cookie
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.call
-import io.ktor.server.plugins.*
 
 object AuthCookieUtils {
+
+    private const val AUTH_COOKIE_TTL = 3600 // 1 hour
+    private const val DEMO_COOKIE_TTL = 86400 // 24 hours
+    private const val REFRESH_COOKIE_TTL = 604800 // 7 days
+
+    private fun isSecure(): Boolean {
+        val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
+        return backendUrl.startsWith("https://")
+    }
+
     fun setAuthCookie(
         call: ApplicationCall,
         token: String
     ) {
-        val isSecure = call.request.origin.scheme == "https"
+        val secure = isSecure()
         call.response.cookies.append(
             Cookie(
                 name = "auth_token",
                 value = token,
                 httpOnly = true,
-                secure = isSecure,
+                secure = secure,
                 path = "/",
-                maxAge = 3600, // 1 hour, matches JWT expiration
-                extensions = mapOf("SameSite" to if (isSecure) "Strict" else "Lax")
+                maxAge = AUTH_COOKIE_TTL,
+                extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
             )
         )
     }
@@ -44,31 +53,64 @@ object AuthCookieUtils {
         call: ApplicationCall,
         token: String
     ) {
-        val isSecure = call.request.origin.scheme == "https"
+        val secure = isSecure()
         call.response.cookies.append(
             Cookie(
                 name = "auth_token",
                 value = token,
                 httpOnly = true,
-                secure = isSecure,
+                secure = secure,
                 path = "/",
-                maxAge = 86400, // 24 hours, matches demo JWT expiration
-                extensions = mapOf("SameSite" to if (isSecure) "Strict" else "Lax")
+                maxAge = DEMO_COOKIE_TTL,
+                extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
+            )
+        )
+    }
+
+    fun setRefreshCookie(
+        call: ApplicationCall,
+        token: String
+    ) {
+        val secure = isSecure()
+        call.response.cookies.append(
+            Cookie(
+                name = "refresh_token",
+                value = token,
+                httpOnly = true,
+                secure = secure,
+                path = "/auth",
+                maxAge = REFRESH_COOKIE_TTL,
+                extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
+            )
+        )
+    }
+
+    fun clearRefreshCookie(call: ApplicationCall) {
+        val secure = isSecure()
+        call.response.cookies.append(
+            Cookie(
+                name = "refresh_token",
+                value = "",
+                httpOnly = true,
+                secure = secure,
+                path = "/auth",
+                maxAge = 0,
+                extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
             )
         )
     }
 
     fun clearAuthCookie(call: ApplicationCall) {
-        val isSecure = call.request.origin.scheme == "https"
+        val secure = isSecure()
         call.response.cookies.append(
             Cookie(
                 name = "auth_token",
                 value = "",
                 httpOnly = true,
-                secure = isSecure,
+                secure = secure,
                 path = "/",
                 maxAge = 0,
-                extensions = mapOf("SameSite" to if (isSecure) "Strict" else "Lax")
+                extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
             )
         )
     }

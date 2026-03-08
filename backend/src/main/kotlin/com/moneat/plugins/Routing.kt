@@ -138,6 +138,16 @@ fun Application.configureRouting() {
             )
         }
 
+        get("/v1/features") {
+            call.respond(
+                FeaturesResponse(
+                    enterprise = FeatureRegistry.isEnterpriseAvailable,
+                    modules = FeatureRegistry.registeredModules.map { it.name },
+                    selfHost = EnvConfig.SelfHost.enabled
+                )
+            )
+        }
+
         // Liveness probe: lightweight check that the JVM and HTTP server are responsive
         get("/health/live") {
             call.respond(mapOf("status" to "ok"))

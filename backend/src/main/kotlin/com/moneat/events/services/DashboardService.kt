@@ -49,6 +49,7 @@ import com.moneat.events.models.TransactionSummaryResponse
 import com.moneat.events.models.TransactionWithSpansResponse
 import com.moneat.events.models.UserInfo
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.CacheService
@@ -59,8 +60,10 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.sentry.ISpan
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -78,6 +81,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -723,17 +727,29 @@ class DashboardService {
         CacheService.cached("cache:issues:$projectId:$page:$limit:${status ?: ""}:${demoEpochMs ?: 0}", 30) {
             val offset = (page - 1) * limit
             val retentionDays = getProjectRetentionDays(projectId)
-            val validStatuses = setOf("unresolved", "resolved", "ignored")
-            val statusFilter =
-                if (status != null && status in validStatuses) {
-                    "AND status = '${escapeSql(status)}'"
-                } else {
-                    ""
-                }
 
             val projectIdClause = if (projectId < 0) "toInt64(e.project_id) = $projectId" else "e.project_id = $projectId"
 
-            // Query events table directly and aggregate
+            val validStatuses = setOf(
+                "unresolved",
+                "resolved",
+                "ignored",
+                "resolvedInNextRelease"
+            )
+            val effectiveStatus = if (
+                status != null && status in validStatuses
+            ) {
+                status
+            } else {
+                null
+            }
+
+            // Build issue ID filter clause from PG statuses
+            val issueIdClause = buildIssueIdFilterClause(
+                projectId,
+                effectiveStatus
+            )
+
             val query =
                 """
             SELECT 
@@ -745,18 +761,12 @@ class DashboardService {
                 formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
                 formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
                 count() as event_count,
-                uniq(user_id) as user_count,
-                any(i.status) as status
+                uniq(user_id) as user_count
             FROM `$clickhouseDb`.events e
-            LEFT JOIN (
-                SELECT issue_id, status 
-                FROM `$clickhouseDb`.issues FINAL
-                WHERE ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
-            ) i USING issue_id
             WHERE $projectIdClause 
                 AND e.event_type = 'error'
                 AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
-                $statusFilter
+                $issueIdClause
             GROUP BY issue_id
             ORDER BY last_seen DESC
             LIMIT $limit OFFSET $offset
@@ -774,7 +784,7 @@ class DashboardService {
                     }
                     return@cached emptyList<IssueResponse>()
                 }
-                body
+                val rawIssues = body
                     .lines()
                     .filter { it.isNotBlank() }
                     .map { line ->
@@ -790,9 +800,25 @@ class DashboardService {
                             lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
                             eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
                             userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
-                            status = obj["status"]?.jsonPrimitive?.content ?: "unresolved"
+                            status = "unresolved"
                         )
                     }
+
+                // Overlay PG statuses
+                val issueIds = rawIssues.map { it.id }
+                val pgStatuses = lookupIssueStatuses(issueIds)
+                rawIssues.map { issue ->
+                    val pgRow = pgStatuses[issue.id]
+                    if (pgRow != null) {
+                        issue.copy(
+                            status = pgRow.status,
+                            substatus = pgRow.substatus,
+                            statusDetail = pgRow.statusDetail
+                        )
+                    } else {
+                        issue
+                    }
+                }
             } catch (e: Exception) {
                 logger.error(e) { "Failed to fetch issues" }
                 emptyList()
@@ -808,7 +834,7 @@ class DashboardService {
         val escapedIssueId = escapeSql(issueId)
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
 
-        // Query events table directly and aggregate
+        // Query events without ClickHouse issues join; status comes from PG
         val query =
             """
             SELECT 
@@ -821,14 +847,8 @@ class DashboardService {
                 formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
                 count() as event_count,
                 uniq(user_id) as user_count,
-                any(i.status) as status,
                 any(fingerprint) as fingerprint
             FROM `$clickhouseDb`.events e
-            LEFT JOIN (
-                SELECT issue_id, status 
-                FROM `$clickhouseDb`.issues FINAL
-                WHERE ${timestampRetentionClause("last_seen", retentionDays, demoEpochMs)}
-            ) i USING issue_id
             WHERE e.issue_id = '$escapedIssueId'
                 AND $projectIdClause
                 AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
@@ -937,6 +957,11 @@ class DashboardService {
                     }
                 }
 
+            // Lookup PG status for this issue
+            val pgRow = lookupIssueStatuses(
+                listOf(obj["issue_id"]?.jsonPrimitive?.content ?: "")
+            )[obj["issue_id"]?.jsonPrimitive?.content ?: ""]
+
             IssueDetailResponse(
                 id = obj["issue_id"]?.jsonPrimitive?.content ?: "",
                 projectId = projectId,
@@ -949,7 +974,9 @@ class DashboardService {
                 lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
                 eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
                 userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
-                status = obj["status"]?.jsonPrimitive?.content ?: "unresolved",
+                status = pgRow?.status ?: "unresolved",
+                substatus = pgRow?.substatus,
+                statusDetail = pgRow?.statusDetail,
                 fingerprint = obj["fingerprint"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
                 latestEvent = latestEvent
             )
@@ -1982,17 +2009,37 @@ class DashboardService {
                         }
 
                     // Await all results
+                    val chUnresolved = unresolvedIssuesDeferred.await()
+                    val chIssuesByStatus = issuesByStatusDeferred.await()
+
+                    // Overlay PG status overrides onto CH counts,
+                    // filtered to only retained issues
+                    val pgOverrides =
+                        lookupProjectIssueStatuses(projectId)
+                    val filteredOverrides = filterToRetainedIssues(
+                        pgOverrides,
+                        projectId,
+                        retentionDays,
+                        demoEpochMs,
+                        parentSpan
+                    )
+                    val adjusted = adjustStatsCounts(
+                        chUnresolved,
+                        chIssuesByStatus,
+                        filteredOverrides
+                    )
+
                     ProjectStatsResponse(
                         totalEvents = totalEventsDeferred.await(),
                         totalIssues = totalIssuesDeferred.await(),
-                        unresolvedIssues = unresolvedIssuesDeferred.await(),
+                        unresolvedIssues = adjusted.first,
                         affectedUsers = affectedUsersDeferred.await(),
                         eventsTimeline = eventsTimelineDeferred.await(),
                         eventsByLevel = eventsByLevelDeferred.await(),
                         eventsByPlatform = eventsByPlatformDeferred.await(),
                         eventsByBrowser = eventsByBrowserDeferred.await(),
                         eventsByEnvironment = eventsByEnvironmentDeferred.await(),
-                        issuesByStatus = issuesByStatusDeferred.await(),
+                        issuesByStatus = adjusted.second,
                         topIssues = topIssuesDeferred.await(),
                         usersTimeline = usersTimelineDeferred.await(),
                         releaseMarkers = releaseMarkersDeferred.await()
@@ -3812,32 +3859,224 @@ class DashboardService {
         }
     }
 
+    private data class PgIssueStatus(
+        val status: String,
+        val substatus: String?,
+        val statusDetail: JsonObject?
+    )
+
+    private suspend fun buildIssueIdFilterClause(
+        projectId: Long,
+        status: String?
+    ): String {
+        if (status == null) return ""
+        return withContext(Dispatchers.IO) {
+            transaction {
+                if (status == "unresolved") {
+                    val excludeIds = IssueStatuses
+                        .selectAll()
+                        .where {
+                            (IssueStatuses.project_id eq projectId) and
+                                (IssueStatuses.status neq "unresolved")
+                        }
+                        .map { it[IssueStatuses.issue_id] }
+                    if (excludeIds.isEmpty()) {
+                        ""
+                    } else {
+                        val escaped = excludeIds.joinToString(",") {
+                            "'${escapeSql(it)}'"
+                        }
+                        "AND e.issue_id NOT IN ($escaped)"
+                    }
+                } else {
+                    val includeIds = IssueStatuses
+                        .selectAll()
+                        .where {
+                            (IssueStatuses.project_id eq projectId) and
+                                (IssueStatuses.status eq status)
+                        }
+                        .map { it[IssueStatuses.issue_id] }
+                    if (includeIds.isEmpty()) {
+                        "AND 1 = 0"
+                    } else {
+                        val escaped = includeIds.joinToString(",") {
+                            "'${escapeSql(it)}'"
+                        }
+                        "AND e.issue_id IN ($escaped)"
+                    }
+                }
+            }
+        }
+    }
+
+    private fun lookupIssueStatuses(
+        issueIds: List<String>
+    ): Map<String, PgIssueStatus> {
+        if (issueIds.isEmpty()) return emptyMap()
+        return transaction {
+            IssueStatuses
+                .selectAll()
+                .where { IssueStatuses.issue_id inList issueIds }
+                .associate { row ->
+                    val detail = row[IssueStatuses.status_detail]
+                    val detailObj = if (detail != null) {
+                        try {
+                            json.parseToJsonElement(detail).jsonObject
+                        } catch (_: Exception) {
+                            null
+                        }
+                    } else {
+                        null
+                    }
+                    row[IssueStatuses.issue_id] to PgIssueStatus(
+                        status = row[IssueStatuses.status],
+                        substatus = row[IssueStatuses.substatus],
+                        statusDetail = detailObj
+                    )
+                }
+        }
+    }
+
+    private fun lookupProjectIssueStatuses(
+        projectId: Long
+    ): Map<String, String> {
+        return transaction {
+            IssueStatuses
+                .selectAll()
+                .where { IssueStatuses.project_id eq projectId }
+                .associate { row ->
+                    row[IssueStatuses.issue_id] to
+                        row[IssueStatuses.status]
+                }
+        }
+    }
+
+    private suspend fun filterToRetainedIssues(
+        pgOverrides: Map<String, String>,
+        projectId: Long,
+        retentionDays: Int,
+        demoEpochMs: Long?,
+        parentSpan: ISpan?
+    ): Map<String, String> {
+        if (pgOverrides.isEmpty()) return pgOverrides
+        val ids = pgOverrides.keys
+        val idList = ids.joinToString(",") {
+            "'${ClickHouseSqlUtils.escapeSql(it)}'"
+        }
+        val projectIdClause =
+            ClickHouseQueryUtils.projectIdClause(projectId)
+        val query = """
+            SELECT DISTINCT issue_id
+            FROM `$clickhouseDb`.issues FINAL
+            WHERE $projectIdClause
+                AND issue_id IN ($idList)
+                AND ${timestampRetentionClause(
+            "last_seen",
+            retentionDays,
+            demoEpochMs
+        )}
+            FORMAT JSONEachRow
+        """.trimIndent()
+        val response =
+            ClickHouseClient.execute(query, parentSpan)
+        val body = response.bodyAsText()
+        if (response.status.value !in 200..299 ||
+            body.trimStart().startsWith("Code:")
+        ) {
+            return pgOverrides
+        }
+        val retainedIds = body.lines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                json.parseToJsonElement(line)
+                    .jsonObject["issue_id"]
+                    ?.jsonPrimitive?.content
+            }
+            .toSet()
+        return pgOverrides.filterKeys { it in retainedIds }
+    }
+
+    private fun adjustStatsCounts(
+        chUnresolved: Long,
+        chIssuesByStatus: Map<String, Long>,
+        pgOverrides: Map<String, String>
+    ): Pair<Long, Map<String, Long>> {
+        if (pgOverrides.isEmpty()) {
+            return chUnresolved to chIssuesByStatus
+        }
+        val statusCounts = chIssuesByStatus.toMutableMap()
+        var unresolvedDelta = 0L
+        for ((_, pgStatus) in pgOverrides) {
+            if (pgStatus != "unresolved") {
+                unresolvedDelta--
+                statusCounts["unresolved"] =
+                    (statusCounts["unresolved"] ?: 0) - 1
+                statusCounts[pgStatus] =
+                    (statusCounts[pgStatus] ?: 0) + 1
+            }
+        }
+        val adjustedUnresolved =
+            maxOf(0L, chUnresolved + unresolvedDelta)
+        val adjustedByStatus = statusCounts
+            .filter { it.value > 0 }
+        return adjustedUnresolved to adjustedByStatus
+    }
+
     suspend fun updateIssue(
         issueId: String,
         update: com.moneat.events.models.IssueUpdateRequest
     ) {
         if (update.status != null) {
-            val validStatuses = setOf("unresolved", "resolved", "ignored")
+            val validStatuses = setOf(
+                "unresolved",
+                "resolved",
+                "ignored",
+                "resolvedInNextRelease"
+            )
             if (update.status !in validStatuses) {
                 throw IllegalArgumentException("Invalid status value")
             }
 
-            val escapedIssueId = escapeSql(issueId)
-            val escapedStatus = escapeSql(update.status)
+            val projectId = getProjectIdForIssue(issueId)
+                ?: throw IllegalArgumentException("Issue not found")
 
-            val query =
-                """
-                ALTER TABLE `$clickhouseDb`.issues
-                UPDATE status = '$escapedStatus'
-                WHERE issue_id = '$escapedIssueId'
-                """.trimIndent()
+            val detailJson = update.statusDetail?.toString()
 
-            try {
-                ClickHouseClient.execute(query)
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to update issue" }
-                throw e
+            transaction {
+                val existing = IssueStatuses
+                    .selectAll()
+                    .where { IssueStatuses.issue_id eq issueId }
+                    .firstOrNull()
+
+                val now = kotlin.time.Clock.System.now()
+
+                if (existing != null) {
+                    IssueStatuses.update(
+                        where = { IssueStatuses.issue_id eq issueId }
+                    ) {
+                        it[status] = update.status
+                        it[substatus] = update.substatus
+                        it[status_detail] = detailJson
+                        it[updated_at] = now
+                    }
+                } else {
+                    IssueStatuses.insert {
+                        it[issue_id] = issueId
+                        it[IssueStatuses.project_id] = projectId
+                        it[status] = update.status
+                        it[substatus] = update.substatus
+                        it[status_detail] = detailJson
+                        it[updated_at] = now
+                    }
+                }
             }
+
+            invalidateIssuesCacheForProject(projectId)
         }
+    }
+
+    private fun invalidateIssuesCacheForProject(projectId: Long) {
+        CacheService.invalidatePattern("cache:issues:$projectId:*")
+        CacheService.invalidatePattern("cache:project_stats:$projectId:*")
     }
 }

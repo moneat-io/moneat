@@ -24,8 +24,13 @@ import kotlinx.serialization.json.Json
 
 abstract class HttpApiHandler : DataSourceHandler {
 
+    companion object {
+        internal const val DEFAULT_HTTP_PORT = 80
+        internal const val DEFAULT_HTTPS_PORT = 443
+    }
+
     protected val json = Json { ignoreUnknownKeys = true }
-    protected open val defaultPort: Int = 80
+    protected open val defaultPort: Int = DEFAULT_HTTP_PORT
     protected val httpClient = HttpClient(CIO) {
         engine {
             requestTimeout = 30_000
@@ -40,10 +45,28 @@ abstract class HttpApiHandler : DataSourceHandler {
             else -> "http://"
         }
         val cleanHost = host.removePrefix("https://").removePrefix("http://").trimEnd('/')
-        val hostHasPort = cleanHost.contains(":")
-        if (port == null || hostHasPort) return "$scheme$cleanHost"
-        val isDefaultPort = (scheme == "http://" && port == 80) || (scheme == "https://" && port == 443)
-        return if (isDefaultPort) "$scheme$cleanHost" else "$scheme$cleanHost:$port"
+        // Normalize bare IPv6 literals (e.g. "2001:db8::1") by wrapping in brackets
+        val normalizedHost = if (
+            !cleanHost.startsWith("[") && cleanHost.count { it == ':' } > 1
+        ) {
+            "[$cleanHost]"
+        } else {
+            cleanHost
+        }
+        val hostHasPort = if (normalizedHost.startsWith("[")) {
+            normalizedHost.contains("]:")
+        } else {
+            normalizedHost.contains(":")
+        }
+        if (port == null || hostHasPort) return "$scheme$normalizedHost"
+        val isDefaultPort =
+            (scheme == "http://" && port == DEFAULT_HTTP_PORT) ||
+                (scheme == "https://" && port == DEFAULT_HTTPS_PORT)
+        return if (isDefaultPort) {
+            "$scheme$normalizedHost"
+        } else {
+            "$scheme$normalizedHost:$port"
+        }
     }
 
     protected fun withAuth(headers: MutableMap<String, String>, credentials: DataSourceCredentials) {

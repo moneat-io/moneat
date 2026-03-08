@@ -20,9 +20,12 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.routes.apiRoutes
+import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
@@ -43,6 +46,7 @@ import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
 import java.util.Collections
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -69,7 +73,15 @@ class ApiRoutesTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, Projects)
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Memberships,
+            Projects,
+            IssueStatuses,
+            Subscriptions,
+            PricingTierConfigs
+        )
     }
 
     @Test
@@ -82,7 +94,7 @@ class ApiRoutesTest {
                 exchange.respond(
                     200,
                     """
-                    {"issue_id":"issue-api-1","title":"API crash","culprit":"controller","level":"error","platform":"kotlin","first_seen":"2026-02-01T00:00:00.000Z","last_seen":"2026-02-02T00:00:00.000Z","event_count":4,"user_count":2,"status":"resolved"}
+                    {"issue_id":"issue-api-1","title":"API crash","culprit":"controller","level":"error","platform":"kotlin","first_seen":"2026-02-01T00:00:00.000Z","last_seen":"2026-02-02T00:00:00.000Z","event_count":4,"user_count":2}
                     """.trimIndent(),
                     contentType = "text/plain"
                 )
@@ -92,6 +104,27 @@ class ApiRoutesTest {
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            // Insert PG status row so overlay returns "resolved"
+            org.jetbrains.exposed.v1.jdbc.transactions.transaction {
+                Organizations.insert {
+                    it[id] = 1
+                    it[name] = "Test Org"
+                    it[slug] = "test-org"
+                }
+                Projects.insert {
+                    it[id] = -1
+                    it[organization_id] = 1
+                    it[name] = "Test Project"
+                    it[slug] = "test-project"
+                }
+                IssueStatuses.insert {
+                    it[issue_id] = "issue-api-1"
+                    it[project_id] = -1
+                    it[status] = "resolved"
+                    it[updated_at] = kotlin.time.Clock.System.now()
+                }
+            }
 
             testApplication {
                 application {
@@ -126,7 +159,6 @@ class ApiRoutesTest {
                 val body = response.bodyAsText()
                 assertTrue(body.contains("issue-api-1"))
                 assertTrue(queries.any { it.contains("LIMIT 5 OFFSET 5") })
-                assertTrue(queries.any { it.contains("AND status = 'resolved'") })
             }
         }
     }

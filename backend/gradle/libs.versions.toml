@@ -8,6 +8,7 @@ kotlinx-datetime = "0.7.1-0.6.x-compat"
 junit = "6.0.3"
 testcontainers = "2.0.3"
 detekt = "1.23.8"
+sonarqube = "7.2.3.7755"
 shadow = "9.3.2"
 jacoco = "0.8.14"
 opentelemetry = "1.59.0"
@@ -73,7 +74,7 @@ java-saml-core = { module = "com.onelogin:java-saml-core", version = "2.9.0" }
 oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.33" }
 
 # Billing
-stripe-java = { module = "com.stripe:stripe-java", version = "31.4.0" }
+stripe-java = { module = "com.stripe:stripe-java", version = "31.4.1" }
 
 # JWT
 java-jwt = { module = "com.auth0:java-jwt", version = "4.5.1" }
@@ -125,7 +126,7 @@ snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "4.0.1" }
 
 # Non-JDBC data clients / SDKs
 mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version = "5.6.4" }
-aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.29" }
+aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.31" }
 google-cloud-bigquery = { module = "com.google.cloud:google-cloud-bigquery", version = "2.60.0" }
 
 # Detekt
@@ -137,3 +138,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 ktor = { id = "io.ktor.plugin", version.ref = "ktor" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+sonarqube = { id = "org.sonarqube", version.ref = "sonarqube" }
