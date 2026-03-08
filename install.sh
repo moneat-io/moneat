@@ -63,9 +63,9 @@ spinner() {
 run_cmd() {
   local spinner_msg="$1" success_msg="$2"
   shift 2
-  local errlog
-  errlog=$(mktemp)
-  "$@" 2>"$errlog" &
+  local cmdlog
+  cmdlog=$(mktemp)
+  "$@" >"$cmdlog" 2>&1 &
   local pid=$!
   spinner "$pid" "$spinner_msg"
   local rc=0
@@ -74,13 +74,17 @@ run_cmd() {
     success "$success_msg"
   else
     error "$success_msg — failed (exit $rc)"
-    if [[ -s "$errlog" ]]; then
-      printf "  ${DIM}%s${RESET}\n" "$(head -5 "$errlog")" >&2
+    if [[ -s "$cmdlog" ]]; then
+      echo >&2
+      while IFS= read -r line; do
+        printf "  ${DIM}%s${RESET}\n" "$line" >&2
+      done < "$cmdlog"
+      echo >&2
     fi
-    rm -f "$errlog"
+    rm -f "$cmdlog"
     exit 1
   fi
-  rm -f "$errlog"
+  rm -f "$cmdlog"
 }
 
 # ── Logo ──
