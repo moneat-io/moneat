@@ -60,6 +60,29 @@ spinner() {
   printf "\r\033[2K"
 }
 
+run_cmd() {
+  local spinner_msg="$1" success_msg="$2"
+  shift 2
+  local errlog
+  errlog=$(mktemp)
+  "$@" 2>"$errlog" &
+  local pid=$!
+  spinner "$pid" "$spinner_msg"
+  local rc=0
+  wait "$pid" || rc=$?
+  if [[ $rc -eq 0 ]]; then
+    success "$success_msg"
+  else
+    error "$success_msg — failed (exit $rc)"
+    if [[ -s "$errlog" ]]; then
+      printf "  ${DIM}%s${RESET}\n" "$(head -5 "$errlog")" >&2
+    fi
+    rm -f "$errlog"
+    exit 1
+  fi
+  rm -f "$errlog"
+}
+
 # ── Logo ──
 LOGO_LINES=7
 
@@ -320,14 +343,12 @@ build_and_start() {
   header "Starting Services"
 
   info "Pulling images..."
-  docker compose pull --quiet 2>/dev/null &
-  spinner $! "Pulling Docker images..."
-  success "Images pulled"
+  run_cmd "Pulling Docker images..." "Images pulled" \
+    docker compose pull --quiet
 
   info "Starting databases..."
-  docker compose up -d postgres clickhouse redis 2>/dev/null &
-  spinner $! "Starting PostgreSQL, ClickHouse, Redis..."
-  success "Databases started"
+  run_cmd "Starting PostgreSQL, ClickHouse, Redis..." "Databases started" \
+    docker compose up -d postgres clickhouse redis
 
   info "Waiting for databases to be healthy..."
   local retries=30
@@ -350,9 +371,8 @@ build_and_start() {
   fi
 
   info "Starting application..."
-  docker compose up -d backend frontend 2>/dev/null &
-  spinner $! "Starting backend and frontend..."
-  success "Application started"
+  run_cmd "Starting backend and frontend..." "Application started" \
+    docker compose up -d backend frontend
 }
 
 # ── Health check ──
