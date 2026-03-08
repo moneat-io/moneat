@@ -18,6 +18,7 @@ package com.moneat.events.models
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class SignupRequest(
@@ -88,7 +89,9 @@ data class IssueResponse(
     val lastSeen: String,
     val eventCount: Long,
     val userCount: Long,
-    val status: String
+    val status: String,
+    val substatus: String? = null,
+    val statusDetail: JsonObject? = null
 )
 
 @Serializable
@@ -105,6 +108,8 @@ data class IssueDetailResponse(
     val eventCount: Long,
     val userCount: Long,
     val status: String,
+    val substatus: String? = null,
+    val statusDetail: JsonObject? = null,
     val fingerprint: List<String>,
     val latestEvent: EventResponse?
 )
@@ -255,7 +260,9 @@ data class PerformanceStatsResponse(
 
 @Serializable
 data class IssueUpdateRequest(
-    val status: String? = null
+    val status: String? = null,
+    val substatus: String? = null,
+    val statusDetail: JsonObject? = null
 )
 
 @Serializable

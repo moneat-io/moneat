@@ -26,6 +26,7 @@ import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Label} from '@/components/ui/label'
+import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from '@/components/ui/dropdown-menu'
 import {SpanWaterfall} from '@/components/span-waterfall'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {EmbeddedLogs} from '@/components/logs/EmbeddedLogs'
@@ -35,12 +36,14 @@ import {
     ArrowUpRight,
     Battery,
     CheckCircle2,
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Circle,
     Clock3,
     Copy,
     DatabaseZap,
+    EyeOff,
     Globe,
     Info,
     Layers,
@@ -51,6 +54,7 @@ import {
     Smartphone,
     Tag,
     TerminalSquare,
+    Timer,
     Zap,
 } from 'lucide-react'
 import {useTimezone} from '@/hooks/useTimezone'
@@ -168,18 +172,19 @@ function IssueDetailPage() {
     enabled: !!primaryTransactionId,
   })
 
-  const resolveMutation = useMutation({
+  const statusMutation = useMutation({
     mutationFn: (status: string) => api.updateIssue(issueId, { status }),
     onSuccess: (_, status) => {
-      trackEvent('Issue Resolve', { source: 'detail', status })
+      trackEvent('Issue StatusChange', { source: 'detail', status })
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
-      toast({
-        variant: 'success',
-        title: status === 'resolved' ? 'Issue resolved' : 'Issue unresolved',
-        description: status === 'resolved' 
-          ? 'The issue has been marked as resolved.' 
-          : 'The issue has been marked as unresolved.',
-      })
+      const messages: Record<string, { title: string; description: string }> = {
+        resolved: { title: 'Issue resolved', description: 'The issue has been marked as resolved.' },
+        unresolved: { title: 'Issue unresolved', description: 'The issue has been marked as unresolved.' },
+        ignored: { title: 'Issue ignored', description: 'The issue has been ignored.' },
+        resolvedInNextRelease: { title: 'Resolve in next release', description: 'The issue will auto-resolve when a new release is deployed.' },
+      }
+      const msg = messages[status] ?? { title: 'Status updated', description: `Status set to ${status}.` }
+      toast({ variant: 'success', ...msg })
     },
   })
 
@@ -230,6 +235,18 @@ function IssueDetailPage() {
                     Resolved
                   </Badge>
                 )}
+                {issue.status === 'ignored' && (
+                  <Badge variant="secondary">
+                    <EyeOff className="h-3 w-3 mr-1" />
+                    Ignored
+                  </Badge>
+                )}
+                {issue.status === 'resolvedInNextRelease' && (
+                  <Badge variant="outline" className="border-blue-500 text-blue-600 dark:text-blue-400">
+                    <Timer className="h-3 w-3 mr-1" />
+                    Resolves in Next Release
+                  </Badge>
+                )}
               </div>
               <h2 className="text-lg sm:text-xl font-bold leading-tight mb-1 break-words [overflow-wrap:anywhere]">
                 {issue.title}
@@ -237,25 +254,68 @@ function IssueDetailPage() {
               <p className="text-sm text-muted-foreground break-words [overflow-wrap:anywhere]">{issue.culprit}</p>
             </div>
             <div className="flex gap-2 flex-shrink-0">
-              {issue.status === 'resolved' ? (
+              {issue.status === 'resolved' && (
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => resolveMutation.mutate('unresolved')}
-                  disabled={resolveMutation.isPending}
+                  onClick={() => statusMutation.mutate('unresolved')}
+                  disabled={statusMutation.isPending}
                 >
                   <AlertCircle className="h-4 w-4 mr-2" />
                   Unresolve
                 </Button>
-              ) : (
+              )}
+              {issue.status === 'ignored' && (
                 <Button
                   size="sm"
-                  onClick={() => resolveMutation.mutate('resolved')}
-                  disabled={resolveMutation.isPending}
+                  variant="outline"
+                  onClick={() => statusMutation.mutate('unresolved')}
+                  disabled={statusMutation.isPending}
                 >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Resolve
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  Unignore
                 </Button>
+              )}
+              {issue.status === 'resolvedInNextRelease' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => statusMutation.mutate('unresolved')}
+                  disabled={statusMutation.isPending}
+                >
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  Unresolve
+                </Button>
+              )}
+              {issue.status === 'unresolved' && (
+                <div className="flex items-center">
+                  <Button
+                    size="sm"
+                    onClick={() => statusMutation.mutate('resolved')}
+                    disabled={statusMutation.isPending}
+                    className="rounded-r-none"
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Resolve
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" disabled={statusMutation.isPending} className="rounded-l-none border-l px-1.5">
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => statusMutation.mutate('resolvedInNextRelease')}>
+                        <Timer className="h-4 w-4 mr-2" />
+                        Resolve in Next Release
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => statusMutation.mutate('ignored')}>
+                        <EyeOff className="h-4 w-4 mr-2" />
+                        Ignore
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               )}
             </div>
           </div>

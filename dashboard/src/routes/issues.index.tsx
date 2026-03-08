@@ -28,17 +28,21 @@ import {Input} from '@/components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {Card} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
+import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from '@/components/ui/dropdown-menu'
 import {
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Cpu,
+  EyeOff,
   FolderKanban,
   Plus,
   Search,
   Server,
   Settings,
+  Timer,
 } from 'lucide-react'
 import {useEffect, useMemo, useState} from 'react'
 import {useToast} from '@/hooks/use-toast'
@@ -244,6 +248,8 @@ function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('unresolved')
   const [selectedIssues, setSelectedIssues] = useState<Set<string>>(new Set())
+  const [page, setPage] = useState(1)
+  const pageSize = 25
   const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -264,24 +270,48 @@ function DashboardPage() {
     }
   }, [selectedProjectId, projects, setSelectedProjectId])
 
+  // Reset selection and page when the visible dataset changes (React-recommended
+  // "adjusting state during rendering" pattern avoids cascading effect renders).
+  const [prevProjectId, setPrevProjectId] = useState(projectId)
+  const [prevStatusFilter, setPrevStatusFilter] = useState(statusFilter)
+  if (projectId !== prevProjectId || statusFilter !== prevStatusFilter) {
+    setPrevProjectId(projectId)
+    setPrevStatusFilter(statusFilter)
+    setSelectedIssues(new Set())
+    setPage(1)
+  }
+
   const { data: issues = [], isError: issuesError, error: issuesErrorObj } = useQuery({
-    queryKey: ['issues', projectId, statusFilter],
-    queryFn: () => (projectId ? api.getIssues(projectId) : []),
+    queryKey: ['issues', projectId, statusFilter, page, pageSize],
+    queryFn: () => (projectId ? api.getIssues(projectId, page, pageSize, statusFilter === 'all' ? undefined : statusFilter) : []),
     enabled: !!projectId,
   })
 
   const resolveMutation = useMutation({
     mutationFn: async (issueIds: string[]) => {
-      await Promise.all(issueIds.map(id => api.updateIssue(id, { status: 'resolved' })))
+      const results = await Promise.allSettled(
+        issueIds.map(id => api.updateIssue(id, { status: 'resolved' }))
+      )
+      const successCount = results.filter(r => r.status === 'fulfilled').length
+      if (successCount === 0) throw new Error('All requests failed')
+      return { submitted: issueIds.length, successCount }
     },
-    onSuccess: () => {
-      trackEvent('Issue Resolve', { count: String(selectedIssues.size) })
+    onSuccess: ({ submitted, successCount }) => {
+      trackEvent('Issue Resolve', { count: String(successCount) })
       queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
       queryClient.invalidateQueries({ queryKey: ['stats', projectId] })
-      toast({
-        title: 'Success',
-        description: `${selectedIssues.size} issue${selectedIssues.size === 1 ? '' : 's'} resolved`,
-      })
+      if (successCount === submitted) {
+        toast({
+          title: 'Success',
+          description: `${submitted} issue${submitted === 1 ? '' : 's'} resolved`,
+        })
+      } else {
+        toast({
+          title: 'Partial Success',
+          description: `${successCount}/${submitted} issues resolved`,
+          variant: 'destructive',
+        })
+      }
       setSelectedIssues(new Set())
     },
     onError: () => {
@@ -292,6 +322,72 @@ function DashboardPage() {
       })
     },
   })
+
+  const ignoreMutation = useMutation({
+    mutationFn: async (issueIds: string[]) => {
+      const results = await Promise.allSettled(
+        issueIds.map(id => api.updateIssue(id, { status: 'ignored' }))
+      )
+      const successCount = results.filter(r => r.status === 'fulfilled').length
+      if (successCount === 0) throw new Error('All requests failed')
+      return { submitted: issueIds.length, successCount }
+    },
+    onSuccess: ({ submitted, successCount }) => {
+      trackEvent('Issue Ignore', { count: String(successCount) })
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['stats', projectId] })
+      if (successCount === submitted) {
+        toast({
+          title: 'Success',
+          description: `${submitted} issue${submitted === 1 ? '' : 's'} ignored`,
+        })
+      } else {
+        toast({
+          title: 'Partial Success',
+          description: `${successCount}/${submitted} issues ignored`,
+          variant: 'destructive',
+        })
+      }
+      setSelectedIssues(new Set())
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to ignore issues', variant: 'destructive' })
+    },
+  })
+
+  const resolveNextReleaseMutation = useMutation({
+    mutationFn: async (issueIds: string[]) => {
+      const results = await Promise.allSettled(
+        issueIds.map(id => api.updateIssue(id, { status: 'resolvedInNextRelease' }))
+      )
+      const successCount = results.filter(r => r.status === 'fulfilled').length
+      if (successCount === 0) throw new Error('All requests failed')
+      return { submitted: issueIds.length, successCount }
+    },
+    onSuccess: ({ submitted, successCount }) => {
+      trackEvent('Issue ResolveInNextRelease', { count: String(successCount) })
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['stats', projectId] })
+      if (successCount === submitted) {
+        toast({
+          title: 'Success',
+          description: `${submitted} issue${submitted === 1 ? '' : 's'} marked to resolve in next release`,
+        })
+      } else {
+        toast({
+          title: 'Partial Success',
+          description: `${successCount}/${submitted} issues marked to resolve in next release`,
+          variant: 'destructive',
+        })
+      }
+      setSelectedIssues(new Set())
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update issues', variant: 'destructive' })
+    },
+  })
+
+  const bulkPending = resolveMutation.isPending || ignoreMutation.isPending || resolveNextReleaseMutation.isPending
 
   const handleToggleIssue = (issueId: string) => {
     const newSelected = new Set(selectedIssues)
@@ -313,6 +409,14 @@ function DashboardPage() {
 
   const handleResolveSelected = () => {
     resolveMutation.mutate(Array.from(selectedIssues))
+  }
+
+  const handleIgnoreSelected = () => {
+    ignoreMutation.mutate(Array.from(selectedIssues))
+  }
+
+  const handleResolveNextReleaseSelected = () => {
+    resolveNextReleaseMutation.mutate(Array.from(selectedIssues))
   }
 
   const safeIssues = useMemo<SafeIssue[]>(() => {
@@ -342,8 +446,7 @@ function DashboardPage() {
       normalizedSearchQuery === '' ||
       issue.title.toLowerCase().includes(normalizedSearchQuery) ||
       issue.culprit.toLowerCase().includes(normalizedSearchQuery)
-    const matchesStatus = statusFilter === 'all' || issue.status === statusFilter
-    return matchesSearch && matchesStatus
+    return matchesSearch
   })
 
   if (isLoading) return <div className="p-8">Loading...</div>
@@ -435,14 +538,32 @@ function DashboardPage() {
                   <span className="text-sm font-medium whitespace-nowrap">
                     {selectedIssues.size} selected
                   </span>
-                  <Button
-                    onClick={handleResolveSelected}
-                    disabled={resolveMutation.isPending}
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 h-7 ml-2"
-                  >
-                    {resolveMutation.isPending ? 'Resolving...' : 'Resolve'}
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        disabled={bulkPending}
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 h-7 ml-2"
+                      >
+                        {bulkPending ? 'Updating...' : 'Actions'}
+                        <ChevronDown className="h-3 w-3 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleResolveSelected}>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Resolve
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleIgnoreSelected}>
+                        <EyeOff className="h-4 w-4 mr-2" />
+                        Ignore
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleResolveNextReleaseSelected}>
+                        <Timer className="h-4 w-4 mr-2" />
+                        Resolve in Next Release
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               )}
 
@@ -455,7 +576,7 @@ function DashboardPage() {
                   className="pl-10"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -463,6 +584,8 @@ function DashboardPage() {
                   <SelectItem value="all">All Issues</SelectItem>
                   <SelectItem value="unresolved">Unresolved</SelectItem>
                   <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="ignored">Ignored</SelectItem>
+                  <SelectItem value="resolvedInNextRelease">Resolve in Next Release</SelectItem>
                 </SelectContent>
               </Select>
               <span className="text-sm text-muted-foreground whitespace-nowrap hidden lg:inline">
@@ -553,6 +676,18 @@ function DashboardPage() {
                                     Resolved
                                   </Badge>
                                 )}
+                                {issue.status === 'ignored' && (
+                                  <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+                                    <EyeOff className="h-3 w-3 mr-0.5" />
+                                    Ignored
+                                  </Badge>
+                                )}
+                                {issue.status === 'resolvedInNextRelease' && (
+                                  <Badge variant="outline" className="border-blue-500 text-blue-600 dark:text-blue-400 text-[11px] px-1.5 py-0">
+                                    <Timer className="h-3 w-3 mr-0.5" />
+                                    Next Release
+                                  </Badge>
+                                )}
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">
@@ -584,6 +719,29 @@ function DashboardPage() {
                     </div>
                   ))}
                 </div>
+                {(page > 1 || issues.length === pageSize) && (
+                  <div className="flex justify-end gap-2 px-4 py-2 border-t border-border/40">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={page <= 1}
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-sm text-muted-foreground self-center">
+                      Page {page}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={issues.length < pageSize}
+                      onClick={() => setPage(p => p + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </>
