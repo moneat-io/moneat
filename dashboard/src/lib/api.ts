@@ -122,6 +122,8 @@ interface Issue {
   eventCount: number
   userCount: number
   status: string
+  substatus?: string
+  statusDetail?: Record<string, string>
 }
 
 interface IssueDetail extends Issue {
@@ -3211,9 +3213,11 @@ class ApiClient {
     })
   }
 
-  async getIssues(projectId: number, page = 1, limit = 25): Promise<Issue[]> {
+  async getIssues(projectId: number, page = 1, limit = 25, status?: string): Promise<Issue[]> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+    if (status) params.set('status', status)
     return this.request<Issue[]>(
-      `${API_BASE}/projects/${projectId}/issues?page=${page}&limit=${limit}`
+      `${API_BASE}/projects/${projectId}/issues?${params.toString()}`
     )
   }
 

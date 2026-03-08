@@ -79,6 +79,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -727,7 +728,26 @@ class DashboardService {
 
             val projectIdClause = if (projectId < 0) "toInt64(e.project_id) = $projectId" else "e.project_id = $projectId"
 
-            // Query events without ClickHouse issues join; status comes from PG
+            val validStatuses = setOf(
+                "unresolved",
+                "resolved",
+                "ignored",
+                "resolvedInNextRelease"
+            )
+            val effectiveStatus = if (
+                status != null && status in validStatuses
+            ) {
+                status
+            } else {
+                null
+            }
+
+            // Build issue ID filter clause from PG statuses
+            val issueIdClause = buildIssueIdFilterClause(
+                projectId,
+                effectiveStatus
+            )
+
             val query =
                 """
             SELECT 
@@ -744,6 +764,7 @@ class DashboardService {
             WHERE $projectIdClause 
                 AND e.event_type = 'error'
                 AND ${timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
+                $issueIdClause
             GROUP BY issue_id
             ORDER BY last_seen DESC
             LIMIT $limit OFFSET $offset
@@ -784,7 +805,7 @@ class DashboardService {
                 // Overlay PG statuses
                 val issueIds = rawIssues.map { it.id }
                 val pgStatuses = lookupIssueStatuses(issueIds)
-                val issues = rawIssues.map { issue ->
+                rawIssues.map { issue ->
                     val pgRow = pgStatuses[issue.id]
                     if (pgRow != null) {
                         issue.copy(
@@ -795,19 +816,6 @@ class DashboardService {
                     } else {
                         issue
                     }
-                }
-
-                // Filter by status (PG-derived)
-                val validStatuses = setOf(
-                    "unresolved",
-                    "resolved",
-                    "ignored",
-                    "resolvedInNextRelease"
-                )
-                if (status != null && status in validStatuses) {
-                    issues.filter { it.status == status }
-                } else {
-                    issues
                 }
             } catch (e: Exception) {
                 logger.error(e) { "Failed to fetch issues" }
@@ -1999,17 +2007,28 @@ class DashboardService {
                         }
 
                     // Await all results
+                    val chUnresolved = unresolvedIssuesDeferred.await()
+                    val chIssuesByStatus = issuesByStatusDeferred.await()
+
+                    // Overlay PG status overrides onto CH counts
+                    val pgOverrides = lookupProjectIssueStatuses(projectId)
+                    val adjusted = adjustStatsCounts(
+                        chUnresolved,
+                        chIssuesByStatus,
+                        pgOverrides
+                    )
+
                     ProjectStatsResponse(
                         totalEvents = totalEventsDeferred.await(),
                         totalIssues = totalIssuesDeferred.await(),
-                        unresolvedIssues = unresolvedIssuesDeferred.await(),
+                        unresolvedIssues = adjusted.first,
                         affectedUsers = affectedUsersDeferred.await(),
                         eventsTimeline = eventsTimelineDeferred.await(),
                         eventsByLevel = eventsByLevelDeferred.await(),
                         eventsByPlatform = eventsByPlatformDeferred.await(),
                         eventsByBrowser = eventsByBrowserDeferred.await(),
                         eventsByEnvironment = eventsByEnvironmentDeferred.await(),
-                        issuesByStatus = issuesByStatusDeferred.await(),
+                        issuesByStatus = adjusted.second,
                         topIssues = topIssuesDeferred.await(),
                         usersTimeline = usersTimelineDeferred.await(),
                         releaseMarkers = releaseMarkersDeferred.await()
@@ -3835,6 +3854,47 @@ class DashboardService {
         val statusDetail: JsonObject?
     )
 
+    private fun buildIssueIdFilterClause(
+        projectId: Long,
+        status: String?
+    ): String {
+        if (status == null) return ""
+        return transaction {
+            if (status == "unresolved") {
+                val excludeIds = IssueStatuses
+                    .selectAll()
+                    .where {
+                        (IssueStatuses.project_id eq projectId) and
+                            (IssueStatuses.status neq "unresolved")
+                    }
+                    .map { it[IssueStatuses.issue_id] }
+                if (excludeIds.isEmpty()) ""
+                else {
+                    val escaped = excludeIds.joinToString(",") {
+                        "'${escapeSql(it)}'"
+                    }
+                    "AND e.issue_id NOT IN ($escaped)"
+                }
+            } else {
+                val includeIds = IssueStatuses
+                    .selectAll()
+                    .where {
+                        (IssueStatuses.project_id eq projectId) and
+                            (IssueStatuses.status eq status)
+                    }
+                    .map { it[IssueStatuses.issue_id] }
+                if (includeIds.isEmpty()) {
+                    "AND 1 = 0"
+                } else {
+                    val escaped = includeIds.joinToString(",") {
+                        "'${escapeSql(it)}'"
+                    }
+                    "AND e.issue_id IN ($escaped)"
+                }
+            }
+        }
+    }
+
     private fun lookupIssueStatuses(
         issueIds: List<String>
     ): Map<String, PgIssueStatus> {
@@ -3861,6 +3921,46 @@ class DashboardService {
                     )
                 }
         }
+    }
+
+    private fun lookupProjectIssueStatuses(
+        projectId: Long
+    ): Map<String, String> {
+        return transaction {
+            IssueStatuses
+                .selectAll()
+                .where { IssueStatuses.project_id eq projectId }
+                .associate { row ->
+                    row[IssueStatuses.issue_id] to
+                        row[IssueStatuses.status]
+                }
+        }
+    }
+
+    private fun adjustStatsCounts(
+        chUnresolved: Long,
+        chIssuesByStatus: Map<String, Long>,
+        pgOverrides: Map<String, String>
+    ): Pair<Long, Map<String, Long>> {
+        if (pgOverrides.isEmpty()) {
+            return chUnresolved to chIssuesByStatus
+        }
+        val statusCounts = chIssuesByStatus.toMutableMap()
+        var unresolvedDelta = 0L
+        for ((_, pgStatus) in pgOverrides) {
+            if (pgStatus != "unresolved") {
+                unresolvedDelta--
+                statusCounts["unresolved"] =
+                    (statusCounts["unresolved"] ?: 0) - 1
+                statusCounts[pgStatus] =
+                    (statusCounts[pgStatus] ?: 0) + 1
+            }
+        }
+        val adjustedUnresolved =
+            maxOf(0L, chUnresolved + unresolvedDelta)
+        val adjustedByStatus = statusCounts
+            .filter { it.value > 0 }
+        return adjustedUnresolved to adjustedByStatus
     }
 
     suspend fun updateIssue(
@@ -3911,6 +4011,13 @@ class DashboardService {
                     }
                 }
             }
+
+            invalidateIssuesCacheForProject(projectId)
         }
+    }
+
+    private fun invalidateIssuesCacheForProject(projectId: Long) {
+        CacheService.invalidatePattern("cache:issues:$projectId:*")
+        CacheService.invalidatePattern("cache:project_stats:$projectId:*")
     }
 }

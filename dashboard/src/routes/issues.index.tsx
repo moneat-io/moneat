@@ -270,7 +270,7 @@ function DashboardPage() {
 
   const { data: issues = [], isError: issuesError, error: issuesErrorObj } = useQuery({
     queryKey: ['issues', projectId, statusFilter],
-    queryFn: () => (projectId ? api.getIssues(projectId) : []),
+    queryFn: () => (projectId ? api.getIssues(projectId, 1, 25, statusFilter === 'all' ? undefined : statusFilter) : []),
     enabled: !!projectId,
   })
 
@@ -392,8 +392,7 @@ function DashboardPage() {
       normalizedSearchQuery === '' ||
       issue.title.toLowerCase().includes(normalizedSearchQuery) ||
       issue.culprit.toLowerCase().includes(normalizedSearchQuery)
-    const matchesStatus = statusFilter === 'all' || issue.status === statusFilter
-    return matchesSearch && matchesStatus
+    return matchesSearch
   })
 
   if (isLoading) return <div className="p-8">Loading...</div>

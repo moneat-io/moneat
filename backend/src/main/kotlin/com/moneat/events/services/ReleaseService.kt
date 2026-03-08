@@ -27,6 +27,8 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.ReleaseFiles
 import com.moneat.shared.models.Releases
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -85,6 +87,9 @@ class ReleaseService {
                     it[Releases.ref] = ref
                     it[created_at] = createdAt
                 }
+
+                // Auto-resolve issues marked resolvedInNextRelease
+                resolveNextReleaseIssues(projectId, version)
 
                 project[Projects.slug]
             }
@@ -520,7 +525,9 @@ class ReleaseService {
                 it[status] = "resolved"
                 it[substatus] = "resolvedViaRelease"
                 it[status_detail] =
-                    """{"resolvedInRelease":"$newVersion"}"""
+                    buildJsonObject {
+                        put("resolvedInRelease", newVersion)
+                    }.toString()
                 it[updated_at] = now
             }
             if (count > 0) {

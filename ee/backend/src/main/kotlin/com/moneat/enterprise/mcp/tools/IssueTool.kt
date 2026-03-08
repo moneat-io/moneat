@@ -25,6 +25,11 @@ private const val MAX_LIMIT = 1000
 private const val DEFAULT_EVENT_LIMIT = 50
 private const val MAX_EVENT_LIMIT = 500
 
+private val ALLOWED_ISSUE_STATUSES = listOf(
+    "unresolved", "resolved", "ignored",
+    "resolvedInNextRelease"
+)
+
 class ListIssuesTool : McpTool {
     override val name = "list_issues"
     override val description =
@@ -35,10 +40,7 @@ class ListIssuesTool : McpTool {
                 "project_id" to schemaNumber("Project ID"),
                 "status" to schemaEnum(
                     "Filter by status",
-                    listOf(
-                        "unresolved", "resolved", "ignored",
-                        "resolvedInNextRelease"
-                    )
+                    ALLOWED_ISSUE_STATUSES
                 ),
                 "page" to schemaNumber("Page number (default 1)"),
                 "limit" to schemaNumber("Results per page (default 25)")
@@ -121,10 +123,7 @@ class UpdateIssueStatusTool : McpTool {
                 "issue_id" to schemaString("Issue ID"),
                 "status" to schemaEnum(
                     "New status",
-                    listOf(
-                        "resolved", "ignored", "unresolved",
-                        "resolvedInNextRelease"
-                    )
+                    ALLOWED_ISSUE_STATUSES
                 )
             )
         ),
@@ -139,13 +138,9 @@ class UpdateIssueStatusTool : McpTool {
             ?: return errorResult("issue_id is required")
         val status = args["status"]?.jsonPrimitive?.content
             ?: return errorResult("status is required")
-        val allowedStatuses = setOf(
-            "resolved", "ignored", "unresolved",
-            "resolvedInNextRelease"
-        )
-        if (status !in allowedStatuses) {
+        if (status !in ALLOWED_ISSUE_STATUSES) {
             return errorResult(
-                "Invalid status: $status. Must be one of: ${allowedStatuses.joinToString(", ")}"
+                "Invalid status: $status. Must be one of: ${ALLOWED_ISSUE_STATUSES.joinToString(", ")}"
             )
         }
         dashboardService.updateIssue(issueId, IssueUpdateRequest(status))

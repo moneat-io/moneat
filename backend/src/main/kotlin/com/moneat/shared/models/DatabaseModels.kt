@@ -16,11 +16,40 @@
 
 package com.moneat.shared.models
 
+import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+
+class JsonbColumnType : ColumnType<String>() {
+    private fun isH2(): Boolean =
+        TransactionManager
+            .currentOrNull()
+            ?.db
+            ?.url
+            ?.contains("h2", ignoreCase = true) == true
+
+    override fun sqlType(): String = if (isH2()) "TEXT" else "JSONB"
+
+    override fun valueFromDB(value: Any): String = when (value) {
+        is org.postgresql.util.PGobject -> value.value ?: ""
+        is String -> value
+        else -> value.toString()
+    }
+
+    override fun notNullValueToDB(value: String): Any {
+        if (isH2()) return value
+        val pgObject = org.postgresql.util.PGobject()
+        pgObject.type = "jsonb"
+        pgObject.value = value
+        return pgObject
+    }
+}
+
+fun Table.jsonb(name: String): Column<String> =
+    registerColumn(name, JsonbColumnType())
 
 class TextArrayColumnType : ColumnType<List<String>>() {
     private fun isH2(): Boolean =
@@ -506,7 +535,7 @@ object IssueStatuses : Table("issue_statuses") {
     val project_id = long("project_id")
     val status = varchar("status", 32).default("unresolved")
     val substatus = varchar("substatus", 64).nullable()
-    val status_detail = text("status_detail").nullable()
+    val status_detail = jsonb("status_detail").nullable()
     val updated_at = timestamp("updated_at")
     val updated_by = integer("updated_by").references(Users.id).nullable()
     override val primaryKey = PrimaryKey(id)
