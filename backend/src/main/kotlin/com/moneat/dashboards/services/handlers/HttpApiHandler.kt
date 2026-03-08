@@ -45,16 +45,28 @@ abstract class HttpApiHandler : DataSourceHandler {
             else -> "http://"
         }
         val cleanHost = host.removePrefix("https://").removePrefix("http://").trimEnd('/')
-        val hostHasPort = if (cleanHost.startsWith("[")) {
-            cleanHost.contains("]:")
+        // Normalize bare IPv6 literals (e.g. "2001:db8::1") by wrapping in brackets
+        val normalizedHost = if (
+            !cleanHost.startsWith("[") && cleanHost.count { it == ':' } > 1
+        ) {
+            "[$cleanHost]"
         } else {
-            cleanHost.contains(":")
+            cleanHost
         }
-        if (port == null || hostHasPort) return "$scheme$cleanHost"
+        val hostHasPort = if (normalizedHost.startsWith("[")) {
+            normalizedHost.contains("]:")
+        } else {
+            normalizedHost.contains(":")
+        }
+        if (port == null || hostHasPort) return "$scheme$normalizedHost"
         val isDefaultPort =
             (scheme == "http://" && port == DEFAULT_HTTP_PORT) ||
                 (scheme == "https://" && port == DEFAULT_HTTPS_PORT)
-        return if (isDefaultPort) "$scheme$cleanHost" else "$scheme$cleanHost:$port"
+        return if (isDefaultPort) {
+            "$scheme$normalizedHost"
+        } else {
+            "$scheme$normalizedHost:$port"
+        }
     }
 
     protected fun withAuth(headers: MutableMap<String, String>, credentials: DataSourceCredentials) {

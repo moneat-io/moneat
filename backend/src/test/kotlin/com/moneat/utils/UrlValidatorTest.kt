@@ -115,7 +115,14 @@ class UrlValidatorTest {
 
     @Test
     fun `unwrapMappedIPv4 converts mapped address`() {
-        val mapped = InetAddress.getByName("::ffff:192.168.1.1")
+        // Build a true Inet6Address for ::ffff:192.168.1.1 so the unwrap
+        // branch is actually exercised (InetAddress.getByName returns Inet4Address).
+        val bytes = byteArrayOf(
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0xFF.toByte(), 0xFF.toByte(),
+            192.toByte(), 168.toByte(), 1, 1
+        )
+        val mapped = Inet6Address.getByAddress(null, bytes, 0)
         val unwrapped = UrlValidator.unwrapMappedIPv4(mapped)
         assertTrue(unwrapped is Inet4Address)
         assertEquals("192.168.1.1", unwrapped.hostAddress)
