@@ -3872,39 +3872,39 @@ class DashboardService {
         if (status == null) return ""
         return withContext(Dispatchers.IO) {
             transaction {
-            if (status == "unresolved") {
-                val excludeIds = IssueStatuses
-                    .selectAll()
-                    .where {
-                        (IssueStatuses.project_id eq projectId) and
-                            (IssueStatuses.status neq "unresolved")
+                if (status == "unresolved") {
+                    val excludeIds = IssueStatuses
+                        .selectAll()
+                        .where {
+                            (IssueStatuses.project_id eq projectId) and
+                                (IssueStatuses.status neq "unresolved")
+                        }
+                        .map { it[IssueStatuses.issue_id] }
+                    if (excludeIds.isEmpty()) {
+                        ""
+                    } else {
+                        val escaped = excludeIds.joinToString(",") {
+                            "'${escapeSql(it)}'"
+                        }
+                        "AND e.issue_id NOT IN ($escaped)"
                     }
-                    .map { it[IssueStatuses.issue_id] }
-                if (excludeIds.isEmpty()) {
-                    ""
                 } else {
-                    val escaped = excludeIds.joinToString(",") {
-                        "'${escapeSql(it)}'"
+                    val includeIds = IssueStatuses
+                        .selectAll()
+                        .where {
+                            (IssueStatuses.project_id eq projectId) and
+                                (IssueStatuses.status eq status)
+                        }
+                        .map { it[IssueStatuses.issue_id] }
+                    if (includeIds.isEmpty()) {
+                        "AND 1 = 0"
+                    } else {
+                        val escaped = includeIds.joinToString(",") {
+                            "'${escapeSql(it)}'"
+                        }
+                        "AND e.issue_id IN ($escaped)"
                     }
-                    "AND e.issue_id NOT IN ($escaped)"
                 }
-            } else {
-                val includeIds = IssueStatuses
-                    .selectAll()
-                    .where {
-                        (IssueStatuses.project_id eq projectId) and
-                            (IssueStatuses.status eq status)
-                    }
-                    .map { it[IssueStatuses.issue_id] }
-                if (includeIds.isEmpty()) {
-                    "AND 1 = 0"
-                } else {
-                    val escaped = includeIds.joinToString(",") {
-                        "'${escapeSql(it)}'"
-                    }
-                    "AND e.issue_id IN ($escaped)"
-                }
-            }
             }
         }
     }
