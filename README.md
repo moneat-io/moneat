@@ -29,18 +29,27 @@
 
 ## Self-Hosting
 
-The interactive installer handles secrets, port allocation, and Docker setup:
+The interactive installer handles version selection, secrets, port allocation, and Docker setup. No need to clone the repo.
+
+**curl:**
 
 ```bash
-git clone https://github.com/moneat-io/moneat.git
-cd moneat
-bash install.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/main/install.sh)
+```
+
+**wget:**
+
+```bash
+bash <(wget -qO- https://raw.githubusercontent.com/moneat-io/moneat/main/install.sh)
 ```
 
 <details>
 <summary><b>Manual Setup</b></summary>
 
 ```bash
+# Download the compose file and env template for a specific release
+curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/v1.0.0/docker-compose.yml -o docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/v1.0.0/.env.example -o .env.example
 cp .env.example .env
 # Edit .env — set JWT_SECRET, DATABASE_PASSWORD, CLICKHOUSE_PASSWORD, FRONTEND_URL, BACKEND_URL
 docker compose up -d
