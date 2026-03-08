@@ -2010,12 +2010,21 @@ class DashboardService {
                     val chUnresolved = unresolvedIssuesDeferred.await()
                     val chIssuesByStatus = issuesByStatusDeferred.await()
 
-                    // Overlay PG status overrides onto CH counts
-                    val pgOverrides = lookupProjectIssueStatuses(projectId)
+                    // Overlay PG status overrides onto CH counts,
+                    // filtered to only retained issues
+                    val pgOverrides =
+                        lookupProjectIssueStatuses(projectId)
+                    val filteredOverrides = filterToRetainedIssues(
+                        pgOverrides,
+                        projectId,
+                        retentionDays,
+                        demoEpochMs,
+                        parentSpan
+                    )
                     val adjusted = adjustStatsCounts(
                         chUnresolved,
                         chIssuesByStatus,
-                        pgOverrides
+                        filteredOverrides
                     )
 
                     ProjectStatsResponse(
@@ -3936,6 +3945,51 @@ class DashboardService {
                         row[IssueStatuses.status]
                 }
         }
+    }
+
+    private suspend fun filterToRetainedIssues(
+        pgOverrides: Map<String, String>,
+        projectId: Long,
+        retentionDays: Int,
+        demoEpochMs: Long?,
+        parentSpan: ISpan?
+    ): Map<String, String> {
+        if (pgOverrides.isEmpty()) return pgOverrides
+        val ids = pgOverrides.keys
+        val idList = ids.joinToString(",") {
+            "'${ClickHouseSqlUtils.escapeSql(it)}'"
+        }
+        val projectIdClause =
+            ClickHouseQueryUtils.projectIdClause(projectId)
+        val query = """
+            SELECT DISTINCT issue_id
+            FROM `$clickhouseDb`.issues FINAL
+            WHERE $projectIdClause
+                AND issue_id IN ($idList)
+                AND ${timestampRetentionClause(
+            "last_seen",
+            retentionDays,
+            demoEpochMs
+        )}
+            FORMAT JSONEachRow
+        """.trimIndent()
+        val response =
+            ClickHouseClient.execute(query, parentSpan)
+        val body = response.bodyAsText()
+        if (response.status.value !in 200..299 ||
+            body.trimStart().startsWith("Code:")
+        ) {
+            return pgOverrides
+        }
+        val retainedIds = body.lines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                json.parseToJsonElement(line)
+                    .jsonObject["issue_id"]
+                    ?.jsonPrimitive?.content
+            }
+            .toSet()
+        return pgOverrides.filterKeys { it in retainedIds }
     }
 
     private fun adjustStatsCounts(

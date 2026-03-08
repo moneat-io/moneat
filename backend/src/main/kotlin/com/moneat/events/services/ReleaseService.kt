@@ -27,6 +27,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.ReleaseFiles
 import com.moneat.shared.models.Releases
+import com.moneat.shared.services.CacheService
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
@@ -535,6 +536,12 @@ class ReleaseService {
                     "Auto-resolved $count issues for project " +
                         "$projectId via release $newVersion"
                 }
+                CacheService.invalidatePattern(
+                    "cache:issues:$projectId:*"
+                )
+                CacheService.invalidatePattern(
+                    "cache:project_stats:$projectId:*"
+                )
             }
         } catch (e: Exception) {
             logger.error(e) {

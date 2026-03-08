@@ -18,6 +18,7 @@ package com.moneat.shared.models
 
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
+import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
@@ -533,6 +534,7 @@ object IssueStatuses : Table("issue_statuses") {
     val id = integer("id").autoIncrement()
     val issue_id = varchar("issue_id", 64).uniqueIndex()
     val project_id = long("project_id")
+        .references(Projects.id, onDelete = ReferenceOption.CASCADE)
     val status = varchar("status", 32).default("unresolved")
     val substatus = varchar("substatus", 64).nullable()
     val status_detail = jsonb("status_detail").nullable()

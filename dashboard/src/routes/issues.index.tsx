@@ -248,6 +248,8 @@ function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('unresolved')
   const [selectedIssues, setSelectedIssues] = useState<Set<string>>(new Set())
+  const [page, setPage] = useState(1)
+  const pageSize = 25
   const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -269,23 +271,35 @@ function DashboardPage() {
   }, [selectedProjectId, projects, setSelectedProjectId])
 
   const { data: issues = [], isError: issuesError, error: issuesErrorObj } = useQuery({
-    queryKey: ['issues', projectId, statusFilter],
-    queryFn: () => (projectId ? api.getIssues(projectId, 1, 25, statusFilter === 'all' ? undefined : statusFilter) : []),
+    queryKey: ['issues', projectId, statusFilter, page, pageSize],
+    queryFn: () => (projectId ? api.getIssues(projectId, page, pageSize, statusFilter === 'all' ? undefined : statusFilter) : []),
     enabled: !!projectId,
   })
 
   const resolveMutation = useMutation({
     mutationFn: async (issueIds: string[]) => {
-      await Promise.all(issueIds.map(id => api.updateIssue(id, { status: 'resolved' })))
+      const results = await Promise.allSettled(
+        issueIds.map(id => api.updateIssue(id, { status: 'resolved' }))
+      )
+      const successCount = results.filter(r => r.status === 'fulfilled').length
+      return { submitted: issueIds.length, successCount }
     },
-    onSuccess: () => {
-      trackEvent('Issue Resolve', { count: String(selectedIssues.size) })
+    onSuccess: ({ submitted, successCount }) => {
+      trackEvent('Issue Resolve', { count: String(successCount) })
       queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
       queryClient.invalidateQueries({ queryKey: ['stats', projectId] })
-      toast({
-        title: 'Success',
-        description: `${selectedIssues.size} issue${selectedIssues.size === 1 ? '' : 's'} resolved`,
-      })
+      if (successCount === submitted) {
+        toast({
+          title: 'Success',
+          description: `${submitted} issue${submitted === 1 ? '' : 's'} resolved`,
+        })
+      } else {
+        toast({
+          title: 'Partial Success',
+          description: `${successCount}/${submitted} issues resolved`,
+          variant: 'destructive',
+        })
+      }
       setSelectedIssues(new Set())
     },
     onError: () => {
@@ -299,15 +313,27 @@ function DashboardPage() {
 
   const ignoreMutation = useMutation({
     mutationFn: async (issueIds: string[]) => {
-      await Promise.all(issueIds.map(id => api.updateIssue(id, { status: 'ignored' })))
+      const results = await Promise.allSettled(
+        issueIds.map(id => api.updateIssue(id, { status: 'ignored' }))
+      )
+      const successCount = results.filter(r => r.status === 'fulfilled').length
+      return { submitted: issueIds.length, successCount }
     },
-    onSuccess: () => {
-      trackEvent('Issue Ignore', { count: String(selectedIssues.size) })
+    onSuccess: ({ submitted, successCount }) => {
+      trackEvent('Issue Ignore', { count: String(successCount) })
       queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
-      toast({
-        title: 'Success',
-        description: `${selectedIssues.size} issue${selectedIssues.size === 1 ? '' : 's'} ignored`,
-      })
+      if (successCount === submitted) {
+        toast({
+          title: 'Success',
+          description: `${submitted} issue${submitted === 1 ? '' : 's'} ignored`,
+        })
+      } else {
+        toast({
+          title: 'Partial Success',
+          description: `${successCount}/${submitted} issues ignored`,
+          variant: 'destructive',
+        })
+      }
       setSelectedIssues(new Set())
     },
     onError: () => {
@@ -317,15 +343,27 @@ function DashboardPage() {
 
   const resolveNextReleaseMutation = useMutation({
     mutationFn: async (issueIds: string[]) => {
-      await Promise.all(issueIds.map(id => api.updateIssue(id, { status: 'resolvedInNextRelease' })))
+      const results = await Promise.allSettled(
+        issueIds.map(id => api.updateIssue(id, { status: 'resolvedInNextRelease' }))
+      )
+      const successCount = results.filter(r => r.status === 'fulfilled').length
+      return { submitted: issueIds.length, successCount }
     },
-    onSuccess: () => {
-      trackEvent('Issue ResolveInNextRelease', { count: String(selectedIssues.size) })
+    onSuccess: ({ submitted, successCount }) => {
+      trackEvent('Issue ResolveInNextRelease', { count: String(successCount) })
       queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
-      toast({
-        title: 'Success',
-        description: `${selectedIssues.size} issue${selectedIssues.size === 1 ? '' : 's'} marked to resolve in next release`,
-      })
+      if (successCount === submitted) {
+        toast({
+          title: 'Success',
+          description: `${submitted} issue${submitted === 1 ? '' : 's'} marked to resolve in next release`,
+        })
+      } else {
+        toast({
+          title: 'Partial Success',
+          description: `${successCount}/${submitted} issues marked to resolve in next release`,
+          variant: 'destructive',
+        })
+      }
       setSelectedIssues(new Set())
     },
     onError: () => {
@@ -522,7 +560,7 @@ function DashboardPage() {
                   className="pl-10"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -665,6 +703,29 @@ function DashboardPage() {
                     </div>
                   ))}
                 </div>
+                {(page > 1 || filteredIssues.length === pageSize) && (
+                  <div className="flex justify-end gap-2 px-4 py-2 border-t border-border/40">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={page <= 1}
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-sm text-muted-foreground self-center">
+                      Page {page}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={filteredIssues.length < pageSize}
+                      onClick={() => setPage(p => p + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </>
