@@ -19,6 +19,7 @@ package com.moneat.logs.routes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.routes.extractPublicKeyFromDsn
 import com.moneat.events.services.DashboardService
@@ -207,14 +208,7 @@ fun Route.logRoutes(
         post("/logs/otlp") {
             val bodyBytes = call.receive<ByteArray>()
             val encoding = call.request.header(HttpHeaders.ContentEncoding)
-            val payloadBytes =
-                if (encoding == "gzip") {
-                    java.util.zip
-                        .GZIPInputStream(bodyBytes.inputStream())
-                        .readBytes()
-                } else {
-                    bodyBytes
-                }
+            val payloadBytes = DecompressionService.decompress(bodyBytes, encoding)
 
             val payload = payloadBytes.decodeToString()
             val parsedEntries = logService.parseOtlpJson(payload)
@@ -272,12 +266,7 @@ fun Route.logRoutes(
 
             val bodyBytes = call.receive<ByteArray>()
             val encoding = call.request.header(HttpHeaders.ContentEncoding)
-            val payloadBytes =
-                if (encoding == "gzip") {
-                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
-                } else {
-                    bodyBytes
-                }
+            val payloadBytes = DecompressionService.decompress(bodyBytes, encoding)
 
             val entries =
                 try {
