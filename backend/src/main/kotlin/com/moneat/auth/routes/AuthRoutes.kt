@@ -98,7 +98,11 @@ fun Route.authRoutes() {
             try {
                 val result = authService.signup(request, context, inviteToken)
                 AuthCookieUtils.setAuthCookie(call, result.token)
-                result.refreshToken?.let { AuthCookieUtils.setRefreshCookie(call, it) }
+                if (result.refreshToken != null) {
+                    AuthCookieUtils.setRefreshCookie(call, result.refreshToken)
+                } else {
+                    AuthCookieUtils.clearRefreshCookie(call)
+                }
                 call.respond(HttpStatusCode.Created, result.copy(refreshToken = null))
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
@@ -112,7 +116,11 @@ fun Route.authRoutes() {
                 val result = authService.login(request)
                 if (result != null) {
                     AuthCookieUtils.setAuthCookie(call, result.token)
-                    result.refreshToken?.let { AuthCookieUtils.setRefreshCookie(call, it) }
+                    if (result.refreshToken != null) {
+                        AuthCookieUtils.setRefreshCookie(call, result.refreshToken)
+                    } else {
+                        AuthCookieUtils.clearRefreshCookie(call)
+                    }
                     call.respond(result.copy(refreshToken = null))
                 } else {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid credentials"))
@@ -216,8 +224,10 @@ fun Route.authRoutes() {
                 val result = authService.refreshToken(refreshToken)
                 if (result != null) {
                     AuthCookieUtils.setAuthCookie(call, result.token)
-                    result.refreshToken?.let {
-                        AuthCookieUtils.setRefreshCookie(call, it)
+                    if (result.refreshToken != null) {
+                        AuthCookieUtils.setRefreshCookie(call, result.refreshToken)
+                    } else {
+                        AuthCookieUtils.clearRefreshCookie(call)
                     }
                     call.respond(result.copy(refreshToken = null))
                 } else {

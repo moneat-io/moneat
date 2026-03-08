@@ -340,13 +340,17 @@ class UptimeCheckExecutor {
     private suspend fun checkWebSocket(monitor: UptimeMonitorData): CheckResult {
         val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
 
+        val httpUrl = url.replace("ws://", "http://").replace("wss://", "https://")
+        try {
+            UrlValidator.validateExternalUrl(httpUrl)
+        } catch (e: UrlValidator.SsrfException) {
+            return CheckResult(0, -1, 0, "Blocked: ${e.message}")
+        }
+
         // Basic WebSocket connection test via HTTP upgrade
         return try {
             val startTime = System.currentTimeMillis()
 
-            // For now, just check if WS endpoint is reachable via HTTP
-            // A full WebSocket implementation would require ws:// protocol handling
-            val httpUrl = url.replace("ws://", "http://").replace("wss://", "https://")
             val response = httpClient.get(httpUrl)
 
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
@@ -375,7 +379,13 @@ class UptimeCheckExecutor {
 
             // For HTTP-based Docker API
             if (dockerHost.startsWith("http")) {
-                val response = httpClient.get("$dockerHost/containers/$containerName/json")
+                val dockerUrl = "$dockerHost/containers/$containerName/json"
+                try {
+                    UrlValidator.validateExternalUrl(dockerUrl)
+                } catch (e: UrlValidator.SsrfException) {
+                    return CheckResult(0, -1, 0, "Blocked: ${e.message}")
+                }
+                val response = httpClient.get(dockerUrl)
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
 
                 if (response.status.value == 200) {

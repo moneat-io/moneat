@@ -22,6 +22,10 @@ private val logger = KotlinLogging.logger {}
 
 class EnvironmentValidator {
 
+    companion object {
+        const val MIN_JWT_SECRET_LENGTH = 32
+    }
+
     data class ValidationResult(
         val isValid: Boolean,
         val errors: List<String>,
@@ -58,9 +62,9 @@ class EnvironmentValidator {
 
         if (value.isNullOrBlank()) {
             errors.add("CRITICAL: $envVar environment variable is not set. This is required.")
-        } else if (envVar == "JWT_SECRET" && value.length < 32) {
+        } else if (envVar == "JWT_SECRET" && value.length < MIN_JWT_SECRET_LENGTH) {
             errors.add(
-                "CRITICAL: $envVar must be at least 32 characters for HMAC256 security."
+                "CRITICAL: $envVar must be at least $MIN_JWT_SECRET_LENGTH characters for HMAC256 security."
             )
         }
     }

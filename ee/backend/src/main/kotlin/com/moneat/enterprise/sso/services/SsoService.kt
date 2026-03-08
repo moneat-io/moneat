@@ -7,6 +7,7 @@ package com.moneat.enterprise.sso.services
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.PricingTierService
+import com.moneat.config.RedisConfig
 import com.moneat.enterprise.sso.models.SsoCallbackData
 import com.moneat.enterprise.sso.models.SsoConfigRequest
 import com.moneat.enterprise.sso.models.SsoConfigResponse
@@ -17,6 +18,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SsoConfigurations
 import com.moneat.shared.models.UserSsoLinks
 import com.moneat.shared.models.Users
+import com.moneat.utils.UrlValidator
 import com.nimbusds.oauth2.sdk.AuthorizationCodeGrant
 import com.nimbusds.oauth2.sdk.TokenRequest
 import com.nimbusds.oauth2.sdk.auth.ClientSecretBasic
@@ -37,13 +39,15 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import com.moneat.utils.UrlValidator
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.net.URI
 import java.security.SecureRandom
-import java.util.*
+import java.util.Base64
+import java.util.Date
+import java.util.Properties
 import javax.crypto.Cipher
+import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Clock
@@ -213,6 +217,7 @@ class SsoService {
             val issuerUrl =
                 ssoConfig[SsoConfigurations.oidcIssuerUrl]
                     ?: throw IllegalArgumentException("OIDC issuer URL not configured")
+            UrlValidator.validateExternalUrl(issuerUrl)
             val clientId =
                 ssoConfig[SsoConfigurations.oidcClientId]
                     ?: throw IllegalArgumentException("OIDC client ID not configured")
@@ -302,7 +307,9 @@ class SsoService {
                         request.idpSsoUrl.isNullOrBlank() ||
                         request.idpCertificate.isNullOrBlank()
                     ) {
-                        throw IllegalArgumentException("SAML requires idpEntityId, idpSsoUrl, and idpCertificate")
+                        throw IllegalArgumentException(
+                            "SAML requires idpEntityId, idpSsoUrl, and idpCertificate"
+                        )
                     }
                     UrlValidator.validateExternalUrl(request.idpSsoUrl)
                 }
@@ -312,7 +319,9 @@ class SsoService {
                         request.oidcClientId.isNullOrBlank() ||
                         request.oidcClientSecret.isNullOrBlank()
                     ) {
-                        throw IllegalArgumentException("OIDC requires oidcIssuerUrl, oidcClientId, and oidcClientSecret")
+                        throw IllegalArgumentException(
+                            "OIDC requires oidcIssuerUrl, oidcClientId, and oidcClientSecret"
+                        )
                     }
                     UrlValidator.validateExternalUrl(request.oidcIssuerUrl)
                 }
@@ -589,47 +598,95 @@ class SsoService {
             .withExpiresAt(Date(System.currentTimeMillis() + 3600000))
             .sign(Algorithm.HMAC256(jwtSecret))
 
+    private companion object {
+        private const val SSO_NONCE_PREFIX = "sso:nonce:"
+        private const val SSO_NONCE_TTL_SECONDS = 600L // 10 minutes
+    }
+
     private fun generateSecureState(orgId: Int): String {
         val nonce = ByteArray(16)
         secureRandom.nextBytes(nonce)
-        val payload = "$orgId:${Base64.getUrlEncoder().withoutPadding().encodeToString(nonce)}:${System.currentTimeMillis()}"
-        val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+        val nonceB64 = Base64.getUrlEncoder().withoutPadding().encodeToString(nonce)
+        val timestamp = System.currentTimeMillis()
+        val payload = "$orgId:$nonceB64:$timestamp"
+
+        // HMAC-SHA256 for integrity
+        val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(jwtSecret.toByteArray(), "HmacSHA256"))
-        val sig = Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(payload.toByteArray()))
-        return Base64.getUrlEncoder().withoutPadding().encodeToString("$payload.$sig".toByteArray())
+        val sig = Base64.getUrlEncoder().withoutPadding().encodeToString(
+            mac.doFinal(payload.toByteArray())
+        )
+
+        val state = "$payload:$sig"
+        val encoded = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(state.toByteArray())
+
+        // Store nonce in Redis for single-use verification
+        try {
+            if (RedisConfig.isInitialized()) {
+                RedisConfig.sync().setex(
+                    "$SSO_NONCE_PREFIX$nonceB64",
+                    SSO_NONCE_TTL_SECONDS,
+                    orgId.toString()
+                )
+            }
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to store SSO nonce in Redis" }
+        }
+
+        return encoded
     }
 
     private fun decodeState(state: String): SsoStateData {
         try {
             val decoded = String(Base64.getUrlDecoder().decode(state))
-            val dotIndex = decoded.lastIndexOf('.')
-            if (dotIndex < 0) {
-                throw IllegalArgumentException("Invalid state format")
-            }
-            val payload = decoded.substring(0, dotIndex)
-            val receivedSig = decoded.substring(dotIndex + 1)
-
-            val mac = javax.crypto.Mac.getInstance("HmacSHA256")
-            mac.init(SecretKeySpec(jwtSecret.toByteArray(), "HmacSHA256"))
-            val expectedSig = Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(payload.toByteArray()))
-            if (!java.security.MessageDigest.isEqual(receivedSig.toByteArray(), expectedSig.toByteArray())) {
-                throw IllegalArgumentException("State signature invalid")
-            }
-
-            val parts = payload.split(":")
-            if (parts.size != 3) {
+            val parts = decoded.split(":")
+            if (parts.size != 4) {
                 throw IllegalArgumentException("Invalid state format")
             }
 
             val orgId = parts[0].toInt()
+            val nonceB64 = parts[1]
             val timestamp = parts[2].toLong()
+            val signature = parts[3]
 
-            // Check if state is expired (10 minutes)
-            if (System.currentTimeMillis() - timestamp > 10 * 60 * 1000) {
+            // Verify HMAC signature
+            val payload = "${parts[0]}:${parts[1]}:${parts[2]}"
+            val mac = Mac.getInstance("HmacSHA256")
+            mac.init(SecretKeySpec(jwtSecret.toByteArray(), "HmacSHA256"))
+            val expected = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(mac.doFinal(payload.toByteArray()))
+
+            if (!java.security.MessageDigest.isEqual(
+                    expected.toByteArray(),
+                    signature.toByteArray()
+                )
+            ) {
+                throw IllegalArgumentException("State signature invalid")
+            }
+
+            // Check expiry (10 minutes)
+            if (System.currentTimeMillis() - timestamp > SSO_NONCE_TTL_SECONDS * 1000) {
                 throw IllegalArgumentException("State expired")
             }
 
-            return SsoStateData(parts[1], orgId, timestamp)
+            // Verify and consume nonce from Redis (single-use)
+            try {
+                if (RedisConfig.isInitialized()) {
+                    val redisKey = "$SSO_NONCE_PREFIX$nonceB64"
+                    val stored = RedisConfig.sync().get(redisKey)
+                    if (stored == null) {
+                        throw IllegalArgumentException("State already used or expired")
+                    }
+                    RedisConfig.sync().del(redisKey)
+                }
+            } catch (e: IllegalArgumentException) {
+                throw e
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to verify SSO nonce in Redis" }
+            }
+
+            return SsoStateData(nonceB64, orgId, timestamp)
         } catch (e: IllegalArgumentException) {
             throw e
         } catch (e: Exception) {
@@ -651,6 +708,7 @@ class SsoService {
         val idpSsoUrl =
             ssoConfig[SsoConfigurations.idpSsoUrl]
                 ?: throw IllegalArgumentException("IDP SSO URL not configured")
+        UrlValidator.validateExternalUrl(idpSsoUrl)
 
         // Construct redirect URL with SAMLRequest and RelayState parameters
         val separator = if (idpSsoUrl.contains("?")) "&" else "?"
@@ -717,6 +775,9 @@ class SsoService {
         state: String,
     ): String {
         val issuerUrl = ssoConfig[SsoConfigurations.oidcIssuerUrl]
+        if (!issuerUrl.isNullOrBlank()) {
+            UrlValidator.validateExternalUrl(issuerUrl)
+        }
         val clientId = ssoConfig[SsoConfigurations.oidcClientId]
         val redirectUri = "$baseUrl/auth/sso/oidc/callback"
 

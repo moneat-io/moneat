@@ -141,7 +141,7 @@ class AuthRoutesTest {
                 val location = response.headers[HttpHeaders.Location]
                 assertNotNull(location)
                 assertTrue(location.startsWith("https://dashboard.test.local/login?error=oauth_failed"))
-                assertTrue(location.contains("message="))
+                // Error messages should not be leaked in redirect URLs
             }
         }
     }
@@ -164,7 +164,7 @@ class AuthRoutesTest {
                 val location = response.headers[HttpHeaders.Location]
                 assertNotNull(location)
                 assertTrue(location.contains("error=oauth_failed"))
-                assertTrue(location.contains("Invalid OAuth state"))
+                // Error messages should not be leaked in redirect URLs
             }
         }
     }

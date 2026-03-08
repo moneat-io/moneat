@@ -506,7 +506,6 @@ open class SyntheticsCheckExecutor {
         return try {
             for (step in steps) {
                 val stepUrl = substituteVariables(step.url, variables)
-
                 try {
                     UrlValidator.validateExternalUrl(stepUrl)
                 } catch (e: UrlValidator.SsrfException) {
@@ -514,10 +513,9 @@ open class SyntheticsCheckExecutor {
                     return SyntheticCheckResult(
                         status = "failed",
                         durationMs = durationMs,
-                        errorMessage = "Blocked: ${e.message}"
+                        errorMessage = "Step '${step.name}' blocked: ${e.message}"
                     )
                 }
-
                 val stepBody = step.body?.let { substituteVariables(it, variables) }
                 val stepHeaders = step.headers?.mapValues { (_, v) -> substituteVariables(v, variables) }
 

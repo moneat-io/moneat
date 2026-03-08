@@ -22,6 +22,10 @@ import io.ktor.server.application.ApplicationCall
 
 object AuthCookieUtils {
 
+    private const val AUTH_COOKIE_TTL = 3600 // 1 hour
+    private const val DEMO_COOKIE_TTL = 86400 // 24 hours
+    private const val REFRESH_COOKIE_TTL = 604800 // 7 days
+
     private fun isSecure(): Boolean {
         val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
         return backendUrl.startsWith("https://")
@@ -39,7 +43,7 @@ object AuthCookieUtils {
                 httpOnly = true,
                 secure = secure,
                 path = "/",
-                maxAge = 3600, // 1 hour, matches JWT expiration
+                maxAge = AUTH_COOKIE_TTL,
                 extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
             )
         )
@@ -57,7 +61,7 @@ object AuthCookieUtils {
                 httpOnly = true,
                 secure = secure,
                 path = "/",
-                maxAge = 86400, // 24 hours, matches demo JWT expiration
+                maxAge = DEMO_COOKIE_TTL,
                 extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
             )
         )
@@ -75,7 +79,7 @@ object AuthCookieUtils {
                 httpOnly = true,
                 secure = secure,
                 path = "/auth/refresh",
-                maxAge = 604800, // 7 days
+                maxAge = REFRESH_COOKIE_TTL,
                 extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
             )
         )

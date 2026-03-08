@@ -17,6 +17,8 @@
 package com.moneat.utils
 
 import com.moneat.config.EnvConfig
+import java.net.Inet4Address
+import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.URI
 
@@ -25,15 +27,14 @@ object UrlValidator {
     class SsrfException(message: String) : IllegalArgumentException(message)
 
     /**
-     * Validates that a URL does not target the host's own
-     * infrastructure. Blocks loopback (localhost / 127.x), the cloud
-     * metadata endpoint (169.254.169.254), and link-local ranges.
+     * Validates that a URL does not target blocked network addresses.
      *
-     * Private-network IPs (10.x, 172.16-31.x, 192.168.x) are
-     * intentionally **allowed** so users can monitor services on
-     * their own internal networks.
+     * Blocks: loopback, link-local, cloud metadata (169.254.169.254),
+     * RFC 1918 private ranges (10/8, 172.16/12, 192.168/16), and
+     * IPv6 ULA (fc00::/7). IPv4-mapped IPv6 addresses are unwrapped
+     * before checking.
      *
-     * When SELF_HOSTED is enabled, loopback addresses are also
+     * When SELF_HOSTED is enabled, loopback and private ranges are
      * allowed so operators can monitor co-located services.
      */
     fun validateExternalUrl(url: String) {
@@ -52,10 +53,11 @@ object UrlValidator {
             throw SsrfException("Cannot resolve host: $host")
         }
 
-        val allowLoopback = EnvConfig.SelfHost.enabled
+        val allowInternal = EnvConfig.SelfHost.enabled
 
         for (addr in addresses) {
-            if (isBlockedAddress(addr, allowLoopback)) {
+            val normalized = unwrapMappedIPv4(addr)
+            if (isBlockedAddress(normalized, allowInternal)) {
                 throw SsrfException(
                     "URL resolves to a blocked address: $host"
                 )
@@ -63,24 +65,60 @@ object UrlValidator {
         }
     }
 
-    private fun isBlockedAddress(
+    /**
+     * Unwrap IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) to their
+     * underlying IPv4 address for consistent checking.
+     */
+    internal fun unwrapMappedIPv4(addr: InetAddress): InetAddress {
+        if (addr is Inet6Address) {
+            val bytes = addr.address
+            // Check for ::ffff:x.x.x.x pattern (bytes 0-9 = 0, 10-11 = 0xff)
+            val isMapped = bytes.size == 16 &&
+                bytes.slice(0..9).all { it == 0.toByte() } &&
+                bytes[10] == 0xFF.toByte() &&
+                bytes[11] == 0xFF.toByte()
+            if (isMapped) {
+                val ipv4Bytes = bytes.sliceArray(12..15)
+                return Inet4Address.getByAddress(ipv4Bytes)
+            }
+        }
+        return addr
+    }
+
+    internal fun isBlockedAddress(
         addr: InetAddress,
-        allowLoopback: Boolean
+        allowInternal: Boolean
     ): Boolean {
+        // Always block metadata and link-local
         if (isMetadataAddress(addr)) return true
         if (addr.isLinkLocalAddress) return true
         if (addr.isAnyLocalAddress) return true
-        if (!allowLoopback && addr.isLoopbackAddress) return true
+
+        // Block loopback unless self-hosted
+        if (addr.isLoopbackAddress && !allowInternal) return true
+
+        // Block private/site-local ranges unless self-hosted
+        if (!allowInternal) {
+            if (addr.isSiteLocalAddress) return true
+            if (isIPv6UniqueLocal(addr)) return true
+        }
+
         return false
     }
 
     private fun isMetadataAddress(addr: InetAddress): Boolean {
         val bytes = addr.address
         if (bytes.size != 4) return false
-        // 169.254.169.254 — cloud metadata endpoint (AWS, GCP, Azure)
         return bytes[0] == 169.toByte() &&
             bytes[1] == 254.toByte() &&
             bytes[2] == 169.toByte() &&
             bytes[3] == 254.toByte()
+    }
+
+    private fun isIPv6UniqueLocal(addr: InetAddress): Boolean {
+        if (addr !is Inet6Address) return false
+        val firstByte = addr.address[0].toInt() and 0xFF
+        // fc00::/7 means first byte is 0xFC or 0xFD
+        return firstByte == 0xFC || firstByte == 0xFD
     }
 }

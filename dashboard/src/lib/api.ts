@@ -2809,14 +2809,15 @@ class ApiClient {
     }
 
     try {
-      // Refresh token is sent as httpOnly cookie via credentials: 'include'
       const response = await fetch(`${API_BASE.replace('/v1', '')}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       })
 
-      if (!response.ok) return false
+      if (!response.ok) {
+        return false
+      }
 
       sessionStorage.setItem('authenticated', 'true')
       return true
@@ -3028,6 +3029,8 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password, name, ...legalConsent }),
     })
+    // Token is now set as httpOnly cookie by the backend
+    setDemoEpoch(null) // Clear demo mode on real signup
     sessionStorage.setItem('authenticated', 'true')
     return response
   }
@@ -3037,7 +3040,8 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
-    setDemoEpoch(null)
+    // Token is now set as httpOnly cookie by the backend
+    setDemoEpoch(null) // Clear demo mode so token refresh doesn't re-issue a demo cookie
     sessionStorage.setItem('authenticated', 'true')
     return response
   }
@@ -3195,7 +3199,7 @@ class ApiClient {
     )
   }
 
-  async updateIssue(issueId: string, updates: { status?: string }): Promise<void> {
+  async updateIssue(issueId: string, updates: { status?: string; substatus?: string; statusDetail?: Record<string, string> }): Promise<void> {
     await this.request(`${API_BASE}/issues/${issueId}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),

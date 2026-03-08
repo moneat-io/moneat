@@ -132,9 +132,14 @@ class AuthCookieUtilsTest {
         )
 
     @Test
-    fun `setAuthCookie uses Lax SameSite for HTTP`() =
+    fun `setAuthCookie uses Strict SameSite for HTTPS backend`() =
         cookieTest(
             handler = { call -> AuthCookieUtils.setAuthCookie(call, "test-token") },
-            assertions = { cookie -> assertTrue(cookie.contains("SameSite=Lax"), "HTTP should use Lax SameSite") }
+            assertions = { cookie ->
+                assertTrue(
+                    cookie.contains("SameSite=Strict"),
+                    "HTTPS backend should use Strict SameSite"
+                )
+            }
         )
 }
