@@ -3868,8 +3868,9 @@ class DashboardService {
                             (IssueStatuses.status neq "unresolved")
                     }
                     .map { it[IssueStatuses.issue_id] }
-                if (excludeIds.isEmpty()) ""
-                else {
+                if (excludeIds.isEmpty()) {
+                    ""
+                } else {
                     val escaped = excludeIds.joinToString(",") {
                         "'${escapeSql(it)}'"
                     }
