@@ -74,7 +74,13 @@ class ApiRoutesTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         TestDatabaseHelper.resetSchema(
-            Users, Organizations, Memberships, Projects, IssueStatuses, Subscriptions, PricingTierConfigs
+            Users,
+            Organizations,
+            Memberships,
+            Projects,
+            IssueStatuses,
+            Subscriptions,
+            PricingTierConfigs
         )
     }
 
