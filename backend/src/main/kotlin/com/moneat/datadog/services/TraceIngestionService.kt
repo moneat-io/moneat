@@ -31,6 +31,7 @@ import com.moneat.datadog.models.DdServiceMapEntry
 import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -694,9 +695,6 @@ object TraceIngestionService {
         if (element == null || element !is JsonObject) return emptyMap()
         return element.mapValues { it.value.jsonPrimitive.double }
     }
-
-    private fun escapeSql(value: String): String =
-        value.replace("\\", "\\\\").replace("'", "\\'")
 
     private fun mapToSqlMap(map: Map<String, String>): String {
         if (map.isEmpty()) return "map()"

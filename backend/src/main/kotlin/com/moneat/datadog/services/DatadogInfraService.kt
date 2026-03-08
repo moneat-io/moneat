@@ -21,6 +21,7 @@ import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogConnectionsPayload
 import com.moneat.datadog.models.DatadogContainerPayload
 import com.moneat.datadog.models.DatadogProcessPayload
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
@@ -349,11 +350,5 @@ object DatadogInfraService {
 
     fun decodeInfraBatch(encoded: String): QueuedInfraBatch {
         return json.decodeFromString(encoded)
-    }
-
-    private fun escapeSql(value: String): String {
-        return value
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
     }
 }

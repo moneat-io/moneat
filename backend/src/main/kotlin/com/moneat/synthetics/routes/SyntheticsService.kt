@@ -24,6 +24,7 @@ import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -444,12 +445,6 @@ class SyntheticsService {
             )
         """.trimIndent()
         ClickHouseClient.execute(sql)
-    }
-
-    private fun escapeSql(value: String): String {
-        return value
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
     }
 
     private fun resolveGlobalVariables(

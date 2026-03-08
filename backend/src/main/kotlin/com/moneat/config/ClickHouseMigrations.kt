@@ -19,6 +19,7 @@ package com.moneat.config
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.server.application.Application
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
@@ -297,10 +298,6 @@ object ClickHouseMigrations {
         val digest = MessageDigest.getInstance("MD5")
         val hash = digest.digest(content.toByteArray())
         return hash.joinToString("") { "%02x".format(it) }
-    }
-
-    private fun escapeSql(text: String): String {
-        return text.replace("\\", "\\\\").replace("'", "\\'")
     }
 }
 

@@ -31,7 +31,7 @@ import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.UsageTrackingService
-import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
@@ -1198,10 +1198,6 @@ class EventService(private val notificationService: NotificationService? = null)
             logger.error(e) { "Failed to store Sentry profile" }
             return false
         }
-    }
-
-    private fun escapeSql(str: String): String {
-        return ClickHouseSqlUtils.escapeSql(str)
     }
 
     private fun fingerprintToArray(fingerprint: List<String>): String {

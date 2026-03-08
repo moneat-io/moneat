@@ -18,6 +18,7 @@ package com.moneat.datadog.routes
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
@@ -341,10 +342,4 @@ private fun JsonObject.s(key: String): String {
     } else {
         el.toString()
     }
-}
-
-private fun escapeSql(value: String): String {
-    return value
-        .replace("\\", "\\\\")
-        .replace("'", "\\'")
 }

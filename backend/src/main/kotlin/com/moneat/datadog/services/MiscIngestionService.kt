@@ -25,6 +25,7 @@ import com.moneat.datadog.models.DdPipelineStatsPayload
 import com.moneat.datadog.models.DdSbomPayload
 import com.moneat.datadog.models.DdSymbolDbPayload
 import com.moneat.datadog.models.DdSyntheticsPayload
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -477,9 +478,6 @@ object MiscIngestionService {
         }
         return result
     }
-
-    private fun escapeSql(value: String): String =
-        value.replace("\\", "\\\\").replace("'", "\\'")
 
     private fun mapToSqlMap(map: Map<String, String>): String {
         if (map.isEmpty()) return "map()"

@@ -28,7 +28,7 @@ import com.moneat.uptime.models.UptimeHeartbeatResponse
 import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.models.UptimeMonitorResponse
 import com.moneat.uptime.models.UptimeMonitors
-import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -720,9 +720,5 @@ class UptimeService(
         val bytes = ByteArray(32)
         random.nextBytes(bytes)
         return bytes.joinToString("") { "%02x".format(it) }
-    }
-
-    private fun escapeSql(text: String): String {
-        return ClickHouseSqlUtils.escapeSql(text)
     }
 }

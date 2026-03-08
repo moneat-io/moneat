@@ -40,7 +40,7 @@ import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.RetentionPolicyService
-import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
@@ -1223,10 +1223,6 @@ class MonitorService {
                     )
                 }
         }
-    }
-
-    private fun escapeSql(value: String): String {
-        return ClickHouseSqlUtils.escapeSql(value)
     }
 
     private fun getTierConfig(organizationId: Int): PricingTierConfigResponse {

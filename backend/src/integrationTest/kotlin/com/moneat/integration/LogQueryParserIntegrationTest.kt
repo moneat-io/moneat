@@ -17,6 +17,7 @@
 package com.moneat.integration
 
 import com.moneat.logs.services.LogQueryParser
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
@@ -54,8 +55,6 @@ class LogQueryParserIntegrationTest {
     private val parser = LogQueryParser()
 
     private fun chBaseUrl(): String = "http://${clickhouse.host}:${clickhouse.getMappedPort(8123)}"
-
-    private fun escapeSql(value: String): String = value.replace("\\", "\\\\").replace("'", "\\'")
 
     // ==========================================
     // Setup & Teardown
@@ -210,7 +209,7 @@ class LogQueryParserIntegrationTest {
         val parsed = parser.parse(ddQuery)
         val whereCondition =
             if (parsed.rootNode != null) {
-                parser.toClickHouseSql(parsed.rootNode, ::escapeSql)
+                parser.toClickHouseSql(parsed.rootNode, ClickHouseSqlUtils::escapeSql)
             } else {
                 "1=1"
             }
@@ -791,7 +790,7 @@ class LogQueryParserIntegrationTest {
             // Uses the production alias pattern: toString(level) AS level_text
             // combined with a WHERE clause that references toString(level) via level:error
             val parsed = parser.parse("level:error")
-            val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ::escapeSql)
+            val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ClickHouseSqlUtils::escapeSql)
 
             val sql =
                 """
@@ -816,7 +815,7 @@ class LogQueryParserIntegrationTest {
     fun `SELECT toString(source) AS source_text does not conflict with WHERE clause on source`() =
         runBlocking {
             val parsed = parser.parse("source:sdk")
-            val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ::escapeSql)
+            val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ClickHouseSqlUtils::escapeSql)
 
             val sql =
                 """
@@ -865,7 +864,7 @@ class LogQueryParserIntegrationTest {
             // Reproduce the exact production query shape — uses level_text/source_text aliases
             // to avoid Enum8 column name collision
             val parsed = parser.parse("level:error AND timeout")
-            val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ::escapeSql)
+            val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ClickHouseSqlUtils::escapeSql)
 
             val sql =
                 """
@@ -898,7 +897,7 @@ class LogQueryParserIntegrationTest {
         runBlocking {
             // Free text "api-gateway" with production SELECT shape
             val parsed = parser.parse("api-gateway")
-            val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ::escapeSql)
+            val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ClickHouseSqlUtils::escapeSql)
 
             val sql =
                 """
@@ -967,7 +966,7 @@ class LogQueryParserIntegrationTest {
         runBlocking {
             // Verify wildcard field search works with the production SELECT shape
             val parsed = parser.parse("host:server*")
-            val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ::escapeSql)
+            val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ClickHouseSqlUtils::escapeSql)
 
             val sql =
                 """

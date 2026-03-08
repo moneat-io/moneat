@@ -18,6 +18,7 @@ package com.moneat.datadog.services
 
 import com.moneat.datadog.models.DdProfileEvent
 import com.moneat.datadog.models.DdProfileEndpoint
+import com.moneat.utils.ClickHouseSqlUtils
 import org.junit.jupiter.api.Test
 import java.lang.reflect.Method
 import kotlin.test.assertEquals
@@ -193,19 +194,11 @@ class ProfileIngestionServiceTest {
 
     // ============ SQL ESCAPING TESTS ============
 
-    private val escapeSqlMethod: Method =
-        ProfileIngestionService::class.java
-            .getDeclaredMethod("escapeSql", String::class.java)
-            .also { it.isAccessible = true }
-
-    private fun escapeSql(value: String): String =
-        escapeSqlMethod.invoke(ProfileIngestionService, value) as String
-
     @Test
     fun `escapeSql escapes single quotes`() {
         assertEquals(
             "O\\'Reilly",
-            escapeSql("O'Reilly"),
+            ClickHouseSqlUtils.escapeSql("O'Reilly"),
             "Single quotes should be escaped"
         )
     }
@@ -214,26 +207,26 @@ class ProfileIngestionServiceTest {
     fun `escapeSql escapes backslashes`() {
         assertEquals(
             "C:\\\\Users",
-            escapeSql("C:\\Users"),
+            ClickHouseSqlUtils.escapeSql("C:\\Users"),
             "Backslashes should be escaped"
         )
     }
 
     @Test
     fun `escapeSql handles normal strings unchanged`() {
-        assertEquals("hello world", escapeSql("hello world"))
+        assertEquals("hello world", ClickHouseSqlUtils.escapeSql("hello world"))
     }
 
     @Test
     fun `escapeSql handles empty string`() {
-        assertEquals("", escapeSql(""))
+        assertEquals("", ClickHouseSqlUtils.escapeSql(""))
     }
 
     @Test
     fun `escapeSql handles combined special chars`() {
         assertEquals(
             "it\\'s a \\\\path",
-            escapeSql("it's a \\path")
+            ClickHouseSqlUtils.escapeSql("it's a \\path")
         )
     }
 
