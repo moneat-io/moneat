@@ -74,6 +74,7 @@ SETTINGS index_granularity = 8192;
 CREATE TABLE IF NOT EXISTS logs (
     log_id UUID,
     organization_id UInt64,
+    project_id UInt64 DEFAULT 0,
     system_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
     timestamp DateTime64(3, 'UTC'),
     received_at DateTime64(3, 'UTC') DEFAULT now64(3),
