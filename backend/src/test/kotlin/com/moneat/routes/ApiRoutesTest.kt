@@ -20,10 +20,12 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.routes.apiRoutes
+import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
@@ -71,7 +73,9 @@ class ApiRoutesTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, Projects, IssueStatuses)
+        TestDatabaseHelper.resetSchema(
+            Users, Organizations, Memberships, Projects, IssueStatuses, Subscriptions, PricingTierConfigs
+        )
     }
 
     @Test
@@ -97,6 +101,17 @@ class ApiRoutesTest {
 
             // Insert PG status row so overlay returns "resolved"
             org.jetbrains.exposed.v1.jdbc.transactions.transaction {
+                Organizations.insert {
+                    it[id] = 1
+                    it[name] = "Test Org"
+                    it[slug] = "test-org"
+                }
+                Projects.insert {
+                    it[id] = -1
+                    it[organization_id] = 1
+                    it[name] = "Test Project"
+                    it[slug] = "test-project"
+                }
                 IssueStatuses.insert {
                     it[issue_id] = "issue-api-1"
                     it[project_id] = -1
