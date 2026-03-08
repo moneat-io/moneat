@@ -50,7 +50,6 @@ function filenameFromContentDisposition(value: string | null): string | null {
 
 interface AuthResponse {
   token: string
-  refreshToken?: string
   expiresIn?: number
   user: { 
     id: number
@@ -2790,23 +2789,9 @@ class ApiClient {
     return sessionStorage.getItem('impersonate_token')
   }
 
-  private getRefreshToken(): string | null {
-    return localStorage.getItem('refresh_token')
-  }
-
-  private setRefreshToken(token: string): void {
-    localStorage.setItem('refresh_token', token)
-  }
-
-  private removeRefreshToken(): void {
-    localStorage.removeItem('refresh_token')
-  }
-
   private async refreshAccessToken(): Promise<boolean> {
-    const refreshToken = this.getRefreshToken()
-
     // Demo users don't have refresh tokens — re-issue via demo-refresh
-    if (!refreshToken && isDemo()) {
+    if (isDemo()) {
       try {
         const response = await fetch(`${API_BASE.replace('/v1', '')}/auth/demo-refresh`, {
           method: 'POST',
@@ -2823,29 +2808,19 @@ class ApiClient {
       }
     }
 
-    if (!refreshToken) return false
-
     try {
+      // Refresh token is sent as httpOnly cookie via credentials: 'include'
       const response = await fetch(`${API_BASE.replace('/v1', '')}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
         credentials: 'include',
       })
 
-      if (!response.ok) {
-        this.removeRefreshToken()
-        return false
-      }
+      if (!response.ok) return false
 
-      const data: AuthResponse = await response.json()
-      if (data.refreshToken) {
-        this.setRefreshToken(data.refreshToken)
-      }
       sessionStorage.setItem('authenticated', 'true')
       return true
     } catch {
-      this.removeRefreshToken()
       return false
     }
   }
@@ -3053,11 +3028,6 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password, name, ...legalConsent }),
     })
-    // Token is now set as httpOnly cookie by the backend
-    // Store refresh token in localStorage
-    if (response.refreshToken) {
-      this.setRefreshToken(response.refreshToken)
-    }
     sessionStorage.setItem('authenticated', 'true')
     return response
   }
@@ -3067,12 +3037,7 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
-    // Token is now set as httpOnly cookie by the backend
-    // Store refresh token in localStorage
-    if (response.refreshToken) {
-      this.setRefreshToken(response.refreshToken)
-    }
-    setDemoEpoch(null) // Clear demo mode so token refresh doesn't re-issue a demo cookie
+    setDemoEpoch(null)
     sessionStorage.setItem('authenticated', 'true')
     return response
   }
@@ -3116,7 +3081,6 @@ class ApiClient {
     sessionStorage.removeItem('impersonate_token')
     sessionStorage.removeItem('authenticated')
     localStorage.removeItem('selectedProjectId')
-    this.removeRefreshToken()
     // Clear demo mode
     setDemoEpoch(null)
     // Clear the httpOnly auth cookie via backend

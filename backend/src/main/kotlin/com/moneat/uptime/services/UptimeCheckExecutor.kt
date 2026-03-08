@@ -19,6 +19,7 @@ package com.moneat.uptime.services
 import com.jayway.jsonpath.JsonPath
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.UptimeMonitorData
+import com.moneat.utils.UrlValidator
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -94,6 +95,12 @@ class UptimeCheckExecutor {
      */
     private suspend fun checkHttp(monitor: UptimeMonitorData): CheckResult {
         val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
+
+        try {
+            UrlValidator.validateExternalUrl(url)
+        } catch (e: UrlValidator.SsrfException) {
+            return CheckResult(0, -1, 0, "Blocked: ${e.message}")
+        }
 
         val startTime = System.currentTimeMillis()
 

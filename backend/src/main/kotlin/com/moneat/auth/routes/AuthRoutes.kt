@@ -23,7 +23,6 @@ import com.moneat.config.EnvConfig
 import com.moneat.events.models.CompleteOnboardingRequest
 import com.moneat.events.models.ForgotPasswordRequest
 import com.moneat.events.models.LoginRequest
-import com.moneat.events.models.RefreshTokenRequest
 import com.moneat.events.models.ResendVerificationRequest
 import com.moneat.events.models.ResetPasswordRequest
 import com.moneat.events.models.SignupRequest
@@ -99,7 +98,8 @@ fun Route.authRoutes() {
             try {
                 val result = authService.signup(request, context, inviteToken)
                 AuthCookieUtils.setAuthCookie(call, result.token)
-                call.respond(HttpStatusCode.Created, result)
+                result.refreshToken?.let { AuthCookieUtils.setRefreshCookie(call, it) }
+                call.respond(HttpStatusCode.Created, result.copy(refreshToken = null))
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
             }
@@ -112,7 +112,8 @@ fun Route.authRoutes() {
                 val result = authService.login(request)
                 if (result != null) {
                     AuthCookieUtils.setAuthCookie(call, result.token)
-                    call.respond(result)
+                    result.refreshToken?.let { AuthCookieUtils.setRefreshCookie(call, it) }
+                    call.respond(result.copy(refreshToken = null))
                 } else {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid credentials"))
                 }
@@ -196,22 +197,42 @@ fun Route.authRoutes() {
             }
 
             AuthCookieUtils.clearAuthCookie(call)
+            AuthCookieUtils.clearRefreshCookie(call)
             call.respond(MessageResponse("Logged out"))
         }
 
         post("/refresh") {
-            val request = call.receive<RefreshTokenRequest>()
+            val refreshToken = call.request.cookies["refresh_token"]
+
+            if (refreshToken == null) {
+                call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse("No refresh token provided")
+                )
+                return@post
+            }
 
             try {
-                val result = authService.refreshToken(request.refreshToken)
+                val result = authService.refreshToken(refreshToken)
                 if (result != null) {
                     AuthCookieUtils.setAuthCookie(call, result.token)
-                    call.respond(result)
+                    result.refreshToken?.let {
+                        AuthCookieUtils.setRefreshCookie(call, it)
+                    }
+                    call.respond(result.copy(refreshToken = null))
                 } else {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid or expired refresh token"))
+                    AuthCookieUtils.clearRefreshCookie(call)
+                    call.respond(
+                        HttpStatusCode.Unauthorized,
+                        ErrorResponse("Invalid or expired refresh token")
+                    )
                 }
             } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.Unauthorized, ErrorResponse(e.message))
+                AuthCookieUtils.clearRefreshCookie(call)
+                call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse(e.message)
+                )
             }
         }
 
@@ -224,7 +245,9 @@ fun Route.authRoutes() {
                 }
 
                 val state = oauthService.generateState()
-                val secureCookie = call.request.origin.scheme == "https"
+                val secureCookie =
+                    EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
+                        .startsWith("https://")
                 call.response.cookies.append(
                     Cookie(
                         name = "oauth_state",
@@ -262,7 +285,8 @@ fun Route.authRoutes() {
                         value = "",
                         path = "/auth",
                         maxAge = 0,
-                        secure = call.request.origin.scheme == "https"
+                        secure = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
+                            .startsWith("https://")
                     )
                 )
 
@@ -275,7 +299,7 @@ fun Route.authRoutes() {
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "GitHub OAuth callback failed: ${e.message}" }
                 val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/login?error=oauth_failed&message=${e.message}")
+                call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
             } catch (e: Exception) {
                 logger.error(e) { "GitHub OAuth callback error" }
                 val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")

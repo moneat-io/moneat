@@ -58,6 +58,10 @@ class EnvironmentValidator {
 
         if (value.isNullOrBlank()) {
             errors.add("CRITICAL: $envVar environment variable is not set. This is required.")
+        } else if (envVar == "JWT_SECRET" && value.length < 32) {
+            errors.add(
+                "CRITICAL: $envVar must be at least 32 characters for HMAC256 security."
+            )
         }
     }
 

@@ -37,6 +37,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import com.moneat.utils.UrlValidator
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.net.URI
@@ -303,6 +304,7 @@ class SsoService {
                     ) {
                         throw IllegalArgumentException("SAML requires idpEntityId, idpSsoUrl, and idpCertificate")
                     }
+                    UrlValidator.validateExternalUrl(request.idpSsoUrl)
                 }
 
                 SsoProviderType.OIDC -> {
@@ -312,6 +314,7 @@ class SsoService {
                     ) {
                         throw IllegalArgumentException("OIDC requires oidcIssuerUrl, oidcClientId, and oidcClientSecret")
                     }
+                    UrlValidator.validateExternalUrl(request.oidcIssuerUrl)
                 }
             }
 
@@ -589,14 +592,31 @@ class SsoService {
     private fun generateSecureState(orgId: Int): String {
         val nonce = ByteArray(16)
         secureRandom.nextBytes(nonce)
-        val state = "$orgId:${Base64.getUrlEncoder().withoutPadding().encodeToString(nonce)}:${System.currentTimeMillis()}"
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(state.toByteArray())
+        val payload = "$orgId:${Base64.getUrlEncoder().withoutPadding().encodeToString(nonce)}:${System.currentTimeMillis()}"
+        val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(jwtSecret.toByteArray(), "HmacSHA256"))
+        val sig = Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(payload.toByteArray()))
+        return Base64.getUrlEncoder().withoutPadding().encodeToString("$payload.$sig".toByteArray())
     }
 
     private fun decodeState(state: String): SsoStateData {
         try {
             val decoded = String(Base64.getUrlDecoder().decode(state))
-            val parts = decoded.split(":")
+            val dotIndex = decoded.lastIndexOf('.')
+            if (dotIndex < 0) {
+                throw IllegalArgumentException("Invalid state format")
+            }
+            val payload = decoded.substring(0, dotIndex)
+            val receivedSig = decoded.substring(dotIndex + 1)
+
+            val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+            mac.init(SecretKeySpec(jwtSecret.toByteArray(), "HmacSHA256"))
+            val expectedSig = Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(payload.toByteArray()))
+            if (!java.security.MessageDigest.isEqual(receivedSig.toByteArray(), expectedSig.toByteArray())) {
+                throw IllegalArgumentException("State signature invalid")
+            }
+
+            val parts = payload.split(":")
             if (parts.size != 3) {
                 throw IllegalArgumentException("Invalid state format")
             }
@@ -610,6 +630,8 @@ class SsoService {
             }
 
             return SsoStateData(parts[1], orgId, timestamp)
+        } catch (e: IllegalArgumentException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalArgumentException("Invalid state parameter")
         }

@@ -17,6 +17,7 @@
 package com.moneat.dashboards.services.handlers
 
 import com.moneat.dashboards.services.DataSourceCredentials
+import com.moneat.utils.UrlValidator
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.engine.cio.endpoint
@@ -41,9 +42,16 @@ abstract class HttpApiHandler : DataSourceHandler {
         }
         val cleanHost = host.removePrefix("https://").removePrefix("http://").trimEnd('/')
         val hostHasPort = cleanHost.contains(":")
-        if (port == null || hostHasPort) return "$scheme$cleanHost"
-        val isDefaultPort = (scheme == "http://" && port == 80) || (scheme == "https://" && port == 443)
-        return if (isDefaultPort) "$scheme$cleanHost" else "$scheme$cleanHost:$port"
+        val url = if (port == null || hostHasPort) {
+            "$scheme$cleanHost"
+        } else {
+            val isDefaultPort =
+                (scheme == "http://" && port == 80) ||
+                    (scheme == "https://" && port == 443)
+            if (isDefaultPort) "$scheme$cleanHost" else "$scheme$cleanHost:$port"
+        }
+        UrlValidator.validateExternalUrl(url)
+        return url
     }
 
     protected fun withAuth(headers: MutableMap<String, String>, credentials: DataSourceCredentials) {
