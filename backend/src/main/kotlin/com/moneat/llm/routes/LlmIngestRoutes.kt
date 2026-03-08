@@ -18,6 +18,7 @@ package com.moneat.llm.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.RedisConfig
+import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.services.EventService
 import com.moneat.llm.models.LlmIngestPayload
@@ -75,14 +76,7 @@ fun Route.llmIngestRoutes() {
             try {
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
-                val decompressedBytes =
-                    if (contentEncoding == "gzip") {
-                        java.util.zip
-                            .GZIPInputStream(bodyBytes.inputStream())
-                            .readBytes()
-                    } else {
-                        bodyBytes
-                    }
+                val decompressedBytes = DecompressionService.decompress(bodyBytes, contentEncoding)
 
                 val payload = json.decodeFromString<LlmIngestPayload>(decompressedBytes.decodeToString())
 

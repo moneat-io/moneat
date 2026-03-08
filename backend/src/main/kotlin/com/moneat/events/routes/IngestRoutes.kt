@@ -19,6 +19,7 @@ package com.moneat.events.routes
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.config.RedisConfig
+import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.events.models.SentryEnvelope
 import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
@@ -94,15 +95,7 @@ fun Route.ingestRoutes(
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
 
-                val decompressedBytes =
-                    if (contentEncoding == "gzip") {
-                        logger.debug { "Decompressing gzip envelope" }
-                        java.util.zip
-                            .GZIPInputStream(bodyBytes.inputStream())
-                            .readBytes()
-                    } else {
-                        bodyBytes
-                    }
+                val decompressedBytes = DecompressionService.decompress(bodyBytes, contentEncoding)
 
                 logger.debug { "Received envelope for project $projectId" }
                 logger.debug { "Envelope body:\n${decompressedBytes.decodeToString().take(500)}" }
