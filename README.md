@@ -47,8 +47,9 @@ bash <(wget -qO- https://raw.githubusercontent.com/moneat-io/moneat/main/install
 <summary><b>Manual Setup</b></summary>
 
 ```bash
-# Download the compose file for a specific release
+# Download the compose file and env template for a specific release
 curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/v1.0.0/docker-compose.yml -o docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/v1.0.0/.env.example -o .env.example
 cp .env.example .env
 # Edit .env — set JWT_SECRET, DATABASE_PASSWORD, CLICKHOUSE_PASSWORD, FRONTEND_URL, BACKEND_URL
 docker compose up -d

@@ -167,6 +167,11 @@ setup_install_dir() {
   fi
 
   local compose_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${MONEAT_VERSION}/docker-compose.yml"
+  if [[ -f "docker-compose.yml" ]]; then
+    local backup="docker-compose.yml.bak.$(date +%Y%m%d%H%M%S)"
+    info "Existing docker-compose.yml found — backing up to ${backup}"
+    mv "docker-compose.yml" "$backup"
+  fi
   fetch_url "$compose_url" "docker-compose.yml"
   success "Downloaded docker-compose.yml (${MONEAT_VERSION})"
 }
@@ -450,11 +455,11 @@ health_check() {
   info "Waiting for services to be ready..."
 
   while [[ $retries -gt 0 ]]; do
-    if [[ "$backend_ok" == false ]] && curl -sf "$backend_url" &>/dev/null; then
+    if [[ "$backend_ok" == false ]] && fetch_url "$backend_url" "" &>/dev/null; then
       backend_ok=true
       success "Backend is healthy"
     fi
-    if [[ "$frontend_ok" == false ]] && curl -sf "$frontend_url" &>/dev/null; then
+    if [[ "$frontend_ok" == false ]] && fetch_url "$frontend_url" "" &>/dev/null; then
       frontend_ok=true
       success "Frontend is healthy"
     fi
