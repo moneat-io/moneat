@@ -17,6 +17,7 @@
 package com.moneat.plugins
 
 import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.config.EnvConfig
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -30,6 +31,7 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 private val demoUserId = EnvConfig.Demo.USER_ID
 private val demoUserEmail = EnvConfig.Demo.USER_EMAIL
+private val jwtSecret by lazy { EnvConfig.get("JWT_SECRET") }
 private val demoSafeWritePaths =
     setOf(
         "/auth/login",
@@ -65,7 +67,7 @@ private fun isDemoToken(token: String?): Boolean {
     if (token.isNullOrBlank()) return false
 
     return try {
-        val decoded = JWT.decode(token)
+        val decoded = JWT.require(Algorithm.HMAC256(jwtSecret)).build().verify(token)
         if (decoded.getClaim("isDemo")?.asBoolean() == true) return true
 
         val userId =
