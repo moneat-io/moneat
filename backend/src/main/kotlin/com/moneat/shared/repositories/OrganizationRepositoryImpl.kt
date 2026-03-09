@@ -18,9 +18,13 @@ package com.moneat.shared.repositories
 
 import com.moneat.shared.repositories.models.OrganizationRow
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 
 class OrganizationRepositoryImpl : OrganizationRepository {
 
@@ -34,5 +38,38 @@ class OrganizationRepositoryImpl : OrganizationRepository {
         transaction {
             Organizations.selectAll().where { Organizations.slug eq slug }.firstOrNull()
                 ?.let { OrganizationRow(it[Organizations.id], it[Organizations.name], it[Organizations.slug]) }
+        }
+
+    override fun updateOnboardingOrgAndMarkComplete(update: OrganizationRepository.OnboardingUpdate): String =
+        transaction {
+            var slug = update.baseSlug
+            var suffix = 2
+            while (
+                Organizations
+                    .selectAll()
+                    .where { (Organizations.slug eq slug) and (Organizations.id neq update.orgId) }
+                    .count() > 0
+            ) {
+                slug = "${update.baseSlug}-$suffix"
+                suffix++
+            }
+
+            Organizations.update({ Organizations.id eq update.orgId }) {
+                it[name] = update.name
+                it[Organizations.slug] = slug
+                it[company_size] = update.companySize
+                it[referral_source] = update.referralSource
+                it[utm_source] = update.utmSource
+                it[utm_medium] = update.utmMedium
+                it[utm_campaign] = update.utmCampaign
+                it[utm_content] = update.utmContent
+                it[utm_term] = update.utmTerm
+            }
+
+            Users.update({ Users.id eq update.userId }) {
+                it[onboarding_completed] = true
+            }
+
+            slug
         }
 }

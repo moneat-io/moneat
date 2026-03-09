@@ -81,7 +81,9 @@ class OrgMembershipServiceTest {
 
     @Test
     fun `updateMemberRole updates role successfully`() {
-        val orgId = 1; val ownerId = 1; val memberId = 2
+        val orgId = 1
+        val ownerId = 1
+        val memberId = 2
         every { repository.getMemberRole(orgId, ownerId) } returns "owner"
         every { repository.getMemberRole(orgId, memberId) } returns "member"
         every { repository.updateMemberRole(orgId, memberId, "admin") } returns 1
@@ -91,7 +93,9 @@ class OrgMembershipServiceTest {
 
     @Test
     fun `updateMemberRole prevents admin from assigning owner role`() {
-        val orgId = 1; val adminId = 2; val memberId = 3
+        val orgId = 1
+        val adminId = 2
+        val memberId = 3
         every { repository.getMemberRole(orgId, adminId) } returns "admin"
         every { repository.getMemberRole(orgId, memberId) } returns "member"
         assertFailsWith<IllegalStateException> {
@@ -101,7 +105,9 @@ class OrgMembershipServiceTest {
 
     @Test
     fun `updateMemberRole prevents admin from modifying owner`() {
-        val orgId = 1; val adminId = 2; val ownerId = 3
+        val orgId = 1
+        val adminId = 2
+        val ownerId = 3
         every { repository.getMemberRole(orgId, adminId) } returns "admin"
         every { repository.getMemberRole(orgId, ownerId) } returns "owner"
         assertFailsWith<IllegalStateException> {
@@ -111,7 +117,8 @@ class OrgMembershipServiceTest {
 
     @Test
     fun `updateMemberRole prevents changing last owner`() {
-        val orgId = 1; val ownerId = 1
+        val orgId = 1
+        val ownerId = 1
         every { repository.getMemberRole(orgId, ownerId) } returns "owner"
         every { repository.getOwnerCount(orgId) } returns 1
         assertFailsWith<Exception> {
@@ -121,7 +128,9 @@ class OrgMembershipServiceTest {
 
     @Test
     fun `removeMember removes member successfully`() {
-        val orgId = 1; val ownerId = 1; val memberId = 2
+        val orgId = 1
+        val ownerId = 1
+        val memberId = 2
         every { repository.getMemberRole(orgId, ownerId) } returns "owner"
         every { repository.getMemberRole(orgId, memberId) } returns "member"
         every { repository.removeMember(orgId, memberId) } returns 1
@@ -131,7 +140,9 @@ class OrgMembershipServiceTest {
 
     @Test
     fun `removeMember prevents removing owner`() {
-        val orgId = 1; val adminId = 2; val ownerId = 3
+        val orgId = 1
+        val adminId = 2
+        val ownerId = 3
         every { repository.getMemberRole(orgId, adminId) } returns "admin"
         every { repository.getMemberRole(orgId, ownerId) } returns "owner"
         assertFailsWith<Exception> { service.removeMember(orgId, ownerId, adminId) }
@@ -139,7 +150,9 @@ class OrgMembershipServiceTest {
 
     @Test
     fun `removeMember prevents admin from removing another admin`() {
-        val orgId = 1; val admin1Id = 2; val admin2Id = 3
+        val orgId = 1
+        val admin1Id = 2
+        val admin2Id = 3
         every { repository.getMemberRole(orgId, admin1Id) } returns "admin"
         every { repository.getMemberRole(orgId, admin2Id) } returns "admin"
         assertFailsWith<IllegalStateException> { service.removeMember(orgId, admin2Id, admin1Id) }

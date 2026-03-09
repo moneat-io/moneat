@@ -44,13 +44,22 @@ import com.moneat.events.repositories.ProjectRepositoryImpl
 import io.sentry.ISpan
 
 class DashboardService(
-    projectRepositoryOverride: ProjectRepository? = null,
-    issueRepositoryOverride: IssueRepository? = null,
+    private val projectRepository: ProjectRepository,
+    private val issueRepository: IssueRepository,
+    private val queryHelper: DashboardQueryHelper = DashboardQueryHelper(),
 ) {
-    private val queryHelper = DashboardQueryHelper()
-    private val projectRepository: ProjectRepository = projectRepositoryOverride
-        ?: ProjectRepositoryImpl { col, days, demo -> queryHelper.timestampRetentionClause(col, days, demo) }
-    private val issueRepository: IssueRepository = issueRepositoryOverride ?: IssueRepositoryImpl(queryHelper)
+    companion object {
+        fun create(): DashboardService {
+            val queryHelper = DashboardQueryHelper()
+            return DashboardService(
+                projectRepository = ProjectRepositoryImpl { col, days, demo ->
+                    queryHelper.timestampRetentionClause(col, days, demo)
+                },
+                issueRepository = IssueRepositoryImpl(queryHelper),
+                queryHelper = queryHelper,
+            )
+        }
+    }
     private val feedbackService = FeedbackService(queryHelper)
     private val releaseStatsService = ReleaseStatsService(queryHelper)
     private val replayService = ReplayService(queryHelper)

@@ -137,7 +137,9 @@ class OrgManagementRoutesMockTest {
 
         every { mockMembershipService.requireRole(orgId, userId, OrgRole.MEMBER) } just runs
         every { mockMembershipService.getMembers(orgId) } returns listOf(
-            OrgMemberResponse(userId = userId, email = "owner@acme.test", name = "owner", role = "owner", joinedAt = null)
+            OrgMemberResponse(
+                userId = userId, email = "owner@acme.test", name = "owner", role = "owner", joinedAt = null
+            )
         )
         every { mockInvitationService.getPendingInvitations(orgId) } returns listOf(
             InvitationResponse(

@@ -14,7 +14,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 
-private val projectDashboardService = DashboardService()
+private val projectDashboardService = DashboardService.create()
 
 class ListProjectsTool : McpTool {
     override val name = "list_projects"

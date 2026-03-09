@@ -39,6 +39,7 @@ interface ProjectRepository {
     fun findProjectKeyByTarget(projectId: Long, target: String?): Boolean
     fun updateProject(projectId: Long, request: UpdateProjectRequest)
     fun deleteProject(projectId: Long)
+    fun searchProjectsByName(orgId: Int, namePattern: String, limit: Int): List<ProjectRow>
     suspend fun getIssueCountForProject(
         projectId: Long,
         retentionDays: Int,

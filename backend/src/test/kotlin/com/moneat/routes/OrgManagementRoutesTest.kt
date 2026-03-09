@@ -17,6 +17,11 @@
 package com.moneat.routes
 
 import com.moneat.org.routes.orgManagementRoutes
+import com.moneat.notifications.services.EmailService
+import com.moneat.org.repositories.OrgInvitationRepositoryImpl
+import com.moneat.org.repositories.OrgMembershipRepositoryImpl
+import com.moneat.org.services.OrgInvitationService
+import com.moneat.org.services.OrgMembershipService
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.shared.models.Memberships
@@ -51,6 +56,13 @@ import com.moneat.testsupport.TestDatabaseHelper
 class OrgManagementRoutesTest {
     private val jwtSecret = "test-secret-for-org-management-routes"
 
+    private fun wireRoutes(): Pair<OrgMembershipService, OrgInvitationService> {
+        val repo = OrgMembershipRepositoryImpl()
+        val membershipService = OrgMembershipService(repo)
+        val invitationService = OrgInvitationService(membershipService, EmailService(), OrgInvitationRepositoryImpl())
+        return membershipService to invitationService
+    }
+
     companion object {
         private var dbInitialized = false
     }
@@ -84,7 +96,10 @@ class OrgManagementRoutesTest {
             application {
                 install(ContentNegotiation) { json() }
                 installAuth()
-                routing { orgManagementRoutes() }
+                routing {
+                    val (ms, is_) = wireRoutes()
+                    orgManagementRoutes(ms, is_)
+                }
             }
 
             val response =
@@ -110,7 +125,10 @@ class OrgManagementRoutesTest {
             application {
                 install(ContentNegotiation) { json() }
                 installAuth()
-                routing { orgManagementRoutes() }
+                routing {
+                    val (ms, is_) = wireRoutes()
+                    orgManagementRoutes(ms, is_)
+                }
             }
 
             val response =
@@ -133,7 +151,10 @@ class OrgManagementRoutesTest {
             application {
                 install(ContentNegotiation) { json() }
                 installAuth()
-                routing { orgManagementRoutes() }
+                routing {
+                    val (ms, is_) = wireRoutes()
+                    orgManagementRoutes(ms, is_)
+                }
             }
 
             val response =
@@ -152,7 +173,10 @@ class OrgManagementRoutesTest {
             application {
                 install(ContentNegotiation) { json() }
                 installAuth()
-                routing { orgManagementRoutes() }
+                routing {
+                    val (ms, is_) = wireRoutes()
+                    orgManagementRoutes(ms, is_)
+                }
             }
 
             val response = client.get("/v1/org/invitations/details")

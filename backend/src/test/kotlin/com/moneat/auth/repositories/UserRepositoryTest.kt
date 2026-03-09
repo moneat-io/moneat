@@ -17,8 +17,12 @@
 package com.moneat.auth.repositories
 
 import com.moneat.shared.models.Users
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.SsoConfigurations
 import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,7 +45,7 @@ class UserRepositoryTest {
             )
         }
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(Users)
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, SsoConfigurations)
         repository = UserRepositoryImpl()
     }
 
@@ -214,5 +218,64 @@ class UserRepositoryTest {
         assertFalse(repository.findById(userId)!!.onboardingCompleted)
         repository.updateOnboardingCompleted(userId)
         assertTrue(repository.findById(userId)!!.onboardingCompleted)
+    }
+
+    // ============ requiresSsoForEmail ============
+
+    @Test
+    fun `requiresSsoForEmail returns false when user has no membership`() {
+        createUser(email = "nosso@test.com")
+        assertFalse(repository.requiresSsoForEmail("nosso@test.com"))
+    }
+
+    @Test
+    fun `requiresSsoForEmail returns false when org has no SSO config requiring SSO`() {
+        val userId = createUser(email = "user@domain.com")
+        val orgId = org.jetbrains.exposed.v1.jdbc.transactions.transaction {
+            val oid = Organizations.insert {
+                it[name] = "Org"
+                it[slug] = "org"
+            } get Organizations.id
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = oid
+                it[role] = "owner"
+            }
+            SsoConfigurations.insert {
+                it[organizationId] = oid
+                it[providerType] = "saml"
+                it[isEnabled] = true
+                it[requireSso] = false
+                it[emailDomain] = "domain.com"
+            }
+            oid
+        }
+        assertFalse(repository.requiresSsoForEmail("user@domain.com"))
+        // suppress unused variable warning
+        orgId.let {}
+    }
+
+    @Test
+    fun `requiresSsoForEmail returns true when org has enabled requireSso config matching domain`() {
+        val userId = createUser(email = "sso@company.com")
+        org.jetbrains.exposed.v1.jdbc.transactions.transaction {
+            val oid = Organizations.insert {
+                it[name] = "Company"
+                it[slug] = "company"
+            } get Organizations.id
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = oid
+                it[role] = "member"
+            }
+            SsoConfigurations.insert {
+                it[organizationId] = oid
+                it[providerType] = "saml"
+                it[isEnabled] = true
+                it[requireSso] = true
+                it[emailDomain] = "company.com"
+            }
+        }
+        assertTrue(repository.requiresSsoForEmail("sso@company.com"))
     }
 }

@@ -78,7 +78,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 
 fun Route.apiRoutes() {
-    val dashboardService = DashboardService()
+    val dashboardService = DashboardService.create()
 
     // Public routes (no auth required)
     route("/v1") {

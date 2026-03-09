@@ -23,7 +23,6 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.monitor.models.AlertConfigResponse
 import com.moneat.monitor.models.AlertResponse
-import com.moneat.monitor.models.AlertRow
 import com.moneat.monitor.models.ContainerMetricDataPoint
 import com.moneat.monitor.models.ContainerMetricsResponse
 import com.moneat.monitor.models.ContainerStats

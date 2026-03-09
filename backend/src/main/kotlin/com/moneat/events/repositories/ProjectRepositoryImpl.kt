@@ -34,6 +34,8 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.like
+import org.jetbrains.exposed.v1.core.lowerCase
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -210,6 +212,24 @@ class ProjectRepositoryImpl(
             Projects.deleteWhere { Projects.id eq projectId }
         }
     }
+
+    override fun searchProjectsByName(orgId: Int, namePattern: String, limit: Int): List<ProjectRow> =
+        transaction {
+            Projects
+                .selectAll()
+                .where { (Projects.organization_id eq orgId) and (Projects.name.lowerCase() like namePattern) }
+                .limit(limit)
+                .map { row ->
+                    ProjectRow(
+                        projectId = row[Projects.id],
+                        name = row[Projects.name],
+                        slug = row[Projects.slug],
+                        framework = row[Projects.framework],
+                        keys = emptyList(),
+                        dsn = "",
+                    )
+                }
+        }
 
     override suspend fun getIssueCountForProject(
         projectId: Long,

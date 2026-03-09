@@ -42,4 +42,5 @@ interface UserRepository {
     fun updatePassword(id: Int, passwordHash: String)
     fun clearPasswordResetToken(id: Int)
     fun updateOnboardingCompleted(id: Int)
+    fun requiresSsoForEmail(email: String): Boolean
 }

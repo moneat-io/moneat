@@ -33,7 +33,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 
 fun Route.llmRoutes() {
-    val dashboardService = DashboardService()
+    val dashboardService = DashboardService.create()
     val llmService = LlmDashboardService()
 
     authenticate("auth-jwt") {

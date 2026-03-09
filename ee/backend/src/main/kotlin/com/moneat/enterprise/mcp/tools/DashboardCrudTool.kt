@@ -10,6 +10,7 @@ import com.moneat.dashboards.models.UpdateDashboardRequest
 import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
+import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.enterprise.mcp.models.McpContext
@@ -23,7 +24,8 @@ import kotlinx.serialization.json.jsonPrimitive
 private val dashCrudService = CustomDashboardService(
     DashboardFolderRepositoryImpl(),
     DashboardRepositoryImpl(),
-    DashboardWidgetRepositoryImpl()
+    DashboardWidgetRepositoryImpl(),
+    ProjectRepositoryImpl { col, _, _ -> col },
 )
 private val dashAlertService = DashboardAlertService()
 

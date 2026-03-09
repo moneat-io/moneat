@@ -49,7 +49,10 @@ class IssueRepositoryTest {
         TestDatabaseHelper.resetSchema(Organizations, Projects, IssueStatuses)
         repository = IssueRepositoryImpl(DashboardQueryHelper())
         projectId = transaction {
-            val orgId = Organizations.insert { it[name] = "Org"; it[slug] = "org" } get Organizations.id
+            val orgId = Organizations.insert {
+                it[name] = "Org"
+                it[slug] = "org"
+            } get Organizations.id
             Projects.insert {
                 it[organization_id] = orgId
                 it[name] = "Project"
@@ -114,7 +117,10 @@ class IssueRepositoryTest {
     @Test
     fun `upsertIssueStatus is isolated per project`() {
         val otherProjectId = transaction {
-            val orgId = Organizations.insert { it[name] = "Org2"; it[slug] = "org2" } get Organizations.id
+            val orgId = Organizations.insert {
+                it[name] = "Org2"
+                it[slug] = "org2"
+            } get Organizations.id
             Projects.insert {
                 it[organization_id] = orgId
                 it[name] = "Other"

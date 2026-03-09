@@ -21,7 +21,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-private val dashboardService = DashboardService()
+private val dashboardService = DashboardService.create()
 private val logService = LogService(LogRepositoryImpl())
 private val monitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 

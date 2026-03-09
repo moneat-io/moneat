@@ -55,7 +55,11 @@ private val logger = KotlinLogging.logger {}
 // Public billing endpoints (no auth required)
 fun Route.publicBillingRoutes(
     pricingTierService: PricingTierService = PricingTierService(),
-    stripeService: StripeService = StripeService(SubscriptionRepositoryImpl(), OrganizationRepositoryImpl(), pricingTierService),
+    stripeService: StripeService = StripeService(
+        SubscriptionRepositoryImpl(),
+        OrganizationRepositoryImpl(),
+        pricingTierService
+    ),
 ) {
     route("/billing") {
         get("/plans") {
@@ -75,7 +79,11 @@ fun Route.publicBillingRoutes(
 fun Route.billingRoutes(
     pricingTierService: PricingTierService = PricingTierService(),
     quotaService: BillingQuotaService = BillingQuotaService(pricingTierService),
-    stripeService: StripeService = StripeService(SubscriptionRepositoryImpl(), OrganizationRepositoryImpl(), pricingTierService),
+    stripeService: StripeService = StripeService(
+        SubscriptionRepositoryImpl(),
+        OrganizationRepositoryImpl(),
+        pricingTierService
+    ),
 ) {
     val usageTrackingService = UsageTrackingService.instance
 

@@ -2,6 +2,7 @@ package com.moneat.services
 
 import com.moneat.auth.repositories.UserRepositoryImpl
 import com.moneat.shared.repositories.MembershipRepositoryImpl
+import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.auth.services.AuthService
 import com.moneat.events.models.LoginRequest
 import com.moneat.events.models.SignupRequest
@@ -30,7 +31,11 @@ import kotlin.test.assertTrue
 import com.moneat.testsupport.TestDatabaseHelper
 
 class AuthServiceTest {
-    private val authService = AuthService(UserRepositoryImpl(), MembershipRepositoryImpl())
+    private val authService = AuthService(
+        UserRepositoryImpl(),
+        MembershipRepositoryImpl(),
+        OrganizationRepositoryImpl()
+    )
 
     companion object {
         private var db: Database? = null

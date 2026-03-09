@@ -90,7 +90,7 @@ class SummaryService(
     private val monitorService: MonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl()),
     private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl()),
     private val alertService: MonitorAlertService = MonitorAlertService(),
-    private val dashboardService: DashboardService = DashboardService(),
+    private val dashboardService: DashboardService = DashboardService.create(),
     private val releaseService: ReleaseService = ReleaseService()
 ) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()

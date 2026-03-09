@@ -17,9 +17,16 @@
 package com.moneat.auth.repositories
 
 import com.moneat.auth.repositories.models.UserRow
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.SsoConfigurations
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.innerJoin
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.core.trim
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -128,6 +135,27 @@ class UserRepositoryImpl : UserRepository {
             Users.update({ Users.id eq id }) {
                 it[Users.onboarding_completed] = true
             }
+        }
+    }
+
+    override fun requiresSsoForEmail(email: String): Boolean {
+        val normalizedEmail = email.lowercase().trim()
+        val normalizedDomain = normalizedEmail.substringAfter("@").trim()
+        if (normalizedDomain.isBlank()) return false
+        return transaction {
+            (
+                Users
+                    .innerJoin(Memberships) { Users.id eq Memberships.user_id }
+                    .innerJoin(SsoConfigurations) { Memberships.organization_id eq SsoConfigurations.organizationId }
+                )
+                .selectAll()
+                .where {
+                    (Users.email eq normalizedEmail) and
+                        (SsoConfigurations.emailDomain.isNotNull()) and
+                        (SsoConfigurations.emailDomain.trim().lowerCase() eq normalizedDomain) and
+                        (SsoConfigurations.isEnabled eq true) and
+                        (SsoConfigurations.requireSso eq true)
+                }.firstOrNull() != null
         }
     }
 

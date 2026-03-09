@@ -1,10 +1,8 @@
 package com.moneat.services
 
-import com.moneat.events.models.InvitationResponse
 import com.moneat.notifications.services.EmailService
 import com.moneat.org.repositories.OrgInvitationRepository
 import com.moneat.org.repositories.models.InvitationWithInviterRow
-import com.moneat.org.repositories.models.OrgInvitationDetailsRow
 import com.moneat.org.repositories.models.OrgInvitationRow
 import com.moneat.org.repositories.models.OrgInvitationUserRow
 import com.moneat.org.services.OrgInvitationService
@@ -41,7 +39,9 @@ class OrgInvitationServiceTest {
         every { invitationRepository.expireStaleInvitations(orgId, email, any()) } returns 0
         every { invitationRepository.findUserByEmail(email) } returns null
         every { invitationRepository.existsPendingInvitation(orgId, email, any()) } returns false
-        every { invitationRepository.createInvitation(orgId, email, any(), adminId, any(), any(), any()) } returns invitationId
+        every {
+            invitationRepository.createInvitation(orgId, email, any(), adminId, any(), any(), any())
+        } returns invitationId
         every { invitationRepository.findInviterAndOrg(adminId, orgId) } returns null
     }
 
@@ -218,8 +218,12 @@ class OrgInvitationServiceTest {
     fun `getPendingInvitations returns valid pending invitations`() {
         every { invitationRepository.expireAllStaleForOrg(orgId, any()) } returns 0
         every { invitationRepository.findPendingInvitations(orgId, any()) } returns listOf(
-            InvitationWithInviterRow(1, "user1@test.com", "member", "pending", futureMs, Clock.System.now(), "Admin", "admin@test.com"),
-            InvitationWithInviterRow(2, "user2@test.com", "member", "pending", futureMs, Clock.System.now(), "Admin", "admin@test.com"),
+            InvitationWithInviterRow(
+                1, "user1@test.com", "member", "pending", futureMs, Clock.System.now(), "Admin", "admin@test.com"
+            ),
+            InvitationWithInviterRow(
+                2, "user2@test.com", "member", "pending", futureMs, Clock.System.now(), "Admin", "admin@test.com"
+            ),
         )
 
         val pending = service.getPendingInvitations(orgId)

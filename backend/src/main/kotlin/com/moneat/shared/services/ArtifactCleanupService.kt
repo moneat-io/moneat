@@ -17,10 +17,7 @@
 package com.moneat.shared.services
 
 import com.moneat.auth.services.AuthTokenService
-import com.moneat.notifications.services.EmailService
-import com.moneat.org.repositories.OrgInvitationRepositoryImpl
 import com.moneat.org.services.OrgInvitationService
-import com.moneat.org.services.OrgMembershipService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -37,12 +34,8 @@ private val logger = KotlinLogging.logger {}
  * but accumulate until purged; invitations are status-flipped but never deleted.
  */
 class ArtifactCleanupService(
-    private val authTokenService: AuthTokenService = AuthTokenService(),
-    private val orgInvitationService: OrgInvitationService = OrgInvitationService(
-        OrgMembershipService(com.moneat.org.repositories.OrgMembershipRepositoryImpl()),
-        EmailService(),
-        OrgInvitationRepositoryImpl()
-    ),
+    private val authTokenService: AuthTokenService,
+    private val orgInvitationService: OrgInvitationService,
     private val cleanupInterval: kotlin.time.Duration = 24.hours
 ) {
     private var cleanupJob: Job? = null

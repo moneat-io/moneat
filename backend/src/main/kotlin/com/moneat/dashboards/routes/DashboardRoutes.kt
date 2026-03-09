@@ -37,9 +37,6 @@ import com.moneat.dashboards.models.UpdateDashboardRequest
 import com.moneat.dashboards.models.MoveToFolderRequest
 import com.moneat.dashboards.models.UpdateFolderRequest
 import com.moneat.dashboards.models.Dashboards
-import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
-import com.moneat.dashboards.repositories.DashboardRepositoryImpl
-import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
@@ -111,11 +108,7 @@ private fun getDashboardScope(dashboardId: Long, orgId: Long): DashboardScope? {
 }
 
 fun Route.customDashboardRoutes(
-    dashboardService: CustomDashboardService = CustomDashboardService(
-        DashboardFolderRepositoryImpl(),
-        DashboardRepositoryImpl(),
-        DashboardWidgetRepositoryImpl()
-    ),
+    dashboardService: CustomDashboardService,
     queryEngine: DashboardQueryEngine = DashboardQueryEngine(),
     retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
     dataDogTranslator: DataDogTranslator = DataDogTranslator(),

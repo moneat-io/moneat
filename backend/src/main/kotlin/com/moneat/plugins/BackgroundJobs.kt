@@ -16,6 +16,7 @@
 
 package com.moneat.plugins
 
+import com.moneat.auth.services.AuthTokenService
 import com.moneat.auth.services.RefreshTokenCleanupService
 import com.moneat.billing.services.BillingBackgroundService
 import com.moneat.config.ClickHouseClient
@@ -26,6 +27,11 @@ import com.moneat.events.services.IngestionWorker
 import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.logs.services.LogIngestionWorker
 import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.notifications.services.EmailService
+import com.moneat.org.repositories.OrgInvitationRepositoryImpl
+import com.moneat.org.repositories.OrgMembershipRepositoryImpl
+import com.moneat.org.services.OrgInvitationService
+import com.moneat.org.services.OrgMembershipService
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionBackgroundService
@@ -63,7 +69,16 @@ fun Application.configureBackgroundJobs() {
     val billingBackgroundService = BillingBackgroundService()
     val retentionBackgroundService = RetentionBackgroundService()
     val refreshTokenCleanupService = RefreshTokenCleanupService()
-    val artifactCleanupService = ArtifactCleanupService()
+    val artifactOrgMembershipRepo = OrgMembershipRepositoryImpl()
+    val artifactOrgMembershipService = OrgMembershipService(artifactOrgMembershipRepo)
+    val artifactCleanupService = ArtifactCleanupService(
+        authTokenService = AuthTokenService(),
+        orgInvitationService = OrgInvitationService(
+            artifactOrgMembershipService,
+            EmailService(),
+            OrgInvitationRepositoryImpl(),
+        ),
+    )
     val uptimeScheduler = UptimeScheduler()
     val queueKey = environment.config.property("ingest.queueKey").getString()
     val dlqKey = environment.config.property("ingest.dlqKey").getString()

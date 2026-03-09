@@ -25,4 +25,21 @@ import com.moneat.shared.repositories.models.OrganizationRow
 interface OrganizationRepository {
     fun findById(id: Int): OrganizationRow?
     fun findBySlug(slug: String): OrganizationRow?
+
+    data class OnboardingUpdate(
+        val orgId: Int,
+        val userId: Int,
+        val baseSlug: String,
+        val name: String,
+        val companySize: String,
+        val referralSource: String,
+        val utmSource: String?,
+        val utmMedium: String?,
+        val utmCampaign: String?,
+        val utmContent: String?,
+        val utmTerm: String?,
+    )
+
+    /** Atomically ensures slug uniqueness, updates org fields, and marks user onboarding complete. */
+    fun updateOnboardingOrgAndMarkComplete(update: OnboardingUpdate): String
 }

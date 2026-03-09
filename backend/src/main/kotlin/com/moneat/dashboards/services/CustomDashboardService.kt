@@ -20,6 +20,7 @@ import com.moneat.dashboards.repositories.DashboardFolderRepository
 import com.moneat.dashboards.repositories.DashboardRepository
 import com.moneat.dashboards.repositories.DashboardWidgetRepository
 import com.moneat.dashboards.repositories.DashboardWithFavoriteFlag
+import com.moneat.events.repositories.ProjectRepository
 import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.CreateDashboardRequest
 import com.moneat.dashboards.models.CreateFolderRequest
@@ -40,14 +41,7 @@ import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.models.UpdateDashboardRequest
 import com.moneat.dashboards.models.UpdateFolderRequest
 import com.moneat.dashboards.models.WidgetResponse
-import com.moneat.shared.models.Projects
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.like
-import org.jetbrains.exposed.v1.core.lowerCase
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
 
 private val json = Json {
@@ -58,7 +52,8 @@ private val json = Json {
 class CustomDashboardService(
     private val folderRepository: DashboardFolderRepository,
     private val dashboardRepository: DashboardRepository,
-    private val dashboardWidgetRepository: DashboardWidgetRepository
+    private val dashboardWidgetRepository: DashboardWidgetRepository,
+    private val projectRepository: ProjectRepository,
 ) {
 
     private fun parseVariables(variablesJson: String): List<DashboardVariable> {
@@ -230,18 +225,8 @@ class CustomDashboardService(
         val dashboards = dashboardRepository.search(orgId, userId, pattern).map { d ->
             mapToResponse(d, loadWidgets(d.id))
         }
-        val projects = transaction {
-            Projects.selectAll()
-                .where {
-                    (Projects.organization_id eq orgId.toInt()) and (Projects.name.lowerCase() like pattern)
-                }
-                .limit(10)
-                .map { row ->
-                    SearchProjectResponse(
-                        id = row[Projects.id],
-                        name = row[Projects.name]
-                    )
-                }
+        val projects = projectRepository.searchProjectsByName(orgId.toInt(), pattern, limit = 10).map { row ->
+            SearchProjectResponse(id = row.projectId, name = row.name)
         }
         return SearchResponse(dashboards = dashboards, projects = projects)
     }

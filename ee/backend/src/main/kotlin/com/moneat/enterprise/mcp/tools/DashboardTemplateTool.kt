@@ -10,6 +10,7 @@ import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
+import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.dashboards.translation.DataDogTranslator
@@ -25,7 +26,8 @@ import kotlinx.serialization.json.jsonPrimitive
 private val templateDashService = CustomDashboardService(
     DashboardFolderRepositoryImpl(),
     DashboardRepositoryImpl(),
-    DashboardWidgetRepositoryImpl()
+    DashboardWidgetRepositoryImpl(),
+    ProjectRepositoryImpl { col, _, _ -> col },
 )
 private val dashQueryEngine = DashboardQueryEngine()
 private val dataDogTranslator = DataDogTranslator()

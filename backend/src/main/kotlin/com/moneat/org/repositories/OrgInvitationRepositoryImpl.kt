@@ -21,7 +21,6 @@ import com.moneat.org.repositories.models.InviterAndOrgRow
 import com.moneat.org.repositories.models.OrgInvitationDetailsRow
 import com.moneat.org.repositories.models.OrgInvitationRow
 import com.moneat.org.repositories.models.OrgInvitationUserRow
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrgInvitations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -109,7 +108,8 @@ class OrgInvitationRepositoryImpl : OrgInvitationRepository {
     override fun findInviterAndOrg(invitedBy: Int, orgId: Int): InviterAndOrgRow? =
         transaction {
             val inviter = Users.selectAll().where { Users.id eq invitedBy }.singleOrNull() ?: return@transaction null
-            val org = Organizations.selectAll().where { Organizations.id eq orgId }.singleOrNull() ?: return@transaction null
+            val org = Organizations.selectAll()
+                .where { Organizations.id eq orgId }.singleOrNull() ?: return@transaction null
             InviterAndOrgRow(
                 inviterName = inviter[Users.name],
                 inviterEmail = inviter[Users.email],

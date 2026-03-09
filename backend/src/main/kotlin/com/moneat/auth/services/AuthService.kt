@@ -17,7 +17,6 @@
 package com.moneat.auth.services
 
 import com.moneat.auth.repositories.UserRepository
-import com.moneat.auth.repositories.UserRepositoryImpl
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.config.EnvConfig
@@ -29,23 +28,17 @@ import com.moneat.notifications.services.EmailService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrgInvitations
 import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.SsoConfigurations
 import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.Users
 import com.moneat.shared.repositories.MembershipRepository
-import com.moneat.shared.repositories.MembershipRepositoryImpl
+import com.moneat.shared.repositories.OrganizationRepository
 import com.moneat.shared.services.SidebarPreferenceService
 import com.moneat.utils.SentryUtils
 import io.ktor.server.config.ApplicationConfig
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
-import org.jetbrains.exposed.v1.core.innerJoin
-import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.lessEq
-import org.jetbrains.exposed.v1.core.lowerCase
-import org.jetbrains.exposed.v1.core.neq
-import org.jetbrains.exposed.v1.core.trim
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -75,7 +68,8 @@ data class SignupRequestContext(
 
 class AuthService(
     private val userRepository: UserRepository,
-    private val membershipRepository: MembershipRepository
+    private val membershipRepository: MembershipRepository,
+    private val organizationRepository: OrganizationRepository,
 ) {
     companion object {
         private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
@@ -503,86 +497,56 @@ class AuthService(
         utmTerm: String? = null,
         sidebarHiddenItems: List<String>? = null
     ): UserResponse {
-        return transaction {
-            val user =
-                Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                    ?: throw IllegalArgumentException("User not found")
+        val user = userRepository.findById(userId)
+            ?: throw IllegalArgumentException("User not found")
+        val membership = membershipRepository.getFirstMembershipForUser(userId)
+            ?: throw IllegalArgumentException("No organization found for user")
 
-            // Get the user's default organization
-            val membership =
-                Memberships
-                    .selectAll()
-                    .where { Memberships.user_id eq userId }
-                    .firstOrNull()
-                    ?: throw IllegalArgumentException("No organization found for user")
+        val baseSlug = (customSlug ?: organizationName)
+            .lowercase()
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+            .take(100)
 
-            val orgId = membership[Memberships.organization_id]
-            val membershipId = membership[Memberships.id]
-
-            // Generate slug from custom input or organization name
-            val baseSlug =
-                (customSlug ?: organizationName)
-                    .lowercase()
-                    .replace(Regex("[^a-z0-9]+"), "-")
-                    .trim('-')
-                    .take(100)
-
-            // Ensure slug uniqueness
-            var slug = baseSlug
-            var suffix = 2
-            while (Organizations
-                    .selectAll()
-                    .where { (Organizations.slug eq slug) and (Organizations.id neq orgId) }
-                    .count() > 0
-            ) {
-                slug = "$baseSlug-$suffix"
-                suffix++
-            }
-
-            // Update organization with new name, slug, company size, referral source, and UTM parameters
-            Organizations.update({ Organizations.id eq orgId }) {
-                it[name] = organizationName
-                it[Organizations.slug] = slug
-                it[company_size] = companySize
-                it[Organizations.referral_source] = referralSource
-                it[utm_source] = utmSource
-                it[utm_medium] = utmMedium
-                it[utm_campaign] = utmCampaign
-                it[utm_content] = utmContent
-                it[utm_term] = utmTerm
-            }
-
-            // Update sidebar preferences if provided
-            val hiddenItems =
-                if (sidebarHiddenItems != null) {
-                    SidebarPreferenceService.updatePreferences(
-                        membershipId = membershipId,
-                        userId = userId,
-                        organizationId = orgId,
-                        hiddenItems = sidebarHiddenItems,
-                        source = "onboarding"
-                    )
-                } else {
-                    emptyList()
-                }
-
-            // Mark onboarding as completed
-            Users.update({ Users.id eq userId }) {
-                it[onboarding_completed] = true
-            }
-
-            UserResponse(
-                user[Users.id],
-                user[Users.email],
-                user[Users.name],
-                user[Users.email_verified],
-                true,
-                user[Users.is_admin],
-                slug,
-                null,
-                hiddenItems
+        val finalSlug = organizationRepository.updateOnboardingOrgAndMarkComplete(
+            OrganizationRepository.OnboardingUpdate(
+                orgId = membership.organizationId,
+                userId = userId,
+                baseSlug = baseSlug,
+                name = organizationName,
+                companySize = companySize,
+                referralSource = referralSource,
+                utmSource = utmSource,
+                utmMedium = utmMedium,
+                utmCampaign = utmCampaign,
+                utmContent = utmContent,
+                utmTerm = utmTerm,
             )
+        )
+
+        val hiddenItems = if (sidebarHiddenItems != null) {
+            SidebarPreferenceService.updatePreferences(
+                membershipId = membership.id,
+                userId = userId,
+                organizationId = membership.organizationId,
+                hiddenItems = sidebarHiddenItems,
+                source = "onboarding"
+            )
+        } else {
+            emptyList()
         }
+
+        return UserResponse(
+            user.id,
+            user.email,
+            user.name,
+            user.emailVerified,
+            true,
+            user.isAdmin,
+            finalSlug,
+            null,
+            hiddenItems
+        )
     }
 
     fun logout(userId: Int) {
@@ -632,23 +596,5 @@ class AuthService(
      * password login for users in other orgs sharing the same domain.
      * Domain comparison is normalized (lowercase, trim) to avoid bypass.
      */
-    private fun checkSsoRequired(email: String): Boolean {
-        val normalizedDomain = email.substringAfter("@").lowercase().trim()
-        if (normalizedDomain.isBlank()) return false
-        return transaction {
-            (
-                Users.innerJoin(Memberships) { Users.id eq Memberships.user_id }
-                    .innerJoin(SsoConfigurations) { Memberships.organization_id eq SsoConfigurations.organizationId }
-                )
-                .selectAll()
-                .where {
-                    (Users.email eq email.lowercase().trim()) and
-                        (SsoConfigurations.emailDomain.isNotNull()) and
-                        (SsoConfigurations.emailDomain.trim().lowerCase() eq normalizedDomain) and
-                        (SsoConfigurations.isEnabled eq true) and
-                        (SsoConfigurations.requireSso eq true)
-                }
-                .firstOrNull() != null
-        }
-    }
+    private fun checkSsoRequired(email: String): Boolean = userRepository.requiresSsoForEmail(email)
 }
