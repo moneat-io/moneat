@@ -17,6 +17,7 @@
 package com.moneat.dashboards.services.handlers
 
 import com.moneat.dashboards.services.DataSourceCredentials
+import com.moneat.utils.UrlValidator
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.engine.cio.endpoint
@@ -38,7 +39,8 @@ abstract class HttpApiHandler : DataSourceHandler {
         }
     }
 
-    internal fun buildUrl(host: String, port: Int?): String {
+    /** Builds the URL string without performing SSRF validation. */
+    internal fun buildUrlString(host: String, port: Int?): String {
         val scheme = when {
             host.startsWith("https://") -> "https://"
             host.startsWith("http://") -> "http://"
@@ -58,15 +60,21 @@ abstract class HttpApiHandler : DataSourceHandler {
         } else {
             normalizedHost.contains(":")
         }
-        if (port == null || hostHasPort) return "$scheme$normalizedHost"
-        val isDefaultPort =
-            (scheme == "http://" && port == DEFAULT_HTTP_PORT) ||
-                (scheme == "https://" && port == DEFAULT_HTTPS_PORT)
-        return if (isDefaultPort) {
+        return if (port == null || hostHasPort) {
             "$scheme$normalizedHost"
         } else {
-            "$scheme$normalizedHost:$port"
+            val isDefaultPort =
+                (scheme == "http://" && port == DEFAULT_HTTP_PORT) ||
+                    (scheme == "https://" && port == DEFAULT_HTTPS_PORT)
+            if (isDefaultPort) "$scheme$normalizedHost" else "$scheme$normalizedHost:$port"
         }
+    }
+
+    /** Builds the URL and validates it against SSRF-blocked addresses. */
+    internal fun buildUrl(host: String, port: Int?): String {
+        val url = buildUrlString(host, port)
+        UrlValidator.validateExternalUrl(url)
+        return url
     }
 
     protected fun withAuth(headers: MutableMap<String, String>, credentials: DataSourceCredentials) {

@@ -166,44 +166,67 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with plain host and explicit port`() {
-        val url = prometheusHandler.buildUrl("prometheus.example.com", 9090)
+        val url = prometheusHandler.buildUrlString("prometheus.example.com", 9090)
         assertEquals("http://prometheus.example.com:9090", url)
     }
 
     @Test
     fun `buildPrometheusUrl with plain host and null port`() {
-        val url = prometheusHandler.buildUrl("prometheus.example.com", null)
+        val url = prometheusHandler.buildUrlString("prometheus.example.com", null)
         assertEquals("http://prometheus.example.com", url)
     }
 
     @Test
     fun `buildPrometheusUrl with http prefix`() {
-        val url = prometheusHandler.buildUrl("http://prometheus.example.com", 9090)
+        val url = prometheusHandler.buildUrlString("http://prometheus.example.com", 9090)
         assertEquals("http://prometheus.example.com:9090", url)
     }
 
     @Test
     fun `buildPrometheusUrl with https prefix and default port`() {
-        val url = prometheusHandler.buildUrl("https://prometheus.example.com", 443)
+        val url = prometheusHandler.buildUrlString("https://prometheus.example.com", 443)
         assertEquals("https://prometheus.example.com", url)
     }
 
     @Test
     fun `buildPrometheusUrl with https prefix and custom port`() {
-        val url = prometheusHandler.buildUrl("https://prometheus.example.com", 9090)
+        val url = prometheusHandler.buildUrlString("https://prometheus.example.com", 9090)
         assertEquals("https://prometheus.example.com:9090", url)
     }
 
     @Test
     fun `buildPrometheusUrl with host already containing port`() {
-        val url = prometheusHandler.buildUrl("prometheus.example.com:9090", 9090)
+        val url = prometheusHandler.buildUrlString("prometheus.example.com:9090", 9090)
         assertEquals("http://prometheus.example.com:9090", url)
     }
 
     @Test
     fun `buildPrometheusUrl strips trailing slash`() {
-        val url = prometheusHandler.buildUrl("prometheus.example.com/", 9090)
+        val url = prometheusHandler.buildUrlString("prometheus.example.com/", 9090)
         assertEquals("http://prometheus.example.com:9090", url)
+    }
+
+    // --- SSRF validation (HttpApiHandler.buildUrl) ---
+
+    @Test
+    fun `buildUrl blocks cloud metadata address`() {
+        assertFailsWith<IllegalArgumentException> {
+            prometheusHandler.buildUrl("169.254.169.254", 80)
+        }
+    }
+
+    @Test
+    fun `buildUrl blocks loopback address`() {
+        assertFailsWith<IllegalArgumentException> {
+            prometheusHandler.buildUrl("127.0.0.1", 9090)
+        }
+    }
+
+    @Test
+    fun `buildUrl blocks private RFC1918 address`() {
+        assertFailsWith<IllegalArgumentException> {
+            prometheusHandler.buildUrl("192.168.1.1", 9090)
+        }
     }
 
     // --- Prometheus step resolution ---
