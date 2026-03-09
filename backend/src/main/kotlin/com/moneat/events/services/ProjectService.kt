@@ -165,9 +165,7 @@ class ProjectService(private val queryHelper: DashboardQueryHelper) {
                 val currentCount = transaction {
                     Projects.selectAll().where { Projects.organization_id eq orgId }.count()
                 }
-                if (currentCount >= max) {
-                    throw IllegalStateException("project_limit_reached")
-                }
+                check(currentCount < max) { "project_limit_reached" }
             }
         }
 
@@ -181,9 +179,7 @@ class ProjectService(private val queryHelper: DashboardQueryHelper) {
                 }
                 .firstOrNull()
         }
-        if (existing != null) {
-            throw IllegalStateException("A project with this name already exists")
-        }
+        check(existing == null) { "A project with this name already exists" }
 
         val projectId = transaction {
             Projects.insert {
@@ -214,9 +210,7 @@ class ProjectService(private val queryHelper: DashboardQueryHelper) {
                         }
                         .firstOrNull()
                 }
-                if (existingTarget != null) {
-                    throw IllegalStateException("Target $target already exists")
-                }
+                check(existingTarget == null) { "Target $target already exists" }
                 val publicKey = generatePublicKey()
                 val secretKey = generateSecretKey()
                 ProjectKeys.insert {
@@ -245,9 +239,7 @@ class ProjectService(private val queryHelper: DashboardQueryHelper) {
                 }
                 .firstOrNull()
         }
-        if (existing != null) {
-            throw IllegalStateException("Target $target already exists")
-        }
+        check(existing == null) { "Target $target already exists" }
 
         val publicKey = generatePublicKey()
         val secretKey = generateSecretKey()
@@ -285,9 +277,7 @@ class ProjectService(private val queryHelper: DashboardQueryHelper) {
                             ((Projects.name eq name) or (Projects.slug eq slug))
                     }
                     .firstOrNull()
-                if (conflict != null) {
-                    throw IllegalStateException("A project with this name already exists")
-                }
+                check(conflict == null) { "A project with this name already exists" }
             }
 
             Projects.update({ Projects.id eq projectId }) {

@@ -228,9 +228,7 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
     ) {
         if (update.status != null) {
             val validStatuses = setOf("unresolved", "resolved", "archived")
-            if (update.status !in validStatuses) {
-                throw IllegalArgumentException("Invalid status value")
-            }
+            require(update.status in validStatuses) { "Invalid status value" }
             val normalizedFeedbackId =
                 queryHelper.normalizeUuid(feedbackId) ?: throw IllegalArgumentException("Invalid feedback ID")
             val escapedStatus = escapeSql(update.status)

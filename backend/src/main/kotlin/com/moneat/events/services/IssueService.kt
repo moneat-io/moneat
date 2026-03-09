@@ -26,7 +26,6 @@ import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -79,14 +78,6 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
         val offset = (page - 1) * limit
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
-        val retentionClause = queryHelper.timestampRetentionClause("last_seen", retentionDays, demoEpochMs)
-
-        val validStatuses = setOf("unresolved", "resolved", "archived", "ignored")
-        val statusFilter = if (status != null && status in validStatuses) {
-            "AND status = '${escapeSql(status)}'"
-        } else {
-            ""
-        }
 
         val retentionClauseForEvents = queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
 
@@ -358,9 +349,7 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
 
         if (update.status != null) {
             val validStatuses = setOf("unresolved", "resolved", "archived", "ignored")
-            if (update.status !in validStatuses) {
-                throw IllegalArgumentException("Invalid status value")
-            }
+            require(update.status in validStatuses) { "Invalid status value" }
             transaction {
                 val existing = IssueStatuses
                     .selectAll()

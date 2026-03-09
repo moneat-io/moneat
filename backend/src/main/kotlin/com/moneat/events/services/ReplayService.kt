@@ -272,16 +272,18 @@ class ReplayService(
         }
     }
 
+    private fun parsedToJsonElementList(parsed: JsonElement): List<JsonElement> =
+        when (parsed) {
+            is JsonArray -> parsed.toList()
+            else -> listOf(parsed)
+        }
+
     private fun parseJsonEvents(
         payload: String,
         segmentIdx: Int
     ): List<JsonElement> {
         return try {
-            val parsed = json.parseToJsonElement(payload)
-            when (parsed) {
-                is JsonArray -> parsed.toList()
-                else -> listOf(parsed)
-            }
+            parsedToJsonElementList(json.parseToJsonElement(payload))
         } catch (e: Exception) {
             logger.error(e) { "Segment $segmentIdx: Failed to parse replay payload as JSON" }
             emptyList()
@@ -358,24 +360,16 @@ class ReplayService(
         recordingData: String,
         segmentIdx: Int
     ): SegmentDecodeResult {
-        val rawBytes =
-            try {
-                Base64.getDecoder().decode(recordingData)
-            } catch (_: IllegalArgumentException) {
-                null
-            }
-
-        if (rawBytes == null) {
-            return SegmentDecodeResult(events = parseJsonEvents(recordingData, segmentIdx))
-        }
+        val rawBytes = runCatching { Base64.getDecoder().decode(recordingData) }.getOrNull()
+            ?: return SegmentDecodeResult(events = parseJsonEvents(recordingData, segmentIdx))
 
         val firstNonWhitespace =
             rawBytes.firstOrNull {
                 val code = it.toInt()
                 code != ' '.code && code != '\n'.code && code != '\r'.code && code != '\t'.code
             }
-
-        if (firstNonWhitespace == '['.code.toByte() || firstNonWhitespace == '{'.code.toByte()) {
+        val isJsonStart = firstNonWhitespace == '['.code.toByte() || firstNonWhitespace == '{'.code.toByte()
+        if (isJsonStart) {
             return SegmentDecodeResult(
                 events = parseJsonEvents(String(rawBytes, Charsets.UTF_8), segmentIdx)
             )
@@ -516,7 +510,13 @@ class ReplayService(
                         val rawErrorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
                         val fallbackErrorCount =
                             if (rawErrorCount == 0 && startedMs != null && finishedMs != null) {
-                                getReplayWindowErrorCount(projectId, startedMs, finishedMs, obj["user_id"]?.jsonPrimitive?.contentOrNull, retentionDays)
+                                getReplayWindowErrorCount(
+                                    projectId,
+                                    startedMs,
+                                    finishedMs,
+                                    obj["user_id"]?.jsonPrimitive?.contentOrNull,
+                                    retentionDays
+                                )
                             } else {
                                 0
                             }
@@ -545,6 +545,71 @@ class ReplayService(
             logger.error(e) { "Failed to fetch replays for project $projectId" }
             emptyList()
         }
+    }
+
+    private suspend fun buildReplayDetailFromRow(
+        obj: JsonObject,
+        retentionDays: Int
+    ): ReplayDetailResponse? {
+        val replayId = obj["replay_id"]?.jsonPrimitive?.content ?: return null
+        val objProjectId = obj["project_id"]?.jsonPrimitive?.long ?: return null
+        val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
+        val startedMs = obj["started_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+        val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+        val tagsStr = obj["tags"]?.jsonPrimitive?.contentOrNull ?: "{}"
+        val tagsMap =
+            try {
+                val tagsObj = json.parseToJsonElement(tagsStr) as? JsonObject ?: return null
+                tagsObj.mapValues { it.value.jsonPrimitive.content }
+            } catch (_: Exception) { emptyMap<String, String>() }
+        val replayErrorIds = parseStringArray(obj["error_ids"]).distinct()
+        val fallbackErrorIds =
+            if (replayErrorIds.isEmpty() && startedMs != null && finishedMs != null) {
+                getReplayWindowErrorIds(
+                    projectId = objProjectId,
+                    startMs = startedMs,
+                    endMs = finishedMs,
+                    userId = userId,
+                    retentionDays = retentionDays
+                )
+            } else {
+                emptyList()
+            }
+        val mergedErrorIds = (replayErrorIds + fallbackErrorIds).distinct()
+        val fallbackErrorCount =
+            if (replayErrorIds.isEmpty() && startedMs != null && finishedMs != null) {
+                getReplayWindowErrorCount(
+                    projectId = objProjectId,
+                    startMs = startedMs,
+                    endMs = finishedMs,
+                    userId = userId,
+                    retentionDays = retentionDays
+                )
+            } else {
+                0
+            }
+        return ReplayDetailResponse(
+            replayId = replayId,
+            projectId = objProjectId,
+            startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
+            finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
+            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+            urls = parseStringArray(obj["urls"]),
+            errorCount = maxOf(mergedErrorIds.size, fallbackErrorCount),
+            errorIds = mergedErrorIds,
+            traceIds = parseStringArray(obj["trace_ids"]),
+            segmentCount = obj["segment_count"]?.jsonPrimitive?.intOrNull ?: 0,
+            environment = obj["environment"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            release = obj["release"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            platform = obj["platform"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            user = queryHelper.extractUserInfo(obj),
+            browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0,
+            tags = tagsMap
+        )
     }
 
     suspend fun getReplay(
@@ -593,69 +658,10 @@ class ReplayService(
 
         return try {
             val response = ClickHouseClient.execute(query)
-
             val body = response.bodyAsText()
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
-
             val obj = json.parseToJsonElement(line).jsonObject
-            val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
-            val startedMs = obj["started_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
-            val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
-            val tagsStr = obj["tags"]?.jsonPrimitive?.contentOrNull ?: "{}"
-            val tagsMap =
-                try {
-                    val tagsObj = json.parseToJsonElement(tagsStr) as? JsonObject ?: return null
-                    tagsObj.mapValues { it.value.jsonPrimitive.content }
-                } catch (_: Exception) { emptyMap<String, String>() }
-            val replayErrorIds = parseStringArray(obj["error_ids"]).distinct()
-            val fallbackErrorIds =
-                if (replayErrorIds.isEmpty() && startedMs != null && finishedMs != null) {
-                    getReplayWindowErrorIds(
-                        projectId = obj["project_id"]?.jsonPrimitive?.long ?: return null,
-                        startMs = startedMs,
-                        endMs = finishedMs,
-                        userId = userId,
-                        retentionDays = retentionDays
-                    )
-                } else {
-                    emptyList()
-                }
-            val mergedErrorIds = (replayErrorIds + fallbackErrorIds).distinct()
-            val fallbackErrorCount =
-                if (replayErrorIds.isEmpty() && startedMs != null && finishedMs != null) {
-                    getReplayWindowErrorCount(
-                        projectId = obj["project_id"]?.jsonPrimitive?.long ?: return null,
-                        startMs = startedMs,
-                        endMs = finishedMs,
-                        userId = userId,
-                        retentionDays = retentionDays
-                    )
-                } else {
-                    0
-                }
-
-            ReplayDetailResponse(
-                replayId = obj["replay_id"]?.jsonPrimitive?.content ?: return null,
-                projectId = obj["project_id"]?.jsonPrimitive?.long ?: return null,
-                startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
-                finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
-                durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                urls = parseStringArray(obj["urls"]),
-                errorCount = maxOf(mergedErrorIds.size, fallbackErrorCount),
-                errorIds = mergedErrorIds,
-                traceIds = parseStringArray(obj["trace_ids"]),
-                segmentCount = obj["segment_count"]?.jsonPrimitive?.intOrNull ?: 0,
-                environment = obj["environment"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                release = obj["release"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                platform = obj["platform"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                user = queryHelper.extractUserInfo(obj),
-                browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0,
-                tags = tagsMap
-            )
+            buildReplayDetailFromRow(obj, retentionDays)
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch replay $replayId" }
             null
