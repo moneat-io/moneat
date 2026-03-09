@@ -14,9 +14,21 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export {
-  api,
-  formatErrorForLogging,
-  resetAuthRedirectForTesting,
-} from './api/index'
-export type * from './api/types'
+export interface DdEventResponse {
+  eventId: string
+  title: string
+  text: string
+  timestamp: string
+  priority: string
+  host: string
+  tags: Record<string, string>
+  alertType: string
+  aggregationKey: string
+  sourceTypeName: string
+  deviceName: string
+}
+
+export interface DdEventListResponse {
+  events: DdEventResponse[]
+  totalCount: number
+}

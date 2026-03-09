@@ -14,9 +14,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export {
-  api,
-  formatErrorForLogging,
-  resetAuthRedirectForTesting,
-} from './api/index'
-export type * from './api/types'
+export interface DdHostResponse {
+  id: number
+  hostname: string
+  os: string
+  platform: string
+  processor: string
+  cpuCores: number
+  memoryTotalKb: number
+  agentVersion: string
+  tags: Record<string, string>
+  firstSeenAt: string
+  lastSeenAt: string
+  isOnline: boolean
+}
+
+export interface DdHostListResponse {
+  hosts: DdHostResponse[]
+  totalCount: number
+}

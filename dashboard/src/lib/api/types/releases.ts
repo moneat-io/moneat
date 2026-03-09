@@ -14,9 +14,29 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export {
-  api,
-  formatErrorForLogging,
-  resetAuthRedirectForTesting,
-} from './api/index'
-export type * from './api/types'
+import type { TimelinePoint, TopIssue } from './issues'
+
+export interface Release {
+  version: string
+  firstSeen: string
+  lastSeen: string
+  eventCount: number
+  newIssueCount: number
+  crashFreeRate: number | null
+  userCount: number
+}
+
+export interface ReleaseStats {
+  version: string
+  firstSeen: string
+  lastSeen: string
+  totalEvents: number
+  newIssues: number
+  resolvedIssues: number
+  crashFreeSessionRate: number | null
+  crashFreeUserRate: number | null
+  userCount: number
+  eventsTimeline: TimelinePoint[]
+  eventsByLevel: Record<string, number>
+  topIssues: TopIssue[]
+}

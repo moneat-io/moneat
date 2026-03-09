@@ -14,9 +14,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export {
-  api,
-  formatErrorForLogging,
-  resetAuthRedirectForTesting,
-} from './api/index'
-export type * from './api/types'
+export function formatErrorForLogging(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.message === 'NETWORK_ERROR') {
+      return 'Network error: Unable to connect to server'
+    }
+    return error.message
+  }
+  return String(error)
+}
+
+export function filenameFromContentDisposition(
+  value: string | null
+): string | null {
+  if (!value) return null
+  const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim())
+    } catch {
+      return utf8Match[1].trim()
+    }
+  }
+  const filenameMatch = value.match(/filename="?([^";]+)"?/i)
+  return filenameMatch?.[1]?.trim() ?? null
+}

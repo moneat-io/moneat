@@ -17,7 +17,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
-import { api } from '../api'
+import { api, resetAuthRedirectForTesting } from '../api'
 
 const API_BASE = 'http://localhost:8080'
 
@@ -25,6 +25,7 @@ describe('ApiClient', () => {
   beforeEach(() => {
     localStorage.clear()
     sessionStorage.clear()
+    resetAuthRedirectForTesting?.()
   })
 
   describe('Auth token handling', () => {

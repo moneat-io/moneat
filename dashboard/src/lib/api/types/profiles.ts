@@ -14,9 +14,34 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export {
-  api,
-  formatErrorForLogging,
-  resetAuthRedirectForTesting,
-} from './api/index'
-export type * from './api/types'
+export interface ProfileResponse {
+  profileId: string
+  host: string
+  service: string
+  env: string
+  version: string
+  runtime: string
+  language: string
+  profileType: string
+  startTime: string
+  endTime: string
+  durationNs: number
+  sizeBytes: number
+  tags: Record<string, string>
+  source?: string
+}
+
+export interface ProfileListResponse {
+  profiles: ProfileResponse[]
+  totalCount: number
+}
+
+export interface FlamegraphFrame {
+  name: string
+  value: number
+  children: FlamegraphFrame[]
+}
+
+export interface FlamegraphResponse {
+  frames: FlamegraphFrame[]
+}

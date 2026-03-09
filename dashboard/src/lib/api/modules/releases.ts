@@ -14,9 +14,19 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export {
-  api,
-  formatErrorForLogging,
-  resetAuthRedirectForTesting,
-} from './api/index'
-export type * from './api/types'
+import type { ApiClientCore } from '../client'
+import type { Release, ReleaseStats } from '../types'
+
+export function releasesMethods(core: ApiClientCore) {
+  const base = core.API_BASE
+
+  return {
+    getReleases: (projectId: number) =>
+      core.request<Release[]>(`${base}/projects/${projectId}/releases`),
+
+    getReleaseStats: (projectId: number, version: string) =>
+      core.request<ReleaseStats>(
+        `${base}/projects/${projectId}/releases/${encodeURIComponent(version)}/stats`
+      ),
+  }
+}

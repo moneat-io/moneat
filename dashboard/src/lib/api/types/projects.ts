@@ -14,9 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export {
-  api,
-  formatErrorForLogging,
-  resetAuthRedirectForTesting,
-} from './api/index'
-export type * from './api/types'
+export interface ProjectKey {
+  platformTarget: string | null
+  dsn: string
+}
+
+export interface Project {
+  id: number
+  name: string
+  slug: string
+  framework?: string
+  keys: ProjectKey[]
+  dsn: string
+  issueCount?: number
+}
