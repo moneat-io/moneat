@@ -219,15 +219,28 @@ abstract class JdbcHandler(
         return false
     }
 
+    private fun stripSqlComments(query: String): String {
+        // MySQL conditional comments: keep the SQL content, strip only the markers
+        val conditionalStripped = Regex("""/\*!([\s\S]*?)\*/""").replace(query) { it.groupValues[1] }
+        // Regular block comments: collapse to "" so INS/**/ERT becomes INSERT
+        val noBlock = Regex("""/\*[\s\S]*?\*/""").replace(conditionalStripped, "")
+        // Line comments (-- and MySQL #)
+        val noLine = Regex("""(--|#)[^\n]*""").replace(noBlock, "")
+        return noLine
+    }
+
     internal fun validateSqlQuery(query: String) {
-        val trimmed = query.trim().uppercase()
+        val normalized = stripSqlComments(
+            java.text.Normalizer.normalize(query, java.text.Normalizer.Form.NFKC)
+        )
+        val trimmed = normalized.trim().uppercase()
         require(trimmed.startsWith("SELECT")) { "Only SELECT queries are allowed" }
-        require(!hasSemicolonOutsideQuotes(query)) { "Multiple statements are not allowed" }
+        require(!hasSemicolonOutsideQuotes(normalized)) { "Multiple statements are not allowed" }
         for ((pattern, name) in forbiddenKeywords()) {
-            require(!pattern.containsMatchIn(query)) { "$name statements are not allowed" }
+            require(!pattern.containsMatchIn(normalized)) { "$name statements are not allowed" }
         }
         for ((pattern, fn) in forbiddenFunctionPatterns()) {
-            require(!pattern.containsMatchIn(query)) { "Function or table $fn is not allowed" }
+            require(!pattern.containsMatchIn(normalized)) { "Function or table $fn is not allowed" }
         }
     }
 

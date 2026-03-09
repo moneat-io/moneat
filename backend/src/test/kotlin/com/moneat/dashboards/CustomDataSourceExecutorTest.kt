@@ -162,6 +162,44 @@ class CustomDataSourceExecutorTest {
         postgresHandler.validateSqlQuery("SELECT my_dblink_config FROM settings")
     }
 
+    // --- Encoding / comment-injection bypass tests ---
+
+    @Test
+    fun `validateSqlQuery rejects comment-split INSERT keyword`() {
+        // INS/**/ERT is parsed as INSERT by MySQL/MariaDB; must be caught after comment stripping
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT 1 UNION ALL INS/**/ERT INTO users VALUES ('x')")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery rejects comment-split DROP keyword`() {
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT 1; DRO/**/P TABLE users")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery rejects MySQL conditional comment wrapping forbidden function`() {
+        // /*!pg_read_file*/ strips to pg_read_file which must still be caught
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT /*!pg_read_file*/('/etc/passwd')")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery rejects full-width Unicode forbidden keyword`() {
+        // Full-width ＩＮＳＥＲＴ normalises to INSERT via NFKC and must be caught
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT 1 FROM t WHERE ＩＮＳＥＲＴ = 1")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery allows legitimate inline comment`() {
+        postgresHandler.validateSqlQuery("SELECT /* fetch all */ * FROM users LIMIT 10")
+    }
+
     // --- Prometheus URL building (PrometheusHandler uses HttpApiHandler.buildUrl) ---
 
     @Test
