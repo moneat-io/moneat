@@ -67,6 +67,18 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
 
         val retentionClauseForEvents = queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
 
+        val pgOverrides = if (projectId > 0) {
+            transaction {
+                IssueStatuses
+                    .selectAll()
+                    .where { IssueStatuses.project_id eq projectId }
+                    .associate { it[IssueStatuses.issue_id] to it[IssueStatuses.status] }
+            }
+        } else {
+            emptyMap()
+        }
+
+        val overfetch = if (status != null) (limit + offset) * 5 else limit + offset
         val query = """
             SELECT
                 issue_id,
@@ -87,46 +99,46 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
                 AND $retentionClauseForEvents
             GROUP BY issue_id, project_id
             ORDER BY max(timestamp) DESC
-            LIMIT $limit OFFSET $offset
+            LIMIT $overfetch
             FORMAT JSONEachRow
         """.trimIndent()
 
         val rows = queryHelper.executeJsonEachRowQuery(query, "Issues") ?: return emptyList()
-        val pgOverrides = if (projectId > 0) {
-            transaction {
-                IssueStatuses
-                    .selectAll()
-                    .where { IssueStatuses.project_id eq projectId }
-                    .associate { it[IssueStatuses.issue_id] to it[IssueStatuses.status] }
-            }
-        } else {
-            emptyMap()
-        }
 
         return try {
-            rows.mapNotNull { obj ->
-                var chStatus = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved"
-                val issueId = obj["issue_id"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            var skipped = 0
+            val result = mutableListOf<IssueResponse>()
+            for (obj in rows) {
+                val chStatus = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved"
+                val issueId = obj["issue_id"]?.jsonPrimitive?.content ?: continue
                 val effectiveStatus = pgOverrides[issueId] ?: chStatus
 
-                if (status != null && effectiveStatus != status) return@mapNotNull null
+                if (status != null && effectiveStatus != status) continue
 
-                IssueResponse(
-                    id = issueId,
-                    projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
-                    title = obj["title"]?.jsonPrimitive?.content ?: "",
-                    culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
-                    level = obj["level"]?.jsonPrimitive?.content ?: "error",
-                    platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                    firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
-                    lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
-                    eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
-                    userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
-                    status = effectiveStatus,
-                    substatus = null,
-                    statusDetail = null
+                if (skipped < offset) {
+                    skipped++
+                    continue
+                }
+                result.add(
+                    IssueResponse(
+                        id = issueId,
+                        projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
+                        title = obj["title"]?.jsonPrimitive?.content ?: "",
+                        culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
+                        level = obj["level"]?.jsonPrimitive?.content ?: "error",
+                        platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+                        firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
+                        lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
+                        eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
+                        userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
+                        status = effectiveStatus,
+                        substatus = null,
+                        statusDetail = null
+                    )
                 )
+                if (result.size >= limit) break
             }
+            result
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch issues for project $projectId" }
             emptyList()

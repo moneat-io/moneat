@@ -73,7 +73,7 @@ class ReplayService(
         val query =
             """
             SELECT toInt64(project_id) as project_id
-            FROM `$clickhouseDb`.issues
+            FROM `$clickhouseDb`.issues FINAL
             WHERE issue_id = '$escapedIssueId'
             LIMIT 1
             FORMAT JSONEachRow
@@ -788,10 +788,8 @@ class ReplayService(
         }
 
         if (replay.traceIds.isNotEmpty()) {
-            val traceConditions = replay.traceIds.distinct().map { traceId ->
-                val escaped = escapeSql(traceId)
-                "positionCaseInsensitive(e.contexts, '\"trace_id\":\"$escaped\"') > 0"
-            }.joinToString(" OR ")
+            val traceIdList = replay.traceIds.distinct().map { "'${escapeSql(it)}'" }.joinToString(",")
+            val traceConditions = "JSONExtractString(e.contexts, 'trace', 'trace_id') IN ($traceIdList)"
             val query = buildTransactionsByTraceQuery(projectId, traceConditions, retentionDays, demoEpochMs)
             fetchAndAddTimelineItems(
                 query = query,
@@ -803,7 +801,6 @@ class ReplayService(
                 addedIds = addedIds
             )
 
-            val traceIdList = replay.traceIds.distinct().map { "'${escapeSql(it)}'" }.joinToString(",")
             val spansQuery = buildSpansByTraceQuery(projectId, traceIdList, retentionDays, demoEpochMs)
             fetchAndAddTimelineItems(
                 query = spansQuery,
@@ -982,26 +979,8 @@ class ReplayService(
         val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val escapedIssueId = escapeSql(issueId)
+        val retentionClause = queryHelper.timestampRetentionClause("e.timestamp", retentionDays)
 
-        val eventIdsQuery =
-            """
-            SELECT toString(event_id) as event_id
-            FROM `$clickhouseDb`.events
-            WHERE issue_id = '$escapedIssueId'
-                AND project_id = $projectId
-                AND event_type = 'error'
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
-            LIMIT 100
-            FORMAT JSONEachRow
-            """.trimIndent()
-
-        val eventIds = queryHelper.executeJsonEachRowQuery(eventIdsQuery, "Event IDs for issue")?.mapNotNull { obj ->
-            obj["event_id"]?.jsonPrimitive?.content
-        } ?: emptyList()
-
-        if (eventIds.isEmpty()) return emptyList()
-
-        val eventIdList = eventIds.joinToString(",") { "'${escapeSql(it)}'" }
         val query =
             """
             SELECT
@@ -1021,8 +1000,14 @@ class ReplayService(
                 argMax(r.os_version, r.timestamp) as os_version,
                 argMax(r.activity, r.timestamp) as activity
             FROM `$clickhouseDb`.replay_events r
+            ARRAY JOIN r.error_ids AS error_id
+            INNER JOIN `$clickhouseDb`.events e
+                ON toString(e.event_id) = error_id
+                AND e.issue_id = '$escapedIssueId'
+                AND e.project_id = $projectId
+                AND e.event_type = 'error'
+                AND $retentionClause
             WHERE r.project_id = $projectId
-                AND hasAny(r.error_ids, [$eventIdList])
                 AND r.timestamp >= now64(3) - INTERVAL $retentionDays DAY
             GROUP BY r.replay_id, r.project_id
             ORDER BY max(r.timestamp) DESC

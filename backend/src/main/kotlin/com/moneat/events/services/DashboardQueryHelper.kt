@@ -243,15 +243,20 @@ class DashboardQueryHelper {
         query: String,
         parentSpan: ISpan? = null
     ): Long {
-        val response = ClickHouseClient.execute(query, parentSpan)
-        val body = response.bodyAsText()
-        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-            logger.error { "Failed to execute scalar query: ${response.status} ${body.take(400)}" }
-            return 0
+        return try {
+            val response = ClickHouseClient.execute(query, parentSpan)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                logger.error { "Failed to execute scalar query: ${response.status} ${body.take(400)}" }
+                return 0
+            }
+            if (body.isBlank()) return 0
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            obj["total"]?.jsonPrimitive?.long ?: 0
+        } catch (e: Throwable) {
+            logger.error(e) { "Scalar query failed (transport/parse): query=${query.take(200)}, returning 0" }
+            0
         }
-        if (body.isBlank()) return 0
-        val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-        return obj["total"]?.jsonPrimitive?.long ?: 0
     }
 
     suspend fun executeTimelineQuery(
@@ -363,13 +368,18 @@ class DashboardQueryHelper {
         return body
             .lines()
             .filter { it.isNotBlank() }
-            .map { line ->
-                val obj = json.parseToJsonElement(line).jsonObject
-                TopIssue(
-                    issueId = obj["issue_id"]?.jsonPrimitive?.content ?: "",
-                    title = obj["title"]?.jsonPrimitive?.content ?: "",
-                    count = obj["count"]?.jsonPrimitive?.long ?: 0
-                )
+            .mapNotNull { line ->
+                try {
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    TopIssue(
+                        issueId = obj["issue_id"]?.jsonPrimitive?.content ?: "",
+                        title = obj["title"]?.jsonPrimitive?.content ?: "",
+                        count = obj["count"]?.jsonPrimitive?.long ?: 0
+                    )
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
+                    null
+                }
             }
     }
 }

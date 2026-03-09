@@ -17,6 +17,7 @@
 package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
+import io.ktor.client.statement.bodyAsText
 import com.moneat.events.models.FeedbackDetailResponse
 import com.moneat.events.models.FeedbackListItem
 import com.moneat.utils.ClickHouseQueryUtils
@@ -122,9 +123,9 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
         val normalizedFeedbackId = queryHelper.normalizeUuid(feedbackId) ?: return null
         val projectId = getProjectIdForFeedback(normalizedFeedbackId) ?: return null
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        val retentionDays = queryHelper.getProjectRetentionDays(projectId)
+        val retentionClause = queryHelper.timestampRetentionClause("timestamp", retentionDays)
 
-        // For feedback detail, we don't apply retention filtering since we're looking up a specific ID
-        // The feedback item was already shown in the list (which did apply retention), so we know it exists
         val query =
             """
             SELECT
@@ -149,6 +150,7 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             FROM `$clickhouseDb`.user_feedback FINAL
             WHERE toString(feedback_id) = '$normalizedFeedbackId'
                 AND $projectIdClause
+                AND $retentionClause
             LIMIT 1
             FORMAT JSONEachRow
             """.trimIndent()
@@ -197,11 +199,16 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                 UPDATE status = '$escapedStatus', updated_at = now64(3)
                 WHERE toString(feedback_id) = '$normalizedFeedbackId'
                 """.trimIndent()
-            try {
+            val response = try {
                 ClickHouseClient.execute(query)
             } catch (e: Exception) {
                 logger.error(e) { "Failed to update feedback" }
                 throw e
+            }
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                logger.error { "Feedback update failed: query=${query.take(200)}, status=${response.status}, body=${body.take(400)}" }
+                throw IllegalStateException("ClickHouse ALTER TABLE UPDATE failed: ${response.status} ${body.take(200)}")
             }
         }
     }
