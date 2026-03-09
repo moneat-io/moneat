@@ -65,20 +65,22 @@ export interface ApiClientCore {
   isAuthenticated(): boolean
 }
 
+function getImpersonateToken(): string | null {
+  return globalThis.sessionStorage?.getItem('impersonate_token') ?? null
+}
+
 /** Reset auth redirect state. Used by tests to avoid cross-test pollution. */
-export let resetAuthRedirectForTesting: (() => void) | null = null
+export const resetAuthRedirectForTesting: { current: (() => void) | null } = {
+  current: null,
+}
 
 export function createApiClientCore(): ApiClientCore {
   let authRedirectInProgress = false
   let refreshPromise: Promise<boolean> | null = null
 
-  resetAuthRedirectForTesting = () => {
+  resetAuthRedirectForTesting.current = () => {
     authRedirectInProgress = false
     refreshPromise = null
-  }
-
-  function getImpersonateToken(): string | null {
-    return sessionStorage.getItem('impersonate_token')
   }
 
   async function refreshAccessToken(): Promise<boolean> {
@@ -95,7 +97,7 @@ export function createApiClientCore(): ApiClientCore {
         if (!response.ok) return false
         const data = await response.json()
         if (data.demoEpochMs) setDemoEpoch(data.demoEpochMs)
-        sessionStorage.setItem('authenticated', 'true')
+        globalThis.sessionStorage?.setItem('authenticated', 'true')
         return true
       } catch {
         return false
@@ -112,7 +114,7 @@ export function createApiClientCore(): ApiClientCore {
         }
       )
       if (!response.ok) return false
-      sessionStorage.setItem('authenticated', 'true')
+      globalThis.sessionStorage?.setItem('authenticated', 'true')
       return true
     } catch {
       return false
@@ -120,9 +122,9 @@ export function createApiClientCore(): ApiClientCore {
   }
 
   async function logout(): Promise<void> {
-    sessionStorage.removeItem('impersonate_token')
-    sessionStorage.removeItem('authenticated')
-    localStorage.removeItem('selectedProjectId')
+    globalThis.sessionStorage?.removeItem('impersonate_token')
+    globalThis.sessionStorage?.removeItem('authenticated')
+    globalThis.localStorage?.removeItem('selectedProjectId')
     setDemoEpoch(null)
     try {
       await fetch(`${API_BASE.replace('/v1', '')}/auth/logout`, {
@@ -132,6 +134,40 @@ export function createApiClientCore(): ApiClientCore {
     } catch {
       // Ignore errors
     }
+  }
+
+  async function logoutAndRedirect(): Promise<never> {
+    await logout()
+    if (
+      !authRedirectInProgress &&
+      typeof globalThis.window !== 'undefined' &&
+      !AUTH_PAGE_PATHS.has(globalThis.window.location.pathname)
+    ) {
+      authRedirectInProgress = true
+      globalThis.window.location.assign('/login')
+    }
+    throw new Error('Unauthorized')
+  }
+
+  async function handle401Retry<T>(
+    endpoint: string,
+    options: RequestInit,
+    authRetryCount: number,
+    retry: (ep: string, opts: RequestInit, count: number) => Promise<T>
+  ): Promise<T> {
+    if (authRetryCount >= 1) return logoutAndRedirect()
+    refreshPromise ??= refreshAccessToken().finally(() => {
+      refreshPromise = null
+    })
+    const refreshed = await refreshPromise
+    return refreshed ? retry(endpoint, options, authRetryCount + 1) : logoutAndRedirect()
+  }
+
+  function buildErrorFromResponse(response: Response, errorData: { error?: string } | null): Error & { status: number } {
+    const errorMessage = errorData?.error ?? `API Error: ${response.status} ${response.statusText}`
+    const error = new Error(errorMessage) as Error & { status: number }
+    error.status = response.status
+    return error
   }
 
   async function request<T>(
@@ -168,50 +204,17 @@ export function createApiClientCore(): ApiClientCore {
     }
 
     if (response.status === 401) {
-      if (authRetryCount >= 1) {
-        await logout()
-        if (
-          !authRedirectInProgress &&
-          typeof window !== 'undefined' &&
-          !AUTH_PAGE_PATHS.has(window.location.pathname)
-        ) {
-          authRedirectInProgress = true
-          window.location.assign('/login')
-        }
-        throw new Error('Unauthorized')
-      }
-      if (!refreshPromise) {
-        refreshPromise = refreshAccessToken().finally(() => {
-          refreshPromise = null
-        })
-      }
-      const refreshed = await refreshPromise
-      if (refreshed) {
-        return request<T>(endpoint, options, authRetryCount + 1)
-      }
-      await logout()
-      if (
-        !authRedirectInProgress &&
-        typeof window !== 'undefined' &&
-        !AUTH_PAGE_PATHS.has(window.location.pathname)
-      ) {
-        authRedirectInProgress = true
-        window.location.assign('/login')
-      }
-      throw new Error('Unauthorized')
+      return handle401Retry(endpoint, options, authRetryCount, request)
     }
 
     if (!response.ok) {
-      let errorMessage = `API Error: ${response.status} ${response.statusText}`
+      let errorData: { error?: string } | null = null
       try {
-        const errorData = await response.json()
-        if (errorData.error) errorMessage = errorData.error
+        errorData = await response.json()
       } catch {
         // use default
       }
-      const error = new Error(errorMessage) as Error & { status: number }
-      error.status = response.status
-      throw error
+      throw buildErrorFromResponse(response, errorData)
     }
     if (response.status === 204) return undefined as T
     return response.json()
@@ -248,37 +251,7 @@ export function createApiClientCore(): ApiClientCore {
     }
 
     if (response.status === 401) {
-      if (authRetryCount >= 1) {
-        await logout()
-        if (
-          !authRedirectInProgress &&
-          typeof window !== 'undefined' &&
-          !AUTH_PAGE_PATHS.has(window.location.pathname)
-        ) {
-          authRedirectInProgress = true
-          window.location.assign('/login')
-        }
-        throw new Error('Unauthorized')
-      }
-      if (!refreshPromise) {
-        refreshPromise = refreshAccessToken().finally(() => {
-          refreshPromise = null
-        })
-      }
-      const refreshed = await refreshPromise
-      if (refreshed) {
-        return fetchWithAuth(endpoint, options, authRetryCount + 1)
-      }
-      await logout()
-      if (
-        !authRedirectInProgress &&
-        typeof window !== 'undefined' &&
-        !AUTH_PAGE_PATHS.has(window.location.pathname)
-      ) {
-        authRedirectInProgress = true
-        window.location.assign('/login')
-      }
-      throw new Error('Unauthorized')
+      return handle401Retry(endpoint, options, authRetryCount, fetchWithAuth)
     }
 
     return response
@@ -294,7 +267,7 @@ export function createApiClientCore(): ApiClientCore {
   function isAuthenticated(): boolean {
     return (
       !!getImpersonateToken() ||
-      sessionStorage.getItem('authenticated') === 'true'
+      globalThis.sessionStorage?.getItem('authenticated') === 'true'
     )
   }
 
@@ -314,13 +287,13 @@ export function createApiClientCore(): ApiClientCore {
         signal: controller.signal,
       })
       if (!response.ok) {
-        sessionStorage.removeItem('authenticated')
+        globalThis.sessionStorage?.removeItem('authenticated')
         return false
       }
-      sessionStorage.setItem('authenticated', 'true')
+      globalThis.sessionStorage?.setItem('authenticated', 'true')
       return true
     } catch {
-      sessionStorage.removeItem('authenticated')
+      globalThis.sessionStorage?.removeItem('authenticated')
       return false
     } finally {
       clearTimeout(timeoutId)

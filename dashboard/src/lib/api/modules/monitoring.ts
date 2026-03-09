@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { ApiClientCore } from '../client'
+import { urlWithQuery } from '../utils'
 import type {
   DdEventListResponse,
   DdServiceCheckListResponse,
@@ -82,7 +83,7 @@ export function monitoringMethods(core: ApiClientCore) {
       if (params.limit != null) searchParams.set('limit', String(params.limit))
       if (params.offset != null) searchParams.set('offset', String(params.offset))
       const qs = searchParams.toString()
-      return core.request<DdEventListResponse>(`${base}/infra/events${qs ? `?${qs}` : ''}`)
+      return core.request<DdEventListResponse>(urlWithQuery(`${base}/infra/events`, qs))
     },
 
     // Service checks
@@ -101,7 +102,7 @@ export function monitoringMethods(core: ApiClientCore) {
       if (params.offset != null) searchParams.set('offset', String(params.offset))
       const qs = searchParams.toString()
       return core.request<DdServiceCheckListResponse>(
-        `${base}/infra/service-checks${qs ? `?${qs}` : ''}`
+        urlWithQuery(`${base}/infra/service-checks`, qs)
       )
     },
 
@@ -119,7 +120,7 @@ export function monitoringMethods(core: ApiClientCore) {
       if (to) params.append('to', to)
       const qs = params.toString()
       return core.request<SystemMetricsHistory>(
-        `${base}/hosts/${hostId}/metrics${qs ? `?${qs}` : ''}`
+        urlWithQuery(`${base}/hosts/${hostId}/metrics`, qs)
       )
     },
 
@@ -140,7 +141,7 @@ export function monitoringMethods(core: ApiClientCore) {
       if (params.offset != null) searchParams.set('offset', String(params.offset))
       const qs = searchParams.toString()
       return core.request<DdProcessListResponse>(
-        `${base}/infra/processes${qs ? `?${qs}` : ''}`
+        urlWithQuery(`${base}/infra/processes`, qs)
       )
     },
 
@@ -158,7 +159,7 @@ export function monitoringMethods(core: ApiClientCore) {
       if (params.offset != null) searchParams.set('offset', String(params.offset))
       const qs = searchParams.toString()
       return core.request<DdContainerListResponse>(
-        `${base}/infra/containers${qs ? `?${qs}` : ''}`
+        urlWithQuery(`${base}/infra/containers`, qs)
       )
     },
 
@@ -176,7 +177,7 @@ export function monitoringMethods(core: ApiClientCore) {
       if (params.offset != null) searchParams.set('offset', String(params.offset))
       const qs = searchParams.toString()
       return core.request<DdConnectionListResponse>(
-        `${base}/infra/connections${qs ? `?${qs}` : ''}`
+        urlWithQuery(`${base}/infra/connections`, qs)
       )
     },
 
@@ -223,7 +224,7 @@ export function monitoringMethods(core: ApiClientCore) {
       if (interval) params.append('interval', interval)
       const query = params.toString()
       return core.request<SystemMetricsHistory>(
-        `${base}/monitor/hosts/${hostId}/metrics${query ? `?${query}` : ''}`
+        urlWithQuery(`${base}/monitor/hosts/${hostId}/metrics`, query)
       )
     },
 
@@ -257,7 +258,7 @@ export function monitoringMethods(core: ApiClientCore) {
       if (interval) params.append('interval', interval)
       const query = params.toString()
       return core.request<ContainerMetricsHistory>(
-        `${base}/monitor/systems/${systemId}/containers/${encodeURIComponent(containerName)}/metrics${query ? `?${query}` : ''}`
+        urlWithQuery(`${base}/monitor/systems/${systemId}/containers/${encodeURIComponent(containerName)}/metrics`, query)
       )
     },
 

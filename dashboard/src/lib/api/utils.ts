@@ -14,6 +14,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+/** Build URL with optional query string. Avoids nested template literals. */
+export function urlWithQuery(path: string, qs: string): string {
+  return qs ? path + '?' + qs : path
+}
+
 export function formatErrorForLogging(error: unknown): string {
   if (error instanceof Error) {
     if (error.message === 'NETWORK_ERROR') {
@@ -28,7 +33,8 @@ export function filenameFromContentDisposition(
   value: string | null
 ): string | null {
   if (!value) return null
-  const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i)
+  const utf8Regex = /filename\*=UTF-8''([^;]+)/i
+  const utf8Match = utf8Regex.exec(value)
   if (utf8Match?.[1]) {
     try {
       return decodeURIComponent(utf8Match[1].trim())
@@ -36,6 +42,7 @@ export function filenameFromContentDisposition(
       return utf8Match[1].trim()
     }
   }
-  const filenameMatch = value.match(/filename="?([^";]+)"?/i)
+  const filenameRegex = /filename="?([^";]+)"?/i
+  const filenameMatch = filenameRegex.exec(value)
   return filenameMatch?.[1]?.trim() ?? null
 }

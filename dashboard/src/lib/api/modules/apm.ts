@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { ApiClientCore } from '../client'
+import { urlWithQuery } from '../utils'
 import type {
   ApmTraceListResponse,
   ApmTraceDetailResponse,
@@ -41,7 +42,7 @@ export function apmMethods(core: ApiClientCore) {
       if (params.limit != null) searchParams.set('limit', String(params.limit))
       if (params.offset != null) searchParams.set('offset', String(params.offset))
       const qs = searchParams.toString()
-      return core.request<ApmTraceListResponse>(`${base}/traces${qs ? `?${qs}` : ''}`)
+      return core.request<ApmTraceListResponse>(urlWithQuery(`${base}/traces`, qs))
     },
 
     getApmTraceDetail: (traceId: string) =>
@@ -62,7 +63,7 @@ export function apmMethods(core: ApiClientCore) {
       if (params.limit != null) searchParams.set('limit', String(params.limit))
       if (params.offset != null) searchParams.set('offset', String(params.offset))
       const qs = searchParams.toString()
-      return core.request<ApmErrorsResponse>(`${base}/apm-errors${qs ? `?${qs}` : ''}`)
+      return core.request<ApmErrorsResponse>(urlWithQuery(`${base}/apm-errors`, qs))
     },
 
     getApmResourceStats: (
@@ -78,7 +79,7 @@ export function apmMethods(core: ApiClientCore) {
       if (params.offset != null) searchParams.set('offset', String(params.offset))
       const qs = searchParams.toString()
       return core.request<ApmResourceStatsResponse>(
-        `${base}/traces/resources${qs ? `?${qs}` : ''}`
+        urlWithQuery(`${base}/traces/resources`, qs)
       )
     },
   }

@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { ApiClientCore } from '../client'
+import { urlWithQuery } from '../utils'
 import type {
   LogApiKey,
   LogEntry,
@@ -121,31 +122,10 @@ export function logsMethods(core: ApiClientCore) {
         excludeTags?: Record<string, string>
       } = {}
     ): Promise<LogQueryResponse> => {
-      const params = new URLSearchParams()
+      const params = buildLogFilterParams(options)
       if (options.cursor) params.set('cursor', options.cursor)
       params.set('limit', String(options.limit ?? 100))
-      if (options.query) params.set('q', options.query)
-      if (options.levels && options.levels.length > 0) {
-        options.levels.forEach((level) => params.append('level', level))
-      }
-      if (options.service) params.set('service', options.service)
-      if (options.environment) params.set('environment', options.environment)
       if (options.containerName) params.set('containerName', options.containerName)
-      if (options.from) params.set('from', options.from)
-      if (options.to) params.set('to', options.to)
-      if (options.tags) {
-        Object.entries(options.tags).forEach(([key, value]) => {
-          if (key) params.append('tag', `${key}:${value}`)
-        })
-      }
-      if (options.excludeService) params.set('excludeService', options.excludeService)
-      if (options.excludeEnvironment) params.set('excludeEnvironment', options.excludeEnvironment)
-      if (options.excludeContainerName) params.set('excludeContainerName', options.excludeContainerName)
-      if (options.excludeTags) {
-        Object.entries(options.excludeTags).forEach(([key, value]) => {
-          if (key) params.append('excludeTag', `${key}:${value}`)
-        })
-      }
       const response = await core.request<RawLogResponse>(`${base}/logs?${params.toString()}`)
       return mapRawLogResponse(response)
     },
@@ -196,7 +176,7 @@ export function logsMethods(core: ApiClientCore) {
       if (options.to) params.set('to', options.to)
       const query = params.toString()
       const response = await core.request<RawLogFilterResponse>(
-        `${base}/logs/filters${query ? `?${query}` : ''}`
+        urlWithQuery(`${base}/logs/filters`, query)
       )
       const mapServices = (arr: (string | { value: string; count: number })[]) =>
         arr.map((item: string | { value: string; count: number }) =>
@@ -357,7 +337,7 @@ export function logsMethods(core: ApiClientCore) {
       a.download = 'logs-export.csv'
       document.body.appendChild(a)
       a.click()
-      document.body.removeChild(a)
+      a.remove()
       URL.revokeObjectURL(url)
     },
   }

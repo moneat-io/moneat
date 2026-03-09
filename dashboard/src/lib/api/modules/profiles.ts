@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { ApiClientCore } from '../client'
+import { urlWithQuery } from '../utils'
 import type {
   ProfileListResponse,
   FlamegraphResponse,
@@ -41,7 +42,7 @@ export function profilesMethods(core: ApiClientCore) {
       if (params.limit != null) searchParams.set('limit', String(params.limit))
       if (params.offset != null) searchParams.set('offset', String(params.offset))
       const qs = searchParams.toString()
-      return core.request<ProfileListResponse>(`${base}/profiles${qs ? `?${qs}` : ''}`)
+      return core.request<ProfileListResponse>(urlWithQuery(`${base}/profiles`, qs))
     },
 
     downloadProfile: async (
@@ -66,8 +67,8 @@ export function profilesMethods(core: ApiClientCore) {
       try {
         a.click()
       } finally {
-        document.body.removeChild(a)
-        setTimeout(() => URL.revokeObjectURL(url), 0)
+        a.remove()
+        URL.revokeObjectURL(url)
       }
     },
 

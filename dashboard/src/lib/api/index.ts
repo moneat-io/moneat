@@ -14,10 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {
-  createApiClientCore,
-  resetAuthRedirectForTesting,
-} from './client'
+import { createApiClientCore } from './client'
 import { authMethods } from './modules/auth'
 import { projectsMethods } from './modules/projects'
 import { issuesMethods } from './modules/issues'
@@ -83,6 +80,7 @@ export const api = {
   ...logIndexesMethods(core),
 }
 
-export { formatErrorForLogging, resetAuthRedirectForTesting }
+export { formatErrorForLogging } from './utils'
+export { resetAuthRedirectForTesting } from './client'
 
 export type * from './types'

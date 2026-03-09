@@ -92,9 +92,8 @@ function normalizeAnalyticsBreakdown(
   data: AnalyticsBreakdownItem[] | AnalyticsBreakdownApiResponse
 ): AnalyticsBreakdownItem[] {
   if (Array.isArray(data)) return data
-  return Array.isArray((data as AnalyticsBreakdownApiResponse)?.results)
-    ? (data as AnalyticsBreakdownApiResponse).results!
-    : []
+  const apiData = data as AnalyticsBreakdownApiResponse
+  return Array.isArray(apiData?.results) ? apiData.results : []
 }
 
 export function analyticsMethods(core: ApiClientCore) {

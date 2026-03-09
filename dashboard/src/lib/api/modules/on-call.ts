@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { ApiClientCore } from '../client'
+import { urlWithQuery } from '../utils'
 import type {
   Priority,
   BusinessHours,
@@ -145,7 +146,7 @@ export function onCallMethods(core: ApiClientCore) {
       if (filters?.toDate) params.append('toDate', filters.toDate)
       const query = params.toString()
       return core.request<Incident[]>(
-        `${base}/incidents${query ? `?${query}` : ''}`
+        urlWithQuery(`${base}/incidents`, query)
       )
     },
 

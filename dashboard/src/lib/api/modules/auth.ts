@@ -38,7 +38,7 @@ export function authMethods(core: ApiClientCore) {
         body: JSON.stringify({ email, password, name, ...legalConsent }),
       })
       setDemoEpoch(null)
-      sessionStorage.setItem('authenticated', 'true')
+      globalThis.sessionStorage?.setItem('authenticated', 'true')
       return response
     },
 
@@ -51,7 +51,7 @@ export function authMethods(core: ApiClientCore) {
         body: JSON.stringify({ email, password }),
       })
       setDemoEpoch(null)
-      sessionStorage.setItem('authenticated', 'true')
+      globalThis.sessionStorage?.setItem('authenticated', 'true')
       return response
     },
 
@@ -108,32 +108,21 @@ export function authMethods(core: ApiClientCore) {
 
     checkAuth: () => core.checkAuth(),
 
-    completeOnboarding: async (
-      organizationName: string,
-      companySize: string,
-      slug: string,
-      referralSource: string,
-      utmSource?: string,
-      utmMedium?: string,
-      utmCampaign?: string,
-      utmContent?: string,
-      utmTerm?: string,
+    completeOnboarding: async (options: {
+      organizationName: string
+      companySize: string
+      slug: string
+      referralSource: string
+      utmSource?: string
+      utmMedium?: string
+      utmCampaign?: string
+      utmContent?: string
+      utmTerm?: string
       sidebarHiddenItems?: string[]
-    ) =>
+    }) =>
       core.request(`${authBase}/auth/complete-onboarding`, {
         method: 'POST',
-        body: JSON.stringify({
-          organizationName,
-          companySize,
-          slug,
-          referralSource,
-          utmSource,
-          utmMedium,
-          utmCampaign,
-          utmContent,
-          utmTerm,
-          sidebarHiddenItems,
-        }),
+        body: JSON.stringify(options),
       }),
 
     demoLogin: async (): Promise<{ token: string; demoEpochMs: number }> => {
@@ -141,7 +130,7 @@ export function authMethods(core: ApiClientCore) {
         token: string
         demoEpochMs: number
       }>(`${authBase}/auth/demo-login`, { method: 'POST' })
-      sessionStorage.setItem('authenticated', 'true')
+      globalThis.sessionStorage?.setItem('authenticated', 'true')
       setDemoEpoch(response.demoEpochMs)
       return response
     },

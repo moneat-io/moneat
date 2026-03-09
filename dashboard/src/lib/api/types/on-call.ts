@@ -40,11 +40,13 @@ export interface BusinessHours {
   windows: BusinessHoursWindow[]
 }
 
+export type OnCallRotationType = 'DAILY' | 'WEEKLY' | 'CUSTOM'
+
 export interface OnCallSchedule {
   id: number
   organizationId: number
   name: string
-  rotationType: 'DAILY' | 'WEEKLY' | 'CUSTOM'
+  rotationType: OnCallRotationType
   handoffTime: string
   timezone: string
   createdAt: string
@@ -186,7 +188,7 @@ export interface DeviceToken {
 
 export interface CreateOnCallScheduleRequest {
   name: string
-  rotationType: 'DAILY' | 'WEEKLY' | 'CUSTOM'
+  rotationType: OnCallRotationType
   handoffTime: string
   timezone: string
   participants: { userId: number; position: number }[]
@@ -194,7 +196,7 @@ export interface CreateOnCallScheduleRequest {
 
 export interface UpdateOnCallScheduleRequest {
   name?: string
-  rotationType?: 'DAILY' | 'WEEKLY' | 'CUSTOM'
+  rotationType?: OnCallRotationType
   handoffTime?: string
   timezone?: string
   participants?: { userId: number; position: number }[]

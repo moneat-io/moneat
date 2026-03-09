@@ -25,7 +25,7 @@ describe('ApiClient', () => {
   beforeEach(() => {
     localStorage.clear()
     sessionStorage.clear()
-    resetAuthRedirectForTesting?.()
+    resetAuthRedirectForTesting.current?.()
   })
 
   describe('Auth token handling', () => {

@@ -86,12 +86,14 @@ export interface DashboardWidgetAlertNotificationChannels {
   discord: boolean
 }
 
+export type DashboardAlertCondition = '>' | '<' | '>=' | '<=' | '=='
+
 export interface DashboardWidgetAlert {
   id: number
   widget_id: number
   dashboard_id: number
   name: string
-  condition: '>' | '<' | '>=' | '<=' | '=='
+  condition: DashboardAlertCondition
   threshold: number
   metric_index: number
   duration_seconds: number
@@ -107,7 +109,7 @@ export interface DashboardWidgetAlert {
 export interface CreateDashboardAlertRequest {
   widget_id: number
   name: string
-  condition: '>' | '<' | '>=' | '<=' | '=='
+  condition: DashboardAlertCondition
   threshold: number
   metric_index?: number
   duration_seconds?: number
@@ -118,7 +120,7 @@ export interface CreateDashboardAlertRequest {
 
 export interface UpdateDashboardAlertRequest {
   name?: string
-  condition?: '>' | '<' | '>=' | '<=' | '=='
+  condition?: DashboardAlertCondition
   threshold?: number
   metric_index?: number
   duration_seconds?: number

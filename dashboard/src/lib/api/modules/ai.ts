@@ -23,6 +23,32 @@ import type {
   AiSseEvent,
 } from '../types'
 
+async function readSseStream(response: Response, onEvent: (event: AiSseEvent) => void): Promise<void> {
+  const reader = response.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const event = JSON.parse(line.slice(6)) as AiSseEvent
+          onEvent(event)
+        } catch {
+          /* skip malformed events */
+        }
+      }
+    }
+  }
+}
+
 export function aiMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
@@ -78,43 +104,7 @@ export function aiMethods(core: ApiClientCore) {
         throw new Error((err as { error?: string }).error || `Stream error: ${response.status}`)
       }
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) {
-          buffer += decoder.decode()
-          break
-        }
-        buffer += decoder.decode(value, { stream: true })
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6)) as AiSseEvent
-              onEvent(event)
-            } catch {
-              /* skip malformed events */
-            }
-          }
-        }
-      }
-
-      for (const line of buffer.split('\n')) {
-        if (line.startsWith('data: ')) {
-          try {
-            const event = JSON.parse(line.slice(6)) as AiSseEvent
-            onEvent(event)
-          } catch {
-            /* skip malformed events */
-          }
-        }
-      }
+      await readSseStream(response, onEvent)
     },
 
     streamAiConfirm: async (
@@ -132,43 +122,7 @@ export function aiMethods(core: ApiClientCore) {
         throw new Error((err as { error?: string }).error || `Confirm error: ${response.status}`)
       }
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) {
-          buffer += decoder.decode()
-          break
-        }
-        buffer += decoder.decode(value, { stream: true })
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6)) as AiSseEvent
-              onEvent(event)
-            } catch {
-              /* skip malformed events */
-            }
-          }
-        }
-      }
-
-      for (const line of buffer.split('\n')) {
-        if (line.startsWith('data: ')) {
-          try {
-            const event = JSON.parse(line.slice(6)) as AiSseEvent
-            onEvent(event)
-          } catch {
-            /* skip malformed events */
-          }
-        }
-      }
+      await readSseStream(response, onEvent)
     },
   }
 }

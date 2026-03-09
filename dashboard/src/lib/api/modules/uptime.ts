@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { ApiClientCore } from '../client'
+import { urlWithQuery } from '../utils'
 import type {
   UptimeMonitor,
   CreateUptimeMonitorRequest,
@@ -72,7 +73,7 @@ export function uptimeMethods(core: ApiClientCore) {
       if (to !== undefined && to !== null) params.append('to', to.toString())
       const query = params.toString()
       return core.request<UptimeHeartbeat[]>(
-        `${base}/uptime/monitors/${monitorId}/heartbeats${query ? `?${query}` : ''}`
+        urlWithQuery(`${base}/uptime/monitors/${monitorId}/heartbeats`, query)
       )
     },
   }
