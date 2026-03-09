@@ -69,6 +69,20 @@ function getImpersonateToken(): string | null {
   return globalThis.sessionStorage?.getItem('impersonate_token') ?? null
 }
 
+function buildErrorFromResponse(response: Response, errorData: { error?: string } | null): Error & { status: number } {
+  const errorMessage = errorData?.error ?? `API Error: ${response.status} ${response.statusText}`
+  const error = new Error(errorMessage) as Error & { status: number }
+  error.status = response.status
+  return error
+}
+
+function isAuthenticated(): boolean {
+  return (
+    !!getImpersonateToken() ||
+    globalThis.sessionStorage?.getItem('authenticated') === 'true'
+  )
+}
+
 /** Reset auth redirect state. Used by tests to avoid cross-test pollution. */
 export const resetAuthRedirectForTesting: { current: (() => void) | null } = {
   current: null,
@@ -140,7 +154,7 @@ export function createApiClientCore(): ApiClientCore {
     await logout()
     if (
       !authRedirectInProgress &&
-      typeof globalThis.window !== 'undefined' &&
+      globalThis.window !== undefined &&
       !AUTH_PAGE_PATHS.has(globalThis.window.location.pathname)
     ) {
       authRedirectInProgress = true
@@ -161,13 +175,6 @@ export function createApiClientCore(): ApiClientCore {
     })
     const refreshed = await refreshPromise
     return refreshed ? retry(endpoint, options, authRetryCount + 1) : logoutAndRedirect()
-  }
-
-  function buildErrorFromResponse(response: Response, errorData: { error?: string } | null): Error & { status: number } {
-    const errorMessage = errorData?.error ?? `API Error: ${response.status} ${response.statusText}`
-    const error = new Error(errorMessage) as Error & { status: number }
-    error.status = response.status
-    return error
   }
 
   async function request<T>(
@@ -262,13 +269,6 @@ export function createApiClientCore(): ApiClientCore {
       ? `${API_BASE}${endpoint.replace(/^\/v1/, '')}`
       : endpoint
     return request<T>(url)
-  }
-
-  function isAuthenticated(): boolean {
-    return (
-      !!getImpersonateToken() ||
-      globalThis.sessionStorage?.getItem('authenticated') === 'true'
-    )
   }
 
   async function checkAuth(): Promise<boolean> {

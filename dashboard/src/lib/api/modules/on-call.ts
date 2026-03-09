@@ -216,7 +216,7 @@ export function onCallMethods(core: ApiClientCore) {
       if (filters.priorityLevel) params.set('priorityLevel', filters.priorityLevel)
       const q = params.toString()
       return core.request<OnCallIncident[]>(
-        `${base}/on-call-incidents${q ? `?${q}` : ''}`
+        urlWithQuery(`${base}/on-call-incidents`, q)
       )
     },
 

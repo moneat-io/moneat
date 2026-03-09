@@ -27,6 +27,8 @@ export interface SyntheticVariableExtractionPayload {
   path?: string
 }
 
+export type SyntheticAuthMethod = 'basic' | 'bearer' | null
+
 export interface SyntheticStepPayload {
   name?: string
   url: string
@@ -53,7 +55,7 @@ export interface CreateSyntheticTestPayload {
   method?: string
   headers?: Record<string, string> | null
   body?: string | null
-  authMethod?: 'basic' | 'bearer' | null
+  authMethod?: SyntheticAuthMethod
   authUser?: string | null
   authPass?: string | null
   assertions?: SyntheticAssertionPayload[]
@@ -75,7 +77,7 @@ export interface UpdateSyntheticTestPayload {
   method?: string
   headers?: Record<string, string> | null
   body?: string | null
-  authMethod?: 'basic' | 'bearer' | null
+  authMethod?: SyntheticAuthMethod
   authUser?: string | null
   authPass?: string | null
   assertions?: SyntheticAssertionPayload[]
@@ -94,7 +96,7 @@ export interface SyntheticTestResponse {
   method: string
   headers?: Record<string, string> | null
   body?: string | null
-  authMethod?: 'basic' | 'bearer' | null
+  authMethod?: SyntheticAuthMethod
   authUser?: string | null
   assertions: SyntheticAssertionPayload[]
   steps: SyntheticStepPayload[]

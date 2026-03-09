@@ -130,7 +130,18 @@ While some rules are currently disabled in `detekt.yml`, always follow best prac
 - Limit function parameters (prefer data classes)
 - Use descriptive variable/function names
 
-### Exposed DSL (Kotlin Database ORM)
+### Frontend TypeScript Code Style Guidelines
+The dashboard code is checked by SonarCloud. Follow these rules when writing TypeScript/React code:
+
+- ❌ **Don't use `typeof x !== 'undefined'`** — compare directly: `x !== undefined`
+- ❌ **Don't duplicate module imports** — merge all imports from the same path into one statement
+- ❌ **Don't use nested template literals** — use a helper (e.g. `urlWithQuery`) or a variable instead
+- ❌ **Don't leave unused imports** — remove or convert to a re-export if needed
+- ❌ **Don't add unnecessary type assertions** — avoid `as SomeType` when TypeScript already narrows the type
+- ✅ **Extract repeated union types into a named type alias** — e.g. `type IncidentSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null`
+- ✅ **Define helper functions at module scope** when they don't close over instance state — avoids the "move function to outer scope" smell
+
+
 **CRITICAL:** Always use the current Exposed DSL syntax to avoid deprecation warnings:
 
 - ❌ **DEPRECATED**: `Table.select { condition }`

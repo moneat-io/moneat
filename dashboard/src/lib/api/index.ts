@@ -44,8 +44,6 @@ import { dashboardsMethods } from './modules/dashboards'
 import { syntheticsMethods } from './modules/synthetics'
 import { logIndexesMethods } from './modules/log-indexes'
 
-import { formatErrorForLogging } from './utils'
-
 const core = createApiClientCore()
 
 export const api = {

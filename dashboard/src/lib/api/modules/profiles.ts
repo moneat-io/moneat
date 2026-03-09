@@ -15,12 +15,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { ApiClientCore } from '../client'
-import { urlWithQuery } from '../utils'
+import { urlWithQuery, filenameFromContentDisposition } from '../utils'
 import type {
   ProfileListResponse,
   FlamegraphResponse,
 } from '../types'
-import { filenameFromContentDisposition } from '../utils'
 
 export function profilesMethods(core: ApiClientCore) {
   const base = core.API_BASE
