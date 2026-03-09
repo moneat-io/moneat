@@ -16,7 +16,6 @@
 
 package com.moneat.events.services
 
-import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.EventResponse
 import com.moneat.events.models.IssueDetailResponse
 import com.moneat.events.models.IssueTransactionResponse
@@ -25,9 +24,7 @@ import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
-import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.long
@@ -54,18 +51,7 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()
-
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) return null
-            if (body.isBlank()) return null
-            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-            obj["project_id"]?.jsonPrimitive?.long
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to get project ID for issue $issueId" }
-            null
-        }
+        return queryHelper.executeProjectIdQuery(query, "Issue", issueId)
     }
 
     suspend fun getIssues(
@@ -105,48 +91,42 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299) return emptyList()
-
-            val pgOverrides = if (projectId > 0) {
-                transaction {
-                    IssueStatuses
-                        .selectAll()
-                        .where { IssueStatuses.project_id eq projectId }
-                        .associate { it[IssueStatuses.issue_id] to it[IssueStatuses.status] }
-                }
-            } else {
-                emptyMap()
+        val rows = queryHelper.executeJsonEachRowQuery(query, "Issues") ?: return emptyList()
+        val pgOverrides = if (projectId > 0) {
+            transaction {
+                IssueStatuses
+                    .selectAll()
+                    .where { IssueStatuses.project_id eq projectId }
+                    .associate { it[IssueStatuses.issue_id] to it[IssueStatuses.status] }
             }
+        } else {
+            emptyMap()
+        }
 
-            body.lines()
-                .filter { it.isNotBlank() }
-                .mapNotNull { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    var chStatus = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved"
-                    val issueId = obj["issue_id"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    val effectiveStatus = pgOverrides[issueId] ?: chStatus
+        return try {
+            rows.mapNotNull { obj ->
+                var chStatus = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved"
+                val issueId = obj["issue_id"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                val effectiveStatus = pgOverrides[issueId] ?: chStatus
 
-                    if (status != null && effectiveStatus != status) return@mapNotNull null
+                if (status != null && effectiveStatus != status) return@mapNotNull null
 
-                    IssueResponse(
-                        id = issueId,
-                        projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
-                        title = obj["title"]?.jsonPrimitive?.content ?: "",
-                        culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
-                        level = obj["level"]?.jsonPrimitive?.content ?: "error",
-                        platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                        firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
-                        lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
-                        eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
-                        userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
-                        status = effectiveStatus,
-                        substatus = null,
-                        statusDetail = null
-                    )
-                }
+                IssueResponse(
+                    id = issueId,
+                    projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
+                    title = obj["title"]?.jsonPrimitive?.content ?: "",
+                    culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
+                    level = obj["level"]?.jsonPrimitive?.content ?: "error",
+                    platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+                    firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
+                    lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
+                    eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
+                    userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
+                    status = effectiveStatus,
+                    substatus = null,
+                    statusDetail = null
+                )
+            }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch issues for project $projectId" }
             emptyList()
@@ -200,40 +180,32 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
                 ?.get(Projects.name)
         } ?: "Unknown"
 
-        return try {
-            val response = ClickHouseClient.execute(detailQuery)
-            val body = response.bodyAsText()
-            val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
-            val obj = json.parseToJsonElement(line).jsonObject
+        val obj = queryHelper.executeJsonEachRowQuery(detailQuery, "Issue detail")?.firstOrNull() ?: return null
 
-            val fingerprintArr =
-                obj["fingerprint"]?.jsonArray?.map { it.jsonPrimitive.contentOrNull ?: "" } ?: emptyList()
-            val effectiveStatus = pgStatus ?: (obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved")
+        val fingerprintArr =
+            obj["fingerprint"]?.jsonArray?.map { it.jsonPrimitive.contentOrNull ?: "" } ?: emptyList()
+        val effectiveStatus = pgStatus ?: (obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved")
 
-            val latestEvent = getIssueEvents(issueId, 1, demoEpochMs).firstOrNull()
+        val latestEvent = getIssueEvents(issueId, 1, demoEpochMs).firstOrNull()
 
-            IssueDetailResponse(
-                id = issueId,
-                projectId = projectId,
-                projectName = projectName,
-                title = obj["title"]?.jsonPrimitive?.content ?: "",
-                culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
-                level = obj["level"]?.jsonPrimitive?.content ?: "error",
-                platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
-                lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
-                eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
-                userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
-                status = effectiveStatus,
-                substatus = null,
-                statusDetail = null,
-                fingerprint = fingerprintArr,
-                latestEvent = latestEvent
-            )
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch issue $issueId" }
-            null
-        }
+        return IssueDetailResponse(
+            id = issueId,
+            projectId = projectId,
+            projectName = projectName,
+            title = obj["title"]?.jsonPrimitive?.content ?: "",
+            culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
+            level = obj["level"]?.jsonPrimitive?.content ?: "error",
+            platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+            firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
+            lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
+            eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
+            userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
+            status = effectiveStatus,
+            substatus = null,
+            statusDetail = null,
+            fingerprint = fingerprintArr,
+            latestEvent = latestEvent
+        )
     }
 
     suspend fun getIssueEvents(
@@ -271,20 +243,8 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299) return emptyList()
-            body.lines()
-                .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    queryHelper.mapEventRow(obj)
-                }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch events for issue $issueId" }
-            emptyList()
-        }
+        val rows = queryHelper.executeJsonEachRowQuery(query, "Issue events") ?: return emptyList()
+        return rows.map { queryHelper.mapEventRow(it) }
     }
 
     suspend fun getIssueTransactions(
@@ -316,27 +276,17 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299) return emptyList()
-            body.lines()
-                .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    IssueTransactionResponse(
-                        eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
-                        name = obj["name"]?.jsonPrimitive?.content ?: "",
-                        op = obj["op"]?.jsonPrimitive?.content ?: "",
-                        duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                        timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
-                        status = obj["status"]?.jsonPrimitive?.contentOrNull,
-                        traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull
-                    )
-                }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch transactions for issue $issueId" }
-            emptyList()
+        val rows = queryHelper.executeJsonEachRowQuery(query, "Issue transactions") ?: return emptyList()
+        return rows.map { obj ->
+            IssueTransactionResponse(
+                eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
+                name = obj["name"]?.jsonPrimitive?.content ?: "",
+                op = obj["op"]?.jsonPrimitive?.content ?: "",
+                duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+                status = obj["status"]?.jsonPrimitive?.contentOrNull,
+                traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull
+            )
         }
     }
 

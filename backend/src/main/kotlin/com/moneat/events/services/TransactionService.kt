@@ -33,7 +33,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.long
-import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -72,18 +71,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()
-
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) return null
-            if (body.isBlank()) return null
-            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-            obj["project_id"]?.jsonPrimitive?.longOrNull?.takeIf { it > 0 }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to get project ID for transaction $eventId" }
-            null
-        }
+        return queryHelper.executeProjectIdQuery(query, "Transaction", eventId)?.takeIf { it > 0 }
     }
 
     suspend fun getTransactions(
@@ -122,29 +110,19 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299) return emptyList()
-            body.lines()
-                .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    TransactionSummaryResponse(
-                        name = obj["name"]?.jsonPrimitive?.content ?: "",
-                        op = obj["op"]?.jsonPrimitive?.content ?: "",
-                        latestEventId = obj["latest_event_id"]?.jsonPrimitive?.contentOrNull,
-                        count = obj["count"]?.jsonPrimitive?.long ?: 0,
-                        p50 = obj["p50"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                        p75 = obj["p75"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                        p95 = obj["p95"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                        failureRate = obj["failure_rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                        tpm = obj["tpm"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-                    )
-                }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch transactions for project $projectId" }
-            emptyList()
+        val rows = queryHelper.executeJsonEachRowQuery(query, "Transactions") ?: return emptyList()
+        return rows.map { obj ->
+            TransactionSummaryResponse(
+                name = obj["name"]?.jsonPrimitive?.content ?: "",
+                op = obj["op"]?.jsonPrimitive?.content ?: "",
+                latestEventId = obj["latest_event_id"]?.jsonPrimitive?.contentOrNull,
+                count = obj["count"]?.jsonPrimitive?.long ?: 0,
+                p50 = obj["p50"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                p75 = obj["p75"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                p95 = obj["p95"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                failureRate = obj["failure_rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                tpm = obj["tpm"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+            )
         }
     }
 
@@ -269,34 +247,26 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
-            val obj = json.parseToJsonElement(line).jsonObject
-            val startTs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-            val duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-            val tagsMap = queryHelper.parseStringMap(obj["tags"])
-            TransactionDetailResponse(
-                eventId = obj["event_id"]?.jsonPrimitive?.content ?: return null,
-                name = obj["name"]?.jsonPrimitive?.content ?: "",
-                op = obj["op"]?.jsonPrimitive?.content ?: "",
-                startTimestamp = startTs / 1000.0,
-                duration = duration,
-                traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
-                timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
-                environment = obj["environment"]?.jsonPrimitive?.contentOrNull,
-                release = obj["release"]?.jsonPrimitive?.contentOrNull,
-                status = obj["status"]?.jsonPrimitive?.contentOrNull,
-                tags = tagsMap,
-                contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
-                breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull,
-                request = obj["request"]?.jsonPrimitive?.contentOrNull
-            )
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch transaction $eventId" }
-            null
-        }
+        val obj = queryHelper.executeJsonEachRowQuery(query, "Transaction")?.firstOrNull() ?: return null
+        val startTs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+        val duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+        val tagsMap = queryHelper.parseStringMap(obj["tags"])
+        return TransactionDetailResponse(
+            eventId = obj["event_id"]?.jsonPrimitive?.content ?: return null,
+            name = obj["name"]?.jsonPrimitive?.content ?: "",
+            op = obj["op"]?.jsonPrimitive?.content ?: "",
+            startTimestamp = startTs / 1000.0,
+            duration = duration,
+            traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
+            timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+            environment = obj["environment"]?.jsonPrimitive?.contentOrNull,
+            release = obj["release"]?.jsonPrimitive?.contentOrNull,
+            status = obj["status"]?.jsonPrimitive?.contentOrNull,
+            tags = tagsMap,
+            contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
+            breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull,
+            request = obj["request"]?.jsonPrimitive?.contentOrNull
+        )
     }
 
     suspend fun getTransactionSpans(eventId: String): TransactionWithSpansResponse? {
@@ -323,21 +293,10 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val spans = try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299) return TransactionWithSpansResponse(transaction, emptyList())
-            body.lines()
-                .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    mapSpanRow(obj)
-                }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch spans for transaction $eventId" }
-            emptyList()
-        }
-
+        val rows =
+            queryHelper.executeJsonEachRowQuery(query, "Transaction spans")
+                ?: return TransactionWithSpansResponse(transaction, emptyList())
+        val spans = rows.map { mapSpanRow(it) }
         return TransactionWithSpansResponse(transaction, spans)
     }
 
@@ -368,20 +327,11 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
 
+        val rows = queryHelper.executeJsonEachRowQuery(query, "Trace spans") ?: return null
+        val spans = rows.map { mapSpanRow(it) }
+        if (spans.isEmpty()) return null
+
         return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.isBlank()) return null
-
-            val spans = body.lines()
-                .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    mapSpanRow(obj)
-                }
-
-            if (spans.isEmpty()) return null
-
             val startTs = spans.minOf { it.startTimestamp }
             val endTs = spans.maxOf { it.endTimestamp }
             val duration = endTs - startTs
@@ -427,19 +377,11 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
-            val obj = json.parseToJsonElement(line).jsonObject
-            val span = mapSpanRow(obj)
-            val transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull
-            val transaction = transactionId?.let { getTransaction(it) }
-            SpanDetailResponse(span = span, transaction = transaction)
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch span $spanId" }
-            null
-        }
+        val obj = queryHelper.executeJsonEachRowQuery(query, "Span")?.firstOrNull() ?: return null
+        val span = mapSpanRow(obj)
+        val transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull
+        val transaction = transactionId?.let { getTransaction(it) }
+        return SpanDetailResponse(span = span, transaction = transaction)
     }
 
     suspend fun getRelatedErrorsForTransaction(
@@ -478,19 +420,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299) return emptyList()
-            body.lines()
-                .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    queryHelper.mapEventRow(obj)
-                }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch related errors for transaction $eventId" }
-            emptyList()
-        }
+        val rows = queryHelper.executeJsonEachRowQuery(query, "Related errors") ?: return emptyList()
+        return rows.map { queryHelper.mapEventRow(it) }
     }
 }

@@ -37,6 +37,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.contentOrNull
 import mu.KotlinLogging
 
@@ -54,6 +55,57 @@ class DashboardQueryHelper {
     val json = Json { ignoreUnknownKeys = true }
     val retentionPolicyService = RetentionPolicyService()
     val pricingTierService = PricingTierService()
+
+    /**
+     * Executes a query that returns a single row with project_id, e.g. for entity lookup.
+     * Returns null on HTTP/ClickHouse error or when no valid row is returned.
+     */
+    suspend fun executeProjectIdQuery(
+        query: String,
+        context: String,
+        entityId: String
+    ): Long? {
+        return try {
+            val response = ClickHouseClient.execute(query)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                logger.error { "$context failed for $entityId: ${response.status} ${body.take(400)}" }
+                return null
+            }
+            if (body.isBlank()) return null
+            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+            obj["project_id"]?.jsonPrimitive?.longOrNull
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get project ID for $context" }
+            null
+        }
+    }
+
+    /**
+     * Executes a JSONEachRow query and returns parsed JsonObjects, or null on error.
+     */
+    suspend fun executeJsonEachRowQuery(
+        query: String,
+        errorContext: String = "Query"
+    ): List<JsonObject>? {
+        return try {
+            val response = ClickHouseClient.execute(query)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                logger.error { "$errorContext failed: ${response.status} ${body.take(400)}" }
+                return null
+            }
+            body
+                .lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull()
+                }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            null
+        }
+    }
 
     /**
      * Safely extracts body text from ClickHouse response, checking for error messages.

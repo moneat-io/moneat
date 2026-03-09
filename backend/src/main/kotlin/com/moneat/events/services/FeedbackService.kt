@@ -17,7 +17,6 @@
 package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
-import io.ktor.client.statement.bodyAsText
 import com.moneat.events.models.FeedbackDetailResponse
 import com.moneat.events.models.FeedbackListItem
 import com.moneat.utils.ClickHouseQueryUtils
@@ -26,8 +25,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 
@@ -47,30 +44,12 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             LIMIT 1
             FORMAT JSONEachRow
             """.trimIndent()
-
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error {
-                    "Failed to get project ID for feedback $feedbackId: ${response.status} ${body.take(400)}"
-                }
-                return null
-            }
-            if (body.isBlank()) return null
-            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-            val projectId = obj["project_id"]?.jsonPrimitive?.longOrNull
-
-            // Validate project_id is in valid range (reject corrupted data)
-            if (projectId == null || projectId <= 0L) {
-                logger.warn { "Invalid project_id for feedback $feedbackId: $projectId" }
-                return null
-            }
-            projectId
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to get project ID for feedback" }
-            null
+        val projectId = queryHelper.executeProjectIdQuery(query, "Feedback", feedbackId)
+        if (projectId == null || projectId <= 0L) {
+            logger.warn { "Invalid project_id for feedback $feedbackId: $projectId" }
+            return null
         }
+        return projectId
     }
 
     suspend fun getFeedback(
@@ -118,35 +97,24 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299) return emptyList()
-            body
-                .lines()
-                .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    FeedbackListItem(
-                        feedbackId = obj["feedback_id"]?.jsonPrimitive?.content ?: "",
-                        message = obj["message"]?.jsonPrimitive?.content ?: "",
-                        contactEmail = obj["contact_email"]?.jsonPrimitive?.content ?: "",
-                        name = obj["name"]?.jsonPrimitive?.content ?: "",
-                        url = obj["url"]?.jsonPrimitive?.content ?: "",
-                        status = obj["status"]?.jsonPrimitive?.content ?: "unresolved",
-                        timestamp = obj["created_at"]?.jsonPrimitive?.content ?: "",
-                        environment = obj["environment"]?.jsonPrimitive?.content ?: "",
-                        release = obj["release"]?.jsonPrimitive?.content ?: "",
-                        platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                        user = queryHelper.extractUserInfo(obj),
-                        associatedEventId =
-                        obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                        replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-                    )
-                }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch feedback for project $projectId" }
-            emptyList()
+        val rows = queryHelper.executeJsonEachRowQuery(query, "Feedback list") ?: return emptyList()
+        return rows.map { obj ->
+            FeedbackListItem(
+                feedbackId = obj["feedback_id"]?.jsonPrimitive?.content ?: "",
+                message = obj["message"]?.jsonPrimitive?.content ?: "",
+                contactEmail = obj["contact_email"]?.jsonPrimitive?.content ?: "",
+                name = obj["name"]?.jsonPrimitive?.content ?: "",
+                url = obj["url"]?.jsonPrimitive?.content ?: "",
+                status = obj["status"]?.jsonPrimitive?.content ?: "unresolved",
+                timestamp = obj["created_at"]?.jsonPrimitive?.content ?: "",
+                environment = obj["environment"]?.jsonPrimitive?.content ?: "",
+                release = obj["release"]?.jsonPrimitive?.content ?: "",
+                platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+                user = queryHelper.extractUserInfo(obj),
+                associatedEventId =
+                obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+            )
         }
     }
 
@@ -185,35 +153,26 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
-            val obj = json.parseToJsonElement(line).jsonObject
-            val tagsMap = parseTagsMap(obj["tags"])
-            FeedbackDetailResponse(
-                feedbackId = obj["feedback_id"]?.jsonPrimitive?.content ?: return null,
-                message = obj["message"]?.jsonPrimitive?.content ?: "",
-                contactEmail = obj["contact_email"]?.jsonPrimitive?.content ?: "",
-                name = obj["name"]?.jsonPrimitive?.content ?: "",
-                url = obj["url"]?.jsonPrimitive?.content ?: "",
-                status = obj["status"]?.jsonPrimitive?.content ?: "unresolved",
-                timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
-                environment = obj["environment"]?.jsonPrimitive?.content ?: "",
-                release = obj["release"]?.jsonPrimitive?.content ?: "",
-                platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                user = queryHelper.extractUserInfo(obj),
-                associatedEventId =
-                obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                tags = tagsMap,
-                sdkName = obj["sdk_name"]?.jsonPrimitive?.content ?: "",
-                sdkVersion = obj["sdk_version"]?.jsonPrimitive?.content ?: ""
-            )
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch feedback $feedbackId" }
-            null
-        }
+        val obj = queryHelper.executeJsonEachRowQuery(query, "Feedback detail")?.firstOrNull() ?: return null
+        val tagsMap = parseTagsMap(obj["tags"])
+        return FeedbackDetailResponse(
+            feedbackId = obj["feedback_id"]?.jsonPrimitive?.content ?: return null,
+            message = obj["message"]?.jsonPrimitive?.content ?: "",
+            contactEmail = obj["contact_email"]?.jsonPrimitive?.content ?: "",
+            name = obj["name"]?.jsonPrimitive?.content ?: "",
+            url = obj["url"]?.jsonPrimitive?.content ?: "",
+            status = obj["status"]?.jsonPrimitive?.content ?: "unresolved",
+            timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+            environment = obj["environment"]?.jsonPrimitive?.content ?: "",
+            release = obj["release"]?.jsonPrimitive?.content ?: "",
+            platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+            user = queryHelper.extractUserInfo(obj),
+            associatedEventId = obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            tags = tagsMap,
+            sdkName = obj["sdk_name"]?.jsonPrimitive?.content ?: "",
+            sdkVersion = obj["sdk_version"]?.jsonPrimitive?.content ?: ""
+        )
     }
 
     private fun parseTagsMap(element: JsonElement?): Map<String, String> {

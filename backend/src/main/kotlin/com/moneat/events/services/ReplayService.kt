@@ -65,22 +65,7 @@ class ReplayService(
             LIMIT 1
             FORMAT JSONEachRow
             """.trimIndent()
-
-        return try {
-            val response = ClickHouseClient.execute(query)
-
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get project ID for replay $replayId: ${response.status} ${body.take(400)}" }
-                return null
-            }
-            if (body.isBlank()) return null
-            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-            obj["project_id"]?.jsonPrimitive?.long
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to get project ID for replay" }
-            null
-        }
+        return queryHelper.executeProjectIdQuery(query, "Replay", replayId)
     }
 
     private suspend fun getProjectIdForIssue(issueId: String): Long? {
@@ -88,27 +73,12 @@ class ReplayService(
         val query =
             """
             SELECT toInt64(project_id) as project_id
-            FROM `$clickhouseDb`.issues 
+            FROM `$clickhouseDb`.issues
             WHERE issue_id = '$escapedIssueId'
             LIMIT 1
             FORMAT JSONEachRow
             """.trimIndent()
-
-        return try {
-            val response = ClickHouseClient.execute(query)
-
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to get project ID for issue $issueId: ${response.status} ${body.take(400)}" }
-                return null
-            }
-            if (body.isBlank()) return null
-            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-            obj["project_id"]?.jsonPrimitive?.long
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to get project ID for issue" }
-            null
-        }
+        return queryHelper.executeProjectIdQuery(query, "Issue", issueId)
     }
 
     private fun parseStringArray(element: JsonElement?): List<String> {
@@ -363,65 +333,30 @@ class ReplayService(
         val rawBytes = runCatching { Base64.getDecoder().decode(recordingData) }.getOrNull()
             ?: return SegmentDecodeResult(events = parseJsonEvents(recordingData, segmentIdx))
 
-        val firstNonWhitespace =
-            rawBytes.firstOrNull {
-                val code = it.toInt()
-                code != ' '.code && code != '\n'.code && code != '\r'.code && code != '\t'.code
-            }
-        val isJsonStart = firstNonWhitespace == '['.code.toByte() || firstNonWhitespace == '{'.code.toByte()
-        if (isJsonStart) {
-            return SegmentDecodeResult(
-                events = parseJsonEvents(String(rawBytes, Charsets.UTF_8), segmentIdx)
-            )
+        if (isJsonPayload(rawBytes)) {
+            return SegmentDecodeResult(events = parseJsonEvents(String(rawBytes, Charsets.UTF_8), segmentIdx))
         }
 
+        return decodeMsgpackReplaySegment(rawBytes, segmentIdx)
+    }
+
+    private fun isJsonPayload(rawBytes: ByteArray): Boolean {
+        val firstNonWhitespace = rawBytes.firstOrNull {
+            val code = it.toInt()
+            code != ' '.code && code != '\n'.code && code != '\r'.code && code != '\t'.code
+        }
+        return firstNonWhitespace == '['.code.toByte() || firstNonWhitespace == '{'.code.toByte()
+    }
+
+    private fun decodeMsgpackReplaySegment(rawBytes: ByteArray, segmentIdx: Int): SegmentDecodeResult {
         return try {
             val unpacker = MessagePack.newDefaultUnpacker(rawBytes)
             val topMapSize = unpacker.unpackMapHeader()
             val events = mutableListOf<JsonElement>()
-            var mobileSegmentId: Int? = null
+            val mobileSegmentIdHolder = mutableListOf<Int?>(null)
 
             repeat(topMapSize) {
-                val key = unpacker.unpackString()
-                when (key) {
-                    "replay_event" -> {
-                        val payload = readMsgpackBinaryOrString(unpacker)
-                        if (payload != null && mobileSegmentId == null) {
-                            mobileSegmentId = extractSegmentIdFromJsonPayload(String(payload, Charsets.UTF_8))
-                        }
-                    }
-
-                    "replay_recording" -> {
-                        val payload = readMsgpackBinaryOrString(unpacker) ?: return@repeat
-                        val (segmentIdFromRecording, recordingEvents) = parseReplayRecordingBinary(payload, segmentIdx)
-                        val effectiveSegmentId = segmentIdFromRecording ?: mobileSegmentId ?: segmentIdx
-                        if (mobileSegmentId == null) {
-                            mobileSegmentId = segmentIdFromRecording
-                        }
-                        events.addAll(annotateEventsWithSegmentId(recordingEvents, effectiveSegmentId))
-                    }
-
-                    "replay_video" -> {
-                        val payload = readMsgpackBinaryOrString(unpacker) ?: return@repeat
-                        events.add(
-                            JsonObject(
-                                mapOf(
-                                    "type" to JsonPrimitive("mobile_replay_video"),
-                                    "segment_id" to JsonPrimitive(mobileSegmentId ?: segmentIdx),
-                                    "mime_type" to JsonPrimitive(
-                                        if (isLikelyMp4(payload)) "video/mp4" else "application/octet-stream"
-                                    ),
-                                    "size" to JsonPrimitive(payload.size),
-                                    "data" to JsonPrimitive(Base64.getEncoder().encodeToString(payload))
-                                )
-                            )
-                        )
-                    }
-
-                    else -> {
-                        unpacker.skipValue()
-                    }
-                }
+                processMsgpackKey(unpacker, segmentIdx, events, mobileSegmentIdHolder)
             }
 
             unpacker.close()
@@ -429,6 +364,53 @@ class ReplayService(
         } catch (e: Exception) {
             logger.error(e) { "Segment $segmentIdx: Failed to parse msgpack replay segment" }
             SegmentDecodeResult(events = emptyList(), isMobileReplay = true)
+        }
+    }
+
+    private fun processMsgpackKey(
+        unpacker: MessageUnpacker,
+        segmentIdx: Int,
+        events: MutableList<JsonElement>,
+        mobileSegmentIdHolder: MutableList<Int?>
+    ) {
+        val key = unpacker.unpackString()
+        val mobileSegmentId = mobileSegmentIdHolder.firstOrNull()
+        when (key) {
+            "replay_event" -> {
+                val payload = readMsgpackBinaryOrString(unpacker)
+                if (payload != null && mobileSegmentId == null) {
+                    mobileSegmentIdHolder[0] = extractSegmentIdFromJsonPayload(String(payload, Charsets.UTF_8))
+                }
+            }
+
+            "replay_recording" -> {
+                val payload = readMsgpackBinaryOrString(unpacker) ?: return
+                val (segmentIdFromRecording, recordingEvents) = parseReplayRecordingBinary(payload, segmentIdx)
+                val effectiveSegmentId = segmentIdFromRecording ?: mobileSegmentId ?: segmentIdx
+                if (mobileSegmentId == null) {
+                    mobileSegmentIdHolder[0] = segmentIdFromRecording
+                }
+                events.addAll(annotateEventsWithSegmentId(recordingEvents, effectiveSegmentId))
+            }
+
+            "replay_video" -> {
+                val payload = readMsgpackBinaryOrString(unpacker) ?: return
+                events.add(
+                    JsonObject(
+                        mapOf(
+                            "type" to JsonPrimitive("mobile_replay_video"),
+                            "segment_id" to JsonPrimitive(mobileSegmentId ?: segmentIdx),
+                            "mime_type" to JsonPrimitive(
+                                if (isLikelyMp4(payload)) "video/mp4" else "application/octet-stream"
+                            ),
+                            "size" to JsonPrimitive(payload.size),
+                            "data" to JsonPrimitive(Base64.getEncoder().encodeToString(payload))
+                        )
+                    )
+                )
+            }
+
+            else -> unpacker.skipValue()
         }
     }
 
@@ -668,6 +650,101 @@ class ReplayService(
         }
     }
 
+    private suspend fun fetchAndAddTimelineItems(
+        query: String,
+        errorContext: String,
+        failureMessage: String,
+        replayStartMs: Long,
+        mapper: (JsonObject, Long) -> ReplayTimelineItem?,
+        items: MutableList<ReplayTimelineItem>,
+        addedIds: MutableSet<String>
+    ) {
+        runCatching {
+            val response = ClickHouseClient.execute(query)
+            val body = response.bodyAsText()
+            if (isClickHouseError(response.status.value, body, errorContext)) return@runCatching
+            body
+                .lines()
+                .filter { it.isNotBlank() }
+                .filter { !it.trimStart().startsWith("Code:") }
+                .forEach { line ->
+                    val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
+                    val item = mapper(obj, replayStartMs) ?: return@forEach
+                    if (!addedIds.add(item.id)) return@forEach
+                    items.add(item)
+                }
+        }.onFailure { logger.error(it) { "Failed to fetch $failureMessage" } }
+    }
+
+    private fun buildErrorsByIdQuery(
+        projectId: Long,
+        inClause: String,
+        retentionDays: Int,
+        demoEpochMs: Long?
+    ): String =
+        """
+        SELECT
+            toString(e.event_id) as event_id,
+            formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
+            toUnixTimestamp64Milli(e.timestamp) as ts_ms,
+            message,
+            level,
+            issue_id,
+            exception_type,
+            exception_value
+        FROM `$clickhouseDb`.events e
+        WHERE e.project_id = $projectId
+            AND e.event_type = 'error'
+            AND toString(e.event_id) IN ($inClause)
+            AND ${queryHelper.timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
+        FORMAT JSONEachRow
+        """.trimIndent()
+
+    private fun buildTransactionsByTraceQuery(
+        projectId: Long,
+        traceConditions: String,
+        retentionDays: Int,
+        demoEpochMs: Long?
+    ): String =
+        """
+        SELECT
+            toString(e.event_id) as event_id,
+            formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
+            toUnixTimestamp64Milli(e.timestamp) as ts_ms,
+            transaction_name,
+            duration_ms,
+            transaction_op,
+            contexts
+        FROM `$clickhouseDb`.events e
+        WHERE e.project_id = $projectId
+            AND e.event_type = 'transaction'
+            AND ($traceConditions)
+            AND ${queryHelper.timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
+        FORMAT JSONEachRow
+        """.trimIndent()
+
+    private fun buildSpansByTraceQuery(
+        projectId: Long,
+        traceIdList: String,
+        retentionDays: Int,
+        demoEpochMs: Long?
+    ): String =
+        """
+        SELECT
+            span_id,
+            trace_id,
+            toString(transaction_id) as transaction_id,
+            description,
+            op,
+            toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
+            duration_ms
+        FROM `$clickhouseDb`.spans
+        WHERE project_id = $projectId
+            AND trace_id IN ($traceIdList)
+            AND ${queryHelper.timestampRetentionClause("start_timestamp", retentionDays, demoEpochMs)}
+        FORMAT JSONEachRow
+        """.trimIndent()
+
     suspend fun getReplayTimeline(
         replayId: String,
         demoEpochMs: Long? = null
@@ -695,139 +772,51 @@ class ReplayService(
                 ?.takeIf { it.isNotBlank() }
                 ?.let { "AND user_id = '${escapeSql(it)}'" } ?: ""
 
-        // Fetch errors by errorIds
-        if (replay.errorIds.isNotEmpty()) {
-            val errorIdList = replay.errorIds.mapNotNull { queryHelper.normalizeUuid(it) }.distinct()
-            if (errorIdList.isNotEmpty()) {
-                val inClause = errorIdList.joinToString(",") { "'${escapeSql(it)}'" }
-                val query =
-                    """
-                    SELECT
-                        toString(e.event_id) as event_id,
-                        formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
-                        toUnixTimestamp64Milli(e.timestamp) as ts_ms,
-                        message,
-                        level,
-                        issue_id,
-                        exception_type,
-                        exception_value
-                    FROM `$clickhouseDb`.events e
-                    WHERE e.project_id = $projectId
-                        AND e.event_type = 'error'
-                        AND toString(e.event_id) IN ($inClause)
-                        AND ${queryHelper.timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
-                    FORMAT JSONEachRow
-                    """.trimIndent()
-                runCatching {
-                    val response = ClickHouseClient.execute(query)
-                    val body = response.bodyAsText()
-                    if (isClickHouseError(response.status.value, body, "Replay timeline errors by IDs")) {
-                        return@runCatching
-                    }
-                    body
-                        .lines()
-                        .filter { it.isNotBlank() }
-                        .filter { !it.trimStart().startsWith("Code:") }
-                        .forEach { line ->
-                            val obj =
-                                runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                            val item = mapErrorTimelineItem(obj, replayStartMs) ?: return@forEach
-                            if (!addedIds.add(item.id)) return@forEach
-                            items.add(item)
-                        }
-                }.onFailure { logger.error(it) { "Failed to fetch replay timeline errors" } }
-            }
+        val errorIdList = replay.errorIds.mapNotNull { queryHelper.normalizeUuid(it) }.distinct()
+        if (errorIdList.isNotEmpty()) {
+            val inClause = errorIdList.joinToString(",") { "'${escapeSql(it)}'" }
+            val query = buildErrorsByIdQuery(projectId, inClause, retentionDays, demoEpochMs)
+            fetchAndAddTimelineItems(
+                query = query,
+                errorContext = "Replay timeline errors by IDs",
+                failureMessage = "replay timeline errors",
+                replayStartMs = replayStartMs,
+                mapper = ::mapErrorTimelineItem,
+                items = items,
+                addedIds = addedIds
+            )
         }
 
-        // Fetch transactions by traceIds
         if (replay.traceIds.isNotEmpty()) {
-            val traceConditions =
-                replay.traceIds
-                    .distinct()
-                    .map { traceId ->
-                        val escaped = escapeSql(traceId)
-                        "positionCaseInsensitive(e.contexts, '\"trace_id\":\"$escaped\"') > 0"
-                    }.joinToString(" OR ")
-            val query =
-                """
-                SELECT
-                    toString(e.event_id) as event_id,
-                    formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
-                    toUnixTimestamp64Milli(e.timestamp) as ts_ms,
-                    transaction_name,
-                    duration_ms,
-                    transaction_op,
-                    contexts
-                FROM `$clickhouseDb`.events e
-                WHERE e.project_id = $projectId
-                    AND e.event_type = 'transaction'
-                    AND ($traceConditions)
-                    AND ${queryHelper.timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
-                FORMAT JSONEachRow
-                """.trimIndent()
-            runCatching {
-                val response = ClickHouseClient.execute(query)
-                val body = response.bodyAsText()
-                if (isClickHouseError(response.status.value, body, "Replay timeline transactions by trace IDs")) {
-                    return@runCatching
-                }
-                body
-                    .lines()
-                    .filter { it.isNotBlank() }
-                    .filter { !it.trimStart().startsWith("Code:") }
-                    .forEach { line ->
-                        val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                        val item = mapTransactionTimelineItem(obj, replayStartMs) ?: return@forEach
-                        if (!addedIds.add(item.id)) return@forEach
-                        items.add(item)
-                    }
-            }.onFailure { logger.error(it) { "Failed to fetch replay timeline transactions" } }
-        }
+            val traceConditions = replay.traceIds.distinct().map { traceId ->
+                val escaped = escapeSql(traceId)
+                "positionCaseInsensitive(e.contexts, '\"trace_id\":\"$escaped\"') > 0"
+            }.joinToString(" OR ")
+            val query = buildTransactionsByTraceQuery(projectId, traceConditions, retentionDays, demoEpochMs)
+            fetchAndAddTimelineItems(
+                query = query,
+                errorContext = "Replay timeline transactions by trace IDs",
+                failureMessage = "replay timeline transactions",
+                replayStartMs = replayStartMs,
+                mapper = ::mapTransactionTimelineItem,
+                items = items,
+                addedIds = addedIds
+            )
 
-        // Fetch spans by traceIds
-        if (replay.traceIds.isNotEmpty()) {
-            val traceIdList =
-                replay.traceIds
-                    .distinct()
-                    .map { "'${escapeSql(it)}'" }
-                    .joinToString(",")
-            val query =
-                """
-                SELECT
-                    span_id,
-                    trace_id,
-                    toString(transaction_id) as transaction_id,
-                    description,
-                    op,
-                    toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
-                    duration_ms
-                FROM `$clickhouseDb`.spans
-                WHERE project_id = $projectId
-                    AND trace_id IN ($traceIdList)
-                    AND ${queryHelper.timestampRetentionClause("start_timestamp", retentionDays, demoEpochMs)}
-                FORMAT JSONEachRow
-                """.trimIndent()
-            runCatching {
-                val response = ClickHouseClient.execute(query)
-                val body = response.bodyAsText()
-                if (isClickHouseError(response.status.value, body, "Replay timeline spans by trace IDs")) {
-                    return@runCatching
-                }
-                body
-                    .lines()
-                    .filter { it.isNotBlank() }
-                    .filter { !it.trimStart().startsWith("Code:") }
-                    .forEach { line ->
-                        val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                        val item = mapSpanTimelineItem(obj, replayStartMs) ?: return@forEach
-                        if (!addedIds.add(item.id)) return@forEach
-                        items.add(item)
-                    }
-            }.onFailure { logger.error(it) { "Failed to fetch replay timeline spans" } }
+            val traceIdList = replay.traceIds.distinct().map { "'${escapeSql(it)}'" }.joinToString(",")
+            val spansQuery = buildSpansByTraceQuery(projectId, traceIdList, retentionDays, demoEpochMs)
+            fetchAndAddTimelineItems(
+                query = spansQuery,
+                errorContext = "Replay timeline spans by trace IDs",
+                failureMessage = "replay timeline spans",
+                replayStartMs = replayStartMs,
+                mapper = ::mapSpanTimelineItem,
+                items = items,
+                addedIds = addedIds
+            )
         }
 
         // Link by time range: include errors/transactions/spans that occurred during the replay
-        // when client did not send error_ids/trace_ids (or to supplement)
         val errorsInRangeQuery =
             """
             SELECT
@@ -847,23 +836,15 @@ class ReplayService(
             LIMIT 100
             FORMAT JSONEachRow
             """.trimIndent()
-        runCatching {
-            val response = ClickHouseClient.execute(errorsInRangeQuery)
-            val body = response.bodyAsText()
-            if (isClickHouseError(response.status.value, body, "Replay timeline errors by time range")) {
-                return@runCatching
-            }
-            body
-                .lines()
-                .filter { it.isNotBlank() }
-                .filter { !it.trimStart().startsWith("Code:") }
-                .forEach { line ->
-                    val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                    val item = mapErrorTimelineItem(obj, replayStartMs) ?: return@forEach
-                    if (!addedIds.add(item.id)) return@forEach
-                    items.add(item)
-                }
-        }.onFailure { logger.error(it) { "Failed to fetch replay timeline errors by time range" } }
+        fetchAndAddTimelineItems(
+            query = errorsInRangeQuery,
+            errorContext = "Replay timeline errors by time range",
+            failureMessage = "replay timeline errors by time range",
+            replayStartMs = replayStartMs,
+            mapper = ::mapErrorTimelineItem,
+            items = items,
+            addedIds = addedIds
+        )
 
         val transactionsInRangeQuery =
             """
@@ -883,23 +864,15 @@ class ReplayService(
             LIMIT 100
             FORMAT JSONEachRow
             """.trimIndent()
-        runCatching {
-            val response = ClickHouseClient.execute(transactionsInRangeQuery)
-            val body = response.bodyAsText()
-            if (isClickHouseError(response.status.value, body, "Replay timeline transactions by time range")) {
-                return@runCatching
-            }
-            body
-                .lines()
-                .filter { it.isNotBlank() }
-                .filter { !it.trimStart().startsWith("Code:") }
-                .forEach { line ->
-                    val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                    val item = mapTransactionTimelineItem(obj, replayStartMs) ?: return@forEach
-                    if (!addedIds.add(item.id)) return@forEach
-                    items.add(item)
-                }
-        }.onFailure { logger.error(it) { "Failed to fetch replay timeline transactions by time range" } }
+        fetchAndAddTimelineItems(
+            query = transactionsInRangeQuery,
+            errorContext = "Replay timeline transactions by time range",
+            failureMessage = "replay timeline transactions by time range",
+            replayStartMs = replayStartMs,
+            mapper = ::mapTransactionTimelineItem,
+            items = items,
+            addedIds = addedIds
+        )
 
         val spansInRangeQuery =
             """
@@ -920,23 +893,15 @@ class ReplayService(
             LIMIT 200
             FORMAT JSONEachRow
             """.trimIndent()
-        runCatching {
-            val response = ClickHouseClient.execute(spansInRangeQuery)
-            val body = response.bodyAsText()
-            if (isClickHouseError(response.status.value, body, "Replay timeline spans by time range")) {
-                return@runCatching
-            }
-            body
-                .lines()
-                .filter { it.isNotBlank() }
-                .filter { !it.trimStart().startsWith("Code:") }
-                .forEach { line ->
-                    val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                    val item = mapSpanTimelineItem(obj, replayStartMs) ?: return@forEach
-                    if (!addedIds.add(item.id)) return@forEach
-                    items.add(item)
-                }
-        }.onFailure { logger.error(it) { "Failed to fetch replay timeline spans by time range" } }
+        fetchAndAddTimelineItems(
+            query = spansInRangeQuery,
+            errorContext = "Replay timeline spans by time range",
+            failureMessage = "replay timeline spans by time range",
+            replayStartMs = replayStartMs,
+            mapper = ::mapSpanTimelineItem,
+            items = items,
+            addedIds = addedIds
+        )
 
         val sorted = items.sortedBy { it.offsetMs }
         return ReplayTimelineResponse(items = sorted, replayStartMs = replayStartMs)
@@ -1030,21 +995,9 @@ class ReplayService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val eventIds =
-            try {
-                val response = ClickHouseClient.execute(eventIdsQuery)
-                val body = response.bodyAsText()
-                body
-                    .lines()
-                    .filter { it.isNotBlank() }
-                    .mapNotNull { line ->
-                        val obj = json.parseToJsonElement(line).jsonObject
-                        obj["event_id"]?.jsonPrimitive?.content
-                    }
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to get event IDs for issue $issueId" }
-                emptyList()
-            }
+        val eventIds = queryHelper.executeJsonEachRowQuery(eventIdsQuery, "Event IDs for issue")?.mapNotNull { obj ->
+            obj["event_id"]?.jsonPrimitive?.content
+        } ?: emptyList()
 
         if (eventIds.isEmpty()) return emptyList()
 
