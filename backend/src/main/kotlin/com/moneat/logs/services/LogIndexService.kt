@@ -17,6 +17,7 @@
 package com.moneat.logs.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.isClickHouseError
 import com.moneat.logs.models.CreateLogIndexRequest
 import com.moneat.logs.models.LogIndexResponse
 import com.moneat.logs.models.LogIndexTestResponse
@@ -26,7 +27,6 @@ import com.moneat.shared.services.CacheService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -359,9 +359,7 @@ class LogIndexService {
         return try {
             val response = ClickHouseClient.execute(sql)
             val body = response.bodyAsText()
-            if (!response.status.isSuccess() ||
-                body.trimStart().startsWith("Code:")
-            ) {
+            if (response.isClickHouseError(body)) {
                 0L
             } else {
                 json.parseToJsonElement(body.trim())

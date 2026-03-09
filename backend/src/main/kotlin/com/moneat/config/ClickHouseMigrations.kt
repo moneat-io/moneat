@@ -17,7 +17,6 @@
 package com.moneat.config
 
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
 import io.ktor.server.application.Application
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.serialization.json.Json
@@ -177,22 +176,21 @@ object ClickHouseMigrations {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.executeMigration(query)
-            val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+        val response = ClickHouseClient.executeMigration(query)
+        val body = response.bodyAsText()
+        if (response.isClickHouseError(body)) {
+            throw RuntimeException("ClickHouse error reading applied migrations: ${body.take(500)}")
+        }
+        if (body.isBlank()) return emptyList()
 
-            body.trim().lines().map { line ->
-                val json = Json.parseToJsonElement(line).jsonObject
-                AppliedMigration(
-                    version = json["version"]?.jsonPrimitive?.int ?: 0,
-                    description = json["description"]?.jsonPrimitive?.content ?: "",
-                    checksum = json["checksum"]?.jsonPrimitive?.content ?: "",
-                    appliedAt = json["applied_at"]?.jsonPrimitive?.content ?: ""
-                )
-            }
-        } catch (e: Exception) {
-            emptyList()
+        return body.trim().lines().map { line ->
+            val json = Json.parseToJsonElement(line).jsonObject
+            AppliedMigration(
+                version = json["version"]?.jsonPrimitive?.int ?: 0,
+                description = json["description"]?.jsonPrimitive?.content ?: "",
+                checksum = json["checksum"]?.jsonPrimitive?.content ?: "",
+                appliedAt = json["applied_at"]?.jsonPrimitive?.content ?: ""
+            )
         }
     }
 
@@ -232,7 +230,7 @@ object ClickHouseMigrations {
             val response = ClickHouseClient.executeMigration(statement)
             val body = response.bodyAsText()
 
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.isClickHouseError(body)) {
                 throw RuntimeException(
                     "Migration V${migration.version} failed at statement ${index + 1}/${statements.size}: $body"
                 )
@@ -249,7 +247,7 @@ object ClickHouseMigrations {
         val recordResponse = ClickHouseClient.executeMigration(insertSql)
         val recordBody = recordResponse.bodyAsText()
 
-        if (!recordResponse.status.isSuccess() || recordBody.trimStart().startsWith("Code:")) {
+        if (recordResponse.isClickHouseError(recordBody)) {
             throw RuntimeException("Failed to record migration V${migration.version}: $recordBody")
         }
 

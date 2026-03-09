@@ -19,6 +19,7 @@ package com.moneat.org.routes
 import com.moneat.auth.services.AuthService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.isClickHouseError
 import com.moneat.events.models.TriggerIncidentRequest
 import com.moneat.incident.models.AlertSource
 import com.moneat.incident.models.IncidentEvent
@@ -114,7 +115,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
     val response = ClickHouseClient.execute(query)
     val body = response.bodyAsText().trim()
 
-    if (response.status != HttpStatusCode.OK || body.startsWith("Code:")) {
+    if (response.isClickHouseError(body)) {
         logger.warn { "Failed to query telemetry_pulses: ${body.take(200)}" }
         return ReceivedTelemetryStatus(deploymentCount = 0, lastSeenAt = null, deployments = emptyList())
     }
