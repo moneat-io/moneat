@@ -67,10 +67,9 @@ export function aiMethods(core: ApiClientCore) {
       },
       onEvent: (event: AiSseEvent) => void
     ) => {
-      const response = await fetch(`${base}/ai/chat/stream`, {
+      const response = await core.fetchWithAuth(`${base}/ai/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(request),
       })
 
@@ -85,7 +84,10 @@ export function aiMethods(core: ApiClientCore) {
 
       while (true) {
         const { value, done } = await reader.read()
-        if (done) break
+        if (done) {
+          buffer += decoder.decode()
+          break
+        }
         buffer += decoder.decode(value, { stream: true })
 
         const lines = buffer.split('\n')
@@ -102,16 +104,26 @@ export function aiMethods(core: ApiClientCore) {
           }
         }
       }
+
+      for (const line of buffer.split('\n')) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(line.slice(6)) as AiSseEvent
+            onEvent(event)
+          } catch {
+            /* skip malformed events */
+          }
+        }
+      }
     },
 
     streamAiConfirm: async (
       snapshotId: number,
       onEvent: (event: AiSseEvent) => void
     ) => {
-      const response = await fetch(`${base}/ai/chat/confirm`, {
+      const response = await core.fetchWithAuth(`${base}/ai/chat/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ snapshotId }),
       })
 
@@ -126,7 +138,10 @@ export function aiMethods(core: ApiClientCore) {
 
       while (true) {
         const { value, done } = await reader.read()
-        if (done) break
+        if (done) {
+          buffer += decoder.decode()
+          break
+        }
         buffer += decoder.decode(value, { stream: true })
 
         const lines = buffer.split('\n')
@@ -140,6 +155,17 @@ export function aiMethods(core: ApiClientCore) {
             } catch {
               /* skip malformed events */
             }
+          }
+        }
+      }
+
+      for (const line of buffer.split('\n')) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(line.slice(6)) as AiSseEvent
+            onEvent(event)
+          } catch {
+            /* skip malformed events */
           }
         }
       }

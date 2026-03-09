@@ -43,16 +43,16 @@ export function issuesMethods(core: ApiClientCore) {
     },
 
     getIssue: (issueId: string) =>
-      core.request<IssueDetail>(`${base}/issues/${issueId}`),
+      core.request<IssueDetail>(`${base}/issues/${encodeURIComponent(issueId)}`),
 
     getIssueEvents: (issueId: string, limit = 50) =>
       core.request<Event[]>(
-        `${base}/issues/${issueId}/events?limit=${limit}`
+        `${base}/issues/${encodeURIComponent(issueId)}/events?limit=${limit}`
       ),
 
     getIssueTransactions: (issueId: string, limit = 20) =>
       core.request<IssueTransaction[]>(
-        `${base}/issues/${issueId}/transactions?limit=${limit}`
+        `${base}/issues/${encodeURIComponent(issueId)}/transactions?limit=${limit}`
       ),
 
     updateIssue: (
@@ -63,7 +63,7 @@ export function issuesMethods(core: ApiClientCore) {
         statusDetail?: Record<string, string>
       }
     ) =>
-      core.request(`${base}/issues/${issueId}`, {
+      core.request(`${base}/issues/${encodeURIComponent(issueId)}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
       }),

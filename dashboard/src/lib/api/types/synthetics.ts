@@ -94,7 +94,7 @@ export interface SyntheticTestResponse {
   method: string
   headers?: Record<string, string> | null
   body?: string | null
-  authMethod?: string | null
+  authMethod?: 'basic' | 'bearer' | null
   authUser?: string | null
   assertions: SyntheticAssertionPayload[]
   steps: SyntheticStepPayload[]

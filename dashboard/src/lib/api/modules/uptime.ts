@@ -68,8 +68,8 @@ export function uptimeMethods(core: ApiClientCore) {
       to?: number
     ) => {
       const params = new URLSearchParams()
-      if (from) params.append('from', from.toString())
-      if (to) params.append('to', to.toString())
+      if (from !== undefined && from !== null) params.append('from', from.toString())
+      if (to !== undefined && to !== null) params.append('to', to.toString())
       const query = params.toString()
       return core.request<UptimeHeartbeat[]>(
         `${base}/uptime/monitors/${monitorId}/heartbeats${query ? `?${query}` : ''}`

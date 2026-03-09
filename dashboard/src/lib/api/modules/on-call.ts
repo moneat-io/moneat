@@ -213,8 +213,9 @@ export function onCallMethods(core: ApiClientCore) {
       const params = new URLSearchParams()
       if (filters.status) params.set('status', filters.status)
       if (filters.priorityLevel) params.set('priorityLevel', filters.priorityLevel)
+      const q = params.toString()
       return core.request<OnCallIncident[]>(
-        `${base}/on-call-incidents?${params.toString()}`
+        `${base}/on-call-incidents${q ? `?${q}` : ''}`
       )
     },
 

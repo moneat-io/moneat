@@ -113,12 +113,6 @@ describe('ApiClient', () => {
   })
 
   describe('401 logout and redirect behavior', () => {
-    beforeEach(() => {
-      // Reset auth redirect flag on the api singleton between tests
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (api as any).authRedirectInProgress = false
-    })
-
     it('clears session and redirects to /login on 401', async () => {
       const mockAssign = vi.fn()
       const originalLocation = window.location

@@ -54,9 +54,10 @@ export function userMethods(core: ApiClientCore) {
         body: JSON.stringify({ timezone }),
       }),
 
-    getOrganizations: async (): Promise<
-      Array<{ id: number; name: string; slug: string }>
-    > => [{ id: 1, name: 'Default Organization', slug: 'default' }],
+    getOrganizations: () =>
+      core.request<Array<{ id: number; name: string; slug: string }>>(
+        `${base}/organizations`
+      ),
 
     getOrganizationAccountSettings: (organizationId: number) =>
       core.request<OrganizationAccountSettings>(

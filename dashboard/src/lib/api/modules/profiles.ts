@@ -63,9 +63,12 @@ export function profilesMethods(core: ApiClientCore) {
       a.href = url
       a.download = filename ?? dispositionName ?? `profile-${profileId}.${defaultExt}`
       document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      try {
+        a.click()
+      } finally {
+        document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 0)
+      }
     },
 
     getProfileFlamegraph: (profileId: string) =>

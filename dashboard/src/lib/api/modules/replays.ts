@@ -56,11 +56,12 @@ export function replaysMethods(core: ApiClientCore) {
         `${base}/replays/${encodeURIComponent(replayId)}/timeline`
       ),
 
-    getIssueIdForEvent: async (eventId: string) => {
+    getIssueIdForEvent: async (eventId: string): Promise<string | null> => {
       try {
-        return await core.request<{ issueId: string }>(
+        const response = await core.request<{ issueId: string }>(
           `${base}/events/${encodeURIComponent(eventId)}/issue`
         )
+        return response.issueId
       } catch {
         return null
       }

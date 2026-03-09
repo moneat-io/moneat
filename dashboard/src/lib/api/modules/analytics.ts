@@ -156,7 +156,7 @@ export function analyticsMethods(core: ApiClientCore) {
       params?: AnalyticsParams
     ) =>
       fetchAnalyticsBreakdown(
-        `${base}/analytics/${projectId}/utm/${utmParam}${buildAnalyticsQuery(params)}`
+        `${base}/analytics/${projectId}/utm/${encodeURIComponent(utmParam)}${buildAnalyticsQuery(params)}`
       ),
 
     getAnalyticsLocations: (projectId: number, params?: AnalyticsParams) =>

@@ -153,7 +153,7 @@ export function statusPagesMethods(core: ApiClientCore) {
       ),
 
     getPublicStatusPage: async (slug: string) => {
-      const publicUrl = `${backendUrl}/public/status/${slug}`
+      const publicUrl = `${backendUrl}/public/status/${encodeURIComponent(slug)}`
       const response = await fetch(publicUrl)
       if (!response.ok) {
         throw new Error('Failed to fetch public status page')
@@ -162,7 +162,7 @@ export function statusPagesMethods(core: ApiClientCore) {
     },
 
     getPublicStatusPageByDomain: async (domain: string) => {
-      const publicUrl = `${backendUrl}/public/status/domain/${domain}`
+      const publicUrl = `${backendUrl}/public/status/domain/${encodeURIComponent(domain)}`
       const response = await fetch(publicUrl)
       if (!response.ok) {
         throw new Error('Failed to fetch public status page')

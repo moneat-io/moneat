@@ -142,6 +142,7 @@ export function authMethods(core: ApiClientCore) {
         demoEpochMs: number
       }>(`${authBase}/auth/demo-login`, { method: 'POST' })
       sessionStorage.setItem('authenticated', 'true')
+      setDemoEpoch(response.demoEpochMs)
       return response
     },
 

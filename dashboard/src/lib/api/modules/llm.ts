@@ -51,8 +51,8 @@ export function llmMethods(core: ApiClientCore) {
       if (params.provider) searchParams.set('provider', params.provider)
       if (params.type) searchParams.set('type', params.type)
       if (params.status) searchParams.set('status', params.status)
-      if (params.page) searchParams.set('page', String(params.page))
-      if (params.pageSize) searchParams.set('pageSize', String(params.pageSize))
+      if (params.page !== undefined) searchParams.set('page', String(params.page))
+      if (params.pageSize !== undefined) searchParams.set('pageSize', String(params.pageSize))
       return core.request<LlmGenerationsListResponse>(
         `${base}/llm/generations?${searchParams}`
       )

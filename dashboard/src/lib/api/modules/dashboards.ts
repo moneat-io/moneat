@@ -257,13 +257,17 @@ export function dashboardsMethods(core: ApiClientCore) {
     queryCustomDataSource: (
       id: number,
       request: CustomDataSourceQueryRequest
-    ) =>
-      core.request<Record<string, unknown>[]>(
+    ) => {
+      // Strip data_source_id from body; the id is authoritative via the URL
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { data_source_id: _, ...body } = request
+      return core.request<Record<string, unknown>[]>(
         `${base}/datasources/${id}/query`,
         {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify(body),
         }
-      ),
+      )
+    },
   }
 }
