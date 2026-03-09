@@ -353,6 +353,9 @@ generate_secrets() {
 
   REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
   success "REDIS_PASSWORD         (32 chars, alphanumeric)"
+
+  DATA_SOURCE_ENCRYPTION_KEY=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
+  success "DATA_SOURCE_ENCRYPTION_KEY (32 chars, alphanumeric)"
 }
 
 # ── Write .env files ──
@@ -397,6 +400,9 @@ REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:${REDIS_PORT}
 
 # JWT
 JWT_SECRET=${JWT_SECRET}
+
+# Custom data source credential encryption (separate from JWT)
+DATA_SOURCE_ENCRYPTION_KEY=${DATA_SOURCE_ENCRYPTION_KEY}
 
 # Email / SMTP
 EMAIL_FROM=${EMAIL_FROM}

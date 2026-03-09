@@ -42,6 +42,9 @@ At minimum, you **must** change these values:
 # Generate a strong secret: openssl rand -base64 64
 JWT_SECRET=your-secure-random-secret
 
+# Generate a distinct secret: openssl rand -base64 32
+DATA_SOURCE_ENCRYPTION_KEY=your-datasource-encryption-key
+
 # Database passwords — use strong, unique passwords
 DATABASE_PASSWORD=your-postgres-password
 CLICKHOUSE_PASSWORD=your-clickhouse-password
@@ -55,7 +58,7 @@ SELF_HOSTED=true
 ```
 
 :::danger[Use strong secrets]
-Never use the default development passwords in production. Generate unique passwords for `JWT_SECRET`, `DATABASE_PASSWORD`, and `CLICKHOUSE_PASSWORD`.
+Never use the default development passwords in production. Generate unique passwords for `JWT_SECRET`, `DATA_SOURCE_ENCRYPTION_KEY`, `DATABASE_PASSWORD`, and `CLICKHOUSE_PASSWORD`. `DATA_SOURCE_ENCRYPTION_KEY` must be distinct from `JWT_SECRET`.
 :::
 
 ### 3. Update Docker Compose
@@ -77,6 +80,7 @@ services:
       DATABASE_PASSWORD: your-postgres-password
       CLICKHOUSE_PASSWORD: your-clickhouse-password
       JWT_SECRET: your-secure-random-secret
+      DATA_SOURCE_ENCRYPTION_KEY: your-datasource-encryption-key  # Distinct from JWT_SECRET
       FRONTEND_URL: https://moneat.example.com
       BACKEND_URL: https://api.moneat.example.com
       SELF_HOSTED: "true"
@@ -146,6 +150,7 @@ The self-hosted deployment consists of five services:
 | Variable | Description |
 |----------|-------------|
 | `JWT_SECRET` | Secret key for signing JWT tokens. Generate with `openssl rand -base64 64`. |
+| `DATA_SOURCE_ENCRYPTION_KEY` | Key for encrypting custom data source credentials. Must be separate from JWT_SECRET. Generate with `openssl rand -base64 32`. |
 | `DATABASE_PASSWORD` | PostgreSQL password. Must match `POSTGRES_PASSWORD` in the postgres service. |
 | `CLICKHOUSE_PASSWORD` | ClickHouse password. Must match the clickhouse service config. |
 | `FRONTEND_URL` | Public URL of the dashboard (e.g. `https://moneat.example.com`). |
@@ -255,6 +260,7 @@ docker compose logs backend
 The backend validates all critical environment variables on startup and will exit with a clear error message if any are missing. Common issues:
 
 - `JWT_SECRET` not set or using the default development value
+- `DATA_SOURCE_ENCRYPTION_KEY` not set — generate one with `openssl rand -base64 32` and add `DATA_SOURCE_ENCRYPTION_KEY=your-datasource-encryption-key` to your `.env`
 - `DATABASE_PASSWORD` doesn't match the PostgreSQL container's `POSTGRES_PASSWORD`
 - `CLICKHOUSE_PASSWORD` doesn't match the ClickHouse container's password
 

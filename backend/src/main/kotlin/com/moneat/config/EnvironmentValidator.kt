@@ -41,6 +41,7 @@ class EnvironmentValidator {
         validateCriticalSecret("JWT_SECRET", errors)
         validateCriticalSecret("DATABASE_PASSWORD", errors)
         validateCriticalSecret("CLICKHOUSE_PASSWORD", errors)
+        validateCriticalSecret("DATA_SOURCE_ENCRYPTION_KEY", errors)
 
         // CRITICAL: Production URLs must be set correctly (relaxed for self-host)
         if (!isSelfHost) {
@@ -62,9 +63,12 @@ class EnvironmentValidator {
 
         if (value.isNullOrBlank()) {
             errors.add("CRITICAL: $envVar environment variable is not set. This is required.")
-        } else if (envVar == "JWT_SECRET" && value.length < MIN_JWT_SECRET_LENGTH) {
+        } else if (
+            (envVar == "JWT_SECRET" || envVar == "DATA_SOURCE_ENCRYPTION_KEY") &&
+            value.length < MIN_JWT_SECRET_LENGTH
+        ) {
             errors.add(
-                "CRITICAL: $envVar must be at least $MIN_JWT_SECRET_LENGTH characters for HMAC256 security."
+                "CRITICAL: $envVar must be at least $MIN_JWT_SECRET_LENGTH characters for security."
             )
         }
     }

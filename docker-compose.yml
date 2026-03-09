@@ -75,6 +75,7 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-moneat_dev_password}
       REDIS_URL: redis://:${REDIS_PASSWORD:-moneat_dev_password}@redis:6379
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      DATA_SOURCE_ENCRYPTION_KEY: ${DATA_SOURCE_ENCRYPTION_KEY:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       BACKEND_URL: ${BACKEND_URL:-http://localhost:8080}
       STRIPE_ENABLED: "false"
