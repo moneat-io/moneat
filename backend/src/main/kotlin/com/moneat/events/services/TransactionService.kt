@@ -41,6 +41,9 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
     private val clickhouseDb: String get() = queryHelper.clickhouseDb
     private val json get() = queryHelper.json
 
+    companion object {
+        private const val APDEX_THRESHOLD_MS = 500
+    }
     private fun mapSpanRow(obj: JsonObject): SpanResponse {
         val startMs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
         val endMs = obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
@@ -140,7 +143,9 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
         val filterClause = queryHelper.buildTransactionFilterClause(environment, operation)
 
         val totalQuery = """
-            SELECT count() as total, avg(duration_ms) as avg_duration
+            SELECT count() as total, avg(duration_ms) as avg_duration,
+                countIf(duration_ms <= $APDEX_THRESHOLD_MS) as satisfied,
+                countIf(duration_ms > $APDEX_THRESHOLD_MS AND duration_ms <= ${APDEX_THRESHOLD_MS * 4}) as tolerated
             FROM `$clickhouseDb`.events
             WHERE $projectIdClause
                 AND event_type = 'transaction'
@@ -186,26 +191,34 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
         return try {
             val totalResponse = ClickHouseClient.execute(totalQuery)
             val totalBody = totalResponse.bodyAsText()
-            val (totalCount, avgDuration) = if (
-                totalResponse.status.value in 200..299 && totalBody.isNotBlank()
-            ) {
+            val totalCount: Long
+            val avgDuration: Double
+            val satisfiedCount: Long
+            val toleratedCount: Long
+            if (totalResponse.status.value in 200..299 && totalBody.isNotBlank()) {
                 val obj = json.parseToJsonElement(totalBody.lines().first()).jsonObject
-                val count = obj["total"]?.jsonPrimitive?.long ?: 0L
-                val avg = obj["avg_duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-                count to avg
+                totalCount = obj["total"]?.jsonPrimitive?.long ?: 0L
+                avgDuration = obj["avg_duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+                satisfiedCount = obj["satisfied"]?.jsonPrimitive?.long ?: 0L
+                toleratedCount = obj["tolerated"]?.jsonPrimitive?.long ?: 0L
             } else {
-                0L to 0.0
+                totalCount = 0L
+                avgDuration = 0.0
+                satisfiedCount = 0L
+                toleratedCount = 0L
             }
 
             val throughput = queryHelper.executeTimelineQuery(throughputQuery)
             val slowest = queryHelper.executeSlowestTransactionsQuery(slowestQuery)
 
-            val satisfied = totalCount * 0.94
-            val tolerated = totalCount * 0.94
-            val apdex = if (totalCount > 0) (satisfied + tolerated * 0.5) / totalCount else 0.0
+            val apdex = if (totalCount > 0) {
+                ((satisfiedCount + toleratedCount * 0.5) / totalCount).coerceIn(0.0, 1.0)
+            } else {
+                0.0
+            }
 
             PerformanceStatsResponse(
-                apdex = apdex.coerceIn(0.0, 1.0),
+                apdex = apdex,
                 throughput = throughput,
                 slowestTransactions = slowest,
                 totalTransactions = totalCount,

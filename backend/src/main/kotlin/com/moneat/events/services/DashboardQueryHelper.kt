@@ -334,12 +334,18 @@ class DashboardQueryHelper {
         return body
             .lines()
             .filter { it.isNotBlank() }
-            .associate { line ->
-                val obj = json.parseToJsonElement(line).jsonObject
-                val key = obj[keyField]?.jsonPrimitive?.content ?: "unknown"
-                val count = obj["count"]?.jsonPrimitive?.long ?: 0
-                key to count
+            .mapNotNull { line ->
+                try {
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    val key = obj[keyField]?.jsonPrimitive?.content ?: "unknown"
+                    val count = obj["count"]?.jsonPrimitive?.long ?: 0
+                    key to count
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
+                    null
+                }
             }
+            .toMap()
     }
 
     suspend fun executeTopIssuesQuery(

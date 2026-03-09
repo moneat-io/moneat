@@ -29,7 +29,6 @@ import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.client.statement.bodyAsText
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -152,7 +151,7 @@ class ProjectService(private val queryHelper: DashboardQueryHelper) {
         )
     }
 
-    fun createProject(
+    suspend fun createProject(
         userId: Int,
         request: CreateProjectRequest
     ): ProjectResponse {
@@ -223,7 +222,8 @@ class ProjectService(private val queryHelper: DashboardQueryHelper) {
             }
         }
 
-        return runBlocking { getProject(projectId) }!!
+        return getProject(projectId)
+            ?: throw IllegalStateException("Project not found after creation (id=$projectId)")
     }
 
     fun addProjectTarget(

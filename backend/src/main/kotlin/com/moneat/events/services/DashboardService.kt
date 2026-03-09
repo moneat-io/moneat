@@ -91,7 +91,7 @@ class DashboardService {
     suspend fun getProject(projectId: Long): ProjectResponse? =
         projectService.getProject(projectId)
 
-    fun createProject(
+    suspend fun createProject(
         userId: Int,
         request: com.moneat.events.models.CreateProjectRequest
     ): ProjectResponse = projectService.createProject(userId, request)

@@ -217,7 +217,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
                 uniq(user_id) as count
             FROM `$clickhouseDb`.events
             WHERE $projectIdClause
-                AND timestamp >= now() - INTERVAL $hoursBack HOUR
+                AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
                 AND user_id != ''
                 AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
             GROUP BY time
