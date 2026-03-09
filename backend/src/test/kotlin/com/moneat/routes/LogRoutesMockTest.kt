@@ -16,7 +16,6 @@
 
 package com.moneat.routes
 
-import com.moneat.billing.services.BillingQuotaService
 import com.moneat.logs.services.LogService
 import com.moneat.logs.routes.logRoutes
 import com.auth0.jwt.JWT
@@ -62,7 +61,6 @@ class LogRoutesMockTest {
     }
 
     private val mockLogService = mockk<LogService>(relaxed = true)
-    private val mockQuotaService = mockk<BillingQuotaService>(relaxed = true)
 
     @BeforeTest
     fun setupDatabase() {
@@ -140,7 +138,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs") {
@@ -156,7 +154,7 @@ class LogRoutesMockTest {
             // Request without auth header → 401 (or 403 if auth rejects)
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs")
@@ -176,7 +174,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/tag-values?key=service") {
@@ -193,7 +191,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/tag-values") {
@@ -220,7 +218,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/filters") {
@@ -245,7 +243,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/aggregate") {
@@ -271,7 +269,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/top?field=service") {
@@ -288,7 +286,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/top") {

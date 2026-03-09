@@ -53,7 +53,7 @@ private val json = Json {
     coerceInputValues = true
 }
 
-fun Route.datadogHostRoutes() {
+fun Route.datadogHostIngestRoutes() {
     // DD agent intake endpoints
     route("/dd") {
         route("/api/v1") {
@@ -186,7 +186,9 @@ fun Route.datadogHostRoutes() {
             )
         }
     }
+}
 
+fun Route.datadogHostQueryRoutes() {
     // Dashboard query endpoints (JWT-authenticated)
     route("/v1") {
         authenticate("auth-jwt") {

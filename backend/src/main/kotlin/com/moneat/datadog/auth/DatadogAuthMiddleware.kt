@@ -85,6 +85,22 @@ object DatadogAuthMiddleware {
         return organizationId
     }
 
+    /**
+     * Resolves an org ID from a DD-API-KEY without performing HTTP responses.
+     * Uses the same cache as [authenticate] to avoid redundant DB lookups.
+     */
+    fun resolveOrgId(apiKey: String): Int? {
+        val now = System.currentTimeMillis()
+        evictExpiredEntries(now)
+        val cached = cache[apiKey]
+        if (cached != null) return cached.organizationId
+        val organizationId = DatadogService.validateApiKey(apiKey) ?: return null
+        if (cache.size < MAX_CACHE_SIZE) {
+            cache[apiKey] = CachedKey(organizationId, now + CACHE_TTL_MS)
+        }
+        return organizationId
+    }
+
     // For testing
     internal fun clearCache() {
         cache.clear()
