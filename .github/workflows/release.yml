@@ -102,7 +102,7 @@ jobs:
             type=sha,format=long
 
       - name: Build and push backend image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
+        uses: docker/build-push-action@dbac3ca1e5410ec04d2cce48cfbcfa3175fb8f4f
         with:
           context: .
           file: backend/Dockerfile
@@ -150,7 +150,7 @@ jobs:
             type=sha,format=long
 
       - name: Build and push dashboard image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
+        uses: docker/build-push-action@dbac3ca1e5410ec04d2cce48cfbcfa3175fb8f4f
         with:
           context: .
           file: dashboard/Dockerfile
