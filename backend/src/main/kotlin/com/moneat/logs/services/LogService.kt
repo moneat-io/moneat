@@ -40,7 +40,6 @@ import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -191,8 +190,8 @@ class LogService {
             """.trimIndent()
 
         val response = ClickHouseClient.execute(insert)
-        if (!response.status.isSuccess()) {
-            val errorBody = response.bodyAsText()
+        val errorBody = response.bodyAsText()
+        if (response.isClickHouseError(errorBody)) {
             throw IllegalStateException("Failed to insert logs into ClickHouse: ${errorBody.take(600)}")
         }
 

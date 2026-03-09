@@ -119,7 +119,7 @@ object ClickHouseClient {
         val queryWithFormat = if (query.trimEnd().uppercase().contains("FORMAT")) query else "$query FORMAT $format"
         val response = execute(queryWithFormat, span)
         val body = response.bodyAsText()
-        if (!response.status.isSuccess()) {
+        if (response.isClickHouseError(body)) {
             throw IllegalStateException(
                 "ClickHouse query failed (${response.status.value}): ${body.take(500)}"
             )

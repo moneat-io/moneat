@@ -247,7 +247,10 @@ private fun io.ktor.server.routing.RoutingContext.paramOffset(): Int =
 private suspend fun executeCount(sql: String): Long {
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
-    if (resp.isClickHouseError(body)) return 0L
+    if (resp.isClickHouseError(body)) {
+        logger.error { "ClickHouse error in executeCount. SQL: ${sql.take(200)} Body: ${body.take(300)}" }
+        throw IllegalStateException("ClickHouse query error: ${body.take(300)}")
+    }
     return body.trim().lines().firstOrNull()?.let {
         json.parseToJsonElement(it).jsonObject["cnt"]
             ?.jsonPrimitive?.content?.toLongOrNull()
@@ -260,7 +263,10 @@ private suspend fun executeRows(
 ): List<JsonObject> {
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
-    if (resp.isClickHouseError(body)) return emptyList()
+    if (resp.isClickHouseError(body)) {
+        logger.error { "ClickHouse error in executeRows. SQL: ${sql.take(200)} Body: ${body.take(300)}" }
+        throw IllegalStateException("ClickHouse query error: ${body.take(300)}")
+    }
     return body.trim().lines().filter { it.isNotBlank() }.map { line ->
         mapper(json.parseToJsonElement(line).jsonObject)
     }

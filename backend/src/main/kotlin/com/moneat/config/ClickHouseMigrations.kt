@@ -176,22 +176,21 @@ object ClickHouseMigrations {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
-            val response = ClickHouseClient.executeMigration(query)
-            val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+        val response = ClickHouseClient.executeMigration(query)
+        val body = response.bodyAsText()
+        if (body.isBlank()) return emptyList()
+        if (response.isClickHouseError(body)) {
+            throw RuntimeException("ClickHouse error reading applied migrations: ${body.take(500)}")
+        }
 
-            body.trim().lines().map { line ->
-                val json = Json.parseToJsonElement(line).jsonObject
-                AppliedMigration(
-                    version = json["version"]?.jsonPrimitive?.int ?: 0,
-                    description = json["description"]?.jsonPrimitive?.content ?: "",
-                    checksum = json["checksum"]?.jsonPrimitive?.content ?: "",
-                    appliedAt = json["applied_at"]?.jsonPrimitive?.content ?: ""
-                )
-            }
-        } catch (e: Exception) {
-            emptyList()
+        return body.trim().lines().map { line ->
+            val json = Json.parseToJsonElement(line).jsonObject
+            AppliedMigration(
+                version = json["version"]?.jsonPrimitive?.int ?: 0,
+                description = json["description"]?.jsonPrimitive?.content ?: "",
+                checksum = json["checksum"]?.jsonPrimitive?.content ?: "",
+                appliedAt = json["applied_at"]?.jsonPrimitive?.content ?: ""
+            )
         }
     }
 
