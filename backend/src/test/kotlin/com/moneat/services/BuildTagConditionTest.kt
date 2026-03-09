@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -25,7 +26,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle top-level field 'service'`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("service", "auth-service")
 
         assertEquals("service = 'auth-service'", condition)
@@ -35,7 +36,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle top-level field 'host'`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("host", "api-prod-3")
 
         assertEquals("host = 'api-prod-3'", condition)
@@ -45,7 +46,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle top-level field 'environment'`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("environment", "production")
 
         assertEquals("environment = 'production'", condition)
@@ -55,7 +56,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should map 'status' to 'level' field`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("status", "error")
 
         assertEquals("toString(level) = 'error'", condition)
@@ -65,7 +66,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle custom tag (not top-level field)`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("custom_tag", "custom_value")
 
         assertTrue(condition.contains("has(tags, 'custom_tag')"))
@@ -74,7 +75,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle SQL injection in top-level field value`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("service", "auth'; DROP TABLE users; --")
 
         // Should escape the single quote
@@ -84,7 +85,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle SQL injection in custom tag key`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("tag'; DROP TABLE users; --", "value")
 
         // Should escape the single quote in the key
@@ -93,7 +94,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle SQL injection in custom tag value`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("custom_tag", "value'; DROP TABLE users; --")
 
         // Should escape the single quote in the value
@@ -102,7 +103,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle empty key`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("", "value")
 
         assertEquals("", condition)
@@ -110,7 +111,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle blank key`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("  ", "value")
 
         assertEquals("", condition)
@@ -118,7 +119,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle all top-level fields`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val enumFields = setOf("level", "source")
         val topLevelFields =
             listOf(
@@ -146,7 +147,7 @@ class BuildTagConditionTest {
 
     @Test
     fun `buildTagCondition should handle special characters in field names`() {
-        val service = LogService()
+        val service = LogService(LogRepositoryImpl())
         val condition = service.buildTagCondition("http.status_code", "200")
 
         // Not a top-level field, should use tags

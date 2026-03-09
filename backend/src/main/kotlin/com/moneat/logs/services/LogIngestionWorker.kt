@@ -18,6 +18,7 @@ package com.moneat.logs.services
 
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
+import com.moneat.logs.repositories.LogRepositoryImpl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +39,7 @@ class LogIngestionWorker(
     private val dlqKey: String,
     private val workerCount: Int
 ) {
-    private val logService = LogService()
+    private val logService = LogService(LogRepositoryImpl())
     private val logIndexService = LogIndexService()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()

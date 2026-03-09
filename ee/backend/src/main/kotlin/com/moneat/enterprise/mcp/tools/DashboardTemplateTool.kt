@@ -7,6 +7,9 @@ package com.moneat.enterprise.mcp.tools
 import com.moneat.dashboards.models.CreateDashboardRequest
 import com.moneat.dashboards.models.CreateWidgetRequest
 import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
+import com.moneat.dashboards.repositories.DashboardRepositoryImpl
+import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.dashboards.translation.DataDogTranslator
@@ -19,7 +22,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-private val templateDashService = CustomDashboardService()
+private val templateDashService = CustomDashboardService(
+    DashboardFolderRepositoryImpl(),
+    DashboardRepositoryImpl(),
+    DashboardWidgetRepositoryImpl()
+)
 private val dashQueryEngine = DashboardQueryEngine()
 private val dataDogTranslator = DataDogTranslator()
 private val grafanaTranslator = GrafanaTranslator()

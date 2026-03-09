@@ -16,7 +16,6 @@
 
 package com.moneat.events.services
 
-import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.ExceptionInfo
@@ -26,14 +25,12 @@ import com.moneat.events.models.SentryFeedback
 import com.moneat.events.models.SentryReplayEvent
 import com.moneat.events.models.SentrySpan
 import com.moneat.events.models.SentryTransaction
+import com.moneat.events.repositories.EventRepository
+import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.notifications.services.NotificationService
-import com.moneat.shared.models.ProjectKeys
-import com.moneat.shared.models.Projects
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
@@ -50,10 +47,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Instant
@@ -63,12 +56,15 @@ import java.util.concurrent.atomic.AtomicInteger
 
 private val logger = KotlinLogging.logger {}
 
-class EventService(private val notificationService: NotificationService? = null) {
+class EventService(
+    private val notificationService: NotificationService? = null,
+    private val eventRepository: EventRepository
+) {
     companion object {
         private const val DEFAULT_PROFILE_MAX_PAYLOAD_BYTES = 10 * 1024 * 1024 // 10 MiB
     }
 
-    private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
+    private val clickhouseDb: String get() = com.moneat.config.ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracker = UsageTrackingService.instance
     private val releaseService = ReleaseService()
@@ -99,8 +95,6 @@ class EventService(private val notificationService: NotificationService? = null)
     // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
     private val replaySegmentCounters = ConcurrentHashMap<String, AtomicInteger>()
 
-    data class ProjectKeyVerification(val isValid: Boolean, val platformTarget: String?)
-
     fun verifyProjectKey(
         projectId: Long,
         publicKey: String
@@ -109,19 +103,7 @@ class EventService(private val notificationService: NotificationService? = null)
         val now = System.currentTimeMillis()
         projectKeyCache[cacheKey]?.let { if (it.expiresAt > now) return it.value }
 
-        val result =
-            transaction {
-                ProjectKeys
-                    .selectAll()
-                    .where {
-                        (ProjectKeys.project_id eq projectId) and
-                            (ProjectKeys.public_key eq publicKey) and
-                            (ProjectKeys.is_active eq true)
-                    }.firstOrNull()
-                    ?.let { row ->
-                        ProjectKeyVerification(true, row[ProjectKeys.platform_target])
-                    } ?: ProjectKeyVerification(false, null)
-            }
+        val result = eventRepository.verifyProjectKey(projectId, publicKey)
         projectKeyCache[cacheKey] = CachedEntry(result, now + CACHE_TTL_MS)
         return result
     }
@@ -130,14 +112,7 @@ class EventService(private val notificationService: NotificationService? = null)
         val now = System.currentTimeMillis()
         orgIdCache[projectId]?.let { if (it.expiresAt > now) return it.value }
 
-        val result =
-            transaction {
-                Projects
-                    .selectAll()
-                    .where { Projects.id eq projectId }
-                    .firstOrNull()
-                    ?.get(Projects.organization_id)
-            }
+        val result = eventRepository.getOrganizationIdForProject(projectId)
         orgIdCache[projectId] = CachedEntry(result, now + CACHE_TTL_MS)
         return result
     }
@@ -326,11 +301,8 @@ class EventService(private val notificationService: NotificationService? = null)
             """.trimIndent()
 
         try {
-            val transactionResponse = ClickHouseClient.execute(transactionInsert)
-
-            if (!transactionResponse.status.isSuccess()) {
-                val errorBody = transactionResponse.bodyAsText()
-                logger.error { "Failed to insert transaction: $errorBody" }
+            val transactionSuccess = eventRepository.executeClickHouseInsert(transactionInsert)
+            if (!transactionSuccess) {
                 return false
             }
 
@@ -379,12 +351,7 @@ class EventService(private val notificationService: NotificationService? = null)
                         ${spanRows.joinToString(",\n")}
                         """.trimIndent()
 
-                    val spansResponse = ClickHouseClient.execute(spansInsert)
-
-                    if (!spansResponse.status.isSuccess()) {
-                        val errorBody = spansResponse.bodyAsText()
-                        logger.error { "Failed to insert spans: $errorBody" }
-                    }
+                    eventRepository.executeClickHouseInsertNoResult(spansInsert)
                 }
             }
 
@@ -504,10 +471,8 @@ class EventService(private val notificationService: NotificationService? = null)
             """.trimIndent()
 
         try {
-            val response = ClickHouseClient.execute(query)
-            if (!response.status.isSuccess()) {
-                val errorBody = response.bodyAsText()
-                logger.error { "Failed to insert event: $errorBody" }
+            val success = eventRepository.executeClickHouseInsert(query)
+            if (!success) {
                 return false
             } else {
                 logger.info { "Event stored: $eventId for project $projectId" }
@@ -607,10 +572,8 @@ class EventService(private val notificationService: NotificationService? = null)
             """.trimIndent()
 
         try {
-            val response = ClickHouseClient.execute(insertQuery)
-            if (!response.status.isSuccess()) {
-                val errorBody = response.bodyAsText()
-                logger.error { "Failed to insert feedback: $errorBody" }
+            val success = eventRepository.executeClickHouseInsert(insertQuery)
+            if (!success) {
                 return false
             } else {
                 logger.info { "Feedback stored: $feedbackId for project $projectId" }
@@ -702,10 +665,8 @@ class EventService(private val notificationService: NotificationService? = null)
             """.trimIndent()
 
         try {
-            val response = ClickHouseClient.execute(replayEventInsert)
-            if (!response.status.isSuccess()) {
-                val errorBody = response.bodyAsText()
-                logger.error { "Failed to insert replay event: $errorBody" }
+            val success = eventRepository.executeClickHouseInsert(replayEventInsert)
+            if (!success) {
                 return false
             } else {
                 logger.info { "Replay event stored: $replayId segment $segmentId for project $projectId" }
@@ -741,13 +702,8 @@ class EventService(private val notificationService: NotificationService? = null)
             """.trimIndent()
 
         try {
-            val response = ClickHouseClient.execute(recordingInsert)
-            if (!response.status.isSuccess()) {
-                val errorBody = response.bodyAsText()
-                logger.error { "Failed to insert replay recording: $errorBody" }
-            } else {
-                logger.info { "Replay recording stored: $replayId segment $segmentId for project $projectId" }
-            }
+            eventRepository.executeClickHouseInsertNoResult(recordingInsert)
+            logger.info { "Replay recording stored: $replayId segment $segmentId for project $projectId" }
         } catch (e: Exception) {
             logger.error(e) { "Error storing replay recording in ClickHouse" }
         }
@@ -811,13 +767,8 @@ class EventService(private val notificationService: NotificationService? = null)
             """.trimIndent()
 
         try {
-            val response = ClickHouseClient.execute(replayEventInsert)
-            if (!response.status.isSuccess()) {
-                val errorBody = response.bodyAsText()
-                logger.error { "Failed to insert synthetic replay event: $errorBody" }
-            } else {
-                logger.info { "Synthetic replay event stored: $replayId for project $projectId" }
-            }
+            eventRepository.executeClickHouseInsertNoResult(replayEventInsert)
+            logger.info { "Synthetic replay event stored: $replayId for project $projectId" }
         } catch (e: Exception) {
             logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
         }
@@ -1072,10 +1023,9 @@ class EventService(private val notificationService: NotificationService? = null)
                 ${rows.joinToString(",\n")}
                 """.trimIndent()
 
-            val response = ClickHouseClient.execute(query)
-            if (!response.status.isSuccess()) {
-                val body = response.bodyAsText()
-                logger.error { "Failed to insert ai.* spans as LLM generations: $body" }
+            val success = eventRepository.executeClickHouseInsert(query)
+            if (!success) {
+                logger.error { "Failed to insert ai.* spans as LLM generations" }
             } else {
                 logger.info { "Cross-inserted ${rows.size} ai.* spans as LLM generations for project $projectId" }
             }
@@ -1186,11 +1136,9 @@ class EventService(private val notificationService: NotificationService? = null)
                 )
             """.trimIndent()
 
-            val response = ClickHouseClient.execute(insert)
-            if (!response.status.isSuccess()) {
-                logger.error {
-                    "Failed to insert Sentry profile into ClickHouse"
-                }
+            val success = eventRepository.executeClickHouseInsert(insert)
+            if (!success) {
+                logger.error { "Failed to insert Sentry profile into ClickHouse" }
                 return false
             }
             return true
@@ -1216,40 +1164,16 @@ class EventService(private val notificationService: NotificationService? = null)
         val cacheKey = "$projectId:$issueId"
         if (cacheKey in knownIssueIds) return false
 
-        val query =
-            """
-            SELECT count() as cnt
-            FROM `$clickhouseDb`.events
-            WHERE project_id = $projectId
-              AND issue_id = '$issueId'
-            FORMAT JSON
-            """.trimIndent()
+        val count = eventRepository.getEventCountForIssue(projectId, issueId)
 
-        return try {
-            val response = ClickHouseClient.execute(query)
-            val jsonResponse = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-            val count =
-                jsonResponse["data"]
-                    ?.jsonArray
-                    ?.firstOrNull()
-                    ?.jsonObject
-                    ?.get("cnt")
-                    ?.jsonPrimitive
-                    ?.longOrNull ?: 0
-
-            if (count > 1) {
-                // Evict oldest entries if cache grows too large
-                if (knownIssueIds.size > MAX_KNOWN_ISSUES) {
-                    knownIssueIds.clear()
-                }
-                knownIssueIds.add(cacheKey)
-                false
-            } else {
-                true
+        return if (count > 1) {
+            if (knownIssueIds.size > MAX_KNOWN_ISSUES) {
+                knownIssueIds.clear()
             }
-        } catch (e: Exception) {
-            logger.error(e) { "Error checking if issue $issueId is new" }
+            knownIssueIds.add(cacheKey)
             false
+        } else {
+            true
         }
     }
 }

@@ -17,6 +17,9 @@
 package com.moneat.billing.services
 
 import com.moneat.billing.models.BillingUsageResponse
+import com.moneat.billing.repositories.SubscriptionRepositoryImpl
+import com.moneat.billing.services.StripeService
+import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.billing.models.QuotaNotificationsSent
 import com.moneat.notifications.services.EmailService
 import com.moneat.shared.models.Memberships
@@ -46,7 +49,7 @@ import kotlin.time.Duration.Companion.seconds
 private val logger = KotlinLogging.logger {}
 
 class BillingBackgroundService(
-    private val stripeService: StripeService = StripeService(),
+    private val stripeService: StripeService = StripeService(SubscriptionRepositoryImpl(), OrganizationRepositoryImpl()),
     private val quotaService: BillingQuotaService = BillingQuotaService(),
     private val emailService: EmailService = EmailService(),
     private val pricingTierService: PricingTierService = PricingTierService()

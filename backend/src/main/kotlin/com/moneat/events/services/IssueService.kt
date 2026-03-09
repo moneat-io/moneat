@@ -17,43 +17,24 @@
 package com.moneat.events.services
 
 import com.moneat.events.models.EventResponse
-import io.ktor.server.plugins.BadRequestException
 import com.moneat.events.models.IssueDetailResponse
-import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.models.IssueResponse
-import com.moneat.shared.models.IssueStatuses
-import com.moneat.shared.models.Projects
+import com.moneat.events.models.IssueTransactionResponse
+import com.moneat.events.models.IssueUpdateRequest
+import com.moneat.events.repositories.IssueRepository
 import com.moneat.utils.ClickHouseQueryUtils
-import com.moneat.utils.ClickHouseSqlUtils.escapeSql
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.long
+import io.ktor.server.plugins.BadRequestException
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.update
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 
-class IssueService(private val queryHelper: DashboardQueryHelper) {
-    private val clickhouseDb: String get() = queryHelper.clickhouseDb
-    private val json get() = queryHelper.json
+class IssueService(
+    private val issueRepository: IssueRepository,
+    private val queryHelper: DashboardQueryHelper
+) {
 
-    suspend fun getProjectIdForIssue(issueId: String): Long? {
-        val escapedIssueId = escapeSql(issueId)
-        val query = """
-            SELECT toInt64(project_id) as project_id
-            FROM `$clickhouseDb`.issues FINAL
-            WHERE issue_id = '$escapedIssueId'
-            LIMIT 1
-            FORMAT JSONEachRow
-        """.trimIndent()
-        return queryHelper.executeProjectIdQuery(query, "Issue", issueId)
-    }
+    suspend fun getProjectIdForIssue(issueId: String): Long? =
+        issueRepository.getProjectIdForIssue(issueId)
 
     suspend fun getIssues(
         projectId: Long,
@@ -65,54 +46,26 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
         val offset = (page - 1) * limit
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        val retentionClauseForEvents =
+            queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
 
-        val retentionClauseForEvents = queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
-
-        val pgOverrides = if (projectId > 0) {
-            transaction {
-                IssueStatuses
-                    .selectAll()
-                    .where { IssueStatuses.project_id eq projectId }
-                    .associate { it[IssueStatuses.issue_id] to it[IssueStatuses.status] }
-            }
-        } else {
-            emptyMap()
-        }
+        val pgOverrides = issueRepository.getIssueStatusOverrides(projectId)
 
         val overfetch = if (status != null) (limit + offset) * 5 else limit + offset
-        val query = """
-            SELECT
-                issue_id,
-                toInt64(project_id) as project_id,
-                any(message) as title,
-                any(exception_type) as culprit,
-                any(level) as level,
-                any(platform) as platform,
-                formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
-                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
-                count() as event_count,
-                uniq(user_id) as user_count,
-                'unresolved' as status
-            FROM `$clickhouseDb`.events e
-            WHERE $projectIdClause
-                AND event_type = 'error'
-                AND issue_id != ''
-                AND $retentionClauseForEvents
-            GROUP BY issue_id, project_id
-            ORDER BY max(timestamp) DESC
-            LIMIT $overfetch
-            FORMAT JSONEachRow
-        """.trimIndent()
-
-        val rows = queryHelper.executeJsonEachRowQuery(query, "Issues") ?: return emptyList()
+        val rows = issueRepository.getIssuesRaw(
+            projectId = projectId,
+            offset = offset,
+            overfetch = overfetch,
+            retentionDays = retentionDays,
+            retentionClause = retentionClauseForEvents,
+            projectIdClause = projectIdClause
+        )
 
         return try {
             var skipped = 0
             val result = mutableListOf<IssueResponse>()
-            for (obj in rows) {
-                val chStatus = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved"
-                val issueId = obj["issue_id"]?.jsonPrimitive?.content ?: continue
-                val effectiveStatus = pgOverrides[issueId] ?: chStatus
+            for (row in rows) {
+                val effectiveStatus = pgOverrides[row.issueId] ?: row.status
 
                 if (status != null && effectiveStatus != status) continue
 
@@ -122,16 +75,16 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
                 }
                 result.add(
                     IssueResponse(
-                        id = issueId,
-                        projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
-                        title = obj["title"]?.jsonPrimitive?.content ?: "",
-                        culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
-                        level = obj["level"]?.jsonPrimitive?.content ?: "error",
-                        platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                        firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
-                        lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
-                        eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
-                        userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
+                        id = row.issueId,
+                        projectId = row.projectId,
+                        title = row.title,
+                        culprit = row.culprit,
+                        level = row.level,
+                        platform = row.platform,
+                        firstSeen = row.firstSeen,
+                        lastSeen = row.lastSeen,
+                        eventCount = row.eventCount,
+                        userCount = row.userCount,
                         status = effectiveStatus,
                         substatus = null,
                         statusDetail = null
@@ -150,73 +103,42 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
         issueId: String,
         demoEpochMs: Long? = null
     ): IssueDetailResponse? {
-        val escapedIssueId = escapeSql(issueId)
-        val projectId = getProjectIdForIssue(issueId) ?: return null
+        val projectId = issueRepository.getProjectIdForIssue(issueId) ?: return null
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
-        val retentionClause = queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
+        val retentionClause =
+            queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
 
-        val detailQuery = """
-            SELECT
-                issue_id,
-                toInt64(project_id) as project_id,
-                any(message) as title,
-                any(exception_type) as culprit,
-                any(level) as level,
-                any(platform) as platform,
-                formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
-                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
-                count() as event_count,
-                uniq(user_id) as user_count,
-                'unresolved' as status,
-                any(fingerprint) as fingerprint
-            FROM `$clickhouseDb`.events e
-            WHERE issue_id = '$escapedIssueId' AND $projectIdClause AND $retentionClause
-            GROUP BY issue_id, project_id
-            LIMIT 1
-            FORMAT JSONEachRow
-        """.trimIndent()
+        val obj = issueRepository.getIssueDetailRaw(
+            issueId = issueId,
+            projectId = projectId,
+            retentionDays = retentionDays,
+            retentionClause = retentionClause,
+            projectIdClause = projectIdClause
+        ) ?: return null
 
-        val pgStatus = transaction {
-            IssueStatuses
-                .selectAll()
-                .where { (IssueStatuses.issue_id eq issueId) and (IssueStatuses.project_id eq projectId) }
-                .firstOrNull()
-                ?.get(IssueStatuses.status)
-        }
-
-        val projectName = transaction {
-            Projects
-                .selectAll()
-                .where { Projects.id eq projectId }
-                .firstOrNull()
-                ?.get(Projects.name)
-        } ?: "Unknown"
-
-        val obj = queryHelper.executeJsonEachRowQuery(detailQuery, "Issue detail")?.firstOrNull() ?: return null
-
-        val fingerprintArr =
-            obj["fingerprint"]?.jsonArray?.map { it.jsonPrimitive.contentOrNull ?: "" } ?: emptyList()
-        val effectiveStatus = pgStatus ?: (obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved")
+        val pgStatus = issueRepository.getIssueStatus(issueId, projectId)
+        val projectName = issueRepository.getProjectName(projectId)
+        val effectiveStatus = pgStatus ?: obj.status
 
         val latestEvent = getIssueEvents(issueId, 1, demoEpochMs).firstOrNull()
 
         return IssueDetailResponse(
-            id = issueId,
-            projectId = projectId,
-            projectName = projectName,
-            title = obj["title"]?.jsonPrimitive?.content ?: "",
-            culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
-            level = obj["level"]?.jsonPrimitive?.content ?: "error",
-            platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-            firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
-            lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
-            eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
-            userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
+            id = obj.issueId,
+            projectId = obj.projectId,
+            projectName = projectName ?: "Unknown",
+            title = obj.title,
+            culprit = obj.culprit,
+            level = obj.level,
+            platform = obj.platform,
+            firstSeen = obj.firstSeen,
+            lastSeen = obj.lastSeen,
+            eventCount = obj.eventCount,
+            userCount = obj.userCount,
             status = effectiveStatus,
             substatus = null,
             statusDetail = null,
-            fingerprint = fingerprintArr,
+            fingerprint = obj.fingerprint ?: emptyList(),
             latestEvent = latestEvent
         )
     }
@@ -226,38 +148,19 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
         limit: Int,
         demoEpochMs: Long? = null
     ): List<EventResponse> {
-        val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
-        val escapedIssueId = escapeSql(issueId)
+        val projectId = issueRepository.getProjectIdForIssue(issueId) ?: return emptyList()
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
-        val retentionClause = queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
+        val retentionClause =
+            queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
 
-        val query = """
-            SELECT
-                toString(event_id) as event_id,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
-                message,
-                platform,
-                level,
-                environment,
-                release,
-                user_id,
-                user_email,
-                user_username,
-                tags,
-                contexts,
-                exception_value as exception,
-                breadcrumbs
-            FROM `$clickhouseDb`.events
-            WHERE $projectIdClause AND issue_id = '$escapedIssueId' AND event_type = 'error'
-                AND $retentionClause
-            ORDER BY timestamp DESC
-            LIMIT $limit
-            FORMAT JSONEachRow
-        """.trimIndent()
-
-        val rows = queryHelper.executeJsonEachRowQuery(query, "Issue events") ?: return emptyList()
-        return rows.map { queryHelper.mapEventRow(it) }
+        return issueRepository.getIssueEvents(
+            issueId = issueId,
+            projectId = projectId,
+            limit = limit,
+            retentionClause = retentionClause,
+            projectIdClause = projectIdClause
+        )
     }
 
     suspend fun getIssueTransactions(
@@ -265,76 +168,32 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
         limit: Int,
         demoEpochMs: Long? = null
     ): List<IssueTransactionResponse> {
-        val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
-        val escapedIssueId = escapeSql(issueId)
+        val projectId = issueRepository.getProjectIdForIssue(issueId) ?: return emptyList()
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
-        val retentionClause = queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
+        val retentionClause =
+            queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
 
-        val query = """
-            SELECT
-                toString(event_id) as event_id,
-                transaction_name as name,
-                transaction_op as op,
-                duration_ms as duration,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
-                JSONExtractString(contexts, 'trace', 'status') as status,
-                JSONExtractString(contexts, 'trace', 'trace_id') as trace_id
-            FROM `$clickhouseDb`.events
-            WHERE $projectIdClause AND issue_id = '$escapedIssueId'
-                AND event_type = 'transaction'
-                AND $retentionClause
-            ORDER BY timestamp DESC
-            LIMIT $limit
-            FORMAT JSONEachRow
-        """.trimIndent()
-
-        val rows = queryHelper.executeJsonEachRowQuery(query, "Issue transactions") ?: return emptyList()
-        return rows.map { obj ->
-            IssueTransactionResponse(
-                eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
-                name = obj["name"]?.jsonPrimitive?.content ?: "",
-                op = obj["op"]?.jsonPrimitive?.content ?: "",
-                duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
-                status = obj["status"]?.jsonPrimitive?.contentOrNull,
-                traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull
-            )
-        }
+        return issueRepository.getIssueTransactions(
+            issueId = issueId,
+            projectId = projectId,
+            limit = limit,
+            retentionClause = retentionClause,
+            projectIdClause = projectIdClause
+        )
     }
 
     suspend fun updateIssue(
         issueId: String,
-        update: com.moneat.events.models.IssueUpdateRequest
+        update: IssueUpdateRequest
     ) {
-        val projectId = getProjectIdForIssue(issueId)
+        val projectId = issueRepository.getProjectIdForIssue(issueId)
             ?: throw IllegalArgumentException("Issue not found")
 
         if (update.status != null) {
             val validStatuses = setOf("unresolved", "resolved", "archived", "ignored")
             if (update.status !in validStatuses) throw BadRequestException("Invalid status value")
-            transaction {
-                val existing = IssueStatuses
-                    .selectAll()
-                    .where { (IssueStatuses.issue_id eq issueId) and (IssueStatuses.project_id eq projectId) }
-                    .firstOrNull()
-
-                if (existing != null) {
-                    IssueStatuses.update(
-                        where = { (IssueStatuses.issue_id eq issueId) and (IssueStatuses.project_id eq projectId) }
-                    ) {
-                        it[IssueStatuses.status] = update.status
-                        it[IssueStatuses.updated_at] = kotlin.time.Clock.System.now()
-                    }
-                } else {
-                    IssueStatuses.insert {
-                        it[IssueStatuses.issue_id] = issueId
-                        it[IssueStatuses.project_id] = projectId
-                        it[IssueStatuses.status] = update.status
-                        it[IssueStatuses.updated_at] = kotlin.time.Clock.System.now()
-                    }
-                }
-            }
+            issueRepository.upsertIssueStatus(issueId, projectId, update.status)
         }
     }
 }

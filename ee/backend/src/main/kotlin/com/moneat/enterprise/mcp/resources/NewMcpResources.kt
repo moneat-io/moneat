@@ -4,11 +4,15 @@
 
 package com.moneat.enterprise.mcp.resources
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.enterprise.mcp.models.McpContext
 import com.moneat.enterprise.mcp.protocol.McpResource
 import com.moneat.enterprise.mcp.protocol.ResourceContent
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
 import com.moneat.statuspage.services.StatusPageService
+import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -40,7 +44,7 @@ class ActiveIncidentsResource : McpResource {
 }
 
 class UptimeSummaryResource : McpResource {
-    private val uptimeService = UptimeService()
+    private val uptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
 
     override val uri = "moneat://uptime/summary"
     override val name = "Uptime Summary"
@@ -97,8 +101,8 @@ class StatusPagesResource : McpResource {
 }
 
 class InfrastructureHealthResource : McpResource {
-    private val monitorService = MonitorService()
-    private val uptimeService = UptimeService()
+    private val monitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
+    private val uptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
 
     override val uri = "moneat://infrastructure/health"
     override val name = "Infrastructure Health"

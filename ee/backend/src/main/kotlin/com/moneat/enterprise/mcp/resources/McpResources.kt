@@ -8,6 +8,8 @@ import com.moneat.enterprise.mcp.models.McpContext
 import com.moneat.enterprise.mcp.protocol.McpResource
 import com.moneat.enterprise.mcp.protocol.ResourceContent
 import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
@@ -21,7 +23,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val jsonFmt = Json { prettyPrint = true }
-private val monitorService = MonitorService()
+private val monitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 private val alertService = MonitorAlertService()
 
 class OrgOverviewResource : McpResource {

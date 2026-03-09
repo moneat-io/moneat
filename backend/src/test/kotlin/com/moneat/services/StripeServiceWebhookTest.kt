@@ -18,7 +18,9 @@ package com.moneat.services
 
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.models.StripeWebhookEvents
+import com.moneat.billing.repositories.SubscriptionRepositoryImpl
 import com.moneat.billing.services.StripeService
+import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
@@ -38,7 +40,7 @@ import kotlin.time.Instant
 import com.moneat.testsupport.TestDatabaseHelper
 
 class StripeServiceWebhookTest {
-    private val stripeService = StripeService()
+    private val stripeService = StripeService(SubscriptionRepositoryImpl(), OrganizationRepositoryImpl())
     private var testOrgId: Int = 0
     private var freeTierId: Int = 0
     private var testTierId: Int = 0
@@ -703,6 +705,8 @@ class StripeServiceWebhookTest {
         val identifiers = mutableListOf<String>()
         val values = mutableListOf<String>()
         val meteringService = StripeService(
+            subscriptionRepository = SubscriptionRepositoryImpl(),
+            organizationRepository = OrganizationRepositoryImpl(),
             meterEventSender = { params ->
                 identifiers += params.identifier
                 values += params.payload["value"] ?: ""
@@ -738,6 +742,8 @@ class StripeServiceWebhookTest {
         val identifiers = mutableListOf<String>()
         var shouldFail = true
         val meteringService = StripeService(
+            subscriptionRepository = SubscriptionRepositoryImpl(),
+            organizationRepository = OrganizationRepositoryImpl(),
             meterEventSender = { params ->
                 identifiers += params.identifier
                 if (shouldFail) {
@@ -791,6 +797,8 @@ class StripeServiceWebhookTest {
     fun `flushPendingMeteredUsage includes past_due subscriptions`() {
         val identifiers = mutableListOf<String>()
         val meteringService = StripeService(
+            subscriptionRepository = SubscriptionRepositoryImpl(),
+            organizationRepository = OrganizationRepositoryImpl(),
             meterEventSender = { params ->
                 identifiers += params.identifier
             },

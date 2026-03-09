@@ -16,7 +16,9 @@
 
 package com.moneat.auth.services
 
+import com.moneat.billing.repositories.SubscriptionRepositoryImpl
 import com.moneat.billing.services.StripeService
+import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.config.ClickHouseClient
 import com.moneat.notifications.services.EmailService
 import com.moneat.shared.models.Memberships
@@ -43,7 +45,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 private val logger = KotlinLogging.logger {}
 
 class AccountDeletionService(
-    private val stripeService: StripeService = StripeService(),
+    private val stripeService: StripeService = StripeService(SubscriptionRepositoryImpl(), OrganizationRepositoryImpl()),
     private val emailService: EmailService = EmailService()
 ) {
 

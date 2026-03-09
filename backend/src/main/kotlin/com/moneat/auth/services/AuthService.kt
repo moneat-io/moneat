@@ -16,6 +16,8 @@
 
 package com.moneat.auth.services
 
+import com.moneat.auth.repositories.UserRepository
+import com.moneat.auth.repositories.UserRepositoryImpl
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.config.EnvConfig
@@ -30,6 +32,8 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SsoConfigurations
 import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.Users
+import com.moneat.shared.repositories.MembershipRepository
+import com.moneat.shared.repositories.MembershipRepositoryImpl
 import com.moneat.shared.services.SidebarPreferenceService
 import com.moneat.utils.SentryUtils
 import io.ktor.server.config.ApplicationConfig
@@ -69,7 +73,10 @@ data class SignupRequestContext(
     val userAgent: String? = null
 )
 
-class AuthService {
+class AuthService(
+    private val userRepository: UserRepository,
+    private val membershipRepository: MembershipRepository
+) {
     companion object {
         private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
     }
@@ -312,62 +319,31 @@ class AuthService {
     }
 
     fun verifyEmail(token: String): Boolean {
-        return transaction {
-            val user =
-                Users
-                    .selectAll()
-                    .where { Users.email_verification_token eq token }
-                    .firstOrNull()
-                    ?: return@transaction false
-
-            val expiresAt = user[Users.email_verification_expires_at]
-            if (expiresAt == null || expiresAt < System.currentTimeMillis()) {
-                return@transaction false
-            }
-
-            // Mark as verified and clear token
-            Users.update({ Users.id eq user[Users.id] }) {
-                it[email_verified] = true
-                it[email_verification_token] = null
-                it[email_verification_expires_at] = null
-            }
-
-            true
+        val user = userRepository.findByEmailVerificationToken(token) ?: return false
+        val expiresAt = user.emailVerificationExpiresAt
+        if (expiresAt == null || expiresAt < System.currentTimeMillis()) {
+            return false
         }
+        userRepository.updateEmailVerified(user.id, true)
+        userRepository.clearEmailVerificationToken(user.id)
+        return true
     }
 
     fun resendVerificationEmail(email: String): Boolean {
         val normalizedEmail = email.lowercase().trim()
-        return transaction {
-            val user =
-                Users
-                    .selectAll()
-                    .where { Users.email eq normalizedEmail }
-                    .firstOrNull()
-                    ?: return@transaction false
-
-            // Check if already verified
-            if (user[Users.email_verified]) {
-                throw IllegalArgumentException("Email already verified")
-            }
-
-            // Generate new token
-            val verificationToken = generateVerificationToken()
-            val expiresAt = System.currentTimeMillis() + VERIFICATION_TTL_MS
-
-            Users.update({ Users.id eq user[Users.id] }) {
-                it[email_verification_token] = verificationToken
-                it[email_verification_expires_at] = expiresAt
-            }
-
-            // Send email
-            try {
-                emailService.sendVerificationEmail(normalizedEmail, verificationToken, user[Users.name])
-                true
-            } catch (e: Exception) {
-                println("Failed to send verification email: ${e.message}")
-                false
-            }
+        val user = userRepository.findByEmail(normalizedEmail) ?: return false
+        if (user.emailVerified) {
+            throw IllegalArgumentException("Email already verified")
+        }
+        val verificationToken = generateVerificationToken()
+        val expiresAt = System.currentTimeMillis() + VERIFICATION_TTL_MS
+        userRepository.updateVerificationToken(user.id, verificationToken, expiresAt)
+        return try {
+            emailService.sendVerificationEmail(normalizedEmail, verificationToken, user.name)
+            true
+        } catch (e: Exception) {
+            println("Failed to send verification email: ${e.message}")
+            false
         }
     }
 
@@ -381,48 +357,36 @@ class AuthService {
             )
         }
 
-        return transaction {
-            val user =
-                Users.selectAll().where { Users.email eq normalizedEmail }.firstOrNull()
-                    ?: return@transaction null
+        val user = userRepository.findByEmail(normalizedEmail) ?: return null
 
-            if (!BCrypt.checkpw(request.password, user[Users.password_hash])) {
-                return@transaction null
-            }
-
-            if (!user[Users.email_verified]) {
-                throw IllegalArgumentException("Email not verified. Please check your email for the verification link.")
-            }
-
-            val userId = user[Users.id]
-
-            // Get user's org membership
-            val membership =
-                Memberships
-                    .selectAll()
-                    .where { Memberships.user_id eq userId }
-                    .firstOrNull()
-                    ?: throw IllegalStateException("User has no organization membership")
-
-            val orgId = membership[Memberships.organization_id]
-            val orgRole = membership[Memberships.role]
-
-            val tokenPair = refreshTokenService.generateRefreshToken(userId, user[Users.email], orgId, orgRole)
-            AuthResponse(
-                token = tokenPair.accessToken,
-                refreshToken = tokenPair.refreshToken,
-                expiresIn = tokenPair.expiresIn,
-                user =
-                UserResponse(
-                    userId,
-                    user[Users.email],
-                    user[Users.name],
-                    user[Users.email_verified],
-                    user[Users.onboarding_completed],
-                    user[Users.is_admin]
-                )
-            )
+        if (!BCrypt.checkpw(request.password, user.passwordHash)) {
+            return null
         }
+
+        if (!user.emailVerified) {
+            throw IllegalArgumentException("Email not verified. Please check your email for the verification link.")
+        }
+
+        val (orgId, orgRole) = run {
+            val membership = membershipRepository.getFirstMembershipForUser(user.id)
+                ?: throw IllegalStateException("User has no organization membership")
+            membership.organizationId to membership.role
+        }
+
+        val tokenPair = refreshTokenService.generateRefreshToken(user.id, user.email, orgId, orgRole)
+        return AuthResponse(
+            token = tokenPair.accessToken,
+            refreshToken = tokenPair.refreshToken,
+            expiresIn = tokenPair.expiresIn,
+            user = UserResponse(
+                user.id,
+                user.email,
+                user.name,
+                user.emailVerified,
+                user.onboardingCompleted,
+                user.isAdmin
+            )
+        )
     }
 
     private fun generateToken(
@@ -448,17 +412,11 @@ class AuthService {
         email: String
     ): String {
         // For impersonation, get the user's org membership
-        val (orgId, orgRole) =
-            transaction {
-                val membership =
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?: throw IllegalStateException("User has no organization membership")
-
-                membership[Memberships.organization_id] to membership[Memberships.role]
-            }
+        val (orgId, orgRole) = run {
+            val membership = membershipRepository.getFirstMembershipForUser(userId)
+                ?: throw IllegalStateException("User has no organization membership")
+            membership.organizationId to membership.role
+        }
 
         return generateToken(userId, email, orgId, orgRole)
     }
@@ -500,31 +458,16 @@ class AuthService {
 
     fun requestPasswordReset(email: String): Boolean {
         val normalizedEmail = email.lowercase().trim()
-        return transaction {
-            val user =
-                Users
-                    .selectAll()
-                    .where { Users.email eq normalizedEmail }
-                    .firstOrNull()
-                    ?: return@transaction false
-
-            // Generate reset token
-            val resetToken = generateVerificationToken()
-            val expiresAt = System.currentTimeMillis() + (60 * 60 * 1000) // 1 hour
-
-            Users.update({ Users.id eq user[Users.id] }) {
-                it[password_reset_token] = resetToken
-                it[password_reset_expires_at] = expiresAt
-            }
-
-            // Send password reset email
-            try {
-                emailService.sendPasswordResetEmail(normalizedEmail, resetToken, user[Users.name])
-                true
-            } catch (e: Exception) {
-                println("Failed to send password reset email: ${e.message}")
-                false
-            }
+        val user = userRepository.findByEmail(normalizedEmail) ?: return false
+        val resetToken = generateVerificationToken()
+        val expiresAt = System.currentTimeMillis() + (60 * 60 * 1000) // 1 hour
+        userRepository.updatePasswordResetToken(user.id, resetToken, expiresAt)
+        return try {
+            emailService.sendPasswordResetEmail(normalizedEmail, resetToken, user.name)
+            true
+        } catch (e: Exception) {
+            println("Failed to send password reset email: ${e.message}")
+            false
         }
     }
 
@@ -536,29 +479,15 @@ class AuthService {
             throw IllegalArgumentException("Password must be at least 8 characters")
         }
 
-        return transaction {
-            val user =
-                Users
-                    .selectAll()
-                    .where { Users.password_reset_token eq token }
-                    .firstOrNull()
-                    ?: return@transaction false
-
-            val expiresAt = user[Users.password_reset_expires_at]
-            if (expiresAt == null || expiresAt < System.currentTimeMillis()) {
-                return@transaction false
-            }
-
-            // Update password and clear reset token
-            val passwordHash = BCrypt.hashpw(newPassword, BCrypt.gensalt())
-            Users.update({ Users.id eq user[Users.id] }) {
-                it[password_hash] = passwordHash
-                it[password_reset_token] = null
-                it[password_reset_expires_at] = null
-            }
-
-            true
+        val user = userRepository.findByPasswordResetToken(token) ?: return false
+        val expiresAt = user.passwordResetExpiresAt
+        if (expiresAt == null || expiresAt < System.currentTimeMillis()) {
+            return false
         }
+        val passwordHash = BCrypt.hashpw(newPassword, BCrypt.gensalt())
+        userRepository.updatePassword(user.id, passwordHash)
+        userRepository.clearPasswordResetToken(user.id)
+        return true
     }
 
     fun completeOnboarding(
@@ -676,21 +605,17 @@ class AuthService {
         val userId = decodedJWT.getClaim("userId").asInt()
         val email = decodedJWT.getClaim("email").asString()
 
-        val user =
-            transaction {
-                val userRow =
-                    Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                        ?: return@transaction null
-
-                UserResponse(
-                    userId,
-                    email,
-                    userRow[Users.name],
-                    userRow[Users.email_verified],
-                    userRow[Users.onboarding_completed],
-                    userRow[Users.is_admin]
-                )
-            } ?: return null
+        val user = run {
+            val userRow = userRepository.findById(userId) ?: return null
+            UserResponse(
+                userId,
+                email,
+                userRow.name,
+                userRow.emailVerified,
+                userRow.onboardingCompleted,
+                userRow.isAdmin
+            )
+        }
 
         return AuthResponse(
             token = tokenPair.accessToken,

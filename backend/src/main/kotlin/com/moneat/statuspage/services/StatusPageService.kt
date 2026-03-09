@@ -35,10 +35,12 @@ import com.moneat.statuspage.models.StatusPageMonitorResponse
 import com.moneat.statuspage.models.StatusPageMonitors
 import com.moneat.statuspage.models.StatusPageResponse
 import com.moneat.statuspage.models.StatusPages
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.statuspage.models.UpdateIncidentRequest
 import com.moneat.statuspage.models.UpdateStatusPageRequest
 import com.moneat.statuspage.models.UptimeDataPoint
 import com.moneat.uptime.models.UptimeMonitors
+import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
@@ -65,7 +67,7 @@ import kotlin.time.Duration.Companion.hours
 private val logger = KotlinLogging.logger {}
 
 class StatusPageService(
-    private val uptimeService: UptimeService = UptimeService()
+    private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
 ) {
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()

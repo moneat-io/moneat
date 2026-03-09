@@ -22,6 +22,8 @@ import com.moneat.events.models.InviteMemberRequest
 import com.moneat.events.models.OrgMembersResponse
 import com.moneat.events.models.UpdateMemberRoleRequest
 import com.moneat.notifications.services.EmailService
+import com.moneat.org.repositories.OrgInvitationRepositoryImpl
+import com.moneat.org.repositories.OrgMembershipRepositoryImpl
 import com.moneat.org.services.OrgInvitationService
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
@@ -40,9 +42,14 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 
-fun Route.orgManagementRoutes() {
-    val membershipService = OrgMembershipService()
-    val invitationService = OrgInvitationService(membershipService, EmailService())
+fun Route.orgManagementRoutes(
+    membershipService: OrgMembershipService = OrgMembershipService(OrgMembershipRepositoryImpl()),
+    invitationService: OrgInvitationService = OrgInvitationService(
+        OrgMembershipService(OrgMembershipRepositoryImpl()),
+        EmailService(),
+        OrgInvitationRepositoryImpl()
+    )
+) {
 
     route("/v1/org") {
         authenticate("auth-jwt") {

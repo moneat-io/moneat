@@ -8,12 +8,14 @@ import com.moneat.enterprise.mcp.models.McpContext
 import com.moneat.enterprise.mcp.protocol.InputSchema
 import com.moneat.enterprise.mcp.protocol.McpTool
 import com.moneat.enterprise.mcp.protocol.ToolCallResult
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-private val metricsMonitorService = MonitorService()
+private val metricsMonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 
 private const val DEFAULT_METRIC_HOURS = 24
 private const val MAX_METRIC_HOURS = 168

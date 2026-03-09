@@ -16,7 +16,10 @@
 
 package com.moneat.org.routes
 
+import com.moneat.auth.repositories.UserRepositoryImpl
+import com.moneat.shared.repositories.MembershipRepositoryImpl
 import com.moneat.auth.services.AuthService
+import com.moneat.billing.repositories.SubscriptionRepositoryImpl
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
@@ -173,7 +176,7 @@ private data class AdminSuccessResponse(
 
 fun Route.adminRoutes() {
     val adminService = AdminService()
-    val authService = AuthService()
+    val authService = AuthService(UserRepositoryImpl(), MembershipRepositoryImpl())
     val pricingTierService = PricingTierService()
     val attributionAnalyticsService = com.moneat.shared.services.AttributionAnalyticsService()
 
@@ -888,7 +891,7 @@ fun Route.adminRoutes() {
                 }
 
                 // Promotional credit management
-                val adminBillingService = com.moneat.billing.services.AdminBillingService()
+                val adminBillingService = com.moneat.billing.services.AdminBillingService(SubscriptionRepositoryImpl())
 
                 post("/organizations/{orgId}/promotional-credits") {
                     val principal = call.principal<JWTPrincipal>()

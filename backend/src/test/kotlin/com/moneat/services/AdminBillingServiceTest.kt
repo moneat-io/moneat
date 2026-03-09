@@ -1,5 +1,6 @@
 package com.moneat.services
 
+import com.moneat.billing.repositories.SubscriptionRepositoryImpl
 import com.moneat.billing.services.AdminBillingService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
@@ -13,7 +14,7 @@ import kotlin.test.*
 import com.moneat.testsupport.TestDatabaseHelper
 
 class AdminBillingServiceTest {
-    private val service = AdminBillingService()
+    private val service = AdminBillingService(SubscriptionRepositoryImpl())
 
     companion object {
         private var db: org.jetbrains.exposed.v1.jdbc.Database? = null

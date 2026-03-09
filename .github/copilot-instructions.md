@@ -206,6 +206,15 @@ Users.selectAll().where { (Users.id eq userId) and (Users.active eq true) }
 
 This applies to all tables and joins. The project uses `-Werror` (warnings as errors), so deprecated DSL will cause build failures.
 
+### Repository Layer
+When adding or extending the repository layer:
+
+- ❌ **NEVER put domain models in the same file as a repository interface**
+- ✅ **ALWAYS put domain models in separate files** — e.g. `ProjectRow` in `repositories/models/ProjectRow.kt` or `models/ProjectRow.kt`, not in `ProjectRepository.kt`
+- Repository interfaces live in `{domain}/repositories/{Entity}Repository.kt`
+- Implementations live in `{domain}/repositories/{Entity}RepositoryImpl.kt`
+- Domain models (data classes returned by repositories) live in their own files under `{domain}/repositories/models/` or `{domain}/models/`
+
 ### Database Migrations
 - **PostgreSQL**: Uses Flyway; migrations in `backend/src/main/resources/db/migration/*.sql`
 - **ClickHouse**: Custom versioned migrations in `backend/src/main/resources/db/clickhouse_migration/V*__*.sql`

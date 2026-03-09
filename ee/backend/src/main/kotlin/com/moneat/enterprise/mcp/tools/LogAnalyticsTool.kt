@@ -8,13 +8,14 @@ import com.moneat.enterprise.mcp.models.McpContext
 import com.moneat.enterprise.mcp.protocol.InputSchema
 import com.moneat.enterprise.mcp.protocol.McpTool
 import com.moneat.enterprise.mcp.protocol.ToolCallResult
+import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-private val logAnalyticsService = LogService()
+private val logAnalyticsService = LogService(LogRepositoryImpl())
 private val logToolLogger = mu.KotlinLogging.logger {}
 
 private const val DEFAULT_LOG_TOP_LIMIT = 10

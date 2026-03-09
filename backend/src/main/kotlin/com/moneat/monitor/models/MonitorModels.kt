@@ -281,6 +281,50 @@ data class AlertData(
     val templateAlertId: Int? = null
 )
 
+/** Row returned from HostAlerts or OrganizationAlertTemplates by repository methods. */
+data class AlertRow(
+    val id: Int,
+    val hostId: Int,
+    val organizationId: Int,
+    val metric: String,
+    val condition: String,
+    val threshold: Double,
+    val durationSeconds: Int,
+    val enabled: Boolean,
+    val lastTriggeredAt: kotlin.time.Instant?,
+    val createdAt: kotlin.time.Instant,
+    val scope: String = "host"
+)
+
+/** Row returned from HostAlertSettings by repository methods. */
+data class AlertSettingRow(
+    val hostId: Int,
+    val organizationId: Int,
+    val scope: String,
+    val updatedAt: kotlin.time.Instant
+)
+
+/** Data required to create a new alert (host-scoped or global). */
+data class CreateAlertData(
+    val hostId: Int,
+    val organizationId: Int,
+    val metric: String,
+    val condition: String,
+    val threshold: Double,
+    val durationSeconds: Int,
+    val enabled: Boolean,
+    val scope: String
+)
+
+/** Partial update fields for an existing alert. */
+data class UpdateAlertData(
+    val metric: String? = null,
+    val condition: String? = null,
+    val threshold: Double? = null,
+    val durationSeconds: Int? = null,
+    val enabled: Boolean? = null
+)
+
 @Serializable
 data class CreateAgentApiKeyRequest(
     val name: String

@@ -3,6 +3,8 @@ package com.moneat.services
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationAlertTemplates
@@ -29,7 +31,7 @@ import kotlinx.coroutines.runBlocking
 import com.moneat.testsupport.TestDatabaseHelper
 
 class MonitorServiceTest {
-    private val service = MonitorService()
+    private val service = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 
     companion object {
         private var db: org.jetbrains.exposed.v1.jdbc.Database? = null

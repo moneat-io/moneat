@@ -16,6 +16,8 @@
 
 package com.moneat.services
 
+import com.moneat.auth.repositories.UserRepositoryImpl
+import com.moneat.shared.repositories.MembershipRepositoryImpl
 import com.moneat.auth.services.AuthService
 import com.moneat.auth.services.SignupRequestContext
 import com.moneat.events.models.SignupRequest
@@ -35,7 +37,7 @@ import kotlin.test.*
 import com.moneat.testsupport.TestDatabaseHelper
 
 class AuthServiceLegalConsentTest {
-    private val authService = AuthService()
+    private val authService = AuthService(UserRepositoryImpl(), MembershipRepositoryImpl())
     private val appConfig = ApplicationConfig("application.conf")
     private val termsVersion = appConfig.property("legal.termsVersion").getString()
     private val privacyVersion = appConfig.property("legal.privacyVersion").getString()
