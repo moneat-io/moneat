@@ -16,8 +16,8 @@ sonar {
     properties {
         property("sonar.projectKey", "moneat")
         property("sonar.projectName", "moneat")
-        property("sonar.sources", "src/main/kotlin")
-        property("sonar.tests", "src/test/kotlin,src/integrationTest/kotlin")
+        property("sonar.sources", "$projectDir/src/main/kotlin,${project(":ee").projectDir}/src/main/kotlin")
+        property("sonar.tests", "$projectDir/src/test/kotlin,$projectDir/src/integrationTest/kotlin")
         property(
             "sonar.coverage.jacoco.xmlReportPaths",
             "${layout.buildDirectory.get()}/reports/jacoco/test/jacocoTestReport.xml"
