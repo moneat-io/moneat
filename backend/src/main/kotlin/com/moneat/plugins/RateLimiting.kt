@@ -99,7 +99,9 @@ fun Application.configureRateLimiting() {
                 val parts = call.request.headers[HttpHeaders.Authorization]?.split(Regex("\\s+"), limit = 2)
                 val token = if (parts != null && parts.size == 2 && parts[0].equals("Bearer", ignoreCase = true)) {
                     parts[1].trim().takeIf { it.isNotBlank() }
-                } else null
+                } else {
+                    null
+                }
                 if (token != null) {
                     logApiKeyService.validateKey(token)
                         ?.let { "org:$it" }
