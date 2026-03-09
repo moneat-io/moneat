@@ -32,6 +32,10 @@ import kotlin.test.assertFailsWith
 
 class CustomDataSourceExecutorTest {
 
+    private companion object {
+        private const val PROMETHEUS_EXAMPLE_URL = "https://prometheus.example.com"
+    }
+
     private val executor = CustomDataSourceExecutor()
     private val postgresHandler = PostgresHandler(ConcurrentHashMap())
     private val prometheusHandler = PrometheusHandler()
@@ -222,14 +226,14 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with https prefix and default port`() {
-        val url = prometheusHandler.buildUrl("https://prometheus.example.com", 443)
-        assertEquals("https://prometheus.example.com", url)
+        val url = prometheusHandler.buildUrl(PROMETHEUS_EXAMPLE_URL, 443)
+        assertEquals(PROMETHEUS_EXAMPLE_URL, url)
     }
 
     @Test
     fun `buildPrometheusUrl with https prefix and custom port`() {
-        val url = prometheusHandler.buildUrl("https://prometheus.example.com", 9090)
-        assertEquals("https://prometheus.example.com:9090", url)
+        val url = prometheusHandler.buildUrl(PROMETHEUS_EXAMPLE_URL, 9090)
+        assertEquals("$PROMETHEUS_EXAMPLE_URL:9090", url)
     }
 
     @Test
