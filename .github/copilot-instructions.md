@@ -102,6 +102,34 @@ dashboard/src/
 └── contexts/                # React contexts (auth, etc.)
 ```
 
+### Dashboard: TypeScript & ESLint (Sonar-friendly)
+To avoid Sonar/ESLint code smells in `dashboard/`:
+
+**Exports & globals:**
+- ❌ **Don't export mutable `let`**: `export let x = null`
+- ✅ **Use `const` with object/ref**: `export const x = { current: null }` for test hooks, etc.
+- ✅ **Prefer `globalThis.window`** over `window` (SSR-safe)
+- ✅ **Prefer `globalThis.sessionStorage`** / `globalThis.localStorage` over bare globals
+
+**Assignments & operators:**
+- ✅ **Use nullish coalescing assignment** when assigning only if null: `x ??= value` instead of `if (!x) x = value`
+
+**Strings & DOM:**
+- ❌ **Avoid nested template literals**: `` `${base}/path${qs ? `?${qs}` : ''}` ``
+- ✅ **Use `urlWithQuery(path, qs)`** from `dashboard/src/lib/api/utils.ts` or string concat: `path + (qs ? '?' + qs : '')`
+- ✅ **Use `child.remove()`** instead of `parent.removeChild(child)`
+
+**Regex:**
+- ✅ **Use `RegExp.exec()`** instead of `string.match()` when you need capture groups
+
+**Functions & types:**
+- ✅ **Limit parameters to ≤7** – use an options object for functions with many params
+- ✅ **Use type aliases** for repeated union types: `type Status = 'a' | 'b' | 'c'`
+- ✅ **Re-export with `export { X } from './path'`** instead of import-then-export
+
+**Complexity:**
+- **Keep cognitive complexity ≤15** – extract helpers, use early returns, avoid deep nesting
+
 ## Key Conventions
 
 ### Detekt Code Style Guidelines
@@ -123,6 +151,8 @@ dashboard/src/
   ./gradlew detektFormat    # Auto-fix formatting
   ```
 
+- **SonarQube** runs in CI (`.github/workflows/sonar.yml`). Follow the "Kotlin: Validation & Control Flow" and "Dashboard: TypeScript & ESLint" guidelines below to avoid common Sonar code smells.
+
 While some rules are currently disabled in `detekt.yml`, always follow best practices for new code:
 - Use explicit imports (no wildcards)
 - Keep lines ≤ 120 characters
@@ -141,7 +171,22 @@ The dashboard code is checked by SonarCloud. Follow these rules when writing Typ
 - ✅ **Extract repeated union types into a named type alias** — e.g. `type IncidentSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null`
 - ✅ **Define helper functions at module scope** when they don't close over instance state — avoids the "move function to outer scope" smell
 
+### Kotlin: Validation & Control Flow (Sonar-friendly)
+To avoid Sonar code smells and keep code consistent:
 
+- ❌ **Don't use if-throw for validation**: `if (x !in valid) throw IllegalArgumentException("msg")`
+- ✅ **Use `require()` for internal argument preconditions**: `require(x in valid) { "Invalid value" }` — use only in internal helpers/library code, not Ktor handlers (throws `IllegalArgumentException` → HTTP 500 unless mapped by `StatusPages`)
+- ✅ **Use `check()` for internal state preconditions**: `check(existing == null) { "Already exists" }` — same caveat; use only where `IllegalStateException` is appropriate internally
+- ✅ **In Ktor route handlers**, throw `BadRequestException` (or domain-specific exceptions) for client validation errors, or explicitly map `IllegalArgumentException`/`IllegalStateException` to 4xx/409 via the `StatusPages` plugin — do not rely on `require()`/`check()` inside handlers unless `StatusPages` maps them
+
+- **Remove unused local variables** – delete any variable that is never read.
+
+- **Keep cognitive complexity low (≤15)** – extract helper functions when logic gets nested:
+  - Use `runCatching { }.getOrNull()` only in non-suspending, synchronous helpers (e.g., parsing/mapping functions). **Avoid in suspending/coroutine contexts**: `runCatching` swallows all `Throwable`s including `CancellationException`, which can break coroutine cancellation. In suspend functions, use try/catch that rethrows `CancellationException`, or avoid `runCatching` entirely.
+  - Extract complex parsing or mapping into private functions
+  - Prefer early returns over nested conditionals
+
+### Exposed DSL (Kotlin Database ORM)
 **CRITICAL:** Always use the current Exposed DSL syntax to avoid deprecation warnings:
 
 - ❌ **DEPRECATED**: `Table.select { condition }`
