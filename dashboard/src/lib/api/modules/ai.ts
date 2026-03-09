@@ -23,6 +23,18 @@ import type {
   AiSseEvent,
 } from '../types'
 
+function parseSseDataLines(lines: string[], onEvent: (event: AiSseEvent) => void): void {
+  for (const line of lines) {
+    if (!line.startsWith('data: ')) continue
+    try {
+      const event = JSON.parse(line.slice(6)) as AiSseEvent
+      onEvent(event)
+    } catch {
+      /* skip malformed events */
+    }
+  }
+}
+
 async function readSseStream(response: Response, onEvent: (event: AiSseEvent) => void): Promise<void> {
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
@@ -32,34 +44,13 @@ async function readSseStream(response: Response, onEvent: (event: AiSseEvent) =>
     const { value, done } = await reader.read()
     if (done) {
       buffer += decoder.decode(undefined, { stream: false })
-      const lines = buffer.split('\n')
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const event = JSON.parse(line.slice(6)) as AiSseEvent
-            onEvent(event)
-          } catch {
-            /* skip malformed events */
-          }
-        }
-      }
+      parseSseDataLines(buffer.split('\n'), onEvent)
       break
     }
     buffer += decoder.decode(value, { stream: true })
-
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
-
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        try {
-          const event = JSON.parse(line.slice(6)) as AiSseEvent
-          onEvent(event)
-        } catch {
-          /* skip malformed events */
-        }
-      }
-    }
+    parseSseDataLines(lines, onEvent)
   }
 }
 

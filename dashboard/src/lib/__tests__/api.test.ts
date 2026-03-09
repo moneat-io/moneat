@@ -27,7 +27,7 @@ describe('ApiClient', () => {
     sessionStorage.clear()
     const reset = resetAuthRedirectForTesting.current
     if (typeof reset !== 'function') {
-      throw new Error('resetAuthRedirectForTesting.current is not a function')
+      throw new TypeError('resetAuthRedirectForTesting.current is not a function')
     }
     reset()
   })
