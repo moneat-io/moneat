@@ -207,8 +207,14 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             }
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Feedback update failed: query=${query.take(200)}, status=${response.status}, body=${body.take(400)}" }
-                throw IllegalStateException("ClickHouse ALTER TABLE UPDATE failed: ${response.status} ${body.take(200)}")
+                logger.error {
+                    "Feedback update failed: query=${query.take(
+                        200
+                    )}, status=${response.status}, body=${body.take(400)}"
+                }
+                throw IllegalStateException(
+                    "ClickHouse ALTER TABLE UPDATE failed: ${response.status} ${body.take(200)}"
+                )
             }
         }
     }
