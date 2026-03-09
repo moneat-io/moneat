@@ -16,6 +16,7 @@
 
 package com.moneat.plugins
 
+import com.moneat.config.EnvConfig
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.logs.services.LogApiKeyService
@@ -28,13 +29,73 @@ import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.origin
 import io.ktor.server.request.ApplicationRequest
+import java.net.InetAddress
 import kotlin.time.Duration.Companion.seconds
 
-// Follows the same CF-Connecting-IP → X-Forwarded-For → remoteHost precedence used elsewhere.
-private fun ApplicationRequest.clientIp(): String =
-    headers["CF-Connecting-IP"]?.trim()?.takeIf { it.isNotBlank() }
-        ?: headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-        ?: origin.remoteHost
+/**
+ * Trusted upstream proxies consulted before accepting forwarded-IP headers.
+ *
+ * Configure via the TRUSTED_PROXIES environment variable as a comma-separated list
+ * of IPv4/IPv6 addresses or CIDR ranges (e.g. "103.21.244.0/22,10.0.0.0/8").
+ *
+ * Only requests whose direct connection IP (origin.remoteHost) matches an entry
+ * are allowed to set CF-Connecting-IP or X-Forwarded-For as the rate-limit key.
+ * Direct connections from unknown IPs are always bucketed by their own address.
+ */
+private object TrustedProxies {
+    private val entries: List<String> by lazy {
+        EnvConfig.get("TRUSTED_PROXIES", "")
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
+
+    fun contains(ip: String): Boolean =
+        entries.isNotEmpty() && entries.any { matchesEntry(ip, it) }
+
+    private fun matchesEntry(ip: String, entry: String): Boolean {
+        if (!entry.contains('/')) return ip == entry
+        return try {
+            val (networkStr, prefixStr) = entry.split('/', limit = 2)
+            val prefixLen = prefixStr.toInt()
+            val addr = InetAddress.getByName(ip).address
+            val network = InetAddress.getByName(networkStr).address
+            if (addr.size != network.size) return false
+            val fullBytes = prefixLen / 8
+            val remainBits = prefixLen % 8
+            for (i in 0 until fullBytes) {
+                if (addr[i] != network[i]) return false
+            }
+            if (remainBits > 0) {
+                val mask = (0xFF shl (8 - remainBits)).toByte()
+                val addrBits = addr[fullBytes].toInt() and mask.toInt()
+                val networkBits = network[fullBytes].toInt() and mask.toInt()
+                if (addrBits != networkBits) return false
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+}
+
+/**
+ * Returns the real client IP for rate-limiting purposes.
+ *
+ * CF-Connecting-IP and X-Forwarded-For are only trusted when the direct connection
+ * peer (origin.remoteHost) is listed in TRUSTED_PROXIES; otherwise the peer address
+ * itself is used so spoofed headers cannot bypass rate limits.
+ */
+private fun ApplicationRequest.clientIp(): String {
+    val remoteHost = origin.remoteHost
+    return if (TrustedProxies.contains(remoteHost)) {
+        headers["CF-Connecting-IP"]?.trim()?.takeIf { it.isNotBlank() }
+            ?: headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+            ?: remoteHost
+    } else {
+        remoteHost
+    }
+}
 
 private const val INGEST_RATE_LIMIT = 100
 private const val INGEST_REFILL_SECONDS = 1
