@@ -33,7 +33,7 @@ import kotlin.test.assertFailsWith
 class CustomDataSourceExecutorTest {
 
     private companion object {
-        private const val PROMETHEUS_EXAMPLE_URL = "https://prometheus.example.com"
+        private const val PROMETHEUS_EXAMPLE_URL = "https://example.com"
     }
 
     private val executor = CustomDataSourceExecutor()
@@ -233,7 +233,7 @@ class CustomDataSourceExecutorTest {
     @Test
     fun `buildPrometheusUrl with https prefix and custom port`() {
         val url = prometheusHandler.buildUrl(PROMETHEUS_EXAMPLE_URL, 9090)
-        assertEquals("$PROMETHEUS_EXAMPLE_URL:9090", url)
+        assertEquals("https://example.com:9090", url)
     }
 
     @Test

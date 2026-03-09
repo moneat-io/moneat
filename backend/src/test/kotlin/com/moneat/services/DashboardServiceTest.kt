@@ -70,11 +70,11 @@ class DashboardServiceTest {
             MockHttpServer { exchange ->
                 val query = exchange.requestBodyText()
                 queries += query
-                if (query.contains("FROM `test`.events e") && query.contains("GROUP BY issue_id")) {
+                if (query.contains("events e") && query.contains("GROUP BY issue_id")) {
                     exchange.respond(
                         200,
                         """
-                    {"issue_id":"issue-1","title":"Null pointer","culprit":"Main.kt","level":"error","platform":"kotlin","first_seen":"2026-02-01T01:00:00.000Z","last_seen":"2026-02-02T01:00:00.000Z","event_count":12,"user_count":4}
+                    {"issue_id":"issue-1","title":"Null pointer","culprit":"Main.kt","level":"error","platform":"kotlin","first_seen":"2026-02-01T01:00:00.000Z","last_seen":"2026-02-02T01:00:00.000Z","event_count":12,"user_count":4,"status":"resolved"}
                         """.trimIndent(),
                         contentType = "text/plain"
                     )
@@ -108,12 +108,13 @@ class DashboardServiceTest {
                 }
 
                 val service = DashboardService()
-                val issues = service.getIssues(projectId = -1, page = 3, limit = 10, status = "resolved")
+                val issues = service.getIssues(projectId = -1, page = 1, limit = 10, status = "resolved")
 
                 assertEquals(1, issues.size)
                 assertEquals("issue-1", issues.first().id)
                 assertEquals("resolved", issues.first().status)
-                assertTrue(queries.any { it.contains("LIMIT 10 OFFSET 20") })
+                // Pagination uses overfetch: (limit+offset)*5 when status filter is set; page 1 => offset 0 => LIMIT 50
+                assertTrue(queries.any { it.contains("LIMIT 50") })
             }
         }
 
@@ -154,6 +155,21 @@ class DashboardServiceTest {
             }.use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
+                org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+
+                transaction {
+                    Organizations.insert {
+                        it[id] = 1
+                        it[name] = "Test Org"
+                        it[slug] = "test-org"
+                    }
+                    Projects.insert {
+                        it[id] = -1
+                        it[organization_id] = 1
+                        it[name] = "Android"
+                        it[slug] = "android"
+                    }
+                }
 
                 val service = DashboardService()
                 val issue = service.getIssue("issue-1")

@@ -158,7 +158,7 @@ class DashboardServiceProjectTest {
     // ===================== createProject =====================
 
     @Test
-    fun `createProject creates project with generated slug and DSN`() {
+    fun `createProject creates project with generated slug and DSN`() = runBlocking {
         val userId = seedUser()
         val orgId = seedOrg()
         seedMembership(userId, orgId)
@@ -174,7 +174,7 @@ class DashboardServiceProjectTest {
     }
 
     @Test
-    fun `createProject throws when user has no organization`() {
+    fun `createProject throws when user has no organization`() = runBlocking {
         val userId = seedUser()
 
         val service = DashboardService()
@@ -185,7 +185,7 @@ class DashboardServiceProjectTest {
     }
 
     @Test
-    fun `createProject throws when project with same name already exists`() {
+    fun `createProject throws when project with same name already exists`() = runBlocking {
         val userId = seedUser()
         val orgId = seedOrg()
         seedMembership(userId, orgId)
@@ -201,7 +201,7 @@ class DashboardServiceProjectTest {
     }
 
     @Test
-    fun `createProject with multiple targets creates multiple keys`() {
+    fun `createProject with multiple targets creates multiple keys`() = runBlocking {
         val userId = seedUser()
         val orgId = seedOrg()
         seedMembership(userId, orgId)
@@ -219,7 +219,7 @@ class DashboardServiceProjectTest {
     }
 
     @Test
-    fun `createProject with no targets creates single key`() {
+    fun `createProject with no targets creates single key`() = runBlocking {
         val userId = seedUser()
         val orgId = seedOrg()
         seedMembership(userId, orgId)
@@ -232,7 +232,7 @@ class DashboardServiceProjectTest {
     }
 
     @Test
-    fun `createProject normalizes special characters in slug`() {
+    fun `createProject normalizes special characters in slug`() = runBlocking {
         val userId = seedUser()
         val orgId = seedOrg()
         seedMembership(userId, orgId)
@@ -389,7 +389,7 @@ class DashboardServiceProjectTest {
         MockHttpServer { exchange ->
             exchange.respond(
                 200,
-                """{"project_id":$projectId,"count":42}""",
+                """{"total":42}""",
                 contentType = "text/plain"
             )
         }.use { server ->
@@ -464,7 +464,7 @@ class DashboardServiceProjectTest {
         }
 
         MockHttpServer { exchange ->
-            exchange.respond(200, """{"count":7}""", contentType = "text/plain")
+            exchange.respond(200, """{"total":7}""", contentType = "text/plain")
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
