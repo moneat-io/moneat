@@ -18,6 +18,7 @@ package com.moneat.logs.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.config.isClickHouseError
 import com.moneat.logs.models.AgentLogEntry
 import com.moneat.logs.models.LogAggregateBucket
 import com.moneat.logs.models.LogAggregateResponse
@@ -383,7 +384,7 @@ class LogService {
 
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.isClickHouseError(body)) {
             logger.error("ClickHouse query failed. WHERE clause: $whereClause")
             logger.error("Full query: $query")
             throw IllegalStateException("Failed to query logs: ${body.take(1000)}")
@@ -409,7 +410,7 @@ class LogService {
         val totalCountResponse = ClickHouseClient.execute(totalCountQuery)
         val totalCountBody = totalCountResponse.bodyAsText()
         val totalCount =
-            if (totalCountResponse.status.isSuccess() && !totalCountBody.trimStart().startsWith("Code:")) {
+            if (!totalCountResponse.isClickHouseError(totalCountBody)) {
                 try {
                     val jsonElement = Json.parseToJsonElement(totalCountBody.trim())
                     jsonElement.jsonObject["count"]?.jsonPrimitive?.longOrNull ?: 0L
@@ -567,7 +568,7 @@ class LogService {
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
         logger.debug { "Aggregate logs response body (first 500 chars): ${body.take(500)}" }
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.isClickHouseError(body)) {
             logger.warn { "Failed to aggregate logs: ${body.take(600)}" }
             return LogAggregateResponse(buckets = emptyList(), totalCount = 0, interval = resolvedInterval)
         }
@@ -700,7 +701,7 @@ class LogService {
 
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.isClickHouseError(body)) {
             logger.warn { "Failed to query top values: ${body.take(600)}" }
             return LogTopResponse(field = field, values = emptyList(), totalCount = 0)
         }
@@ -816,7 +817,7 @@ class LogService {
         logger.debug { "Export CSV SQL: $sql" }
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.isClickHouseError(body)) {
             logger.error { "ClickHouse export error. SQL: $sql\nError: ${body.take(600)}" }
             throw IllegalStateException("Failed to export logs: ${body.take(600)}")
         }
@@ -918,7 +919,7 @@ class LogService {
     private suspend fun queryValueCounts(query: String): List<LogFilterOptionWithCount> {
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.isClickHouseError(body)) {
             logger.warn { "Failed to query value counts: ${body.take(600)}" }
             return emptyList()
         }
@@ -1065,7 +1066,7 @@ class LogService {
     private suspend fun queryDistinctLines(query: String): List<String> {
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.isClickHouseError(body)) {
             logger.warn { "Failed to query log filter values: ${body.take(600)}" }
             return emptyList()
         }

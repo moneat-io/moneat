@@ -17,11 +17,11 @@
 package com.moneat.datadog.security
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.isClickHouseError
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.isSuccess
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -247,7 +247,7 @@ private fun io.ktor.server.routing.RoutingContext.paramOffset(): Int =
 private suspend fun executeCount(sql: String): Long {
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
-    if (!resp.status.isSuccess() || body.startsWith("Code:")) return 0L
+    if (resp.isClickHouseError(body)) return 0L
     return body.trim().lines().firstOrNull()?.let {
         json.parseToJsonElement(it).jsonObject["cnt"]
             ?.jsonPrimitive?.content?.toLongOrNull()
@@ -260,7 +260,7 @@ private suspend fun executeRows(
 ): List<JsonObject> {
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
-    if (!resp.status.isSuccess() || body.startsWith("Code:")) return emptyList()
+    if (resp.isClickHouseError(body)) return emptyList()
     return body.trim().lines().filter { it.isNotBlank() }.map { line ->
         mapper(json.parseToJsonElement(line).jsonObject)
     }

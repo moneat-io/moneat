@@ -163,6 +163,12 @@ object ClickHouseClient {
     }
 }
 
+/** Returns true if the response body represents a ClickHouse error (e.g. "Code: 60, DB::Exception..."). */
+fun String.isClickHouseError(): Boolean = trimStart().startsWith("Code:")
+
+/** Returns true if the HTTP response or body indicates a ClickHouse failure. */
+fun HttpResponse.isClickHouseError(body: String): Boolean = !status.isSuccess() || body.isClickHouseError()
+
 fun Application.configureClickHouse() {
     // Skip ClickHouse in test environment if not configured
     val url =

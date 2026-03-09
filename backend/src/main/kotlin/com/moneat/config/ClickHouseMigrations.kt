@@ -232,7 +232,7 @@ object ClickHouseMigrations {
             val response = ClickHouseClient.executeMigration(statement)
             val body = response.bodyAsText()
 
-            if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+            if (response.isClickHouseError(body)) {
                 throw RuntimeException(
                     "Migration V${migration.version} failed at statement ${index + 1}/${statements.size}: $body"
                 )
@@ -249,7 +249,7 @@ object ClickHouseMigrations {
         val recordResponse = ClickHouseClient.executeMigration(insertSql)
         val recordBody = recordResponse.bodyAsText()
 
-        if (!recordResponse.status.isSuccess() || recordBody.trimStart().startsWith("Code:")) {
+        if (recordResponse.isClickHouseError(recordBody)) {
             throw RuntimeException("Failed to record migration V${migration.version}: $recordBody")
         }
 
