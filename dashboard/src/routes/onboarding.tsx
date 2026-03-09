@@ -184,19 +184,26 @@ function OnboardingPage() {
     try {
       // Retrieve UTM parameters from localStorage
       const utmParamsStr = localStorage.getItem('utm_params')
-      const utmParams = utmParamsStr ? JSON.parse(utmParamsStr) : {}
+      let utmParams: Record<string, string | undefined> = {}
+      if (utmParamsStr) {
+        try {
+          utmParams = JSON.parse(utmParamsStr) as Record<string, string | undefined>
+        } catch {
+          localStorage.removeItem('utm_params')
+        }
+      }
       
-      await api.completeOnboarding(
-        organizationName, 
-        companySize, 
-        slug, 
+      await api.completeOnboarding({
+        organizationName,
+        companySize,
+        slug,
         referralSource,
-        utmParams.utmSource,
-        utmParams.utmMedium,
-        utmParams.utmCampaign,
-        utmParams.utmContent,
-        utmParams.utmTerm
-      )
+        utmSource: utmParams.utmSource,
+        utmMedium: utmParams.utmMedium,
+        utmCampaign: utmParams.utmCampaign,
+        utmContent: utmParams.utmContent,
+        utmTerm: utmParams.utmTerm,
+      })
       
       // Clean up UTM params after successful onboarding
       localStorage.removeItem('utm_params')

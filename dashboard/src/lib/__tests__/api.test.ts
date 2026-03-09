@@ -17,7 +17,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
-import { api } from '../api'
+import { api, resetAuthRedirectForTesting } from '../api'
 
 const API_BASE = 'http://localhost:8080'
 
@@ -25,6 +25,11 @@ describe('ApiClient', () => {
   beforeEach(() => {
     localStorage.clear()
     sessionStorage.clear()
+    const reset = resetAuthRedirectForTesting.current
+    if (typeof reset !== 'function') {
+      throw new TypeError('resetAuthRedirectForTesting.current is not a function')
+    }
+    reset()
   })
 
   describe('Auth token handling', () => {
@@ -112,12 +117,6 @@ describe('ApiClient', () => {
   })
 
   describe('401 logout and redirect behavior', () => {
-    beforeEach(() => {
-      // Reset auth redirect flag on the api singleton between tests
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (api as any).authRedirectInProgress = false
-    })
-
     it('clears session and redirects to /login on 401', async () => {
       const mockAssign = vi.fn()
       const originalLocation = window.location
