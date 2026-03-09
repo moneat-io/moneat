@@ -191,8 +191,8 @@ class LogService {
 
         val response = ClickHouseClient.execute(insert)
         val errorBody = response.bodyAsText()
-        if (response.isClickHouseError(errorBody)) {
-            throw IllegalStateException("Failed to insert logs into ClickHouse: ${errorBody.take(600)}")
+        check(!response.isClickHouseError(errorBody)) {
+            "Failed to insert logs into ClickHouse: ${errorBody.take(600)}"
         }
 
         val totalBytes = batch.logs.sumOf { it.message.length + it.body.length }

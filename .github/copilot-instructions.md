@@ -177,6 +177,7 @@ To avoid Sonar code smells and keep code consistent:
 - ❌ **Don't use if-throw for validation**: `if (x !in valid) throw IllegalArgumentException("msg")`
 - ✅ **Use `require()` for internal argument preconditions**: `require(x in valid) { "Invalid value" }` — use only in internal helpers/library code, not Ktor handlers (throws `IllegalArgumentException` → HTTP 500 unless mapped by `StatusPages`)
 - ✅ **Use `check()` for internal state preconditions**: `check(existing == null) { "Already exists" }` — same caveat; use only where `IllegalStateException` is appropriate internally
+- ✅ **Replace if-throw with `check()` for response validation**: `check(!response.isError()) { "Error: ${body.take(500)}" }` instead of `if (response.isError()) throw IllegalStateException(...)` — Sonar prefers this pattern
 - ✅ **In Ktor route handlers**, throw `BadRequestException` (or domain-specific exceptions) for client validation errors, or explicitly map `IllegalArgumentException`/`IllegalStateException` to 4xx/409 via the `StatusPages` plugin — do not rely on `require()`/`check()` inside handlers unless `StatusPages` maps them
 
 - **Remove unused local variables** – delete any variable that is never read.
