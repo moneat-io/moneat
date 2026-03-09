@@ -214,6 +214,7 @@ jobs:
           CLICKHOUSE_PASSWORD: moneat_test_password
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret-for-ci-only
+          DATA_SOURCE_ENCRYPTION_KEY: test-secret-for-ci-only-32chars-minimum
           STRIPE_ENABLED: false
           BILLING_ENFORCEMENT_ENABLED: false
           TESTING_BACKGROUND_JOBS_ENABLED: false
@@ -358,6 +359,7 @@ jobs:
           CLICKHOUSE_PASSWORD: moneat_test_password
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret-for-ci-only
+          DATA_SOURCE_ENCRYPTION_KEY: test-secret-for-ci-only-32chars-minimum
           STRIPE_ENABLED: false
         run: |
           ./gradlew shadowJar --no-daemon

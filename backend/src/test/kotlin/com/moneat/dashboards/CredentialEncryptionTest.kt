@@ -29,7 +29,7 @@ class CredentialEncryptionTest {
     @BeforeTest
     fun setup() {
         // Set a test encryption key for the tests
-        System.setProperty("JWT_SECRET", "test-encryption-key-for-credential-tests-32chars-minimum")
+        System.setProperty("DATA_SOURCE_ENCRYPTION_KEY", "test-encryption-key-for-credential-tests-32chars-minimum")
     }
 
     @Test

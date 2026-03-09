@@ -146,6 +146,7 @@ The self-hosted deployment consists of five services:
 | Variable | Description |
 |----------|-------------|
 | `JWT_SECRET` | Secret key for signing JWT tokens. Generate with `openssl rand -base64 64`. |
+| `DATA_SOURCE_ENCRYPTION_KEY` | Key for encrypting custom data source credentials. Must be separate from JWT_SECRET. Generate with `openssl rand -base64 32`. |
 | `DATABASE_PASSWORD` | PostgreSQL password. Must match `POSTGRES_PASSWORD` in the postgres service. |
 | `CLICKHOUSE_PASSWORD` | ClickHouse password. Must match the clickhouse service config. |
 | `FRONTEND_URL` | Public URL of the dashboard (e.g. `https://moneat.example.com`). |
