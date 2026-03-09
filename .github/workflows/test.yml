@@ -131,136 +131,6 @@ jobs:
           name: frontend-test-results
           path: dashboard/coverage/
 
-  # PR-Required: Web E2E smoke tests
-  web-e2e-smoke:
-    if: false # Disabled pending stabilization
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: moneat
-          POSTGRES_PASSWORD: moneat_test_password
-          POSTGRES_DB: moneat
-        ports:
-          - 5499:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      clickhouse:
-        image: clickhouse/clickhouse-server:26.2-alpine
-        env:
-          CLICKHOUSE_USER: moneat
-          CLICKHOUSE_PASSWORD: moneat_test_password
-          CLICKHOUSE_DB: moneat
-        ports:
-          - 8123:8123
-          - 9000:9000
-        options: >-
-          --health-cmd "clickhouse-client --query 'SELECT 1'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      redis:
-        image: redis:8-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: ${{ env.JAVA_VERSION }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache Gradle packages
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-
-      - name: Build backend
-        working-directory: backend
-        run: ./gradlew shadowJar --no-daemon
-
-      - name: Start backend
-        working-directory: backend
-        env:
-          DATABASE_URL: jdbc:postgresql://localhost:5499/moneat
-          DATABASE_USER: moneat
-          DATABASE_PASSWORD: moneat_test_password
-          CLICKHOUSE_URL: http://localhost:8123
-          CLICKHOUSE_USER: moneat
-          CLICKHOUSE_PASSWORD: moneat_test_password
-          REDIS_URL: redis://localhost:6379
-          JWT_SECRET: test-secret-for-ci-only
-          DATA_SOURCE_ENCRYPTION_KEY: test-secret-for-ci-only-32chars-minimum
-          STRIPE_ENABLED: false
-          BILLING_ENFORCEMENT_ENABLED: false
-          TESTING_BACKGROUND_JOBS_ENABLED: false
-          FRONTEND_URL: http://localhost:5173
-        run: |
-          java -jar build/libs/moneat-backend-all.jar &
-          echo $! > backend.pid
-          sleep 10
-
-      - name: Seed E2E data
-        working-directory: e2e
-        env:
-          BACKEND_URL: http://localhost:8080
-        run: ./seed-data.sh
-
-      - name: Install dashboard dependencies
-        working-directory: dashboard
-        run: npm ci
-
-      - name: Install Playwright
-        working-directory: e2e/web
-        run: |
-          npm ci
-          npx playwright install chromium
-
-      - name: Run smoke tests
-        working-directory: e2e/web
-        env:
-          BASE_URL: http://localhost:5173
-          CI: true
-        run: npm run test:smoke
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report
-          path: e2e/web/playwright-report/
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: web-e2e-results
-          path: e2e/web/test-results/
-
   # Nightly: Full backend integration tests (Testcontainers)
   backend-integration:
     runs-on: ubuntu-latest
@@ -298,96 +168,10 @@ jobs:
           name: backend-integration-test-results
           path: backend/build/test-results/integrationTest/
 
-  # Nightly: Full web E2E suite
-  web-e2e-full:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    if: false && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: moneat
-          POSTGRES_PASSWORD: moneat_test_password
-          POSTGRES_DB: moneat
-        ports:
-          - 5499:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      clickhouse:
-        image: clickhouse/clickhouse-server:26.2-alpine
-        env:
-          CLICKHOUSE_USER: moneat
-          CLICKHOUSE_PASSWORD: moneat_test_password
-          CLICKHOUSE_DB: moneat
-        ports:
-          - 8123:8123
-          - 9000:9000
-
-      redis:
-        image: redis:8-alpine
-        ports:
-          - 6379:6379
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: ${{ env.JAVA_VERSION }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Build and start backend
-        working-directory: backend
-        env:
-          DATABASE_URL: jdbc:postgresql://localhost:5499/moneat
-          DATABASE_USER: moneat
-          DATABASE_PASSWORD: moneat_test_password
-          CLICKHOUSE_URL: http://localhost:8123
-          CLICKHOUSE_USER: moneat
-          CLICKHOUSE_PASSWORD: moneat_test_password
-          REDIS_URL: redis://localhost:6379
-          JWT_SECRET: test-secret-for-ci-only
-          DATA_SOURCE_ENCRYPTION_KEY: test-secret-for-ci-only-32chars-minimum
-          STRIPE_ENABLED: false
-        run: |
-          ./gradlew shadowJar --no-daemon
-          java -jar build/libs/moneat-backend-all.jar &
-          sleep 15
-
-      - name: Seed E2E data
-        working-directory: e2e
-        run: ./seed-data.sh
-
-      - name: Install dependencies and run full E2E
-        working-directory: e2e/web
-        run: |
-          npm ci
-          npx playwright install chromium
-          npm test
-
-      - name: Upload full Playwright report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-full-report
-          path: e2e/web/playwright-report/
-
   # Flake detection and stability monitoring
   flake-detection:
     runs-on: ubuntu-latest
-    needs: [backend-unit, frontend-unit, web-e2e-smoke]
+    needs: [backend-unit, frontend-unit]
     if: false && always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
 
     steps:
@@ -407,7 +191,6 @@ jobs:
           echo "### Test Stability Metrics" >> $GITHUB_STEP_SUMMARY
           echo "- **Backend Unit Tests:** ✅ Stable (0 flakes in 10 runs)" >> $GITHUB_STEP_SUMMARY
           echo "- **Frontend Unit Tests:** ✅ Stable (0 flakes in 10 runs)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Web E2E Smoke:** ⚠️  Monitoring (Playwright retries enabled)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 **Flake Rate Calculation:** (retries / total runs) × 100" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -417,7 +200,7 @@ jobs:
   # Performance monitoring for CI pipeline
   performance-report:
     runs-on: ubuntu-latest
-    needs: [backend-unit, frontend-unit, web-e2e-smoke, backend-integration, web-e2e-full]
+    needs: [backend-unit, frontend-unit, backend-integration]
     if: false && always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
 
     steps:
@@ -432,49 +215,15 @@ jobs:
           echo "|-----|----------|--------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| backend-unit | ~5 min | <10 min | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| frontend-unit | ~3 min | <5 min | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| web-e2e-smoke | ~10 min | <15 min | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| backend-integration | ~15 min | <30 min | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| web-e2e-full | ~20 min | <45 min | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "ℹ️ **Note:** Actual durations vary based on runner availability and test changes." >> $GITHUB_STEP_SUMMARY
-
-  # Android manual validation reminder
-  android-validation-gate:
-    runs-on: ubuntu-latest
-    if: false && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Generate Android validation reminder
-        run: |
-          echo "## 📱 Android Manual Validation" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Manual validation required before release" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Checklist Location" >> $GITHUB_STEP_SUMMARY
-          echo "📋 See \`docs/ANDROID_VALIDATION_CHECKLIST.md\` for full procedure." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Minimum Required Tests" >> $GITHUB_STEP_SUMMARY
-          echo "1. ✅ Crash event ingestion" >> $GITHUB_STEP_SUMMARY
-          echo "2. ✅ Handled error ingestion" >> $GITHUB_STEP_SUMMARY
-          echo "3. ✅ Event grouping/fingerprinting" >> $GITHUB_STEP_SUMMARY
-          echo "4. ✅ Session tracking" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### How to Run" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "cd e2e" >> $GITHUB_STEP_SUMMARY
-          echo "./run-android.sh" >> $GITHUB_STEP_SUMMARY
-          echo "# Follow checklist in docs/ANDROID_VALIDATION_CHECKLIST.md" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "⚠️ **Release Criterion:** Android validation must pass before production deployment." >> $GITHUB_STEP_SUMMARY
 
   # Nightly failure notification
   notify-failures:
     runs-on: ubuntu-latest
-    needs: [backend-unit, frontend-unit, web-e2e-smoke, backend-integration, web-e2e-full, coverage-check]
-    if: always() && github.event_name == 'schedule' && (needs.backend-unit.result == 'failure' || needs.frontend-unit.result == 'failure' || needs.web-e2e-smoke.result == 'failure' || needs.backend-integration.result == 'failure' || needs.web-e2e-full.result == 'failure' || needs.coverage-check.result == 'failure')
+    needs: [backend-unit, frontend-unit, backend-integration, coverage-check]
+    if: always() && github.event_name == 'schedule' && (needs.backend-unit.result == 'failure' || needs.frontend-unit.result == 'failure' || needs.backend-integration.result == 'failure' || needs.coverage-check.result == 'failure')
 
     steps:
       - name: Generate failure summary
@@ -493,14 +242,8 @@ jobs:
           if [ "${{ needs.frontend-unit.result }}" = "failure" ]; then
             echo "- ❌ frontend-unit" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ "${{ needs.web-e2e-smoke.result }}" = "failure" ]; then
-            echo "- ❌ web-e2e-smoke" >> $GITHUB_STEP_SUMMARY
-          fi
           if [ "${{ needs.backend-integration.result }}" = "failure" ]; then
             echo "- ❌ backend-integration" >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ "${{ needs.web-e2e-full.result }}" = "failure" ]; then
-            echo "- ❌ web-e2e-full" >> $GITHUB_STEP_SUMMARY
           fi
           if [ "${{ needs.coverage-check.result }}" = "failure" ]; then
             echo "- ❌ coverage-check" >> $GITHUB_STEP_SUMMARY

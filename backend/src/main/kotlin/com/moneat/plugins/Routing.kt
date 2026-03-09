@@ -32,6 +32,7 @@ import com.moneat.events.routes.telemetryIngestRoutes
 import com.moneat.incident.routes.incidentProviderRoutes
 import com.moneat.llm.routes.llmIngestRoutes
 import com.moneat.llm.routes.llmRoutes
+import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
 import com.moneat.monitor.routes.infraRoutes
 import com.moneat.monitor.routes.monitorRoutes
@@ -171,8 +172,10 @@ fun Application.configureRouting() {
         }
         routingLogger.info { "Ingestion routes registered" }
 
-        // Telemetry pulse receiver — accepts anonymous heartbeats from self-hosted instances
-        telemetryIngestRoutes()
+        // Telemetry pulse receiver — rate-limited by IP (unauthenticated, anonymous heartbeats)
+        rateLimit(RateLimitName("telemetry")) {
+            telemetryIngestRoutes()
+        }
 
         // Stripe webhooks
         stripeWebhookRoutes()
@@ -202,6 +205,9 @@ fun Application.configureRouting() {
         infraRoutes()
 
         // Logging ingestion and query endpoints
+        rateLimit(RateLimitName("log-ingestion")) {
+            logIngestRoutes()
+        }
         logRoutes()
 
         // Uptime monitoring endpoints
