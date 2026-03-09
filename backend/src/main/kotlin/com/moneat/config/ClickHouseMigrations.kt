@@ -178,10 +178,10 @@ object ClickHouseMigrations {
 
         val response = ClickHouseClient.executeMigration(query)
         val body = response.bodyAsText()
-        if (body.isBlank()) return emptyList()
         if (response.isClickHouseError(body)) {
             throw RuntimeException("ClickHouse error reading applied migrations: ${body.take(500)}")
         }
+        if (body.isBlank()) return emptyList()
 
         return body.trim().lines().map { line ->
             val json = Json.parseToJsonElement(line).jsonObject

@@ -208,8 +208,8 @@ class ReplayService(
 
         return try {
             val response = ClickHouseClient.execute(query)
-            if (response.status.value !in 200..299) return 0
-            val line = response.bodyAsText().lines().firstOrNull { it.isNotBlank() } ?: return 0
+            val body = queryHelper.extractClickHouseBody(response) ?: return 0
+            val line = body.lines().firstOrNull { it.isNotBlank() } ?: return 0
             val obj = json.parseToJsonElement(line).jsonObject
             obj["count"]?.jsonPrimitive?.intOrNull ?: 0
         } catch (e: Exception) {
@@ -245,17 +245,15 @@ class ReplayService(
 
         return try {
             val response = ClickHouseClient.execute(query)
-            if (response.status.value !in 200..299) return emptyList()
-            response
-                .bodyAsText()
+            val body = queryHelper.extractClickHouseBody(response) ?: return emptyList()
+            body
                 .lines()
                 .filter { it.isNotBlank() }
                 .mapNotNull { line ->
                     runCatching {
                         json
-                            .parseToJsonElement(
-                                line
-                            ).jsonObject["event_id"]
+                            .parseToJsonElement(line)
+                            .jsonObject["event_id"]
                             ?.jsonPrimitive
                             ?.contentOrNull
                     }.getOrNull()
@@ -641,7 +639,7 @@ class ReplayService(
 
         return try {
             val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
+            val body = queryHelper.extractClickHouseBody(response) ?: return null
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
             val obj = json.parseToJsonElement(line).jsonObject
             buildReplayDetailFromRow(obj, retentionDays)
@@ -928,8 +926,8 @@ class ReplayService(
 
         return try {
             val response = ClickHouseClient.execute(query)
+            val body = queryHelper.extractClickHouseBody(response) ?: return null
 
-            val body = response.bodyAsText()
             val allEvents = mutableListOf<JsonElement>()
             var isMobileReplay = false
 
