@@ -32,6 +32,10 @@ import kotlin.test.assertFailsWith
 
 class CustomDataSourceExecutorTest {
 
+    private companion object {
+        private const val PROMETHEUS_EXAMPLE_URL = "https://prometheus.example.com"
+    }
+
     private val executor = CustomDataSourceExecutor()
     private val postgresHandler = PostgresHandler(ConcurrentHashMap())
     private val prometheusHandler = PrometheusHandler()
@@ -162,6 +166,44 @@ class CustomDataSourceExecutorTest {
         postgresHandler.validateSqlQuery("SELECT my_dblink_config FROM settings")
     }
 
+    // --- Encoding / comment-injection bypass tests ---
+
+    @Test
+    fun `validateSqlQuery rejects comment-split INSERT keyword`() {
+        // INS/**/ERT is parsed as INSERT by MySQL/MariaDB; must be caught after comment stripping
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT 1 UNION ALL INS/**/ERT INTO users VALUES ('x')")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery rejects comment-split DROP keyword`() {
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT 1; DRO/**/P TABLE users")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery rejects MySQL conditional comment wrapping forbidden function`() {
+        // /*!pg_read_file*/ strips to pg_read_file which must still be caught
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT /*!pg_read_file*/('/etc/passwd')")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery rejects full-width Unicode forbidden keyword`() {
+        // Full-width ＩＮＳＥＲＴ normalises to INSERT via NFKC and must be caught
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT 1 FROM t WHERE ＩＮＳＥＲＴ = 1")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery allows legitimate inline comment`() {
+        postgresHandler.validateSqlQuery("SELECT /* fetch all */ * FROM users LIMIT 10")
+    }
+
     // --- Prometheus URL building (PrometheusHandler uses HttpApiHandler.buildUrl) ---
 
     @Test
@@ -184,14 +226,14 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `buildPrometheusUrl with https prefix and default port`() {
-        val url = prometheusHandler.buildUrlString("https://prometheus.example.com", 443)
-        assertEquals("https://prometheus.example.com", url)
+        val url = prometheusHandler.buildUrl(PROMETHEUS_EXAMPLE_URL, 443)
+        assertEquals(PROMETHEUS_EXAMPLE_URL, url)
     }
 
     @Test
     fun `buildPrometheusUrl with https prefix and custom port`() {
-        val url = prometheusHandler.buildUrlString("https://prometheus.example.com", 9090)
-        assertEquals("https://prometheus.example.com:9090", url)
+        val url = prometheusHandler.buildUrl(PROMETHEUS_EXAMPLE_URL, 9090)
+        assertEquals("$PROMETHEUS_EXAMPLE_URL:9090", url)
     }
 
     @Test
