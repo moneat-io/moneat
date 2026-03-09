@@ -87,6 +87,29 @@ class ReplayService(
         return arr.mapNotNull { it.jsonPrimitive.contentOrNull }
     }
 
+    private fun buildReplayListItemFromJson(
+        obj: JsonObject,
+        projectId: Long,
+        errorCount: Int
+    ): ReplayListItem? {
+        val replayId = obj["replay_id"]?.jsonPrimitive?.content ?: return null
+        return ReplayListItem(
+            replayId = replayId,
+            projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
+            startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
+            finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
+            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+            urls = parseStringArray(obj["urls"]),
+            errorCount = errorCount,
+            user = queryHelper.extractUserInfo(obj),
+            browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0
+        )
+    }
+
     private fun isClickHouseError(statusCode: Int, body: String, context: String): Boolean {
         if (statusCode !in 200..299 || body.trimStart().startsWith("Code:")) {
             if (statusCode !in 200..299) {
@@ -477,53 +500,30 @@ class ReplayService(
             """.trimIndent()
 
         return try {
-            val response = ClickHouseClient.execute(query)
-
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299) return emptyList()
-
-            body
-                .lines()
-                .filter { it.isNotBlank() }
-                .mapNotNull { line ->
-                    try {
-                        val obj = json.parseToJsonElement(line).jsonObject
-                        val startedMs = obj["started_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
-                        val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
-                        val rawErrorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
-                        val fallbackErrorCount =
-                            if (rawErrorCount == 0 && startedMs != null && finishedMs != null) {
-                                getReplayWindowErrorCount(
-                                    projectId,
-                                    startedMs,
-                                    finishedMs,
-                                    obj["user_id"]?.jsonPrimitive?.contentOrNull,
-                                    retentionDays
-                                )
-                            } else {
-                                0
-                            }
-                        ReplayListItem(
-                            replayId = obj["replay_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
-                            projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
-                            startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
-                            finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
-                            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                            urls = parseStringArray(obj["urls"]),
-                            errorCount = maxOf(rawErrorCount, fallbackErrorCount),
-                            user = queryHelper.extractUserInfo(obj),
-                            browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            browserVersion =
-                            obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0
-                        )
-                    } catch (e: Exception) {
-                        logger.error(e) { "Failed to parse replay list row" }
-                        null
-                    }
+            val rows = queryHelper.executeJsonEachRowQuery(query, "Replays") ?: return emptyList()
+            rows.mapNotNull { obj ->
+                try {
+                    val startedMs = obj["started_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                    val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                    val rawErrorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
+                    val fallbackErrorCount =
+                        if (rawErrorCount == 0 && startedMs != null && finishedMs != null) {
+                            getReplayWindowErrorCount(
+                                projectId,
+                                startedMs,
+                                finishedMs,
+                                obj["user_id"]?.jsonPrimitive?.contentOrNull,
+                                retentionDays
+                            )
+                        } else {
+                            0
+                        }
+                    buildReplayListItemFromJson(obj, projectId, maxOf(rawErrorCount, fallbackErrorCount))
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to parse replay list row" }
+                    null
                 }
+            }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch replays for project $projectId" }
             emptyList()
@@ -1021,38 +1021,19 @@ class ReplayService(
             """.trimIndent()
 
         return try {
-            val response = ClickHouseClient.execute(query)
-
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299) return emptyList()
-
-            body
-                .lines()
-                .filter { it.isNotBlank() }
-                .mapNotNull { line ->
-                    try {
-                        val obj = json.parseToJsonElement(line).jsonObject
-                        ReplayListItem(
-                            replayId = obj["replay_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
-                            projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
-                            startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
-                            finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
-                            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                            urls = parseStringArray(obj["urls"]),
-                            errorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0,
-                            user = queryHelper.extractUserInfo(obj),
-                            browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            browserVersion =
-                            obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0
-                        )
-                    } catch (e: Exception) {
-                        logger.error(e) { "Failed to parse replay list row for issue" }
-                        null
-                    }
+            val rows = queryHelper.executeJsonEachRowQuery(query, "Replays for issue") ?: return emptyList()
+            rows.mapNotNull { obj ->
+                try {
+                    buildReplayListItemFromJson(
+                        obj,
+                        projectId,
+                        obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
+                    )
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to parse replay list row for issue" }
+                    null
                 }
+            }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch replays for issue $issueId" }
             emptyList()

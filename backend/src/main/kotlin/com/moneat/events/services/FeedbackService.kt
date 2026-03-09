@@ -16,8 +16,6 @@
 
 package com.moneat.events.services
 
-import com.moneat.config.ClickHouseClient
-import io.ktor.client.statement.bodyAsText
 import io.ktor.server.plugins.BadRequestException
 import com.moneat.events.models.FeedbackDetailResponse
 import com.moneat.events.models.FeedbackListItem
@@ -200,23 +198,7 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                 UPDATE status = '$escapedStatus', updated_at = now64(3)
                 WHERE toString(feedback_id) = '$normalizedFeedbackId'
                 """.trimIndent()
-            val response = try {
-                ClickHouseClient.execute(query)
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to update feedback" }
-                throw e
-            }
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error {
-                    "Feedback update failed: query=${query.take(
-                        200
-                    )}, status=${response.status}, body=${body.take(400)}"
-                }
-                throw IllegalStateException(
-                    "ClickHouse ALTER TABLE UPDATE failed: ${response.status} ${body.take(200)}"
-                )
-            }
+            queryHelper.executeMutation(query, "Feedback update")
         }
     }
 }

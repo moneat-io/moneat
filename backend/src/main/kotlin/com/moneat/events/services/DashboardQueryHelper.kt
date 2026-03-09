@@ -97,10 +97,11 @@ class DashboardQueryHelper {
      */
     suspend fun executeJsonEachRowQuery(
         query: String,
-        errorContext: String = "Query"
+        errorContext: String = "Query",
+        parentSpan: ISpan? = null
     ): List<JsonObject>? {
         return try {
-            val response = ClickHouseClient.execute(query)
+            val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
                 logger.error { "$errorContext failed: ${response.status} ${body.take(400)}" }
@@ -381,6 +382,67 @@ class DashboardQueryHelper {
         } catch (e: Exception) {
             logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
             emptyMap()
+        }
+    }
+
+    /**
+     * Executes a JSONEachRow query and returns a map from transformed rows.
+     * Returns empty map on HTTP/ClickHouse error or when body is blank.
+     */
+    suspend fun <K, V> executeQueryToMap(
+        query: String,
+        errorContext: String,
+        parentSpan: ISpan? = null,
+        transform: (JsonObject) -> Pair<K, V>?
+    ): Map<K, V> {
+        return try {
+            val response = ClickHouseClient.execute(query, parentSpan)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.isBlank() ||
+                body.trimStart().startsWith("Code:")
+            ) {
+                if (response.status.value !in 200..299) {
+                    logger.error { "$errorContext failed: ${response.status} ${body.take(400)}" }
+                }
+                return emptyMap()
+            }
+            body
+                .lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull()
+                        ?.let(transform)
+                }
+                .toMap()
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            emptyMap()
+        }
+    }
+
+    /**
+     * Executes a mutation (ALTER TABLE UPDATE, etc.) and validates the response.
+     * Throws IllegalStateException if the mutation failed.
+     */
+    suspend fun executeMutation(
+        query: String,
+        errorContext: String
+    ) {
+        val response = try {
+            ClickHouseClient.execute(query)
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            throw e
+        }
+        val body = response.bodyAsText()
+        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+            logger.error {
+                "$errorContext failed: query=${query.take(200)}, status=${response.status}, " +
+                    "body=${body.take(400)}"
+            }
+            throw IllegalStateException(
+                "ClickHouse mutation failed: ${response.status} ${body.take(200)}"
+            )
         }
     }
 

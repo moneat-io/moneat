@@ -185,27 +185,17 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
         query: String,
         parentSpan: ISpan? = null
     ): List<ReleaseListRow> {
-        val response = ClickHouseClient.execute(query, parentSpan)
-        val body = response.bodyAsText()
-
-        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-            logger.error { "Failed to execute releases list query: ${response.status} ${body.take(400)}" }
-            return emptyList()
+        val rows = queryHelper.executeJsonEachRowQuery(query, "releases list", parentSpan)
+            ?: return emptyList()
+        return rows.map { obj ->
+            ReleaseListRow(
+                version = obj["version"]?.jsonPrimitive?.content ?: "",
+                firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
+                lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
+                eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
+                userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0
+            )
         }
-
-        return body
-            .lines()
-            .filter { it.isNotBlank() }
-            .map { line ->
-                val obj = json.parseToJsonElement(line).jsonObject
-                ReleaseListRow(
-                    version = obj["version"]?.jsonPrimitive?.content ?: "",
-                    firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
-                    lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
-                    eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
-                    userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0
-                )
-            }
     }
 
     private suspend fun getNewIssueCountForReleases(
@@ -230,22 +220,14 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             GROUP BY first_release
             FORMAT JSONEachRow
             """.trimIndent()
-        return try {
-            val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.isBlank()) return emptyMap()
-            body.lines()
-                .filter { it.isNotBlank() }
-                .mapNotNull { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    val v = obj["version"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    val total = obj["total"]?.jsonPrimitive?.long ?: 0L
-                    v to total
-                }
-                .toMap()
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch new issue counts for releases" }
-            emptyMap()
+        return queryHelper.executeQueryToMap(
+            query = query,
+            errorContext = "new issue counts for releases",
+            parentSpan = parentSpan
+        ) { obj ->
+            val v = obj["version"]?.jsonPrimitive?.content ?: return@executeQueryToMap null
+            val total = obj["total"]?.jsonPrimitive?.long ?: 0L
+            v to total
         }
     }
 
@@ -266,23 +248,15 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             GROUP BY release
             FORMAT JSONEachRow
             """.trimIndent()
-        return try {
-            val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.isBlank()) return emptyMap()
-            body.lines()
-                .filter { it.isNotBlank() }
-                .mapNotNull { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    val v = obj["version"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
-                    if (rate == null || rate.isNaN() || rate.isInfinite()) return@mapNotNull null
-                    v to rate
-                }
-                .toMap()
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to fetch crash-free rates for releases" }
-            emptyMap()
+        return queryHelper.executeQueryToMap(
+            query = query,
+            errorContext = "crash-free rates for releases",
+            parentSpan = parentSpan
+        ) { obj ->
+            val v = obj["version"]?.jsonPrimitive?.content ?: return@executeQueryToMap null
+            val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+            if (rate == null || rate.isNaN() || rate.isInfinite()) return@executeQueryToMap null
+            v to rate
         }
     }
 
