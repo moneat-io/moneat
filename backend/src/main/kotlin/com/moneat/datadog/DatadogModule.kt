@@ -20,7 +20,8 @@ import com.moneat.enterprise.EnterpriseModule
 import com.moneat.datadog.routes.datadogDogStatsDRoutes
 import com.moneat.datadog.routes.datadogEventQueryRoutes
 import com.moneat.datadog.routes.datadogEventRoutes
-import com.moneat.datadog.routes.datadogHostRoutes
+import com.moneat.datadog.routes.datadogHostIngestRoutes
+import com.moneat.datadog.routes.datadogHostQueryRoutes
 import com.moneat.datadog.routes.datadogInfraQueryRoutes
 import com.moneat.datadog.routes.datadogInfraRoutes
 import com.moneat.datadog.routes.datadogLogRoutes
@@ -51,6 +52,8 @@ import com.moneat.datadog.workers.MiscIngestionWorker
 import com.moneat.datadog.workers.OrchestratorIngestionWorker
 import com.moneat.datadog.workers.TraceIngestionWorker
 import io.ktor.server.application.Application
+import io.ktor.server.plugins.ratelimit.RateLimitName
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.routing.Route
 import mu.KotlinLogging
 
@@ -83,37 +86,35 @@ class DatadogModule : EnterpriseModule {
 
     override fun registerRoutes(route: Route) {
         route.apply {
-            // Phase 1: Foundation
             datadogValidateRoutes()
-            // Phase 2: Logs & Metrics
-            datadogLogRoutes()
-            datadogMetricRoutes()
-            datadogDogStatsDRoutes()
-            // Phase 3-4: Traces & Profiles
-            traceIngestRoutes()
-            profileIngestRoutes()
+
+            // Ingest routes rate-limited per DD API key
+            rateLimit(RateLimitName("datadog-ingestion")) {
+                datadogLogRoutes()
+                datadogMetricRoutes()
+                datadogDogStatsDRoutes()
+                traceIngestRoutes()
+                profileIngestRoutes()
+                datadogEventRoutes()
+                datadogHostIngestRoutes()
+                datadogInfraRoutes()
+                orchestratorIngestRoutes()
+                dbmIngestRoutes()
+                debuggerIngestRoutes()
+                telemetryProxyRoutes()
+                miscIngestRoutes()
+                ndmIngestRoutes()
+                securityIngestRoutes()
+            }
+
+            // Dashboard / query routes (JWT-protected, not agent ingest)
             traceDashboardRoutes()
             profileDashboardRoutes()
-            // Phase 5: Events & Hosts
-            datadogEventRoutes()
-            datadogHostRoutes()
             datadogEventQueryRoutes()
-            // Phase 6: Infrastructure
-            datadogInfraRoutes()
+            datadogHostQueryRoutes()
             datadogInfraQueryRoutes()
-            // Phase 7: Advanced
-            orchestratorIngestRoutes()
-            dbmIngestRoutes()
-            debuggerIngestRoutes()
             debuggerProbeRoutes()
-            telemetryProxyRoutes()
-            // Phase 8: Misc (symdb, pipeline, lineage, streams, synthetics, images, sbom)
-            miscIngestRoutes()
-            // Phase 9: Network Devices
-            ndmIngestRoutes()
             ndmQueryRoutes()
-            // Phase 10: Security
-            securityIngestRoutes()
         }
     }
 

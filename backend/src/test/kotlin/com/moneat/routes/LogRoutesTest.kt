@@ -16,6 +16,7 @@
 
 package com.moneat.routes
 
+import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
@@ -51,7 +52,7 @@ class LogRoutesTest {
         block.also { }
 
     @Test
-    fun `otlp endpoint accepts empty payload without auth`() =
+    fun `otlp endpoint returns 401 without auth even for empty payload`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -67,7 +68,7 @@ class LogRoutesTest {
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
-                routing { logRoutes() }
+                routing { logIngestRoutes() }
             }
 
             val response =
@@ -75,8 +76,8 @@ class LogRoutesTest {
                     setBody("""{"resourceLogs":[]}""")
                 }
 
-            assertEquals(HttpStatusCode.Accepted, response.status)
-            assertTrue(response.bodyAsText().contains("accepted"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertTrue(response.bodyAsText().contains("Missing or invalid"))
         }
 
     @Test
@@ -96,7 +97,7 @@ class LogRoutesTest {
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
-                routing { logRoutes() }
+                routing { logIngestRoutes() }
             }
 
             val payload =
