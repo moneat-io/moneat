@@ -17,7 +17,6 @@
 package com.moneat.config
 
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
 import io.ktor.server.application.Application
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.serialization.json.Json
