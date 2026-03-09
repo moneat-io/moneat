@@ -87,11 +87,12 @@ fun Application.configureRateLimiting() {
             rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
         }
         register(RateLimitName("log-ingestion")) {
+            val logApiKeyService = LogApiKeyService()
             requestKey { call ->
                 val token = call.request.headers[HttpHeaders.Authorization]
                     ?.removePrefix("Bearer ")?.trim()
                 if (token != null) {
-                    LogApiKeyService().validateKey(token)
+                    logApiKeyService.validateKey(token)
                         ?.let { "org:$it" }
                         ?: call.request.origin.remoteHost
                 } else {
