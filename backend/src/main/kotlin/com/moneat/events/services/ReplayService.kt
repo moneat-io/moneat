@@ -25,6 +25,7 @@ import com.moneat.events.models.ReplayTimelineItem
 import com.moneat.events.models.ReplayTimelineResponse
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -659,10 +660,10 @@ class ReplayService(
         items: MutableList<ReplayTimelineItem>,
         addedIds: MutableSet<String>
     ) {
-        runCatching {
+        try {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (isClickHouseError(response.status.value, body, errorContext)) return@runCatching
+            if (isClickHouseError(response.status.value, body, errorContext)) return
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -673,7 +674,10 @@ class ReplayService(
                     if (!addedIds.add(item.id)) return@forEach
                     items.add(item)
                 }
-        }.onFailure { logger.error(it) { "Failed to fetch $failureMessage" } }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            logger.error(e) { "Failed to fetch $failureMessage" }
+        }
     }
 
     private fun buildErrorsByIdQuery(
@@ -828,7 +832,7 @@ class ReplayService(
             FROM (SELECT *, timestamp as ts_col FROM `$clickhouseDb`.events WHERE project_id = $projectId AND event_type = 'error' $userClause)
             WHERE ts_col >= fromUnixTimestamp64Milli($replayStartMs)
                 AND ts_col <= fromUnixTimestamp64Milli($replayEndMs)
-                AND ${queryHelper.timestampRetentionClause("ts_col", retentionDays)}
+                AND ${queryHelper.timestampRetentionClause("ts_col", retentionDays, demoEpochMs)}
             ORDER BY ts_col ASC
             LIMIT 100
             FORMAT JSONEachRow
@@ -856,7 +860,7 @@ class ReplayService(
             FROM (SELECT *, timestamp as ts_col FROM `$clickhouseDb`.events WHERE project_id = $projectId AND event_type = 'transaction' $userClause)
             WHERE ts_col >= fromUnixTimestamp64Milli($replayStartMs)
                 AND ts_col <= fromUnixTimestamp64Milli($replayEndMs)
-                AND ${queryHelper.timestampRetentionClause("ts_col", retentionDays)}
+                AND ${queryHelper.timestampRetentionClause("ts_col", retentionDays, demoEpochMs)}
             ORDER BY ts_col ASC
             LIMIT 100
             FORMAT JSONEachRow
@@ -885,7 +889,7 @@ class ReplayService(
             WHERE project_id = $projectId
                 AND start_timestamp >= fromUnixTimestamp64Milli($replayStartMs)
                 AND start_timestamp <= fromUnixTimestamp64Milli($replayEndMs)
-                AND ${queryHelper.timestampRetentionClause("start_timestamp", retentionDays)}
+                AND ${queryHelper.timestampRetentionClause("start_timestamp", retentionDays, demoEpochMs)}
             ORDER BY start_timestamp ASC
             LIMIT 200
             FORMAT JSONEachRow
@@ -990,7 +994,7 @@ class ReplayService(
                 formatDateTime(max(r.timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as finished_at,
                 dateDiff('millisecond', min(r.replay_start_timestamp), max(r.timestamp)) as duration_ms,
                 arrayFlatten(groupArray(r.urls)) as urls,
-                length(arrayFlatten(groupArray(r.error_ids))) as error_count,
+                length(arrayDistinct(arrayFlatten(groupArray(r.error_ids)))) as error_count,
                 argMax(r.user_id, r.timestamp) as user_id,
                 argMax(r.user_email, r.timestamp) as user_email,
                 argMax(r.user_username, r.timestamp) as user_username,
@@ -1000,7 +1004,7 @@ class ReplayService(
                 argMax(r.os_version, r.timestamp) as os_version,
                 argMax(r.activity, r.timestamp) as activity
             FROM `$clickhouseDb`.replay_events r
-            ARRAY JOIN r.error_ids AS error_id
+            ARRAY JOIN arrayDistinct(r.error_ids) AS error_id
             INNER JOIN `$clickhouseDb`.events e
                 ON toString(e.event_id) = error_id
                 AND e.issue_id = '$escapedIssueId'

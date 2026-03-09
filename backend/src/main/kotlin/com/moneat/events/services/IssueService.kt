@@ -17,6 +17,7 @@
 package com.moneat.events.services
 
 import com.moneat.events.models.EventResponse
+import io.ktor.server.plugins.BadRequestException
 import com.moneat.events.models.IssueDetailResponse
 import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.models.IssueResponse
@@ -311,7 +312,7 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
 
         if (update.status != null) {
             val validStatuses = setOf("unresolved", "resolved", "archived", "ignored")
-            require(update.status in validStatuses) { "Invalid status value" }
+            if (update.status !in validStatuses) throw BadRequestException("Invalid status value")
             transaction {
                 val existing = IssueStatuses
                     .selectAll()

@@ -18,6 +18,7 @@ package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
 import io.ktor.client.statement.bodyAsText
+import io.ktor.server.plugins.BadRequestException
 import com.moneat.events.models.FeedbackDetailResponse
 import com.moneat.events.models.FeedbackListItem
 import com.moneat.utils.ClickHouseQueryUtils
@@ -189,7 +190,7 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
     ) {
         if (update.status != null) {
             val validStatuses = setOf("unresolved", "resolved", "archived")
-            require(update.status in validStatuses) { "Invalid status value" }
+            if (update.status !in validStatuses) throw BadRequestException("Invalid status value")
             val normalizedFeedbackId =
                 queryHelper.normalizeUuid(feedbackId) ?: throw IllegalArgumentException("Invalid feedback ID")
             val escapedStatus = escapeSql(update.status)

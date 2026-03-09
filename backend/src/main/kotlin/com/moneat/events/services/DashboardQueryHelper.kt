@@ -49,6 +49,17 @@ data class PeriodConfig(
     val periodMinutes: Int
 )
 
+private enum class PeriodWindow(
+    val hoursBack: Int,
+    val intervalMinutes: Int,
+    val periodMinutes: Int
+) {
+    H24(24, 60, 24 * 60),
+    D30(720, 1440, 30 * 24 * 60),
+    D90(2160, 4320, 90 * 24 * 60),
+    DEFAULT(168, 360, 7 * 24 * 60)
+}
+
 class DashboardQueryHelper {
     val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     val backendUrl: String get() = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
@@ -209,12 +220,17 @@ class DashboardQueryHelper {
     }
 
     fun getPeriodConfig(period: String): PeriodConfig {
-        return when (period) {
-            "24h" -> PeriodConfig(hoursBack = 24, intervalMinutes = 60, periodMinutes = 24 * 60)
-            "30d" -> PeriodConfig(hoursBack = 720, intervalMinutes = 1440, periodMinutes = 30 * 24 * 60)
-            "90d" -> PeriodConfig(hoursBack = 2160, intervalMinutes = 4320, periodMinutes = 90 * 24 * 60)
-            else -> PeriodConfig(hoursBack = 168, intervalMinutes = 360, periodMinutes = 7 * 24 * 60)
+        val window = when (period) {
+            "24h" -> PeriodWindow.H24
+            "30d" -> PeriodWindow.D30
+            "90d" -> PeriodWindow.D90
+            else -> PeriodWindow.DEFAULT
         }
+        return PeriodConfig(
+            hoursBack = window.hoursBack,
+            intervalMinutes = window.intervalMinutes,
+            periodMinutes = window.periodMinutes
+        )
     }
 
     fun buildTransactionFilterClause(
@@ -263,64 +279,76 @@ class DashboardQueryHelper {
         query: String,
         parentSpan: ISpan? = null
     ): List<TimelinePoint> {
-        val response = ClickHouseClient.execute(query, parentSpan)
-        val body = response.bodyAsText()
-
-        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-            logger.error { "ClickHouse query failed: ${body.take(400)}" }
-            return emptyList()
-        }
-
-        return body
-            .lines()
-            .filter { it.isNotBlank() }
-            .mapNotNull { line ->
-                try {
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    TimelinePoint(
-                        timestamp = obj["time"]?.jsonPrimitive?.content ?: "",
-                        count = obj["count"]?.jsonPrimitive?.long ?: 0
-                    )
-                } catch (e: Exception) {
-                    logger.error(e) { "Failed to parse line: $line" }
-                    null
-                }
+        return try {
+            val response = ClickHouseClient.execute(query, parentSpan)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                logger.error { "ClickHouse query failed: ${body.take(400)}" }
+                return emptyList()
             }
+            body
+                .lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    try {
+                        val obj = json.parseToJsonElement(line).jsonObject
+                        TimelinePoint(
+                            timestamp = obj["time"]?.jsonPrimitive?.content ?: "",
+                            count = obj["count"]?.jsonPrimitive?.long ?: 0
+                        )
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to parse line: $line" }
+                        null
+                    }
+                }
+        } catch (e: Exception) {
+            logger.error(
+                e
+            ) { "executeTimelineQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
+            emptyList()
+        }
     }
 
     suspend fun executeSlowestTransactionsQuery(
         query: String,
         parentSpan: ISpan? = null
     ): List<SlowTransactionResponse> {
-        val response = ClickHouseClient.execute(query, parentSpan)
-        val body = response.bodyAsText()
-
-        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-            logger.error { "ClickHouse query failed: ${body.take(400)}" }
-            return emptyList()
-        }
-
-        return body
-            .lines()
-            .filter { it.isNotBlank() }
-            .mapNotNull { line ->
-                try {
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    SlowTransactionResponse(
-                        eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
-                        name = obj["name"]?.jsonPrimitive?.content ?: "",
-                        op = obj["op"]?.jsonPrimitive?.content ?: "",
-                        duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                        timestamp =
-                        obj["timestamp_iso"]?.jsonPrimitive?.content
-                            ?: obj["timestamp"]?.jsonPrimitive?.content
-                            ?: ""
-                    )
-                } catch (e: Exception) {
-                    logger.error(e) { "Failed to parse line: $line" }
-                    null
-                }
+        return try {
+            val response = ClickHouseClient.execute(query, parentSpan)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                logger.error { "ClickHouse query failed: ${body.take(400)}" }
+                return emptyList()
             }
+            body
+                .lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    try {
+                        val obj = json.parseToJsonElement(line).jsonObject
+                        SlowTransactionResponse(
+                            eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
+                            name = obj["name"]?.jsonPrimitive?.content ?: "",
+                            op = obj["op"]?.jsonPrimitive?.content ?: "",
+                            duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+                            timestamp =
+                            obj["timestamp_iso"]?.jsonPrimitive?.content
+                                ?: obj["timestamp"]?.jsonPrimitive?.content
+                                ?: ""
+                        )
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to parse line: $line" }
+                        null
+                    }
+                }
+        } catch (e: Exception) {
+            logger.error(e) {
+                "executeSlowestTransactionsQuery failed (transport/parse): query=${query.take(
+                    200
+                )}, returning emptyList"
+            }
+            emptyList()
+        }
     }
 
     suspend fun executeMapQuery(
@@ -328,58 +356,66 @@ class DashboardQueryHelper {
         keyField: String,
         parentSpan: ISpan? = null
     ): Map<String, Long> {
-        val response = ClickHouseClient.execute(query, parentSpan)
-        val body = response.bodyAsText()
-
-        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-            logger.error { "Failed to execute map query: ${response.status} ${body.take(400)}" }
-            return emptyMap()
-        }
-
-        return body
-            .lines()
-            .filter { it.isNotBlank() }
-            .mapNotNull { line ->
-                try {
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    val key = obj[keyField]?.jsonPrimitive?.content ?: "unknown"
-                    val count = obj["count"]?.jsonPrimitive?.long ?: 0
-                    key to count
-                } catch (e: Exception) {
-                    logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
-                    null
-                }
+        return try {
+            val response = ClickHouseClient.execute(query, parentSpan)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                logger.error { "Failed to execute map query: ${response.status} ${body.take(400)}" }
+                return emptyMap()
             }
-            .toMap()
+            body
+                .lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    try {
+                        val obj = json.parseToJsonElement(line).jsonObject
+                        val key = obj[keyField]?.jsonPrimitive?.content ?: "unknown"
+                        val count = obj["count"]?.jsonPrimitive?.long ?: 0
+                        key to count
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
+                        null
+                    }
+                }
+                .toMap()
+        } catch (e: Exception) {
+            logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
+            emptyMap()
+        }
     }
 
     suspend fun executeTopIssuesQuery(
         query: String,
         parentSpan: ISpan? = null
     ): List<TopIssue> {
-        val response = ClickHouseClient.execute(query, parentSpan)
-        val body = response.bodyAsText()
-
-        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-            logger.error { "Failed to execute top issues query: ${response.status} ${body.take(400)}" }
-            return emptyList()
-        }
-
-        return body
-            .lines()
-            .filter { it.isNotBlank() }
-            .mapNotNull { line ->
-                try {
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    TopIssue(
-                        issueId = obj["issue_id"]?.jsonPrimitive?.content ?: "",
-                        title = obj["title"]?.jsonPrimitive?.content ?: "",
-                        count = obj["count"]?.jsonPrimitive?.long ?: 0
-                    )
-                } catch (e: Exception) {
-                    logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
-                    null
-                }
+        return try {
+            val response = ClickHouseClient.execute(query, parentSpan)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+                logger.error { "Failed to execute top issues query: ${response.status} ${body.take(400)}" }
+                return emptyList()
             }
+            body
+                .lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    try {
+                        val obj = json.parseToJsonElement(line).jsonObject
+                        TopIssue(
+                            issueId = obj["issue_id"]?.jsonPrimitive?.content ?: "",
+                            title = obj["title"]?.jsonPrimitive?.content ?: "",
+                            count = obj["count"]?.jsonPrimitive?.long ?: 0
+                        )
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
+                        null
+                    }
+                }
+        } catch (e: Exception) {
+            logger.error(
+                e
+            ) { "executeTopIssuesQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
+            emptyList()
+        }
     }
 }

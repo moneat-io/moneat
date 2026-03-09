@@ -69,23 +69,20 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
 
             try {
                 val releases = executeReleasesListQuery(releasesQuery, parentSpan)
-                val result = mutableListOf<ReleaseListResponse>()
-                for (r in releases) {
-                    val newIssueCount = getNewIssueCountForRelease(projectId, r.version, retentionDays)
-                    val crashFreeRate = getCrashFreeRateForRelease(projectId, r.version, retentionDays)
-                    result.add(
-                        ReleaseListResponse(
-                            version = r.version,
-                            firstSeen = r.firstSeen,
-                            lastSeen = r.lastSeen,
-                            eventCount = r.eventCount,
-                            newIssueCount = newIssueCount,
-                            crashFreeRate = crashFreeRate,
-                            userCount = r.userCount
-                        )
+                val versions = releases.map { it.version }
+                val newIssueCountByVersion = getNewIssueCountForReleases(projectId, versions, retentionDays, parentSpan)
+                val crashFreeRateByVersion = getCrashFreeRateForReleases(projectId, versions, retentionDays, parentSpan)
+                releases.map { r ->
+                    ReleaseListResponse(
+                        version = r.version,
+                        firstSeen = r.firstSeen,
+                        lastSeen = r.lastSeen,
+                        eventCount = r.eventCount,
+                        newIssueCount = newIssueCountByVersion[r.version] ?: 0L,
+                        crashFreeRate = crashFreeRateByVersion[r.version],
+                        userCount = r.userCount
                     )
                 }
-                result
             } catch (e: Exception) {
                 logger.error(e) { "Failed to fetch releases for project $projectId" }
                 emptyList()
@@ -125,7 +122,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             val newIssues = getNewIssueCountForRelease(projectId, version, retentionDays)
             val resolvedIssues = 0L
             val crashFreeSessionRate = getCrashFreeRateForRelease(projectId, version, retentionDays)
-            val crashFreeUserRate = crashFreeSessionRate
+            val crashFreeUserRate: Double? = null // TODO: implement getCrashFreeUserRateForRelease when user-based query exists
 
             val intervalMinutes = 360
             val eventsTimelineQuery =
@@ -208,6 +205,84 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                     userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0
                 )
             }
+    }
+
+    private suspend fun getNewIssueCountForReleases(
+        projectId: Long,
+        versions: List<String>,
+        retentionDays: Int,
+        parentSpan: ISpan? = null
+    ): Map<String, Long> {
+        if (versions.isEmpty()) return emptyMap()
+        val escapedVersions = versions.distinct().map { "'${escapeSql(it)}'" }.joinToString(",")
+        val query =
+            """
+            SELECT first_release as version, count() as total
+            FROM (
+                SELECT issue_id, argMin(release, timestamp) as first_release
+                FROM `$clickhouseDb`.events
+                WHERE project_id = $projectId AND event_type = 'error' AND issue_id != ''
+                    AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
+                GROUP BY issue_id
+                HAVING first_release IN ($escapedVersions)
+            )
+            GROUP BY first_release
+            FORMAT JSONEachRow
+            """.trimIndent()
+        return try {
+            val response = ClickHouseClient.execute(query, parentSpan)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.isBlank()) return emptyMap()
+            body.lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    val v = obj["version"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                    val total = obj["total"]?.jsonPrimitive?.long ?: 0L
+                    v to total
+                }
+                .toMap()
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch new issue counts for releases" }
+            emptyMap()
+        }
+    }
+
+    private suspend fun getCrashFreeRateForReleases(
+        projectId: Long,
+        versions: List<String>,
+        retentionDays: Int,
+        parentSpan: ISpan? = null
+    ): Map<String, Double> {
+        if (versions.isEmpty()) return emptyMap()
+        val escapedVersions = versions.distinct().map { "'${escapeSql(it)}'" }.joinToString(",")
+        val query =
+            """
+            SELECT release as version, countIf(errors = 0) * 100.0 / count() as rate
+            FROM `$clickhouseDb`.sessions
+            WHERE project_id = $projectId AND release IN ($escapedVersions)
+                AND ${queryHelper.timestampRetentionClause("started", retentionDays)}
+            GROUP BY release
+            FORMAT JSONEachRow
+            """.trimIndent()
+        return try {
+            val response = ClickHouseClient.execute(query, parentSpan)
+            val body = response.bodyAsText()
+            if (response.status.value !in 200..299 || body.isBlank()) return emptyMap()
+            body.lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    val v = obj["version"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                    val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+                    if (rate == null || rate.isNaN() || rate.isInfinite()) return@mapNotNull null
+                    v to rate
+                }
+                .toMap()
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to fetch crash-free rates for releases" }
+            emptyMap()
+        }
     }
 
     private suspend fun getNewIssueCountForRelease(

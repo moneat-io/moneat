@@ -402,6 +402,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
         limit: Int = 20
     ): List<EventResponse> {
         val transaction = getTransaction(eventId) ?: return emptyList()
+        if (transaction.traceId.isBlank()) return emptyList()
         val projectId = getProjectIdForTransaction(eventId) ?: return emptyList()
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val normalizedEventId = queryHelper.normalizeUuid(eventId) ?: return emptyList()
