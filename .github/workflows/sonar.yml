@@ -43,9 +43,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build, test, and analyze
+      - name: Build and test
         working-directory: backend
+        run: ./gradlew test jacocoTestReport --no-daemon
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        with:
+          projectBaseDir: backend
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: ./gradlew test jacocoTestReport sonar --info --no-daemon
