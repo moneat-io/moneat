@@ -21,7 +21,6 @@ import com.moneat.events.models.EventResponse
 import com.moneat.events.models.IssueDetailResponse
 import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.models.IssueResponse
-import com.moneat.events.models.UserInfo
 import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseQueryUtils
@@ -289,30 +288,7 @@ class IssueService(private val queryHelper: DashboardQueryHelper) {
                 .filter { it.isNotBlank() }
                 .map { line ->
                     val obj = json.parseToJsonElement(line).jsonObject
-                    val tagsMap = (obj["tags"] as? JsonObject)?.entries?.associate { (k, v) ->
-                        k to (v.jsonPrimitive.contentOrNull ?: "")
-                    } ?: emptyMap()
-                    val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
-                    val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
-                    val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
-                    EventResponse(
-                        eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
-                        timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
-                        message = obj["message"]?.jsonPrimitive?.content ?: "",
-                        platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                        level = obj["level"]?.jsonPrimitive?.content ?: "error",
-                        environment = obj["environment"]?.jsonPrimitive?.contentOrNull,
-                        release = obj["release"]?.jsonPrimitive?.contentOrNull,
-                        user = if (userId != null || userEmail != null || userUsername != null) {
-                            UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                        } else {
-                            null
-                        },
-                        tags = HashMap(tagsMap),
-                        contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
-                        exception = obj["exception"]?.jsonPrimitive?.contentOrNull,
-                        breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
-                    )
+                    queryHelper.mapEventRow(obj)
                 }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch events for issue $issueId" }

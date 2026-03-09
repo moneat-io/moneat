@@ -23,7 +23,6 @@ import com.moneat.events.models.ReplayListItem
 import com.moneat.events.models.ReplayRecordingResponse
 import com.moneat.events.models.ReplayTimelineItem
 import com.moneat.events.models.ReplayTimelineResponse
-import com.moneat.events.models.UserInfo
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.serialization.json.JsonArray
@@ -115,6 +114,80 @@ class ReplayService(
     private fun parseStringArray(element: JsonElement?): List<String> {
         val arr = element?.jsonArray ?: return emptyList()
         return arr.mapNotNull { it.jsonPrimitive.contentOrNull }
+    }
+
+    private fun isClickHouseError(statusCode: Int, body: String, context: String): Boolean {
+        if (statusCode !in 200..299 || body.trimStart().startsWith("Code:")) {
+            if (statusCode !in 200..299) {
+                logger.error { "$context failed: $statusCode ${body.take(400)}" }
+            } else {
+                logger.error { "$context (ClickHouse): ${body.take(400)}" }
+            }
+            return true
+        }
+        return false
+    }
+
+    private fun mapErrorTimelineItem(obj: JsonObject, replayStartMs: Long): ReplayTimelineItem? {
+        val tsMs = obj["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return null
+        val eventId = obj["event_id"]?.jsonPrimitive?.content ?: return null
+        val exceptionType = obj["exception_type"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+        val message = obj["message"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+        return ReplayTimelineItem(
+            id = eventId,
+            type = "error",
+            timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+            offsetMs = (tsMs - replayStartMs).toDouble(),
+            title = exceptionType ?: message ?: "Error",
+            description = obj["exception_value"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?: obj["message"]?.jsonPrimitive?.contentOrNull,
+            durationMs = null,
+            category = obj["level"]?.jsonPrimitive?.contentOrNull,
+            eventId = eventId,
+            issueId = obj["issue_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            traceId = null
+        )
+    }
+
+    private fun mapTransactionTimelineItem(obj: JsonObject, replayStartMs: Long): ReplayTimelineItem? {
+        val tsMs = obj["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return null
+        val eventId = obj["event_id"]?.jsonPrimitive?.content ?: return null
+        val traceId = queryHelper.parseTraceContext(
+            obj["contexts"]?.jsonPrimitive?.content ?: "{}"
+        )?.get("trace_id")?.jsonPrimitive?.contentOrNull
+        return ReplayTimelineItem(
+            id = eventId,
+            type = "transaction",
+            timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+            offsetMs = (tsMs - replayStartMs).toDouble(),
+            title = obj["transaction_name"]?.jsonPrimitive?.content ?: "Transaction",
+            description = null,
+            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
+            category = obj["transaction_op"]?.jsonPrimitive?.contentOrNull,
+            eventId = eventId,
+            issueId = null,
+            traceId = traceId
+        )
+    }
+
+    private fun mapSpanTimelineItem(obj: JsonObject, replayStartMs: Long): ReplayTimelineItem? {
+        val startTsMs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return null
+        val spanId = obj["span_id"]?.jsonPrimitive?.content ?: return null
+        val traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull
+        return ReplayTimelineItem(
+            id = "span-$traceId-$spanId",
+            type = "span",
+            timestamp = Instant.ofEpochMilli(startTsMs).toString(),
+            offsetMs = (startTsMs - replayStartMs).toDouble(),
+            title = obj["description"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
+            description = obj["op"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
+            category = obj["op"]?.jsonPrimitive?.contentOrNull,
+            eventId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            issueId = null,
+            traceId = traceId
+        )
     }
 
     private suspend fun getReplayWindowErrorCount(
@@ -438,15 +511,12 @@ class ReplayService(
                 .mapNotNull { line ->
                     try {
                         val obj = json.parseToJsonElement(line).jsonObject
-                        val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
-                        val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
-                        val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
                         val startedMs = obj["started_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                         val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                         val rawErrorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
                         val fallbackErrorCount =
                             if (rawErrorCount == 0 && startedMs != null && finishedMs != null) {
-                                getReplayWindowErrorCount(projectId, startedMs, finishedMs, userId, retentionDays)
+                                getReplayWindowErrorCount(projectId, startedMs, finishedMs, obj["user_id"]?.jsonPrimitive?.contentOrNull, retentionDays)
                             } else {
                                 0
                             }
@@ -458,12 +528,7 @@ class ReplayService(
                             durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
                             urls = parseStringArray(obj["urls"]),
                             errorCount = maxOf(rawErrorCount, fallbackErrorCount),
-                            user =
-                            if (userId != null || userEmail != null || userUsername != null) {
-                                UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                            } else {
-                                null
-                            },
+                            user = queryHelper.extractUserInfo(obj),
                             browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             browserVersion =
                             obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
@@ -534,8 +599,6 @@ class ReplayService(
 
             val obj = json.parseToJsonElement(line).jsonObject
             val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
-            val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
-            val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
             val startedMs = obj["started_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
             val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
             val tagsStr = obj["tags"]?.jsonPrimitive?.contentOrNull ?: "{}"
@@ -585,12 +648,7 @@ class ReplayService(
                 environment = obj["environment"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 release = obj["release"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 platform = obj["platform"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                user =
-                if (userId != null || userEmail != null || userUsername != null) {
-                    UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                } else {
-                    null
-                },
+                user = queryHelper.extractUserInfo(obj),
                 browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
@@ -657,16 +715,7 @@ class ReplayService(
                 runCatching {
                     val response = ClickHouseClient.execute(query)
                     val body = response.bodyAsText()
-                    if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                        if (response.status.value !in 200..299) {
-                            logger.error {
-                                "Replay timeline errors by IDs failed: ${response.status} ${body.take(
-                                    400
-                                )}"
-                            }
-                        } else {
-                            logger.error { "Replay timeline errors by IDs (ClickHouse): ${body.take(400)}" }
-                        }
+                    if (isClickHouseError(response.status.value, body, "Replay timeline errors by IDs")) {
                         return@runCatching
                     }
                     body
@@ -676,30 +725,9 @@ class ReplayService(
                         .forEach { line ->
                             val obj =
                                 runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                            val tsMs = obj["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
-                            val exceptionType =
-                                obj["exception_type"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-                            val message = obj["message"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-                            val title = exceptionType ?: message ?: "Error"
-                            val eventId = obj["event_id"]?.jsonPrimitive?.content ?: return@forEach
-                            if (!addedIds.add(eventId)) return@forEach
-                            items.add(
-                                ReplayTimelineItem(
-                                    id = eventId,
-                                    type = "error",
-                                    timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
-                                    offsetMs = (tsMs - replayStartMs).toDouble(),
-                                    title = title,
-                                    description =
-                                    obj["exception_value"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-                                        ?: obj["message"]?.jsonPrimitive?.contentOrNull,
-                                    durationMs = null,
-                                    category = obj["level"]?.jsonPrimitive?.contentOrNull,
-                                    eventId = eventId,
-                                    issueId = obj["issue_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                                    traceId = null
-                                )
-                            )
+                            val item = mapErrorTimelineItem(obj, replayStartMs) ?: return@forEach
+                            if (!addedIds.add(item.id)) return@forEach
+                            items.add(item)
                         }
                 }.onFailure { logger.error(it) { "Failed to fetch replay timeline errors" } }
             }
@@ -734,16 +762,7 @@ class ReplayService(
             runCatching {
                 val response = ClickHouseClient.execute(query)
                 val body = response.bodyAsText()
-                if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                    if (response.status.value !in 200..299) {
-                        logger.error {
-                            "Replay timeline transactions by trace IDs failed: ${response.status} ${body.take(
-                                400
-                            )}"
-                        }
-                    } else {
-                        logger.error { "Replay timeline transactions by trace IDs (ClickHouse): ${body.take(400)}" }
-                    }
+                if (isClickHouseError(response.status.value, body, "Replay timeline transactions by trace IDs")) {
                     return@runCatching
                 }
                 body
@@ -752,28 +771,9 @@ class ReplayService(
                     .filter { !it.trimStart().startsWith("Code:") }
                     .forEach { line ->
                         val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                        val tsMs = obj["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
-                        val eventId = obj["event_id"]?.jsonPrimitive?.content ?: return@forEach
-                        if (!addedIds.add(eventId)) return@forEach
-                        val traceId =
-                            queryHelper.parseTraceContext(
-                                obj["contexts"]?.jsonPrimitive?.content ?: "{}"
-                            )?.get("trace_id")?.jsonPrimitive?.contentOrNull
-                        items.add(
-                            ReplayTimelineItem(
-                                id = eventId,
-                                type = "transaction",
-                                timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
-                                offsetMs = (tsMs - replayStartMs).toDouble(),
-                                title = obj["transaction_name"]?.jsonPrimitive?.content ?: "Transaction",
-                                description = null,
-                                durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
-                                category = obj["transaction_op"]?.jsonPrimitive?.contentOrNull,
-                                eventId = eventId,
-                                issueId = null,
-                                traceId = traceId
-                            )
-                        )
+                        val item = mapTransactionTimelineItem(obj, replayStartMs) ?: return@forEach
+                        if (!addedIds.add(item.id)) return@forEach
+                        items.add(item)
                     }
             }.onFailure { logger.error(it) { "Failed to fetch replay timeline transactions" } }
         }
@@ -804,16 +804,7 @@ class ReplayService(
             runCatching {
                 val response = ClickHouseClient.execute(query)
                 val body = response.bodyAsText()
-                if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                    if (response.status.value !in 200..299) {
-                        logger.error {
-                            "Replay timeline spans by trace IDs failed: ${response.status} ${body.take(
-                                400
-                            )}"
-                        }
-                    } else {
-                        logger.error { "Replay timeline spans by trace IDs (ClickHouse): ${body.take(400)}" }
-                    }
+                if (isClickHouseError(response.status.value, body, "Replay timeline spans by trace IDs")) {
                     return@runCatching
                 }
                 body
@@ -822,32 +813,9 @@ class ReplayService(
                     .filter { !it.trimStart().startsWith("Code:") }
                     .forEach { line ->
                         val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                        val startTsMs =
-                            obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
-                        val spanId = obj["span_id"]?.jsonPrimitive?.content ?: return@forEach
-                        val traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull
-                        val spanItemId = "span-$traceId-$spanId"
-                        if (!addedIds.add(spanItemId)) return@forEach
-                        val spanTimestampIso = Instant.ofEpochMilli(startTsMs).toString()
-                        items.add(
-                            ReplayTimelineItem(
-                                id = spanItemId,
-                                type = "span",
-                                timestamp = spanTimestampIso,
-                                offsetMs = (startTsMs - replayStartMs).toDouble(),
-                                title =
-                                obj["description"]?.jsonPrimitive?.content?.takeIf {
-                                    it.isNotBlank()
-                                } ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
-                                description = obj["op"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                                durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
-                                category = obj["op"]?.jsonPrimitive?.contentOrNull,
-                                eventId =
-                                obj["transaction_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                                issueId = null,
-                                traceId = traceId
-                            )
-                        )
+                        val item = mapSpanTimelineItem(obj, replayStartMs) ?: return@forEach
+                        if (!addedIds.add(item.id)) return@forEach
+                        items.add(item)
                     }
             }.onFailure { logger.error(it) { "Failed to fetch replay timeline spans" } }
         }
@@ -876,12 +844,7 @@ class ReplayService(
         runCatching {
             val response = ClickHouseClient.execute(errorsInRangeQuery)
             val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                if (response.status.value !in 200..299) {
-                    logger.error { "Replay timeline errors by time range failed: ${response.status} ${body.take(400)}" }
-                } else {
-                    logger.error { "Replay timeline errors by time range (ClickHouse): ${body.take(400)}" }
-                }
+            if (isClickHouseError(response.status.value, body, "Replay timeline errors by time range")) {
                 return@runCatching
             }
             body
@@ -890,29 +853,9 @@ class ReplayService(
                 .filter { !it.trimStart().startsWith("Code:") }
                 .forEach { line ->
                     val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                    val tsMs = obj["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
-                    val exceptionType = obj["exception_type"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-                    val message = obj["message"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-                    val title = exceptionType ?: message ?: "Error"
-                    val eventId = obj["event_id"]?.jsonPrimitive?.content ?: return@forEach
-                    if (!addedIds.add(eventId)) return@forEach
-                    items.add(
-                        ReplayTimelineItem(
-                            id = eventId,
-                            type = "error",
-                            timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
-                            offsetMs = (tsMs - replayStartMs).toDouble(),
-                            title = title,
-                            description =
-                            obj["exception_value"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-                                ?: obj["message"]?.jsonPrimitive?.contentOrNull,
-                            durationMs = null,
-                            category = obj["level"]?.jsonPrimitive?.contentOrNull,
-                            eventId = eventId,
-                            issueId = obj["issue_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            traceId = null
-                        )
-                    )
+                    val item = mapErrorTimelineItem(obj, replayStartMs) ?: return@forEach
+                    if (!addedIds.add(item.id)) return@forEach
+                    items.add(item)
                 }
         }.onFailure { logger.error(it) { "Failed to fetch replay timeline errors by time range" } }
 
@@ -937,16 +880,7 @@ class ReplayService(
         runCatching {
             val response = ClickHouseClient.execute(transactionsInRangeQuery)
             val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                if (response.status.value !in 200..299) {
-                    logger.error {
-                        "Replay timeline transactions by time range failed: ${response.status} ${body.take(
-                            400
-                        )}"
-                    }
-                } else {
-                    logger.error { "Replay timeline transactions by time range (ClickHouse): ${body.take(400)}" }
-                }
+            if (isClickHouseError(response.status.value, body, "Replay timeline transactions by time range")) {
                 return@runCatching
             }
             body
@@ -955,28 +889,9 @@ class ReplayService(
                 .filter { !it.trimStart().startsWith("Code:") }
                 .forEach { line ->
                     val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                    val tsMs = obj["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
-                    val eventId = obj["event_id"]?.jsonPrimitive?.content ?: return@forEach
-                    if (!addedIds.add(eventId)) return@forEach
-                    val traceId =
-                        queryHelper.parseTraceContext(
-                            obj["contexts"]?.jsonPrimitive?.content ?: "{}"
-                        )?.get("trace_id")?.jsonPrimitive?.contentOrNull
-                    items.add(
-                        ReplayTimelineItem(
-                            id = eventId,
-                            type = "transaction",
-                            timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
-                            offsetMs = (tsMs - replayStartMs).toDouble(),
-                            title = obj["transaction_name"]?.jsonPrimitive?.content ?: "Transaction",
-                            description = null,
-                            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
-                            category = obj["transaction_op"]?.jsonPrimitive?.contentOrNull,
-                            eventId = eventId,
-                            issueId = null,
-                            traceId = traceId
-                        )
-                    )
+                    val item = mapTransactionTimelineItem(obj, replayStartMs) ?: return@forEach
+                    if (!addedIds.add(item.id)) return@forEach
+                    items.add(item)
                 }
         }.onFailure { logger.error(it) { "Failed to fetch replay timeline transactions by time range" } }
 
@@ -1002,12 +917,7 @@ class ReplayService(
         runCatching {
             val response = ClickHouseClient.execute(spansInRangeQuery)
             val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                if (response.status.value !in 200..299) {
-                    logger.error { "Replay timeline spans by time range failed: ${response.status} ${body.take(400)}" }
-                } else {
-                    logger.error { "Replay timeline spans by time range (ClickHouse): ${body.take(400)}" }
-                }
+            if (isClickHouseError(response.status.value, body, "Replay timeline spans by time range")) {
                 return@runCatching
             }
             body
@@ -1016,30 +926,9 @@ class ReplayService(
                 .filter { !it.trimStart().startsWith("Code:") }
                 .forEach { line ->
                     val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                    val startTsMs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
-                    val spanId = obj["span_id"]?.jsonPrimitive?.content ?: return@forEach
-                    val traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull
-                    val spanItemId = "span-$traceId-$spanId"
-                    if (!addedIds.add(spanItemId)) return@forEach
-                    val spanTimestampIso = Instant.ofEpochMilli(startTsMs).toString()
-                    items.add(
-                        ReplayTimelineItem(
-                            id = spanItemId,
-                            type = "span",
-                            timestamp = spanTimestampIso,
-                            offsetMs = (startTsMs - replayStartMs).toDouble(),
-                            title =
-                            obj["description"]?.jsonPrimitive?.content?.takeIf {
-                                it.isNotBlank()
-                            } ?: obj["op"]?.jsonPrimitive?.content ?: "Span",
-                            description = obj["op"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
-                            category = obj["op"]?.jsonPrimitive?.contentOrNull,
-                            eventId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            issueId = null,
-                            traceId = traceId
-                        )
-                    )
+                    val item = mapSpanTimelineItem(obj, replayStartMs) ?: return@forEach
+                    if (!addedIds.add(item.id)) return@forEach
+                    items.add(item)
                 }
         }.onFailure { logger.error(it) { "Failed to fetch replay timeline spans by time range" } }
 
@@ -1194,9 +1083,6 @@ class ReplayService(
                 .mapNotNull { line ->
                     try {
                         val obj = json.parseToJsonElement(line).jsonObject
-                        val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
-                        val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
-                        val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
                         ReplayListItem(
                             replayId = obj["replay_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
                             projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
@@ -1205,12 +1091,7 @@ class ReplayService(
                             durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
                             urls = parseStringArray(obj["urls"]),
                             errorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0,
-                            user =
-                            if (userId != null || userEmail != null || userUsername != null) {
-                                UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                            } else {
-                                null
-                            },
+                            user = queryHelper.extractUserInfo(obj),
                             browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             browserVersion =
                             obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },

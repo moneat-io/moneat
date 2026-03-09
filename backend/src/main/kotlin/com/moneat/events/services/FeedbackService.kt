@@ -20,7 +20,6 @@ import com.moneat.config.ClickHouseClient
 import io.ktor.client.statement.bodyAsText
 import com.moneat.events.models.FeedbackDetailResponse
 import com.moneat.events.models.FeedbackListItem
-import com.moneat.events.models.UserInfo
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.serialization.json.JsonElement
@@ -128,9 +127,6 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                 .filter { it.isNotBlank() }
                 .map { line ->
                     val obj = json.parseToJsonElement(line).jsonObject
-                    val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
-                    val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
-                    val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
                     FeedbackListItem(
                         feedbackId = obj["feedback_id"]?.jsonPrimitive?.content ?: "",
                         message = obj["message"]?.jsonPrimitive?.content ?: "",
@@ -142,12 +138,7 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                         environment = obj["environment"]?.jsonPrimitive?.content ?: "",
                         release = obj["release"]?.jsonPrimitive?.content ?: "",
                         platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                        user =
-                        if (userId != null || userEmail != null || userUsername != null) {
-                            UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                        } else {
-                            null
-                        },
+                        user = queryHelper.extractUserInfo(obj),
                         associatedEventId =
                         obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                         replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
@@ -199,9 +190,6 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             val body = response.bodyAsText()
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
             val obj = json.parseToJsonElement(line).jsonObject
-            val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
-            val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
-            val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
             val tagsMap = parseTagsMap(obj["tags"])
             FeedbackDetailResponse(
                 feedbackId = obj["feedback_id"]?.jsonPrimitive?.content ?: return null,
@@ -214,12 +202,7 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                 environment = obj["environment"]?.jsonPrimitive?.content ?: "",
                 release = obj["release"]?.jsonPrimitive?.content ?: "",
                 platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                user =
-                if (userId != null || userEmail != null || userUsername != null) {
-                    UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                } else {
-                    null
-                },
+                user = queryHelper.extractUserInfo(obj),
                 associatedEventId =
                 obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },

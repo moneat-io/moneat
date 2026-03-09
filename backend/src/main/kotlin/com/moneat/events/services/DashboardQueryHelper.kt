@@ -20,9 +20,11 @@ import com.moneat.billing.models.PricingTier
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
+import com.moneat.events.models.EventResponse
 import com.moneat.events.models.SlowTransactionResponse
 import com.moneat.events.models.TimelinePoint
 import com.moneat.events.models.TopIssue
+import com.moneat.events.models.UserInfo
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.HttpResponse
@@ -82,6 +84,37 @@ class DashboardQueryHelper {
         }
 
         return null
+    }
+
+    fun extractUserInfo(obj: JsonObject): UserInfo? {
+        val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
+        val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
+        val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
+        return if (userId != null || userEmail != null || userUsername != null) {
+            UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+        } else {
+            null
+        }
+    }
+
+    fun mapEventRow(obj: JsonObject): EventResponse {
+        val tagsMap = (obj["tags"] as? JsonObject)?.entries?.associate { (k, v) ->
+            k to (v.jsonPrimitive.contentOrNull ?: "")
+        } ?: emptyMap()
+        return EventResponse(
+            eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
+            timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+            message = obj["message"]?.jsonPrimitive?.content ?: "",
+            platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+            level = obj["level"]?.jsonPrimitive?.content ?: "error",
+            environment = obj["environment"]?.jsonPrimitive?.contentOrNull,
+            release = obj["release"]?.jsonPrimitive?.contentOrNull,
+            user = extractUserInfo(obj),
+            tags = HashMap(tagsMap),
+            contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
+            exception = obj["exception"]?.jsonPrimitive?.contentOrNull,
+            breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
+        )
     }
 
     fun parseStringMap(element: JsonElement?): HashMap<String, String> {

@@ -25,7 +25,6 @@ import com.moneat.events.models.TraceDetailResponse
 import com.moneat.events.models.TransactionDetailResponse
 import com.moneat.events.models.TransactionSummaryResponse
 import com.moneat.events.models.TransactionWithSpansResponse
-import com.moneat.events.models.UserInfo
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
@@ -42,6 +41,27 @@ private val logger = KotlinLogging.logger {}
 class TransactionService(private val queryHelper: DashboardQueryHelper) {
     private val clickhouseDb: String get() = queryHelper.clickhouseDb
     private val json get() = queryHelper.json
+
+    private fun mapSpanRow(obj: JsonObject): SpanResponse {
+        val startMs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+        val endMs = obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+        val duration = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+        val tagsMap = queryHelper.parseStringMap(obj["tags"])
+        return SpanResponse(
+            spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
+            parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull,
+            transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull,
+            op = obj["op"]?.jsonPrimitive?.content ?: "",
+            description = obj["description"]?.jsonPrimitive?.content ?: "",
+            startTimestamp = startMs / 1000.0,
+            endTimestamp = endMs / 1000.0,
+            duration = duration,
+            status = obj["status"]?.jsonPrimitive?.contentOrNull,
+            tags = tagsMap,
+            data = obj["data"]?.jsonPrimitive?.contentOrNull
+        )
+    }
 
     suspend fun getProjectIdForTransaction(eventId: String): Long? {
         val normalizedEventId = queryHelper.normalizeUuid(eventId) ?: return null
@@ -311,24 +331,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 .filter { it.isNotBlank() }
                 .map { line ->
                     val obj = json.parseToJsonElement(line).jsonObject
-                    val startMs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-                    val endMs = obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-                    val duration = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-                    val tagsMap = queryHelper.parseStringMap(obj["tags"])
-                    SpanResponse(
-                        spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
-                        parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                        traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull,
-                        transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull,
-                        op = obj["op"]?.jsonPrimitive?.content ?: "",
-                        description = obj["description"]?.jsonPrimitive?.content ?: "",
-                        startTimestamp = startMs / 1000.0,
-                        endTimestamp = endMs / 1000.0,
-                        duration = duration,
-                        status = obj["status"]?.jsonPrimitive?.contentOrNull,
-                        tags = tagsMap,
-                        data = obj["data"]?.jsonPrimitive?.contentOrNull
-                    )
+                    mapSpanRow(obj)
                 }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch spans for transaction $eventId" }
@@ -374,24 +377,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 .filter { it.isNotBlank() }
                 .map { line ->
                     val obj = json.parseToJsonElement(line).jsonObject
-                    val startMs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-                    val endMs = obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-                    val duration = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-                    val tagsMap = queryHelper.parseStringMap(obj["tags"])
-                    SpanResponse(
-                        spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
-                        parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                        traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull,
-                        transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull,
-                        op = obj["op"]?.jsonPrimitive?.content ?: "",
-                        description = obj["description"]?.jsonPrimitive?.content ?: "",
-                        startTimestamp = startMs / 1000.0,
-                        endTimestamp = endMs / 1000.0,
-                        duration = duration,
-                        status = obj["status"]?.jsonPrimitive?.contentOrNull,
-                        tags = tagsMap,
-                        data = obj["data"]?.jsonPrimitive?.contentOrNull
-                    )
+                    mapSpanRow(obj)
                 }
 
             if (spans.isEmpty()) return null
@@ -446,24 +432,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             val body = response.bodyAsText()
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
             val obj = json.parseToJsonElement(line).jsonObject
-            val startMs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-            val endMs = obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-            val duration = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-            val tagsMap = queryHelper.parseStringMap(obj["tags"])
-            val span = SpanResponse(
-                spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
-                parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull,
-                transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull,
-                op = obj["op"]?.jsonPrimitive?.content ?: "",
-                description = obj["description"]?.jsonPrimitive?.content ?: "",
-                startTimestamp = startMs / 1000.0,
-                endTimestamp = endMs / 1000.0,
-                duration = duration,
-                status = obj["status"]?.jsonPrimitive?.contentOrNull,
-                tags = tagsMap,
-                data = obj["data"]?.jsonPrimitive?.contentOrNull
-            )
+            val span = mapSpanRow(obj)
             val transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull
             val transaction = transactionId?.let { getTransaction(it) }
             SpanDetailResponse(span = span, transaction = transaction)
@@ -517,30 +486,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 .filter { it.isNotBlank() }
                 .map { line ->
                     val obj = json.parseToJsonElement(line).jsonObject
-                    val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
-                    val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
-                    val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
-                    val tagsMap = (obj["tags"] as? JsonObject)?.entries?.associate { (k, v) ->
-                        k to (v.jsonPrimitive.contentOrNull ?: "")
-                    } ?: emptyMap()
-                    EventResponse(
-                        eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
-                        timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
-                        message = obj["message"]?.jsonPrimitive?.content ?: "",
-                        platform = obj["platform"]?.jsonPrimitive?.content ?: "",
-                        level = obj["level"]?.jsonPrimitive?.content ?: "error",
-                        environment = obj["environment"]?.jsonPrimitive?.contentOrNull,
-                        release = obj["release"]?.jsonPrimitive?.contentOrNull,
-                        user = if (userId != null || userEmail != null || userUsername != null) {
-                            UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
-                        } else {
-                            null
-                        },
-                        tags = HashMap(tagsMap),
-                        contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
-                        exception = obj["exception"]?.jsonPrimitive?.contentOrNull,
-                        breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
-                    )
+                    queryHelper.mapEventRow(obj)
                 }
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch related errors for transaction $eventId" }
