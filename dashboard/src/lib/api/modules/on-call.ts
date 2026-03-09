@@ -212,11 +212,10 @@ export function onCallMethods(core: ApiClientCore) {
       filters: { status?: string; priorityLevel?: string } = {}
     ) => {
       const params = new URLSearchParams()
-      if (filters.status) params.set('status', filters.status)
-      if (filters.priorityLevel) params.set('priorityLevel', filters.priorityLevel)
-      const q = params.toString()
+      if (filters.status) params.append('status', filters.status)
+      if (filters.priorityLevel) params.append('priorityLevel', filters.priorityLevel)
       return core.request<OnCallIncident[]>(
-        urlWithQuery(`${base}/on-call-incidents`, q)
+        urlWithQuery(`${base}/on-call-incidents`, params.toString())
       )
     },
 

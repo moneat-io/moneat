@@ -32,14 +32,14 @@ import type {
 
 export function statusPagesMethods(core: ApiClientCore) {
   const base = core.API_BASE
-  const backendUrl = base.replace(/\/v1$/, '') || 'https://api.moneat.io'
+  const backendUrl = base.replace(/\/v1$/, '')
 
   return {
     getStatusPages: () =>
       core.request<StatusPage[]>(`${base}/status-pages`),
 
     getStatusPage: (pageId: string) =>
-      core.request<StatusPageDetail>(`${base}/status-pages/${pageId}`),
+      core.request<StatusPageDetail>(`${base}/status-pages/${encodeURIComponent(pageId)}`),
 
     createStatusPage: (data: CreateStatusPageRequest) =>
       core.request<StatusPage>(`${base}/status-pages`, {
@@ -51,13 +51,13 @@ export function statusPagesMethods(core: ApiClientCore) {
       pageId: string,
       data: UpdateStatusPageRequest
     ) =>
-      core.request<StatusPage>(`${base}/status-pages/${pageId}`, {
+      core.request<StatusPage>(`${base}/status-pages/${encodeURIComponent(pageId)}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
 
     deleteStatusPage: (pageId: string) =>
-      core.request<void>(`${base}/status-pages/${pageId}`, {
+      core.request<void>(`${base}/status-pages/${encodeURIComponent(pageId)}`, {
         method: 'DELETE',
       }),
 
@@ -66,7 +66,7 @@ export function statusPagesMethods(core: ApiClientCore) {
       monitors: MonitorAssignment[]
     ) =>
       core.request<StatusPageMonitor[]>(
-        `${base}/status-pages/${pageId}/monitors`,
+        `${base}/status-pages/${encodeURIComponent(pageId)}/monitors`,
         {
           method: 'POST',
           body: JSON.stringify({ monitors }),
@@ -78,7 +78,7 @@ export function statusPagesMethods(core: ApiClientCore) {
       monitorId: string
     ) =>
       core.request<void>(
-        `${base}/status-pages/${pageId}/monitors/${monitorId}`,
+        `${base}/status-pages/${encodeURIComponent(pageId)}/monitors/${encodeURIComponent(monitorId)}`,
         {
           method: 'DELETE',
         }
@@ -86,7 +86,7 @@ export function statusPagesMethods(core: ApiClientCore) {
 
     getStatusPageIncidents: (pageId: string) =>
       core.request<StatusPageIncident[]>(
-        `${base}/status-pages/${pageId}/incidents`
+        `${base}/status-pages/${encodeURIComponent(pageId)}/incidents`
       ),
 
     createIncident: (
@@ -94,7 +94,7 @@ export function statusPagesMethods(core: ApiClientCore) {
       data: CreateIncidentRequest
     ) =>
       core.request<StatusPageIncident>(
-        `${base}/status-pages/${pageId}/incidents`,
+        `${base}/status-pages/${encodeURIComponent(pageId)}/incidents`,
         {
           method: 'POST',
           body: JSON.stringify(data),
@@ -107,7 +107,7 @@ export function statusPagesMethods(core: ApiClientCore) {
       data: UpdateIncidentRequest
     ) =>
       core.request<StatusPageIncident>(
-        `${base}/status-pages/${pageId}/incidents/${incidentId}`,
+        `${base}/status-pages/${encodeURIComponent(pageId)}/incidents/${encodeURIComponent(incidentId)}`,
         {
           method: 'PUT',
           body: JSON.stringify(data),
@@ -120,7 +120,7 @@ export function statusPagesMethods(core: ApiClientCore) {
       data: CreateIncidentUpdateRequest
     ) =>
       core.request<StatusPageIncident>(
-        `${base}/status-pages/${pageId}/incidents/${incidentId}/updates`,
+        `${base}/status-pages/${encodeURIComponent(pageId)}/incidents/${encodeURIComponent(incidentId)}/updates`,
         {
           method: 'POST',
           body: JSON.stringify(data),
@@ -129,7 +129,7 @@ export function statusPagesMethods(core: ApiClientCore) {
 
     addCustomDomain: (pageId: string, domain: string) =>
       core.request<CustomDomain>(
-        `${base}/status-pages/${pageId}/domains`,
+        `${base}/status-pages/${encodeURIComponent(pageId)}/domains`,
         {
           method: 'POST',
           body: JSON.stringify({ domain }),
@@ -138,7 +138,7 @@ export function statusPagesMethods(core: ApiClientCore) {
 
     verifyCustomDomain: (pageId: string, domainId: number) =>
       core.request<CustomDomain>(
-        `${base}/status-pages/${pageId}/domains/${domainId}/verify`,
+        `${base}/status-pages/${encodeURIComponent(pageId)}/domains/${domainId}/verify`,
         {
           method: 'POST',
         }
@@ -146,28 +146,20 @@ export function statusPagesMethods(core: ApiClientCore) {
 
     removeCustomDomain: (pageId: string, domainId: number) =>
       core.request<void>(
-        `${base}/status-pages/${pageId}/domains/${domainId}`,
+        `${base}/status-pages/${encodeURIComponent(pageId)}/domains/${domainId}`,
         {
           method: 'DELETE',
         }
       ),
 
-    getPublicStatusPage: async (slug: string) => {
-      const publicUrl = `${backendUrl}/public/status/${encodeURIComponent(slug)}`
-      const response = await fetch(publicUrl)
-      if (!response.ok) {
-        throw new Error('Failed to fetch public status page')
-      }
-      return response.json() as Promise<PublicStatusPage>
-    },
+    getPublicStatusPage: (slug: string) =>
+      core.request<PublicStatusPage>(
+        `${backendUrl}/public/status/${encodeURIComponent(slug)}`
+      ),
 
-    getPublicStatusPageByDomain: async (domain: string) => {
-      const publicUrl = `${backendUrl}/public/status/domain/${encodeURIComponent(domain)}`
-      const response = await fetch(publicUrl)
-      if (!response.ok) {
-        throw new Error('Failed to fetch public status page')
-      }
-      return response.json() as Promise<PublicStatusPage>
-    },
+    getPublicStatusPageByDomain: (domain: string) =>
+      core.request<PublicStatusPage>(
+        `${backendUrl}/public/status/domain/${encodeURIComponent(domain)}`
+      ),
   }
 }

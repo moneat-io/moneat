@@ -25,7 +25,11 @@ describe('ApiClient', () => {
   beforeEach(() => {
     localStorage.clear()
     sessionStorage.clear()
-    resetAuthRedirectForTesting.current?.()
+    const reset = resetAuthRedirectForTesting.current
+    if (typeof reset !== 'function') {
+      throw new Error('resetAuthRedirectForTesting.current is not a function')
+    }
+    reset()
   })
 
   describe('Auth token handling', () => {

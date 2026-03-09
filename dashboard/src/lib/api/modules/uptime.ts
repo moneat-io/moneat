@@ -25,16 +25,17 @@ import type {
 
 export function uptimeMethods(core: ApiClientCore) {
   const base = core.API_BASE
+  const monitorsBase = `${base}/uptime/monitors`
 
   return {
     getUptimeMonitors: () =>
-      core.request<UptimeMonitor[]>(`${base}/uptime/monitors`),
+      core.request<UptimeMonitor[]>(monitorsBase),
 
     getUptimeMonitor: (monitorId: string) =>
-      core.request<UptimeMonitor>(`${base}/uptime/monitors/${monitorId}`),
+      core.request<UptimeMonitor>(`${monitorsBase}/${encodeURIComponent(monitorId)}`),
 
     createUptimeMonitor: (data: CreateUptimeMonitorRequest) =>
-      core.request<UptimeMonitor>(`${base}/uptime/monitors`, {
+      core.request<UptimeMonitor>(monitorsBase, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -43,23 +44,23 @@ export function uptimeMethods(core: ApiClientCore) {
       monitorId: string,
       data: UpdateUptimeMonitorRequest
     ) =>
-      core.request<UptimeMonitor>(`${base}/uptime/monitors/${monitorId}`, {
+      core.request<UptimeMonitor>(`${monitorsBase}/${encodeURIComponent(monitorId)}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
 
     deleteUptimeMonitor: (monitorId: string) =>
-      core.request<void>(`${base}/uptime/monitors/${monitorId}`, {
+      core.request<void>(`${monitorsBase}/${encodeURIComponent(monitorId)}`, {
         method: 'DELETE',
       }),
 
     pauseUptimeMonitor: (monitorId: string) =>
-      core.request<void>(`${base}/uptime/monitors/${monitorId}/pause`, {
+      core.request<void>(`${monitorsBase}/${encodeURIComponent(monitorId)}/pause`, {
         method: 'POST',
       }),
 
     resumeUptimeMonitor: (monitorId: string) =>
-      core.request<void>(`${base}/uptime/monitors/${monitorId}/resume`, {
+      core.request<void>(`${monitorsBase}/${encodeURIComponent(monitorId)}/resume`, {
         method: 'POST',
       }),
 
@@ -73,7 +74,7 @@ export function uptimeMethods(core: ApiClientCore) {
       if (to !== undefined && to !== null) params.append('to', to.toString())
       const query = params.toString()
       return core.request<UptimeHeartbeat[]>(
-        urlWithQuery(`${base}/uptime/monitors/${monitorId}/heartbeats`, query)
+        urlWithQuery(`${monitorsBase}/${encodeURIComponent(monitorId)}/heartbeats`, query)
       )
     },
   }

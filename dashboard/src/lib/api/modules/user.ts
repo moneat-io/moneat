@@ -97,8 +97,10 @@ export function userMethods(core: ApiClientCore) {
     } | null> => {
       try {
         return await core.request(`${base}/subscription`)
-      } catch {
-        return null
+      } catch (err) {
+        const status = (err as { status?: number })?.status
+        if (status === 404) return null
+        throw err
       }
     },
   }

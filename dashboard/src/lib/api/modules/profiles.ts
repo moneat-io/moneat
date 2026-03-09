@@ -67,7 +67,7 @@ export function profilesMethods(core: ApiClientCore) {
         a.click()
       } finally {
         a.remove()
-        URL.revokeObjectURL(url)
+        queueMicrotask(() => URL.revokeObjectURL(url))
       }
     },
 

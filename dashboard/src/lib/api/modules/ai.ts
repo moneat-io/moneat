@@ -30,7 +30,21 @@ async function readSseStream(response: Response, onEvent: (event: AiSseEvent) =>
 
   while (true) {
     const { value, done } = await reader.read()
-    if (done) break
+    if (done) {
+      buffer += decoder.decode(undefined, { stream: false })
+      const lines = buffer.split('\n')
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(line.slice(6)) as AiSseEvent
+            onEvent(event)
+          } catch {
+            /* skip malformed events */
+          }
+        }
+      }
+      break
+    }
     buffer += decoder.decode(value, { stream: true })
 
     const lines = buffer.split('\n')

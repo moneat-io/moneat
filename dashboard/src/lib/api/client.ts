@@ -100,14 +100,17 @@ export function createApiClientCore(): ApiClientCore {
   async function refreshAccessToken(): Promise<boolean> {
     if (isDemo()) {
       try {
+        const { signal, cleanup } = withRequestTimeoutSignal()
         const response = await fetch(
           `${API_BASE.replace('/v1', '')}/auth/demo-refresh`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
+            signal,
           }
         )
+        cleanup()
         if (!response.ok) return false
         const data = await response.json()
         if (data.demoEpochMs) setDemoEpoch(data.demoEpochMs)
@@ -119,14 +122,17 @@ export function createApiClientCore(): ApiClientCore {
     }
 
     try {
+      const { signal, cleanup } = withRequestTimeoutSignal()
       const response = await fetch(
         `${API_BASE.replace('/v1', '')}/auth/refresh`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
+          signal,
         }
       )
+      cleanup()
       if (!response.ok) return false
       globalThis.sessionStorage?.setItem('authenticated', 'true')
       return true
@@ -141,10 +147,13 @@ export function createApiClientCore(): ApiClientCore {
     globalThis.localStorage?.removeItem('selectedProjectId')
     setDemoEpoch(null)
     try {
+      const { signal, cleanup } = withRequestTimeoutSignal()
       await fetch(`${API_BASE.replace('/v1', '')}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
+        signal,
       })
+      cleanup()
     } catch {
       // Ignore errors
     }
@@ -183,12 +192,10 @@ export function createApiClientCore(): ApiClientCore {
     authRetryCount = 0
   ): Promise<T> {
     const impersonateToken = getImpersonateToken()
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string>),
-    }
-    if (impersonateToken)
-      headers['Authorization'] = `Bearer ${impersonateToken}`
+    const headers = new Headers(options.headers ?? {})
+    headers.set('Content-Type', 'application/json')
+    if (impersonateToken) headers.set('Authorization', `Bearer ${impersonateToken}`)
+    const headersObj = Object.fromEntries(headers.entries())
 
     const { signal, cleanup } = withRequestTimeoutSignal(
       options.signal as AbortSignal | undefined
@@ -198,7 +205,7 @@ export function createApiClientCore(): ApiClientCore {
     try {
       response = await fetch(endpoint, {
         ...options,
-        headers,
+        headers: headersObj,
         credentials: 'include',
         signal,
       })
@@ -233,11 +240,9 @@ export function createApiClientCore(): ApiClientCore {
     authRetryCount = 0
   ): Promise<Response> {
     const impersonateToken = getImpersonateToken()
-    const headers: Record<string, string> = {
-      ...(options.headers as Record<string, string>),
-    }
-    if (impersonateToken)
-      headers['Authorization'] = `Bearer ${impersonateToken}`
+    const headers = new Headers(options.headers ?? {})
+    if (impersonateToken) headers.set('Authorization', `Bearer ${impersonateToken}`)
+    const headersObj = Object.fromEntries(headers.entries())
 
     const { signal, cleanup } = withRequestTimeoutSignal(
       options.signal as AbortSignal | undefined
@@ -247,7 +252,7 @@ export function createApiClientCore(): ApiClientCore {
     try {
       response = await fetch(endpoint, {
         ...options,
-        headers,
+        headers: headersObj,
         credentials: 'include',
         signal,
       })
@@ -287,13 +292,14 @@ export function createApiClientCore(): ApiClientCore {
         signal: controller.signal,
       })
       if (!response.ok) {
-        globalThis.sessionStorage?.removeItem('authenticated')
+        if (response.status === 401 || response.status === 403) {
+          globalThis.sessionStorage?.removeItem('authenticated')
+        }
         return false
       }
       globalThis.sessionStorage?.setItem('authenticated', 'true')
       return true
     } catch {
-      globalThis.sessionStorage?.removeItem('authenticated')
       return false
     } finally {
       clearTimeout(timeoutId)

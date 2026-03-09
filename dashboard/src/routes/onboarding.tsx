@@ -184,7 +184,14 @@ function OnboardingPage() {
     try {
       // Retrieve UTM parameters from localStorage
       const utmParamsStr = localStorage.getItem('utm_params')
-      const utmParams = utmParamsStr ? JSON.parse(utmParamsStr) : {}
+      let utmParams: Record<string, string | undefined> = {}
+      if (utmParamsStr) {
+        try {
+          utmParams = JSON.parse(utmParamsStr) as Record<string, string | undefined>
+        } catch {
+          localStorage.removeItem('utm_params')
+        }
+      }
       
       await api.completeOnboarding({
         organizationName,

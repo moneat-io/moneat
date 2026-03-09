@@ -30,7 +30,7 @@ export function llmMethods(core: ApiClientCore) {
   return {
     getLlmOverview: (projectId: number, range = '24h') =>
       core.request<LlmOverviewResponse>(
-        `${base}/llm/overview?projectId=${projectId}&range=${range}`
+        `${base}/llm/overview?projectId=${projectId}&range=${encodeURIComponent(range)}`
       ),
 
     getLlmGenerations: (
@@ -60,22 +60,22 @@ export function llmMethods(core: ApiClientCore) {
 
     getLlmGenerationDetail: (projectId: number, generationId: string) =>
       core.request<LlmGenerationDetail>(
-        `${base}/llm/generations/${generationId}?projectId=${projectId}`
+        `${base}/llm/generations/${encodeURIComponent(generationId)}?projectId=${projectId}`
       ),
 
     getLlmTrace: (projectId: number, traceId: string) =>
       core.request<LlmTraceResponse>(
-        `${base}/llm/traces/${traceId}?projectId=${projectId}`
+        `${base}/llm/traces/${encodeURIComponent(traceId)}?projectId=${projectId}`
       ),
 
     getLlmModels: (projectId: number, range = '24h') =>
       core.request<LlmModelStats[]>(
-        `${base}/llm/models?projectId=${projectId}&range=${range}`
+        `${base}/llm/models?projectId=${projectId}&range=${encodeURIComponent(range)}`
       ),
 
     getLlmCosts: (projectId: number, range = '24h') =>
       core.request<LlmCostsResponse>(
-        `${base}/llm/costs?projectId=${projectId}&range=${range}`
+        `${base}/llm/costs?projectId=${projectId}&range=${encodeURIComponent(range)}`
       ),
   }
 }

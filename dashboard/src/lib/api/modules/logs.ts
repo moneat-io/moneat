@@ -78,7 +78,7 @@ function buildLogFilterParams(options: {
   const params = new URLSearchParams()
   if (options.query) params.set('q', options.query)
   if (options.levels && options.levels.length > 0) {
-    options.levels.forEach((level) => params.append('level', level))
+    options.levels.forEach((level) => { params.append('level', level) })
   }
   if (options.service) params.set('service', options.service)
   if (options.environment) params.set('environment', options.environment)
@@ -86,7 +86,7 @@ function buildLogFilterParams(options: {
   if (options.to) params.set('to', options.to)
   if (options.tags) {
     Object.entries(options.tags).forEach(([key, value]) => {
-      if (key) params.append('tag', `${key}:${value}`)
+      if (key) { params.append('tag', `${key}:${value}`) }
     })
   }
   if (options.excludeService) params.set('excludeService', options.excludeService)
@@ -94,7 +94,7 @@ function buildLogFilterParams(options: {
   if (options.excludeContainerName) params.set('excludeContainerName', options.excludeContainerName)
   if (options.excludeTags) {
     Object.entries(options.excludeTags).forEach(([key, value]) => {
-      if (key) params.append('excludeTag', `${key}:${value}`)
+      if (key) { params.append('excludeTag', `${key}:${value}`) }
     })
   }
   return params
@@ -150,7 +150,7 @@ export function logsMethods(core: ApiClientCore) {
       params.set('limit', String(options.limit ?? 100))
       if (options.query) params.set('query', options.query)
       if (options.levels && options.levels.length > 0) {
-        options.levels.forEach((level) => params.append('levels', level))
+        options.levels.forEach((level) => { params.append('levels', level) })
       }
       if (options.service) params.set('service', options.service)
       if (options.environment) params.set('environment', options.environment)
@@ -159,7 +159,7 @@ export function logsMethods(core: ApiClientCore) {
       if (options.to) params.set('to', options.to)
       if (options.tags) {
         Object.entries(options.tags).forEach(([key, value]) => {
-          if (key) params.append('tag', `${key}:${value}`)
+          if (key) { params.append('tag', `${key}:${value}`) }
         })
       }
       const response = await core.request<RawLogResponse>(
@@ -236,7 +236,7 @@ export function logsMethods(core: ApiClientCore) {
       const params = new URLSearchParams()
       if (options.query) params.set('q', options.query)
       if (options.levels && options.levels.length > 0) {
-        options.levels.forEach((level) => params.append('level', level))
+        options.levels.forEach((level) => { params.append('level', level) })
       }
       if (options.service) params.set('service', options.service)
       if (options.environment) params.set('environment', options.environment)
