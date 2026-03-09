@@ -27,7 +27,14 @@ import io.ktor.server.auth.principal
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.origin
+import io.ktor.server.request.ApplicationRequest
 import kotlin.time.Duration.Companion.seconds
+
+// Follows the same CF-Connecting-IP → X-Forwarded-For → remoteHost precedence used elsewhere.
+private fun ApplicationRequest.clientIp(): String =
+    headers["CF-Connecting-IP"]?.trim()?.takeIf { it.isNotBlank() }
+        ?: headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+        ?: origin.remoteHost
 
 private const val INGEST_RATE_LIMIT = 100
 private const val INGEST_REFILL_SECONDS = 1
@@ -79,9 +86,9 @@ fun Application.configureRateLimiting() {
                 if (apiKey != null) {
                     DatadogAuthMiddleware.resolveOrgId(apiKey)
                         ?.let { "org:$it" }
-                        ?: call.request.origin.remoteHost
+                        ?: call.request.clientIp()
                 } else {
-                    call.request.origin.remoteHost
+                    call.request.clientIp()
                 }
             }
             rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
@@ -89,20 +96,22 @@ fun Application.configureRateLimiting() {
         register(RateLimitName("log-ingestion")) {
             val logApiKeyService = LogApiKeyService()
             requestKey { call ->
-                val token = call.request.headers[HttpHeaders.Authorization]
-                    ?.removePrefix("Bearer ")?.trim()
+                val parts = call.request.headers[HttpHeaders.Authorization]?.split(Regex("\\s+"), limit = 2)
+                val token = if (parts != null && parts.size == 2 && parts[0].equals("Bearer", ignoreCase = true)) {
+                    parts[1].trim().takeIf { it.isNotBlank() }
+                } else null
                 if (token != null) {
                     logApiKeyService.validateKey(token)
                         ?.let { "org:$it" }
-                        ?: call.request.origin.remoteHost
+                        ?: call.request.clientIp()
                 } else {
-                    call.request.origin.remoteHost
+                    call.request.clientIp()
                 }
             }
             rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
         }
         register(RateLimitName("telemetry")) {
-            requestKey { call -> call.request.origin.remoteHost }
+            requestKey { call -> call.request.clientIp() }
             rateLimiter(limit = TELEMETRY_RATE_LIMIT, refillPeriod = TELEMETRY_REFILL_SECONDS.seconds)
         }
     }
