@@ -674,8 +674,9 @@ class ReplayService(
                     if (!addedIds.add(item.id)) return@forEach
                     items.add(item)
                 }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            if (e is CancellationException) throw e
             logger.error(e) { "Failed to fetch $failureMessage" }
         }
     }

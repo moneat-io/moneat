@@ -122,7 +122,8 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             val newIssues = getNewIssueCountForRelease(projectId, version, retentionDays)
             val resolvedIssues = 0L
             val crashFreeSessionRate = getCrashFreeRateForRelease(projectId, version, retentionDays)
-            val crashFreeUserRate: Double? = null // TODO: implement getCrashFreeUserRateForRelease when user-based query exists
+            // TODO: implement getCrashFreeUserRateForRelease when user-based query exists
+            val crashFreeUserRate: Double? = null
 
             val intervalMinutes = 360
             val eventsTimelineQuery =
