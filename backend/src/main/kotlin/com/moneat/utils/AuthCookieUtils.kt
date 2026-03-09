@@ -44,7 +44,7 @@ object AuthCookieUtils {
                 secure = secure,
                 path = "/",
                 maxAge = AUTH_COOKIE_TTL,
-                extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
+                extensions = mapOf("SameSite" to "Strict")
             )
         )
     }
@@ -62,7 +62,7 @@ object AuthCookieUtils {
                 secure = secure,
                 path = "/",
                 maxAge = DEMO_COOKIE_TTL,
-                extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
+                extensions = mapOf("SameSite" to "Strict")
             )
         )
     }
@@ -80,7 +80,7 @@ object AuthCookieUtils {
                 secure = secure,
                 path = "/auth",
                 maxAge = REFRESH_COOKIE_TTL,
-                extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
+                extensions = mapOf("SameSite" to "Strict")
             )
         )
     }
@@ -95,7 +95,7 @@ object AuthCookieUtils {
                 secure = secure,
                 path = "/auth",
                 maxAge = 0,
-                extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
+                extensions = mapOf("SameSite" to "Strict")
             )
         )
     }
@@ -110,7 +110,7 @@ object AuthCookieUtils {
                 secure = secure,
                 path = "/",
                 maxAge = 0,
-                extensions = mapOf("SameSite" to if (secure) "Strict" else "Lax")
+                extensions = mapOf("SameSite" to "Strict")
             )
         )
     }
