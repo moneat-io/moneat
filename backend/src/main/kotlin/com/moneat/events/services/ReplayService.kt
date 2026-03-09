@@ -341,7 +341,9 @@ class ReplayService(
                                 mapOf(
                                     "type" to JsonPrimitive("mobile_replay_video"),
                                     "segment_id" to JsonPrimitive(mobileSegmentId ?: segmentIdx),
-                                    "mime_type" to JsonPrimitive(if (isLikelyMp4(payload)) "video/mp4" else "application/octet-stream"),
+                                    "mime_type" to JsonPrimitive(
+                                        if (isLikelyMp4(payload)) "video/mp4" else "application/octet-stream"
+                                    ),
                                     "size" to JsonPrimitive(payload.size),
                                     "data" to JsonPrimitive(Base64.getEncoder().encodeToString(payload))
                                 )
@@ -463,7 +465,8 @@ class ReplayService(
                                 null
                             },
                             browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                            browserVersion =
+                            obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0
@@ -671,9 +674,11 @@ class ReplayService(
                         .filter { it.isNotBlank() }
                         .filter { !it.trimStart().startsWith("Code:") }
                         .forEach { line ->
-                            val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
+                            val obj =
+                                runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
                             val tsMs = obj["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
-                            val exceptionType = obj["exception_type"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                            val exceptionType =
+                                obj["exception_type"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
                             val message = obj["message"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
                             val title = exceptionType ?: message ?: "Error"
                             val eventId = obj["event_id"]?.jsonPrimitive?.content ?: return@forEach
@@ -817,7 +822,8 @@ class ReplayService(
                     .filter { !it.trimStart().startsWith("Code:") }
                     .forEach { line ->
                         val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@forEach
-                        val startTsMs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
+                        val startTsMs =
+                            obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
                         val spanId = obj["span_id"]?.jsonPrimitive?.content ?: return@forEach
                         val traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull
                         val spanItemId = "span-$traceId-$spanId"
@@ -836,7 +842,8 @@ class ReplayService(
                                 description = obj["op"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                                 durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull(),
                                 category = obj["op"]?.jsonPrimitive?.contentOrNull,
-                                eventId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                                eventId =
+                                obj["transaction_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                                 issueId = null,
                                 traceId = traceId
                             )
@@ -1064,7 +1071,8 @@ class ReplayService(
             val allEvents = mutableListOf<JsonElement>()
             var isMobileReplay = false
 
-            logger.debug { "Processing replay recording response, body lines: ${body.lines().filter { it.isNotBlank() }.size}" }
+            val bodyLineCount = body.lines().count { it.isNotBlank() }
+            logger.debug { "Processing replay recording response, body lines: $bodyLineCount" }
 
             body
                 .lines()
@@ -1090,7 +1098,9 @@ class ReplayService(
                         JsonObject(
                             mapOf(
                                 "type" to JsonPrimitive("mobile_replay_not_supported"),
-                                "message" to JsonPrimitive("Mobile session replays are not yet supported in the web viewer")
+                                "message" to JsonPrimitive(
+                                    "Mobile session replays are not yet supported in the web viewer"
+                                )
                             )
                         )
                     )
@@ -1202,7 +1212,8 @@ class ReplayService(
                                 null
                             },
                             browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                            browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                            browserVersion =
+                            obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                             activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0

@@ -21,7 +21,6 @@ import com.moneat.events.models.EventResponse
 import com.moneat.events.models.PerformanceStatsResponse
 import com.moneat.events.models.SpanDetailResponse
 import com.moneat.events.models.SpanResponse
-import com.moneat.events.models.TimelinePoint
 import com.moneat.events.models.TraceDetailResponse
 import com.moneat.events.models.TransactionDetailResponse
 import com.moneat.events.models.TransactionSummaryResponse
@@ -34,7 +33,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.double
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
@@ -197,7 +195,9 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 val count = obj["total"]?.jsonPrimitive?.long ?: 0L
                 val avg = obj["avg_duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
                 count to avg
-            } else 0L to 0.0
+            } else {
+                0L to 0.0
+            }
 
             val throughput = queryHelper.executeTimelineQuery(throughputQuery)
             val slowest = queryHelper.executeSlowestTransactionsQuery(slowestQuery)

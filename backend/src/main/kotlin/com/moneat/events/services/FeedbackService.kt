@@ -148,7 +148,8 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                         } else {
                             null
                         },
-                        associatedEventId = obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                        associatedEventId =
+                        obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                         replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
                     )
                 }
@@ -219,7 +220,8 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                 } else {
                     null
                 },
-                associatedEventId = obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                associatedEventId =
+                obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                 tags = tagsMap,
                 sdkName = obj["sdk_name"]?.jsonPrimitive?.content ?: "",
@@ -246,7 +248,8 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             if (update.status !in validStatuses) {
                 throw IllegalArgumentException("Invalid status value")
             }
-            val normalizedFeedbackId = queryHelper.normalizeUuid(feedbackId) ?: throw IllegalArgumentException("Invalid feedback ID")
+            val normalizedFeedbackId =
+                queryHelper.normalizeUuid(feedbackId) ?: throw IllegalArgumentException("Invalid feedback ID")
             val escapedStatus = escapeSql(update.status)
             val query =
                 """

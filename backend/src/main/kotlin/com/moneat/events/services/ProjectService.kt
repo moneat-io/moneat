@@ -25,7 +25,6 @@ import com.moneat.events.models.ProjectKeyResponse
 import com.moneat.events.models.ProjectResponse
 import com.moneat.events.models.UpdateProjectRequest
 import com.moneat.shared.models.Memberships
-import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseQueryUtils

@@ -77,7 +77,8 @@ class DashboardQueryHelper {
 
         val hexRegex = Regex("^[0-9a-f]{32}$")
         if (hexRegex.matches(trimmed)) {
-            return "${trimmed.substring(0, 8)}-${trimmed.substring(8, 12)}-${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
+            return "${trimmed.substring(0, 8)}-${trimmed.substring(8, 12)}-" +
+                "${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
         }
 
         return null

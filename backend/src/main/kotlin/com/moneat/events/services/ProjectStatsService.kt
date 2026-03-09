@@ -229,22 +229,32 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
                 coroutineScope {
                     val totalEventsDeferred = async { queryHelper.executeScalarQuery(totalEventsQuery, parentSpan) }
                     val totalIssuesDeferred = async { queryHelper.executeScalarQuery(totalIssuesQuery, parentSpan) }
-                    val unresolvedIssuesDeferred = async { queryHelper.executeScalarQuery(unresolvedIssuesQuery, parentSpan) }
+                    val unresolvedIssuesDeferred =
+                        async { queryHelper.executeScalarQuery(unresolvedIssuesQuery, parentSpan) }
                     val affectedUsersDeferred = async { queryHelper.executeScalarQuery(affectedUsersQuery, parentSpan) }
-                    val eventsTimelineDeferred = async { queryHelper.executeTimelineQuery(eventsTimelineQuery, parentSpan) }
-                    val eventsByLevelDeferred = async { queryHelper.executeMapQuery(eventsByLevelQuery, "level", parentSpan) }
-                    val eventsByPlatformDeferred = async { queryHelper.executeMapQuery(eventsByPlatformQuery, "platform", parentSpan) }
-                    val eventsByBrowserDeferred = async { queryHelper.executeMapQuery(eventsByBrowserQuery, "browser_name", parentSpan) }
-                    val eventsByEnvironmentDeferred = async { queryHelper.executeMapQuery(eventsByEnvironmentQuery, "environment", parentSpan) }
-                    val issuesByStatusDeferred = async { queryHelper.executeMapQuery(issuesByStatusQuery, "status", parentSpan) }
+                    val eventsTimelineDeferred =
+                        async { queryHelper.executeTimelineQuery(eventsTimelineQuery, parentSpan) }
+                    val eventsByLevelDeferred =
+                        async { queryHelper.executeMapQuery(eventsByLevelQuery, "level", parentSpan) }
+                    val eventsByPlatformDeferred =
+                        async { queryHelper.executeMapQuery(eventsByPlatformQuery, "platform", parentSpan) }
+                    val eventsByBrowserDeferred =
+                        async { queryHelper.executeMapQuery(eventsByBrowserQuery, "browser_name", parentSpan) }
+                    val eventsByEnvironmentDeferred =
+                        async { queryHelper.executeMapQuery(eventsByEnvironmentQuery, "environment", parentSpan) }
+                    val issuesByStatusDeferred =
+                        async { queryHelper.executeMapQuery(issuesByStatusQuery, "status", parentSpan) }
                     val topIssuesDeferred = async { queryHelper.executeTopIssuesQuery(topIssuesQuery, parentSpan) }
-                    val usersTimelineDeferred = async { queryHelper.executeTimelineQuery(usersTimelineQuery, parentSpan) }
-                    val releaseMarkersDeferred = async { executeReleaseMarkersQuery(projectId, hoursBack, retentionDays, parentSpan) }
+                    val usersTimelineDeferred =
+                        async { queryHelper.executeTimelineQuery(usersTimelineQuery, parentSpan) }
+                    val releaseMarkersDeferred =
+                        async { executeReleaseMarkersQuery(projectId, hoursBack, retentionDays, parentSpan) }
 
                     val chUnresolved = unresolvedIssuesDeferred.await()
                     val chIssuesByStatus = issuesByStatusDeferred.await()
                     val pgOverrides = lookupProjectIssueStatuses(projectId)
-                    val filteredOverrides = filterToRetainedIssues(pgOverrides, projectId, retentionDays, demoEpochMs, parentSpan)
+                    val filteredOverrides =
+                        filterToRetainedIssues(pgOverrides, projectId, retentionDays, demoEpochMs, parentSpan)
                     val adjusted = adjustStatsCounts(chUnresolved, chIssuesByStatus, filteredOverrides)
 
                     ProjectStatsResponse(
