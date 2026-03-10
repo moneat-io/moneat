@@ -20,6 +20,7 @@ import com.moneat.config.EnvConfig
 import com.moneat.config.EnvironmentValidator
 import com.moneat.config.configureClickHouse
 import com.moneat.config.configureRedis
+import com.moneat.di.appModules
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.plugins.configureBackgroundJobs
 import com.moneat.plugins.configureDatabases
@@ -31,8 +32,9 @@ import com.moneat.plugins.configureRouting
 import com.moneat.plugins.configureSecurity
 import com.moneat.plugins.configureSerialization
 import io.ktor.server.application.*
-import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.netty.EngineMain
+import org.koin.ktor.plugin.Koin
+import org.koin.logger.slf4jLogger
 
 fun main(args: Array<String>) {
     // Add JVM shutdown hook to log when shutdown is triggered
@@ -71,6 +73,10 @@ fun Application.module() {
     }
 
     try {
+        install(Koin) {
+            slf4jLogger()
+            modules(appModules)
+        }
         configureSecurity()
         configureHTTP()
         configureSerialization()

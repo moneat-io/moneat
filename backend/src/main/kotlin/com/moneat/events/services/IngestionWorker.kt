@@ -46,11 +46,12 @@ private val logger = KotlinLogging.logger {}
 class IngestionWorker(
     private val queueKey: String,
     private val dlqKey: String,
-    private val workerCount: Int
+    private val workerCount: Int,
+    private val eventService: EventService = run {
+        val emailService = EmailService()
+        EventService(NotificationService(emailService), EventRepositoryImpl())
+    },
 ) {
-    private val emailService = EmailService()
-    private val notificationService = NotificationService(emailService)
-    private val eventService = EventService(notificationService, EventRepositoryImpl())
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()

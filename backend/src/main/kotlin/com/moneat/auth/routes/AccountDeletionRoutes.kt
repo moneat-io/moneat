@@ -17,10 +17,6 @@
 package com.moneat.auth.routes
 
 import com.moneat.auth.services.AccountDeletionService
-import com.moneat.billing.repositories.SubscriptionRepositoryImpl
-import com.moneat.billing.services.StripeService
-import com.moneat.notifications.services.EmailService
-import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.utils.ErrorResponse
@@ -39,6 +35,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 
@@ -69,10 +66,7 @@ data class OrgDeletionValidationResponse(val canDelete: Boolean, val error: Stri
 data class CannotDeleteUserResponse(val error: String?, val organizations: List<String>)
 
 fun Route.accountDeletionRoutes() {
-    val deletionService = AccountDeletionService(
-        stripeService = StripeService(SubscriptionRepositoryImpl(), OrganizationRepositoryImpl()),
-        emailService = EmailService(),
-    )
+    val deletionService = GlobalContext.get().get<AccountDeletionService>()
 
     // Get organization details for account deletion confirmation
     get("/organizations/{orgId}") {

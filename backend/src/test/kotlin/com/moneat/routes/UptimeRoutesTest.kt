@@ -57,6 +57,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class UptimeRoutesTest {
     companion object {
@@ -65,6 +68,7 @@ class UptimeRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url = "jdbc:h2:mem:moneat_uptime_routes;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -634,4 +638,9 @@ class UptimeRoutesTest {
                 }
             assertEquals(HttpStatusCode.OK, response.status)
         }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
+    }
 }

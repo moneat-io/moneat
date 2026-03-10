@@ -16,12 +16,10 @@
 
 package com.moneat.uptime.routes
 
-import com.moneat.billing.services.BillingQuotaService
 import com.moneat.shared.models.Memberships
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
 import com.moneat.uptime.models.UpdateUptimeMonitorRequest
-import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
@@ -45,6 +43,7 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.koin.core.context.GlobalContext
 import java.util.*
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
@@ -68,7 +67,7 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
  * Uptime monitoring routes.
  */
 fun Route.uptimeRoutes(
-    uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl()),
+    uptimeService: UptimeService = GlobalContext.get().get(),
 ) {
     route("/v1/uptime") {
         /**

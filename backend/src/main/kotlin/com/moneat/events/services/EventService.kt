@@ -63,7 +63,8 @@ private val logger = KotlinLogging.logger {}
 
 class EventService(
     private val notificationService: NotificationService? = null,
-    private val eventRepository: EventRepository
+    private val eventRepository: EventRepository,
+    private val releaseService: ReleaseService = ReleaseService(),
 ) {
     companion object {
         private const val DEFAULT_PROFILE_MAX_PAYLOAD_BYTES = 10 * 1024 * 1024 // 10 MiB
@@ -71,7 +72,6 @@ class EventService(
 
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracker = UsageTrackingService.instance
-    private val releaseService = ReleaseService()
     private val scope = CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
     private val profileStoragePath: String = EnvConfig.get(
         "PROFILE_STORAGE_PATH",

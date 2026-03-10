@@ -46,13 +46,14 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.ByteArrayOutputStream
+import org.koin.core.context.GlobalContext
 import java.util.zip.GZIPInputStream
 
 private val logger = KotlinLogging.logger {}
 
 fun Route.releaseRoutes() {
-    val releaseService = ReleaseService()
-    val authTokenService = AuthTokenService()
+    val releaseService = GlobalContext.get().get<ReleaseService>()
+    val authTokenService = GlobalContext.get().get<AuthTokenService>()
     val logger = KotlinLogging.logger {}
 
     // Sentry-compatible auth verification endpoint (used by sentry-cli login/info)

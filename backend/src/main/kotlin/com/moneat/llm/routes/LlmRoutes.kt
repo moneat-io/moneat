@@ -31,10 +31,11 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
+import org.koin.core.context.GlobalContext
 
 fun Route.llmRoutes() {
-    val dashboardService = DashboardService.create()
-    val llmService = LlmDashboardService()
+    val dashboardService = GlobalContext.get().get<DashboardService>()
+    val llmService = GlobalContext.get().get<LlmDashboardService>()
 
     authenticate("auth-jwt") {
         rateLimit(RateLimitName("api")) {

@@ -28,10 +28,10 @@ import java.util.*
 
 class ProjectService(
     private val projectRepository: ProjectRepository,
-    private val queryHelper: DashboardQueryHelper
+    private val queryHelper: DashboardQueryHelper,
+    private val pricingTierService: PricingTierService = PricingTierService(),
+    private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
 ) {
-    private val pricingTierService = PricingTierService()
-    private val billingQuotaService = BillingQuotaService()
 
     suspend fun getProjects(
         userId: Int,

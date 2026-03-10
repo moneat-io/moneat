@@ -60,12 +60,13 @@ private enum class PeriodWindow(
     DEFAULT(168, 360, 7 * 24 * 60)
 }
 
-class DashboardQueryHelper {
+class DashboardQueryHelper(
+    val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
+    val pricingTierService: PricingTierService = PricingTierService(),
+) {
     val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     val backendUrl: String get() = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
     val json = Json { ignoreUnknownKeys = true }
-    val retentionPolicyService = RetentionPolicyService()
-    val pricingTierService = PricingTierService()
 
     /**
      * Executes a query that returns a single row with project_id, e.g. for entity lookup.

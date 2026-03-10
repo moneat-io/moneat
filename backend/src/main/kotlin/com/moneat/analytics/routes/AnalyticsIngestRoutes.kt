@@ -16,7 +16,6 @@
 
 package com.moneat.analytics.routes
 
-import com.moneat.config.RedisConfig
 import com.moneat.analytics.models.AnalyticsEventPayload
 import com.moneat.analytics.models.EnrichedAnalyticsEvent
 import com.moneat.analytics.services.AnalyticsIngestionWorker
@@ -24,10 +23,8 @@ import com.moneat.analytics.services.GeoIpService
 import com.moneat.analytics.services.ReferrerParser
 import com.moneat.analytics.services.SessionHashService
 import com.moneat.analytics.services.UserAgentService
-import com.moneat.events.repositories.EventRepositoryImpl
+import com.moneat.config.RedisConfig
 import com.moneat.events.services.EventService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.NotificationService
 import com.moneat.shared.models.ProjectKeys
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -48,6 +45,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.koin.core.context.GlobalContext
 import java.net.URI
 
 private val logger = KotlinLogging.logger {}
@@ -59,9 +57,9 @@ private val json = Json { ignoreUnknownKeys = true }
  * Also serves the tracking script at /js/m.js.
  */
 fun Route.analyticsIngestRoutes(
-    sessionHashService: SessionHashService = SessionHashService(),
-    geoIpService: GeoIpService = GeoIpService(),
-    eventService: EventService = EventService(NotificationService(EmailService()), EventRepositoryImpl()),
+    sessionHashService: SessionHashService = GlobalContext.get().get(),
+    geoIpService: GeoIpService = GlobalContext.get().get(),
+    eventService: EventService = GlobalContext.get().get(),
     enqueueEvent: (String) -> Unit = { message ->
         RedisConfig.sync().lpush(AnalyticsIngestionWorker.QUEUE_KEY, message)
     },

@@ -17,6 +17,7 @@ flyway = "12.1.0"
 h2 = "2.4.240"
 mockk = "1.14.9"
 shedlock = "7.6.0"
+koin = "4.0.4"
 
 [libraries]
 # Ktor Server
@@ -130,6 +131,11 @@ google-cloud-bigquery = { module = "com.google.cloud:google-cloud-bigquery", ver
 
 # Detekt
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
+
+# Koin - dependency injection
+koin-ktor = { module = "io.insert-koin:koin-ktor", version.ref = "koin" }
+koin-logger-slf4j = { module = "io.insert-koin:koin-logger-slf4j", version.ref = "koin" }
+koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

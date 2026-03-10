@@ -70,6 +70,8 @@ class AuthService(
     private val userRepository: UserRepository,
     private val membershipRepository: MembershipRepository,
     private val organizationRepository: OrganizationRepository,
+    private val emailService: EmailService = EmailService(),
+    private val refreshTokenService: RefreshTokenService = RefreshTokenService(),
 ) {
     companion object {
         private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
@@ -82,9 +84,7 @@ class AuthService(
     private val jwtAudience = config.property("jwt.audience").getString()
     private val legalTermsVersion = config.property("legal.termsVersion").getString()
     private val legalPrivacyVersion = config.property("legal.privacyVersion").getString()
-    private val emailService = EmailService()
     private val secureRandom = SecureRandom()
-    private val refreshTokenService = RefreshTokenService()
 
     fun signup(
         request: SignupRequest,

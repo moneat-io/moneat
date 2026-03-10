@@ -29,6 +29,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import mu.KotlinLogging
+import org.koin.core.context.GlobalContext
 import java.time.LocalDate
 
 private val logger = KotlinLogging.logger {}
@@ -38,8 +39,8 @@ private val logger = KotlinLogging.logger {}
  * All endpoints are under /v1/analytics/{projectId}/...
  */
 fun Route.analyticsRoutes(
-    analyticsService: AnalyticsService = AnalyticsService(),
-    dashboardService: DashboardService = DashboardService.create(),
+    analyticsService: AnalyticsService = GlobalContext.get().get(),
+    dashboardService: DashboardService = GlobalContext.get().get(),
 ) {
     route("/v1/analytics/{projectId}") {
         authenticate("auth-jwt") {

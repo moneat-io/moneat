@@ -47,6 +47,9 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class MonitorRoutesTest {
     companion object {
@@ -55,6 +58,7 @@ class MonitorRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url =
@@ -354,4 +358,9 @@ class MonitorRoutesTest {
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
+    }
 }

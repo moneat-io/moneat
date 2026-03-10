@@ -244,7 +244,9 @@ data class DeleteUsersResponse(
     val errors: List<String> = emptyList()
 )
 
-class AdminService {
+class AdminService(
+    private val pricingTierService: PricingTierService = PricingTierService(),
+) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val usageTracker = UsageTrackingService.instance
 
@@ -260,7 +262,6 @@ class AdminService {
         }
     }
 
-    private val pricingTierService = PricingTierService()
     private val json = Json { ignoreUnknownKeys = true }
 
     private val usableStorageBytes = 35L * 1024 * 1024 * 1024 // 35GB from MONETIZATION.md

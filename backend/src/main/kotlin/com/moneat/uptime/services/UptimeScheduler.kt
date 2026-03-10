@@ -44,13 +44,11 @@ private val logger = KotlinLogging.logger {}
  */
 class UptimeScheduler(
     private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl()),
-    private val checkExecutor: UptimeCheckExecutor = UptimeCheckExecutor()
+    private val checkExecutor: UptimeCheckExecutor = UptimeCheckExecutor(),
+    private val slackService: SlackService = SlackService(),
+    private val discordService: DiscordService = DiscordService(),
+    private val incidentService: IncidentService = IncidentService(),
 ) {
-
-    private val slackService = SlackService()
-    private val discordService = DiscordService()
-    private val incidentService =
-        IncidentService()
     private var schedulerJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val runningChecks = Collections.synchronizedSet(mutableSetOf<UUID>())

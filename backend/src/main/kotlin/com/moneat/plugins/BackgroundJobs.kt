@@ -16,7 +16,6 @@
 
 package com.moneat.plugins
 
-import com.moneat.auth.services.AuthTokenService
 import com.moneat.auth.services.RefreshTokenCleanupService
 import com.moneat.billing.services.BillingBackgroundService
 import com.moneat.config.ClickHouseClient
@@ -27,11 +26,6 @@ import com.moneat.events.services.IngestionWorker
 import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.logs.services.LogIngestionWorker
 import com.moneat.monitor.services.MonitorAlertService
-import com.moneat.notifications.services.EmailService
-import com.moneat.org.repositories.OrgInvitationRepositoryImpl
-import com.moneat.org.repositories.OrgMembershipRepositoryImpl
-import com.moneat.org.services.OrgInvitationService
-import com.moneat.org.services.OrgMembershipService
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionBackgroundService
@@ -45,6 +39,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import mu.KotlinLogging
+import org.koin.core.context.GlobalContext
 import kotlin.time.Duration.Companion.hours
 
 private val logger = KotlinLogging.logger {}
@@ -64,22 +59,14 @@ fun Application.configureBackgroundJobs() {
     val database = attributes[ExposedDatabaseKey]
     TaskLock.initialize(ExposedLockProvider(database))
 
-    val monitorAlertService = MonitorAlertService()
-    val dashboardAlertService = DashboardAlertService()
-    val billingBackgroundService = BillingBackgroundService()
-    val retentionBackgroundService = RetentionBackgroundService()
-    val refreshTokenCleanupService = RefreshTokenCleanupService()
-    val artifactOrgMembershipRepo = OrgMembershipRepositoryImpl()
-    val artifactOrgMembershipService = OrgMembershipService(artifactOrgMembershipRepo)
-    val artifactCleanupService = ArtifactCleanupService(
-        authTokenService = AuthTokenService(),
-        orgInvitationService = OrgInvitationService(
-            artifactOrgMembershipService,
-            EmailService(),
-            OrgInvitationRepositoryImpl(),
-        ),
-    )
-    val uptimeScheduler = UptimeScheduler()
+    val koin = GlobalContext.get()
+    val monitorAlertService = koin.get<MonitorAlertService>()
+    val dashboardAlertService = koin.get<DashboardAlertService>()
+    val billingBackgroundService = koin.get<BillingBackgroundService>()
+    val retentionBackgroundService = koin.get<RetentionBackgroundService>()
+    val refreshTokenCleanupService = koin.get<RefreshTokenCleanupService>()
+    val artifactCleanupService = koin.get<ArtifactCleanupService>()
+    val uptimeScheduler = koin.get<UptimeScheduler>()
     val queueKey = environment.config.property("ingest.queueKey").getString()
     val dlqKey = environment.config.property("ingest.dlqKey").getString()
     val workerCount =
@@ -87,7 +74,7 @@ fun Application.configureBackgroundJobs() {
             .property("ingest.workerCount")
             .getString()
             .toInt()
-    val ingestionWorker = IngestionWorker(queueKey, dlqKey, workerCount)
+    val ingestionWorker = IngestionWorker(queueKey, dlqKey, workerCount, eventService = koin.get())
     val logQueueKey = environment.config.propertyOrNull("logs.queueKey")?.getString() ?: "moneat:logs:queue"
     val logDlqKey = environment.config.propertyOrNull("logs.dlqKey")?.getString() ?: "moneat:logs:dlq"
     val logWorkerCount =
@@ -95,7 +82,13 @@ fun Application.configureBackgroundJobs() {
             .propertyOrNull("logs.workerCount")
             ?.getString()
             ?.toIntOrNull() ?: 2
-    val logIngestionWorker = LogIngestionWorker(logQueueKey, logDlqKey, logWorkerCount)
+    val logIngestionWorker = LogIngestionWorker(
+        logQueueKey,
+        logDlqKey,
+        logWorkerCount,
+        logService = koin.get(),
+        logIndexService = koin.get(),
+    )
     val llmQueueKey = environment.config.propertyOrNull("llm.queueKey")?.getString() ?: "moneat:llm:queue"
     val llmDlqKey = environment.config.propertyOrNull("llm.dlqKey")?.getString() ?: "moneat:llm:dlq"
     val llmWorkerCount =

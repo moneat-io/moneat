@@ -21,14 +21,10 @@ import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.events.models.SentryEnvelope
-import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.logs.models.LogIngestEntry
-import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.NotificationService
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpHeaders
@@ -43,14 +39,15 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
 fun Route.ingestRoutes(
-    eventService: EventService = EventService(NotificationService(EmailService()), EventRepositoryImpl()),
-    quotaService: BillingQuotaService = BillingQuotaService(),
-    logService: LogService = LogService(LogRepositoryImpl()),
+    eventService: EventService = GlobalContext.get().get(),
+    quotaService: BillingQuotaService = GlobalContext.get().get(),
+    logService: LogService = GlobalContext.get().get(),
     enqueueEnvelope: (queueKey: String, message: String) -> Unit = { queueKey, message ->
         RedisConfig.sync().lpush(queueKey, message)
     },

@@ -37,10 +37,10 @@ private const val FULL_SAMPLING_RATE = 1.0f
 class LogIngestionWorker(
     private val queueKey: String,
     private val dlqKey: String,
-    private val workerCount: Int
+    private val workerCount: Int,
+    private val logService: LogService = LogService(LogRepositoryImpl()),
+    private val logIndexService: LogIndexService = LogIndexService(),
 ) {
-    private val logService = LogService(LogRepositoryImpl())
-    private val logIndexService = LogIndexService()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
 

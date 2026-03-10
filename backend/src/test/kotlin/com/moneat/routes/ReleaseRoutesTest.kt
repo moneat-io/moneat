@@ -48,6 +48,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class ReleaseRoutesTest {
     private val testBearerToken = "test-bearer-token-releases"
@@ -60,6 +63,7 @@ class ReleaseRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url =
@@ -184,4 +188,9 @@ class ReleaseRoutesTest {
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
+    }
 }

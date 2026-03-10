@@ -44,6 +44,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class AdminRoutesTest {
     private val jwtSecret = "test-secret-for-admin-routes"
@@ -54,6 +57,7 @@ class AdminRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url =
@@ -171,4 +175,9 @@ class AdminRoutesTest {
 
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
+    }
 }

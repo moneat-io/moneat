@@ -16,9 +16,7 @@
 
 package com.moneat.billing.routes
 
-import com.moneat.billing.repositories.SubscriptionRepositoryImpl
 import com.moneat.billing.services.StripeService
-import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receiveText
@@ -29,11 +27,12 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 
 fun Route.stripeWebhookRoutes() {
-    val stripeService = StripeService(SubscriptionRepositoryImpl(), OrganizationRepositoryImpl())
+    val stripeService = GlobalContext.get().get<StripeService>()
 
     post("/api/webhooks/stripe") {
         logger.info { "Received webhook request at /api/webhooks/stripe" }

@@ -52,7 +52,9 @@ private val logger = KotlinLogging.logger {}
 
 class MonitorService(
     private val hostRepository: HostRepository,
-    private val hostAlertRepository: HostAlertRepository
+    private val hostAlertRepository: HostAlertRepository,
+    private val pricingTierService: PricingTierService = PricingTierService(),
+    private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
 ) {
     private data class DefaultAlertTemplate(
         val metric: String,
@@ -71,8 +73,6 @@ class MonitorService(
     }
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
-    private val pricingTierService = PricingTierService()
-    private val retentionPolicyService = RetentionPolicyService()
     private val defaultAlertTemplates =
         listOf(
             DefaultAlertTemplate(metric = "cpu_percent", condition = ">", threshold = 80.0),

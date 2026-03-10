@@ -17,7 +17,6 @@
 package com.moneat.monitor.routes
 
 import com.moneat.logs.models.LogQueryRequest
-import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.models.AllContainersResponse
 import com.moneat.monitor.models.ContainerStatsResponse
@@ -27,8 +26,6 @@ import com.moneat.monitor.models.HostResponse
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
-import com.moneat.monitor.repositories.HostAlertRepositoryImpl
-import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.models.HostData
@@ -50,6 +47,7 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.koin.core.context.GlobalContext
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -110,8 +108,8 @@ private suspend fun ensureHostAccessible(
 }
 
 fun Route.monitorRoutes(
-    monitorService: MonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl()),
-    logService: LogService = LogService(LogRepositoryImpl()),
+    monitorService: MonitorService = GlobalContext.get().get(),
+    logService: LogService = GlobalContext.get().get(),
 ) {
     route("/v1/monitor") {
         /**
@@ -641,7 +639,7 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val alertService = MonitorAlertService()
+                val alertService = GlobalContext.get().get<MonitorAlertService>()
                 val periods = alertService.listSilencePeriods(organizationIds.first())
                 call.respond(HttpStatusCode.OK, periods)
             }
@@ -662,7 +660,7 @@ fun Route.monitorRoutes(
                     return@post
                 }
 
-                val alertService = MonitorAlertService()
+                val alertService = GlobalContext.get().get<MonitorAlertService>()
                 val period = alertService.createSilencePeriod(organizationIds.first(), userId, request)
                 call.respond(HttpStatusCode.Created, period)
             }
@@ -683,7 +681,7 @@ fun Route.monitorRoutes(
                     return@delete
                 }
 
-                val alertService = MonitorAlertService()
+                val alertService = GlobalContext.get().get<MonitorAlertService>()
                 val deleted = alertService.deleteSilencePeriod(periodId, organizationIds.first())
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Silence period not found"))

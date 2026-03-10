@@ -18,17 +18,12 @@ package com.moneat.plugins
 
 import com.moneat.ai.aiChatRoutes
 import com.moneat.auth.routes.authRoutes
-import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
-import com.moneat.dashboards.repositories.DashboardRepositoryImpl
-import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
-import com.moneat.dashboards.routes.customDashboardRoutes
-import com.moneat.dashboards.services.CustomDashboardService
-import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.auth.routes.authTokenRoutes
 import com.moneat.billing.routes.stripeWebhookRoutes
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
+import com.moneat.dashboards.routes.customDashboardRoutes
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
@@ -43,11 +38,6 @@ import com.moneat.monitor.routes.infraRoutes
 import com.moneat.monitor.routes.monitorRoutes
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
-import com.moneat.notifications.services.EmailService
-import com.moneat.org.repositories.OrgInvitationRepositoryImpl
-import com.moneat.org.repositories.OrgMembershipRepositoryImpl
-import com.moneat.org.services.OrgInvitationService
-import com.moneat.org.services.OrgMembershipService
 import com.moneat.statuspage.routes.statusPageRoutes
 import com.moneat.summary.routes.summaryRoutes
 import com.moneat.uptime.routes.uptimeRoutes
@@ -233,16 +223,7 @@ fun Application.configureRouting() {
         incidentProviderRoutes()
 
         // Organization team management endpoints
-        val orgMembershipRepo = OrgMembershipRepositoryImpl()
-        val orgMembershipService = OrgMembershipService(orgMembershipRepo)
-        orgManagementRoutes(
-            membershipService = orgMembershipService,
-            invitationService = OrgInvitationService(
-                orgMembershipService,
-                EmailService(),
-                OrgInvitationRepositoryImpl(),
-            ),
-        )
+        orgManagementRoutes()
 
         routingLogger.info { "Registering enterprise routes..." }
         // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader
@@ -253,14 +234,7 @@ fun Application.configureRouting() {
         aiChatRoutes()
 
         // Custom dashboard builder endpoints
-        customDashboardRoutes(
-            dashboardService = CustomDashboardService(
-                DashboardFolderRepositoryImpl(),
-                DashboardRepositoryImpl(),
-                DashboardWidgetRepositoryImpl(),
-                ProjectRepositoryImpl { col, _, _ -> col },
-            ),
-        )
+        customDashboardRoutes()
 
         routingLogger.info { "All routes registered successfully" }
     }

@@ -60,6 +60,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class StatusPageRoutesTest {
     companion object {
@@ -69,6 +72,7 @@ class StatusPageRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url = "jdbc:h2:mem:moneat_status_pages;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -767,4 +771,9 @@ class StatusPageRoutesTest {
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
+    }
 }

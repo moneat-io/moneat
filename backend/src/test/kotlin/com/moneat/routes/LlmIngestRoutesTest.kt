@@ -25,8 +25,17 @@ import io.ktor.server.testing.testApplication
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 
 class LlmIngestRoutesTest {
+    @BeforeTest
+    fun setupKoin() {
+        startTestKoin()
+    }
+
     @Test
     fun `llm ingest returns bad request for invalid project id`() =
         testApplication {
@@ -52,4 +61,9 @@ class LlmIngestRoutesTest {
             assertEquals(HttpStatusCode.Unauthorized, response.status)
             assertTrue(response.bodyAsText().contains("Missing or invalid authentication"))
         }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
+    }
 }

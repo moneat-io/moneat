@@ -68,6 +68,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -108,14 +109,14 @@ private fun getDashboardScope(dashboardId: Long, orgId: Long): DashboardScope? {
 }
 
 fun Route.customDashboardRoutes(
-    dashboardService: CustomDashboardService,
-    queryEngine: DashboardQueryEngine = DashboardQueryEngine(),
-    retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
+    dashboardService: CustomDashboardService = GlobalContext.get().get(),
+    queryEngine: DashboardQueryEngine = GlobalContext.get().get(),
+    retentionPolicyService: RetentionPolicyService = GlobalContext.get().get(),
     dataDogTranslator: DataDogTranslator = DataDogTranslator(),
     grafanaTranslator: GrafanaTranslator = GrafanaTranslator(),
-    dataSourceService: CustomDataSourceService = CustomDataSourceService(),
-    dataSourceExecutor: CustomDataSourceExecutor = CustomDataSourceExecutor(),
-    dashboardAlertService: DashboardAlertService = DashboardAlertService()
+    dataSourceService: CustomDataSourceService = GlobalContext.get().get(),
+    dataSourceExecutor: CustomDataSourceExecutor = GlobalContext.get().get(),
+    dashboardAlertService: DashboardAlertService = GlobalContext.get().get(),
 ) {
     // Resolve __prometheus marker to the org's first Prometheus custom datasource
     fun resolvePrometheusDataSource(dsl: QueryDsl, orgId: Long): QueryDsl {

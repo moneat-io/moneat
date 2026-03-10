@@ -23,9 +23,7 @@ import com.moneat.billing.models.UpdatePaygBudgetRequest
 import com.moneat.billing.models.UpdatePaygBudgetResponse
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.PricingTierService
-import com.moneat.billing.repositories.SubscriptionRepositoryImpl
 import com.moneat.billing.services.StripeService
-import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.BooleanResponse
@@ -43,6 +41,7 @@ import io.ktor.server.routing.route
 import kotlinx.datetime.LocalDate
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.koin.core.context.GlobalContext
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -54,12 +53,8 @@ private val logger = KotlinLogging.logger {}
 
 // Public billing endpoints (no auth required)
 fun Route.publicBillingRoutes(
-    pricingTierService: PricingTierService = PricingTierService(),
-    stripeService: StripeService = StripeService(
-        SubscriptionRepositoryImpl(),
-        OrganizationRepositoryImpl(),
-        pricingTierService
-    ),
+    pricingTierService: PricingTierService = GlobalContext.get().get(),
+    stripeService: StripeService = GlobalContext.get().get(),
 ) {
     route("/billing") {
         get("/plans") {
@@ -77,13 +72,9 @@ fun Route.publicBillingRoutes(
 
 // Protected billing endpoints (require auth)
 fun Route.billingRoutes(
-    pricingTierService: PricingTierService = PricingTierService(),
-    quotaService: BillingQuotaService = BillingQuotaService(pricingTierService),
-    stripeService: StripeService = StripeService(
-        SubscriptionRepositoryImpl(),
-        OrganizationRepositoryImpl(),
-        pricingTierService
-    ),
+    pricingTierService: PricingTierService = GlobalContext.get().get(),
+    quotaService: BillingQuotaService = GlobalContext.get().get(),
+    stripeService: StripeService = GlobalContext.get().get(),
 ) {
     val usageTrackingService = UsageTrackingService.instance
 

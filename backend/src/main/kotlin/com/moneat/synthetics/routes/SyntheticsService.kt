@@ -48,7 +48,12 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class SyntheticsService {
+class SyntheticsService(
+    private val emailService: EmailService = EmailService(),
+    private val slackService: SlackService = SlackService(),
+    private val discordService: DiscordService = DiscordService(),
+    private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
+) {
     companion object {
         private val logger = KotlinLogging.logger {}
         private val runScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -348,9 +353,6 @@ class SyntheticsService {
         test: SyntheticTestData,
         result: SyntheticCheckResult
     ) {
-        val prefsService = AlertNotificationPreferencesService()
-        val emailService = EmailService()
-
         val subject = "Synthetic test failed: ${test.name}"
         val message = buildString {
             append("Test '${test.name}' (${test.testType}) failed.")
@@ -385,7 +387,7 @@ class SyntheticsService {
         ).isNotEmpty()
         if (slackEnabled) {
             runScope.launch {
-                SlackService().sendUptimeAlert(
+                slackService.sendUptimeAlert(
                     organizationId = test.organizationId,
                     monitorName = test.name,
                     oldStatus = "passing",
@@ -404,7 +406,7 @@ class SyntheticsService {
         ).isNotEmpty()
         if (discordEnabled) {
             runScope.launch {
-                DiscordService().sendUptimeAlert(
+                discordService.sendUptimeAlert(
                     organizationId = test.organizationId,
                     monitorUrl = test.url ?: test.name,
                     isDown = true,

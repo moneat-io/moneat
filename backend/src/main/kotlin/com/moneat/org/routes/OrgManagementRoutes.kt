@@ -38,10 +38,11 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
+import org.koin.core.context.GlobalContext
 
 fun Route.orgManagementRoutes(
-    membershipService: OrgMembershipService,
-    invitationService: OrgInvitationService,
+    membershipService: OrgMembershipService = GlobalContext.get().get(),
+    invitationService: OrgInvitationService = GlobalContext.get().get(),
 ) {
     route("/v1/org") {
         authenticate("auth-jwt") {
