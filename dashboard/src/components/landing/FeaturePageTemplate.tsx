@@ -18,8 +18,8 @@ import {useEffect} from 'react'
 import {Link} from '@tanstack/react-router'
 import {ArrowRight, type LucideIcon} from 'lucide-react'
 import {Button} from '@/components/ui/button'
-import {ScreenshotFrame} from './variant-a'
-import {LandingNavbar, LandingFooter} from './landing-navbar'
+import {ScreenshotFrame} from './VariantA'
+import {LandingNavbar, LandingFooter} from './LandingNavbar'
 import {Helmet} from 'react-helmet-async'
 
 interface SubFeature {

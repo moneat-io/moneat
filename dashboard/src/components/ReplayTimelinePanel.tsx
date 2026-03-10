@@ -23,7 +23,7 @@ import type {ReplayTimelineItem as BaseTimelineItem} from '@/lib/api'
 import {api} from '@/lib/api'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Badge} from '@/components/ui/badge'
-import {SpanWaterfall} from '@/components/span-waterfall'
+import {SpanWaterfall} from '@/components/SpanWaterfall'
 import {cn} from '@/lib/utils'
 import {
     Activity,

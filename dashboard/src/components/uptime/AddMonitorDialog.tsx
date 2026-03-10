@@ -41,7 +41,7 @@ import {
   Zap,
 } from 'lucide-react'
 import {useState} from 'react'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 
 interface AddMonitorDialogProps {
   open: boolean

@@ -16,7 +16,7 @@
 
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo } from 'react'
-import { Logo } from '@/components/logo'
+import { Logo } from '@/components/Logo'
 
 export const Route = createFileRoute('/auth/sso/callback')({
   component: SsoCallbackPage,

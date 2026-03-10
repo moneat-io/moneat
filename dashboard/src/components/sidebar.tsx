@@ -19,12 +19,12 @@ import {Link, useNavigate, useRouterState} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
-import {useProject} from '@/contexts/project-context'
-import {ThemeSwitcher} from '@/components/theme-switcher'
+import {useProject} from '@/contexts/ProjectContext'
+import {ThemeSwitcher} from '@/components/ThemeSwitcher'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Badge} from '@/components/ui/badge'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {
     Activity,
     AlertCircle,

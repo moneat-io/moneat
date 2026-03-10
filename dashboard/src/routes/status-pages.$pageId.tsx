@@ -70,8 +70,8 @@ import {
     Zap,
 } from 'lucide-react'
 import {useState} from 'react'
-import {useToast} from '@/hooks/use-toast'
-import {StatusPagePreview} from '@/components/status-page-preview'
+import {useToast} from '@/hooks/useToast'
+import {StatusPagePreview} from '@/components/StatusPagePreview'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime} from '@/lib/date-format'
 

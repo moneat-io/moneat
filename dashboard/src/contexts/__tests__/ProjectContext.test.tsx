@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { ProjectProvider, useProject } from '../project-context'
+import { ProjectProvider, useProject } from '../ProjectContext'
 
 describe('ProjectProvider', () => {
   beforeEach(() => {

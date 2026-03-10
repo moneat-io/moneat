@@ -27,7 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {ListChecks, Plus, Trash2, Pencil, Clock, User, Users, ArrowDown, Repeat, Zap} from 'lucide-react'
 import {useState} from 'react'
 import {EscalationPolicyEditor, type EscalationPolicyData} from '@/components/on-call/EscalationPolicyEditor'

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {Logo} from '@/components/logo'
+import {Logo} from '@/components/Logo'
 import {cn} from '@/lib/utils'
 
 interface LoginLogoProps {

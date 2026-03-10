@@ -16,7 +16,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {ShieldCheck, Package, AlertTriangle, Search, FileText, Shield} from 'lucide-react'
-import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/feature-page-template'
+import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
 
 const config: FeaturePageConfig = {
   slug: 'security-sbom',

@@ -23,8 +23,8 @@ import {Button} from '@/components/ui/button'
 import {Card, CardContent} from '@/components/ui/card'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {CheckCircle2, Pause, Play, Trash2, XCircle, Clock, ArrowUpRight, Activity} from 'lucide-react'
-import {useToast} from '@/hooks/use-toast'
-import HeartbeatBar from './heartbeat-bar'
+import {useToast} from '@/hooks/useToast'
+import HeartbeatBar from './HeartbeatBar'
 
 interface MonitorCompactTableProps {
   monitors: UptimeMonitor[]

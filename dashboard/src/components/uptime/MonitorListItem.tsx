@@ -24,8 +24,8 @@ import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent} from '@/components/ui/card'
 import {CheckCircle2, Clock, Pause, Play, Trash2, XCircle} from 'lucide-react'
-import {useToast} from '@/hooks/use-toast'
-import HeartbeatBar from './heartbeat-bar'
+import {useToast} from '@/hooks/useToast'
+import HeartbeatBar from './HeartbeatBar'
 
 interface MonitorListItemProps {
   monitor: UptimeMonitor

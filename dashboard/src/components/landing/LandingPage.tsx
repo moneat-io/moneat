@@ -15,8 +15,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useEffect} from 'react'
-import {VariantA} from './variant-a'
-import {LandingNavbar, LandingFooter} from './landing-navbar'
+import {VariantA} from './VariantA'
+import {LandingNavbar, LandingFooter} from './LandingNavbar'
 import {Helmet} from 'react-helmet-async'
 
 export function LandingPage() {

@@ -21,9 +21,9 @@ import {Button} from '@/components/ui/button'
 import {Card, CardContent} from '@/components/ui/card'
 import {Activity, CheckCircle2, Globe, LayoutGrid, Pause, Plus, Rows3, XCircle} from 'lucide-react'
 import {useEffect, useState} from 'react'
-import AddMonitorDialog from '@/components/uptime/add-monitor-dialog'
-import MonitorListItem from '@/components/uptime/monitor-list-item'
-import MonitorCompactTable from '@/components/uptime/monitor-compact-table'
+import AddMonitorDialog from '@/components/uptime/AddMonitorDialog'
+import MonitorListItem from '@/components/uptime/MonitorListItem'
+import MonitorCompactTable from '@/components/uptime/MonitorCompactTable'
 
 export const Route = createFileRoute('/uptime/')({
   beforeLoad: () => {

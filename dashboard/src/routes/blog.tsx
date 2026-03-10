@@ -1,6 +1,6 @@
 import {createFileRoute, Outlet} from '@tanstack/react-router'
 import {useEffect} from 'react'
-import {LandingNavbar, LandingFooter} from '@/components/landing/landing-navbar'
+import {LandingNavbar, LandingFooter} from '@/components/landing/LandingNavbar'
 import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/blog')({

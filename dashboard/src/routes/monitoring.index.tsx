@@ -63,7 +63,7 @@ import {
 } from 'lucide-react'
 import {useEffect, useMemo, useState} from 'react'
 import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
 

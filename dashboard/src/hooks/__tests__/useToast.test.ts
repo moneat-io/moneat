@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reducer } from '../use-toast'
+import { reducer } from '../useToast'
 
 type ToastItem = Parameters<typeof reducer>[0]['toasts'][number]
 

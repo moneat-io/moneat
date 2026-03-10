@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { LoginLogo } from '@/components/login-logo'
+import { LoginLogo } from '@/components/LoginLogo'
 
 describe('LoginLogo', () => {
   it('renders without crashing', () => {

@@ -1,6 +1,6 @@
 import {createFileRoute, Outlet} from '@tanstack/react-router'
 import {BarChart3} from 'lucide-react'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {AnalyticsRealtimeBadge} from '@/components/analytics/AnalyticsRealtimeBadge'

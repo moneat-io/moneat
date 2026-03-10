@@ -20,7 +20,7 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import type {ApmErrorGroup} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {formatRelativeTime, cn} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -45,7 +45,7 @@ import {
   Timer,
 } from 'lucide-react'
 import {useEffect, useMemo, useState} from 'react'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {getNow} from '@/lib/demo'
 // Helper function to get level color for badges
 function getLevelColor(level: string): string {

@@ -17,7 +17,7 @@
 import {useQuery} from '@tanstack/react-query'
 import {ChevronDown, Search, Plus, Settings, LogOut, Sparkles} from 'lucide-react'
 import {api} from '@/lib/api'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
 import {cn} from '@/lib/utils'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
@@ -32,7 +32,7 @@ import {Button} from '@/components/ui/button'
 import {getPlatformInfo} from '@/routes/projects'
 import {Package} from 'lucide-react'
 import {useNavigate} from '@tanstack/react-router'
-import {Logo} from '@/components/logo'
+import {Logo} from '@/components/Logo'
 
 export const TOPBAR_HEIGHT = 49
 

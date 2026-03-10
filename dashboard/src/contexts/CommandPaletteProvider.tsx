@@ -32,7 +32,7 @@ import {
   type ChatSnapshot,
 } from '@/lib/ai-chat-history'
 import {confirmAiAction, streamAiAssistant, type AssistantStreamEvent} from '@/lib/mcp-chat'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 
 const EXPIRY_MS = 60 * 60 * 1000 // 1 hour
 

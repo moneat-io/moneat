@@ -16,7 +16,7 @@
 
 import {cn} from '@/lib/utils'
 import {Signal, Wifi} from 'lucide-react'
-import type {ReplayOrientation} from '@/components/mobile-replay-viewer'
+import type {ReplayOrientation} from '@/components/MobileReplayViewer'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatTimeHM12} from '@/lib/date-format'
 
