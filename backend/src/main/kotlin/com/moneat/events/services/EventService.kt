@@ -26,11 +26,18 @@ import com.moneat.events.models.SentryReplayEvent
 import com.moneat.events.models.SentrySpan
 import com.moneat.events.models.SentryTransaction
 import com.moneat.events.repositories.EventRepository
+import com.moneat.events.repositories.models.ErrorEventInsertData
+import com.moneat.events.repositories.models.FeedbackInsertData
+import com.moneat.events.repositories.models.LlmGenerationInsertData
+import com.moneat.events.repositories.models.ProfileInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
+import com.moneat.events.repositories.models.ReplayEventInsertData
+import com.moneat.events.repositories.models.ReplayRecordingInsertData
+import com.moneat.events.repositories.models.SpanInsertData
+import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.notifications.services.NotificationService
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.UsageTrackingService
-import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
@@ -62,7 +69,6 @@ class EventService(
         private const val DEFAULT_PROFILE_MAX_PAYLOAD_BYTES = 10 * 1024 * 1024 // 10 MiB
     }
 
-    private val clickhouseDb: String get() = com.moneat.config.ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracker = UsageTrackingService.instance
     private val releaseService = ReleaseService()
@@ -255,112 +261,68 @@ class EventService(
         val request = transaction.request?.toString() ?: "{}"
         val message = transaction.transaction ?: transactionOp.ifBlank { "transaction" }
 
-        val transactionInsert =
-            """
-            INSERT INTO `$clickhouseDb`.events (
-                event_id, project_id, timestamp, event_type, level,
-                message, platform, environment, release, dist, server_name,
-                user_id, user_email, user_username, user_ip_address,
-                exception_type, exception_value, stack_trace,
-                transaction_name, transaction_op, duration_ms,
-                fingerprint, issue_id, tags, contexts, breadcrumbs, request,
-                sdk_name, sdk_version
-            ) VALUES (
-                toUUID('$eventId'),
-                $projectId,
-                fromUnixTimestamp64Milli($endTimestampMs),
-                'transaction',
-                '$transactionLevel',
-                '${escapeSql(message)}',
-                '${escapeSql(transaction.platform ?: "unknown")}',
-                '${escapeSql(transaction.environment ?: "production")}',
-                '${escapeSql(transaction.release ?: "")}',
-                '${escapeSql(transaction.dist ?: "")}',
-                '${escapeSql(transaction.server_name ?: "")}',
-                '${escapeSql(transaction.user?.id ?: "")}',
-                '${escapeSql(transaction.user?.email ?: "")}',
-                '${escapeSql(transaction.user?.username ?: "")}',
-                '${escapeSql(transaction.user?.ip_address ?: "")}',
-                '',
-                '',
-                '',
-                '${escapeSql(transaction.transaction ?: "")}',
-                '${escapeSql(transactionOp)}',
-                $durationMs,
-                [],
-                '',
-                ${tagsToMap(transaction.tags)},
-                '${escapeSql(contexts)}',
-                '${escapeSql(breadcrumbs)}',
-                '${escapeSql(request)}',
-                '${escapeSql(transaction.sdk?.name ?: "")}',
-                '${escapeSql(transaction.sdk?.version ?: "")}'
-            )
-            """.trimIndent()
+        val transactionData = TransactionEventInsertData(
+            eventId = eventId,
+            projectId = projectId,
+            timestampMs = endTimestampMs,
+            level = transactionLevel,
+            message = message,
+            platform = transaction.platform ?: "unknown",
+            environment = transaction.environment ?: "production",
+            release = transaction.release ?: "",
+            dist = transaction.dist ?: "",
+            serverName = transaction.server_name ?: "",
+            userId = transaction.user?.id ?: "",
+            userEmail = transaction.user?.email ?: "",
+            userUsername = transaction.user?.username ?: "",
+            userIpAddress = transaction.user?.ip_address ?: "",
+            transactionName = transaction.transaction ?: "",
+            transactionOp = transactionOp,
+            durationMs = durationMs,
+            tags = transaction.tags,
+            contexts = contexts,
+            breadcrumbs = breadcrumbs,
+            request = request,
+            sdkName = transaction.sdk?.name ?: "",
+            sdkVersion = transaction.sdk?.version ?: ""
+        )
 
         try {
-            val transactionSuccess = eventRepository.executeClickHouseInsert(transactionInsert)
-            if (!transactionSuccess) {
+            if (!eventRepository.insertTransaction(transactionData)) {
                 return false
             }
 
             val spans = transaction.spans.orEmpty()
             if (spans.isNotEmpty()) {
-                val spanRows =
-                    spans.mapNotNull { span ->
-                        val spanStart = span.start_timestamp ?: transaction.start_timestamp
-                        val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
-                        if (spanStart == null || spanEnd == null) return@mapNotNull null
+                val spanRows = spans.mapNotNull { span ->
+                    val spanStart = span.start_timestamp ?: transaction.start_timestamp
+                    val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
+                    if (spanStart == null || spanEnd == null) return@mapNotNull null
 
-                        val spanStartMs = unixSecondsToMillis(spanStart)
-                        val spanEndMs = unixSecondsToMillis(spanEnd)
-                        val spanDurationMs = durationMs(spanStart, spanEnd)
-                        val spanId = span.span_id?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
-                        val parentSpanId = span.parent_span_id ?: ""
-                        val spanTraceId = span.trace_id ?: traceId
-                        val spanData = span.data?.toString() ?: "{}"
-
-                        """
-                        (
-                            '${escapeSql(spanId)}',
-                            '${escapeSql(parentSpanId)}',
-                            '${escapeSql(spanTraceId)}',
-                            toUUID('$eventId'),
-                            $projectId,
-                            '${escapeSql(span.op ?: "")}',
-                            '${escapeSql(span.description ?: "")}',
-                            fromUnixTimestamp64Milli($spanStartMs),
-                            fromUnixTimestamp64Milli($spanEndMs),
-                            $spanDurationMs,
-                            '${escapeSql(span.status ?: "")}',
-                            ${tagsToMap(span.tags)},
-                            '${escapeSql(spanData)}'
-                        )
-                        """.trimIndent()
-                    }
-
-                if (spanRows.isNotEmpty()) {
-                    val spansInsert =
-                        """
-                        INSERT INTO `$clickhouseDb`.spans (
-                            span_id, parent_span_id, trace_id, transaction_id, project_id,
-                            op, description, start_timestamp, end_timestamp, duration_ms, status, tags, data
-                        ) VALUES
-                        ${spanRows.joinToString(",\n")}
-                        """.trimIndent()
-
-                    eventRepository.executeClickHouseInsertNoResult(spansInsert)
+                    val spanId = span.span_id?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
+                    SpanInsertData(
+                        spanId = spanId,
+                        parentSpanId = span.parent_span_id ?: "",
+                        traceId = span.trace_id ?: traceId,
+                        transactionId = eventId,
+                        projectId = projectId,
+                        op = span.op ?: "",
+                        description = span.description ?: "",
+                        startTimestampMs = unixSecondsToMillis(spanStart),
+                        endTimestampMs = unixSecondsToMillis(spanEnd),
+                        durationMs = durationMs(spanStart, spanEnd),
+                        status = span.status ?: "",
+                        tags = span.tags,
+                        data = span.data?.toString() ?: "{}"
+                    )
                 }
+                eventRepository.insertSpans(spanRows)
             }
 
             logger.debug { "Transaction stored: $eventId for project $projectId (spans=${spans.size})" }
 
             // Detect ai.* spans and cross-insert into llm_generations
-            val aiSpans =
-                spans.filter { span ->
-                    val op = span.op ?: ""
-                    op.startsWith("ai.")
-                }
+            val aiSpans = spans.filter { span -> (span.op ?: "").startsWith("ai.") }
             if (aiSpans.isNotEmpty()) {
                 insertAiSpansAsLlmGenerations(projectId, traceId, transaction, aiSpans)
             }
@@ -428,48 +390,37 @@ class EventService(
         val breadcrumbs = event.breadcrumbs?.toString() ?: "[]"
         val request = event.request?.toString() ?: "{}"
 
-        // Build ClickHouse insert query
-        val query =
-            """
-            INSERT INTO `$clickhouseDb`.events (
-                event_id, project_id, timestamp, event_type, level,
-                message, platform, environment, release, dist, server_name,
-                user_id, user_email, user_username, user_ip_address,
-                exception_type, exception_value, stack_trace,
-                fingerprint, issue_id, tags, contexts, breadcrumbs, request,
-                sdk_name, sdk_version
-            ) VALUES (
-                toUUID('$eventId'),
-                $projectId,
-                fromUnixTimestamp64Milli($timestamp),
-                'error',
-                '$eventLevel',
-                '${escapeSql(exceptionValue)}',
-                '${escapeSql(event.platform ?: "unknown")}',
-                '${escapeSql(event.environment ?: "production")}',
-                '${escapeSql(event.release ?: "")}',
-                '${escapeSql(event.dist ?: "")}',
-                '${escapeSql(event.server_name ?: "")}',
-                '${escapeSql(event.user?.id ?: "")}',
-                '${escapeSql(event.user?.email ?: "")}',
-                '${escapeSql(event.user?.username ?: "")}',
-                '${escapeSql(event.user?.ip_address ?: "")}',
-                '${escapeSql(exceptionType)}',
-                '${escapeSql(exceptionValue)}',
-                '${escapeSql(stackTrace)}',
-                ${fingerprintToArray(fingerprint)},
-                '$issueId',
-                ${tagsToMap(event.tags)},
-                '${escapeSql(contexts)}',
-                '${escapeSql(breadcrumbs)}',
-                '${escapeSql(request)}',
-                '${escapeSql(event.sdk?.name ?: "")}',
-                '${escapeSql(event.sdk?.version ?: "")}'
-            )
-            """.trimIndent()
+        // Build and insert error event via repository
+        val eventData = ErrorEventInsertData(
+            eventId = eventId,
+            projectId = projectId,
+            timestampMs = timestamp,
+            level = eventLevel,
+            message = exceptionValue,
+            platform = event.platform ?: "unknown",
+            environment = event.environment ?: "production",
+            release = event.release ?: "",
+            dist = event.dist ?: "",
+            serverName = event.server_name ?: "",
+            userId = event.user?.id ?: "",
+            userEmail = event.user?.email ?: "",
+            userUsername = event.user?.username ?: "",
+            userIpAddress = event.user?.ip_address ?: "",
+            exceptionType = exceptionType,
+            exceptionValue = exceptionValue,
+            stackTrace = stackTrace,
+            fingerprint = fingerprint,
+            issueId = issueId,
+            tags = event.tags,
+            contexts = contexts,
+            breadcrumbs = breadcrumbs,
+            request = request,
+            sdkName = event.sdk?.name ?: "",
+            sdkVersion = event.sdk?.version ?: ""
+        )
 
         try {
-            val success = eventRepository.executeClickHouseInsert(query)
+            val success = eventRepository.insertErrorEvent(eventData)
             if (!success) return false
             logger.info { "Event stored: $eventId for project $projectId" }
             CacheService.invalidatePattern("cache:issues:$projectId:*")
@@ -535,39 +486,30 @@ class EventService(
         val userUsername = feedback.user?.username ?: ""
         val userIpAddress = feedback.user?.ip_address ?: ""
 
-        val insertQuery =
-            """
-            INSERT INTO `$clickhouseDb`.user_feedback (
-                feedback_id, project_id, timestamp, message, contact_email, name, url,
-                associated_event_id, replay_id, environment, release, platform,
-                user_id, user_email, user_username, user_ip_address,
-                sdk_name, sdk_version, tags, status
-            ) VALUES (
-                toUUID('${normalizeUuid(feedbackId)}'),
-                $projectId,
-                fromUnixTimestamp64Milli($timestamp),
-                '${escapeSql(message)}',
-                '${escapeSql(contactEmail)}',
-                '${escapeSql(name)}',
-                '${escapeSql(url)}',
-                '${escapeSql(associatedEventId)}',
-                '${escapeSql(replayId)}',
-                '${escapeSql(feedback.environment ?: "")}',
-                '${escapeSql(feedback.release ?: "")}',
-                '${escapeSql(feedback.platform ?: "")}',
-                '${escapeSql(userId)}',
-                '${escapeSql(userEmail)}',
-                '${escapeSql(userUsername)}',
-                '${escapeSql(userIpAddress)}',
-                '${escapeSql(feedback.sdk?.name ?: "")}',
-                '${escapeSql(feedback.sdk?.version ?: "")}',
-                ${tagsToMap(feedback.tags)},
-                'unresolved'
-            )
-            """.trimIndent()
+        val feedbackData = FeedbackInsertData(
+            feedbackId = normalizeUuid(feedbackId),
+            projectId = projectId,
+            timestampMs = timestamp,
+            message = message,
+            contactEmail = contactEmail,
+            name = name,
+            url = url,
+            associatedEventId = associatedEventId,
+            replayId = replayId,
+            environment = feedback.environment ?: "",
+            release = feedback.release ?: "",
+            platform = feedback.platform ?: "",
+            userId = userId,
+            userEmail = userEmail,
+            userUsername = userUsername,
+            userIpAddress = userIpAddress,
+            sdkName = feedback.sdk?.name ?: "",
+            sdkVersion = feedback.sdk?.version ?: "",
+            tags = feedback.tags
+        )
 
         try {
-            val success = eventRepository.executeClickHouseInsert(insertQuery)
+            val success = eventRepository.insertFeedback(feedbackData)
             if (!success) return false
             logger.info { "Feedback stored: $feedbackId for project $projectId" }
             return true
@@ -615,49 +557,36 @@ class EventService(
                 ?.jsonPrimitive
                 ?.intOrNull ?: 0
 
-        val urlsArray = "[${urls.joinToString(",") { "'${escapeSql(it)}'" }}]"
-        val errorIdsArray = "[${errorIds.joinToString(",") { "'${escapeSql(it)}'" }}]"
-        val traceIdsArray = "[${traceIds.joinToString(",") { "'${escapeSql(it)}'" }}]"
-
-        val replayEventInsert =
-            """
-            INSERT INTO `$clickhouseDb`.replay_events (
-                replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
-                urls, error_ids, trace_ids, environment, release, platform,
-                user_id, user_email, user_username, user_ip_address,
-                sdk_name, sdk_version, browser_name, browser_version,
-                os_name, os_version, device_name, device_family, activity, tags
-            ) VALUES (
-                toUUID('${normalizeUuid(replayId)}'),
-                $projectId,
-                $segmentId,
-                fromUnixTimestamp64Milli($ts),
-                fromUnixTimestamp64Milli($startTs),
-                $urlsArray,
-                $errorIdsArray,
-                $traceIdsArray,
-                '${escapeSql(replayEvent.environment ?: "")}',
-                '${escapeSql(replayEvent.release ?: "")}',
-                '${escapeSql(replayEvent.platform ?: "")}',
-                '${escapeSql(replayEvent.user?.id ?: "")}',
-                '${escapeSql(replayEvent.user?.email ?: "")}',
-                '${escapeSql(replayEvent.user?.username ?: "")}',
-                '${escapeSql(replayEvent.user?.ip_address ?: "")}',
-                '${escapeSql(replayEvent.sdk?.name ?: "")}',
-                '${escapeSql(replayEvent.sdk?.version ?: "")}',
-                '${escapeSql(browserName)}',
-                '${escapeSql(browserVersion)}',
-                '${escapeSql(osName)}',
-                '${escapeSql(osVersion)}',
-                '${escapeSql(deviceName)}',
-                '${escapeSql(deviceFamily)}',
-                $activity,
-                '${escapeSql(tags)}'
-            )
-            """.trimIndent()
+        val replayData = ReplayEventInsertData(
+            replayId = normalizeUuid(replayId),
+            projectId = projectId,
+            segmentId = segmentId,
+            timestampMs = ts,
+            replayStartTimestampMs = startTs,
+            urls = urls,
+            errorIds = errorIds,
+            traceIds = traceIds,
+            environment = replayEvent.environment ?: "",
+            release = replayEvent.release ?: "",
+            platform = replayEvent.platform ?: "",
+            userId = replayEvent.user?.id ?: "",
+            userEmail = replayEvent.user?.email ?: "",
+            userUsername = replayEvent.user?.username ?: "",
+            userIpAddress = replayEvent.user?.ip_address ?: "",
+            sdkName = replayEvent.sdk?.name ?: "",
+            sdkVersion = replayEvent.sdk?.version ?: "",
+            browserName = browserName,
+            browserVersion = browserVersion,
+            osName = osName,
+            osVersion = osVersion,
+            deviceName = deviceName,
+            deviceFamily = deviceFamily,
+            activity = activity,
+            tags = tags
+        )
 
         try {
-            val success = eventRepository.executeClickHouseInsert(replayEventInsert)
+            val success = eventRepository.insertReplayEvent(replayData)
             if (!success) return false
             logger.info { "Replay event stored: $replayId segment $segmentId for project $projectId" }
             return true
@@ -673,25 +602,16 @@ class EventService(
         segmentId: Int,
         payload: String
     ) {
-        val normalizedReplayId = normalizeUuid(replayId)
-        val timestamp = System.currentTimeMillis()
-        val escapedPayload = escapeSql(payload)
-
-        val recordingInsert =
-            """
-            INSERT INTO `$clickhouseDb`.replay_segments (
-                replay_id, project_id, segment_id, timestamp, recording_data
-            ) VALUES (
-                toUUID('$normalizedReplayId'),
-                $projectId,
-                $segmentId,
-                fromUnixTimestamp64Milli($timestamp),
-                '$escapedPayload'
-            )
-            """.trimIndent()
-
         try {
-            eventRepository.executeClickHouseInsertNoResult(recordingInsert)
+            eventRepository.insertReplayRecording(
+                ReplayRecordingInsertData(
+                    replayId = normalizeUuid(replayId),
+                    projectId = projectId,
+                    segmentId = segmentId,
+                    timestampMs = System.currentTimeMillis(),
+                    recordingData = payload
+                )
+            )
             logger.info { "Replay recording stored: $replayId segment $segmentId for project $projectId" }
         } catch (e: Exception) {
             logger.error(e) { "Error storing replay recording in ClickHouse" }
@@ -718,45 +638,36 @@ class EventService(
         val sdkVersion = ""
         val platform = "android"
 
-        val replayEventInsert =
-            """
-            INSERT INTO `$clickhouseDb`.replay_events (
-                replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
-                urls, error_ids, trace_ids, environment, release, platform,
-                user_id, user_email, user_username, user_ip_address,
-                sdk_name, sdk_version, browser_name, browser_version,
-                os_name, os_version, device_name, device_family, activity, tags
-            ) VALUES (
-                toUUID('$normalizedReplayId'),
-                $projectId,
-                $segmentId,
-                fromUnixTimestamp64Milli($timestamp),
-                fromUnixTimestamp64Milli($timestamp),
-                [],
-                [],
-                [],
-                'e2e-testing',
-                '',
-                '$platform',
-                '',
-                '',
-                '',
-                '',
-                '$sdkName',
-                '$sdkVersion',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                0,
-                '{}'
-            )
-            """.trimIndent()
-
         try {
-            eventRepository.executeClickHouseInsertNoResult(replayEventInsert)
+            eventRepository.insertReplayEvent(
+                ReplayEventInsertData(
+                    replayId = normalizedReplayId,
+                    projectId = projectId,
+                    segmentId = segmentId,
+                    timestampMs = timestamp,
+                    replayStartTimestampMs = timestamp,
+                    urls = emptyList(),
+                    errorIds = emptyList(),
+                    traceIds = emptyList(),
+                    environment = "e2e-testing",
+                    release = "",
+                    platform = platform,
+                    userId = "",
+                    userEmail = "",
+                    userUsername = "",
+                    userIpAddress = "",
+                    sdkName = sdkName,
+                    sdkVersion = sdkVersion,
+                    browserName = "",
+                    browserVersion = "",
+                    osName = "",
+                    osVersion = "",
+                    deviceName = "",
+                    deviceFamily = "",
+                    activity = 0,
+                    tags = "{}"
+                )
+            )
             logger.info { "Synthetic replay event stored: $replayId for project $projectId" }
         } catch (e: Exception) {
             logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
@@ -925,98 +836,63 @@ class EventService(
         aiSpans: List<SentrySpan>
     ) {
         try {
-            val rows =
-                aiSpans.mapNotNull { span ->
-                    val spanStart = span.start_timestamp ?: return@mapNotNull null
-                    val spanEnd = span.timestamp ?: return@mapNotNull null
-                    val spanDurationMs = durationMs(spanStart, spanEnd)
-                    val spanTimestampMs = unixSecondsToMillis(spanEnd)
-                    val generationId = UUID.randomUUID().toString()
-                    val spanId = span.span_id ?: ""
-                    val parentSpanId = span.parent_span_id ?: ""
-                    val op = span.op ?: ""
-                    val data = span.data
+            val generations = aiSpans.mapNotNull { span ->
+                val spanStart = span.start_timestamp ?: return@mapNotNull null
+                val spanEnd = span.timestamp ?: return@mapNotNull null
+                val op = span.op ?: ""
+                val data = span.data
 
-                    val model =
-                        data?.get("ai.model_id")?.jsonPrimitive?.contentOrNull
-                            ?: data?.get("model")?.jsonPrimitive?.contentOrNull ?: ""
-                    val provider = data?.get("ai.provider")?.jsonPrimitive?.contentOrNull ?: ""
-                    val inputTokens =
-                        data?.get("ai.input_tokens")?.jsonPrimitive?.intOrNull
-                            ?: data?.get("ai.prompt_tokens_used")?.jsonPrimitive?.intOrNull ?: 0
-                    val outputTokens =
-                        data?.get("ai.output_tokens")?.jsonPrimitive?.intOrNull
-                            ?: data?.get("ai.completion_tokens_used")?.jsonPrimitive?.intOrNull ?: 0
-                    val totalTokens =
-                        data?.get("ai.total_tokens_used")?.jsonPrimitive?.intOrNull
-                            ?: (inputTokens + outputTokens)
-                    val input = data?.get("ai.input_messages")?.toString() ?: ""
-                    val output = data?.get("ai.responses")?.toString() ?: ""
-
-                    val type =
-                        when {
-                            op.contains("chat_completion") -> "chat"
-                            op.contains("embedding") -> "embedding"
-                            op.contains("tool_call") || op.contains("tool") -> "tool_call"
-                            op.contains("agent") -> "agent"
-                            op.contains("chain") || op.contains("pipeline") -> "chain"
-                            op.contains("retriever") -> "retriever"
-                            else -> "completion"
-                        }
-
-                    val status = if (span.status == "ok" || span.status == null) "success" else "error"
-
-                    """(
-                    toUUID('$generationId'),
-                    $projectId,
-                    '${escapeSql(traceId)}',
-                    '${escapeSql(spanId)}',
-                    '${escapeSql(parentSpanId)}',
-                    fromUnixTimestamp64Milli($spanTimestampMs),
-                    $spanDurationMs,
-                    '${escapeSql(span.description ?: op)}',
-                    '${escapeSql(model)}',
-                    '${escapeSql(provider)}',
-                    '$type',
-                    '${escapeSql(input)}',
-                    '${escapeSql(output)}',
-                    $inputTokens,
-                    $outputTokens,
-                    $totalTokens,
-                    0.0,
-                    0, 0, 0,
-                    '$status',
-                    '', 0,
-                    '${escapeSql(transaction.user?.id ?: "")}',
-                    '',
-                    '${escapeSql(transaction.environment ?: "")}',
-                    '${escapeSql(transaction.release ?: "")}',
-                    ${tagsToMap(span.tags)},
-                    '{}'
-                )
-                    """.trimIndent()
+                val model = data?.get("ai.model_id")?.jsonPrimitive?.contentOrNull
+                    ?: data?.get("model")?.jsonPrimitive?.contentOrNull ?: ""
+                val provider = data?.get("ai.provider")?.jsonPrimitive?.contentOrNull ?: ""
+                val inputTokens = data?.get("ai.input_tokens")?.jsonPrimitive?.intOrNull
+                    ?: data?.get("ai.prompt_tokens_used")?.jsonPrimitive?.intOrNull ?: 0
+                val outputTokens = data?.get("ai.output_tokens")?.jsonPrimitive?.intOrNull
+                    ?: data?.get("ai.completion_tokens_used")?.jsonPrimitive?.intOrNull ?: 0
+                val totalTokens = data?.get("ai.total_tokens_used")?.jsonPrimitive?.intOrNull
+                    ?: (inputTokens + outputTokens)
+                val type = when {
+                    op.contains("chat_completion") -> "chat"
+                    op.contains("embedding") -> "embedding"
+                    op.contains("tool_call") || op.contains("tool") -> "tool_call"
+                    op.contains("agent") -> "agent"
+                    op.contains("chain") || op.contains("pipeline") -> "chain"
+                    op.contains("retriever") -> "retriever"
+                    else -> "completion"
                 }
 
-            if (rows.isEmpty()) return
+                LlmGenerationInsertData(
+                    generationId = UUID.randomUUID().toString(),
+                    projectId = projectId,
+                    traceId = traceId,
+                    spanId = span.span_id ?: "",
+                    parentSpanId = span.parent_span_id ?: "",
+                    timestampMs = unixSecondsToMillis(spanEnd),
+                    durationMs = durationMs(spanStart, spanEnd),
+                    name = span.description ?: op,
+                    model = model,
+                    provider = provider,
+                    type = type,
+                    input = data?.get("ai.input_messages")?.toString() ?: "",
+                    output = data?.get("ai.responses")?.toString() ?: "",
+                    inputTokens = inputTokens,
+                    outputTokens = outputTokens,
+                    totalTokens = totalTokens,
+                    status = if (span.status == "ok" || span.status == null) "success" else "error",
+                    userId = transaction.user?.id ?: "",
+                    environment = transaction.environment ?: "",
+                    release = transaction.release ?: "",
+                    tags = span.tags
+                )
+            }
 
-            val query =
-                """
-                INSERT INTO `$clickhouseDb`.llm_generations (
-                    generation_id, project_id, trace_id, span_id, parent_span_id,
-                    timestamp, duration_ms, name, model, provider, type,
-                    input, output, input_tokens, output_tokens, total_tokens, cost_usd,
-                    temperature, max_tokens, top_p,
-                    status, error_message, status_code,
-                    user_id, session_id, environment, release, tags, metadata
-                ) VALUES
-                ${rows.joinToString(",\n")}
-                """.trimIndent()
+            if (generations.isEmpty()) return
 
-            val success = eventRepository.executeClickHouseInsert(query)
+            val success = eventRepository.insertLlmGenerations(generations)
             if (!success) {
                 logger.error { "Failed to insert ai.* spans as LLM generations" }
             } else {
-                logger.info { "Cross-inserted ${rows.size} ai.* spans as LLM generations for project $projectId" }
+                logger.info { "Cross-inserted ${generations.size} ai.* spans as LLM generations for project $projectId" }
             }
         } catch (e: Exception) {
             logger.warn(e) { "Failed to cross-insert ai.* spans as LLM generations" }
@@ -1098,34 +974,22 @@ class EventService(
             val durationNs = profileJson["duration_ns"]
                 ?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                 ?: 0L
-            val insert = """
-                INSERT INTO `$clickhouseDb`.profiles (
-                    profile_id, organization_id,
-                    host, service, env, version,
-                    runtime, language, profile_type,
-                    start_time, end_time, duration_ns,
-                    storage_key, tags, size_bytes, source
-                ) VALUES (
-                    generateUUIDv4(),
-                    $orgId,
-                    '',
-                    '${escapeSql(transactionName)}',
-                    '${escapeSql(environment)}',
-                    '${escapeSql(release)}',
-                    '${escapeSql(runtime)}',
-                    '${escapeSql(platform)}',
-                    'cpu',
-                    fromUnixTimestamp64Milli($nowMs),
-                    fromUnixTimestamp64Milli(${nowMs + durationNs / 1_000_000}),
-                    $durationNs,
-                    '${escapeSql(storageKey)}',
-                    map(),
-                    $payloadSize,
-                    'sentry'
-                )
-            """.trimIndent()
 
-            val success = eventRepository.executeClickHouseInsert(insert)
+            val success = eventRepository.insertProfile(
+                ProfileInsertData(
+                    organizationId = orgId,
+                    service = transactionName,
+                    environment = environment,
+                    release = release,
+                    runtime = runtime,
+                    platform = platform,
+                    startTimeMs = nowMs,
+                    endTimeMs = nowMs + durationNs / 1_000_000,
+                    durationNs = durationNs,
+                    storageKey = storageKey,
+                    payloadSizeBytes = payloadSize
+                )
+            )
             if (!success) {
                 logger.error { "Failed to insert Sentry profile into ClickHouse" }
                 return false
@@ -1135,15 +999,6 @@ class EventService(
             logger.error(e) { "Failed to store Sentry profile" }
             return false
         }
-    }
-
-    private fun fingerprintToArray(fingerprint: List<String>): String {
-        return "[${fingerprint.joinToString(",") { "'${escapeSql(it)}'" }}]"
-    }
-
-    private fun tagsToMap(tags: Map<String, String>?): String {
-        if (tags.isNullOrEmpty()) return "{}"
-        return "{${tags.entries.joinToString(",") { "'${escapeSql(it.key)}':'${escapeSql(it.value)}'" }}}"
     }
 
     private suspend fun isNewIssue(

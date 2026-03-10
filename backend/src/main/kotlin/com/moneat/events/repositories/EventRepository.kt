@@ -16,20 +16,31 @@
 
 package com.moneat.events.repositories
 
+import com.moneat.events.repositories.models.ErrorEventInsertData
+import com.moneat.events.repositories.models.FeedbackInsertData
+import com.moneat.events.repositories.models.LlmGenerationInsertData
+import com.moneat.events.repositories.models.ProfileInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
+import com.moneat.events.repositories.models.ReplayEventInsertData
+import com.moneat.events.repositories.models.ReplayRecordingInsertData
+import com.moneat.events.repositories.models.SpanInsertData
+import com.moneat.events.repositories.models.TransactionEventInsertData
 
 /**
  * Repository for event ingestion and project key lookups.
  * Abstracts PostgreSQL (ProjectKeys, Projects) and ClickHouse event/transaction/feedback inserts.
- *
- * Note: ClickHouse insert methods accept pre-built SQL. SQL construction and escaping
- * remain in the service for Phase 1; a future refactor can move SQL building into the
- * repository for full encapsulation.
  */
 interface EventRepository {
     fun verifyProjectKey(projectId: Long, publicKey: String): ProjectKeyVerification
     fun getOrganizationIdForProject(projectId: Long): Int?
-    suspend fun executeClickHouseInsert(sql: String): Boolean
-    suspend fun executeClickHouseInsertNoResult(sql: String)
     suspend fun getEventCountForIssue(projectId: Long, issueId: String): Long
+
+    suspend fun insertErrorEvent(data: ErrorEventInsertData): Boolean
+    suspend fun insertTransaction(data: TransactionEventInsertData): Boolean
+    suspend fun insertSpans(rows: List<SpanInsertData>)
+    suspend fun insertFeedback(data: FeedbackInsertData): Boolean
+    suspend fun insertReplayEvent(data: ReplayEventInsertData): Boolean
+    suspend fun insertReplayRecording(data: ReplayRecordingInsertData)
+    suspend fun insertLlmGenerations(rows: List<LlmGenerationInsertData>): Boolean
+    suspend fun insertProfile(data: ProfileInsertData): Boolean
 }
