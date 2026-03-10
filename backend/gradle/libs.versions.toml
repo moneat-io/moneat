@@ -70,7 +70,7 @@ commons-codec = { module = "commons-codec:commons-codec", version = "1.21.0" }
 
 # SSO
 java-saml-core = { module = "com.onelogin:java-saml-core", version = "2.9.0" }
-oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.33" }
+oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.34" }
 
 # Billing
 stripe-java = { module = "com.stripe:stripe-java", version = "31.4.1" }
