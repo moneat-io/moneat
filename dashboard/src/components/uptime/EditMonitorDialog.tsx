@@ -25,11 +25,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {Input} from '@/components/ui/input'
-import {Label} from '@/components/ui/label'
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {useState} from 'react'
 import {useToast} from '@/hooks/useToast'
+import {MonitorFormFields, type MonitorFormData} from './MonitorFormFields'
 
 interface EditMonitorDialogProps {
   open: boolean
@@ -40,7 +38,7 @@ interface EditMonitorDialogProps {
 export default function EditMonitorDialog({open, onOpenChange, monitor}: EditMonitorDialogProps) {
   const {toast} = useToast()
   const queryClient = useQueryClient()
-  const serverFormData: Partial<UpdateUptimeMonitorRequest> = monitor ? {
+  const serverFormData: MonitorFormData = monitor ? {
     name: monitor.name,
     url: monitor.url,
     hostname: monitor.hostname,
@@ -54,7 +52,7 @@ export default function EditMonitorDialog({open, onOpenChange, monitor}: EditMon
     timeoutSeconds: monitor.timeoutSeconds,
     retries: monitor.retries,
   } : {}
-  const [localFormData, setFormData] = useState<Partial<UpdateUptimeMonitorRequest> | undefined>(undefined)
+  const [localFormData, setFormData] = useState<MonitorFormData | undefined>(undefined)
   const formData = (open && localFormData) ? localFormData : serverFormData
 
   const updateMutation = useMutation({
@@ -93,158 +91,13 @@ export default function EditMonitorDialog({open, onOpenChange, monitor}: EditMon
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div>
-            <Label htmlFor="name">Monitor Name</Label>
-            <Input
-              id="name"
-              value={formData.name || ''}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              placeholder="My Website"
-            />
-          </div>
-
-          {/* HTTP/Keyword/WebSocket monitors */}
-          {['http', 'keyword', 'websocket'].includes(monitor.type) && (
-            <div>
-              <Label htmlFor="url">URL</Label>
-              <Input
-                id="url"
-                value={formData.url || ''}
-                onChange={(e) => setFormData({...formData, url: e.target.value})}
-                placeholder="https://example.com"
-              />
-            </div>
-          )}
-
-          {/* TCP/Ping/DNS/SSL monitors */}
-          {['tcp', 'ping', 'dns', 'ssl'].includes(monitor.type) && (
-            <>
-              <div>
-                <Label htmlFor="hostname">Hostname</Label>
-                <Input
-                  id="hostname"
-                  value={formData.hostname || ''}
-                  onChange={(e) => setFormData({...formData, hostname: e.target.value})}
-                  placeholder="example.com"
-                />
-              </div>
-              {(monitor.type === 'tcp' || monitor.type === 'ssl') && (
-                <div>
-                  <Label htmlFor="port">Port</Label>
-                  <Input
-                    id="port"
-                    type="number"
-                    value={formData.port || ''}
-                    onChange={(e) => setFormData({...formData, port: parseInt(e.target.value)})}
-                    placeholder={monitor.type === 'ssl' ? '443' : '80'}
-                  />
-                </div>
-              )}
-            </>
-          )}
-
-          {/* HTTP method */}
-          {monitor.type === 'http' && (
-            <div>
-              <Label htmlFor="method">HTTP Method</Label>
-              <Select
-                value={formData.method || 'GET'}
-                onValueChange={(value) => setFormData({...formData, method: value})}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="GET">GET</SelectItem>
-                  <SelectItem value="POST">POST</SelectItem>
-                  <SelectItem value="PUT">PUT</SelectItem>
-                  <SelectItem value="DELETE">DELETE</SelectItem>
-                  <SelectItem value="HEAD">HEAD</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Keyword */}
-          {monitor.type === 'keyword' && (
-            <div>
-              <Label htmlFor="keyword">Keyword to search for</Label>
-              <Input
-                id="keyword"
-                value={formData.keyword || ''}
-                onChange={(e) => setFormData({...formData, keyword: e.target.value})}
-                placeholder="Success"
-              />
-            </div>
-          )}
-
-          {/* Database */}
-          {monitor.type === 'database' && (
-            <div>
-              <Label htmlFor="dbConnectionString">Connection String</Label>
-              <Input
-                id="dbConnectionString"
-                value={formData.dbConnectionString || ''}
-                onChange={(e) => setFormData({...formData, dbConnectionString: e.target.value})}
-                placeholder="jdbc:postgresql://localhost:5432/mydb"
-              />
-            </div>
-          )}
-
-          {/* Docker */}
-          {monitor.type === 'docker' && (
-            <>
-              <div>
-                <Label htmlFor="dockerContainerName">Container Name</Label>
-                <Input
-                  id="dockerContainerName"
-                  value={formData.dockerContainerName || ''}
-                  onChange={(e) => setFormData({...formData, dockerContainerName: e.target.value})}
-                  placeholder="my-container"
-                />
-              </div>
-              <div>
-                <Label htmlFor="dockerHost">Docker Host</Label>
-                <Input
-                  id="dockerHost"
-                  value={formData.dockerHost || ''}
-                  onChange={(e) => setFormData({...formData, dockerHost: e.target.value})}
-                  placeholder="http://localhost:2375"
-                />
-              </div>
-            </>
-          )}
-
-          <div>
-            <Label htmlFor="interval">Check Interval (seconds)</Label>
-            <Input
-              id="interval"
-              type="number"
-              value={formData.intervalSeconds || 60}
-              onChange={(e) => setFormData({...formData, intervalSeconds: parseInt(e.target.value)})}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="timeout">Timeout (seconds)</Label>
-            <Input
-              id="timeout"
-              type="number"
-              value={formData.timeoutSeconds || 30}
-              onChange={(e) => setFormData({...formData, timeoutSeconds: parseInt(e.target.value)})}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="retries">Retries</Label>
-            <Input
-              id="retries"
-              type="number"
-              value={formData.retries || 0}
-              onChange={(e) => setFormData({...formData, retries: parseInt(e.target.value)})}
-            />
-          </div>
+        <div className="py-4">
+          <MonitorFormFields
+            formData={formData}
+            monitorType={monitor.type}
+            onChange={setFormData}
+            showRetries
+          />
         </div>
 
         <DialogFooter>

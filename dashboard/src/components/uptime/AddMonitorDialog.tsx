@@ -25,9 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {Input} from '@/components/ui/input'
-import {Label} from '@/components/ui/label'
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {
   Activity,
   ArrowUp,
@@ -42,6 +39,7 @@ import {
 } from 'lucide-react'
 import {useState} from 'react'
 import {useToast} from '@/hooks/useToast'
+import {MonitorFormFields, type MonitorFormData} from './MonitorFormFields'
 
 interface AddMonitorDialogProps {
   open: boolean
@@ -135,7 +133,7 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
   const {toast} = useToast()
   const queryClient = useQueryClient()
   const [step, setStep] = useState<1 | 2>(1)
-  const [formData, setFormData] = useState<Partial<CreateUptimeMonitorRequest>>({
+  const [formData, setFormData] = useState<MonitorFormData>({
     type: 'http',
     method: 'GET',
     intervalSeconds: 60,
@@ -212,172 +210,13 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
             ))}
           </div>
         ) : (
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="name">Monitor Name</Label>
-              <Input
-                id="name"
-                value={formData.name || ''}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                placeholder="My Website"
-              />
-            </div>
-
-            {/* HTTP/Keyword/WebSocket monitors */}
-            {['http', 'keyword', 'websocket'].includes(formData.type!) && (
-              <div>
-                <Label htmlFor="url">URL</Label>
-                <Input
-                  id="url"
-                  value={formData.url || ''}
-                  onChange={(e) => setFormData({...formData, url: e.target.value})}
-                  placeholder="https://example.com"
-                />
-              </div>
-            )}
-
-            {/* TCP/Ping/DNS/SSL monitors */}
-            {['tcp', 'ping', 'dns', 'ssl'].includes(formData.type!) && (
-              <>
-                <div>
-                  <Label htmlFor="hostname">Hostname</Label>
-                  <Input
-                    id="hostname"
-                    value={formData.hostname || ''}
-                    onChange={(e) => setFormData({...formData, hostname: e.target.value})}
-                    placeholder="example.com"
-                  />
-                </div>
-                {(formData.type === 'tcp' || formData.type === 'ssl') && (
-                  <div>
-                    <Label htmlFor="port">Port</Label>
-                    <Input
-                      id="port"
-                      type="number"
-                      value={formData.port || ''}
-                      onChange={(e) => setFormData({...formData, port: parseInt(e.target.value)})}
-                      placeholder={formData.type === 'ssl' ? '443' : '80'}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* HTTP method */}
-            {formData.type === 'http' && (
-              <div>
-                <Label htmlFor="method">HTTP Method</Label>
-                <Select
-                  value={formData.method || 'GET'}
-                  onValueChange={(value) => setFormData({...formData, method: value})}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="GET">GET</SelectItem>
-                    <SelectItem value="POST">POST</SelectItem>
-                    <SelectItem value="PUT">PUT</SelectItem>
-                    <SelectItem value="DELETE">DELETE</SelectItem>
-                    <SelectItem value="HEAD">HEAD</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Keyword */}
-            {formData.type === 'keyword' && (
-              <div>
-                <Label htmlFor="keyword">Keyword to search for</Label>
-                <Input
-                  id="keyword"
-                  value={formData.keyword || ''}
-                  onChange={(e) => setFormData({...formData, keyword: e.target.value})}
-                  placeholder="Success"
-                />
-              </div>
-            )}
-
-            {/* Database */}
-            {formData.type === 'database' && (
-              <div>
-                <Label htmlFor="dbConnectionString">Connection String</Label>
-                <Input
-                  id="dbConnectionString"
-                  value={formData.dbConnectionString || ''}
-                  onChange={(e) => setFormData({...formData, dbConnectionString: e.target.value})}
-                  placeholder="jdbc:postgresql://localhost:5432/mydb"
-                />
-              </div>
-            )}
-
-            {/* Docker */}
-            {formData.type === 'docker' && (
-              <>
-                <div>
-                  <Label htmlFor="dockerContainerName">Container Name</Label>
-                  <Input
-                    id="dockerContainerName"
-                    value={formData.dockerContainerName || ''}
-                    onChange={(e) => setFormData({...formData, dockerContainerName: e.target.value})}
-                    placeholder="my-container"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="dockerHost">Docker Host</Label>
-                  <Input
-                    id="dockerHost"
-                    value={formData.dockerHost || ''}
-                    onChange={(e) => setFormData({...formData, dockerHost: e.target.value})}
-                    placeholder="http://localhost:2375"
-                  />
-                </div>
-              </>
-            )}
-
-            <div>
-              <Label htmlFor="interval">Check Interval (seconds)</Label>
-              <Input
-                id="interval"
-                type="number"
-                value={formData.intervalSeconds || 60}
-                onChange={(e) => setFormData({...formData, intervalSeconds: parseInt(e.target.value)})}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="timeout">Timeout (seconds)</Label>
-              <Input
-                id="timeout"
-                type="number"
-                value={formData.timeoutSeconds || 30}
-                onChange={(e) => setFormData({...formData, timeoutSeconds: parseInt(e.target.value)})}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="incidentSeverity">Incident Severity</Label>
-              <Select
-                value={formData.incidentSeverity || ''}
-                onValueChange={(value) =>
-                  setFormData({...formData, incidentSeverity: value === 'none' ? undefined : value})
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Use routing rule default" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Use routing rule default</SelectItem>
-                  <SelectItem value="CRITICAL">[P0] Critical</SelectItem>
-                  <SelectItem value="HIGH">[P1] High</SelectItem>
-                  <SelectItem value="MEDIUM">[P2] Medium</SelectItem>
-                  <SelectItem value="LOW">[P3] Low</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Override the default incident severity when this monitor triggers an alert. P0–P2 page on-call 24/7. P3 notifies during business hours only.
-              </p>
-            </div>
+          <div className="py-4">
+            <MonitorFormFields
+              formData={formData}
+              monitorType={formData.type || 'http'}
+              onChange={setFormData}
+              showIncidentSeverity
+            />
           </div>
         )}
 

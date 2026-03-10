@@ -23,11 +23,12 @@ import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Separator} from '@/components/ui/separator'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
-import {Activity, ArrowLeft, CheckCircle2, Clock, Pause, Pencil, Play, Trash2, XCircle} from 'lucide-react'
+import {Activity, ArrowLeft, CheckCircle2, Clock, Pause, Pencil, Play, Trash2} from 'lucide-react'
 import {useToast} from '@/hooks/useToast'
 import {Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts'
 import HeartbeatBar from '@/components/uptime/HeartbeatBar'
 import EditMonitorDialog from '@/components/uptime/EditMonitorDialog'
+import {getStatusBadge} from '@/components/uptime/MonitorStatusBadge'
 import {useState} from 'react'
 import {getNow} from '@/lib/demo'
 import {useTimezone} from '@/hooks/useTimezone'
@@ -41,19 +42,6 @@ export const Route = createFileRoute('/uptime/$monitorId')({
   },
   component: UptimeDetailPage,
 })
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'up':
-      return <Badge className="bg-emerald-500 hover:bg-emerald-600"><CheckCircle2 className="mr-1 h-3 w-3" />Up</Badge>
-    case 'down':
-      return <Badge className="bg-red-500 hover:bg-red-600"><XCircle className="mr-1 h-3 w-3" />Down</Badge>
-    case 'paused':
-      return <Badge variant="outline"><Pause className="mr-1 h-3 w-3" />Paused</Badge>
-    default:
-      return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Pending</Badge>
-  }
-}
 
 function UptimeDetailPage() {
   const {monitorId} = Route.useParams()

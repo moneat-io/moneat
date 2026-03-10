@@ -19,125 +19,23 @@ import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/compo
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatMonthDay} from '@/lib/date-format'
 
-// Preview component for rendering a status page with given configuration
-export function StatusPagePreview({
-  name,
-  description,
-  logoUrl,
-  primaryColor,
-  darkMode,
-  showUptimeHistory,
-  historyDays,
-  monitors = [],
-}: {
+export type StatusPageMonitorEntry = {
   name: string
-  description?: string | null
-  logoUrl?: string | null
-  primaryColor: string
-  darkMode: boolean
-  showUptimeHistory: boolean
-  historyDays: number
-  monitors?: Array<{
-    name: string
-    displayName?: string | null
-    status: string
-    uptimePercentage: number
-    uptimeHistory?: {date: string; uptime: number}[] | null
-  }>
-}) {
-  const isDarkMode = darkMode
+  displayName?: string | null
+  status: string
+  uptimePercentage: number
+  uptimeHistory?: {date: string; uptime: number}[] | null
+}
 
-  // Calculate overall status from monitors
-  const allOperational = monitors.length === 0 || monitors.every((m) => m.status === 'operational')
-  const anyDown = monitors.some((m) => m.status === 'down')
-  const anyDegraded = monitors.some((m) => m.status === 'degraded')
-
-  const overallStatus = anyDown ? 'down' : anyDegraded ? 'degraded' : allOperational ? 'operational' : 'unknown'
-
-  return (
-    <TooltipProvider delayDuration={0}>
-      <div className={`min-h-full font-sans antialiased ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}`}>
-        {/* Minimal Top Bar */}
-        <header className={`border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-          <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              {logoUrl ? (
-                <img src={logoUrl} alt={name} className="h-6 w-6 object-contain rounded" />
-              ) : (
-                <div className="h-6 w-6 rounded flex items-center justify-center" style={{backgroundColor: primaryColor + '18'}}>
-                  <Activity className="h-3.5 w-3.5" style={{color: primaryColor}} />
-                </div>
-              )}
-              <span className="font-semibold text-sm tracking-tight">{name}</span>
-            </div>
-          </div>
-        </header>
-
-        <main className="max-w-3xl mx-auto px-6 py-10 space-y-8">
-          {/* Status Banner */}
-          <StatusBanner status={overallStatus} isDarkMode={isDarkMode} />
-
-          {description && (
-            <div className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-              {description}
-            </div>
-          )}
-
-          {/* Monitors */}
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                System Status
-              </h2>
-              {showUptimeHistory && (
-                <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                  {historyDays}-day uptime
-                </span>
-              )}
-            </div>
-
-            <div className={`rounded-xl border ${isDarkMode ? 'border-slate-800 divide-slate-800' : 'border-slate-200 divide-slate-100'} divide-y`}>
-              {monitors.length === 0 ? (
-                <div className={`px-5 py-12 text-center text-sm ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                  No monitors configured yet.
-                </div>
-              ) : (
-                monitors.map((monitor) => (
-                  <MonitorRow
-                    key={monitor.name}
-                    monitor={monitor}
-                    showHistory={showUptimeHistory}
-                    historyDays={historyDays}
-                    isDarkMode={isDarkMode}
-                  />
-                ))
-              )}
-            </div>
-          </section>
-        </main>
-
-        {/* Footer */}
-        <footer className={`border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-100'} mt-8`}>
-          <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className={`text-xs ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
-              Powered by{' '}
-              <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Moneat
-              </span>
-            </p>
-            <p className={`text-xs ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
-              Preview Mode
-            </p>
-          </div>
-        </footer>
-      </div>
-    </TooltipProvider>
-  )
+function getBarColor(uptime: number, isDarkMode: boolean) {
+  if (uptime >= 99) return isDarkMode ? 'bg-emerald-500/70' : 'bg-emerald-400'
+  if (uptime >= 90) return isDarkMode ? 'bg-amber-500/70' : 'bg-amber-400'
+  return isDarkMode ? 'bg-red-500/70' : 'bg-red-400'
 }
 
 // ─── Status Banner ───────────────────────────────────────────────────────────
 
-function StatusBanner({status, isDarkMode}: {status: string; isDarkMode: boolean}) {
+export function StatusBanner({status, isDarkMode}: {status: string; isDarkMode: boolean}) {
   const config = {
     operational: {
       icon: CheckCircle2,
@@ -186,24 +84,19 @@ function StatusBanner({status, isDarkMode}: {status: string; isDarkMode: boolean
 
 // ─── Monitor Row ─────────────────────────────────────────────────────────────
 
-function MonitorRow({
+export function StatusPageMonitorRow({
   monitor,
   showHistory,
   historyDays,
   isDarkMode,
+  timezone,
 }: {
-  monitor: {
-    name: string
-    displayName?: string | null
-    status: string
-    uptimePercentage: number
-    uptimeHistory?: {date: string; uptime: number}[] | null
-  }
+  monitor: StatusPageMonitorEntry
   showHistory: boolean
   historyDays: number
   isDarkMode: boolean
+  timezone: string
 }) {
-  const { timezone } = useTimezone()
   const statusColors = {
     operational: isDarkMode ? 'text-emerald-400' : 'text-emerald-600',
     degraded: isDarkMode ? 'text-amber-400' : 'text-amber-600',
@@ -281,10 +174,113 @@ function MonitorRow({
   )
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+export function StatusPagePreview({
+  name,
+  description,
+  logoUrl,
+  primaryColor,
+  darkMode,
+  showUptimeHistory,
+  historyDays,
+  monitors = [],
+}: {
+  name: string
+  description?: string | null
+  logoUrl?: string | null
+  primaryColor: string
+  darkMode: boolean
+  showUptimeHistory: boolean
+  historyDays: number
+  monitors?: StatusPageMonitorEntry[]
+}) {
+  const isDarkMode = darkMode
+  const { timezone } = useTimezone()
 
-function getBarColor(uptime: number, isDarkMode: boolean) {
-  if (uptime >= 99) return isDarkMode ? 'bg-emerald-500/70' : 'bg-emerald-400'
-  if (uptime >= 90) return isDarkMode ? 'bg-amber-500/70' : 'bg-amber-400'
-  return isDarkMode ? 'bg-red-500/70' : 'bg-red-400'
+  // Calculate overall status from monitors
+  const allOperational = monitors.length === 0 || monitors.every((m) => m.status === 'operational')
+  const anyDown = monitors.some((m) => m.status === 'down')
+  const anyDegraded = monitors.some((m) => m.status === 'degraded')
+
+  const overallStatus = anyDown ? 'down' : anyDegraded ? 'degraded' : allOperational ? 'operational' : 'unknown'
+
+  return (
+    <TooltipProvider delayDuration={0}>
+      <div className={`min-h-full font-sans antialiased ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}`}>
+        {/* Minimal Top Bar */}
+        <header className={`border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+          <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              {logoUrl ? (
+                <img src={logoUrl} alt={name} className="h-6 w-6 object-contain rounded" />
+              ) : (
+                <div className="h-6 w-6 rounded flex items-center justify-center" style={{backgroundColor: primaryColor + '18'}}>
+                  <Activity className="h-3.5 w-3.5" style={{color: primaryColor}} />
+                </div>
+              )}
+              <span className="font-semibold text-sm tracking-tight">{name}</span>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-3xl mx-auto px-6 py-10 space-y-8">
+          {/* Status Banner */}
+          <StatusBanner status={overallStatus} isDarkMode={isDarkMode} />
+
+          {description && (
+            <div className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+              {description}
+            </div>
+          )}
+
+          {/* Monitors */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                System Status
+              </h2>
+              {showUptimeHistory && (
+                <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                  {historyDays}-day uptime
+                </span>
+              )}
+            </div>
+
+            <div className={`rounded-xl border ${isDarkMode ? 'border-slate-800 divide-slate-800' : 'border-slate-200 divide-slate-100'} divide-y`}>
+              {monitors.length === 0 ? (
+                <div className={`px-5 py-12 text-center text-sm ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                  No monitors configured yet.
+                </div>
+              ) : (
+                monitors.map((monitor) => (
+                  <StatusPageMonitorRow
+                    key={monitor.name}
+                    monitor={monitor}
+                    showHistory={showUptimeHistory}
+                    historyDays={historyDays}
+                    isDarkMode={isDarkMode}
+                    timezone={timezone}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+        </main>
+
+        {/* Footer */}
+        <footer className={`border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-100'} mt-8`}>
+          <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className={`text-xs ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+              Powered by{' '}
+              <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                Moneat
+              </span>
+            </p>
+            <p className={`text-xs ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+              Preview Mode
+            </p>
+          </div>
+        </footer>
+      </div>
+    </TooltipProvider>
+  )
 }

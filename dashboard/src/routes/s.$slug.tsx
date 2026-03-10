@@ -18,20 +18,17 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
-import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
+import {TooltipProvider} from '@/components/ui/tooltip'
 import {
     Activity,
-    AlertCircle,
-    AlertTriangle,
-    CheckCircle2,
     ChevronRight,
     Clock,
     Globe,
     Loader2,
-    XCircle,
 } from 'lucide-react'
 import {Helmet} from 'react-helmet-async'
-import {browserTimezone, formatDateTime as formatDateTimeFn, formatMonthDay, formatTimeHM12} from '@/lib/date-format'
+import {browserTimezone, formatDateTime as formatDateTimeFn, formatTimeHM12} from '@/lib/date-format'
+import {StatusBanner, StatusPageMonitorRow} from '@/components/StatusPagePreview'
 
 export const Route = createFileRoute('/s/$slug')({
   component: PublicStatusPage,
@@ -163,12 +160,13 @@ function PublicStatusPage() {
 
             <div className={`rounded-xl border ${isDarkMode ? 'border-slate-800 divide-slate-800' : 'border-slate-200 divide-slate-100'} divide-y`}>
               {statusPage.monitors.map((monitor) => (
-                <MonitorRow
+                <StatusPageMonitorRow
                   key={monitor.name}
                   monitor={monitor}
                   showHistory={statusPage.showUptimeHistory}
                   historyDays={statusPage.historyDays}
                   isDarkMode={isDarkMode}
+                  timezone={browserTimezone()}
                 />
               ))}
               {statusPage.monitors.length === 0 && (
@@ -201,151 +199,6 @@ function PublicStatusPage() {
         </footer>
       </div>
     </TooltipProvider>
-  )
-}
-
-// ─── Status Banner ───────────────────────────────────────────────────────────
-
-function StatusBanner({status, isDarkMode}: {status: string; isDarkMode: boolean}) {
-  const config = {
-    operational: {
-      icon: CheckCircle2,
-      title: 'All Systems Operational',
-      bg: isDarkMode ? 'bg-emerald-950/40' : 'bg-emerald-50',
-      border: isDarkMode ? 'border-emerald-900/50' : 'border-emerald-200',
-      iconColor: isDarkMode ? 'text-emerald-400' : 'text-emerald-600',
-      textColor: isDarkMode ? 'text-emerald-300' : 'text-emerald-800',
-    },
-    degraded: {
-      icon: AlertTriangle,
-      title: 'Partial System Outage',
-      bg: isDarkMode ? 'bg-amber-950/40' : 'bg-amber-50',
-      border: isDarkMode ? 'border-amber-900/50' : 'border-amber-200',
-      iconColor: isDarkMode ? 'text-amber-400' : 'text-amber-600',
-      textColor: isDarkMode ? 'text-amber-300' : 'text-amber-800',
-    },
-    down: {
-      icon: XCircle,
-      title: 'Major System Outage',
-      bg: isDarkMode ? 'bg-red-950/40' : 'bg-red-50',
-      border: isDarkMode ? 'border-red-900/50' : 'border-red-200',
-      iconColor: isDarkMode ? 'text-red-400' : 'text-red-600',
-      textColor: isDarkMode ? 'text-red-300' : 'text-red-800',
-    },
-    unknown: {
-      icon: AlertCircle,
-      title: 'Status Unknown',
-      bg: isDarkMode ? 'bg-slate-900' : 'bg-slate-50',
-      border: isDarkMode ? 'border-slate-700' : 'border-slate-200',
-      iconColor: isDarkMode ? 'text-slate-400' : 'text-slate-500',
-      textColor: isDarkMode ? 'text-slate-300' : 'text-slate-700',
-    },
-  }
-
-  const c = config[status as keyof typeof config] || config.unknown
-  const Icon = c.icon
-
-  return (
-    <div className={`rounded-xl border ${c.border} ${c.bg} px-6 py-5 flex items-center gap-4`}>
-      <Icon className={`h-6 w-6 flex-shrink-0 ${c.iconColor}`} />
-      <span className={`text-base font-semibold ${c.textColor}`}>{c.title}</span>
-    </div>
-  )
-}
-
-// ─── Monitor Row ─────────────────────────────────────────────────────────────
-
-function MonitorRow({
-  monitor,
-  showHistory,
-  historyDays,
-  isDarkMode,
-}: {
-  monitor: {
-    name: string
-    displayName?: string | null
-    status: string
-    uptimePercentage: number
-    uptimeHistory?: {date: string; uptime: number}[] | null
-  }
-  showHistory: boolean
-  historyDays: number
-  isDarkMode: boolean
-}) {
-  const statusColors = {
-    operational: isDarkMode ? 'text-emerald-400' : 'text-emerald-600',
-    degraded: isDarkMode ? 'text-amber-400' : 'text-amber-600',
-    down: isDarkMode ? 'text-red-400' : 'text-red-600',
-  }
-
-  const statusDotColors = {
-    operational: isDarkMode ? 'bg-emerald-400' : 'bg-emerald-500',
-    degraded: isDarkMode ? 'bg-amber-400' : 'bg-amber-500',
-    down: isDarkMode ? 'bg-red-400' : 'bg-red-500',
-  }
-
-  const uptimeColor = monitor.uptimePercentage >= 99.9
-    ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600')
-    : monitor.uptimePercentage >= 99
-      ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600')
-      : monitor.uptimePercentage >= 95
-        ? (isDarkMode ? 'text-amber-400' : 'text-amber-600')
-        : (isDarkMode ? 'text-red-400' : 'text-red-600')
-
-  const history = showHistory && monitor.uptimeHistory
-    ? monitor.uptimeHistory.slice(-historyDays)
-    : null
-
-  return (
-    <div className={`px-5 py-4 ${isDarkMode ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50/80'} transition-colors`}>
-      {/* Top: name + status */}
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${statusDotColors[monitor.status as keyof typeof statusDotColors] || 'bg-slate-400'}`} />
-          <span className="font-medium text-sm truncate">
-            {monitor.displayName || monitor.name}
-          </span>
-        </div>
-        <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-          <span className={`text-xs font-medium tabular-nums ${uptimeColor}`}>
-            {monitor.uptimePercentage.toFixed(2)}%
-          </span>
-          <span className={`text-xs capitalize ${statusColors[monitor.status as keyof typeof statusColors] || (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
-            {monitor.status === 'operational' ? 'Operational' : monitor.status}
-          </span>
-        </div>
-      </div>
-
-      {/* Uptime History Bar */}
-      {history && history.length > 0 && (
-        <div className="mt-3">
-          <div className="flex items-stretch gap-[1.5px] h-8 w-full">
-            {history.map((point, index) => {
-              const barColor = getBarColor(point.uptime, isDarkMode)
-              return (
-                <Tooltip key={index}>
-                  <TooltipTrigger asChild>
-                    <div
-                      className={`flex-1 rounded-[2px] ${barColor} transition-opacity hover:opacity-80 cursor-default min-w-[2px]`}
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <p className="font-medium">{formatMonthDay(new Date(point.date), browserTimezone())}</p>
-                    <p className={`tabular-nums ${point.uptime >= 99 ? 'text-emerald-600 dark:text-emerald-400' : point.uptime >= 90 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {point.uptime.toFixed(2)}% uptime
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              )
-            })}
-          </div>
-          <div className={`flex justify-between mt-1.5 text-[10px] ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
-            <span>{historyDays}d ago</span>
-            <span>Today</span>
-          </div>
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -456,12 +309,6 @@ function MaintenanceCard({
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getBarColor(uptime: number, isDarkMode: boolean) {
-  if (uptime >= 99) return isDarkMode ? 'bg-emerald-500/70' : 'bg-emerald-400'
-  if (uptime >= 90) return isDarkMode ? 'bg-amber-500/70' : 'bg-amber-400'
-  return isDarkMode ? 'bg-red-500/70' : 'bg-red-400'
-}
 
 function getIncidentStatusColor(status: string, isDarkMode: boolean) {
   const map: Record<string, string> = {

@@ -23,26 +23,13 @@ import {cn, formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent} from '@/components/ui/card'
-import {CheckCircle2, Clock, Pause, Play, Trash2, XCircle} from 'lucide-react'
+import {Pause, Play, Trash2} from 'lucide-react'
 import {useToast} from '@/hooks/useToast'
 import HeartbeatBar from './HeartbeatBar'
+import {getStatusBadge} from './MonitorStatusBadge'
 
 interface MonitorListItemProps {
   monitor: UptimeMonitor
-}
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'up':
-      return <Badge className="bg-emerald-500 hover:bg-emerald-600"><CheckCircle2 className="mr-1 h-3 w-3" />Up</Badge>
-    case 'down':
-      return <Badge className="bg-red-500 hover:bg-red-600"><XCircle className="mr-1 h-3 w-3" />Down</Badge>
-    case 'paused':
-      return <Badge variant="outline"><Pause className="mr-1 h-3 w-3" />Paused</Badge>
-    case 'pending':
-    default:
-      return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Pending</Badge>
-  }
 }
 
 function getMonitorTypeLabel(type: string): string {
