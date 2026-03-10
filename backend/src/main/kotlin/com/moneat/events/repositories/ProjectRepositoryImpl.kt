@@ -165,14 +165,16 @@ class ProjectRepositoryImpl(
                     .selectAll()
                     .where {
                         (ProjectKeys.project_id eq projectId) and
-                            ProjectKeys.platform_target.isNull()
+                            ProjectKeys.platform_target.isNull() and
+                            (ProjectKeys.is_active eq true)
                     }
             } else {
                 ProjectKeys
                     .selectAll()
                     .where {
                         (ProjectKeys.project_id eq projectId) and
-                            (ProjectKeys.platform_target eq target)
+                            (ProjectKeys.platform_target eq target) and
+                            (ProjectKeys.is_active eq true)
                     }
             }
             query.firstOrNull() != null

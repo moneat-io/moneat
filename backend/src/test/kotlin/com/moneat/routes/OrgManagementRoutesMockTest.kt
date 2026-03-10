@@ -66,6 +66,8 @@ class OrgManagementRoutesMockTest {
 
     companion object {
         private const val JWT_SECRET = "org-mock-secret"
+        private const val OWNER_EMAIL = "owner@acme.test"
+        private const val NEW_MEMBER_EMAIL = "new@acme.test"
         private var dbInitialized = false
     }
 
@@ -132,13 +134,13 @@ class OrgManagementRoutesMockTest {
     @Test
     fun `GET members returns members and invitations from service`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("owner@acme.test")
+        val userId = seedUser(OWNER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         every { mockMembershipService.requireRole(orgId, userId, OrgRole.MEMBER) } just runs
         every { mockMembershipService.getMembers(orgId) } returns listOf(
             OrgMemberResponse(
-                userId = userId, email = "owner@acme.test", name = "owner", role = "owner", joinedAt = null
+                userId = userId, email = OWNER_EMAIL, name = "owner", role = "owner", joinedAt = null
             )
         )
         every { mockInvitationService.getPendingInvitations(orgId) } returns listOf(
@@ -148,7 +150,7 @@ class OrgManagementRoutesMockTest {
                 role = "member",
                 status = "pending",
                 invitedBy = "owner",
-                invitedByEmail = "owner@acme.test",
+                invitedByEmail = OWNER_EMAIL,
                 createdAt = "2026-01-01T00:00:00Z",
                 expiresAt = "2026-12-31T00:00:00Z"
             )
@@ -164,7 +166,7 @@ class OrgManagementRoutesMockTest {
             }
             assertEquals(HttpStatusCode.OK, response.status)
             val body = response.bodyAsText()
-            assertTrue(body.contains("owner@acme.test"))
+            assertTrue(body.contains(OWNER_EMAIL))
             assertTrue(body.contains("invitee@acme.test"))
         }
     }
@@ -172,7 +174,7 @@ class OrgManagementRoutesMockTest {
     @Test
     fun `PUT member role returns 400 for non-numeric user id`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("owner@acme.test")
+        val userId = seedUser(OWNER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         testApplication {
@@ -193,7 +195,7 @@ class OrgManagementRoutesMockTest {
     @Test
     fun `DELETE invitation returns 400 for non-numeric invitation id`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("owner@acme.test")
+        val userId = seedUser(OWNER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         testApplication {
@@ -225,18 +227,18 @@ class OrgManagementRoutesMockTest {
     @Test
     fun `POST invite member delegates to invitationService`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("owner@acme.test")
+        val userId = seedUser(OWNER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         every { mockMembershipService.requireRole(orgId, userId, OrgRole.ADMIN) } just runs
-        every { mockInvitationService.inviteMember(orgId, "new@acme.test", "member", userId) } returns
+        every { mockInvitationService.inviteMember(orgId, NEW_MEMBER_EMAIL, "member", userId) } returns
             InvitationResponse(
                 id = 99,
-                email = "new@acme.test",
+                email = NEW_MEMBER_EMAIL,
                 role = "member",
                 status = "pending",
                 invitedBy = "owner",
-                invitedByEmail = "owner@acme.test",
+                invitedByEmail = OWNER_EMAIL,
                 createdAt = "2026-01-01T00:00:00Z",
                 expiresAt = "2026-12-31T00:00:00Z"
             )
@@ -249,10 +251,10 @@ class OrgManagementRoutesMockTest {
             val response = client.post("/v1/org/invitations") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
-                setBody("""{"email":"new@acme.test","role":"member"}""")
+                setBody("""{"email":"$NEW_MEMBER_EMAIL","role":"member"}""")
             }
             assertEquals(HttpStatusCode.Created, response.status)
-            verify { mockInvitationService.inviteMember(orgId, "new@acme.test", "member", userId) }
+            verify { mockInvitationService.inviteMember(orgId, NEW_MEMBER_EMAIL, "member", userId) }
         }
     }
 }

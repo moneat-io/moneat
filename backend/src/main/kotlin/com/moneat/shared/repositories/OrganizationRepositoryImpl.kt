@@ -69,6 +69,8 @@ class OrganizationRepositoryImpl : OrganizationRepository {
                 suffix++
             }
         }
-        throw IllegalStateException("Could not generate a unique slug for '${update.baseSlug}' after $MAX_SLUG_RETRIES attempts")
+        throw IllegalStateException(
+            "Could not generate a unique slug for '${update.baseSlug}' after $MAX_SLUG_RETRIES attempts"
+        )
     }
 }

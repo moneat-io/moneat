@@ -33,6 +33,11 @@ import kotlin.test.assertTrue
 
 class UserRepositoryTest {
 
+    companion object {
+        private const val FIND_EMAIL = "find@test.com"
+        private const val RESET_TOKEN = "reset-tok"
+    }
+
     private var db: Database? = null
     private lateinit var repository: UserRepository
 
@@ -95,10 +100,10 @@ class UserRepositoryTest {
 
     @Test
     fun `findByEmail returns user for existing email`() {
-        createUser(email = "find@test.com")
-        val found = repository.findByEmail("find@test.com")
+        createUser(email = FIND_EMAIL)
+        val found = repository.findByEmail(FIND_EMAIL)
         assertNotNull(found)
-        assertEquals("find@test.com", found.email)
+        assertEquals(FIND_EMAIL, found.email)
     }
 
     @Test
@@ -185,8 +190,8 @@ class UserRepositoryTest {
     @Test
     fun `updatePasswordResetToken sets reset token and expiry`() {
         val userId = createUser(email = "reset@test.com", emailVerified = true)
-        repository.updatePasswordResetToken(userId, "reset-tok", 8000L)
-        val found = repository.findByPasswordResetToken("reset-tok")
+        repository.updatePasswordResetToken(userId, RESET_TOKEN, 8000L)
+        val found = repository.findByPasswordResetToken(RESET_TOKEN)
         assertNotNull(found)
         assertEquals(8000L, found.passwordResetExpiresAt)
     }
@@ -194,7 +199,7 @@ class UserRepositoryTest {
     @Test
     fun `clearPasswordResetToken nulls the reset token`() {
         val userId = createUser(email = "clearreset@test.com", emailVerified = true)
-        repository.updatePasswordResetToken(userId, "reset-tok", 9000L)
+        repository.updatePasswordResetToken(userId, RESET_TOKEN, 9000L)
         repository.clearPasswordResetToken(userId)
         val updated = repository.findById(userId)!!
         assertNull(updated.passwordResetToken)

@@ -34,6 +34,10 @@ import kotlin.test.assertTrue
 
 class OrgMembershipRepositoryTest {
 
+    companion object {
+        private const val MEMBER_EMAIL = "user@test.com"
+    }
+
     private var db: Database? = null
     private lateinit var repository: OrgMembershipRepository
 
@@ -100,7 +104,7 @@ class OrgMembershipRepositoryTest {
     fun getMembersExcludesMembersFromOtherOrgs() {
         val org1 = insertOrg("Org 1")
         val org2 = insertOrg("Org 2")
-        val userId = insertUser("user@test.com")
+        val userId = insertUser(MEMBER_EMAIL)
         insertMembership(org1, userId, "owner")
         insertMembership(org2, userId, "member")
 
@@ -127,7 +131,7 @@ class OrgMembershipRepositoryTest {
     @Test
     fun updateMemberRoleUpdatesSuccessfully() {
         val orgId = insertOrg()
-        val userId = insertUser("user@test.com")
+        val userId = insertUser(MEMBER_EMAIL)
         insertMembership(orgId, userId, "member")
 
         val updated = repository.updateMemberRole(orgId, userId, "admin")
@@ -146,7 +150,7 @@ class OrgMembershipRepositoryTest {
     @Test
     fun removeMemberDeletesSuccessfully() {
         val orgId = insertOrg()
-        val userId = insertUser("user@test.com")
+        val userId = insertUser(MEMBER_EMAIL)
         insertMembership(orgId, userId, "member")
 
         val deleted = repository.removeMember(orgId, userId)

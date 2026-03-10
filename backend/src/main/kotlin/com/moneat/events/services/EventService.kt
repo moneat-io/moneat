@@ -470,32 +470,29 @@ class EventService(
 
         try {
             val success = eventRepository.executeClickHouseInsert(query)
-            if (!success) {
-                return false
-            } else {
-                logger.info { "Event stored: $eventId for project $projectId" }
-                CacheService.invalidatePattern("cache:issues:$projectId:*")
-                event.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
-                    try {
-                        releaseService.upsertReleaseFromEvent(projectId, releaseVersion, timestamp)
-                    } catch (e: Exception) {
-                        logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
-                    }
+            if (!success) return false
+            logger.info { "Event stored: $eventId for project $projectId" }
+            CacheService.invalidatePattern("cache:issues:$projectId:*")
+            event.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
+                try {
+                    releaseService.upsertReleaseFromEvent(projectId, releaseVersion, timestamp)
+                } catch (e: Exception) {
+                    logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                 }
-
-                // Check if this is a new issue and trigger notifications
-                scope.launch {
-                    try {
-                        if (isNewIssue(projectId, issueId)) {
-                            logger.info { "New issue detected: $issueId for project $projectId" }
-                            notificationService?.onNewIssue(projectId, issueId, event)
-                        }
-                    } catch (e: Exception) {
-                        logger.error(e) { "Error checking for new issue notifications" }
-                    }
-                }
-                return true
             }
+
+            // Check if this is a new issue and trigger notifications
+            scope.launch {
+                try {
+                    if (isNewIssue(projectId, issueId)) {
+                        logger.info { "New issue detected: $issueId for project $projectId" }
+                        notificationService?.onNewIssue(projectId, issueId, event)
+                    }
+                } catch (e: Exception) {
+                    logger.error(e) { "Error checking for new issue notifications" }
+                }
+            }
+            return true
         } catch (e: Exception) {
             logger.error(e) { "Error storing event in ClickHouse" }
             return false
@@ -571,12 +568,9 @@ class EventService(
 
         try {
             val success = eventRepository.executeClickHouseInsert(insertQuery)
-            if (!success) {
-                return false
-            } else {
-                logger.info { "Feedback stored: $feedbackId for project $projectId" }
-                return true
-            }
+            if (!success) return false
+            logger.info { "Feedback stored: $feedbackId for project $projectId" }
+            return true
         } catch (e: Exception) {
             logger.error(e) { "Error storing feedback in ClickHouse" }
             return false
@@ -664,12 +658,9 @@ class EventService(
 
         try {
             val success = eventRepository.executeClickHouseInsert(replayEventInsert)
-            if (!success) {
-                return false
-            } else {
-                logger.info { "Replay event stored: $replayId segment $segmentId for project $projectId" }
-                return true
-            }
+            if (!success) return false
+            logger.info { "Replay event stored: $replayId segment $segmentId for project $projectId" }
+            return true
         } catch (e: Exception) {
             logger.error(e) { "Error storing replay event in ClickHouse" }
             return false

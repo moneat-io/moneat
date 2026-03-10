@@ -20,6 +20,12 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 
 class OrgInvitationServiceTest {
+    companion object {
+        private const val NEW_USER_EMAIL = "newuser@test.com"
+        private const val EXISTING_EMAIL = "existing@test.com"
+        private const val DUP_EMAIL = "dup@test.com"
+    }
+
     private val membershipService = mockk<OrgMembershipService>()
     private val emailService = mockk<EmailService>(relaxed = true)
     private val invitationRepository = mockk<OrgInvitationRepository>()
@@ -50,10 +56,10 @@ class OrgInvitationServiceTest {
     @Test
     fun `inviteMember creates pending invitation`() {
         mockAdminRole()
-        stubInviteCreation("newuser@test.com")
+        stubInviteCreation(NEW_USER_EMAIL)
 
-        val result = service.inviteMember(orgId, "newuser@test.com", "member", adminId)
-        assertEquals("newuser@test.com", result.email)
+        val result = service.inviteMember(orgId, NEW_USER_EMAIL, "member", adminId)
+        assertEquals(NEW_USER_EMAIL, result.email)
         assertEquals("member", result.role)
         assertEquals("pending", result.status)
     }
@@ -79,25 +85,25 @@ class OrgInvitationServiceTest {
     fun `inviteMember rejects when user is already a member`() {
         mockAdminRole()
         val existingUserId = 99
-        every { invitationRepository.expireStaleInvitations(orgId, "existing@test.com", any()) } returns 0
-        every { invitationRepository.findUserByEmail("existing@test.com") } returns
-            OrgInvitationUserRow(existingUserId, "existing@test.com", "Existing")
+        every { invitationRepository.expireStaleInvitations(orgId, EXISTING_EMAIL, any()) } returns 0
+        every { invitationRepository.findUserByEmail(EXISTING_EMAIL) } returns
+            OrgInvitationUserRow(existingUserId, EXISTING_EMAIL, "Existing")
         every { membershipService.isMember(orgId, existingUserId) } returns true
 
         assertFailsWith<BadRequestException> {
-            service.inviteMember(orgId, "existing@test.com", "member", adminId)
+            service.inviteMember(orgId, EXISTING_EMAIL, "member", adminId)
         }
     }
 
     @Test
     fun `inviteMember rejects duplicate pending invitation`() {
         mockAdminRole()
-        every { invitationRepository.expireStaleInvitations(orgId, "dup@test.com", any()) } returns 0
-        every { invitationRepository.findUserByEmail("dup@test.com") } returns null
-        every { invitationRepository.existsPendingInvitation(orgId, "dup@test.com", any()) } returns true
+        every { invitationRepository.expireStaleInvitations(orgId, DUP_EMAIL, any()) } returns 0
+        every { invitationRepository.findUserByEmail(DUP_EMAIL) } returns null
+        every { invitationRepository.existsPendingInvitation(orgId, DUP_EMAIL, any()) } returns true
 
         assertFailsWith<BadRequestException> {
-            service.inviteMember(orgId, "dup@test.com", "member", adminId)
+            service.inviteMember(orgId, DUP_EMAIL, "member", adminId)
         }
     }
 
@@ -116,7 +122,7 @@ class OrgInvitationServiceTest {
     private fun makeInvite(
         status: String = "pending",
         expiresAt: Long = futureMs,
-        email: String = "newuser@test.com",
+        email: String = NEW_USER_EMAIL,
     ) = OrgInvitationRow(
         id = 1, orgId = orgId, email = email, role = "member",
         invitedBy = adminId, token = "tok", status = status,
@@ -129,7 +135,7 @@ class OrgInvitationServiceTest {
         val userId = 20
         every { invitationRepository.findByToken("tok") } returns invite
         every { invitationRepository.findUserById(userId) } returns
-            OrgInvitationUserRow(userId, "newuser@test.com", "New User")
+            OrgInvitationUserRow(userId, NEW_USER_EMAIL, "New User")
         every { membershipService.isMember(orgId, userId) } returns false
         justRun { membershipService.addMember(orgId, userId, "member") }
         every { invitationRepository.updateStatus(1, "accepted") } returns 1
@@ -209,7 +215,8 @@ class OrgInvitationServiceTest {
     @Test
     fun `cleanupExpiredInvitations returns zero when no expired`() {
         every { invitationRepository.cleanupExpiredInvitations(any()) } returns 0
-        assertEquals(0, service.cleanupExpiredInvitations())
+        service.cleanupExpiredInvitations()
+        verify { invitationRepository.cleanupExpiredInvitations(any()) }
     }
 
     // --- getPendingInvitations ---

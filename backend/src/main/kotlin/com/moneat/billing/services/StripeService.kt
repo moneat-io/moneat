@@ -451,7 +451,7 @@ class StripeService(
 
         if (!tier.oncallEnabled) throw IllegalArgumentException("On-call is not enabled for this tier")
 
-        val isYearly = subRow.billingInterval.equals("yearly", ignoreCase = true)
+        val isYearly = subRow.billingInterval.lowercase() == "yearly"
         val oncallPriceId =
             if (isYearly) {
                 tier.stripeOncallYearlyPriceId ?: tier.stripeOncallPriceId

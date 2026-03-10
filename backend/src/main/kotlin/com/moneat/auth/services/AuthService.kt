@@ -326,9 +326,7 @@ class AuthService(
     fun resendVerificationEmail(email: String): Boolean {
         val normalizedEmail = email.lowercase().trim()
         val user = userRepository.findByEmail(normalizedEmail) ?: return false
-        if (user.emailVerified) {
-            throw IllegalArgumentException("Email already verified")
-        }
+        require(!user.emailVerified) { "Email already verified" }
         val verificationToken = generateVerificationToken()
         val expiresAt = System.currentTimeMillis() + VERIFICATION_TTL_MS
         userRepository.updateVerificationToken(user.id, verificationToken, expiresAt)
@@ -357,9 +355,7 @@ class AuthService(
             return null
         }
 
-        if (!user.emailVerified) {
-            throw IllegalArgumentException("Email not verified. Please check your email for the verification link.")
-        }
+        require(user.emailVerified) { "Email not verified. Please check your email for the verification link." }
 
         val (orgId, orgRole) = run {
             val membership = membershipRepository.getFirstMembershipForUser(user.id)

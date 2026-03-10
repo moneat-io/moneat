@@ -63,6 +63,14 @@ class DashboardServiceProjectTest {
     private val mockIssueRepo = mockk<IssueRepository>(relaxed = true)
 
     companion object {
+        private const val PROJECT_NAME = "My App"
+        private const val PROJECT_SLUG = "my-app"
+        private const val MULTI_TARGET_NAME = "Multi Target"
+        private const val MULTI_TARGET_SLUG = "multi-target"
+        private const val SINGLE_KEY_NAME = "Single Key App"
+        private const val SINGLE_KEY_SLUG = "single-key-app"
+        private const val SPECIAL_CHARS_NAME = "My App v2.0!"
+        private const val SPECIAL_CHARS_SLUG = "my-app-v2-0"
         private var db: Database? = null
 
         fun seedUser(email: String = "user@test.com"): Int = transaction {
@@ -168,12 +176,12 @@ class DashboardServiceProjectTest {
         seedMembership(userId, seedOrg())
 
         every { mockProjectRepo.getProjectCountForOrganization(any()) } returns 0
-        every { mockProjectRepo.findProjectByNameOrSlug(any(), "My App", "my-app") } returns null
-        every { mockProjectRepo.createProject(any(), "My App", "my-app", "kotlin") } returns 42L
+        every { mockProjectRepo.findProjectByNameOrSlug(any(), PROJECT_NAME, PROJECT_SLUG) } returns null
+        every { mockProjectRepo.createProject(any(), PROJECT_NAME, PROJECT_SLUG, "kotlin") } returns 42L
         every { mockProjectRepo.findProjectKeyByTarget(42L, null) } returns false
         every { mockProjectRepo.createProjectKey(42L, any(), any(), null) } just runs
         every { mockProjectRepo.getProjectById(42L) } returns ProjectRow(
-            projectId = 42L, name = "My App", slug = "my-app", framework = "kotlin",
+            projectId = 42L, name = PROJECT_NAME, slug = PROJECT_SLUG, framework = "kotlin",
             keys = listOf(ProjectKeyResponse(null, "http://testkey@test/42")),
             dsn = "http://testkey@test/42"
         )
@@ -181,11 +189,11 @@ class DashboardServiceProjectTest {
 
         val result = makeDashboardService().createProject(
             userId,
-            CreateProjectRequest(name = "My App", framework = "kotlin")
+            CreateProjectRequest(name = PROJECT_NAME, framework = "kotlin")
         )
 
-        assertEquals("My App", result.name)
-        assertEquals("my-app", result.slug)
+        assertEquals(PROJECT_NAME, result.name)
+        assertEquals(PROJECT_SLUG, result.slug)
         assertEquals("kotlin", result.framework)
         assertTrue(result.keys.isNotEmpty())
         assertTrue(result.dsn.isNotEmpty())
@@ -220,12 +228,12 @@ class DashboardServiceProjectTest {
         seedMembership(userId, seedOrg())
 
         every { mockProjectRepo.getProjectCountForOrganization(any()) } returns 0
-        every { mockProjectRepo.findProjectByNameOrSlug(any(), "Multi Target", "multi-target") } returns null
-        every { mockProjectRepo.createProject(any(), "Multi Target", "multi-target", null) } returns 100L
+        every { mockProjectRepo.findProjectByNameOrSlug(any(), MULTI_TARGET_NAME, MULTI_TARGET_SLUG) } returns null
+        every { mockProjectRepo.createProject(any(), MULTI_TARGET_NAME, MULTI_TARGET_SLUG, null) } returns 100L
         every { mockProjectRepo.findProjectKeyByTarget(100L, any()) } returns false
         every { mockProjectRepo.createProjectKey(100L, any(), any(), any()) } just runs
         every { mockProjectRepo.getProjectById(100L) } returns ProjectRow(
-            projectId = 100L, name = "Multi Target", slug = "multi-target", framework = null,
+            projectId = 100L, name = MULTI_TARGET_NAME, slug = MULTI_TARGET_SLUG, framework = null,
             keys = listOf(
                 ProjectKeyResponse("android", "http://k1@test/100"),
                 ProjectKeyResponse("ios", "http://k2@test/100"),
@@ -236,7 +244,7 @@ class DashboardServiceProjectTest {
 
         val result = makeDashboardService().createProject(
             userId,
-            CreateProjectRequest(name = "Multi Target", targets = listOf("android", "ios"))
+            CreateProjectRequest(name = MULTI_TARGET_NAME, targets = listOf("android", "ios"))
         )
 
         assertEquals(2, result.keys.size)
@@ -251,18 +259,18 @@ class DashboardServiceProjectTest {
         seedMembership(userId, seedOrg())
 
         every { mockProjectRepo.getProjectCountForOrganization(any()) } returns 0
-        every { mockProjectRepo.findProjectByNameOrSlug(any(), "Single Key App", "single-key-app") } returns null
-        every { mockProjectRepo.createProject(any(), "Single Key App", "single-key-app", null) } returns 200L
+        every { mockProjectRepo.findProjectByNameOrSlug(any(), SINGLE_KEY_NAME, SINGLE_KEY_SLUG) } returns null
+        every { mockProjectRepo.createProject(any(), SINGLE_KEY_NAME, SINGLE_KEY_SLUG, null) } returns 200L
         every { mockProjectRepo.findProjectKeyByTarget(200L, null) } returns false
         every { mockProjectRepo.createProjectKey(200L, any(), any(), null) } just runs
         every { mockProjectRepo.getProjectById(200L) } returns ProjectRow(
-            projectId = 200L, name = "Single Key App", slug = "single-key-app", framework = null,
+            projectId = 200L, name = SINGLE_KEY_NAME, slug = SINGLE_KEY_SLUG, framework = null,
             keys = listOf(ProjectKeyResponse(null, "http://k@test/200")),
             dsn = "http://k@test/200"
         )
         coEvery { mockProjectRepo.getIssueCountForProject(200L, any(), null) } returns 0L
 
-        val result = makeDashboardService().createProject(userId, CreateProjectRequest(name = "Single Key App"))
+        val result = makeDashboardService().createProject(userId, CreateProjectRequest(name = SINGLE_KEY_NAME))
 
         assertEquals(1, result.keys.size)
         assertNull(result.keys.first().platformTarget)
@@ -274,19 +282,19 @@ class DashboardServiceProjectTest {
         seedMembership(userId, seedOrg())
 
         every { mockProjectRepo.getProjectCountForOrganization(any()) } returns 0
-        every { mockProjectRepo.findProjectByNameOrSlug(any(), "My App v2.0!", "my-app-v2-0") } returns null
-        every { mockProjectRepo.createProject(any(), "My App v2.0!", "my-app-v2-0", null) } returns 300L
+        every { mockProjectRepo.findProjectByNameOrSlug(any(), SPECIAL_CHARS_NAME, SPECIAL_CHARS_SLUG) } returns null
+        every { mockProjectRepo.createProject(any(), SPECIAL_CHARS_NAME, SPECIAL_CHARS_SLUG, null) } returns 300L
         every { mockProjectRepo.findProjectKeyByTarget(300L, null) } returns false
         every { mockProjectRepo.createProjectKey(300L, any(), any(), null) } just runs
         every { mockProjectRepo.getProjectById(300L) } returns ProjectRow(
-            projectId = 300L, name = "My App v2.0!", slug = "my-app-v2-0", framework = null,
+            projectId = 300L, name = SPECIAL_CHARS_NAME, slug = SPECIAL_CHARS_SLUG, framework = null,
             keys = listOf(ProjectKeyResponse(null, "http://k@test/300")),
             dsn = "http://k@test/300"
         )
         coEvery { mockProjectRepo.getIssueCountForProject(300L, any(), null) } returns 0L
 
-        val result = makeDashboardService().createProject(userId, CreateProjectRequest(name = "My App v2.0!"))
-        assertEquals("my-app-v2-0", result.slug)
+        val result = makeDashboardService().createProject(userId, CreateProjectRequest(name = SPECIAL_CHARS_NAME))
+        assertEquals(SPECIAL_CHARS_SLUG, result.slug)
     }
 
     // ===================== addProjectTarget =====================
@@ -360,14 +368,14 @@ class DashboardServiceProjectTest {
     fun `getProjects returns projects with issue counts`() = runBlocking {
         every { mockProjectRepo.getOrganizationIdsForUser(1) } returns listOf(10)
         every { mockProjectRepo.getProjectsForOrganizations(listOf(10)) } returns listOf(
-            ProjectRow(1L, "My App", "my-app", null, emptyList(), "http://k@host/1")
+            ProjectRow(1L, PROJECT_NAME, PROJECT_SLUG, null, emptyList(), "http://k@host/1")
         )
         coEvery { mockProjectRepo.getIssueCountForProject(1L, any(), null) } returns 42L
 
         val projects = makeDashboardService().getProjects(1)
 
         assertEquals(1, projects.size)
-        assertEquals("My App", projects.first().name)
+        assertEquals(PROJECT_NAME, projects.first().name)
         assertEquals(42, projects.first().issueCount)
     }
 

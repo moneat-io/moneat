@@ -33,6 +33,10 @@ import kotlin.test.assertTrue
 
 class IssueRepositoryTest {
 
+    companion object {
+        private const val ISSUE_ID = "issue-x"
+    }
+
     private var db: Database? = null
     private lateinit var repository: IssueRepository
     private var projectId: Long = 0L
@@ -109,9 +113,9 @@ class IssueRepositoryTest {
 
     @Test
     fun `upsertIssueStatus updates existing status row`() {
-        repository.upsertIssueStatus("issue-x", projectId, "unresolved")
-        repository.upsertIssueStatus("issue-x", projectId, "resolved")
-        assertEquals("resolved", repository.getIssueStatus("issue-x", projectId))
+        repository.upsertIssueStatus(ISSUE_ID, projectId, "unresolved")
+        repository.upsertIssueStatus(ISSUE_ID, projectId, "resolved")
+        assertEquals("resolved", repository.getIssueStatus(ISSUE_ID, projectId))
     }
 
     @Test
