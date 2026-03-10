@@ -110,22 +110,22 @@ class OrgManagementRoutesMockTest {
     private fun seedOrg(name: String): Int = transaction {
         Organizations.insert {
             it[Organizations.name] = name
-            it[slug] = name.lowercase()
+            it[Organizations.slug] = name.lowercase()
         } get Organizations.id
     }
 
     private fun seedUser(email: String): Int = transaction {
         Users.insert {
             it[Users.email] = email
-            it[password_hash] = "hashed"
+            it[Users.password_hash] = "hashed"
             it[Users.name] = email.substringBefore("@")
-            it[email_verified] = true
+            it[Users.email_verified] = true
         } get Users.id
     }
 
     private fun seedMembership(orgId: Int, userId: Int, role: String) = transaction {
         Memberships.insert {
-            it[organization_id] = orgId
+            it[Memberships.organization_id] = orgId
             it[Memberships.user_id] = userId
             it[Memberships.role] = role
         }

@@ -1151,7 +1151,7 @@ class EventService(
         issueId: String
     ): Boolean {
         val cacheKey = "$projectId:$issueId"
-        if (cacheKey in knownIssueIds) return false
+        if (!knownIssueIds.add(cacheKey)) return false
 
         val count = eventRepository.getEventCountForIssue(projectId, issueId)
 
@@ -1159,9 +1159,9 @@ class EventService(
             if (knownIssueIds.size > MAX_KNOWN_ISSUES) {
                 knownIssueIds.clear()
             }
-            knownIssueIds.add(cacheKey)
             false
         } else {
+            knownIssueIds.remove(cacheKey)
             true
         }
     }

@@ -195,7 +195,7 @@ class OrgInvitationServiceTest {
         every { membershipService.requireRole(orgId, memberId, any()) } throws
             IllegalStateException("Insufficient permissions")
 
-        assertFailsWith<Exception> { service.revokeInvitation(1, memberId) }
+        assertFailsWith<IllegalStateException> { service.revokeInvitation(1, memberId) }
     }
 
     // --- cleanupExpiredInvitations ---

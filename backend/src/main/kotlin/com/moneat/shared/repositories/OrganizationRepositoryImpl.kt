@@ -48,7 +48,7 @@ class OrganizationRepositoryImpl : OrganizationRepository {
             try {
                 val candidateSlug = slug
                 transaction {
-                    Organizations.update({ Organizations.id eq update.orgId }) {
+                    val orgUpdated = Organizations.update({ Organizations.id eq update.orgId }) {
                         it[name] = update.name
                         it[Organizations.slug] = candidateSlug
                         it[company_size] = update.companySize
@@ -59,12 +59,17 @@ class OrganizationRepositoryImpl : OrganizationRepository {
                         it[utm_content] = update.utmContent
                         it[utm_term] = update.utmTerm
                     }
-                    Users.update({ Users.id eq update.userId }) {
+                    check(orgUpdated == 1) { "Organization with id=${update.orgId} not found" }
+                    val userUpdated = Users.update({ Users.id eq update.userId }) {
                         it[onboarding_completed] = true
                     }
+                    check(userUpdated == 1) { "User with id=${update.userId} not found" }
                 }
                 return candidateSlug
-            } catch (_: ExposedSQLException) {
+            } catch (e: ExposedSQLException) {
+                val isSlugConflict = e.cause?.message?.contains("organizations_slug", ignoreCase = true) == true ||
+                    e.sqlState == "23505"
+                if (!isSlugConflict) throw e
                 slug = "${update.baseSlug}-$suffix"
                 suffix++
             }

@@ -70,7 +70,7 @@ class ProjectRepositoryImpl(
                 .map { row ->
                     val projectId = row[Projects.id]
                     val keys = getProjectKeys(projectId)
-                    val firstDsn = keys.firstOrNull()?.dsn ?: ""
+                    val firstDsn = keys.firstOrNull { it.platformTarget == null }?.dsn ?: keys.firstOrNull()?.dsn ?: ""
                     ProjectRow(
                         projectId = projectId,
                         name = row[Projects.name],
@@ -90,7 +90,7 @@ class ProjectRepositoryImpl(
                 .firstOrNull()
                 ?.let { row ->
                     val keys = getProjectKeys(projectId)
-                    val firstDsn = keys.firstOrNull()?.dsn ?: ""
+                    val firstDsn = keys.firstOrNull { it.platformTarget == null }?.dsn ?: keys.firstOrNull()?.dsn ?: ""
                     ProjectRow(
                         projectId = projectId,
                         name = row[Projects.name],
@@ -119,7 +119,7 @@ class ProjectRepositoryImpl(
                 ?.let { row ->
                     val projectId = row[Projects.id]
                     val keys = getProjectKeys(projectId)
-                    val firstDsn = keys.firstOrNull()?.dsn ?: ""
+                    val firstDsn = keys.firstOrNull { it.platformTarget == null }?.dsn ?: keys.firstOrNull()?.dsn ?: ""
                     ProjectRow(
                         projectId = projectId,
                         name = row[Projects.name],
@@ -217,9 +217,10 @@ class ProjectRepositoryImpl(
 
     override fun searchProjectsByName(orgId: Int, namePattern: String, limit: Int): List<ProjectRow> =
         transaction {
+            val pattern = namePattern.lowercase()
             Projects
                 .selectAll()
-                .where { (Projects.organization_id eq orgId) and (Projects.name.lowerCase() like namePattern) }
+                .where { (Projects.organization_id eq orgId) and (Projects.name.lowerCase() like pattern) }
                 .limit(limit)
                 .map { row ->
                     ProjectRow(

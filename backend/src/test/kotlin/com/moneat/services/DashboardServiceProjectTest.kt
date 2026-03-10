@@ -321,7 +321,7 @@ class DashboardServiceProjectTest {
     }
 
     @Test
-    fun `addProjectTarget null target does not conflict with android target`() {
+    fun `addProjectTarget android succeeds when no android key exists`() {
         every { mockProjectRepo.findProjectKeyByTarget(2L, "android") } returns false
         every { mockProjectRepo.createProjectKey(2L, any(), any(), "android") } just runs
 

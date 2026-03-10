@@ -329,9 +329,9 @@ class AuthService(
         require(!user.emailVerified) { "Email already verified" }
         val verificationToken = generateVerificationToken()
         val expiresAt = System.currentTimeMillis() + VERIFICATION_TTL_MS
-        userRepository.updateVerificationToken(user.id, verificationToken, expiresAt)
         return try {
             emailService.sendVerificationEmail(normalizedEmail, verificationToken, user.name)
+            userRepository.updateVerificationToken(user.id, verificationToken, expiresAt)
             true
         } catch (e: Exception) {
             println("Failed to send verification email: ${e.message}")
@@ -451,9 +451,9 @@ class AuthService(
         val user = userRepository.findByEmail(normalizedEmail) ?: return false
         val resetToken = generateVerificationToken()
         val expiresAt = System.currentTimeMillis() + (60 * 60 * 1000) // 1 hour
-        userRepository.updatePasswordResetToken(user.id, resetToken, expiresAt)
         return try {
             emailService.sendPasswordResetEmail(normalizedEmail, resetToken, user.name)
+            userRepository.updatePasswordResetToken(user.id, resetToken, expiresAt)
             true
         } catch (e: Exception) {
             println("Failed to send password reset email: ${e.message}")
