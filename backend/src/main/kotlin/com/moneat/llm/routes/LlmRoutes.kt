@@ -92,7 +92,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLlmGenerations(
     val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
     val pageSize = call.request.queryParameters["pageSize"]?.toIntOrNull() ?: 25
     val demoEpochMs = call.getDemoEpochMs()
-    call.respond(llmService.getGenerations(projectId, range, model, provider, type, status, page, pageSize, demoEpochMs))
+    call.respond(
+        llmService.getGenerations(projectId, range, model, provider, type, status, page, pageSize, demoEpochMs)
+    )
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleLlmGenerationDetail(

@@ -57,7 +57,7 @@ fun Route.releaseRoutes(
 ) {
     // Sentry-compatible auth verification endpoint (used by sentry-cli login/info)
     authenticate("auth-bearer") {
-        get("/api/0/") { handleGetApiInfo(authTokenService) }
+        get("/api/0/") { handleGetApiInfo() }
     }
 
     // Sentry-compatible release endpoints
@@ -70,7 +70,7 @@ fun Route.releaseRoutes(
 
             // Get a specific release
             // GET /api/0/organizations/{orgSlug}/releases/{version}/
-            get("/{version}/") { handleGetOrgRelease(releaseService, authTokenService) }
+            get("/{version}/") { handleGetOrgRelease(authTokenService) }
         }
 
         // Project-specific release endpoints (more commonly used by Sentry CLI)
@@ -92,23 +92,21 @@ fun Route.releaseRoutes(
         // Chunk upload endpoint for sentry-cli
         // GET /api/0/organizations/{orgSlug}/chunk-upload/
         route("/api/0/organizations/{orgSlug}/chunk-upload") {
-            get("/") { handleGetChunkUploadParams(releaseService, authTokenService) }
+            get("/") { handleGetChunkUploadParams(releaseService) }
 
             // POST /api/0/organizations/{orgSlug}/chunk-upload/
-            post("/") { handleUploadChunks(releaseService, authTokenService) }
+            post("/") { handleUploadChunks(releaseService) }
         }
 
         // Artifact bundle assemble endpoint
         // POST /api/0/organizations/{orgSlug}/artifactbundle/assemble/
         route("/api/0/organizations/{orgSlug}/artifactbundle") {
-            post("/assemble/") { handleAssembleArtifactBundle(releaseService, authTokenService) }
+            post("/assemble/") { handleAssembleArtifactBundle(releaseService) }
         }
     }
 }
 
-private suspend fun io.ktor.server.routing.RoutingContext.handleGetApiInfo(
-    authTokenService: AuthTokenService,
-) {
+private suspend fun io.ktor.server.routing.RoutingContext.handleGetApiInfo() {
     val principal =
         call.principal<AuthTokenPrincipal>()
             ?: run {
@@ -206,7 +204,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateOrgRelease
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleGetOrgRelease(
-    releaseService: ReleaseService,
     authTokenService: AuthTokenService,
 ) {
     val principal =
@@ -434,7 +431,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListReleaseFiles
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleGetChunkUploadParams(
     releaseService: ReleaseService,
-    authTokenService: AuthTokenService,
 ) {
     val principal =
         call.principal<AuthTokenPrincipal>()
@@ -482,7 +478,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetChunkUploadPa
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
     releaseService: ReleaseService,
-    authTokenService: AuthTokenService,
 ) {
     val principal =
         call.principal<AuthTokenPrincipal>()
@@ -532,7 +527,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifactBundle(
     releaseService: ReleaseService,
-    authTokenService: AuthTokenService,
 ) {
     val principal =
         call.principal<AuthTokenPrincipal>()
