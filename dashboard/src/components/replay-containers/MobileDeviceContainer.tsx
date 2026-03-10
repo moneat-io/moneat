@@ -31,7 +31,7 @@ export interface StatusBarContext {
 
 interface MobileDeviceContainerProps {
   readonly children: React.ReactNode
-  readonly platform: string
+  readonly platform: 'ios' | 'android'
   readonly orientation?: ReplayOrientation
   readonly className?: string
   readonly statusBarContext?: StatusBarContext

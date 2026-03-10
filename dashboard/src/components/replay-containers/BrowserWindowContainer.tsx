@@ -21,6 +21,8 @@ interface BrowserWindowContainerProps {
   readonly children: React.ReactNode
   readonly url?: string
   readonly className?: string
+  readonly browserName?: string
+  readonly osName?: string
 }
 
 export function BrowserWindowContainer({

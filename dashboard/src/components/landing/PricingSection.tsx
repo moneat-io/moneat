@@ -217,12 +217,12 @@ export function PricingSection() {
       api.createBillingCheckoutSession({
         tierName,
         billingInterval: interval,
-        successUrl: `${globalThis.location.origin}/settings?checkout=success&tab=billing`,
-        cancelUrl: `${globalThis.location.origin}/#pricing`,
+        successUrl: `${globalThis.window.location.origin}/settings?checkout=success&tab=billing`,
+        cancelUrl: `${globalThis.window.location.origin}/#pricing`,
       }),
     onSuccess: (session) => {
       if (session.url) {
-        globalThis.location.href = session.url
+        globalThis.window.location.href = session.url
       }
     },
     onError: (err: Error) => {
@@ -268,8 +268,10 @@ export function PricingSection() {
             Per-type limits so you only pay for what you use. Unlimited team members on every plan.
           </p>
 
-          <div className="inline-flex items-center rounded-lg border border-border/60 bg-muted/30 p-1">
+          <div role="radiogroup" aria-label="Billing interval" className="inline-flex items-center rounded-lg border border-border/60 bg-muted/30 p-1">
             <button
+              role="radio"
+              aria-checked={billingInterval === 'monthly'}
               onClick={() => setBillingInterval('monthly')}
               className={`relative rounded-md px-4 py-2 text-sm font-medium transition-all ${
                 billingInterval === 'monthly'
@@ -280,6 +282,8 @@ export function PricingSection() {
               Monthly
             </button>
             <button
+              role="radio"
+              aria-checked={billingInterval === 'yearly'}
               onClick={() => setBillingInterval('yearly')}
               className={`relative rounded-md px-4 py-2 text-sm font-medium transition-all ${
                 billingInterval === 'yearly'

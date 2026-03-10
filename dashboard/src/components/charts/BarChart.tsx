@@ -33,7 +33,7 @@ interface BarChartProps {
   readonly title: string
   readonly height?: number
   readonly color?: string
-  readonly colors?: string[]
+  readonly colors?: readonly string[]
   readonly layout?: 'vertical' | 'horizontal'
 }
 

@@ -163,12 +163,14 @@ export function ReplayTimelineScrubber({
         aria-valuemin={0}
         aria-valuemax={durationMs}
         aria-valuenow={currentOffsetMs}
+        aria-valuetext={`${formatClock(currentOffsetMs)} / ${formatClock(durationMs)}`}
         className={cn(
           'relative h-6 w-full cursor-pointer group/scrubber mb-2',
           isDragging && 'select-none'
         )}
         onMouseDown={handleTrackMouseDown}
         onKeyDown={(e) => {
+          if (e.target instanceof HTMLElement && e.target.closest('button')) return
           const step = durationMs * 0.05
           if (e.key === 'ArrowLeft') { e.preventDefault(); onSeek(Math.max(0, currentOffsetMs - step)) }
           if (e.key === 'ArrowRight') { e.preventDefault(); onSeek(Math.min(durationMs, currentOffsetMs + step)) }

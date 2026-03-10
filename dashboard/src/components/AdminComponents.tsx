@@ -95,6 +95,16 @@ export function MetricCard({
 
 // ─── Quota / Progress Bar ──────────────────────────────────────────────────
 
+function getThresholdColors(percent: number) {
+  if (percent >= 90) {
+    return {bar: 'bg-red-500', stroke: 'stroke-red-500', label: 'text-red-600 dark:text-red-400'}
+  }
+  if (percent >= 70) {
+    return {bar: 'bg-amber-500', stroke: 'stroke-amber-500', label: 'text-amber-600 dark:text-amber-400'}
+  }
+  return {bar: 'bg-emerald-500', stroke: 'stroke-emerald-500', label: 'text-muted-foreground'}
+}
+
 interface QuotaBarProps {
   readonly percent: number | null | undefined
   readonly size?: 'sm' | 'md'
@@ -108,23 +118,7 @@ export function QuotaBar({ percent, size = 'sm', showLabel = true, className }: 
   }
 
   const clamped = Math.min(percent, 100)
-  let color: string
-  if (percent >= 90) {
-    color = 'bg-red-500'
-  } else if (percent >= 70) {
-    color = 'bg-amber-500'
-  } else {
-    color = 'bg-emerald-500'
-  }
-
-  let labelColor: string
-  if (percent >= 90) {
-    labelColor = 'text-red-600 dark:text-red-400'
-  } else if (percent >= 70) {
-    labelColor = 'text-amber-600 dark:text-amber-400'
-  } else {
-    labelColor = 'text-muted-foreground'
-  }
+  const {bar: color, label: labelColor} = getThresholdColors(percent)
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
@@ -160,14 +154,7 @@ export function StorageRing({ percent, size = 64 }: StorageRingProps) {
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - (clamped / 100) * circumference
 
-  let color: string
-  if (percent >= 90) {
-    color = 'stroke-red-500'
-  } else if (percent >= 70) {
-    color = 'stroke-amber-500'
-  } else {
-    color = 'stroke-emerald-500'
-  }
+  const {stroke: color} = getThresholdColors(percent)
 
   return (
     <svg width={size} height={size} className="-rotate-90">

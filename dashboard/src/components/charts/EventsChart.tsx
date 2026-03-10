@@ -86,8 +86,9 @@ function computeCompactDomain(chartData: ChartPoint[]): [number, number] {
 
 function filterReleaseMarkers(markers: ReleaseMarker[], chartData: ChartPoint[]) {
   if (chartData.length === 0) return []
-  const min = chartData[0].timestamp
-  const max = chartData.at(-1)!.timestamp
+  const timestamps = chartData.map((p) => p.timestamp)
+  const min = Math.min(...timestamps)
+  const max = Math.max(...timestamps)
   return markers
     .map((m) => ({...m, timestamp: new Date(m.timestamp).getTime()}))
     .filter((m) => m.timestamp >= min && m.timestamp <= max)

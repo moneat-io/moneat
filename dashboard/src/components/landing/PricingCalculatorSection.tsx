@@ -373,7 +373,7 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
     dbm: false,
   })
 
-  const {data: billingPlans, isPending} = useQuery({
+  const {data: billingPlans, isPending, isError} = useQuery({
     queryKey: ['billing-plans'],
     queryFn: () => api.getBillingPlans(),
   })
@@ -554,7 +554,15 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
                 ))}
               </div>
             )}
-            {!isPending && tiers.length === 0 && (
+            {!isPending && isError && (
+              <Card className="border-destructive/30">
+                <CardHeader>
+                  <CardTitle>Unable to load pricing right now</CardTitle>
+                  <CardDescription>Please refresh the page in a moment.</CardDescription>
+                </CardHeader>
+              </Card>
+            )}
+            {!isPending && !isError && tiers.length === 0 && (
               <Card className="border-border/60">
                 <CardHeader>
                   <CardTitle>Pricing unavailable</CardTitle>
@@ -562,7 +570,7 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
                 </CardHeader>
               </Card>
             )}
-            {!isPending && tiers.length > 0 && (
+            {!isPending && !isError && tiers.length > 0 && (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   {tiers.map((tier, idx) => (
@@ -575,13 +583,13 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
                   const datadogEst = estimateDatadogCost(usage, ddExtras)
                   const freeIdx = tiers.findIndex((t) => t.tierName === 'FREE')
                   const freeFits = freeIdx >= 0 && costs[freeIdx] && !costs[freeIdx].exceedsFreeLimits
-                  let displayMoneatCost: number
+                  let displayMoneatCost: number | null
                   if (freeFits) {
                     displayMoneatCost = 0
                   } else if (bestPlanIdx >= 0) {
                     displayMoneatCost = costs[bestPlanIdx].total
                   } else {
-                    displayMoneatCost = 0
+                    displayMoneatCost = null
                   }
                   const hasUsage =
                     usage.ingestGb > 0 ||
@@ -599,16 +607,16 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
                               Same usage would cost ~{fmtMoney(datadogEst)}/mo on Datadog (log ingest at $0.10/GB; indexing &amp; retention billed separately)
                             </p>
                           </div>
+                          {displayMoneatCost !== null && datadogEst > 0 && (
                           <div className="text-right">
                             <p className="text-2xl font-bold text-emerald-600">
                               Save ~
-                              {datadogEst > 0
-                                ? Math.round((1 - displayMoneatCost / datadogEst) * 100)
-                                : 0}
+                              {Math.round((1 - displayMoneatCost / datadogEst) * 100)}
                               %
                             </p>
                             <p className="text-xs text-muted-foreground">with Moneat</p>
                           </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>

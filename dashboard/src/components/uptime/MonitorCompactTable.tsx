@@ -34,6 +34,7 @@ interface MonitorCompactTableProps {
 function getMonitorIconClass(status: string, isOnline: boolean): string {
   if (isOnline) return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
   if (status === 'down') return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10 text-red-600 dark:text-red-400'
+  if (status === 'pending') return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400'
   return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
 }
 
@@ -88,6 +89,8 @@ function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {
     statusIcon = <CheckCircle2 className="h-4 w-4" />
   } else if (monitor.status === 'down') {
     statusIcon = <XCircle className="h-4 w-4" />
+  } else if (monitor.status === 'pending') {
+    statusIcon = <Activity className="h-4 w-4" />
   } else {
     statusIcon = <Pause className="h-4 w-4" />
   }
@@ -170,6 +173,7 @@ function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {
               className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
               onClick={() => resumeMutation.mutate(monitor.id)}
               title="Resume Monitor"
+              aria-label={`Resume monitor ${monitor.name}`}
             >
               <Play className="h-3.5 w-3.5" />
             </Button>
@@ -180,6 +184,7 @@ function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {
               className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
               onClick={() => pauseMutation.mutate(monitor.id)}
               title="Pause Monitor"
+              aria-label={`Pause monitor ${monitor.name}`}
             >
               <Pause className="h-3.5 w-3.5" />
             </Button>
@@ -194,6 +199,7 @@ function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {
               }
             }}
             title="Delete Monitor"
+            aria-label={`Delete monitor ${monitor.name}`}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>

@@ -46,8 +46,10 @@ function loadInitialPanelMode(): AiPanelMode {
 }
 
 function loadInitialPanelSize(): number {
-  const saved = localStorage.getItem('moneat:ai-panel-size')
-  return saved ? Number.parseFloat(saved) : 30
+  const saved = globalThis.localStorage?.getItem('moneat:ai-panel-size')
+  if (!saved) return 30
+  const parsed = Number.parseFloat(saved)
+  return Number.isFinite(parsed) ? parsed : 30
 }
 
 function loadInitialPanelOrientation(): AiPanelOrientation {

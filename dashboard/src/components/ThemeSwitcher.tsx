@@ -13,22 +13,24 @@ type Theme = 'light' | 'dark' | 'midnight' | 'forest' | 'sunset' | 'gamer' | 're
 const VT323_FONT_ID = 'vt323-font'
 
 function loadGamerFont() {
-  if (document.getElementById(VT323_FONT_ID)) return
-  const link = document.createElement('link')
+  if (!globalThis.document) return
+  if (globalThis.document.getElementById(VT323_FONT_ID)) return
+  const link = globalThis.document.createElement('link')
   link.id = VT323_FONT_ID
   link.rel = 'stylesheet'
   link.href = 'https://fonts.googleapis.com/css2?family=VT323&display=swap'
-  document.head.appendChild(link)
+  globalThis.document.head.appendChild(link)
 }
 
 export function ThemeSwitcher() {
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('theme') as Theme | null
+    const saved = globalThis.localStorage?.getItem('theme') as Theme | null
     return saved || 'dark'
   })
 
   const applyTheme = (newTheme: Theme) => {
-    const root = document.documentElement
+    const root = globalThis.document?.documentElement
+    if (!root) return
     
     // Remove all theme classes
     root.classList.remove('light', 'dark', 'theme-midnight', 'theme-forest', 'theme-sunset', 'theme-gamer', 'theme-retro', 'theme-retro-dark')
@@ -54,7 +56,7 @@ export function ThemeSwitcher() {
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme)
     applyTheme(newTheme)
-    localStorage.setItem('theme', newTheme)
+    globalThis.localStorage?.setItem('theme', newTheme)
   }
 
   return (

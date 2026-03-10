@@ -18,16 +18,18 @@ import {Card, CardContent} from '@/components/ui/card'
 import {LucideIcon} from 'lucide-react'
 import {cn} from '@/lib/utils'
 
-const ACCENT_STYLES: Record<string, { bar: string; icon: string; text: string }> = {
+const ACCENT_STYLES = {
   blue: { bar: 'bg-blue-500', icon: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', text: 'text-blue-600 dark:text-blue-400' },
   amber: { bar: 'bg-amber-500', icon: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', text: 'text-amber-600 dark:text-amber-400' },
   emerald: { bar: 'bg-emerald-500', icon: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', text: 'text-emerald-600 dark:text-emerald-400' },
   violet: { bar: 'bg-violet-500', icon: 'bg-violet-500/15 text-violet-600 dark:text-violet-400', text: 'text-violet-600 dark:text-violet-400' },
   rose: { bar: 'bg-rose-500', icon: 'bg-rose-500/15 text-rose-600 dark:text-rose-400', text: 'text-rose-600 dark:text-rose-400' },
   cyan: { bar: 'bg-cyan-500', icon: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400', text: 'text-cyan-600 dark:text-cyan-400' },
-}
+} satisfies Record<string, { bar: string; icon: string; text: string }>
 
-export function StatsCardSkeleton({ accent, className }: { readonly accent?: keyof typeof ACCENT_STYLES; readonly className?: string }) {
+export type StatsCardAccent = keyof typeof ACCENT_STYLES
+
+export function StatsCardSkeleton({ accent, className }: { readonly accent?: StatsCardAccent; readonly className?: string }) {
   const styles = accent ? ACCENT_STYLES[accent] : null
   return (
     <Card className={cn('overflow-hidden', className)}>
@@ -59,7 +61,7 @@ interface StatsCardProps {
   /** Optional secondary label beneath the value */
   readonly subtitle?: string
   /** Preset accent: blue, amber, emerald, violet, rose, cyan. Adds a top bar and colored icon. */
-  readonly accent?: keyof typeof ACCENT_STYLES
+  readonly accent?: StatsCardAccent
   /** Optional color class override for the value text */
   readonly valueColor?: string
   readonly className?: string

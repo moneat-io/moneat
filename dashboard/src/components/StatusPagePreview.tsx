@@ -60,12 +60,12 @@ function getBarColor(uptime: number, isDarkMode: boolean) {
 
 function getUptimeColor(uptime: number, isDarkMode: boolean): string {
   if (uptime >= 99) return isDarkMode ? 'text-emerald-400' : 'text-emerald-600'
-  if (uptime >= 95) return isDarkMode ? 'text-amber-400' : 'text-amber-600'
+  if (uptime >= 90) return isDarkMode ? 'text-amber-400' : 'text-amber-600'
   return isDarkMode ? 'text-red-400' : 'text-red-600'
 }
 
 function computeOverallStatus(monitors: StatusPageMonitorEntry[]): StatusValue {
-  if (monitors.length === 0) return 'operational'
+  if (monitors.length === 0) return 'unknown'
   if (monitors.some((m) => m.status === 'down')) return 'down'
   if (monitors.some((m) => m.status === 'degraded')) return 'degraded'
   if (monitors.every((m) => m.status === 'operational')) return 'operational'
@@ -134,7 +134,14 @@ function UptimeHistoryBar({
       </div>
       <div className={`flex justify-between mt-1.5 text-[10px] ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
         <span>{historyDays}d ago</span>
-        <span>Today</span>
+        <span>{(() => {
+          const lastEntry = history.at(-1)
+          if (!lastEntry) return 'Today'
+          const lastDate = new Date(lastEntry.date)
+          const today = new Date()
+          if (lastDate.toDateString() === today.toDateString()) return 'Today'
+          return formatMonthDay(lastDate, timezone)
+        })()}</span>
       </div>
     </div>
   )
