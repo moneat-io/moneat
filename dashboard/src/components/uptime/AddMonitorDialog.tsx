@@ -175,32 +175,32 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
       return
     }
 
-    const rawPort = formData.port
-    let resolvedPort: number | undefined
-    if (typeof rawPort === 'string' && rawPort !== '') {
-      resolvedPort = Number.parseInt(rawPort, 10) || undefined
-    } else if (typeof rawPort === 'number') {
-      resolvedPort = rawPort
-    }
+    const type = formData.type ?? 'http'
+    const port = typeof formData.port === 'number' ? formData.port : undefined
 
-    const request: CreateUptimeMonitorRequest = {
+    const base: CreateUptimeMonitorRequest = {
       name: formData.name,
-      type: formData.type ?? 'http',
-      url: formData.url,
-      hostname: formData.hostname,
-      port: resolvedPort,
-      method: formData.method,
-      keyword: formData.keyword,
-      dbConnectionString: formData.dbConnectionString,
-      dockerContainerName: formData.dockerContainerName,
-      dockerHost: formData.dockerHost,
+      type,
       intervalSeconds: formData.intervalSeconds,
       timeoutSeconds: formData.timeoutSeconds,
       retries: formData.retries,
       incidentSeverity: formData.incidentSeverity,
     }
 
-    createMutation.mutate(request)
+    let typeFields: Partial<CreateUptimeMonitorRequest> = {}
+    if (['http', 'keyword', 'websocket'].includes(type)) {
+      typeFields = {url: formData.url, method: formData.method}
+      if (type === 'keyword') typeFields.keyword = formData.keyword
+    } else if (['tcp', 'ping', 'dns', 'ssl'].includes(type)) {
+      typeFields = {hostname: formData.hostname}
+      if (type === 'tcp' || type === 'ssl') typeFields.port = port
+    } else if (type === 'database') {
+      typeFields = {dbConnectionString: formData.dbConnectionString}
+    } else if (type === 'docker') {
+      typeFields = {dockerContainerName: formData.dockerContainerName, dockerHost: formData.dockerHost}
+    }
+
+    createMutation.mutate({...base, ...typeFields})
   }
 
   return (
@@ -219,7 +219,15 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
               <button
                 key={type.value}
                 onClick={() => {
-                  setFormData({...formData, type: type.value})
+                  setFormData({
+                    type: type.value,
+                    name: formData.name,
+                    intervalSeconds: formData.intervalSeconds,
+                    timeoutSeconds: formData.timeoutSeconds,
+                    retries: formData.retries,
+                    incidentSeverity: formData.incidentSeverity,
+                    method: ['http', 'keyword'].includes(type.value) ? (formData.method ?? 'GET') : undefined,
+                  })
                   setStep(2)
                 }}
                 className="flex items-start p-4 border rounded-xl hover:bg-accent hover:border-primary/50 transition-all text-left group"

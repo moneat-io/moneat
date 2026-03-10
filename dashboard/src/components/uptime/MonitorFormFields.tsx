@@ -18,6 +18,13 @@ import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 
+function parseBoundedInteger(value: string, min: number, max: number): number | undefined {
+  if (value === '') return undefined
+  const parsed = Number.parseInt(value, 10)
+  if (Number.isNaN(parsed) || parsed < min || parsed > max) return undefined
+  return parsed
+}
+
 export interface MonitorFormData {
   name?: string
   type?: string
@@ -94,11 +101,7 @@ export function MonitorFormFields({
                 id="port"
                 type="number"
                 value={formData.port ?? ''}
-                onChange={(e) => {
-                  if (e.target.value === '') { onChange({...formData, port: undefined}); return }
-                  const parsed = Number.parseInt(e.target.value, 10)
-                  onChange({...formData, port: Number.isNaN(parsed) ? undefined : parsed})
-                }}
+                onChange={(e) => onChange({...formData, port: parseBoundedInteger(e.target.value, 1, 65535)})}
                 placeholder={monitorType === 'ssl' ? '443' : '80'}
               />
             </div>
@@ -184,11 +187,7 @@ export function MonitorFormFields({
           id="interval"
           type="number"
           value={formData.intervalSeconds ?? ''}
-          onChange={(e) => {
-            if (e.target.value === '') { onChange({...formData, intervalSeconds: undefined}); return }
-            const parsed = Number.parseInt(e.target.value, 10)
-            onChange({...formData, intervalSeconds: Number.isNaN(parsed) ? undefined : parsed})
-          }}
+          onChange={(e) => onChange({...formData, intervalSeconds: parseBoundedInteger(e.target.value, 1, 86400)})}
         />
       </div>
 
@@ -198,11 +197,7 @@ export function MonitorFormFields({
           id="timeout"
           type="number"
           value={formData.timeoutSeconds ?? ''}
-          onChange={(e) => {
-            if (e.target.value === '') { onChange({...formData, timeoutSeconds: undefined}); return }
-            const parsed = Number.parseInt(e.target.value, 10)
-            onChange({...formData, timeoutSeconds: Number.isNaN(parsed) ? undefined : parsed})
-          }}
+          onChange={(e) => onChange({...formData, timeoutSeconds: parseBoundedInteger(e.target.value, 1, 300)})}
         />
       </div>
 
@@ -213,11 +208,7 @@ export function MonitorFormFields({
             id="retries"
             type="number"
             value={formData.retries ?? ''}
-            onChange={(e) => {
-              if (e.target.value === '') { onChange({...formData, retries: undefined}); return }
-              const parsed = Number.parseInt(e.target.value, 10)
-              onChange({...formData, retries: Number.isNaN(parsed) ? undefined : parsed})
-            }}
+            onChange={(e) => onChange({...formData, retries: parseBoundedInteger(e.target.value, 0, 10)})}
           />
         </div>
       )}

@@ -608,8 +608,6 @@ function ReplayDetailPage() {
             ) : (
               <BrowserWindowContainer
                 url={replay.urls?.[0]}
-                browserName={replay.browserName}
-                osName={replay.osName}
               >
                 <div className="w-full h-[450px] flex flex-col items-center justify-center gap-3 bg-black">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -639,8 +637,6 @@ function ReplayDetailPage() {
           ) : hasRecording ? (
             <BrowserWindowContainer
               url={replay.urls?.[0]}
-              browserName={replay.browserName}
-              osName={replay.osName}
             >
               <ReplayPlayer
                 ref={replayPlayerRef}
