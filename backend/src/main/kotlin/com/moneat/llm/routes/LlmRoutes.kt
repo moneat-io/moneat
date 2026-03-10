@@ -37,7 +37,6 @@ fun Route.llmRoutes(
     dashboardService: DashboardService = GlobalContext.get().get(),
     llmService: LlmDashboardService = GlobalContext.get().get(),
 ) {
-
     authenticate("auth-jwt") {
         rateLimit(RateLimitName("api")) {
             route("/v1/llm") {

@@ -55,7 +55,6 @@ fun Route.releaseRoutes(
     releaseService: ReleaseService = GlobalContext.get().get(),
     authTokenService: AuthTokenService = GlobalContext.get().get(),
 ) {
-
     // Sentry-compatible auth verification endpoint (used by sentry-cli login/info)
     authenticate("auth-bearer") {
         get("/api/0/") {

@@ -25,7 +25,6 @@ import com.moneat.events.models.UpdateProjectRequest
 import com.moneat.events.repositories.ProjectRepository
 import java.security.SecureRandom
 import java.util.Base64
-import java.util.UUID
 
 class ProjectService(
     private val projectRepository: ProjectRepository,

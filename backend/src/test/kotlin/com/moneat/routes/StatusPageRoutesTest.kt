@@ -54,7 +54,6 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -784,6 +783,4 @@ class StatusPageRoutesTest {
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
-
 }
-

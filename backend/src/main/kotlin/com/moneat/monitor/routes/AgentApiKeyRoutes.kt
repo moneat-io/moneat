@@ -37,7 +37,6 @@ fun Route.agentApiKeyRoutes(
 ) {
     route("/v1") {
         authenticate("auth-jwt") {
-
             get("/agent-api-keys") {
                 val principal = call.principal<JWTPrincipal>()
                 val orgId = principal!!.payload.getClaim("orgId").asInt()

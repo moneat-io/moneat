@@ -37,7 +37,6 @@ import org.koin.core.context.GlobalContext
 fun Route.authTokenRoutes(
     authTokenService: AuthTokenService = GlobalContext.get().get(),
 ) {
-
     authenticate("auth-jwt") {
         route("/v1/auth-tokens") {
             // Create a new auth token

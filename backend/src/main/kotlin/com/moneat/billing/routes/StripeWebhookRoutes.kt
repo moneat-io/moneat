@@ -34,7 +34,6 @@ private val logger = KotlinLogging.logger {}
 fun Route.stripeWebhookRoutes(
     stripeService: StripeService = GlobalContext.get().get(),
 ) {
-
     post("/api/webhooks/stripe") {
         logger.info { "Received webhook request at /api/webhooks/stripe" }
 

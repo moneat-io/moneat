@@ -626,7 +626,6 @@ fun Route.logIngestRoutes(
     logApiKeyService: LogApiKeyService = GlobalContext.get().get(),
     eventService: EventService = GlobalContext.get().get(),
 ) {
-
     route("/v1") {
         post("/logs/otlp") {
             val organizationId: Int? =

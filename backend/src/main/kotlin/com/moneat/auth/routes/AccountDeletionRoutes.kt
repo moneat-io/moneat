@@ -68,7 +68,6 @@ data class CannotDeleteUserResponse(val error: String?, val organizations: List<
 fun Route.accountDeletionRoutes(
     deletionService: AccountDeletionService = GlobalContext.get().get(),
 ) {
-
     // Get organization details for account deletion confirmation
     get("/organizations/{orgId}") {
         val principal = call.principal<JWTPrincipal>()
