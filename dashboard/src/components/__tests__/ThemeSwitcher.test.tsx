@@ -19,9 +19,9 @@ vi.mock('lucide-react', () => ({
 
 // Mock ResizeObserver which is used by Radix UI
 global.ResizeObserver = class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
+    observe() { /* no-op */ }
+    unobserve() { /* no-op */ }
+    disconnect() { /* no-op */ }
 }
 
 // Mock scrollIntoView

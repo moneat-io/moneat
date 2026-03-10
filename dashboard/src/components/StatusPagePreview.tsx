@@ -19,12 +19,37 @@ import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/compo
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatMonthDay} from '@/lib/date-format'
 
+export type StatusValue = 'operational' | 'degraded' | 'down' | 'unknown'
+
 export type StatusPageMonitorEntry = {
   name: string
   displayName?: string | null
-  status: string
+  status: StatusValue
   uptimePercentage: number
   uptimeHistory?: {date: string; uptime: number}[] | null
+}
+
+type StatusConfigItem = {
+  icon: typeof CheckCircle2
+  title: string
+  bg: string
+  border: string
+  iconColor: string
+  textColor: string
+}
+
+const STATUS_CONFIG_LIGHT: Record<StatusValue, StatusConfigItem> = {
+  operational: {icon: CheckCircle2, title: 'All Systems Operational', bg: 'bg-emerald-50', border: 'border-emerald-200', iconColor: 'text-emerald-600', textColor: 'text-emerald-800'},
+  degraded: {icon: AlertTriangle, title: 'Partial System Outage', bg: 'bg-amber-50', border: 'border-amber-200', iconColor: 'text-amber-600', textColor: 'text-amber-800'},
+  down: {icon: XCircle, title: 'Major System Outage', bg: 'bg-red-50', border: 'border-red-200', iconColor: 'text-red-600', textColor: 'text-red-800'},
+  unknown: {icon: AlertCircle, title: 'Status Unknown', bg: 'bg-slate-50', border: 'border-slate-200', iconColor: 'text-slate-500', textColor: 'text-slate-700'},
+}
+
+const STATUS_CONFIG_DARK: Record<StatusValue, StatusConfigItem> = {
+  operational: {icon: CheckCircle2, title: 'All Systems Operational', bg: 'bg-emerald-950/40', border: 'border-emerald-900/50', iconColor: 'text-emerald-400', textColor: 'text-emerald-300'},
+  degraded: {icon: AlertTriangle, title: 'Partial System Outage', bg: 'bg-amber-950/40', border: 'border-amber-900/50', iconColor: 'text-amber-400', textColor: 'text-amber-300'},
+  down: {icon: XCircle, title: 'Major System Outage', bg: 'bg-red-950/40', border: 'border-red-900/50', iconColor: 'text-red-400', textColor: 'text-red-300'},
+  unknown: {icon: AlertCircle, title: 'Status Unknown', bg: 'bg-slate-900', border: 'border-slate-700', iconColor: 'text-slate-400', textColor: 'text-slate-300'},
 }
 
 function getBarColor(uptime: number, isDarkMode: boolean) {
@@ -33,45 +58,93 @@ function getBarColor(uptime: number, isDarkMode: boolean) {
   return isDarkMode ? 'bg-red-500/70' : 'bg-red-400'
 }
 
+function getUptimeColor(uptime: number, isDarkMode: boolean): string {
+  if (uptime >= 99) return isDarkMode ? 'text-emerald-400' : 'text-emerald-600'
+  if (uptime >= 95) return isDarkMode ? 'text-amber-400' : 'text-amber-600'
+  return isDarkMode ? 'text-red-400' : 'text-red-600'
+}
+
+function computeOverallStatus(monitors: StatusPageMonitorEntry[]): StatusValue {
+  if (monitors.length === 0) return 'operational'
+  if (monitors.some((m) => m.status === 'down')) return 'down'
+  if (monitors.some((m) => m.status === 'degraded')) return 'degraded'
+  if (monitors.every((m) => m.status === 'operational')) return 'operational'
+  return 'unknown'
+}
+
+const STATUS_DOT_COLORS_DARK: Record<string, string> = {
+  operational: 'bg-emerald-400',
+  degraded: 'bg-amber-400',
+  down: 'bg-red-400',
+}
+
+const STATUS_DOT_COLORS_LIGHT: Record<string, string> = {
+  operational: 'bg-emerald-500',
+  degraded: 'bg-amber-500',
+  down: 'bg-red-500',
+}
+
+const STATUS_TEXT_COLORS_DARK: Record<string, string> = {
+  operational: 'text-emerald-400',
+  degraded: 'text-amber-400',
+  down: 'text-red-400',
+}
+
+const STATUS_TEXT_COLORS_LIGHT: Record<string, string> = {
+  operational: 'text-emerald-600',
+  degraded: 'text-amber-600',
+  down: 'text-red-600',
+}
+
+function getTooltipUptimeColor(uptime: number): string {
+  if (uptime >= 99) return 'text-emerald-600 dark:text-emerald-400'
+  if (uptime >= 90) return 'text-amber-600 dark:text-amber-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
+function UptimeHistoryBar({
+  history,
+  historyDays,
+  isDarkMode,
+  timezone,
+}: {
+  history: {date: string; uptime: number}[]
+  historyDays: number
+  isDarkMode: boolean
+  timezone: string
+}) {
+  return (
+    <div className="mt-3">
+      <div className="flex items-stretch gap-[1.5px] h-8 w-full">
+        {history.map((point, index) => (
+          <Tooltip key={index}>
+            <TooltipTrigger asChild>
+              <div
+                className={`flex-1 rounded-[2px] ${getBarColor(point.uptime, isDarkMode)} transition-opacity hover:opacity-80 cursor-default min-w-[2px]`}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              <p className="font-medium">{formatMonthDay(new Date(point.date), timezone)}</p>
+              <p className={`tabular-nums ${getTooltipUptimeColor(point.uptime)}`}>
+                {point.uptime.toFixed(2)}% uptime
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+      <div className={`flex justify-between mt-1.5 text-[10px] ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+        <span>{historyDays}d ago</span>
+        <span>Today</span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Status Banner ───────────────────────────────────────────────────────────
 
-export function StatusBanner({status, isDarkMode}: {status: string; isDarkMode: boolean}) {
-  const config = {
-    operational: {
-      icon: CheckCircle2,
-      title: 'All Systems Operational',
-      bg: isDarkMode ? 'bg-emerald-950/40' : 'bg-emerald-50',
-      border: isDarkMode ? 'border-emerald-900/50' : 'border-emerald-200',
-      iconColor: isDarkMode ? 'text-emerald-400' : 'text-emerald-600',
-      textColor: isDarkMode ? 'text-emerald-300' : 'text-emerald-800',
-    },
-    degraded: {
-      icon: AlertTriangle,
-      title: 'Partial System Outage',
-      bg: isDarkMode ? 'bg-amber-950/40' : 'bg-amber-50',
-      border: isDarkMode ? 'border-amber-900/50' : 'border-amber-200',
-      iconColor: isDarkMode ? 'text-amber-400' : 'text-amber-600',
-      textColor: isDarkMode ? 'text-amber-300' : 'text-amber-800',
-    },
-    down: {
-      icon: XCircle,
-      title: 'Major System Outage',
-      bg: isDarkMode ? 'bg-red-950/40' : 'bg-red-50',
-      border: isDarkMode ? 'border-red-900/50' : 'border-red-200',
-      iconColor: isDarkMode ? 'text-red-400' : 'text-red-600',
-      textColor: isDarkMode ? 'text-red-300' : 'text-red-800',
-    },
-    unknown: {
-      icon: AlertCircle,
-      title: 'Status Unknown',
-      bg: isDarkMode ? 'bg-slate-900' : 'bg-slate-50',
-      border: isDarkMode ? 'border-slate-700' : 'border-slate-200',
-      iconColor: isDarkMode ? 'text-slate-400' : 'text-slate-500',
-      textColor: isDarkMode ? 'text-slate-300' : 'text-slate-700',
-    },
-  }
-
-  const c = config[status as keyof typeof config] || config.unknown
+export function StatusBanner({status, isDarkMode}: {status: StatusValue; isDarkMode: boolean}) {
+  const configs = isDarkMode ? STATUS_CONFIG_DARK : STATUS_CONFIG_LIGHT
+  const c = configs[status] ?? configs.unknown
   const Icon = c.icon
 
   return (
@@ -97,45 +170,29 @@ export function StatusPageMonitorRow({
   isDarkMode: boolean
   timezone: string
 }) {
-  const statusColors = {
-    operational: isDarkMode ? 'text-emerald-400' : 'text-emerald-600',
-    degraded: isDarkMode ? 'text-amber-400' : 'text-amber-600',
-    down: isDarkMode ? 'text-red-400' : 'text-red-600',
-  }
-
-  const statusDotColors = {
-    operational: isDarkMode ? 'bg-emerald-400' : 'bg-emerald-500',
-    degraded: isDarkMode ? 'bg-amber-400' : 'bg-amber-500',
-    down: isDarkMode ? 'bg-red-400' : 'bg-red-500',
-  }
-
-  const uptimeColor = monitor.uptimePercentage >= 99.9
-    ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600')
-    : monitor.uptimePercentage >= 99
-      ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600')
-      : monitor.uptimePercentage >= 95
-        ? (isDarkMode ? 'text-amber-400' : 'text-amber-600')
-        : (isDarkMode ? 'text-red-400' : 'text-red-600')
-
-  const history = showHistory && monitor.uptimeHistory
-    ? monitor.uptimeHistory.slice(-historyDays)
-    : null
+  const statusDotColors = isDarkMode ? STATUS_DOT_COLORS_DARK : STATUS_DOT_COLORS_LIGHT
+  const statusColors = isDarkMode ? STATUS_TEXT_COLORS_DARK : STATUS_TEXT_COLORS_LIGHT
+  const uptimeColor = getUptimeColor(monitor.uptimePercentage, isDarkMode)
+  const dotColor = statusDotColors[monitor.status] ?? 'bg-slate-400'
+  const textColor = statusColors[monitor.status] ?? (isDarkMode ? 'text-slate-400' : 'text-slate-500')
+  const hoverBg = isDarkMode ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50/80'
+  const history = showHistory && monitor.uptimeHistory ? monitor.uptimeHistory.slice(-historyDays) : null
 
   return (
-    <div className={`px-5 py-4 ${isDarkMode ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50/80'} transition-colors`}>
+    <div className={`px-5 py-4 ${hoverBg} transition-colors`}>
       {/* Top: name + status */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${statusDotColors[monitor.status as keyof typeof statusDotColors] || 'bg-slate-400'}`} />
+          <span className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${dotColor}`} />
           <span className="font-medium text-sm truncate">
-            {monitor.displayName || monitor.name}
+            {monitor.displayName ?? monitor.name}
           </span>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0 ml-4">
           <span className={`text-xs font-medium tabular-nums ${uptimeColor}`}>
             {monitor.uptimePercentage.toFixed(2)}%
           </span>
-          <span className={`text-xs capitalize ${statusColors[monitor.status as keyof typeof statusColors] || (isDarkMode ? 'text-slate-400' : 'text-slate-500')}`}>
+          <span className={`text-xs capitalize ${textColor}`}>
             {monitor.status === 'operational' ? 'Operational' : monitor.status}
           </span>
         </div>
@@ -143,32 +200,7 @@ export function StatusPageMonitorRow({
 
       {/* Uptime History Bar */}
       {history && history.length > 0 && (
-        <div className="mt-3">
-          <div className="flex items-stretch gap-[1.5px] h-8 w-full">
-            {history.map((point, index) => {
-              const barColor = getBarColor(point.uptime, isDarkMode)
-              return (
-                <Tooltip key={index}>
-                  <TooltipTrigger asChild>
-                    <div
-                      className={`flex-1 rounded-[2px] ${barColor} transition-opacity hover:opacity-80 cursor-default min-w-[2px]`}
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <p className="font-medium">{formatMonthDay(new Date(point.date), timezone)}</p>
-                    <p className={`tabular-nums ${point.uptime >= 99 ? 'text-emerald-600 dark:text-emerald-400' : point.uptime >= 90 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {point.uptime.toFixed(2)}% uptime
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              )
-            })}
-          </div>
-          <div className={`flex justify-between mt-1.5 text-[10px] ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
-            <span>{historyDays}d ago</span>
-            <span>Today</span>
-          </div>
-        </div>
+        <UptimeHistoryBar history={history} historyDays={historyDays} isDarkMode={isDarkMode} timezone={timezone} />
       )}
     </div>
   )
@@ -195,13 +227,7 @@ export function StatusPagePreview({
 }) {
   const isDarkMode = darkMode
   const { timezone } = useTimezone()
-
-  // Calculate overall status from monitors
-  const allOperational = monitors.length === 0 || monitors.every((m) => m.status === 'operational')
-  const anyDown = monitors.some((m) => m.status === 'down')
-  const anyDegraded = monitors.some((m) => m.status === 'degraded')
-
-  const overallStatus = anyDown ? 'down' : anyDegraded ? 'degraded' : allOperational ? 'operational' : 'unknown'
+  const overallStatus = computeOverallStatus(monitors)
 
   return (
     <TooltipProvider delayDuration={0}>

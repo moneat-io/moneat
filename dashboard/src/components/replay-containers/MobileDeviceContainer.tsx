@@ -88,6 +88,35 @@ function StatusBar({ platform, compact, context }: { platform: string; compact?:
   )
 }
 
+function NotchElement({isIOS, isLandscape}: {isIOS: boolean; isLandscape: boolean}) {
+  const wrapClass = cn('flex justify-center', isLandscape ? 'pt-1' : 'pt-2 pb-0')
+  if (isIOS) {
+    return (
+      <div className={wrapClass}>
+        <div className={cn('bg-black rounded-full', isLandscape ? 'w-[25px] h-[50px]' : 'w-[90px] h-[25px]')} />
+      </div>
+    )
+  }
+  return (
+    <div className={wrapClass}>
+      <div className="w-3 h-3 bg-black/80 rounded-full border border-white/[0.05]" />
+    </div>
+  )
+}
+
+function HomeIndicator({isIOS, isLandscape}: {isIOS: boolean; isLandscape: boolean}) {
+  if (isIOS) {
+    return <div className={cn('bg-white/30 rounded-full', isLandscape ? 'w-[4px] h-[60px]' : 'w-[100px] h-[4px]')} />
+  }
+  return (
+    <div className={cn('flex gap-6', isLandscape && 'flex-col')}>
+      <div className="w-3 h-3 border border-white/20 rounded-sm" />
+      <div className="w-3 h-3 border border-white/20 rounded-full" />
+      <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-white/20 rotate-[-90deg]" />
+    </div>
+  )
+}
+
 export function MobileDeviceContainer({
   children,
   platform,
@@ -120,15 +149,7 @@ export function MobileDeviceContainer({
             isLandscape ? 'w-10 flex-col gap-1' : 'flex-col'
           )}
         >
-          {isIOS ? (
-            <div className={cn('flex justify-center', isLandscape ? 'pt-1' : 'pt-2 pb-0')}>
-              <div className={cn('bg-black rounded-full', isLandscape ? 'w-[25px] h-[50px]' : 'w-[90px] h-[25px]')} />
-            </div>
-          ) : (
-            <div className={cn('flex justify-center', isLandscape ? 'pt-1' : 'pt-2 pb-0')}>
-              <div className="w-3 h-3 bg-black/80 rounded-full border border-white/[0.05]" />
-            </div>
-          )}
+          <NotchElement isIOS={isIOS} isLandscape={isLandscape} />
           <StatusBar platform={platform} compact={isLandscape} context={statusBarContext} />
         </div>
 
@@ -144,15 +165,7 @@ export function MobileDeviceContainer({
             isLandscape ? 'w-10 flex-col gap-4' : 'py-2'
           )}
         >
-          {isIOS ? (
-            <div className={cn('bg-white/30 rounded-full', isLandscape ? 'w-[4px] h-[60px]' : 'w-[100px] h-[4px]')} />
-          ) : (
-            <div className={cn('flex gap-6', isLandscape && 'flex-col')}>
-              <div className="w-3 h-3 border border-white/20 rounded-sm" />
-              <div className="w-3 h-3 border border-white/20 rounded-full" />
-              <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-white/20 rotate-[-90deg]" />
-            </div>
-          )}
+          <HomeIndicator isIOS={isIOS} isLandscape={isLandscape} />
         </div>
       </div>
     </div>

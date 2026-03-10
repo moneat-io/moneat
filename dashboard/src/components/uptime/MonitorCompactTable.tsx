@@ -30,6 +30,18 @@ interface MonitorCompactTableProps {
   monitors: UptimeMonitor[]
 }
 
+function getMonitorIconClass(status: string, isOnline: boolean): string {
+  if (isOnline) return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+  if (status === 'down') return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10 text-red-600 dark:text-red-400'
+  return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+}
+
+function getUptimeClass(uptime: number): string {
+  if (uptime >= 99) return 'text-emerald-600 dark:text-emerald-400'
+  if (uptime >= 95) return 'text-yellow-600 dark:text-yellow-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
 function MonitorRow({monitor}: {monitor: UptimeMonitor}) {
   const {toast} = useToast()
   const queryClient = useQueryClient()
@@ -69,21 +81,13 @@ function MonitorRow({monitor}: {monitor: UptimeMonitor}) {
   })
 
   const isOnline = monitor.status === 'up'
+  const iconClass = getMonitorIconClass(monitor.status, isOnline)
 
   return (
     <TableRow className="group">
       <TableCell className="pl-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div
-            className={cn(
-              'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-              isOnline
-                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                : monitor.status === 'down'
-                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                  : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-            )}
-          >
+          <div className={cn(iconClass)}>
             {isOnline ? <CheckCircle2 className="h-4 w-4" /> : monitor.status === 'down' ? <XCircle className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
           </div>
           <div className="min-w-0">
@@ -125,11 +129,7 @@ function MonitorRow({monitor}: {monitor: UptimeMonitor}) {
       <TableCell className="hidden sm:table-cell text-right">
         <div className="font-mono text-sm font-medium">
           {monitor.uptime24h !== undefined && monitor.uptime24h !== null ? (
-            <span className={cn(
-              monitor.uptime24h >= 99 ? 'text-emerald-600 dark:text-emerald-400' : 
-              monitor.uptime24h >= 95 ? 'text-yellow-600 dark:text-yellow-400' : 
-              'text-red-600 dark:text-red-400'
-            )}>
+            <span className={cn(getUptimeClass(monitor.uptime24h))}>
               {monitor.uptime24h.toFixed(2)}%
             </span>
           ) : '--'}

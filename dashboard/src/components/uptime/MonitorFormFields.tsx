@@ -93,8 +93,12 @@ export function MonitorFormFields({
               <Input
                 id="port"
                 type="number"
-                value={formData.port || ''}
-                onChange={(e) => onChange({...formData, port: parseInt(e.target.value)})}
+                value={formData.port ?? ''}
+                onChange={(e) => {
+                  if (e.target.value === '') { onChange({...formData, port: undefined}); return }
+                  const parsed = parseInt(e.target.value, 10)
+                  onChange({...formData, port: Number.isNaN(parsed) ? undefined : parsed})
+                }}
                 placeholder={monitorType === 'ssl' ? '443' : '80'}
               />
             </div>
@@ -179,8 +183,12 @@ export function MonitorFormFields({
         <Input
           id="interval"
           type="number"
-          value={formData.intervalSeconds || 60}
-          onChange={(e) => onChange({...formData, intervalSeconds: parseInt(e.target.value)})}
+          value={formData.intervalSeconds ?? ''}
+          onChange={(e) => {
+            if (e.target.value === '') { onChange({...formData, intervalSeconds: undefined}); return }
+            const parsed = parseInt(e.target.value, 10)
+            onChange({...formData, intervalSeconds: Number.isNaN(parsed) ? undefined : parsed})
+          }}
         />
       </div>
 
@@ -189,8 +197,12 @@ export function MonitorFormFields({
         <Input
           id="timeout"
           type="number"
-          value={formData.timeoutSeconds || 30}
-          onChange={(e) => onChange({...formData, timeoutSeconds: parseInt(e.target.value)})}
+          value={formData.timeoutSeconds ?? ''}
+          onChange={(e) => {
+            if (e.target.value === '') { onChange({...formData, timeoutSeconds: undefined}); return }
+            const parsed = parseInt(e.target.value, 10)
+            onChange({...formData, timeoutSeconds: Number.isNaN(parsed) ? undefined : parsed})
+          }}
         />
       </div>
 
@@ -200,8 +212,12 @@ export function MonitorFormFields({
           <Input
             id="retries"
             type="number"
-            value={formData.retries || 0}
-            onChange={(e) => onChange({...formData, retries: parseInt(e.target.value)})}
+            value={formData.retries ?? ''}
+            onChange={(e) => {
+              if (e.target.value === '') { onChange({...formData, retries: undefined}); return }
+              const parsed = parseInt(e.target.value, 10)
+              onChange({...formData, retries: Number.isNaN(parsed) ? undefined : parsed})
+            }}
           />
         </div>
       )}

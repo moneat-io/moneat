@@ -69,6 +69,133 @@ function PricingEmptyState() {
   )
 }
 
+function TierCard({
+  tier,
+  billingInterval,
+  isAuthenticated,
+  isPending,
+  onPaidTierClick,
+}: {
+  tier: PricingCardModel
+  billingInterval: 'monthly' | 'yearly'
+  isAuthenticated: boolean
+  isPending: boolean
+  onPaidTierClick: (tierName: string) => void
+}) {
+  const isYearly = billingInterval === 'yearly'
+  const accentClass = tier.highlight ? 'text-sky-500' : 'text-emerald-500'
+  const accentBgClass = tier.highlight ? 'bg-sky-500/10' : 'bg-emerald-500/10'
+  const highlightClass = tier.highlight
+    ? 'relative border-sky-500/50 shadow-xl shadow-sky-500/10'
+    : 'border-border/60'
+  const btnClass = tier.highlight
+    ? 'w-full bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
+    : 'w-full'
+
+  return (
+    <Card className={`flex flex-col ${highlightClass}`}>
+      {tier.highlight && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span className="inline-flex items-center rounded-full bg-gradient-to-r from-sky-500 to-cyan-400 px-4 py-1 text-xs font-semibold text-white shadow-md shadow-sky-500/20">
+            Most popular
+          </span>
+        </div>
+      )}
+      <CardHeader>
+        <CardTitle className="text-lg">{tier.name}</CardTitle>
+        <CardDescription className="text-xs">{tier.description}</CardDescription>
+        <div className="mt-4">
+          <span className="text-4xl font-bold">
+            ${tier.displayPrice === 0 ? '0' : tier.displayPrice.toFixed(0)}
+          </span>
+          <span className="text-muted-foreground text-sm">
+            /mo{isYearly && tier.displayPrice > 0 ? (
+              <span className="block text-xs mt-1">
+                billed ${tier.yearlyTotalPrice.toFixed(0)}/yr
+              </span>
+            ) : ''}
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-1 space-y-4">
+        <div>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Included
+          </p>
+          <ul className="space-y-2">
+            {tier.includedLimits.map((limit) => (
+              <li key={limit} className="flex items-start gap-2">
+                <div className={`mt-0.5 rounded-full p-0.5 ${accentBgClass}`}>
+                  <Check className={`h-3 w-3 ${accentClass}`} />
+                </div>
+                <span className="text-xs leading-tight">{limit}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {tier.overages.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Overages
+            </p>
+            <ul className="space-y-1.5">
+              {tier.overages.map((o) => (
+                <li key={o.label} className="flex items-center gap-2">
+                  <TrendingUp className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+                  <span className="text-xs text-muted-foreground">
+                    {o.label}: <span className="font-medium text-foreground">{o.rate}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {tier.platformFeatures.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Features
+            </p>
+            <ul className="space-y-2">
+              {tier.platformFeatures.map((feature) => (
+                <li key={feature} className="flex items-start gap-2">
+                  <div className={`mt-0.5 rounded-full p-0.5 ${accentBgClass}`}>
+                    <Check className={`h-3 w-3 ${accentClass}`} />
+                  </div>
+                  <span className="text-xs leading-tight">{feature}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+      <CardFooter>
+        {isAuthenticated && tier.tierName !== 'FREE' ? (
+          <Button
+            className={btnClass}
+            variant={tier.highlight ? 'default' : 'outline'}
+            size="lg"
+            disabled={isPending}
+            onClick={() => onPaidTierClick(tier.tierName)}
+          >
+            {tier.cta}
+          </Button>
+        ) : (
+          <Button
+            asChild
+            className={btnClass}
+            variant={tier.highlight ? 'default' : 'outline'}
+            size="lg"
+          >
+            <Link to={tier.ctaLink}>{tier.cta}</Link>
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
+  )
+}
+
 export function PricingSection() {
   const {toast} = useToast()
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
@@ -175,133 +302,16 @@ export function PricingSection() {
           <PricingEmptyState />
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            {tiers.map((tier) => {
-              const displayPrice = tier.displayPrice
-              const isYearly = billingInterval === 'yearly'
-              const accentClass = tier.highlight ? 'text-sky-500' : 'text-emerald-500'
-              const accentBgClass = tier.highlight ? 'bg-sky-500/10' : 'bg-emerald-500/10'
-
-              return (
-                <Card
-                  key={tier.name}
-                  className={`flex flex-col ${
-                    tier.highlight
-                      ? 'relative border-sky-500/50 shadow-xl shadow-sky-500/10'
-                      : 'border-border/60'
-                  }`}
-                >
-                  {tier.highlight && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="inline-flex items-center rounded-full bg-gradient-to-r from-sky-500 to-cyan-400 px-4 py-1 text-xs font-semibold text-white shadow-md shadow-sky-500/20">
-                        Most popular
-                      </span>
-                    </div>
-                  )}
-                  <CardHeader>
-                    <CardTitle className="text-lg">{tier.name}</CardTitle>
-                    <CardDescription className="text-xs">{tier.description}</CardDescription>
-                    <div className="mt-4">
-                      <span className="text-4xl font-bold">
-                        ${displayPrice === 0 ? '0' : displayPrice.toFixed(0)}
-                      </span>
-                      <span className="text-muted-foreground text-sm">
-                        /mo{isYearly && displayPrice > 0 ? (
-                          <span className="block text-xs mt-1">
-                            billed ${tier.yearlyTotalPrice.toFixed(0)}/yr
-                          </span>
-                        ) : ''}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex-1 space-y-4">
-                    {/* Included limits */}
-                    <div>
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        Included
-                      </p>
-                      <ul className="space-y-2">
-                        {tier.includedLimits.map((limit) => (
-                          <li key={limit} className="flex items-start gap-2">
-                            <div className={`mt-0.5 rounded-full p-0.5 ${accentBgClass}`}>
-                              <Check className={`h-3 w-3 ${accentClass}`} />
-                            </div>
-                            <span className="text-xs leading-tight">{limit}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Overages */}
-                    {tier.overages.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                          Overages
-                        </p>
-                        <ul className="space-y-1.5">
-                          {tier.overages.map((o) => (
-                            <li key={o.label} className="flex items-center gap-2">
-                              <TrendingUp className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-                              <span className="text-xs text-muted-foreground">
-                                {o.label}: <span className="font-medium text-foreground">{o.rate}</span>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Platform features */}
-                    {tier.platformFeatures.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                          Features
-                        </p>
-                        <ul className="space-y-2">
-                          {tier.platformFeatures.map((feature) => (
-                            <li key={feature} className="flex items-start gap-2">
-                              <div className={`mt-0.5 rounded-full p-0.5 ${accentBgClass}`}>
-                                <Check className={`h-3 w-3 ${accentClass}`} />
-                              </div>
-                              <span className="text-xs leading-tight">{feature}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </CardContent>
-                  <CardFooter>
-                    {isAuthenticated && tier.tierName !== 'FREE' ? (
-                      <Button
-                        className={`w-full ${
-                          tier.highlight
-                            ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
-                            : ''
-                        }`}
-                        variant={tier.highlight ? 'default' : 'outline'}
-                        size="lg"
-                        disabled={checkoutMutation.isPending}
-                        onClick={() => handlePaidTierClick(tier.tierName)}
-                      >
-                        {tier.cta}
-                      </Button>
-                    ) : (
-                      <Button
-                        asChild
-                        className={`w-full ${
-                          tier.highlight
-                            ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
-                            : ''
-                        }`}
-                        variant={tier.highlight ? 'default' : 'outline'}
-                        size="lg"
-                      >
-                        <Link to={tier.ctaLink}>{tier.cta}</Link>
-                      </Button>
-                    )}
-                  </CardFooter>
-                </Card>
-              )
-            })}
+            {tiers.map((tier) => (
+              <TierCard
+                key={tier.name}
+                tier={tier}
+                billingInterval={billingInterval}
+                isAuthenticated={isAuthenticated}
+                isPending={checkoutMutation.isPending}
+                onPaidTierClick={handlePaidTierClick}
+              />
+            ))}
           </div>
         )}
 

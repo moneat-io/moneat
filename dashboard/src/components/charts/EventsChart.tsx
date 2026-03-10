@@ -72,6 +72,27 @@ const formatTime = (timestamp: string) =>
     hour: '2-digit',
   })
 
+type ChartPoint = {timestamp: number; time: string; count: number}
+
+function computeCompactDomain(chartData: ChartPoint[]): [number, number] {
+  if (chartData.length === 0) return [0, 1]
+  const counts = chartData.map((p) => p.count)
+  const minCount = Math.min(...counts)
+  const maxCount = Math.max(...counts)
+  const range = Math.max(maxCount - minCount, 1)
+  const padding = Math.max(1, Math.round(range * 0.25))
+  return [Math.max(0, minCount - padding), maxCount + padding]
+}
+
+function filterReleaseMarkers(markers: ReleaseMarker[], chartData: ChartPoint[]) {
+  if (chartData.length === 0) return []
+  const min = chartData[0]!.timestamp
+  const max = chartData[chartData.length - 1]!.timestamp
+  return markers
+    .map((m) => ({...m, timestamp: new Date(m.timestamp).getTime()}))
+    .filter((m) => m.timestamp >= min && m.timestamp <= max)
+}
+
 export function EventsChart({
   data,
   title = 'Events Over Time',
@@ -85,27 +106,11 @@ export function EventsChart({
     time: formatTime(point.timestamp),
     count: point.count,
   }))
-  const counts = chartData.map((point) => point.count)
-  const minCount = counts.length > 0 ? Math.min(...counts) : 0
-  const maxCount = counts.length > 0 ? Math.max(...counts) : 0
-  const compactRange = Math.max(maxCount - minCount, 1)
-  const compactPadding = Math.max(1, Math.round(compactRange * 0.25))
-  const compactDomain: [number, number] = [
-    Math.max(0, minCount - compactPadding),
-    maxCount + compactPadding,
-  ]
-
-  const releaseLines = releaseMarkers
-    .map((m) => ({
-      ...m,
-      timestamp: new Date(m.timestamp).getTime(),
-    }))
-    .filter((m) => {
-      if (chartData.length === 0) return false
-      const min = chartData[0]!.timestamp
-      const max = chartData[chartData.length - 1]!.timestamp
-      return m.timestamp >= min && m.timestamp <= max
-    })
+  const compactDomain = computeCompactDomain(chartData)
+  const releaseLines = filterReleaseMarkers(releaseMarkers, chartData)
+  const tickFormatter = compact
+    ? (ts: number) => new Date(ts).toLocaleString('en-US', {hour: 'numeric'})
+    : (ts: number) => formatTime(new Date(ts).toISOString())
 
   return (
     <Card className={cn("border-t-4 border-t-blue-500/50", fillHeight ? "h-full flex flex-col" : "h-full")}>
@@ -123,11 +128,7 @@ export function EventsChart({
               dataKey="timestamp"
               type="number"
               domain={['dataMin', 'dataMax']}
-              tickFormatter={(ts) =>
-                compact
-                  ? new Date(ts).toLocaleString('en-US', {hour: 'numeric'})
-                  : formatTime(new Date(ts).toISOString())
-              }
+              tickFormatter={tickFormatter}
               fontSize={compact ? 10 : 12}
               height={compact ? 16 : 30}
               minTickGap={compact ? 48 : 16}

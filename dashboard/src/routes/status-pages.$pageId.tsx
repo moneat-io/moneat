@@ -409,7 +409,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
   const previewMonitors = statusPage.monitors.map(monitor => ({
     name: monitor.monitorName,
     displayName: monitor.displayName,
-    status: 'operational',
+    status: 'operational' as const,
     uptimePercentage: 99.95,
     uptimeHistory: Array.from({length: formData.historyDays}, (_, i) => ({
       date: new Date(Date.now() - (formData.historyDays - i) * 24 * 60 * 60 * 1000).toISOString(),

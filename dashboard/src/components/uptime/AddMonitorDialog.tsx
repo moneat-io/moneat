@@ -169,17 +169,47 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
     onOpenChange(false)
   }
 
+  const handleDialogOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      handleClose()
+    } else {
+      onOpenChange(true)
+    }
+  }
+
   const handleCreate = () => {
     if (!formData.name) {
       toast({title: 'Monitor name is required', variant: 'destructive'})
       return
     }
 
-    createMutation.mutate(formData as CreateUptimeMonitorRequest)
+    const rawPort = formData.port
+    const resolvedPort = typeof rawPort === 'string'
+      ? (rawPort === '' ? undefined : parseInt(rawPort, 10) || undefined)
+      : rawPort
+
+    const request: CreateUptimeMonitorRequest = {
+      name: formData.name,
+      type: formData.type ?? 'http',
+      url: formData.url,
+      hostname: formData.hostname,
+      port: resolvedPort,
+      method: formData.method,
+      keyword: formData.keyword,
+      dbConnectionString: formData.dbConnectionString,
+      dockerContainerName: formData.dockerContainerName,
+      dockerHost: formData.dockerHost,
+      intervalSeconds: formData.intervalSeconds,
+      timeoutSeconds: formData.timeoutSeconds,
+      retries: formData.retries,
+      incidentSeverity: formData.incidentSeverity,
+    }
+
+    createMutation.mutate(request)
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Uptime Monitor</DialogTitle>

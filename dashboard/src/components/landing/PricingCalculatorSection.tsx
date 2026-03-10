@@ -397,7 +397,7 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
     if (paidIndexes.length === 0) return -1
     return paidIndexes.reduce((best, curr) =>
       costs[curr.i].total < costs[best.i].total ? curr : best,
-    ).i
+    paidIndexes[0]).i
   }, [costs, tiers])
 
   const set = (key: keyof Usage) => (v: number) => setUsage((u) => ({...u, [key]: v}))

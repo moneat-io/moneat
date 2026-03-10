@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import {type StatusValue} from '@/components/StatusPagePreview'
+
 export interface StatusPage {
   id: string
   organizationId: string
@@ -100,7 +102,7 @@ export interface PublicStatusPage {
 export interface PublicMonitorStatus {
   name: string
   displayName?: string
-  status: string
+  status: StatusValue
   uptimePercentage: number
   uptimeHistory?: UptimeDataPoint[]
 }

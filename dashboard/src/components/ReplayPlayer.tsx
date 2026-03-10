@@ -19,6 +19,40 @@ import rrwebPlayer from 'rrweb-player'
 import 'rrweb-player/dist/style.css'
 import {formatErrorForLogging} from '@/lib/api'
 
+type RrwebReplayer = { getCurrentTime?: () => number; timer?: { isActive?: () => boolean } }
+
+function reportCurrentTime(player: InstanceType<typeof rrwebPlayer>, cb: (ms: number) => void): void {
+  try {
+    const replayer = player.getReplayer?.() as RrwebReplayer | undefined
+    if (replayer && typeof replayer.getCurrentTime === 'function') {
+      cb(replayer.getCurrentTime())
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function checkPlayingState(
+  player: InstanceType<typeof rrwebPlayer>,
+  lastKnown: boolean,
+  onChange: (playing: boolean) => void,
+): boolean {
+  try {
+    const replayer = player.getReplayer?.() as RrwebReplayer | undefined
+    if (replayer) {
+      const timer = replayer.timer
+      const isActive = typeof timer?.isActive === 'function' ? timer.isActive() : lastKnown
+      if (isActive !== lastKnown) {
+        onChange(isActive)
+        return isActive
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return lastKnown
+}
+
 interface ReplayPlayerProps {
   events: unknown[]
   width?: number
@@ -155,34 +189,10 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
     let rafId = 0
     const tick = () => {
       const cb = onTimeUpdateRef.current
-      if (cb && player) {
-        try {
-          const replayer = player.getReplayer?.()
-          if (replayer && typeof replayer.getCurrentTime === 'function') {
-            const ms = replayer.getCurrentTime()
-            cb(ms)
-          }
-        } catch {
-          // ignore
-        }
-      }
-      // Detect play/pause state changes from the rrweb controller
+      if (cb && player) reportCurrentTime(player, cb)
+
       if (player && onPlayingChangeRef.current) {
-        try {
-          const replayer = player.getReplayer?.()
-          if (replayer) {
-            // rrweb replayer emits 'pause' and 'resume' events but they are not
-            // easily accessible. Instead, check the timer state.
-            const timer = (replayer as unknown as { timer?: { isActive?: () => boolean } }).timer
-            const isActive = typeof timer?.isActive === 'function' ? timer.isActive() : lastKnownPlaying
-            if (isActive !== lastKnownPlaying) {
-              lastKnownPlaying = isActive
-              onPlayingChangeRef.current(isActive)
-            }
-          }
-        } catch {
-          // ignore
-        }
+        lastKnownPlaying = checkPlayingState(player, lastKnownPlaying, onPlayingChangeRef.current)
       }
       rafId = requestAnimationFrame(tick)
     }

@@ -111,56 +111,51 @@ function formatClock(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
+function formatLifecycleDetail(payload: Record<string, unknown>): string {
+  const screen = payload.screen ?? 'Screen'
+  const state = payload.state ?? ''
+  return `${screen}: ${state}`
+}
+
+function formatClickDetail(payload: Record<string, unknown>): string {
+  const viewClass = (payload['view.class'] as string)?.split('.').pop() ?? ''
+  const viewId = payload['view.id'] ?? ''
+  return viewId ? `Clicked ${viewClass} (${viewId})` : `Clicked ${viewClass}`
+}
+
+function formatNavigationDetail(payload: Record<string, unknown>): string {
+  return `${payload.from ?? ''} → ${payload.to ?? ''}`
+}
+
+function formatHttpDetail(payload: Record<string, unknown>): string | undefined {
+  const parts: string[] = []
+  if (payload.method) parts.push(String(payload.method))
+  if (payload.url) parts.push(String(payload.url))
+  if (payload.status_code != null) parts.push(String(payload.status_code))
+  return parts.length > 0 ? parts.join(' ') : undefined
+}
+
+function formatDeviceDetail(payload: Record<string, unknown>): string | undefined {
+  if (payload.action && String(payload.action).includes('BATTERY')) {
+    const level = payload.level ?? ''
+    const charging = payload.charging ? ' (charging)' : ''
+    return `Battery ${level}%${charging}`
+  }
+  return payload.action ? String(payload.action) : undefined
+}
+
 function formatBreadcrumbDetail(payload: Record<string, unknown>, category: string): string | undefined {
+  if (payload.message && typeof payload.message === 'string') return payload.message
+
   const cat = category.toLowerCase()
-
-  if (payload.message && typeof payload.message === 'string') {
-    return payload.message
-  }
-
-  // UI Lifecycle
-  if (cat.includes('ui.lifecycle')) {
-    const screen = payload.screen ?? 'Screen'
-    const state = payload.state ?? ''
-    return `${screen}: ${state}`
-  }
-
-  // UI Click
-  if (cat.includes('ui.click')) {
-    const viewClass = (payload['view.class'] as string)?.split('.').pop() ?? ''
-    const viewId = payload['view.id'] ?? ''
-    return viewId ? `Clicked ${viewClass} (${viewId})` : `Clicked ${viewClass}`
-  }
-
-  // Navigation
-  if (cat.includes('navigation')) {
-    const from = payload.from ?? ''
-    const to = payload.to ?? ''
-    return `${from} → ${to}`
-  }
-
-  // HTTP
-  if (cat.includes('http') || cat.includes('network')) {
-    const parts: string[] = []
-    if (payload.method) parts.push(String(payload.method))
-    if (payload.url) parts.push(String(payload.url))
-    if (payload.status_code != null) parts.push(String(payload.status_code))
-    return parts.length > 0 ? parts.join(' ') : undefined
-  }
-
-  // Device
-  if (cat.includes('device')) {
-    if (payload.action && String(payload.action).includes('BATTERY')) {
-      const level = payload.level ?? ''
-      const charging = payload.charging ? ' (charging)' : ''
-      return `Battery ${level}%${charging}`
-    }
-    return payload.action ? String(payload.action) : undefined
-  }
+  if (cat.includes('ui.lifecycle')) return formatLifecycleDetail(payload)
+  if (cat.includes('ui.click')) return formatClickDetail(payload)
+  if (cat.includes('navigation')) return formatNavigationDetail(payload)
+  if (cat.includes('http') || cat.includes('network')) return formatHttpDetail(payload)
+  if (cat.includes('device')) return formatDeviceDetail(payload)
 
   if (payload.action && typeof payload.action === 'string') return payload.action
   if (payload.type && typeof payload.type === 'string') return payload.type
-
   return undefined
 }
 
@@ -241,22 +236,22 @@ function formatCategoryAsTitle(category: string): string {
     .join(' ')
 }
 
+function getBreadcrumbTitle(event: ReplayEvent): string {
+  const payload = event.data?.payload
+  const category = payload?.category ?? payload?.type
+  if (typeof category === 'string' && category.length > 0) return formatCategoryAsTitle(category)
+  const message = payload?.message
+  if (typeof message === 'string' && message.length > 0) return message
+  return 'Breadcrumb'
+}
+
 function getEventTitle(event: ReplayEvent): string {
   if (event.type === 3) return 'Touch/Input'
   if (event.type === 4) return 'Viewport Metadata'
 
   if (event.type === 5) {
     const tag = event.data?.tag
-    if (tag === 'breadcrumb') {
-      const payload = event.data?.payload
-      const category = payload?.category ?? payload?.type
-      if (typeof category === 'string' && category.length > 0) {
-        return formatCategoryAsTitle(category)
-      }
-      const message = payload?.message
-      if (typeof message === 'string' && message.length > 0) return message
-      return 'Breadcrumb'
-    }
+    if (tag === 'breadcrumb') return getBreadcrumbTitle(event)
     if (tag === 'video') return 'Video Metadata'
     if (typeof tag === 'string' && tag.length > 0) return tag
     return 'Custom Event'
@@ -694,7 +689,7 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
     play() {
       const video = videoRef.current
       if (video) {
-        void video.play().catch(() => {})
+        video.play().catch(() => {})
       }
     },
     pause() {
@@ -754,7 +749,7 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
                   }
 
                   if (shouldResumeAfterSwitchRef.current) {
-                    void video.play().catch(() => {
+                    video.play().catch(() => {
                       // Browser may block autoplay without user gesture.
                     })
                     shouldResumeAfterSwitchRef.current = false
@@ -789,7 +784,7 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
                       const video = videoRef.current
                       if (!video) return
                       if (video.paused) {
-                        void video.play().catch(() => {
+                        video.play().catch(() => {
                           // Browser may block autoplay without user gesture.
                         })
                       } else {
@@ -810,8 +805,21 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
                   <div
                     ref={timelineTrackRef}
                     className="relative h-9 flex-1 min-w-0 cursor-pointer group/timeline"
+                    role="slider"
+                    tabIndex={0}
+                    aria-label="Timeline seek"
+                    aria-valuemin={0}
+                    aria-valuemax={totalDurationMs}
+                    aria-valuenow={currentGlobalTimeMs}
                     onClick={(event) => seekFromTimelinePointer(event.clientX)}
-                    title="Timeline (click to seek)"
+                    onKeyDown={(e) => {
+                      const step = totalDurationMs * 0.05
+                      if (e.key === 'ArrowLeft') { e.preventDefault(); seekToGlobalTime(currentGlobalTimeMs - step) }
+                      if (e.key === 'ArrowRight') { e.preventDefault(); seekToGlobalTime(currentGlobalTimeMs + step) }
+                      if (e.key === 'Home') { e.preventDefault(); seekToGlobalTime(0) }
+                      if (e.key === 'End') { e.preventDefault(); seekToGlobalTime(totalDurationMs) }
+                    }}
+                    title="Timeline (click or use arrow keys to seek)"
                   >
                     {/* Track background */}
                     <div
