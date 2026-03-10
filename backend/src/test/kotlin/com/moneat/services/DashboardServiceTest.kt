@@ -107,7 +107,7 @@ class DashboardServiceTest {
                     }
                 }
 
-                val service = DashboardService()
+                val service = DashboardService.create()
                 val issues = service.getIssues(projectId = -1, page = 1, limit = 10, status = "resolved")
 
                 assertEquals(1, issues.size)
@@ -171,7 +171,7 @@ class DashboardServiceTest {
                     }
                 }
 
-                val service = DashboardService()
+                val service = DashboardService.create()
                 val issue = service.getIssue("issue-1")
 
                 assertNotNull(issue)
@@ -206,7 +206,7 @@ class DashboardServiceTest {
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
 
-                val service = DashboardService()
+                val service = DashboardService.create()
                 val trace = service.getTraceDetails(projectId = -1, traceId = "trace-1")
 
                 assertNotNull(trace)
@@ -237,7 +237,7 @@ class DashboardServiceTest {
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
 
-                val service = DashboardService()
+                val service = DashboardService.create()
                 val projectId = service.getProjectIdForEvent(compactEventId)
 
                 assertEquals(123L, projectId)

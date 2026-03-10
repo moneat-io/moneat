@@ -17,35 +17,60 @@
 package com.moneat.services
 
 import com.moneat.billing.models.PricingTierConfigs
-import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.CreateProjectRequest
+import com.moneat.events.models.ProjectKeyResponse
 import com.moneat.events.models.UpdateProjectRequest
+import com.moneat.events.repositories.IssueRepository
+import com.moneat.events.repositories.ProjectRepository
+import com.moneat.events.repositories.models.ProjectRow
 import com.moneat.events.services.DashboardService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
-import com.moneat.testsupport.MockHttpServer
-import com.moneat.testsupport.respond
+import com.moneat.testsupport.TestDatabaseHelper
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.runs
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
+/**
+ * Tests for DashboardService project-related operations.
+ *
+ * H2 setup is retained for tests exercising internal services that bypass the repository:
+ *  - AccessService.hasProjectAccess queries Projects/Memberships directly.
+ *  - PricingTierService.getPrimaryOrganizationIdForUser queries Memberships directly.
+ * All project-level operations (create/update/delete/list) go through the mocked ProjectRepository.
+ */
 class DashboardServiceProjectTest {
+
+    private val mockProjectRepo = mockk<ProjectRepository>(relaxed = true)
+    private val mockIssueRepo = mockk<IssueRepository>(relaxed = true)
+
     companion object {
+        private const val PROJECT_NAME = "My App"
+        private const val PROJECT_SLUG = "my-app"
+        private const val MULTI_TARGET_NAME = "Multi Target"
+        private const val MULTI_TARGET_SLUG = "multi-target"
+        private const val SINGLE_KEY_NAME = "Single Key App"
+        private const val SINGLE_KEY_SLUG = "single-key-app"
+        private const val SPECIAL_CHARS_NAME = "My App v2.0!"
+        private const val SPECIAL_CHARS_SLUG = "my-app-v2-0"
         private var db: Database? = null
 
         fun seedUser(email: String = "user@test.com"): Int = transaction {
@@ -62,20 +87,12 @@ class DashboardServiceProjectTest {
             } get Organizations.id
         }
 
-        fun seedMembership(userId: Int, orgId: Int): Int = transaction {
+        fun seedMembership(userId: Int, orgId: Int) = transaction {
             Memberships.insert {
                 it[user_id] = userId
                 it[organization_id] = orgId
                 it[role] = "owner"
-            } get Memberships.id
-        }
-
-        fun seedProSubscription(orgId: Int): Int = transaction {
-            Subscriptions.insert {
-                it[organization_id] = orgId
-                it[plan] = "PRO"
-                it[status] = "active"
-            } get Subscriptions.id
+            }
         }
 
         fun seedProject(orgId: Int, name: String = "Test Project", framework: String? = null): Long = transaction {
@@ -97,20 +114,22 @@ class DashboardServiceProjectTest {
             )
         }
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-
-        // Drop and recreate schema for clean state
+        // Subscriptions/PricingTierConfigs needed by PricingTierService.getEffectiveTierForOrganization
         TestDatabaseHelper.resetSchema(
             Organizations,
             Users,
             Memberships,
             Projects,
-            ProjectKeys,
             Subscriptions,
             PricingTierConfigs
         )
     }
 
+    private fun makeDashboardService() = DashboardService(mockProjectRepo, mockIssueRepo)
+
     // ===================== hasProjectAccess =====================
+    // AccessService.hasProjectAccess queries Projects + Memberships directly (bypasses repo).
+    // H2 seed data is required for these tests.
 
     @Test
     fun `hasProjectAccess returns true when user is member of project org`() {
@@ -118,9 +137,7 @@ class DashboardServiceProjectTest {
         val orgId = seedOrg()
         seedMembership(userId, orgId)
         val projectId = seedProject(orgId)
-
-        val service = DashboardService()
-        assertTrue(service.hasProjectAccess(userId, projectId))
+        assertTrue(makeDashboardService().hasProjectAccess(userId, projectId))
     }
 
     @Test
@@ -128,9 +145,7 @@ class DashboardServiceProjectTest {
         val userId = seedUser("other@test.com")
         val orgId = seedOrg()
         val projectId = seedProject(orgId)
-
-        val service = DashboardService()
-        assertFalse(service.hasProjectAccess(userId, projectId))
+        assertFalse(makeDashboardService().hasProjectAccess(userId, projectId))
     }
 
     @Test
@@ -138,9 +153,7 @@ class DashboardServiceProjectTest {
         val userId = seedUser()
         val orgId = seedOrg()
         seedMembership(userId, orgId)
-
-        val service = DashboardService()
-        assertFalse(service.hasProjectAccess(userId, 999999L))
+        assertFalse(makeDashboardService().hasProjectAccess(userId, 999999L))
     }
 
     @Test
@@ -150,24 +163,37 @@ class DashboardServiceProjectTest {
         val orgB = seedOrg("Org B")
         seedMembership(userId, orgA)
         val projectInB = seedProject(orgB)
-
-        val service = DashboardService()
-        assertFalse(service.hasProjectAccess(userId, projectInB))
+        assertFalse(makeDashboardService().hasProjectAccess(userId, projectInB))
     }
 
     // ===================== createProject =====================
+    // PricingTierService.getPrimaryOrganizationIdForUser queries Memberships directly.
+    // H2 seed data is required for org/membership setup; all repo calls are mocked.
 
     @Test
     fun `createProject creates project with generated slug and DSN`() = runBlocking {
         val userId = seedUser()
-        val orgId = seedOrg()
-        seedMembership(userId, orgId)
+        seedMembership(userId, seedOrg())
 
-        val service = DashboardService()
-        val result = service.createProject(userId, CreateProjectRequest(name = "My App", framework = "kotlin"))
+        every { mockProjectRepo.getProjectCountForOrganization(any()) } returns 0
+        every { mockProjectRepo.findProjectByNameOrSlug(any(), PROJECT_NAME, PROJECT_SLUG) } returns null
+        every { mockProjectRepo.createProject(any(), PROJECT_NAME, PROJECT_SLUG, "kotlin") } returns 42L
+        every { mockProjectRepo.findProjectKeyByTarget(42L, null) } returns false
+        every { mockProjectRepo.createProjectKey(42L, any(), any(), null) } just runs
+        every { mockProjectRepo.getProjectById(42L) } returns ProjectRow(
+            projectId = 42L, name = PROJECT_NAME, slug = PROJECT_SLUG, framework = "kotlin",
+            keys = listOf(ProjectKeyResponse(null, "http://testkey@test/42")),
+            dsn = "http://testkey@test/42"
+        )
+        coEvery { mockProjectRepo.getIssueCountForProject(42L, any(), null) } returns 0L
 
-        assertEquals("My App", result.name)
-        assertEquals("my-app", result.slug)
+        val result = makeDashboardService().createProject(
+            userId,
+            CreateProjectRequest(name = PROJECT_NAME, framework = "kotlin")
+        )
+
+        assertEquals(PROJECT_NAME, result.name)
+        assertEquals(PROJECT_SLUG, result.slug)
         assertEquals("kotlin", result.framework)
         assertTrue(result.keys.isNotEmpty())
         assertTrue(result.dsn.isNotEmpty())
@@ -175,41 +201,50 @@ class DashboardServiceProjectTest {
 
     @Test
     fun `createProject throws when user has no organization`() = runBlocking {
-        val userId = seedUser()
-
-        val service = DashboardService()
-        val ex = kotlin.test.assertFailsWith<IllegalStateException> {
-            service.createProject(userId, CreateProjectRequest(name = "No Org Project"))
+        val ex = assertFailsWith<IllegalStateException> {
+            makeDashboardService().createProject(999, CreateProjectRequest(name = "No Org Project"))
         }
-        assertEquals(ex.message?.contains("no organization"), true)
+        assertTrue(ex.message?.contains("no organization") == true)
     }
 
     @Test
     fun `createProject throws when project with same name already exists`() = runBlocking {
         val userId = seedUser()
-        val orgId = seedOrg()
-        seedMembership(userId, orgId)
-        seedProSubscription(orgId)
-        seedProject(orgId, "Duplicate")
+        seedMembership(userId, seedOrg())
 
-        val service = DashboardService()
-        val ex = kotlin.test.assertFailsWith<IllegalStateException> {
-            service.createProject(userId, CreateProjectRequest(name = "Duplicate"))
+        every { mockProjectRepo.getProjectCountForOrganization(any()) } returns 0
+        every { mockProjectRepo.findProjectByNameOrSlug(any(), "Duplicate", "duplicate") } returns
+            ProjectRow(1L, "Duplicate", "duplicate", null, emptyList(), "")
+
+        val ex = assertFailsWith<IllegalStateException> {
+            makeDashboardService().createProject(userId, CreateProjectRequest(name = "Duplicate"))
         }
-        // Service message: "A project with this name already exists"
-        assertEquals(ex.message?.contains("already exists"), true)
+        assertTrue(ex.message?.contains("already exists") == true)
     }
 
     @Test
     fun `createProject with multiple targets creates multiple keys`() = runBlocking {
         val userId = seedUser()
-        val orgId = seedOrg()
-        seedMembership(userId, orgId)
+        seedMembership(userId, seedOrg())
 
-        val service = DashboardService()
-        val result = service.createProject(
+        every { mockProjectRepo.getProjectCountForOrganization(any()) } returns 0
+        every { mockProjectRepo.findProjectByNameOrSlug(any(), MULTI_TARGET_NAME, MULTI_TARGET_SLUG) } returns null
+        every { mockProjectRepo.createProject(any(), MULTI_TARGET_NAME, MULTI_TARGET_SLUG, null) } returns 100L
+        every { mockProjectRepo.findProjectKeyByTarget(100L, any()) } returns false
+        every { mockProjectRepo.createProjectKey(100L, any(), any(), any()) } just runs
+        every { mockProjectRepo.getProjectById(100L) } returns ProjectRow(
+            projectId = 100L, name = MULTI_TARGET_NAME, slug = MULTI_TARGET_SLUG, framework = null,
+            keys = listOf(
+                ProjectKeyResponse("android", "http://k1@test/100"),
+                ProjectKeyResponse("ios", "http://k2@test/100"),
+            ),
+            dsn = "http://k1@test/100"
+        )
+        coEvery { mockProjectRepo.getIssueCountForProject(100L, any(), null) } returns 0L
+
+        val result = makeDashboardService().createProject(
             userId,
-            CreateProjectRequest(name = "Multi Target", targets = listOf("android", "ios"))
+            CreateProjectRequest(name = MULTI_TARGET_NAME, targets = listOf("android", "ios"))
         )
 
         assertEquals(2, result.keys.size)
@@ -221,11 +256,21 @@ class DashboardServiceProjectTest {
     @Test
     fun `createProject with no targets creates single key`() = runBlocking {
         val userId = seedUser()
-        val orgId = seedOrg()
-        seedMembership(userId, orgId)
+        seedMembership(userId, seedOrg())
 
-        val service = DashboardService()
-        val result = service.createProject(userId, CreateProjectRequest(name = "Single Key App"))
+        every { mockProjectRepo.getProjectCountForOrganization(any()) } returns 0
+        every { mockProjectRepo.findProjectByNameOrSlug(any(), SINGLE_KEY_NAME, SINGLE_KEY_SLUG) } returns null
+        every { mockProjectRepo.createProject(any(), SINGLE_KEY_NAME, SINGLE_KEY_SLUG, null) } returns 200L
+        every { mockProjectRepo.findProjectKeyByTarget(200L, null) } returns false
+        every { mockProjectRepo.createProjectKey(200L, any(), any(), null) } just runs
+        every { mockProjectRepo.getProjectById(200L) } returns ProjectRow(
+            projectId = 200L, name = SINGLE_KEY_NAME, slug = SINGLE_KEY_SLUG, framework = null,
+            keys = listOf(ProjectKeyResponse(null, "http://k@test/200")),
+            dsn = "http://k@test/200"
+        )
+        coEvery { mockProjectRepo.getIssueCountForProject(200L, any(), null) } returns 0L
+
+        val result = makeDashboardService().createProject(userId, CreateProjectRequest(name = SINGLE_KEY_NAME))
 
         assertEquals(1, result.keys.size)
         assertNull(result.keys.first().platformTarget)
@@ -234,264 +279,147 @@ class DashboardServiceProjectTest {
     @Test
     fun `createProject normalizes special characters in slug`() = runBlocking {
         val userId = seedUser()
-        val orgId = seedOrg()
-        seedMembership(userId, orgId)
+        seedMembership(userId, seedOrg())
 
-        val service = DashboardService()
-        val result = service.createProject(userId, CreateProjectRequest(name = "My App v2.0!"))
+        every { mockProjectRepo.getProjectCountForOrganization(any()) } returns 0
+        every { mockProjectRepo.findProjectByNameOrSlug(any(), SPECIAL_CHARS_NAME, SPECIAL_CHARS_SLUG) } returns null
+        every { mockProjectRepo.createProject(any(), SPECIAL_CHARS_NAME, SPECIAL_CHARS_SLUG, null) } returns 300L
+        every { mockProjectRepo.findProjectKeyByTarget(300L, null) } returns false
+        every { mockProjectRepo.createProjectKey(300L, any(), any(), null) } just runs
+        every { mockProjectRepo.getProjectById(300L) } returns ProjectRow(
+            projectId = 300L, name = SPECIAL_CHARS_NAME, slug = SPECIAL_CHARS_SLUG, framework = null,
+            keys = listOf(ProjectKeyResponse(null, "http://k@test/300")),
+            dsn = "http://k@test/300"
+        )
+        coEvery { mockProjectRepo.getIssueCountForProject(300L, any(), null) } returns 0L
 
-        assertEquals("my-app-v2-0", result.slug)
+        val result = makeDashboardService().createProject(userId, CreateProjectRequest(name = SPECIAL_CHARS_NAME))
+        assertEquals(SPECIAL_CHARS_SLUG, result.slug)
     }
 
     // ===================== addProjectTarget =====================
+    // Pure mock tests — no H2 or ClickHouse required.
 
     @Test
     fun `addProjectTarget adds new platform key`() {
-        val orgId = seedOrg()
-        val projectId = seedProject(orgId)
+        every { mockProjectRepo.findProjectKeyByTarget(1L, "web") } returns false
+        every { mockProjectRepo.createProjectKey(1L, any(), any(), "web") } just runs
 
-        val service = DashboardService()
-        val result = service.addProjectTarget(projectId, "web")
-
+        val result = makeDashboardService().addProjectTarget(1L, "web")
         assertEquals("web", result.platformTarget)
         assertTrue(result.dsn.isNotEmpty())
     }
 
     @Test
     fun `addProjectTarget throws when target already exists`() {
-        val orgId = seedOrg()
-        val projectId = seedProject(orgId)
-        transaction {
-            ProjectKeys.insert {
-                it[project_id] = projectId
-                it[public_key] = "existingkey"
-                it[secret_key] = "secretkey"
-                it[platform_target] = "android"
-                it[is_active] = true
-            }
-        }
+        every { mockProjectRepo.findProjectKeyByTarget(1L, "android") } returns true
 
-        val service = DashboardService()
-        val ex = kotlin.test.assertFailsWith<IllegalStateException> {
-            service.addProjectTarget(projectId, "android")
+        val ex = assertFailsWith<IllegalStateException> {
+            makeDashboardService().addProjectTarget(1L, "android")
         }
-        assertEquals(ex.message?.contains("android"), true)
+        assertTrue(ex.message?.contains("android") == true)
     }
 
     @Test
-    fun `addProjectTarget null target does not conflict with android target`() {
-        val orgId = seedOrg()
-        val projectId = seedProject(orgId)
-        transaction {
-            ProjectKeys.insert {
-                it[project_id] = projectId
-                it[public_key] = "nullkey"
-                it[secret_key] = "secret"
-                it[platform_target] = null
-                it[is_active] = true
-            }
-        }
+    fun `addProjectTarget android succeeds when no android key exists`() {
+        every { mockProjectRepo.findProjectKeyByTarget(2L, "android") } returns false
+        every { mockProjectRepo.createProjectKey(2L, any(), any(), "android") } just runs
 
-        val service = DashboardService()
-        // Should NOT throw - null and "android" are different targets
-        val result = service.addProjectTarget(projectId, "android")
+        val result = makeDashboardService().addProjectTarget(2L, "android")
         assertEquals("android", result.platformTarget)
     }
 
     // ===================== updateProject =====================
+    // Pure mock tests — no H2 required. Delegation to repo is verified via mock verification.
 
     @Test
-    fun `updateProject updates project name and slug`() {
-        val orgId = seedOrg()
-        val projectId = seedProject(orgId, "Old Name")
-
-        val service = DashboardService()
-        service.updateProject(projectId, UpdateProjectRequest(name = "New Name"))
-
-        val updated = transaction {
-            Projects.selectAll().where { Projects.id eq projectId }.firstOrNull()
-        }
-        assertNotNull(updated)
-        assertEquals("New Name", updated[Projects.name])
-        assertEquals("new-name", updated[Projects.slug])
+    fun `updateProject delegates to repository with correct arguments`() {
+        val request = UpdateProjectRequest(name = "New Name")
+        makeDashboardService().updateProject(1L, request)
+        verify { mockProjectRepo.updateProject(1L, request) }
     }
 
     @Test
-    fun `updateProject updates framework`() {
-        val orgId = seedOrg()
-        val projectId = seedProject(orgId, "App", "java")
-
-        val service = DashboardService()
-        service.updateProject(projectId, UpdateProjectRequest(framework = "kotlin"))
-
-        val updated = transaction {
-            Projects.selectAll().where { Projects.id eq projectId }.firstOrNull()
-        }
-        assertNotNull(updated)
-        assertEquals("kotlin", updated[Projects.framework])
-    }
-
-    @Test
-    fun `updateProject with no fields does not affect existing name`() {
-        val orgId = seedOrg()
-        val projectId = seedProject(orgId, "Stable App")
-
-        val service = DashboardService()
-        service.updateProject(projectId, UpdateProjectRequest(name = "Stable App"))
-
-        // Project unchanged
-        val row = transaction {
-            Projects.selectAll().where { Projects.id eq projectId }.firstOrNull()
-        }
-        assertEquals("Stable App", row!![Projects.name])
+    fun `updateProject framework change delegates to repository`() {
+        val request = UpdateProjectRequest(framework = "kotlin")
+        makeDashboardService().updateProject(1L, request)
+        verify { mockProjectRepo.updateProject(1L, request) }
     }
 
     // ===================== deleteProject =====================
+    // Pure mock tests — no H2 required. Delegation to repo is verified via mock verification.
 
     @Test
-    fun `deleteProject removes the project`() {
-        val orgId = seedOrg()
-        val projectId = seedProject(orgId, "To Delete")
-
-        val service = DashboardService()
-        service.deleteProject(projectId)
-
-        val row = transaction {
-            Projects.selectAll().where { Projects.id eq projectId }.firstOrNull()
-        }
-        assertNull(row)
+    fun `deleteProject delegates to repository`() {
+        makeDashboardService().deleteProject(1L)
+        verify { mockProjectRepo.deleteProject(1L) }
     }
 
     @Test
-    fun `deleteProject does not affect other projects`() {
-        val orgId = seedOrg()
-        val projectId1 = seedProject(orgId, "Keep Me")
-        val projectId2 = seedProject(orgId, "Delete Me")
-
-        val service = DashboardService()
-        service.deleteProject(projectId2)
-
-        val remaining = transaction {
-            Projects.selectAll().where { Projects.id eq projectId1 }.firstOrNull()
-        }
-        assertNotNull(remaining)
+    fun `deleteProject scopes deletion to given project id`() {
+        makeDashboardService().deleteProject(99L)
+        verify { mockProjectRepo.deleteProject(99L) }
     }
 
-    // ===================== getProjects (with MockHttpServer) =====================
+    // ===================== getProjects =====================
+    // Pure mock tests — no H2 or ClickHouse required.
 
     @Test
-    fun `getProjects returns projects with issue counts from ClickHouse`() = runBlocking {
-        val userId = seedUser()
-        val orgId = seedOrg()
-        seedMembership(userId, orgId)
-        val projectId = seedProject(orgId, "ClickHouse App")
+    fun `getProjects returns projects with issue counts`() = runBlocking {
+        every { mockProjectRepo.getOrganizationIdsForUser(1) } returns listOf(10)
+        every { mockProjectRepo.getProjectsForOrganizations(listOf(10)) } returns listOf(
+            ProjectRow(1L, PROJECT_NAME, PROJECT_SLUG, null, emptyList(), "http://k@host/1")
+        )
+        coEvery { mockProjectRepo.getIssueCountForProject(1L, any(), null) } returns 42L
 
-        MockHttpServer { exchange ->
-            exchange.respond(
-                200,
-                """{"total":42}""",
-                contentType = "text/plain"
-            )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        val projects = makeDashboardService().getProjects(1)
 
-            val service = DashboardService()
-            val projects = service.getProjects(userId)
-
-            assertEquals(1, projects.size)
-            assertEquals("ClickHouse App", projects.first().name)
-            assertEquals(42, projects.first().issueCount)
-        }
+        assertEquals(1, projects.size)
+        assertEquals(PROJECT_NAME, projects.first().name)
+        assertEquals(42, projects.first().issueCount)
     }
 
     @Test
     fun `getProjects returns empty list when user has no orgs`() = runBlocking {
-        val userId = seedUser()
-
-        MockHttpServer { exchange ->
-            exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
-
-            val service = DashboardService()
-            val projects = service.getProjects(userId)
-
-            assertTrue(projects.isEmpty())
-        }
+        every { mockProjectRepo.getOrganizationIdsForUser(1) } returns emptyList()
+        assertTrue(makeDashboardService().getProjects(1).isEmpty())
     }
 
     @Test
     fun `getProjects returns only projects for user org`() = runBlocking {
-        val userId1 = seedUser("u1@test.com")
-        val userId2 = seedUser("u2@test.com")
-        val orgId1 = seedOrg("Org 1")
-        val orgId2 = seedOrg("Org 2")
-        seedMembership(userId1, orgId1)
-        seedMembership(userId2, orgId2)
-        seedProject(orgId1, "Org1 Project")
-        seedProject(orgId2, "Org2 Project")
+        every { mockProjectRepo.getOrganizationIdsForUser(1) } returns listOf(10)
+        every { mockProjectRepo.getProjectsForOrganizations(listOf(10)) } returns listOf(
+            ProjectRow(1L, "Org1 Project", "org1-project", null, emptyList(), "")
+        )
+        coEvery { mockProjectRepo.getIssueCountForProject(any(), any(), null) } returns 0L
 
-        MockHttpServer { exchange ->
-            exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
-
-            val service = DashboardService()
-            val projects = service.getProjects(userId1)
-
-            assertEquals(1, projects.size)
-            assertEquals("Org1 Project", projects.first().name)
-        }
+        val projects = makeDashboardService().getProjects(1)
+        assertEquals(1, projects.size)
+        assertEquals("Org1 Project", projects.first().name)
     }
 
-    // ===================== getProject (with MockHttpServer) =====================
+    // ===================== getProject =====================
+    // Pure mock tests — no H2 or ClickHouse required.
 
     @Test
     fun `getProject returns project detail with issue count`() = runBlocking {
-        val orgId = seedOrg()
-        val projectId = seedProject(orgId, "Detail App", "react")
-        transaction {
-            ProjectKeys.insert {
-                it[project_id] = projectId
-                it[public_key] = "testpubkey123"
-                it[secret_key] = "testseckey123"
-                it[platform_target] = null
-                it[is_active] = true
-            }
-        }
+        val key = ProjectKeyResponse(null, "http://testpubkey123@host/1")
+        every { mockProjectRepo.getProjectById(1L) } returns
+            ProjectRow(1L, "Detail App", "detail-app", "react", listOf(key), key.dsn)
+        coEvery { mockProjectRepo.getIssueCountForProject(1L, any(), null) } returns 7L
 
-        MockHttpServer { exchange ->
-            exchange.respond(200, """{"total":7}""", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        val project = makeDashboardService().getProject(1L)
 
-            val service = DashboardService()
-            val project = service.getProject(projectId)
-
-            assertNotNull(project)
-            assertEquals("Detail App", project.name)
-            assertEquals("react", project.framework)
-            assertEquals(7, project.issueCount)
-            assertTrue(project.dsn.contains("testpubkey123"))
-        }
+        assertNotNull(project)
+        assertEquals("Detail App", project.name)
+        assertEquals("react", project.framework)
+        assertEquals(7, project.issueCount)
+        assertTrue(project.dsn.contains("testpubkey123"))
     }
 
     @Test
     fun `getProject returns null for non-existent project`() = runBlocking {
-        MockHttpServer { exchange ->
-            exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
-
-            val service = DashboardService()
-            val project = service.getProject(999999L)
-
-            assertNull(project)
-        }
+        every { mockProjectRepo.getProjectById(999999L) } returns null
+        assertNull(makeDashboardService().getProject(999999L))
     }
 }

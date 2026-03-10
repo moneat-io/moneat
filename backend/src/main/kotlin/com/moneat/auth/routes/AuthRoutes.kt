@@ -16,6 +16,9 @@
 
 package com.moneat.auth.routes
 
+import com.moneat.auth.repositories.UserRepositoryImpl
+import com.moneat.shared.repositories.MembershipRepositoryImpl
+import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.auth.services.AuthService
 import com.moneat.auth.services.OAuthService
 import com.moneat.auth.services.SignupRequestContext
@@ -58,7 +61,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 private val logger = KotlinLogging.logger {}
 
 fun Route.authRoutes() {
-    val authService = AuthService()
+    val authService = AuthService(UserRepositoryImpl(), MembershipRepositoryImpl(), OrganizationRepositoryImpl())
     val oauthService = OAuthService()
     val config =
         io.ktor.server.config

@@ -19,6 +19,7 @@ package com.moneat.llm.routes
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.services.EventService
 import com.moneat.llm.models.LlmIngestPayload
@@ -42,7 +43,7 @@ private val json = Json { ignoreUnknownKeys = true }
 fun Route.llmIngestRoutes() {
     val emailService = EmailService()
     val notificationService = NotificationService(emailService)
-    val eventService = EventService(notificationService)
+    val eventService = EventService(notificationService, EventRepositoryImpl())
     val quotaService = BillingQuotaService()
 
     route("/api/{projectId}") {

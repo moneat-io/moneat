@@ -9,8 +9,11 @@ import com.moneat.enterprise.mcp.protocol.InputSchema
 import com.moneat.enterprise.mcp.protocol.McpTool
 import com.moneat.enterprise.mcp.protocol.ToolCallResult
 import com.moneat.events.services.DashboardService
+import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
 import com.moneat.logs.models.LogQueryRequest
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
@@ -18,9 +21,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-private val dashboardService = DashboardService()
-private val logService = LogService()
-private val monitorService = MonitorService()
+private val dashboardService = DashboardService.create()
+private val logService = LogService(LogRepositoryImpl())
+private val monitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 
 private const val SEARCH_LIMIT = 10
 private const val SEARCH_LOOKBACK_HOURS = 24L

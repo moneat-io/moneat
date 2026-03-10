@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,7 +28,7 @@ import kotlin.test.assertTrue
  */
 class GetTagValuesTest {
 
-    private val logService = LogService()
+    private val logService = LogService(LogRepositoryImpl())
 
     @Test
     fun `getTagValues should generate correct query for top-level field service`() {

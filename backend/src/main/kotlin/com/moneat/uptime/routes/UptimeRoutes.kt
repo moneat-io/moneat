@@ -16,10 +16,12 @@
 
 package com.moneat.uptime.routes
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.shared.models.Memberships
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
 import com.moneat.uptime.models.UpdateUptimeMonitorRequest
+import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
@@ -66,7 +68,7 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
  * Uptime monitoring routes.
  */
 fun Route.uptimeRoutes(
-    uptimeService: UptimeService = UptimeService(),
+    uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl()),
 ) {
     route("/v1/uptime") {
         /**

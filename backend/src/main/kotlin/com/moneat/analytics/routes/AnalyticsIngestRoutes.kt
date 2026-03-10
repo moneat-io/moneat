@@ -24,6 +24,7 @@ import com.moneat.analytics.services.GeoIpService
 import com.moneat.analytics.services.ReferrerParser
 import com.moneat.analytics.services.SessionHashService
 import com.moneat.analytics.services.UserAgentService
+import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.events.services.EventService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
@@ -60,7 +61,7 @@ private val json = Json { ignoreUnknownKeys = true }
 fun Route.analyticsIngestRoutes(
     sessionHashService: SessionHashService = SessionHashService(),
     geoIpService: GeoIpService = GeoIpService(),
-    eventService: EventService = EventService(NotificationService(EmailService())),
+    eventService: EventService = EventService(NotificationService(EmailService()), EventRepositoryImpl()),
     enqueueEvent: (String) -> Unit = { message ->
         RedisConfig.sync().lpush(AnalyticsIngestionWorker.QUEUE_KEY, message)
     },

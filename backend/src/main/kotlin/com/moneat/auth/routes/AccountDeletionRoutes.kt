@@ -17,6 +17,10 @@
 package com.moneat.auth.routes
 
 import com.moneat.auth.services.AccountDeletionService
+import com.moneat.billing.repositories.SubscriptionRepositoryImpl
+import com.moneat.billing.services.StripeService
+import com.moneat.notifications.services.EmailService
+import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.utils.ErrorResponse
@@ -65,7 +69,10 @@ data class OrgDeletionValidationResponse(val canDelete: Boolean, val error: Stri
 data class CannotDeleteUserResponse(val error: String?, val organizations: List<String>)
 
 fun Route.accountDeletionRoutes() {
-    val deletionService = AccountDeletionService()
+    val deletionService = AccountDeletionService(
+        stripeService = StripeService(SubscriptionRepositoryImpl(), OrganizationRepositoryImpl()),
+        emailService = EmailService(),
+    )
 
     // Get organization details for account deletion confirmation
     get("/organizations/{orgId}") {

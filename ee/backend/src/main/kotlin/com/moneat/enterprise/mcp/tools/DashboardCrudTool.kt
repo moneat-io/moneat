@@ -7,6 +7,10 @@ package com.moneat.enterprise.mcp.tools
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
 import com.moneat.dashboards.models.UpdateDashboardRequest
+import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
+import com.moneat.dashboards.repositories.DashboardRepositoryImpl
+import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
+import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.enterprise.mcp.models.McpContext
@@ -17,7 +21,12 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-private val dashCrudService = CustomDashboardService()
+private val dashCrudService = CustomDashboardService(
+    DashboardFolderRepositoryImpl(),
+    DashboardRepositoryImpl(),
+    DashboardWidgetRepositoryImpl(),
+    ProjectRepositoryImpl { col, _, _ -> col },
+)
 private val dashAlertService = DashboardAlertService()
 
 class UpdateDashboardTool : McpTool {

@@ -4,17 +4,19 @@
 
 package com.moneat.enterprise.mcp.tools
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.enterprise.mcp.models.McpContext
 import com.moneat.enterprise.mcp.protocol.InputSchema
 import com.moneat.enterprise.mcp.protocol.McpTool
 import com.moneat.enterprise.mcp.protocol.ToolCallResult
+import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
 
-private val uptimeService = UptimeService()
+private val uptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
 
 private const val DEFAULT_HEARTBEAT_HOURS = 24
 private const val MAX_HEARTBEAT_HOURS = 168

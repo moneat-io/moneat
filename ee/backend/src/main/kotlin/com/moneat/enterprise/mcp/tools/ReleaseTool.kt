@@ -15,7 +15,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 
 private val releaseService = ReleaseService()
-private val dashboardService = DashboardService()
+private val dashboardService = DashboardService.create()
 
 class ListReleasesTool : McpTool {
     override val name = "list_releases"

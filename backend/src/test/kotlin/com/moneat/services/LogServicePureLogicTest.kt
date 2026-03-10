@@ -21,6 +21,7 @@ import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.models.LogTailFilters
 import com.moneat.logs.models.QueuedLogBatch
 import com.moneat.logs.models.QueuedLogEntry
+import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,7 +31,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LogServicePureLogicTest {
-    private val service = LogService()
+    private val service = LogService(LogRepositoryImpl())
 
     // ==================== estimateBillableBytes (SDK entries) ====================
 

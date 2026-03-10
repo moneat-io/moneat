@@ -37,17 +37,36 @@ import com.moneat.events.models.TraceDetailResponse
 import com.moneat.events.models.TransactionDetailResponse
 import com.moneat.events.models.TransactionSummaryResponse
 import com.moneat.events.models.TransactionWithSpansResponse
+import com.moneat.events.repositories.IssueRepository
+import com.moneat.events.repositories.IssueRepositoryImpl
+import com.moneat.events.repositories.ProjectRepository
+import com.moneat.events.repositories.ProjectRepositoryImpl
 import io.sentry.ISpan
 
-class DashboardService {
-    private val queryHelper = DashboardQueryHelper()
+class DashboardService(
+    private val projectRepository: ProjectRepository,
+    private val issueRepository: IssueRepository,
+    private val queryHelper: DashboardQueryHelper = DashboardQueryHelper(),
+) {
+    companion object {
+        fun create(): DashboardService {
+            val queryHelper = DashboardQueryHelper()
+            return DashboardService(
+                projectRepository = ProjectRepositoryImpl { col, days, demo ->
+                    queryHelper.timestampRetentionClause(col, days, demo)
+                },
+                issueRepository = IssueRepositoryImpl(queryHelper),
+                queryHelper = queryHelper,
+            )
+        }
+    }
     private val feedbackService = FeedbackService(queryHelper)
     private val releaseStatsService = ReleaseStatsService(queryHelper)
     private val replayService = ReplayService(queryHelper)
-    private val projectService = ProjectService(queryHelper)
+    private val projectService = ProjectService(projectRepository, queryHelper)
     private val projectStatsService = ProjectStatsService(queryHelper)
     private val transactionService = TransactionService(queryHelper)
-    private val issueService = IssueService(queryHelper)
+    private val issueService = IssueService(issueRepository, queryHelper)
     private val accessService = AccessService(
         queryHelper = queryHelper,
         issueService = issueService,

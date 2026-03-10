@@ -108,7 +108,7 @@ private fun getDashboardScope(dashboardId: Long, orgId: Long): DashboardScope? {
 }
 
 fun Route.customDashboardRoutes(
-    dashboardService: CustomDashboardService = CustomDashboardService(),
+    dashboardService: CustomDashboardService,
     queryEngine: DashboardQueryEngine = DashboardQueryEngine(),
     retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
     dataDogTranslator: DataDogTranslator = DataDogTranslator(),

@@ -8,6 +8,7 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.RefreshTokens
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -16,7 +17,10 @@ import kotlin.time.Clock
 import com.moneat.testsupport.TestDatabaseHelper
 
 class AccountDeletionServiceTest {
-    private val service = AccountDeletionService()
+    private val service = AccountDeletionService(
+        stripeService = mockk(relaxed = true),
+        emailService = mockk(relaxed = true),
+    )
 
     companion object {
         private var db: org.jetbrains.exposed.v1.jdbc.Database? = null

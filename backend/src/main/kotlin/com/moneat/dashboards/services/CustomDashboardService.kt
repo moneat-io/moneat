@@ -16,16 +16,17 @@
 
 package com.moneat.dashboards.services
 
+import com.moneat.dashboards.repositories.DashboardFolderRepository
+import com.moneat.dashboards.repositories.DashboardRepository
+import com.moneat.dashboards.repositories.DashboardWidgetRepository
+import com.moneat.dashboards.repositories.DashboardWithFavoriteFlag
+import com.moneat.events.repositories.ProjectRepository
 import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.CreateDashboardRequest
 import com.moneat.dashboards.models.CreateFolderRequest
 import com.moneat.dashboards.models.CreateWidgetRequest
-import com.moneat.dashboards.models.DashboardFavorites
-import com.moneat.dashboards.models.DashboardFolders
 import com.moneat.dashboards.models.DashboardResponse
 import com.moneat.dashboards.models.DashboardVariable
-import com.moneat.dashboards.models.DashboardWidgets
-import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.FilterDef
 import com.moneat.dashboards.models.FilterOp
 import com.moneat.dashboards.models.FolderResponse
@@ -40,21 +41,7 @@ import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.models.UpdateDashboardRequest
 import com.moneat.dashboards.models.UpdateFolderRequest
 import com.moneat.dashboards.models.WidgetResponse
-import com.moneat.shared.models.Projects
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.v1.core.SortOrder
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.isNotNull
-import org.jetbrains.exposed.v1.core.like
-import org.jetbrains.exposed.v1.core.lowerCase
-import org.jetbrains.exposed.v1.core.notInList
-import org.jetbrains.exposed.v1.core.or
-import org.jetbrains.exposed.v1.jdbc.deleteWhere
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 
 private val json = Json {
@@ -62,7 +49,12 @@ private val json = Json {
     encodeDefaults = true
 }
 
-class CustomDashboardService {
+class CustomDashboardService(
+    private val folderRepository: DashboardFolderRepository,
+    private val dashboardRepository: DashboardRepository,
+    private val dashboardWidgetRepository: DashboardWidgetRepository,
+    private val projectRepository: ProjectRepository,
+) {
 
     private fun parseVariables(variablesJson: String): List<DashboardVariable> {
         return try {
@@ -72,452 +64,171 @@ class CustomDashboardService {
         }
     }
 
-    fun listDashboards(orgId: Long, projectId: Long? = null, userId: Int? = null): List<DashboardResponse> {
-        return transaction {
-            val query = Dashboards.selectAll().where {
-                if (projectId != null) {
-                    (Dashboards.orgId eq orgId) and (Dashboards.projectId eq projectId)
-                } else {
-                    Dashboards.orgId eq orgId
-                }
-            }.orderBy(Dashboards.updatedAt, SortOrder.DESC)
-
-            val favoritedIds = userId?.let { uid ->
-                DashboardFavorites.selectAll()
-                    .where { DashboardFavorites.userId eq uid }
-                    .map { it[DashboardFavorites.dashboardId] }
-                    .toSet()
-            } ?: emptySet()
-
-            query.map { row ->
-                val dashboardId = row[Dashboards.id]
-                val widgets = loadWidgets(dashboardId)
-                DashboardResponse(
-                    id = dashboardId,
-                    orgId = row[Dashboards.orgId],
-                    projectId = row[Dashboards.projectId],
-                    folderId = row[Dashboards.folderId],
-                    title = row[Dashboards.title],
-                    description = row[Dashboards.description],
-                    layoutType = row[Dashboards.layoutType],
-                    isDefault = row[Dashboards.isDefault],
-                    isFavorited = dashboardId in favoritedIds,
-                    variables = parseVariables(row[Dashboards.variables]),
-                    createdBy = row[Dashboards.createdBy],
-                    createdAt = row[Dashboards.createdAt].toString(),
-                    updatedAt = row[Dashboards.updatedAt].toString(),
-                    widgets = widgets
-                )
-            }
-        }
-    }
+    private fun mapToResponse(d: DashboardWithFavoriteFlag, widgets: List<WidgetResponse>): DashboardResponse =
+        DashboardResponse(
+            id = d.id,
+            orgId = d.orgId,
+            projectId = d.projectId,
+            folderId = d.folderId,
+            title = d.title,
+            description = d.description,
+            layoutType = d.layoutType,
+            isDefault = d.isDefault,
+            isFavorited = d.isFavorited,
+            variables = parseVariables(d.variables),
+            createdBy = d.createdBy,
+            createdAt = d.createdAt,
+            updatedAt = d.updatedAt,
+            widgets = widgets
+        )
 
     private fun loadWidgets(dashboardId: Long): List<WidgetResponse> =
-        DashboardWidgets.selectAll()
-            .where { DashboardWidgets.dashboardId eq dashboardId }
-            .orderBy(DashboardWidgets.sortOrder, SortOrder.ASC)
-            .map { wr ->
-                val queryConfigs: List<QueryDsl> = try {
-                    json.decodeFromString(wr[DashboardWidgets.queryConfigs])
-                } catch (_: Exception) {
-                    try {
-                        listOf(json.decodeFromString<QueryDsl>(wr[DashboardWidgets.queryConfig]))
-                    } catch (_: Exception) { emptyList() }
-                }
-                WidgetResponse(
-                    id = wr[DashboardWidgets.id],
-                    dashboardId = wr[DashboardWidgets.dashboardId],
-                    title = wr[DashboardWidgets.title],
-                    widgetType = wr[DashboardWidgets.widgetType],
-                    gridX = wr[DashboardWidgets.gridX],
-                    gridY = wr[DashboardWidgets.gridY],
-                    gridW = wr[DashboardWidgets.gridW],
-                    gridH = wr[DashboardWidgets.gridH],
-                    queryConfigs = queryConfigs,
-                    displayConfig = try {
-                        json.decodeFromString(wr[DashboardWidgets.displayConfig])
-                    } catch (_: Exception) {
-                        emptyMap()
-                    },
-                    sortOrder = wr[DashboardWidgets.sortOrder]
-                )
+        dashboardWidgetRepository.listByDashboardId(dashboardId).map { wd ->
+            val queryConfigs: List<QueryDsl> = try {
+                json.decodeFromString(wd.queryConfigs)
+            } catch (_: Exception) {
+                try {
+                    listOf(json.decodeFromString<QueryDsl>(wd.queryConfig))
+                } catch (_: Exception) { emptyList() }
             }
-
-    fun getDashboard(id: Long, orgId: Long, userId: Int? = null): DashboardResponse? {
-        return transaction {
-            val row = Dashboards.selectAll().where {
-                (Dashboards.id eq id) and (Dashboards.orgId eq orgId)
-            }.firstOrNull() ?: return@transaction null
-
-            val isFavorited = userId?.let { uid ->
-                DashboardFavorites.selectAll()
-                    .where {
-                        (DashboardFavorites.userId eq uid) and (DashboardFavorites.dashboardId eq id)
-                    }
-                    .any()
-            } ?: false
-
-            val widgets = loadWidgets(id)
-
-            DashboardResponse(
-                id = row[Dashboards.id],
-                orgId = row[Dashboards.orgId],
-                projectId = row[Dashboards.projectId],
-                folderId = row[Dashboards.folderId],
-                title = row[Dashboards.title],
-                description = row[Dashboards.description],
-                layoutType = row[Dashboards.layoutType],
-                isDefault = row[Dashboards.isDefault],
-                isFavorited = isFavorited,
-                variables = parseVariables(row[Dashboards.variables]),
-                createdBy = row[Dashboards.createdBy],
-                createdAt = row[Dashboards.createdAt].toString(),
-                updatedAt = row[Dashboards.updatedAt].toString(),
-                widgets = widgets
+            WidgetResponse(
+                id = wd.id,
+                dashboardId = wd.dashboardId,
+                title = wd.title,
+                widgetType = wd.widgetType,
+                gridX = wd.gridX,
+                gridY = wd.gridY,
+                gridW = wd.gridW,
+                gridH = wd.gridH,
+                queryConfigs = queryConfigs,
+                displayConfig = try {
+                    json.decodeFromString(wd.displayConfig)
+                } catch (_: Exception) {
+                    emptyMap()
+                },
+                sortOrder = wd.sortOrder
             )
         }
+
+    fun listDashboards(orgId: Long, projectId: Long? = null, userId: Int? = null): List<DashboardResponse> =
+        dashboardRepository.list(orgId, projectId, userId).map { d ->
+            mapToResponse(d, loadWidgets(d.id))
+        }
+
+    fun getDashboard(id: Long, orgId: Long, userId: Int? = null): DashboardResponse? {
+        val d = dashboardRepository.getById(id, orgId, userId) ?: return null
+        return mapToResponse(d, loadWidgets(id))
     }
 
     fun createDashboard(orgId: Long, userId: Long, request: CreateDashboardRequest): DashboardResponse {
-        return transaction {
-            val now = Clock.System.now()
-            val dashboardId = Dashboards.insert {
-                it[Dashboards.orgId] = orgId
-                it[Dashboards.projectId] = request.projectId
-                it[Dashboards.folderId] = request.folderId
-                it[Dashboards.title] = request.title
-                it[Dashboards.description] = request.description
-                it[Dashboards.layoutType] = request.layoutType
-                it[Dashboards.isDefault] = request.isDefault
-                it[Dashboards.variables] = json.encodeToString(request.variables)
-                it[Dashboards.createdBy] = userId
-                it[Dashboards.createdAt] = now
-                it[Dashboards.updatedAt] = now
-            } get Dashboards.id
-
-            val widgets = request.widgets.mapIndexed { index, widget ->
-                val widgetId = DashboardWidgets.insert {
-                    it[DashboardWidgets.dashboardId] = dashboardId
-                    it[title] = widget.title
-                    it[widgetType] = widget.widgetType
-                    it[gridX] = widget.gridX
-                    it[gridY] = widget.gridY
-                    it[gridW] = widget.gridW
-                    it[gridH] = widget.gridH
-                    it[queryConfig] = if (widget.queryConfigs.isNotEmpty()) {
-                        json.encodeToString(widget.queryConfigs.first())
-                    } else {
-                        "{}"
-                    }
-                    it[queryConfigs] = json.encodeToString(widget.queryConfigs)
-                    it[displayConfig] = if (widget.displayConfig.isEmpty()) {
-                        "{}"
-                    } else {
-                        json.encodeToString(widget.displayConfig)
-                    }
-                    it[sortOrder] = widget.sortOrder.takeIf { so -> so > 0 } ?: index
-                    it[createdAt] = now
-                    it[updatedAt] = now
-                } get DashboardWidgets.id
-
-                WidgetResponse(
-                    id = widgetId,
-                    dashboardId = dashboardId,
-                    title = widget.title,
-                    widgetType = widget.widgetType,
-                    gridX = widget.gridX,
-                    gridY = widget.gridY,
-                    gridW = widget.gridW,
-                    gridH = widget.gridH,
-                    queryConfigs = widget.queryConfigs,
-                    displayConfig = widget.displayConfig,
-                    sortOrder = widget.sortOrder
-                )
-            }
-
-            DashboardResponse(
-                id = dashboardId,
-                orgId = orgId,
-                projectId = request.projectId,
-                title = request.title,
-                description = request.description,
-                layoutType = request.layoutType,
-                isDefault = request.isDefault,
-                variables = request.variables,
-                createdBy = userId,
-                createdAt = now.toString(),
-                updatedAt = now.toString(),
-                widgets = widgets
+        val data = dashboardRepository.create(orgId, userId, request)
+        val now = Clock.System.now()
+        val widgets = request.widgets.mapIndexed { index, widget ->
+            val sortOrder = widget.sortOrder.takeIf { it > 0 } ?: index
+            val widgetId = dashboardWidgetRepository.insert(data.id, widget, sortOrder, now)
+            WidgetResponse(
+                id = widgetId,
+                dashboardId = data.id,
+                title = widget.title,
+                widgetType = widget.widgetType,
+                gridX = widget.gridX,
+                gridY = widget.gridY,
+                gridW = widget.gridW,
+                gridH = widget.gridH,
+                queryConfigs = widget.queryConfigs,
+                displayConfig = widget.displayConfig,
+                sortOrder = widget.sortOrder
             )
         }
+        return DashboardResponse(
+            id = data.id,
+            orgId = data.orgId,
+            projectId = data.projectId,
+            title = data.title,
+            description = data.description,
+            layoutType = data.layoutType,
+            isDefault = data.isDefault,
+            variables = parseVariables(data.variables),
+            createdBy = data.createdBy,
+            createdAt = data.createdAt,
+            updatedAt = data.updatedAt,
+            widgets = widgets
+        )
     }
 
     fun updateDashboard(id: Long, orgId: Long, request: UpdateDashboardRequest): DashboardResponse? {
-        return transaction {
-            val existing = Dashboards.selectAll().where {
-                (Dashboards.id eq id) and (Dashboards.orgId eq orgId)
-            }.firstOrNull() ?: return@transaction null
-
+        val updated = dashboardRepository.update(id, orgId, request)
+        if (!updated) return null
+        if (request.widgets != null) {
             val now = Clock.System.now()
-            Dashboards.update({ (Dashboards.id eq id) and (Dashboards.orgId eq orgId) }) {
-                request.title?.let { t -> it[Dashboards.title] = t }
-                request.description?.let { d -> it[Dashboards.description] = d }
-                request.folderId?.let { fid -> it[Dashboards.folderId] = fid }
-                request.layoutType?.let { lt -> it[Dashboards.layoutType] = lt }
-                request.isDefault?.let { d -> it[Dashboards.isDefault] = d }
-                request.variables?.let { v -> it[Dashboards.variables] = json.encodeToString(v) }
-                it[Dashboards.updatedAt] = now
-            }
-
-            // Update widgets in place to preserve IDs and dependent records (e.g. alerts)
-            if (request.widgets != null) {
-                val existingById = DashboardWidgets.selectAll()
-                    .where { DashboardWidgets.dashboardId eq id }
-                    .associateBy { it[DashboardWidgets.id] }
-
-                val keptIds = mutableSetOf<Long>()
-
-                request.widgets.forEachIndexed { index, widget ->
-                    val requestedId = widget.id
-                    val existingWidget = requestedId?.let { existingById[it] }
-
-                    if (existingWidget != null) {
-                        DashboardWidgets.update({
-                            (DashboardWidgets.id eq requestedId) and (DashboardWidgets.dashboardId eq id)
-                        }) {
-                            widget.title?.let { v -> it[title] = v }
-                            widget.widgetType?.let { v -> it[widgetType] = v }
-                            widget.gridX?.let { v -> it[gridX] = v }
-                            widget.gridY?.let { v -> it[gridY] = v }
-                            widget.gridW?.let { v -> it[gridW] = v }
-                            widget.gridH?.let { v -> it[gridH] = v }
-                            widget.queryConfigs?.let { qcs ->
-                                it[queryConfig] = if (qcs.isNotEmpty()) json.encodeToString(qcs.first()) else "{}"
-                                it[queryConfigs] = json.encodeToString(qcs)
-                            }
-                            widget.displayConfig?.let { dc ->
-                                it[displayConfig] = if (dc.isEmpty()) "{}" else json.encodeToString(dc)
-                            }
-                            widget.sortOrder?.let { v -> it[sortOrder] = v } ?: run { it[sortOrder] = index }
-                            it[updatedAt] = now
-                        }
-                        keptIds.add(requestedId)
-                    } else {
-                        val newId = DashboardWidgets.insert {
-                            it[dashboardId] = id
-                            it[title] = widget.title
-                            it[widgetType] = widget.widgetType ?: "timeseries"
-                            it[gridX] = widget.gridX ?: 0
-                            it[gridY] = widget.gridY ?: 0
-                            it[gridW] = widget.gridW ?: 6
-                            it[gridH] = widget.gridH ?: 4
-                            it[queryConfig] = widget.queryConfigs?.firstOrNull()?.let { qc ->
-                                json.encodeToString(qc)
-                            } ?: "{}"
-                            it[queryConfigs] = widget.queryConfigs?.let { qcs -> json.encodeToString(qcs) } ?: "[]"
-                            it[displayConfig] = widget.displayConfig?.let { dc ->
-                                if (dc.isEmpty()) "{}" else json.encodeToString(dc)
-                            } ?: "{}"
-                            it[sortOrder] = widget.sortOrder ?: index
-                            it[createdAt] = now
-                            it[updatedAt] = now
-                        } get DashboardWidgets.id
-                        keptIds.add(newId)
-                    }
-                }
-
-                if (keptIds.isEmpty()) {
-                    DashboardWidgets.deleteWhere { dashboardId eq id }
-                } else {
-                    DashboardWidgets.deleteWhere {
-                        (dashboardId eq id) and (DashboardWidgets.id notInList keptIds.toList())
-                    }
-                }
-            }
-
-            getDashboard(id, orgId, null)
+            val keptIds = dashboardWidgetRepository.bulkUpsert(id, request.widgets, now)
+            dashboardWidgetRepository.deleteNotIn(id, keptIds)
         }
+        return getDashboard(id, orgId, null)
     }
 
-    fun moveDashboardToFolder(id: Long, orgId: Long, folderId: Long?): Boolean {
-        return transaction {
-            val updated = Dashboards.update({ (Dashboards.id eq id) and (Dashboards.orgId eq orgId) }) {
-                it[Dashboards.folderId] = folderId
-                it[Dashboards.updatedAt] = Clock.System.now()
-            }
-            updated > 0
-        }
-    }
+    fun moveDashboardToFolder(id: Long, orgId: Long, folderId: Long?): Boolean =
+        dashboardRepository.moveToFolder(id, orgId, folderId)
 
-    fun deleteDashboard(id: Long, orgId: Long): Boolean {
-        return transaction {
-            val deleted = Dashboards.deleteWhere {
-                (Dashboards.id eq id) and (Dashboards.orgId eq orgId)
-            }
-            deleted > 0
-        }
-    }
+    fun deleteDashboard(id: Long, orgId: Long): Boolean =
+        dashboardRepository.delete(id, orgId)
 
-    fun listFolders(orgId: Long): List<FolderResponse> {
-        return transaction {
-            DashboardFolders.selectAll()
-                .where { DashboardFolders.orgId eq orgId }
-                .orderBy(DashboardFolders.sortOrder, SortOrder.ASC)
-                .map { row ->
-                    FolderResponse(
-                        id = row[DashboardFolders.id],
-                        orgId = row[DashboardFolders.orgId],
-                        name = row[DashboardFolders.name],
-                        color = row[DashboardFolders.color],
-                        sortOrder = row[DashboardFolders.sortOrder],
-                        createdAt = row[DashboardFolders.createdAt].toString(),
-                        updatedAt = row[DashboardFolders.updatedAt].toString()
-                    )
-                }
-        }
-    }
-
-    fun createFolder(orgId: Long, request: CreateFolderRequest): FolderResponse {
-        return transaction {
-            val now = Clock.System.now()
-            val id = DashboardFolders.insert {
-                it[DashboardFolders.orgId] = orgId
-                it[DashboardFolders.name] = request.name
-                it[DashboardFolders.color] = request.color
-                it[DashboardFolders.sortOrder] = request.sortOrder
-                it[DashboardFolders.createdAt] = now
-                it[DashboardFolders.updatedAt] = now
-            } get DashboardFolders.id
-
+    fun listFolders(orgId: Long): List<FolderResponse> =
+        folderRepository.listByOrgId(orgId).map { row ->
             FolderResponse(
-                id = id,
-                orgId = orgId,
-                name = request.name,
-                color = request.color,
-                sortOrder = request.sortOrder,
-                createdAt = now.toString(),
-                updatedAt = now.toString()
+                id = row.id,
+                orgId = row.orgId,
+                name = row.name,
+                color = row.color,
+                sortOrder = row.sortOrder,
+                createdAt = row.createdAt.toString(),
+                updatedAt = row.updatedAt.toString()
             )
         }
+
+    fun createFolder(orgId: Long, request: CreateFolderRequest): FolderResponse {
+        val id = folderRepository.create(orgId, request.name, request.color, request.sortOrder)
+        return FolderResponse(
+            id = id,
+            orgId = orgId,
+            name = request.name,
+            color = request.color,
+            sortOrder = request.sortOrder,
+            createdAt = Clock.System.now().toString(),
+            updatedAt = Clock.System.now().toString()
+        )
     }
 
     fun updateFolder(id: Long, orgId: Long, request: UpdateFolderRequest): FolderResponse? {
-        return transaction {
-            val row = DashboardFolders.selectAll().where {
-                (DashboardFolders.id eq id) and (DashboardFolders.orgId eq orgId)
-            }.firstOrNull() ?: return@transaction null
-
-            val now = Clock.System.now()
-            DashboardFolders.update({ (DashboardFolders.id eq id) and (DashboardFolders.orgId eq orgId) }) {
-                request.name?.let { n -> it[DashboardFolders.name] = n }
-                request.color?.let { c -> it[DashboardFolders.color] = c }
-                request.sortOrder?.let { so -> it[DashboardFolders.sortOrder] = so }
-                it[DashboardFolders.updatedAt] = now
-            }
-
-            FolderResponse(
-                id = id,
-                orgId = row[DashboardFolders.orgId],
-                name = request.name ?: row[DashboardFolders.name],
-                color = request.color ?: row[DashboardFolders.color],
-                sortOrder = request.sortOrder ?: row[DashboardFolders.sortOrder],
-                createdAt = row[DashboardFolders.createdAt].toString(),
-                updatedAt = now.toString()
-            )
-        }
+        val row = folderRepository.getByIdAndOrgId(id, orgId) ?: return null
+        folderRepository.update(id, orgId, request.name, request.color, request.sortOrder)
+        return FolderResponse(
+            id = id,
+            orgId = row.orgId,
+            name = request.name ?: row.name,
+            color = request.color ?: row.color,
+            sortOrder = request.sortOrder ?: row.sortOrder,
+            createdAt = row.createdAt.toString(),
+            updatedAt = Clock.System.now().toString()
+        )
     }
 
-    fun deleteFolder(id: Long, orgId: Long): Boolean {
-        return transaction {
-            val deleted = DashboardFolders.deleteWhere {
-                (DashboardFolders.id eq id) and (DashboardFolders.orgId eq orgId)
-            }
-            deleted > 0
-        }
-    }
+    fun deleteFolder(id: Long, orgId: Long): Boolean =
+        folderRepository.delete(id, orgId) > 0
 
-    fun toggleFavorite(userId: Int, dashboardId: Long, orgId: Long): Boolean {
-        return transaction {
-            val exists = Dashboards.selectAll().where {
-                (Dashboards.id eq dashboardId) and (Dashboards.orgId eq orgId)
-            }.any()
-            if (!exists) return@transaction false
-
-            val alreadyFavorited = DashboardFavorites.selectAll().where {
-                (DashboardFavorites.userId eq userId) and (DashboardFavorites.dashboardId eq dashboardId)
-            }.any()
-
-            if (alreadyFavorited) {
-                DashboardFavorites.deleteWhere {
-                    (DashboardFavorites.userId eq userId) and (DashboardFavorites.dashboardId eq dashboardId)
-                }
-                false
-            } else {
-                val now = Clock.System.now()
-                DashboardFavorites.insert {
-                    it[DashboardFavorites.userId] = userId
-                    it[DashboardFavorites.dashboardId] = dashboardId
-                    it[DashboardFavorites.createdAt] = now
-                }
-                true
-            }
-        }
-    }
+    fun toggleFavorite(userId: Int, dashboardId: Long, orgId: Long): Boolean =
+        dashboardRepository.toggleFavorite(userId, dashboardId, orgId)
 
     fun search(orgId: Long, userId: Int?, query: String): SearchResponse {
         if (query.isBlank()) return SearchResponse()
         val pattern = "%${query.trim().lowercase()}%"
-        return transaction {
-            val dashboards = Dashboards.selectAll()
-                .where {
-                    (Dashboards.orgId eq orgId) and (
-                        (Dashboards.title.lowerCase() like pattern) or
-                            ((Dashboards.description.isNotNull()) and (Dashboards.description.lowerCase() like pattern))
-                        )
-                }
-                .orderBy(Dashboards.updatedAt, SortOrder.DESC)
-                .limit(10)
-                .map { row ->
-                    val did = row[Dashboards.id]
-                    val isFav = userId?.let { uid ->
-                        DashboardFavorites.selectAll()
-                            .where {
-                                (DashboardFavorites.userId eq uid) and (DashboardFavorites.dashboardId eq did)
-                            }
-                            .any()
-                    } ?: false
-                    DashboardResponse(
-                        id = did,
-                        orgId = row[Dashboards.orgId],
-                        projectId = row[Dashboards.projectId],
-                        folderId = row[Dashboards.folderId],
-                        title = row[Dashboards.title],
-                        description = row[Dashboards.description],
-                        layoutType = row[Dashboards.layoutType],
-                        isDefault = row[Dashboards.isDefault],
-                        isFavorited = isFav,
-                        variables = parseVariables(row[Dashboards.variables]),
-                        createdBy = row[Dashboards.createdBy],
-                        createdAt = row[Dashboards.createdAt].toString(),
-                        updatedAt = row[Dashboards.updatedAt].toString(),
-                        widgets = loadWidgets(did)
-                    )
-                }
-
-            val projects = Projects.selectAll()
-                .where {
-                    (Projects.organization_id eq orgId.toInt()) and (Projects.name.lowerCase() like pattern)
-                }
-                .limit(10)
-                .map { row ->
-                    SearchProjectResponse(
-                        id = row[Projects.id],
-                        name = row[Projects.name]
-                    )
-                }
-
-            SearchResponse(dashboards = dashboards, projects = projects)
+        val dashboards = dashboardRepository.search(orgId, userId, pattern).map { d ->
+            mapToResponse(d, loadWidgets(d.id))
         }
+        val projects = projectRepository.searchProjectsByName(orgId.toInt(), pattern, limit = 10).map { row ->
+            SearchProjectResponse(id = row.projectId, name = row.name)
+        }
+        return SearchResponse(dashboards = dashboards, projects = projects)
     }
 
     fun getDefaultDashboardTemplates(): List<CreateDashboardRequest> = listOf(

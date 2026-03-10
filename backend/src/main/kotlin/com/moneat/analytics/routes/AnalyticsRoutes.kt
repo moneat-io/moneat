@@ -39,7 +39,7 @@ private val logger = KotlinLogging.logger {}
  */
 fun Route.analyticsRoutes(
     analyticsService: AnalyticsService = AnalyticsService(),
-    dashboardService: DashboardService = DashboardService(),
+    dashboardService: DashboardService = DashboardService.create(),
 ) {
     route("/v1/analytics/{projectId}") {
         authenticate("auth-jwt") {

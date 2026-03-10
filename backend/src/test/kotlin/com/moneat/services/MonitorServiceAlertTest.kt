@@ -19,6 +19,8 @@ package com.moneat.services
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.UpdateAlertRequest
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationAlertTemplates
@@ -46,7 +48,7 @@ import com.moneat.testsupport.TestDatabaseHelper
  * getAlertConfig, updateAlertScope, listAlerts) - all pure PostgreSQL, no ClickHouse needed.
  */
 class MonitorServiceAlertTest {
-    private val service = MonitorService()
+    private val service = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 
     companion object {
         private var db: Database? = null

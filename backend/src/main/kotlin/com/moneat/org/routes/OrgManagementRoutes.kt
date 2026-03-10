@@ -21,7 +21,6 @@ import com.moneat.events.models.BulkInviteRequest
 import com.moneat.events.models.InviteMemberRequest
 import com.moneat.events.models.OrgMembersResponse
 import com.moneat.events.models.UpdateMemberRoleRequest
-import com.moneat.notifications.services.EmailService
 import com.moneat.org.services.OrgInvitationService
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
@@ -40,10 +39,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 
-fun Route.orgManagementRoutes() {
-    val membershipService = OrgMembershipService()
-    val invitationService = OrgInvitationService(membershipService, EmailService())
-
+fun Route.orgManagementRoutes(
+    membershipService: OrgMembershipService,
+    invitationService: OrgInvitationService,
+) {
     route("/v1/org") {
         authenticate("auth-jwt") {
             // Get all members and pending invitations
@@ -94,6 +93,7 @@ fun Route.orgManagementRoutes() {
                 val userId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.payload.getClaim("orgId").asInt()
 
+                membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
                 val request = call.receive<InviteMemberRequest>()
 
                 val invitation = invitationService.inviteMember(orgId, request.email, request.role, userId)

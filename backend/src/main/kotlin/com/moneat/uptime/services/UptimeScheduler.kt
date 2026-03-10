@@ -16,9 +16,11 @@
 
 package com.moneat.uptime.services
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.incident.services.IncidentService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.SlackService
+import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,7 +43,7 @@ private val logger = KotlinLogging.logger {}
  * Runs continuously and executes checks for monitors at their configured intervals.
  */
 class UptimeScheduler(
-    private val uptimeService: UptimeService = UptimeService(),
+    private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl()),
     private val checkExecutor: UptimeCheckExecutor = UptimeCheckExecutor()
 ) {
 

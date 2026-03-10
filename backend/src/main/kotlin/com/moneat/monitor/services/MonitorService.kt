@@ -27,42 +27,33 @@ import com.moneat.monitor.models.ContainerMetricDataPoint
 import com.moneat.monitor.models.ContainerMetricsResponse
 import com.moneat.monitor.models.ContainerStats
 import com.moneat.monitor.models.ContainerWithSystem
+import com.moneat.monitor.models.CreateAlertData
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.HistoricalMetricsResponse
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.MetricDataPoint
+import com.moneat.monitor.models.UpdateAlertData
 import com.moneat.monitor.models.UpdateAlertRequest
-import com.moneat.shared.models.HostAlertSettings
-import com.moneat.shared.models.HostAlertTemplateStates
-import com.moneat.shared.models.HostAlerts
-import com.moneat.shared.models.Hosts
-import com.moneat.shared.models.OrganizationAlertTemplates
+import com.moneat.monitor.repositories.HostAlertRepository
+import com.moneat.monitor.repositories.HostRepository
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.ResultRow
-import org.jetbrains.exposed.v1.core.SortOrder
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.deleteWhere
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
-class MonitorService {
+class MonitorService(
+    private val hostRepository: HostRepository,
+    private val hostAlertRepository: HostAlertRepository
+) {
     private data class DefaultAlertTemplate(
         val metric: String,
         val condition: String,
@@ -100,38 +91,21 @@ class MonitorService {
         if (EnvConfig.SelfHost.enabled) return true
         val tier = getTierConfig(organizationId)
         val maxHosts = tier.maxHosts ?: Int.MAX_VALUE
-        val currentCount =
-            transaction {
-                Hosts.selectAll().where { Hosts.organization_id eq organizationId }.count()
-            }
+        val currentCount = hostRepository.getHostCountForOrganization(organizationId)
         return currentCount < maxHosts
     }
 
     /**
      * List all hosts for an organization.
      */
-    fun listHosts(organizationId: Int): List<HostData> {
-        return transaction {
-            Hosts
-                .selectAll()
-                .where { Hosts.organization_id eq organizationId }
-                .orderBy(Hosts.first_seen_at to SortOrder.DESC)
-                .map { rowToHostData(it) }
-        }
-    }
+    fun listHosts(organizationId: Int): List<HostData> =
+        hostRepository.listByOrganizationId(organizationId)
 
     /**
      * Get a single host by ID.
      */
-    fun getHostById(hostId: Int): HostData? {
-        return transaction {
-            Hosts
-                .selectAll()
-                .where { Hosts.id eq hostId }
-                .firstOrNull()
-                ?.let { rowToHostData(it) }
-        }
-    }
+    fun getHostById(hostId: Int): HostData? =
+        hostRepository.getById(hostId)
 
     /**
      * Delete a host and all its metrics.
@@ -142,30 +116,22 @@ class MonitorService {
     ): Boolean {
         // Delete telemetry from ClickHouse before removing the host row
         val metricsDelete =
-            "ALTER TABLE `$clickhouseDb`.metrics DELETE WHERE organization_id = $organizationId AND tags['host_id'] = '$hostId'"
+            "ALTER TABLE `$clickhouseDb`.metrics DELETE WHERE organization_id = $organizationId" +
+                " AND tags['host_id'] = '$hostId'"
         val containersDelete =
-            "ALTER TABLE `$clickhouseDb`.containers DELETE WHERE organization_id = $organizationId AND tags['host_id'] = '$hostId'"
+            "ALTER TABLE `$clickhouseDb`.containers DELETE WHERE organization_id = $organizationId" +
+                " AND tags['host_id'] = '$hostId'"
 
-        val metricsResponse = ClickHouseClient.execute(metricsDelete)
-        if (!metricsResponse.status.isSuccess()) {
-            val body = metricsResponse.bodyAsText()
-            logger.error { "Failed to delete ClickHouse metrics for hostId=$hostId: $body" }
-            throw Exception("Failed to delete host telemetry (metrics): $body")
+        if (!hostRepository.deleteClickHouseData(metricsDelete)) {
+            logger.error { "Failed to delete ClickHouse metrics for hostId=$hostId" }
+            throw Exception("Failed to delete host telemetry (metrics)")
         }
-        val containersResponse = ClickHouseClient.execute(containersDelete)
-        if (!containersResponse.status.isSuccess()) {
-            val body = containersResponse.bodyAsText()
-            logger.error { "Failed to delete ClickHouse containers for hostId=$hostId: $body" }
-            throw Exception("Failed to delete host telemetry (containers): $body")
+        if (!hostRepository.deleteClickHouseData(containersDelete)) {
+            logger.error { "Failed to delete ClickHouse containers for hostId=$hostId" }
+            throw Exception("Failed to delete host telemetry (containers)")
         }
 
-        return transaction {
-            val deleted =
-                Hosts.deleteWhere {
-                    (Hosts.id eq hostId) and (Hosts.organization_id eq organizationId)
-                }
-            deleted > 0
-        }
+        return hostRepository.delete(hostId, organizationId)
     }
 
     /**
@@ -196,14 +162,7 @@ class MonitorService {
             FORMAT JSONCompact
             """.trimIndent()
 
-        val response = ClickHouseClient.execute(query)
-
-        if (!response.status.isSuccess()) {
-            logger.warn { "Failed to fetch latest metrics for host $hostId" }
-            return null
-        }
-
-        val body = response.bodyAsText()
+        val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return null
 
         try {
@@ -315,13 +274,7 @@ class MonitorService {
             FORMAT JSONCompact
             """.trimIndent()
 
-        val response = ClickHouseClient.execute(query)
-        if (!response.status.isSuccess()) {
-            logger.warn { "Failed to fetch batch latest metrics for org $organizationId" }
-            return hostIds.associateWith { null }
-        }
-
-        val body = response.bodyAsText()
+        val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return hostIds.associateWith { null }
 
         return try {
@@ -441,22 +394,7 @@ class MonitorService {
             FORMAT JSONCompact
                 """.trimIndent()
 
-            val response = ClickHouseClient.execute(query)
-
-            if (!response.status.isSuccess()) {
-                val errorBody = response.bodyAsText()
-                logger.error { "Failed to fetch historical metrics: $errorBody" }
-                return@cached HistoricalMetricsResponse(
-                    system_id = "",
-                    host_id = hostId,
-                    from = effectiveFrom,
-                    to = effectiveTo,
-                    interval_seconds = calculatedInterval,
-                    data_points = emptyList()
-                )
-            }
-
-            val body = response.bodyAsText()
+            val body = hostRepository.executeClickHouseQuery(query)
             val dataPoints =
                 try {
                     val json = Json { ignoreUnknownKeys = true }
@@ -537,14 +475,7 @@ class MonitorService {
             FORMAT JSONCompact
             """.trimIndent()
 
-        val response = ClickHouseClient.execute(query)
-        if (!response.status.isSuccess()) {
-            val errBody = response.bodyAsText()
-            logger.warn { "Failed to fetch containers: $errBody" }
-            return emptyList()
-        }
-
-        val body = response.bodyAsText()
+        val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return emptyList()
 
         return try {
@@ -642,14 +573,7 @@ class MonitorService {
             FORMAT JSONCompact
             """.trimIndent()
 
-        val response = ClickHouseClient.execute(query)
-        if (!response.status.isSuccess()) {
-            val errBody = response.bodyAsText()
-            logger.warn { "Failed to fetch infra containers: $errBody" }
-            return emptyList()
-        }
-
-        val body = response.bodyAsText()
+        val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return emptyList()
 
         return try {
@@ -759,19 +683,7 @@ class MonitorService {
             FORMAT JSONCompact
             """.trimIndent()
 
-        val response = ClickHouseClient.execute(query)
-
-        if (!response.status.isSuccess()) {
-            return ContainerMetricsResponse(
-                container_name = containerName,
-                from = effectiveFrom,
-                to = effectiveTo,
-                interval_seconds = calculatedInterval,
-                data_points = emptyList()
-            )
-        }
-
-        val body = response.bodyAsText()
+        val body = hostRepository.executeClickHouseQuery(query)
         val dataPoints =
             try {
                 val json = Json { ignoreUnknownKeys = true }
@@ -869,31 +781,7 @@ class MonitorService {
         val normalizedScope = if (scope == ALERT_SCOPE_SYSTEM) ALERT_SCOPE_HOST else scope
         ensureOrganizationAlertTemplates(organizationId)
         ensureHostAlertsSeeded(hostId, organizationId)
-
-        val now = Clock.System.now()
-        transaction {
-            val existing =
-                HostAlertSettings
-                    .selectAll()
-                    .where {
-                        (HostAlertSettings.host_id eq hostId) and
-                            (HostAlertSettings.organization_id eq organizationId)
-                    }.firstOrNull()
-
-            if (existing != null) {
-                HostAlertSettings.update({ HostAlertSettings.host_id eq hostId }) {
-                    it[HostAlertSettings.scope] = normalizedScope
-                    it[HostAlertSettings.updated_at] = now
-                }
-            } else {
-                HostAlertSettings.insert {
-                    it[HostAlertSettings.host_id] = hostId
-                    it[HostAlertSettings.organization_id] = organizationId
-                    it[HostAlertSettings.scope] = normalizedScope
-                    it[HostAlertSettings.updated_at] = now
-                }
-            }
-        }
+        hostAlertRepository.upsertAlertSettings(hostId, organizationId, normalizedScope)
         return true
     }
 
@@ -909,22 +797,20 @@ class MonitorService {
         if (scope == ALERT_SCOPE_GLOBAL) {
             ensureOrganizationAlertTemplates(organizationId)
             val now = Clock.System.now()
-            val alertId =
-                transaction {
-                    OrganizationAlertTemplates.insert {
-                        it[OrganizationAlertTemplates.organization_id] = organizationId
-                        it[metric] = request.metric
-                        it[condition] = request.condition
-                        it[threshold] = request.threshold
-                        it[duration_seconds] = request.durationSeconds
-                        it[enabled] = request.enabled
-                        it[created_at] = now
-                        it[updated_at] = now
-                    } get OrganizationAlertTemplates.id
-                }
-
+            val alertId = hostAlertRepository.createAlert(
+                CreateAlertData(
+                    hostId = hostId,
+                    organizationId = organizationId,
+                    metric = request.metric,
+                    condition = request.condition,
+                    threshold = request.threshold,
+                    durationSeconds = request.durationSeconds,
+                    enabled = request.enabled,
+                    scope = ALERT_SCOPE_GLOBAL
+                )
+            )
             return AlertResponse(
-                id = alertId,
+                id = alertId.toInt(),
                 hostId = hostId,
                 scope = ALERT_SCOPE_GLOBAL,
                 metric = request.metric,
@@ -939,24 +825,20 @@ class MonitorService {
 
         ensureHostAlertsSeeded(hostId, organizationId)
         val now = Clock.System.now()
-
-        val alertId =
-            transaction {
-                HostAlerts.insert {
-                    it[HostAlerts.host_id] = hostId
-                    it[HostAlerts.organization_id] = organizationId
-                    it[HostAlerts.metric] = request.metric
-                    it[HostAlerts.condition] = request.condition
-                    it[HostAlerts.threshold] = request.threshold
-                    it[HostAlerts.duration_seconds] = request.durationSeconds
-                    it[HostAlerts.enabled] = request.enabled
-                    it[HostAlerts.last_triggered_at] = null
-                    it[HostAlerts.created_at] = now
-                } get HostAlerts.id
-            }
-
+        val alertId = hostAlertRepository.createAlert(
+            CreateAlertData(
+                hostId = hostId,
+                organizationId = organizationId,
+                metric = request.metric,
+                condition = request.condition,
+                threshold = request.threshold,
+                durationSeconds = request.durationSeconds,
+                enabled = request.enabled,
+                scope = ALERT_SCOPE_HOST
+            )
+        )
         return AlertResponse(
-            id = alertId,
+            id = alertId.toInt(),
             hostId = hostId,
             scope = ALERT_SCOPE_HOST,
             metric = request.metric,
@@ -978,42 +860,20 @@ class MonitorService {
         organizationId: Int,
         request: UpdateAlertRequest,
         scope: String = ALERT_SCOPE_HOST
-    ): Boolean {
-        if (scope == ALERT_SCOPE_GLOBAL) {
-            val now = Clock.System.now()
-            return transaction {
-                val count =
-                    OrganizationAlertTemplates.update({
-                        (OrganizationAlertTemplates.id eq alertId) and
-                            (OrganizationAlertTemplates.organization_id eq organizationId)
-                    }) {
-                        request.metric?.let { metric -> it[OrganizationAlertTemplates.metric] = metric }
-                        request.condition?.let { cond -> it[OrganizationAlertTemplates.condition] = cond }
-                        request.threshold?.let { thresh -> it[OrganizationAlertTemplates.threshold] = thresh }
-                        request.durationSeconds?.let { dur -> it[OrganizationAlertTemplates.duration_seconds] = dur }
-                        request.enabled?.let { en -> it[OrganizationAlertTemplates.enabled] = en }
-                        it[OrganizationAlertTemplates.updated_at] = now
-                    }
-                count > 0
-            }
-        }
-
-        return transaction {
-            val count =
-                HostAlerts.update({
-                    (HostAlerts.id eq alertId) and
-                        (HostAlerts.host_id eq hostId) and
-                        (HostAlerts.organization_id eq organizationId)
-                }) {
-                    request.metric?.let { metric -> it[HostAlerts.metric] = metric }
-                    request.condition?.let { cond -> it[HostAlerts.condition] = cond }
-                    request.threshold?.let { thresh -> it[HostAlerts.threshold] = thresh }
-                    request.durationSeconds?.let { dur -> it[HostAlerts.duration_seconds] = dur }
-                    request.enabled?.let { en -> it[HostAlerts.enabled] = en }
-                }
-            count > 0
-        }
-    }
+    ): Boolean =
+        hostAlertRepository.updateAlert(
+            alertId.toLong(),
+            hostId,
+            organizationId,
+            UpdateAlertData(
+                metric = request.metric,
+                condition = request.condition,
+                threshold = request.threshold,
+                durationSeconds = request.durationSeconds,
+                enabled = request.enabled
+            ),
+            scope
+        )
 
     /**
      * Delete an alert.
@@ -1023,28 +883,8 @@ class MonitorService {
         hostId: Int,
         organizationId: Int,
         scope: String = ALERT_SCOPE_HOST
-    ): Boolean {
-        if (scope == ALERT_SCOPE_GLOBAL) {
-            return transaction {
-                val deleted =
-                    OrganizationAlertTemplates.deleteWhere {
-                        (OrganizationAlertTemplates.id eq alertId) and
-                            (OrganizationAlertTemplates.organization_id eq organizationId)
-                    }
-                deleted > 0
-            }
-        }
-
-        return transaction {
-            val deleted =
-                HostAlerts.deleteWhere {
-                    (HostAlerts.id eq alertId) and
-                        (HostAlerts.host_id eq hostId) and
-                        (HostAlerts.organization_id eq organizationId)
-                }
-            deleted > 0
-        }
-    }
+    ): Boolean =
+        hostAlertRepository.deleteAlert(alertId.toLong(), hostId, organizationId, scope)
 
     // Helper functions
 
@@ -1053,30 +893,22 @@ class MonitorService {
     }
 
     internal fun ensureOrganizationAlertTemplates(organizationId: Int) {
-        transaction {
-            val existingCount =
-                OrganizationAlertTemplates
-                    .selectAll()
-                    .where {
-                        OrganizationAlertTemplates.organization_id eq organizationId
-                    }.count()
-            if (existingCount > 0) {
-                return@transaction
-            }
+        val existing = hostAlertRepository.listGlobalAlertsForHost(organizationId, -1)
+        if (existing.isNotEmpty()) return
 
-            val now = Clock.System.now()
-            defaultAlertTemplates.forEach { template ->
-                OrganizationAlertTemplates.insert {
-                    it[OrganizationAlertTemplates.organization_id] = organizationId
-                    it[metric] = template.metric
-                    it[condition] = template.condition
-                    it[threshold] = template.threshold
-                    it[duration_seconds] = template.durationSeconds
-                    it[enabled] = template.enabled
-                    it[created_at] = now
-                    it[updated_at] = now
-                }
-            }
+        defaultAlertTemplates.forEach { template ->
+            hostAlertRepository.createAlert(
+                CreateAlertData(
+                    hostId = 0,
+                    organizationId = organizationId,
+                    metric = template.metric,
+                    condition = template.condition,
+                    threshold = template.threshold,
+                    durationSeconds = template.durationSeconds,
+                    enabled = template.enabled,
+                    scope = ALERT_SCOPE_GLOBAL
+                )
+            )
         }
     }
 
@@ -1084,146 +916,85 @@ class MonitorService {
         hostId: Int,
         organizationId: Int
     ) {
-        transaction {
-            val existingCount =
-                HostAlerts
-                    .selectAll()
-                    .where {
-                        (HostAlerts.host_id eq hostId) and
-                            (HostAlerts.organization_id eq organizationId)
-                    }.count()
-            if (existingCount > 0) {
-                return@transaction
+        val existingAlerts = hostAlertRepository.listByHostAndOrg(hostId, organizationId)
+        if (existingAlerts.isNotEmpty()) return
+
+        val templates = hostAlertRepository.listGlobalAlertsForHost(organizationId, hostId)
+        val sources: List<CreateAlertData> = if (templates.isEmpty()) {
+            defaultAlertTemplates.map { template ->
+                CreateAlertData(
+                    hostId = hostId,
+                    organizationId = organizationId,
+                    metric = template.metric,
+                    condition = template.condition,
+                    threshold = template.threshold,
+                    durationSeconds = template.durationSeconds,
+                    enabled = template.enabled,
+                    scope = ALERT_SCOPE_HOST
+                )
             }
-
-            val now = Clock.System.now()
-            val templates =
-                OrganizationAlertTemplates
-                    .selectAll()
-                    .where {
-                        OrganizationAlertTemplates.organization_id eq organizationId
-                    }.toList()
-
-            if (templates.isEmpty()) {
-                defaultAlertTemplates.forEach { template ->
-                    HostAlerts.insert {
-                        it[HostAlerts.host_id] = hostId
-                        it[HostAlerts.organization_id] = organizationId
-                        it[HostAlerts.metric] = template.metric
-                        it[HostAlerts.condition] = template.condition
-                        it[HostAlerts.threshold] = template.threshold
-                        it[HostAlerts.duration_seconds] = template.durationSeconds
-                        it[HostAlerts.enabled] = template.enabled
-                        it[HostAlerts.last_triggered_at] = null
-                        it[HostAlerts.created_at] = now
-                    }
-                }
-                return@transaction
-            }
-
-            templates.forEach { template ->
-                HostAlerts.insert {
-                    it[HostAlerts.host_id] = hostId
-                    it[HostAlerts.organization_id] = organizationId
-                    it[HostAlerts.metric] = template[OrganizationAlertTemplates.metric]
-                    it[HostAlerts.condition] = template[OrganizationAlertTemplates.condition]
-                    it[HostAlerts.threshold] = template[OrganizationAlertTemplates.threshold]
-                    it[HostAlerts.duration_seconds] = template[OrganizationAlertTemplates.duration_seconds]
-                    it[HostAlerts.enabled] = template[OrganizationAlertTemplates.enabled]
-                    it[HostAlerts.last_triggered_at] = null
-                    it[HostAlerts.created_at] = now
-                }
+        } else {
+            templates.map { template ->
+                CreateAlertData(
+                    hostId = hostId,
+                    organizationId = organizationId,
+                    metric = template.metric,
+                    condition = template.condition,
+                    threshold = template.threshold,
+                    durationSeconds = template.durationSeconds,
+                    enabled = template.enabled,
+                    scope = ALERT_SCOPE_HOST
+                )
             }
         }
+        sources.forEach { hostAlertRepository.createAlert(it) }
     }
 
     private fun getHostAlertScope(
         hostId: Int,
         organizationId: Int
     ): String {
-        return transaction {
-            val existing =
-                HostAlertSettings
-                    .selectAll()
-                    .where {
-                        (HostAlertSettings.host_id eq hostId) and
-                            (HostAlertSettings.organization_id eq organizationId)
-                    }.firstOrNull()
-
-            if (existing != null) {
-                return@transaction existing[HostAlertSettings.scope]
-            }
-
-            val now = Clock.System.now()
-            HostAlertSettings.insert {
-                it[HostAlertSettings.host_id] = hostId
-                it[HostAlertSettings.organization_id] = organizationId
-                it[HostAlertSettings.scope] = ALERT_SCOPE_HOST
-                it[HostAlertSettings.updated_at] = now
-            }
-            ALERT_SCOPE_HOST
-        }
+        val settings = hostAlertRepository.getAlertSettings(hostId)
+        val existing = settings.firstOrNull { it.organizationId == organizationId }
+        if (existing != null) return existing.scope
+        hostAlertRepository.upsertAlertSettings(hostId, organizationId, ALERT_SCOPE_HOST)
+        return ALERT_SCOPE_HOST
     }
 
-    private fun listHostAlerts(hostId: Int, organizationId: Int): List<AlertResponse> {
-        return transaction {
-            HostAlerts
-                .selectAll()
-                .where { (HostAlerts.host_id eq hostId) and (HostAlerts.organization_id eq organizationId) }
-                .orderBy(HostAlerts.created_at to SortOrder.DESC)
-                .map { row ->
-                    AlertResponse(
-                        id = row[HostAlerts.id],
-                        hostId = hostId,
-                        scope = ALERT_SCOPE_HOST,
-                        metric = row[HostAlerts.metric],
-                        condition = row[HostAlerts.condition],
-                        threshold = row[HostAlerts.threshold],
-                        durationSeconds = row[HostAlerts.duration_seconds],
-                        enabled = row[HostAlerts.enabled],
-                        lastTriggeredAt = row[HostAlerts.last_triggered_at]?.toEpochMilliseconds(),
-                        createdAt = row[HostAlerts.created_at].toEpochMilliseconds()
-                    )
-                }
+    private fun listHostAlerts(hostId: Int, organizationId: Int): List<AlertResponse> =
+        hostAlertRepository.listByHostAndOrg(hostId, organizationId).map { row ->
+            AlertResponse(
+                id = row.id,
+                hostId = hostId,
+                scope = ALERT_SCOPE_HOST,
+                metric = row.metric,
+                condition = row.condition,
+                threshold = row.threshold,
+                durationSeconds = row.durationSeconds,
+                enabled = row.enabled,
+                lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
+                createdAt = row.createdAt.toEpochMilliseconds()
+            )
         }
-    }
 
     private fun listGlobalAlertsForHost(
         hostId: Int,
         organizationId: Int
-    ): List<AlertResponse> {
-        return transaction {
-            val templateStates =
-                HostAlertTemplateStates
-                    .selectAll()
-                    .where {
-                        HostAlertTemplateStates.host_id eq hostId
-                    }.associateBy(
-                        keySelector = { it[HostAlertTemplateStates.template_alert_id] },
-                        valueTransform = { it[HostAlertTemplateStates.last_triggered_at] }
-                    )
-
-            OrganizationAlertTemplates
-                .selectAll()
-                .where {
-                    OrganizationAlertTemplates.organization_id eq organizationId
-                }.orderBy(OrganizationAlertTemplates.created_at to SortOrder.DESC)
-                .map { row ->
-                    AlertResponse(
-                        id = row[OrganizationAlertTemplates.id],
-                        hostId = hostId,
-                        scope = ALERT_SCOPE_GLOBAL,
-                        metric = row[OrganizationAlertTemplates.metric],
-                        condition = row[OrganizationAlertTemplates.condition],
-                        threshold = row[OrganizationAlertTemplates.threshold],
-                        durationSeconds = row[OrganizationAlertTemplates.duration_seconds],
-                        enabled = row[OrganizationAlertTemplates.enabled],
-                        lastTriggeredAt = templateStates[row[OrganizationAlertTemplates.id]]?.toEpochMilliseconds(),
-                        createdAt = row[OrganizationAlertTemplates.created_at].toEpochMilliseconds()
-                    )
-                }
+    ): List<AlertResponse> =
+        hostAlertRepository.listGlobalAlertsForHost(organizationId, hostId).map { row ->
+            AlertResponse(
+                id = row.id,
+                hostId = hostId,
+                scope = ALERT_SCOPE_GLOBAL,
+                metric = row.metric,
+                condition = row.condition,
+                threshold = row.threshold,
+                durationSeconds = row.durationSeconds,
+                enabled = row.enabled,
+                lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
+                createdAt = row.createdAt.toEpochMilliseconds()
+            )
         }
-    }
 
     private fun getTierConfig(organizationId: Int): PricingTierConfigResponse {
         return pricingTierService.getEffectiveTierForOrganization(organizationId).tier
@@ -1241,25 +1012,5 @@ class MonitorService {
         val clampedTo = min(toTimestamp, nowEpochSeconds)
         if (clampedFrom > clampedTo) return null
         return clampedFrom to clampedTo
-    }
-
-    private fun rowToHostData(row: ResultRow): HostData {
-        return HostData(
-            id = row[Hosts.id],
-            organizationId = row[Hosts.organization_id],
-            hostname = row[Hosts.hostname],
-            displayName = row[Hosts.display_name],
-            status = row[Hosts.status],
-            lastSeenAt = row[Hosts.last_seen_at],
-            agentVersion = row[Hosts.agent_version].takeIf { it.isNotBlank() },
-            os = row[Hosts.os].takeIf { it.isNotBlank() },
-            arch = row[Hosts.arch],
-            platform = row[Hosts.platform].takeIf { it.isNotBlank() },
-            processor = row[Hosts.processor].takeIf { it.isNotBlank() },
-            cpuCores = row[Hosts.cpu_cores].takeIf { it > 0 },
-            memoryTotalKb = row[Hosts.memory_total_kb].takeIf { it > 0 },
-            firstSeenAt = row[Hosts.first_seen_at],
-            createdAt = row[Hosts.first_seen_at]
-        )
     }
 }

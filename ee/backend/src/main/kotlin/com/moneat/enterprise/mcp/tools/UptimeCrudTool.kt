@@ -4,18 +4,20 @@
 
 package com.moneat.enterprise.mcp.tools
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.enterprise.mcp.models.McpContext
 import com.moneat.enterprise.mcp.protocol.InputSchema
 import com.moneat.enterprise.mcp.protocol.McpTool
 import com.moneat.enterprise.mcp.protocol.ToolCallResult
 import com.moneat.uptime.models.UpdateUptimeMonitorRequest
+import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
 
-private val uptimeCrudService = UptimeService()
+private val uptimeCrudService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
 
 class UpdateUptimeMonitorTool : McpTool {
     override val name = "update_uptime_monitor"

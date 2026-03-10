@@ -24,10 +24,12 @@ import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.models.SetupIntentResponse
 import com.moneat.billing.models.StripeWebhookEvents
 import com.moneat.billing.models.UpdateOnCallSeatsResponse
+import com.moneat.billing.repositories.SubscriptionRepository
+import com.moneat.billing.repositories.models.StripeSubscriptionData
 import com.moneat.shared.models.Memberships
-import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.shared.repositories.OrganizationRepository
 import com.moneat.utils.SentryUtils
 import com.stripe.Stripe
 import com.stripe.exception.SignatureVerificationException
@@ -76,6 +78,8 @@ import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreatePar
 private val logger = KotlinLogging.logger {}
 
 class StripeService(
+    private val subscriptionRepository: SubscriptionRepository,
+    private val organizationRepository: OrganizationRepository,
     private val pricingTierService: PricingTierService = PricingTierService(),
     private val meterEventSender: (MeterEventCreateParams) -> Unit = { params -> MeterEvent.create(params) },
     private val allowMeteringWhenStripeDisabled: Boolean = false
@@ -340,18 +344,11 @@ class StripeService(
     fun cancelSubscription(organizationId: Int): CancelSubscriptionResponse {
         ensureEnabled()
         val localSubscription =
-            transaction {
-                Subscriptions
-                    .selectAll()
-                    .where {
-                        (Subscriptions.organization_id eq organizationId) and
-                            (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-                    }.orderBy(Subscriptions.id to SortOrder.DESC)
-                    .firstOrNull()
-            } ?: throw IllegalStateException("No active subscription found")
+            subscriptionRepository.findCurrentByOrganizationId(organizationId)
+                ?: throw IllegalStateException("No active subscription found")
 
         val stripeSubscriptionId =
-            localSubscription[Subscriptions.stripe_subscription_id]
+            localSubscription.stripeSubscriptionId
                 ?: throw IllegalStateException("No Stripe subscription linked for this organization")
 
         val canceled =
@@ -363,15 +360,14 @@ class StripeService(
             )
 
         val currentPeriodEnd = canceled.cancelAt?.let { Instant.fromEpochSeconds(it) }
-        transaction {
-            Subscriptions.update({ Subscriptions.id eq localSubscription[Subscriptions.id] }) {
-                it[status] = canceled.status ?: localSubscription[Subscriptions.status]
-                it[current_period_end] = currentPeriodEnd
-            }
-        }
+        subscriptionRepository.updateStatusAndPeriodEnd(
+            localSubscription.id,
+            canceled.status ?: localSubscription.status,
+            currentPeriodEnd
+        )
 
         return CancelSubscriptionResponse(
-            status = canceled.status ?: localSubscription[Subscriptions.status],
+            status = canceled.status ?: localSubscription.status,
             cancelAtPeriodEnd = canceled.cancelAtPeriodEnd == true,
             currentPeriodEnd = epochSecondsToIso(canceled.cancelAt)
         )
@@ -441,28 +437,21 @@ class StripeService(
         if (seats < 0) throw IllegalArgumentException("Seats cannot be negative")
 
         val subRow =
-            transaction {
-                Subscriptions
-                    .selectAll()
-                    .where {
-                        (Subscriptions.organization_id eq organizationId) and
-                            (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-                    }.orderBy(Subscriptions.id to SortOrder.DESC)
-                    .firstOrNull()
-            } ?: throw IllegalArgumentException("No active subscription found")
+            subscriptionRepository.findCurrentByOrganizationId(organizationId)
+                ?: throw IllegalArgumentException("No active subscription found")
 
         val stripeSubId =
-            subRow[Subscriptions.stripe_subscription_id]
+            subRow.stripeSubscriptionId
                 ?: throw IllegalArgumentException("Subscription is not linked to Stripe")
 
-        val tierId = subRow[Subscriptions.pricing_tier_config_id]
+        val tierId = subRow.pricingTierConfigId
         val tier =
             pricingTierService.getTierById(tierId ?: 0)
                 ?: throw IllegalArgumentException("Subscription has no valid pricing tier")
 
         if (!tier.oncallEnabled) throw IllegalArgumentException("On-call is not enabled for this tier")
 
-        val isYearly = subRow[Subscriptions.billing_interval].equals("yearly", ignoreCase = true)
+        val isYearly = subRow.billingInterval.lowercase() == "yearly"
         val oncallPriceId =
             if (isYearly) {
                 tier.stripeOncallYearlyPriceId ?: tier.stripeOncallPriceId
@@ -470,7 +459,7 @@ class StripeService(
                 tier.stripeOncallPriceId
             } ?: throw IllegalArgumentException("On-call price ID not configured for this tier")
 
-        val currentOncallItemId = subRow[Subscriptions.stripe_oncall_item_id]
+        val currentOncallItemId = subRow.stripeOncallItemId
 
         if (seats == 0) {
             if (currentOncallItemId != null) {
@@ -508,7 +497,7 @@ class StripeService(
         /* try {
             com.stripe.model.Invoice.upcoming(
                 com.stripe.param.InvoiceUpcomingParams.builder()
-                    .setCustomer(subRow[Subscriptions.stripe_customer_id])
+                    .setCustomer(subRow.stripeCustomerId)
                     .setSubscription(stripeSubId)
                     .build()
             )
@@ -541,19 +530,11 @@ class StripeService(
         }
         logger.info { "Resolved organization ID $organizationId for subscription ${subscription.id}" }
 
-        val fallbackTier =
-            transaction {
-                val subRow =
-                    Subscriptions
-                        .selectAll()
-                        .where {
-                            (Subscriptions.organization_id eq organizationId) and
-                                (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-                        }.orderBy(Subscriptions.id to SortOrder.DESC)
-                        .firstOrNull()
-                val tierName = subRow?.get(Subscriptions.plan)?.uppercase() ?: "FREE"
-                pricingTierService.getCurrentTier(tierName) ?: pricingTierService.getCurrentTier("FREE")
-            }
+        val fallbackTier = run {
+            val tierName =
+                subscriptionRepository.findCurrentByOrganizationId(organizationId)?.plan?.uppercase() ?: "FREE"
+            pricingTierService.getCurrentTier(tierName) ?: pricingTierService.getCurrentTier("FREE")
+        }
 
         val resolvedTier = resolveTierForSubscription(subscription, fallbackTier)
         val basePriceIds =
@@ -589,87 +570,52 @@ class StripeService(
             }
         }
 
-        transaction {
-            val existing =
-                Subscriptions
-                    .selectAll()
-                    .where {
-                        (Subscriptions.organization_id eq organizationId) and
-                            (Subscriptions.stripe_subscription_id eq subscription.id)
-                    }.orderBy(Subscriptions.id to SortOrder.DESC)
-                    .firstOrNull()
-
-            val planName =
-                resolvedTier?.tierName?.lowercase()
-                    ?: fallbackTier?.tierName?.lowercase()
-                    ?: "free"
-            val tierId = resolvedTier?.id?.takeIf { it > 0 }
-            val periodSourceItem = if (baseItemId != null) {
-                subscription.items.data.find { it.id == baseItemId }
+        val planName =
+            resolvedTier?.tierName?.lowercase()
+                ?: fallbackTier?.tierName?.lowercase()
+                ?: "free"
+        val tierId = resolvedTier?.id?.takeIf { it > 0 }
+        val periodSourceItem = if (baseItemId != null) {
+            subscription.items.data.find { it.id == baseItemId }
+        } else {
+            subscription.items.data.firstOrNull()
+        }
+        val periodStartEpoch = periodSourceItem?.currentPeriodStart ?: subscription.startDate
+        val periodEndEpoch = periodSourceItem?.currentPeriodEnd ?: subscription.trialEnd
+        val startInstant = periodStartEpoch?.let { Instant.fromEpochSeconds(it) }
+        val endInstant = periodEndEpoch?.let { Instant.fromEpochSeconds(it) }
+        val billingInterval =
+            if (baseItemId != null) {
+                subscription.items.data
+                    .find { it.id == baseItemId }
+                    ?.price
+                    ?.recurring
+                    ?.interval ?: "monthly"
             } else {
-                subscription.items.data.firstOrNull()
+                "monthly"
             }
-            val periodStartEpoch = periodSourceItem?.currentPeriodStart ?: subscription.startDate
-            val periodEndEpoch = periodSourceItem?.currentPeriodEnd ?: subscription.trialEnd
-            val startInstant = periodStartEpoch?.let { Instant.fromEpochSeconds(it) }
-            val endInstant = periodEndEpoch?.let { Instant.fromEpochSeconds(it) }
-            val billingInterval =
-                if (baseItemId != null) {
-                    subscription.items.data
-                        .find { it.id == baseItemId }
-                        ?.price
-                        ?.recurring
-                        ?.interval ?: "monthly"
-                } else {
-                    "monthly"
-                }
-            val finalInterval = if (billingInterval == "year") "yearly" else "monthly"
+        val finalInterval = if (billingInterval == "year") "yearly" else "monthly"
 
-            if (existing != null) {
-                logger.info { "Updating existing subscription row ${existing[Subscriptions.id]} for org $organizationId" }
-                Subscriptions.update({ Subscriptions.id eq existing[Subscriptions.id] }) {
-                    it[plan] = planName
-                    it[status] = subscription.status
-                    it[current_period_start] = startInstant
-                    it[current_period_end] = endInstant
-                    it[stripe_customer_id] = subscription.customer
-                    it[pricing_tier_config_id] = tierId
-                    it[stripe_base_item_id] = baseItemId
-                    it[stripe_overage_item_id] = overageItemId
-                    it[stripe_oncall_item_id] = oncallItemId
-                    it[Subscriptions.oncall_seats] = oncallSeats
-                    it[Subscriptions.billing_interval] = finalInterval
-                }
-            } else {
-                logger.info { "Creating new subscription row for org $organizationId, plan=$planName, status=${subscription.status}" }
-                Subscriptions.insert {
-                    it[Subscriptions.organization_id] = organizationId
-                    it[stripe_subscription_id] = subscription.id
-                    it[stripe_customer_id] = subscription.customer
-                    it[plan] = planName
-                    it[status] = subscription.status
-                    it[current_period_start] = startInstant
-                    it[current_period_end] = endInstant
-                    it[pricing_tier_config_id] = tierId
-                    it[payg_budget_cents] = 0
-                    it[payg_used_units] = 0
-                    it[payg_used_micros] = 0
-                    it[pending_meter_units] = 0
-                    it[pending_meter_batch_id] = null
-                    it[pending_meter_batch_units] = 0
-                    it[pending_apm_span_overage_units] = 0
-                    it[pending_apm_span_batch_id] = null
-                    it[pending_apm_span_batch_units] = 0
-                    it[pending_custom_metric_overage_units] = 0
-                    it[pending_custom_metric_batch_id] = null
-                    it[pending_custom_metric_batch_units] = 0
-                    it[stripe_base_item_id] = baseItemId
-                    it[stripe_overage_item_id] = overageItemId
-                    it[stripe_oncall_item_id] = oncallItemId
-                    it[Subscriptions.oncall_seats] = oncallSeats
-                    it[Subscriptions.billing_interval] = finalInterval
-                }
-            }
+        val existing = subscriptionRepository.findByOrganizationAndStripeSubscriptionId(organizationId, subscription.id)
+        val stripeData = StripeSubscriptionData(
+            plan = planName,
+            status = subscription.status,
+            periodStart = startInstant,
+            periodEnd = endInstant,
+            stripeCustomerId = subscription.customer,
+            pricingTierConfigId = tierId,
+            stripeBaseItemId = baseItemId,
+            stripeOverageItemId = overageItemId,
+            stripeOncallItemId = oncallItemId,
+            oncallSeats = oncallSeats,
+            billingInterval = finalInterval,
+        )
+        if (existing != null) {
+            logger.info { "Updating existing subscription row ${existing.id} for org $organizationId" }
+            subscriptionRepository.updateFromStripe(existing.id, stripeData)
+        } else {
+            logger.info { "Creating new subscription row for org $organizationId, plan=$planName, status=${subscription.status}" }
+            subscriptionRepository.insertFromStripe(organizationId, subscription.id, stripeData)
         }
     }
 
@@ -744,56 +690,17 @@ class StripeService(
             return
         }
         logger.info { "Setting subscription $subscriptionId to active for org $organizationId" }
-        transaction {
-            val updateCount =
-                Subscriptions.update({
-                    (Subscriptions.organization_id eq organizationId) and
-                        (Subscriptions.stripe_subscription_id eq subscriptionId)
-                }) {
-                    it[status] = "active"
-                    it[stripe_customer_id] = customerId
-                }
-            logger.info { "Updated $updateCount subscription rows to active" }
-        }
+        subscriptionRepository.activateByOrgAndStripeId(organizationId, subscriptionId, customerId)
+        logger.info { "Updated subscription rows to active" }
     }
 
     fun handleInvoicePaid(invoice: Invoice) {
         val organizationId = resolveOrganizationId(invoice.metadata["organization_id"], invoice.customer) ?: return
         val billingReason = invoice.billingReason ?: ""
         val isCycleRollover = billingReason == "subscription_cycle"
-
-        transaction {
-            val q =
-                Subscriptions
-                    .selectAll()
-                    .where {
-                        (Subscriptions.organization_id eq organizationId) and
-                            (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-                    }.orderBy(Subscriptions.id to SortOrder.DESC)
-            val row = q.firstOrNull() ?: return@transaction
-            val start = invoice.periodStart?.let { kotlin.time.Instant.fromEpochSeconds(it) }
-            val end = invoice.periodEnd?.let { kotlin.time.Instant.fromEpochSeconds(it) }
-
-            Subscriptions.update({ Subscriptions.id eq row[Subscriptions.id] }) {
-                it[status] = "active"
-                it[current_period_start] = start
-                it[current_period_end] = end
-                if (isCycleRollover) {
-                    it[payg_used_units] = 0
-                    it[payg_used_micros] = 0
-                    it[pending_meter_units] = 0
-                    it[pending_meter_batch_id] = null
-                    it[pending_meter_batch_units] = 0
-                    it[pending_apm_span_overage_units] = 0
-                    it[pending_apm_span_batch_id] = null
-                    it[pending_apm_span_batch_units] = 0
-                    it[pending_custom_metric_overage_units] = 0
-                    it[pending_custom_metric_batch_id] = null
-                    it[pending_custom_metric_batch_units] = 0
-                }
-                it[billing_grace_until] = null
-            }
-        }
+        val start = invoice.periodStart?.let { Instant.fromEpochSeconds(it) }
+        val end = invoice.periodEnd?.let { Instant.fromEpochSeconds(it) }
+        subscriptionRepository.updateAfterInvoicePaid(organizationId, start, end, isCycleRollover)
     }
 
     fun handleInvoicePaymentFailed(
@@ -802,15 +709,7 @@ class StripeService(
     ) {
         val organizationId = resolveOrganizationId(invoice.metadata["organization_id"], invoice.customer) ?: return
         val graceUntil = addDays(Clock.System.now(), graceDays)
-        transaction {
-            Subscriptions.update({
-                (Subscriptions.organization_id eq organizationId) and
-                    (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-            }) {
-                it[status] = "past_due"
-                it[billing_grace_until] = graceUntil
-            }
-        }
+        subscriptionRepository.setPastDueByOrganizationId(organizationId, graceUntil)
     }
 
     fun handleSetupIntentSucceeded(setupIntent: SetupIntent) {
@@ -1154,28 +1053,13 @@ class StripeService(
     }
 
     private fun getOrCreateCustomer(organizationId: Int): String {
-        val existing =
-            transaction {
-                Subscriptions
-                    .selectAll()
-                    .where {
-                        (Subscriptions.organization_id eq organizationId) and
-                            (Subscriptions.stripe_customer_id.isNotNull())
-                    }.orderBy(Subscriptions.id to SortOrder.DESC)
-                    .firstOrNull()
-                    ?.get(Subscriptions.stripe_customer_id)
-            }
+        val existing = subscriptionRepository.findStripeCustomerIdByOrganizationId(organizationId)
         if (!existing.isNullOrBlank()) return existing
 
-        val (orgName, ownerEmail) =
+        val orgName =
+            organizationRepository.findById(organizationId)?.name ?: "Moneat Organization $organizationId"
+        val ownerEmail =
             transaction {
-                val orgName =
-                    Organizations
-                        .selectAll()
-                        .where { Organizations.id eq organizationId }
-                        .firstOrNull()
-                        ?.get(Organizations.name)
-                        ?: "Moneat Organization $organizationId"
                 val ownerUserId =
                     Memberships
                         .selectAll()
@@ -1192,15 +1076,13 @@ class StripeService(
                         .firstOrNull()
                         ?.get(Memberships.user_id)
                 val userId = ownerUserId ?: fallbackUserId
-                val email =
-                    userId?.let { id ->
-                        Users
-                            .selectAll()
-                            .where { Users.id eq id }
-                            .firstOrNull()
-                            ?.get(Users.email)
-                    }
-                Pair(orgName, email)
+                userId?.let { id ->
+                    Users
+                        .selectAll()
+                        .where { Users.id eq id }
+                        .firstOrNull()
+                        ?.get(Users.email)
+                }
             }
 
         val paramsBuilder =
@@ -1213,21 +1095,9 @@ class StripeService(
         }
         val customer = Customer.create(paramsBuilder.build())
 
-        transaction {
-            val sub =
-                Subscriptions
-                    .selectAll()
-                    .where {
-                        (Subscriptions.organization_id eq organizationId) and
-                            (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-                    }.orderBy(Subscriptions.id to SortOrder.DESC)
-                    .firstOrNull()
-
-            if (sub != null) {
-                Subscriptions.update({ Subscriptions.id eq sub[Subscriptions.id] }) {
-                    it[stripe_customer_id] = customer.id
-                }
-            }
+        val sub = subscriptionRepository.findCurrentByOrganizationId(organizationId)
+        if (sub != null) {
+            subscriptionRepository.updateStripeCustomerId(sub.id, customer.id)
         }
 
         return customer.id
@@ -1248,15 +1118,7 @@ class StripeService(
             logger.debug { "Customer ID is blank, returning null" }
             return null
         }
-        val orgId =
-            transaction {
-                Subscriptions
-                    .selectAll()
-                    .where { Subscriptions.stripe_customer_id eq customerId }
-                    .orderBy(Subscriptions.id to SortOrder.DESC)
-                    .firstOrNull()
-                    ?.get(Subscriptions.organization_id)
-            }
+        val orgId = subscriptionRepository.findByStripeCustomerId(customerId)?.organizationId
         logger.debug { "Found org ID from customer lookup: $orgId" }
         return orgId
     }
@@ -1267,18 +1129,8 @@ class StripeService(
         }
     }
 
-    private fun findCustomerId(organizationId: Int): String? {
-        return transaction {
-            Subscriptions
-                .selectAll()
-                .where {
-                    (Subscriptions.organization_id eq organizationId) and
-                        (Subscriptions.stripe_customer_id.isNotNull())
-                }.orderBy(Subscriptions.id to SortOrder.DESC)
-                .firstOrNull()
-                ?.get(Subscriptions.stripe_customer_id)
-        }
-    }
+    private fun findCustomerId(organizationId: Int): String? =
+        subscriptionRepository.findStripeCustomerIdByOrganizationId(organizationId)
 
     private fun addDays(
         instant: Instant,

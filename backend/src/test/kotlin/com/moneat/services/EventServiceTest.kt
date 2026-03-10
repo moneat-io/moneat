@@ -27,10 +27,11 @@ import com.moneat.events.models.SentryEvent
 import com.moneat.events.models.StackFrame
 import com.moneat.events.models.StackTrace
 import com.moneat.events.models.UserInfo
+import com.moneat.events.repositories.EventRepository
+import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.services.EventService
-import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.ProjectKeys
-import com.moneat.shared.models.Projects
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -38,12 +39,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.update
 import java.util.*
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -53,7 +48,6 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 /**
  * Comprehensive tests for EventService ingestion logic covering P0 scenarios:
@@ -64,37 +58,26 @@ import com.moneat.testsupport.TestDatabaseHelper
  * 5. Event metadata parsing (SDK, device, user, tags)
  */
 class EventServiceTest {
-    private val eventService = EventService()
-    private var testOrgId: Int = 0
-    private var testProjectId: Long = 0
-    private var validPublicKey: String = "test-public-key-valid"
-    private var inactivePublicKey: String = "test-public-key-inactive"
+    private val eventRepository = mockk<EventRepository>()
+    private lateinit var eventService: EventService
 
-    companion object {
-        private var db: Database? = null
-    }
+    private val testProjectId = 1L
+    private val testOrgId = 1
+    private val validPublicKey = "test-public-key-valid"
+    private val inactivePublicKey = "test-public-key-inactive"
 
     @BeforeTest
-    fun setupDatabase() {
-        // Initialize DB connection and schema once per test class
-        if (db == null) {
-            db = Database.connect(
-                url = "jdbc:h2:mem:moneat_event_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-                driver = "org.h2.Driver"
-            )
-        }
-        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-
-        // Ensure schema exists (idempotent in H2) and clean between tests
-        TestDatabaseHelper.resetSchema(Organizations, Projects, ProjectKeys)
-
-        // Setup test data
-        transaction {
-            testOrgId = insertTestOrganization("Test Org", "test-org")
-            testProjectId = insertTestProject(testOrgId, "Test Project", "test-project")
-            insertTestProjectKey(testProjectId, validPublicKey, isActive = true)
-            insertTestProjectKey(testProjectId, inactivePublicKey, isActive = false)
-        }
+    fun setup() {
+        eventService = EventService(eventRepository = eventRepository)
+        // Catchall defaults (registered first so specific overrides take precedence)
+        every { eventRepository.verifyProjectKey(any(), any()) } returns ProjectKeyVerification(false, null)
+        every { eventRepository.getOrganizationIdForProject(any()) } returns null
+        // Specific mocks
+        every { eventRepository.verifyProjectKey(testProjectId, validPublicKey) } returns
+            ProjectKeyVerification(true, "jvm")
+        every { eventRepository.verifyProjectKey(testProjectId, inactivePublicKey) } returns
+            ProjectKeyVerification(false, null)
+        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
     }
 
     // ============ PROJECT KEY VERIFICATION TESTS (P0) ============
@@ -604,10 +587,8 @@ class EventServiceTest {
         val key1 = "multi-key-1"
         val key2 = "multi-key-2"
 
-        transaction {
-            insertTestProjectKey(testProjectId, key1, isActive = true)
-            insertTestProjectKey(testProjectId, key2, isActive = true)
-        }
+        every { eventRepository.verifyProjectKey(testProjectId, key1) } returns ProjectKeyVerification(true, "jvm")
+        every { eventRepository.verifyProjectKey(testProjectId, key2) } returns ProjectKeyVerification(true, "jvm")
 
         val result1 = eventService.verifyProjectKey(testProjectId, key1)
         val result2 = eventService.verifyProjectKey(testProjectId, key2)
@@ -621,17 +602,8 @@ class EventServiceTest {
         val key1 = "deactivate-key-1"
         val key2 = "deactivate-key-2"
 
-        transaction {
-            insertTestProjectKey(testProjectId, key1, isActive = true)
-            insertTestProjectKey(testProjectId, key2, isActive = true)
-
-            // Deactivate key1
-            ProjectKeys.update({
-                (ProjectKeys.project_id eq testProjectId) and (ProjectKeys.public_key eq key1)
-            }) {
-                it[ProjectKeys.is_active] = false
-            }
-        }
+        // key1 deactivated → handled by catchall (returns false)
+        every { eventRepository.verifyProjectKey(testProjectId, key2) } returns ProjectKeyVerification(true, "jvm")
 
         val result1 = eventService.verifyProjectKey(testProjectId, key1)
         val result2 = eventService.verifyProjectKey(testProjectId, key2)
@@ -734,42 +706,6 @@ class EventServiceTest {
     }
 
     // ============ HELPER METHODS ============
-
-    private fun insertTestOrganization(
-        name: String,
-        slug: String
-    ): Int {
-        return Organizations.insert {
-            it[Organizations.name] = name
-            it[Organizations.slug] = slug
-        }[Organizations.id]
-    }
-
-    private fun insertTestProject(
-        organizationId: Int,
-        name: String,
-        slug: String
-    ): Long {
-        return Projects.insert {
-            it[Projects.organization_id] = organizationId
-            it[Projects.name] = name
-            it[Projects.slug] = slug
-        }[Projects.id]
-    }
-
-    private fun insertTestProjectKey(
-        projectId: Long,
-        publicKey: String,
-        isActive: Boolean
-    ): Int {
-        return ProjectKeys.insert {
-            it[ProjectKeys.project_id] = projectId
-            it[ProjectKeys.public_key] = publicKey
-            it[ProjectKeys.secret_key] = "secret-$publicKey"
-            it[ProjectKeys.platform_target] = "jvm"
-            it[ProjectKeys.is_active] = isActive
-        }[ProjectKeys.id]
-    }
 
     private fun createSentryEvent(
         eventId: String? = null,

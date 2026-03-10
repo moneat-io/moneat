@@ -18,6 +18,7 @@ package com.moneat.billing.services
 
 import com.moneat.billing.models.GrantPromotionalCreditResponse
 import com.moneat.billing.models.PromotionalCreditHistoryItem
+import com.moneat.billing.repositories.SubscriptionRepository
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.PromotionalCreditGrants
 import com.moneat.shared.models.Subscriptions
@@ -39,7 +40,9 @@ import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
-class AdminBillingService {
+class AdminBillingService(
+    private val subscriptionRepository: SubscriptionRepository
+) {
     companion object {
         private const val BYTES_PER_GB = 1_073_741_824L
     }
@@ -211,29 +214,10 @@ class AdminBillingService {
         organizationId: Int,
         adminUserId: Int
     ): Boolean {
-        return transaction {
-            val subscription =
-                Subscriptions
-                    .selectAll()
-                    .where {
-                        (Subscriptions.organization_id eq organizationId) and
-                            (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-                    }.orderBy(Subscriptions.id to SortOrder.DESC)
-                    .firstOrNull()
-                    ?: return@transaction false
-
-            val subscriptionId = subscription[Subscriptions.id]
-
-            Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
-                it[bonus_gb_bytes] = 0L
-                it[bonus_units] = 0L
-                it[bonus_granted_at] = Clock.System.now()
-                it[bonus_granted_by] = adminUserId
-                it[bonus_reason] = "Reset by admin"
-            }
-
+        val result = subscriptionRepository.resetPromotionalCredits(organizationId, adminUserId)
+        if (result) {
             logger.info { "Reset promotional credits for org $organizationId by admin $adminUserId" }
-            true
         }
+        return result
     }
 }

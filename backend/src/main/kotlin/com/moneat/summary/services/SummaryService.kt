@@ -20,6 +20,8 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.events.services.DashboardService
 import com.moneat.events.services.ReleaseService
 import com.moneat.incident.models.IncidentEventLog
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.models.Projects
@@ -40,10 +42,12 @@ import com.moneat.summary.models.IssueSummaryItem
 import com.moneat.summary.models.LogVolumeComparison
 import com.moneat.summary.models.OvernightSummaryResponse
 import com.moneat.summary.models.RelatedLogEntry
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.summary.models.TransactionLatencySummary
 import com.moneat.summary.models.UptimeIncidentSummary
 import com.moneat.summary.models.UptimeMonitorSummary
 import com.moneat.summary.models.WeeklyReportResponse
+import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.async
@@ -83,10 +87,10 @@ private const val WEEK_SECONDS = 7 * 24 * 3600L
 private const val TWO_WEEKS_SECONDS = 14 * 24 * 3600L
 
 class SummaryService(
-    private val monitorService: MonitorService = MonitorService(),
-    private val uptimeService: UptimeService = UptimeService(),
+    private val monitorService: MonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl()),
+    private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl()),
     private val alertService: MonitorAlertService = MonitorAlertService(),
-    private val dashboardService: DashboardService = DashboardService(),
+    private val dashboardService: DashboardService = DashboardService.create(),
     private val releaseService: ReleaseService = ReleaseService()
 ) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()

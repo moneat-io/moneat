@@ -17,6 +17,7 @@
 package com.moneat.monitor.routes
 
 import com.moneat.logs.models.LogQueryRequest
+import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.models.AllContainersResponse
 import com.moneat.monitor.models.ContainerStatsResponse
@@ -26,6 +27,8 @@ import com.moneat.monitor.models.HostResponse
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.models.HostData
@@ -107,8 +110,8 @@ private suspend fun ensureHostAccessible(
 }
 
 fun Route.monitorRoutes(
-    monitorService: MonitorService = MonitorService(),
-    logService: LogService = LogService(),
+    monitorService: MonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl()),
+    logService: LogService = LogService(LogRepositoryImpl()),
 ) {
     route("/v1/monitor") {
         /**

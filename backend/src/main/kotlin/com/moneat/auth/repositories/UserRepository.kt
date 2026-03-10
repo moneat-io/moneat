@@ -1,0 +1,46 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.auth.repositories
+
+import com.moneat.auth.repositories.models.UserRow
+
+/**
+ * Repository for user data access.
+ */
+interface UserRepository {
+    fun findByEmail(email: String): UserRow?
+    fun findById(id: Int): UserRow?
+    fun findByEmailVerificationToken(token: String): UserRow?
+    fun findByPasswordResetToken(token: String): UserRow?
+    fun existsByEmail(email: String): Boolean
+    fun create(
+        email: String,
+        passwordHash: String,
+        name: String?,
+        emailVerified: Boolean,
+        emailVerificationToken: String?,
+        emailVerificationExpiresAt: Long?
+    ): Int
+    fun updateEmailVerified(id: Int, verified: Boolean)
+    fun clearEmailVerificationToken(id: Int)
+    fun updateVerificationToken(id: Int, token: String, expiresAt: Long)
+    fun updatePasswordResetToken(id: Int, token: String, expiresAt: Long)
+    fun updatePassword(id: Int, passwordHash: String)
+    fun clearPasswordResetToken(id: Int)
+    fun updateOnboardingCompleted(id: Int)
+    fun requiresSsoForEmail(email: String): Boolean
+}
