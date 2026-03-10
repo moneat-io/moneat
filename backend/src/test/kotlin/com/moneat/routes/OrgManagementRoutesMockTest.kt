@@ -254,6 +254,7 @@ class OrgManagementRoutesMockTest {
                 setBody("""{"email":"$NEW_MEMBER_EMAIL","role":"member"}""")
             }
             assertEquals(HttpStatusCode.Created, response.status)
+            verify { mockMembershipService.requireRole(orgId, userId, OrgRole.ADMIN) }
             verify { mockInvitationService.inviteMember(orgId, NEW_MEMBER_EMAIL, "member", userId) }
         }
     }

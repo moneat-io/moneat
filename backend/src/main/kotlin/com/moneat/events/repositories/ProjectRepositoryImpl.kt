@@ -30,6 +30,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
+import kotlinx.coroutines.CancellationException
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -64,22 +66,13 @@ class ProjectRepositoryImpl(
 
     override fun getProjectsForOrganizations(orgIds: List<Int>): List<ProjectRow> =
         transaction {
-            Projects
+            val rows = Projects
                 .selectAll()
                 .where { Projects.organization_id inList orgIds }
-                .map { row ->
-                    val projectId = row[Projects.id]
-                    val keys = getProjectKeys(projectId)
-                    val firstDsn = keys.firstOrNull { it.platformTarget == null }?.dsn ?: keys.firstOrNull()?.dsn ?: ""
-                    ProjectRow(
-                        projectId = projectId,
-                        name = row[Projects.name],
-                        slug = row[Projects.slug],
-                        framework = row[Projects.framework],
-                        keys = keys,
-                        dsn = firstDsn
-                    )
-                }
+                .toList()
+            val projectIds = rows.map { it[Projects.id] }
+            val keysByProject = getProjectKeysBatch(projectIds)
+            rows.map { row -> buildProjectRow(row, keysByProject[row[Projects.id]] ?: emptyList()) }
         }
 
     override fun getProjectById(projectId: Long): ProjectRow? =
@@ -88,18 +81,7 @@ class ProjectRepositoryImpl(
                 .selectAll()
                 .where { Projects.id eq projectId }
                 .firstOrNull()
-                ?.let { row ->
-                    val keys = getProjectKeys(projectId)
-                    val firstDsn = keys.firstOrNull { it.platformTarget == null }?.dsn ?: keys.firstOrNull()?.dsn ?: ""
-                    ProjectRow(
-                        projectId = projectId,
-                        name = row[Projects.name],
-                        slug = row[Projects.slug],
-                        framework = row[Projects.framework],
-                        keys = keys,
-                        dsn = firstDsn
-                    )
-                }
+                ?.let { row -> buildProjectRow(row, getProjectKeys(projectId)) }
         }
 
     override fun getProjectCountForOrganization(orgId: Int): Int =
@@ -116,19 +98,7 @@ class ProjectRepositoryImpl(
                         ((Projects.name eq name) or (Projects.slug eq slug))
                 }
                 .firstOrNull()
-                ?.let { row ->
-                    val projectId = row[Projects.id]
-                    val keys = getProjectKeys(projectId)
-                    val firstDsn = keys.firstOrNull { it.platformTarget == null }?.dsn ?: keys.firstOrNull()?.dsn ?: ""
-                    ProjectRow(
-                        projectId = projectId,
-                        name = row[Projects.name],
-                        slug = row[Projects.slug],
-                        framework = row[Projects.framework],
-                        keys = keys,
-                        dsn = firstDsn
-                    )
-                }
+                ?.let { row -> buildProjectRow(row, getProjectKeys(row[Projects.id])) }
         }
 
     override fun createProject(orgId: Int, name: String, slug: String, framework: String?): Long =
@@ -256,6 +226,8 @@ class ProjectRepositoryImpl(
             if (body.isBlank()) return 0
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["total"]?.jsonPrimitive?.long ?: 0
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.error(e) { "Failed to get issue count for project $projectId" }
             0
@@ -273,6 +245,31 @@ class ProjectRepositoryImpl(
                     dsn = buildDsn(pubKey, projectId)
                 )
             }
+
+    private fun getProjectKeysBatch(projectIds: List<Long>): Map<Long, List<ProjectKeyResponse>> {
+        if (projectIds.isEmpty()) return emptyMap()
+        return ProjectKeys
+            .selectAll()
+            .where { (ProjectKeys.project_id inList projectIds) and (ProjectKeys.is_active eq true) }
+            .groupBy({ it[ProjectKeys.project_id] }) { k ->
+                ProjectKeyResponse(
+                    platformTarget = k[ProjectKeys.platform_target],
+                    dsn = buildDsn(k[ProjectKeys.public_key], k[ProjectKeys.project_id])
+                )
+            }
+    }
+
+    private fun buildProjectRow(row: ResultRow, keys: List<ProjectKeyResponse>): ProjectRow {
+        val firstDsn = keys.firstOrNull { it.platformTarget == null }?.dsn ?: keys.firstOrNull()?.dsn ?: ""
+        return ProjectRow(
+            projectId = row[Projects.id],
+            name = row[Projects.name],
+            slug = row[Projects.slug],
+            framework = row[Projects.framework],
+            keys = keys,
+            dsn = firstDsn
+        )
+    }
 
     private fun buildDsn(publicKey: String, projectId: Long): String {
         val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")

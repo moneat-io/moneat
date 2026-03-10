@@ -93,6 +93,7 @@ fun Route.orgManagementRoutes(
                 val userId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.payload.getClaim("orgId").asInt()
 
+                membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
                 val request = call.receive<InviteMemberRequest>()
 
                 val invitation = invitationService.inviteMember(orgId, request.email, request.role, userId)

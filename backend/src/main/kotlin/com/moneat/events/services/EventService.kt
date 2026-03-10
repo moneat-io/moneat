@@ -1008,7 +1008,12 @@ class EventService(
         val cacheKey = "$projectId:$issueId"
         if (!knownIssueIds.add(cacheKey)) return false
 
-        val count = eventRepository.getEventCountForIssue(projectId, issueId)
+        val count = try {
+            eventRepository.getEventCountForIssue(projectId, issueId)
+        } catch (e: Exception) {
+            knownIssueIds.remove(cacheKey)
+            throw e
+        }
 
         return if (count > 1) {
             if (knownIssueIds.size > MAX_KNOWN_ISSUES) {

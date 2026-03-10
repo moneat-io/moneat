@@ -73,6 +73,7 @@ class AuthService(
 ) {
     companion object {
         private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
+        private const val PASSWORD_RESET_TTL_MS = 60 * 60 * 1000L
     }
 
     private val config = ApplicationConfig("application.conf")
@@ -450,7 +451,7 @@ class AuthService(
         val normalizedEmail = email.lowercase().trim()
         val user = userRepository.findByEmail(normalizedEmail) ?: return false
         val resetToken = generateVerificationToken()
-        val expiresAt = System.currentTimeMillis() + (60 * 60 * 1000) // 1 hour
+        val expiresAt = System.currentTimeMillis() + PASSWORD_RESET_TTL_MS // 1 hour
         return try {
             emailService.sendPasswordResetEmail(normalizedEmail, resetToken, user.name)
             userRepository.updatePasswordResetToken(user.id, resetToken, expiresAt)

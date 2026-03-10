@@ -207,15 +207,9 @@ class OrgInvitationServiceTest {
     }
 
     @Test
-    fun `cleanupExpiredInvitations does not affect valid invitations`() {
+    fun `cleanupExpiredInvitations returns zero and delegates when no invitations expired`() {
         every { invitationRepository.cleanupExpiredInvitations(any()) } returns 0
         assertEquals(0, service.cleanupExpiredInvitations())
-    }
-
-    @Test
-    fun `cleanupExpiredInvitations returns zero when no expired`() {
-        every { invitationRepository.cleanupExpiredInvitations(any()) } returns 0
-        service.cleanupExpiredInvitations()
         verify { invitationRepository.cleanupExpiredInvitations(any()) }
     }
 

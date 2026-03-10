@@ -26,6 +26,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 
 private const val MAX_SLUG_RETRIES = 50
+private const val INITIAL_SLUG_SUFFIX = 2
 
 class OrganizationRepositoryImpl : OrganizationRepository {
 
@@ -43,7 +44,7 @@ class OrganizationRepositoryImpl : OrganizationRepository {
 
     override fun updateOnboardingOrgAndMarkComplete(update: OrganizationRepository.OnboardingUpdate): String {
         var slug = update.baseSlug
-        var suffix = 2
+        var suffix = INITIAL_SLUG_SUFFIX
         repeat(MAX_SLUG_RETRIES) {
             try {
                 val candidateSlug = slug
@@ -67,8 +68,7 @@ class OrganizationRepositoryImpl : OrganizationRepository {
                 }
                 return candidateSlug
             } catch (e: ExposedSQLException) {
-                val isSlugConflict = e.cause?.message?.contains("organizations_slug", ignoreCase = true) == true ||
-                    e.sqlState == "23505"
+                val isSlugConflict = e.cause?.message?.contains("organizations_slug", ignoreCase = true) == true
                 if (!isSlugConflict) throw e
                 slug = "${update.baseSlug}-$suffix"
                 suffix++
