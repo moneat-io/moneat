@@ -38,9 +38,18 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 
 class LlmRoutesTest {
     private val jwtSecret = "llm-routes-secret"
+
+    @BeforeTest
+    fun setupKoin() {
+        startTestKoin()
+    }
 
     @Test
     fun `overview endpoint returns 400 when projectId is missing`() =
@@ -84,5 +93,10 @@ class LlmRoutesTest {
             .withAudience("moneat-users")
             .withClaim("userId", userId)
             .sign(Algorithm.HMAC256(jwtSecret))
+    }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
     }
 }

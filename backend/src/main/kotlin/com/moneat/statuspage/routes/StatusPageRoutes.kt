@@ -43,7 +43,8 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.*
+import org.koin.core.context.GlobalContext
+import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
 
@@ -75,7 +76,7 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
  * Status page routes - both authenticated management and public endpoints.
  */
 fun Route.statusPageRoutes(
-    statusPageService: StatusPageService = StatusPageService(),
+    statusPageService: StatusPageService = GlobalContext.get().get(),
 ) {
     // ==================== Authenticated Management Endpoints ====================
 

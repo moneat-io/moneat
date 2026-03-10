@@ -244,9 +244,15 @@ data class DeleteUsersResponse(
     val errors: List<String> = emptyList()
 )
 
-class AdminService {
+class AdminService(
+    private val pricingTierService: PricingTierService = PricingTierService(),
+) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val usageTracker = UsageTrackingService.instance
+
+    companion object {
+        private const val USABLE_STORAGE_BYTES = 35L * 1024 * 1024 * 1024 // 35GB from MONETIZATION.md
+    }
 
     private fun applyUserSearchFilter(
         query: Query,
@@ -260,10 +266,7 @@ class AdminService {
         }
     }
 
-    private val pricingTierService = PricingTierService()
     private val json = Json { ignoreUnknownKeys = true }
-
-    private val usableStorageBytes = 35L * 1024 * 1024 * 1024 // 35GB from MONETIZATION.md
 
     suspend fun getOverviewStats(): AdminOverviewStats {
         usageTracker.flushBuffer()
@@ -622,7 +625,7 @@ class AdminService {
             logger.error(e) { "Failed to query ClickHouse system.parts" }
         }
 
-        val storageUsedPercent = if (usableStorageBytes > 0) (totalBytes.toDouble() / usableStorageBytes * 100) else 0.0
+        val storageUsedPercent = if (USABLE_STORAGE_BYTES > 0) (totalBytes.toDouble() / USABLE_STORAGE_BYTES * 100) else 0.0
         val alerts = mutableListOf<String>()
         if (storageUsedPercent > 70) alerts.add("Storage > 70% (consider adding block storage)")
         if (storageUsedPercent > 80) alerts.add("Storage > 80% (scaling trigger)")

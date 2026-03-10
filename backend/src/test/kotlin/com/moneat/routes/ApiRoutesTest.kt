@@ -54,6 +54,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class ApiRoutesTest {
     private val jwtSecret = "test-secret-for-unit-tests"
@@ -64,6 +67,7 @@ class ApiRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url = "jdbc:h2:mem:moneat_api_routes;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -295,5 +299,10 @@ class ApiRoutesTest {
             .withClaim("userId", userId)
             .withClaim("email", "user$userId@test.com")
             .sign(Algorithm.HMAC256(jwtSecret))
+    }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
     }
 }

@@ -51,6 +51,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import org.koin.core.context.GlobalContext
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 import java.security.MessageDigest
@@ -216,8 +217,8 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
 }
 
 fun Route.integrationRoutes() {
-    val slackService = SlackService()
-    val discordService = DiscordService()
+    val slackService = GlobalContext.get().get<SlackService>()
+    val discordService = GlobalContext.get().get<DiscordService>()
 
     route("/integrations") {
         // List all integrations for the organization
@@ -725,8 +726,8 @@ fun Route.integrationRoutes() {
 
 // Unauthenticated routes for OAuth callbacks
 fun Route.integrationCallbackRoutes() {
-    val slackService = SlackService()
-    val discordService = DiscordService()
+    val slackService = GlobalContext.get().get<SlackService>()
+    val discordService = GlobalContext.get().get<DiscordService>()
 
     route("/integrations") {
         // Slack OAuth callback (no auth required - called by Slack)

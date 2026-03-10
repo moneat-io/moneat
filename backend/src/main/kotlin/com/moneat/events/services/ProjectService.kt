@@ -24,14 +24,14 @@ import com.moneat.events.models.ProjectResponse
 import com.moneat.events.models.UpdateProjectRequest
 import com.moneat.events.repositories.ProjectRepository
 import java.security.SecureRandom
-import java.util.*
+import java.util.Base64
 
 class ProjectService(
     private val projectRepository: ProjectRepository,
-    private val queryHelper: DashboardQueryHelper
+    private val queryHelper: DashboardQueryHelper,
+    private val pricingTierService: PricingTierService = PricingTierService(),
+    private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
 ) {
-    private val pricingTierService = PricingTierService()
-    private val billingQuotaService = BillingQuotaService()
 
     suspend fun getProjects(
         userId: Int,

@@ -51,6 +51,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class AuthTokenRoutesTest {
     private val jwtSecret = "test-secret-for-auth-token-routes"
@@ -61,6 +64,7 @@ class AuthTokenRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url =
@@ -442,5 +446,10 @@ class AuthTokenRoutesTest {
 
             assertEquals(HttpStatusCode.OK, response.status)
         }
+    }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
     }
 }

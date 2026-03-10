@@ -55,13 +55,15 @@ import java.util.concurrent.TimeUnit
 
 private val logger = KotlinLogging.logger {}
 
-class NotificationService(private val emailService: EmailService) {
+class NotificationService(
+    private val emailService: EmailService,
+    private val slackService: SlackService = SlackService(),
+    private val discordService: DiscordService = DiscordService(),
+) {
     private val config = ApplicationConfig("application.conf")
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val frontendUrl = config.property("email.frontendUrl").getString()
     private val json = Json { ignoreUnknownKeys = true }
-    private val slackService = SlackService()
-    private val discordService = DiscordService()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Rate limiting: track last alert time per (user, project)

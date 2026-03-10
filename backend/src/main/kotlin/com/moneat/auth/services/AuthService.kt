@@ -45,7 +45,9 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.mindrot.jbcrypt.BCrypt
 import java.security.SecureRandom
-import java.util.*
+import java.util.Base64
+import java.util.Date
+import java.util.UUID
 import kotlin.time.Clock
 
 data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
@@ -70,6 +72,8 @@ class AuthService(
     private val userRepository: UserRepository,
     private val membershipRepository: MembershipRepository,
     private val organizationRepository: OrganizationRepository,
+    private val emailService: EmailService = EmailService(),
+    private val refreshTokenService: RefreshTokenService = RefreshTokenService(),
 ) {
     companion object {
         private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
@@ -82,9 +86,7 @@ class AuthService(
     private val jwtAudience = config.property("jwt.audience").getString()
     private val legalTermsVersion = config.property("legal.termsVersion").getString()
     private val legalPrivacyVersion = config.property("legal.privacyVersion").getString()
-    private val emailService = EmailService()
     private val secureRandom = SecureRandom()
-    private val refreshTokenService = RefreshTokenService()
 
     fun signup(
         request: SignupRequest,

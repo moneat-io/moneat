@@ -53,6 +53,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class LogRoutesMockTest {
     companion object {
@@ -64,6 +67,7 @@ class LogRoutesMockTest {
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url = "jdbc:h2:mem:moneat_log_mock;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -294,4 +298,9 @@ class LogRoutesMockTest {
             }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
+    }
 }

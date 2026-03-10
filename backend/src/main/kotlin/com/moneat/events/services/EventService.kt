@@ -55,7 +55,7 @@ import mu.KotlinLogging
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Instant
-import java.util.*
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -63,7 +63,8 @@ private val logger = KotlinLogging.logger {}
 
 class EventService(
     private val notificationService: NotificationService? = null,
-    private val eventRepository: EventRepository
+    private val eventRepository: EventRepository,
+    private val releaseService: ReleaseService = ReleaseService(),
 ) {
     companion object {
         private const val DEFAULT_PROFILE_MAX_PAYLOAD_BYTES = 10 * 1024 * 1024 // 10 MiB
@@ -71,7 +72,6 @@ class EventService(
 
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracker = UsageTrackingService.instance
-    private val releaseService = ReleaseService()
     private val scope = CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
     private val profileStoragePath: String = EnvConfig.get(
         "PROFILE_STORAGE_PATH",
@@ -253,7 +253,7 @@ class EventService(
         val traceStatus = traceContext?.get("status")?.jsonPrimitive?.contentOrNull
         val transactionLevel = if (traceStatus == null || traceStatus == "ok") "info" else "error"
 
-        val endTimestampMs = unixSecondsToMillis(transaction.timestamp) ?: System.currentTimeMillis()
+        val endTimestampMs = unixSecondsToMillis(transaction.timestamp ?: (System.currentTimeMillis() / 1000.0))
         val durationMs = durationMs(transaction.start_timestamp, transaction.timestamp)
 
         val contexts = transaction.contexts?.toString() ?: "{}"

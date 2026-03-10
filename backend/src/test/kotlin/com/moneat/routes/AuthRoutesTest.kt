@@ -46,6 +46,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class AuthRoutesTest {
     private val jwtSecret = "test-secret-for-unit-tests"
@@ -76,6 +79,7 @@ class AuthRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url = "jdbc:h2:mem:moneat_auth_routes;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -258,5 +262,10 @@ class AuthRoutesTest {
                 }
             }
         }
+    }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
     }
 }

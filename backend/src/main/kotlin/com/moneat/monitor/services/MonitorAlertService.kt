@@ -71,14 +71,14 @@ private fun String.escapeHtml(): String =
         .replace("\"", "&quot;")
         .replace("'", "&#39;")
 
-class MonitorAlertService {
+class MonitorAlertService(
+    private val emailService: EmailService = EmailService(),
+    private val slackService: SlackService = SlackService(),
+    private val discordService: DiscordService = DiscordService(),
+    private val incidentService: IncidentService = IncidentService(),
+) {
     private val config = ApplicationConfig("application.conf")
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
-    private val emailService = EmailService()
-    private val slackService = SlackService()
-    private val discordService = DiscordService()
-    private val incidentService =
-        IncidentService()
 
     private var evaluationJob: Job? = null
     private var statusCheckJob: Job? = null

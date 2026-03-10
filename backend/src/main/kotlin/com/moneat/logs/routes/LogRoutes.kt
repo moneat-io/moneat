@@ -20,7 +20,6 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.decompression.DecompressionService
-import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.routes.extractPublicKeyFromDsn
 import com.moneat.events.services.EventService
@@ -32,7 +31,6 @@ import com.moneat.logs.models.UpdateLogIndexRequest
 import com.moneat.logs.services.LogApiKeyService
 import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogService
-import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.plugins.isDemoUser
 import com.moneat.utils.ErrorResponse
@@ -59,6 +57,7 @@ import io.lettuce.core.RedisURI
 import io.lettuce.core.pubsub.RedisPubSubAdapter
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import org.koin.core.context.GlobalContext
 import java.time.Instant
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -67,9 +66,9 @@ private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
 fun Route.logRoutes(
-    logService: LogService = LogService(LogRepositoryImpl()),
-    logApiKeyService: LogApiKeyService = LogApiKeyService(),
-    logIndexService: LogIndexService = LogIndexService(),
+    logService: LogService = GlobalContext.get().get(),
+    logApiKeyService: LogApiKeyService = GlobalContext.get().get(),
+    logIndexService: LogIndexService = GlobalContext.get().get(),
 ) {
     route("/v1") {
         authenticate("auth-jwt") {
@@ -622,12 +621,11 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
 }
 
 fun Route.logIngestRoutes(
-    logService: LogService = LogService(LogRepositoryImpl()),
-    quotaService: BillingQuotaService = BillingQuotaService(),
-    logApiKeyService: LogApiKeyService = LogApiKeyService(),
+    logService: LogService = GlobalContext.get().get(),
+    quotaService: BillingQuotaService = GlobalContext.get().get(),
+    logApiKeyService: LogApiKeyService = GlobalContext.get().get(),
+    eventService: EventService = GlobalContext.get().get(),
 ) {
-    val eventService = EventService(eventRepository = EventRepositoryImpl())
-
     route("/v1") {
         post("/logs/otlp") {
             val organizationId: Int? =
