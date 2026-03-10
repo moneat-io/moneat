@@ -17,7 +17,7 @@
 import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -41,7 +41,7 @@ import {
   Video,
 } from 'lucide-react'
 import {useMemo, useState} from 'react'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 
 export const Route = createFileRoute('/feedback')({
   beforeLoad: async ({ location }) => {

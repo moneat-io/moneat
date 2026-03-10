@@ -26,7 +26,7 @@ import {Plus, Database, Trash2, Power, PowerOff, FlaskConical, Check, X, Pencil,
 import {Button} from '@/components/ui/button'
 import {useState, useCallback} from 'react'
 import {DataSourceTypePicker} from '@/components/dashboards/DataSourceTypePicker'
-import {DATA_SOURCE_TYPES} from '@/components/dashboards/dataSourceTypes'
+import {DATA_SOURCE_TYPES} from '@/components/dashboards/DataSourceTypes'
 
 export const Route = createFileRoute('/dashboards/datasources')({
   component: DataSourcesPage,

@@ -19,7 +19,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {DollarSign, TrendingDown, TrendingUp, Users, Wallet} from 'lucide-react'
-import {AdminSkeleton, MetricCard, PlanBadge, SectionHeader,} from '@/components/admin-components'
+import {AdminSkeleton, MetricCard, PlanBadge, SectionHeader,} from '@/components/AdminComponents'
 
 export const Route = createFileRoute('/admin/revenue')({
   component: AdminRevenuePage,

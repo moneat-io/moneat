@@ -30,7 +30,7 @@ import {
     PlanBadge,
     QuotaBar,
     SectionHeader,
-} from '@/components/admin-components'
+} from '@/components/AdminComponents'
 
 export const Route = createFileRoute('/admin/organizations')({
   component: AdminOrganizationsLayout,

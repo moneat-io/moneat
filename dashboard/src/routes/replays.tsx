@@ -17,7 +17,7 @@
 import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate as formatDateUtil} from '@/lib/date-format'

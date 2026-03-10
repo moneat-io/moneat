@@ -23,7 +23,7 @@ import {Checkbox} from '@/components/ui/checkbox'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {LEGAL_PRIVACY_VERSION, LEGAL_TERMS_VERSION} from '@/lib/legal'
-import {Logo} from '@/components/logo'
+import {Logo} from '@/components/Logo'
 import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/signup')({

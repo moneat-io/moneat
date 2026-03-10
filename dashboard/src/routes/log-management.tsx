@@ -16,7 +16,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {FileText, Filter, RefreshCw, Search, Braces, Link2} from 'lucide-react'
-import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/feature-page-template'
+import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
 
 const config: FeaturePageConfig = {
   slug: 'log-management',

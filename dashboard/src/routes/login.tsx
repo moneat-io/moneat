@@ -18,7 +18,7 @@ import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-rout
 import {useState} from 'react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
-import {Logo} from '@/components/logo'
+import {Logo} from '@/components/Logo'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'

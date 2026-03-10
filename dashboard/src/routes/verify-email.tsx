@@ -17,7 +17,7 @@
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useEffect, useState} from 'react'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
-import {Logo} from '@/components/logo'
+import {Logo} from '@/components/Logo'
 import {api} from '@/lib/api'
 
 export const Route = createFileRoute('/verify-email')({

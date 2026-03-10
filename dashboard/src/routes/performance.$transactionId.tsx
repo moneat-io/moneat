@@ -19,12 +19,12 @@ import {useMemo, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {cn} from '@/lib/utils'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {Badge} from '@/components/ui/badge'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Label} from '@/components/ui/label'
-import {SpanWaterfall} from '@/components/span-waterfall'
+import {SpanWaterfall} from '@/components/SpanWaterfall'
 import {
     AlertCircle,
     AlertTriangle,

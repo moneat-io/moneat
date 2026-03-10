@@ -16,7 +16,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {LayoutDashboard, Database, LineChart, Grid3x3, Share2, Palette} from 'lucide-react'
-import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/feature-page-template'
+import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
 
 const config: FeaturePageConfig = {
   slug: 'custom-dashboards',

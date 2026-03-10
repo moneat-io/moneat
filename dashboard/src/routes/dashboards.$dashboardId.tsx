@@ -25,7 +25,7 @@ import {DataSourceMapperModal} from '@/components/dashboards/DataSourceMapperMod
 import {VariableSettingsDialog} from '@/components/dashboards/VariableSettingsDialog'
 import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
 import {useCallback, useEffect, useRef, useState} from 'react'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {isDemo} from '@/lib/demo'
 
 interface DashboardSearch {

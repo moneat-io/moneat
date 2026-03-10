@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -41,7 +41,7 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/compo
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {cn} from '@/lib/utils'
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'

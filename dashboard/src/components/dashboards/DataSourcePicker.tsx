@@ -27,7 +27,7 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover'
-import {DATA_SOURCE_TYPES} from './dataSourceTypes'
+import {DATA_SOURCE_TYPES} from './DataSourceTypes'
 import type {DataSourceInfo} from '@/lib/api'
 
 // Icons for built-in data sources

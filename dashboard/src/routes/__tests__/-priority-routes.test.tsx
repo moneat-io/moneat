@@ -2,7 +2,7 @@ import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
-import { ProjectProvider } from '@/contexts/project-context'
+import { ProjectProvider } from '@/contexts/ProjectContext'
 
 const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -30,7 +30,7 @@ vi.mock('@/lib/api', () => ({
   api: mockApi,
 }))
 
-vi.mock('@/hooks/use-toast', () => ({
+vi.mock('@/hooks/useToast', () => ({
   useToast: () => ({ toast: mockToast }),
 }))
 
@@ -38,21 +38,21 @@ vi.mock('@/hooks/useEnterpriseFeatures', () => ({
   useHasModule: () => false,
 }))
 
-vi.mock('@/components/charts/stats-card', () => ({
+vi.mock('@/components/charts/StatsCard', () => ({
   StatsCard: ({ title, value }: { title: string; value: string }) => <div>{title}:{value}</div>,
   StatsCardSkeleton: () => <div>stats-skeleton</div>,
 }))
 
-vi.mock('@/components/charts/events-chart', () => ({
+vi.mock('@/components/charts/EventsChart', () => ({
   EventsChart: () => <div>events-chart</div>,
   EventsChartSkeleton: () => <div>events-chart-skeleton</div>,
 }))
 
-vi.mock('@/components/charts/bar-chart', () => ({
+vi.mock('@/components/charts/BarChart', () => ({
   BarChart: () => <div>bar-chart</div>,
 }))
 
-vi.mock('@/components/span-waterfall', () => ({
+vi.mock('@/components/SpanWaterfall', () => ({
   SpanWaterfall: () => <div>span-waterfall</div>,
 }))
 
@@ -60,7 +60,7 @@ vi.mock('@/components/logs/EmbeddedLogs', () => ({
   EmbeddedLogs: () => <div>embedded-logs</div>,
 }))
 
-vi.mock('@/components/icons/ai-providers', () => ({
+vi.mock('@/components/icons/AiProviders', () => ({
   ProviderLogo: () => <div>provider-logo</div>,
 }))
 

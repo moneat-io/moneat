@@ -31,7 +31,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {AlertTriangle, CheckCircle2, Clock, ArrowLeft, Zap, User, Calendar, CheckCircle, Bell, UserPlus, MessageSquare, Eye, Send, Link as LinkIcon} from 'lucide-react'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'

@@ -47,7 +47,7 @@ import {
     MetricCard,
     PlanBadge,
     QuotaBar,
-} from '@/components/admin-components'
+} from '@/components/AdminComponents'
 
 export const Route = createFileRoute('/admin/organizations/$orgId')({
   component: AdminOrgDetailPage,

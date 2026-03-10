@@ -70,8 +70,8 @@ import {
     Zap,
 } from 'lucide-react'
 import {useState} from 'react'
-import {useToast} from '@/hooks/use-toast'
-import {StatusPagePreview} from '@/components/status-page-preview'
+import {useToast} from '@/hooks/useToast'
+import {StatusPagePreview} from '@/components/StatusPagePreview'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime} from '@/lib/date-format'
 
@@ -409,7 +409,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
   const previewMonitors = statusPage.monitors.map(monitor => ({
     name: monitor.monitorName,
     displayName: monitor.displayName,
-    status: 'operational',
+    status: 'operational' as const,
     uptimePercentage: 99.95,
     uptimeHistory: Array.from({length: formData.historyDays}, (_, i) => ({
       date: new Date(Date.now() - (formData.historyDays - i) * 24 * 60 * 60 * 1000).toISOString(),

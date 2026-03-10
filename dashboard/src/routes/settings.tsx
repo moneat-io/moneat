@@ -42,7 +42,7 @@ import {
 } from '@/components/ui/dialog'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Switch} from '@/components/ui/switch'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {
   Activity,
   AlertCircle,
@@ -76,8 +76,8 @@ import {
   Users,
   Zap,
 } from 'lucide-react'
-import {SsoTab} from '@/components/sso-settings'
-import {TeamSettings} from '@/components/settings/team-settings'
+import {SsoTab} from '@/components/SsoSettings'
+import {TeamSettings} from '@/components/settings/TeamSettings'
 import {LogIndexesTab} from '@/components/settings/LogIndexesTab'
 import {useAuth} from '@/hooks/useAuth'
 import {useEnterpriseFeatures, useIsSelfHosted, hasEnterpriseModule} from '@/hooks/useEnterpriseFeatures'

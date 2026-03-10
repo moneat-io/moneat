@@ -32,7 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {ArrowDown, ArrowUp, Loader2, Plus, Trash2, Pencil, FlaskConical} from 'lucide-react'
 
 export function LogIndexesTab() {

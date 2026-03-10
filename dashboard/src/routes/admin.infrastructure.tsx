@@ -28,7 +28,7 @@ import {
   MetricCard,
   SectionHeader,
   StorageRing,
-} from '@/components/admin-components'
+} from '@/components/AdminComponents'
 
 export const Route = createFileRoute('/admin/infrastructure')({
   component: AdminInfrastructurePage,

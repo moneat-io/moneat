@@ -50,7 +50,7 @@ import {
     QuotaBar,
     SectionHeader,
     StorageRing,
-} from '@/components/admin-components'
+} from '@/components/AdminComponents'
 
 export const Route = createFileRoute('/admin/')({
   component: AdminOverviewPage,

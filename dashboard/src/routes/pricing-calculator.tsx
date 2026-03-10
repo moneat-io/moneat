@@ -15,9 +15,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link} from '@tanstack/react-router'
-import {Logo} from '@/components/logo'
+import {Logo} from '@/components/Logo'
 import {Button} from '@/components/ui/button'
-import {PricingCalculatorSection} from '@/components/landing/pricing-calculator-section'
+import {PricingCalculatorSection} from '@/components/landing/PricingCalculatorSection'
 import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/pricing-calculator')({

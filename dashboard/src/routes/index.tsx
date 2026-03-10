@@ -15,17 +15,17 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link} from '@tanstack/react-router'
-import {LandingPage} from '@/components/landing/landing-page'
+import {LandingPage} from '@/components/landing/LandingPage'
 import {useQuery} from '@tanstack/react-query'
 import {useState, useEffect} from 'react'
 import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
-import HeartbeatBar from '@/components/uptime/heartbeat-bar'
+import HeartbeatBar from '@/components/uptime/HeartbeatBar'
 import {
   Activity,
   AlertCircle,
@@ -49,8 +49,8 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react'
-import {StatsCard, StatsCardSkeleton} from '@/components/charts/stats-card'
-import {EventsChart, EventsChartSkeleton} from '@/components/charts/events-chart'
+import {StatsCard, StatsCardSkeleton} from '@/components/charts/StatsCard'
+import {EventsChart, EventsChartSkeleton} from '@/components/charts/EventsChart'
 import {getNow} from '@/lib/demo'
 
 // ─── Subtle badge colors ─────────────────────────────────────────────
