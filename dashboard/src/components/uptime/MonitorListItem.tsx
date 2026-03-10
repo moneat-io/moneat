@@ -29,7 +29,7 @@ import HeartbeatBar from './HeartbeatBar'
 import {getStatusBadge} from './MonitorStatusBadge'
 
 interface MonitorListItemProps {
-  monitor: UptimeMonitor
+  readonly monitor: UptimeMonitor
 }
 
 function getMonitorTypeLabel(type: string): string {
@@ -169,18 +169,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
               )}
             </div>
             <div className="flex gap-2">
-              {monitor.status !== 'paused' ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2 text-muted-foreground hover:text-foreground"
-                  onClick={() => pauseMutation.mutate(monitor.id)}
-                  title="Pause Monitor"
-                >
-                  <Pause className="h-4 w-4 mr-1" />
-                  Pause
-                </Button>
-              ) : (
+              {monitor.status === 'paused' ? (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -190,6 +179,17 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
                 >
                   <Play className="h-4 w-4 mr-1" />
                   Resume
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => pauseMutation.mutate(monitor.id)}
+                  title="Pause Monitor"
+                >
+                  <Pause className="h-4 w-4 mr-1" />
+                  Pause
                 </Button>
               )}
               <Button

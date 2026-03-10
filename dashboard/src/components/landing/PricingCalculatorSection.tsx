@@ -157,14 +157,14 @@ const PRESETS: {label: string; usage: Usage}[] = [
 // ─── SliderInput ──────────────────────────────────────────────────────────────────
 
 interface SliderInputProps {
-  label: string
-  sublabel: string
-  value: number
-  max: number
-  logMin?: number
-  unit?: string
-  step?: number
-  onChange: (v: number) => void
+  readonly label: string
+  readonly sublabel: string
+  readonly value: number
+  readonly max: number
+  readonly logMin?: number
+  readonly unit?: string
+  readonly step?: number
+  readonly onChange: (v: number) => void
 }
 
 function SliderInput({label, sublabel, value, max, logMin, unit, step = 1, onChange}: SliderInputProps) {
@@ -217,9 +217,9 @@ function SliderInput({label, sublabel, value, max, logMin, unit, step = 1, onCha
 // ─── PlanCard ─────────────────────────────────────────────────────────────────────
 
 interface PlanCardProps {
-  tier: PricingCardTierInput
-  cost: PlanCost
-  isBest: boolean
+  readonly tier: PricingCardTierInput
+  readonly cost: PlanCost
+  readonly isBest: boolean
 }
 
 function PlanCard({tier, cost, isBest}: PlanCardProps) {
@@ -359,7 +359,7 @@ function estimateDatadogCost(usage: Usage, extras: DatadogExtras): number {
   return logCost + hostCost
 }
 
-export function PricingCalculatorSection({standalone = false}: {standalone?: boolean}) {
+export function PricingCalculatorSection({standalone = false}: {readonly standalone?: boolean}) {
   const [usage, setUsage] = useState<Usage>({
     ingestGb: 0,
     pageViews: 0,
@@ -540,15 +540,15 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
           <div className="lg:col-span-3">
             {isPending && (
               <div className="grid grid-cols-2 gap-4">
-                {Array.from({length: 4}).map((_, i) => (
-                  <Card key={`loading-plan-${i}`} className="border-border/60">
+                {Array.from({length: 4}, (_, i) => `loading-plan-${i}`).map((planId) => (
+                  <Card key={planId} className="border-border/60">
                     <CardHeader>
                       <div className="h-4 w-16 bg-muted rounded animate-pulse" />
                       <div className="h-8 w-20 bg-muted rounded animate-pulse mt-2" />
                     </CardHeader>
                     <CardContent className="space-y-2">
-                      {Array.from({length: 3}).map((__, j) => (
-                        <div key={`loading-feature-${j}`} className="h-3 w-full bg-muted rounded animate-pulse" />
+                      {Array.from({length: 3}, (_, j) => `loading-feature-${j}`).map((featureId) => (
+                        <div key={featureId} className="h-3 w-full bg-muted rounded animate-pulse" />
                       ))}
                     </CardContent>
                   </Card>

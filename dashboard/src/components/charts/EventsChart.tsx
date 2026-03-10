@@ -23,8 +23,8 @@ export function EventsChartSkeleton({
   fillHeight = false,
   compact = false,
 }: {
-  fillHeight?: boolean
-  compact?: boolean
+  readonly fillHeight?: boolean
+  readonly compact?: boolean
 }) {
   return (
     <Card className={cn("border-t-4 border-t-blue-500/50", fillHeight ? "h-full flex flex-col" : "h-full")}>
@@ -33,13 +33,13 @@ export function EventsChartSkeleton({
       </CardHeader>
       <CardContent className={cn("px-4 pt-0", compact ? "pb-1" : "pb-3", fillHeight && "flex-1 min-h-0")}>
         <div className={cn("flex items-end justify-between", compact ? "gap-1" : "gap-2", fillHeight ? "h-full" : "h-[300px]")}>
-          {[...Array(24)].map((_, i) => (
+          {Array.from({length: 24}, (_, i) => ({height: 30 + ((i * 17 + 11) % 70), delay: i * 50})).map(({height, delay}) => (
             <div
-              key={`bar-${i}`}
+              key={`bar-h${height}d${delay}`}
               className={cn("flex-1 bg-muted animate-pulse", compact ? "rounded-sm" : "rounded-t")}
               style={{
-                height: `${30 + ((i * 17 + 11) % 70)}%`,
-                animationDelay: `${i * 50}ms`,
+                height: `${height}%`,
+                animationDelay: `${delay}ms`,
               }}
             />
           ))}
@@ -55,14 +55,14 @@ interface ReleaseMarker {
 }
 
 interface EventsChartProps {
-  data: TimelinePoint[]
-  title?: string
-  height?: number
-  releaseMarkers?: ReleaseMarker[]
+  readonly data: TimelinePoint[]
+  readonly title?: string
+  readonly height?: number
+  readonly releaseMarkers?: ReleaseMarker[]
   /** When true, the chart fills its parent container's height instead of using a fixed height */
-  fillHeight?: boolean
+  readonly fillHeight?: boolean
   /** Compact mode optimized for short containers */
-  compact?: boolean
+  readonly compact?: boolean
 }
 
 const formatTime = (timestamp: string) =>
@@ -87,7 +87,7 @@ function computeCompactDomain(chartData: ChartPoint[]): [number, number] {
 function filterReleaseMarkers(markers: ReleaseMarker[], chartData: ChartPoint[]) {
   if (chartData.length === 0) return []
   const min = chartData[0]!.timestamp
-  const max = chartData[chartData.length - 1]!.timestamp
+  const max = chartData.at(-1)!.timestamp
   return markers
     .map((m) => ({...m, timestamp: new Date(m.timestamp).getTime()}))
     .filter((m) => m.timestamp >= min && m.timestamp <= max)

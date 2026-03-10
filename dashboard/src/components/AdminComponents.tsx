@@ -41,7 +41,7 @@ const planConfig: Record<string, { label: string; className: string }> = {
   },
 }
 
-export function PlanBadge({ plan }: { plan: string }) {
+export function PlanBadge({ plan }: { readonly plan: string }) {
   const config = planConfig[plan.toLowerCase()] ?? {
     label: plan,
     className: 'bg-secondary text-secondary-foreground',
@@ -56,14 +56,14 @@ export function PlanBadge({ plan }: { plan: string }) {
 // ─── Metric Card ────────────────────────────────────────────────────────────
 
 interface MetricCardProps {
-  title: string
-  value: ReactNode
-  subtitle?: ReactNode
-  icon: LucideIcon
-  iconColor?: string
-  iconBg?: string
-  className?: string
-  children?: ReactNode
+  readonly title: string
+  readonly value: ReactNode
+  readonly subtitle?: ReactNode
+  readonly icon: LucideIcon
+  readonly iconColor?: string
+  readonly iconBg?: string
+  readonly className?: string
+  readonly children?: ReactNode
 }
 
 export function MetricCard({
@@ -96,10 +96,10 @@ export function MetricCard({
 // ─── Quota / Progress Bar ──────────────────────────────────────────────────
 
 interface QuotaBarProps {
-  percent: number | null | undefined
-  size?: 'sm' | 'md'
-  showLabel?: boolean
-  className?: string
+  readonly percent: number | null | undefined
+  readonly size?: 'sm' | 'md'
+  readonly showLabel?: boolean
+  readonly className?: string
 }
 
 export function QuotaBar({ percent, size = 'sm', showLabel = true, className }: QuotaBarProps) {
@@ -108,17 +108,23 @@ export function QuotaBar({ percent, size = 'sm', showLabel = true, className }: 
   }
 
   const clamped = Math.min(percent, 100)
-  const color =
-    percent >= 90
-      ? 'bg-red-500'
-      : percent >= 70
-        ? 'bg-amber-500'
-        : 'bg-emerald-500'
+  let color: string
+  if (percent >= 90) {
+    color = 'bg-red-500'
+  } else if (percent >= 70) {
+    color = 'bg-amber-500'
+  } else {
+    color = 'bg-emerald-500'
+  }
 
-  const labelColor =
-    percent >= 90 ? 'text-red-600 dark:text-red-400'
-    : percent >= 70 ? 'text-amber-600 dark:text-amber-400'
-    : 'text-muted-foreground'
+  let labelColor: string
+  if (percent >= 90) {
+    labelColor = 'text-red-600 dark:text-red-400'
+  } else if (percent >= 70) {
+    labelColor = 'text-amber-600 dark:text-amber-400'
+  } else {
+    labelColor = 'text-muted-foreground'
+  }
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
@@ -143,8 +149,8 @@ export function QuotaBar({ percent, size = 'sm', showLabel = true, className }: 
 // ─── Storage Ring (for infrastructure) ──────────────────────────────────────
 
 interface StorageRingProps {
-  percent: number
-  size?: number
+  readonly percent: number
+  readonly size?: number
 }
 
 export function StorageRing({ percent, size = 64 }: StorageRingProps) {
@@ -154,12 +160,14 @@ export function StorageRing({ percent, size = 64 }: StorageRingProps) {
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - (clamped / 100) * circumference
 
-  const color =
-    percent >= 90
-      ? 'stroke-red-500'
-      : percent >= 70
-        ? 'stroke-amber-500'
-        : 'stroke-emerald-500'
+  let color: string
+  if (percent >= 90) {
+    color = 'stroke-red-500'
+  } else if (percent >= 70) {
+    color = 'stroke-amber-500'
+  } else {
+    color = 'stroke-emerald-500'
+  }
 
   return (
     <svg width={size} height={size} className="-rotate-90">
@@ -188,17 +196,17 @@ export function StorageRing({ percent, size = 64 }: StorageRingProps) {
 // ─── Custom Chart Tooltip ──────────────────────────────────────────────────
 
 interface ChartTooltipPayload {
-  name?: string
-  value?: number
-  color?: string
-  dataKey?: string
+  readonly name?: string
+  readonly value?: number
+  readonly color?: string
+  readonly dataKey?: string
 }
 
 interface ChartTooltipProps {
-  active?: boolean
-  payload?: ChartTooltipPayload[]
-  label?: string
-  formatter?: (value: number, name: string) => string
+  readonly active?: boolean
+  readonly payload?: ChartTooltipPayload[]
+  readonly label?: string
+  readonly formatter?: (value: number, name: string) => string
 }
 
 export function ChartTooltipContent({ active, payload, label, formatter }: ChartTooltipProps) {
@@ -230,9 +238,9 @@ export function ChartTooltipContent({ active, payload, label, formatter }: Chart
 // ─── Section Header ─────────────────────────────────────────────────────────
 
 interface SectionHeaderProps {
-  title: string
-  description?: string
-  children?: ReactNode
+  readonly title: string
+  readonly description?: string
+  readonly children?: ReactNode
 }
 
 export function SectionHeader({ title, description, children }: SectionHeaderProps) {
@@ -249,7 +257,7 @@ export function SectionHeader({ title, description, children }: SectionHeaderPro
 
 // ─── Stat Inline ────────────────────────────────────────────────────────────
 
-export function StatInline({ label, value }: { label: string; value: ReactNode }) {
+export function StatInline({ label, value }: { readonly label: string; readonly value: ReactNode }) {
   return (
     <div className="flex items-baseline gap-1.5">
       <span className="text-sm text-muted-foreground">{label}</span>
@@ -305,7 +313,7 @@ export const eventTypeColors = {
 
 // ─── Empty State ────────────────────────────────────────────────────────────
 
-export function EmptyState({ message, icon: Icon }: { message: string; icon?: LucideIcon }) {
+export function EmptyState({ message, icon: Icon }: { readonly message: string; readonly icon?: LucideIcon }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
       {Icon && <Icon className="h-10 w-10 mb-3 opacity-40" />}

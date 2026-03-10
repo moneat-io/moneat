@@ -36,11 +36,11 @@ export interface MonitorFormData {
 }
 
 interface MonitorFormFieldsProps {
-  formData: MonitorFormData
-  monitorType: string
-  onChange: (patch: MonitorFormData) => void
-  showRetries?: boolean
-  showIncidentSeverity?: boolean
+  readonly formData: MonitorFormData
+  readonly monitorType: string
+  readonly onChange: (patch: MonitorFormData) => void
+  readonly showRetries?: boolean
+  readonly showIncidentSeverity?: boolean
 }
 
 export function MonitorFormFields({

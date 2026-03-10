@@ -42,8 +42,8 @@ import {useToast} from '@/hooks/useToast'
 import {MonitorFormFields, type MonitorFormData} from './MonitorFormFields'
 
 interface AddMonitorDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  readonly open: boolean
+  readonly onOpenChange: (open: boolean) => void
 }
 
 const MONITOR_TYPES = [
@@ -170,10 +170,10 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
   }
 
   const handleDialogOpenChange = (isOpen: boolean) => {
-    if (!isOpen) {
-      handleClose()
-    } else {
+    if (isOpen) {
       onOpenChange(true)
+    } else {
+      handleClose()
     }
   }
 
@@ -185,7 +185,7 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
 
     const rawPort = formData.port
     const resolvedPort = typeof rawPort === 'string'
-      ? (rawPort === '' ? undefined : parseInt(rawPort, 10) || undefined)
+      ? (rawPort === '' ? undefined : Number.parseInt(rawPort, 10) || undefined)
       : rawPort
 
     const request: CreateUptimeMonitorRequest = {

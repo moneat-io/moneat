@@ -17,23 +17,23 @@
 import {createContext, ReactNode, useContext, useEffect, useMemo, useState} from 'react'
 
 interface ProjectContextType {
-  selectedProjectId: number | null
-  setSelectedProjectId: (id: number | null) => void
+  readonly selectedProjectId: number | null
+  readonly setSelectedProjectId: (id: number | null) => void
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined)
 
-export function ProjectProvider({ children }: { children: ReactNode }) {
+export function ProjectProvider({ children }: { readonly children: ReactNode }) {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(() => {
     const saved = localStorage.getItem('selectedProjectId')
     return saved ? Number(saved) : null
   })
 
   useEffect(() => {
-    if (selectedProjectId !== null) {
-      localStorage.setItem('selectedProjectId', selectedProjectId.toString())
-    } else {
+    if (selectedProjectId === null) {
       localStorage.removeItem('selectedProjectId')
+    } else {
+      localStorage.setItem('selectedProjectId', selectedProjectId.toString())
     }
   }, [selectedProjectId])
 

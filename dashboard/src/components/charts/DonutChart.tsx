@@ -18,10 +18,10 @@ import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts'
 
 interface DonutChartProps {
-  data: Record<string, number>
-  title: string
-  height?: number
-  colors?: string[]
+  readonly data: Record<string, number>
+  readonly title: string
+  readonly height?: number
+  readonly colors?: string[]
 }
 
 const DEFAULT_COLORS = [

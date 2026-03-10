@@ -18,16 +18,16 @@ vi.mock('lucide-react', () => ({
 }))
 
 // Mock ResizeObserver which is used by Radix UI
-global.ResizeObserver = class ResizeObserver {
+globalThis.ResizeObserver = class ResizeObserver {
     observe() { /* no-op */ }
     unobserve() { /* no-op */ }
     disconnect() { /* no-op */ }
 }
 
 // Mock scrollIntoView
-window.HTMLElement.prototype.scrollIntoView = vi.fn()
-window.HTMLElement.prototype.releasePointerCapture = vi.fn()
-window.HTMLElement.prototype.hasPointerCapture = vi.fn()
+globalThis.HTMLElement.prototype.scrollIntoView = vi.fn()
+globalThis.HTMLElement.prototype.releasePointerCapture = vi.fn()
+globalThis.HTMLElement.prototype.hasPointerCapture = vi.fn()
 
 describe('ThemeSwitcher', () => {
     beforeEach(() => {

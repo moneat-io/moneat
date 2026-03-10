@@ -23,18 +23,18 @@ type SpanNode = Span & { children: SpanNode[] }
 type VisibleSpan = { span: SpanNode; depth: number }
 
 type SpanWaterfallProps = {
-  transaction: TransactionDetail
-  spans: Span[]
+  readonly transaction: TransactionDetail
+  readonly spans: Span[]
 }
 
 type SpanTooltipProps = {
-  span: Span
-  x: number
-  y: number
+  readonly span: Span
+  readonly x: number
+  readonly y: number
 }
 
 type TimeRulerProps = {
-  durationMs: number
+  readonly durationMs: number
 }
 
 function opColorClass(op: string) {
@@ -135,13 +135,13 @@ function SpanTooltip({ span, x, y }: SpanTooltipProps) {
 }
 
 type SpanRowProps = {
-  visible: VisibleSpan
-  durationSec: number
-  transactionStartSec: number
-  collapsed: Set<string>
-  onToggle: (spanId: string) => void
-  onHover: (span: Span, x: number, y: number) => void
-  onLeave: () => void
+  readonly visible: VisibleSpan
+  readonly durationSec: number
+  readonly transactionStartSec: number
+  readonly collapsed: Set<string>
+  readonly onToggle: (spanId: string) => void
+  readonly onHover: (span: Span, x: number, y: number) => void
+  readonly onLeave: () => void
 }
 
 function SpanRow({
@@ -182,7 +182,7 @@ function SpanRow({
         </div>
       </div>
       <div
-        role="presentation"
+        aria-hidden="true"
         className="relative px-2 py-1 min-h-6"
         onMouseMove={(e) => onHover(span, e.clientX + 12, e.clientY + 12)}
         onMouseLeave={onLeave}

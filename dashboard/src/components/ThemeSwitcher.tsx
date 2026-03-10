@@ -28,7 +28,7 @@ export function ThemeSwitcher() {
   })
 
   const applyTheme = (newTheme: Theme) => {
-    const root = window.document.documentElement
+    const root = document.documentElement
     
     // Remove all theme classes
     root.classList.remove('light', 'dark', 'theme-midnight', 'theme-forest', 'theme-sunset', 'theme-gamer', 'theme-retro', 'theme-retro-dark')

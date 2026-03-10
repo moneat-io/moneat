@@ -17,7 +17,7 @@
 import { cn } from '@/lib/utils'
 
 interface ProviderIconProps {
-  className?: string
+  readonly className?: string
 }
 
 export function OpenAIIcon({ className }: ProviderIconProps) {
@@ -93,9 +93,9 @@ const PROVIDER_ICONS: Record<string, React.ComponentType<ProviderIconProps>> = {
 }
 
 interface ProviderLogoProps {
-  provider: string
-  className?: string
-  showName?: boolean
+  readonly provider: string
+  readonly className?: string
+  readonly showName?: boolean
 }
 
 export function ProviderLogo({ provider, className, showName = true }: ProviderLogoProps) {

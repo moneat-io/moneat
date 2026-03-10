@@ -22,22 +22,22 @@ import {formatTimeHM12} from '@/lib/date-format'
 
 export interface StatusBarContext {
   /** Device time from the replay (epoch ms) */
-  deviceTimeMs?: number | null
+  readonly deviceTimeMs?: number | null
   /** Battery level 0-100 */
-  batteryLevel?: number | null
+  readonly batteryLevel?: number | null
   /** Whether the device is charging */
-  isCharging?: boolean | null
+  readonly isCharging?: boolean | null
 }
 
 interface MobileDeviceContainerProps {
-  children: React.ReactNode
-  platform: 'android' | 'ios' | string
-  orientation?: ReplayOrientation
-  className?: string
-  statusBarContext?: StatusBarContext
+  readonly children: React.ReactNode
+  readonly platform: string
+  readonly orientation?: ReplayOrientation
+  readonly className?: string
+  readonly statusBarContext?: StatusBarContext
 }
 
-function BatteryIcon({ level, charging, className }: { level?: number | null; charging?: boolean | null; className?: string }) {
+function BatteryIcon({ level, charging, className }: { readonly level?: number | null; readonly charging?: boolean | null; readonly className?: string }) {
   const pct = typeof level === 'number' && Number.isFinite(level) ? Math.max(0, Math.min(level, 100)) : 100
   const fillWidth = Math.round((pct / 100) * 10)
   const isLow = pct <= 20 && !charging
@@ -59,7 +59,7 @@ function BatteryIcon({ level, charging, className }: { level?: number | null; ch
   )
 }
 
-function StatusBar({ platform, compact, context }: { platform: string; compact?: boolean; context?: StatusBarContext }) {
+function StatusBar({ platform, compact, context }: { readonly platform: string; readonly compact?: boolean; readonly context?: StatusBarContext }) {
   const { timezone } = useTimezone()
   const isIOS = platform === 'ios'
   const date = typeof context?.deviceTimeMs === 'number' && Number.isFinite(context?.deviceTimeMs)
@@ -95,7 +95,7 @@ function StatusBar({ platform, compact, context }: { platform: string; compact?:
   )
 }
 
-function NotchElement({isIOS, isLandscape}: {isIOS: boolean; isLandscape: boolean}) {
+function NotchElement({isIOS, isLandscape}: {readonly isIOS: boolean; readonly isLandscape: boolean}) {
   const wrapClass = cn('flex justify-center', isLandscape ? 'pt-1' : 'pt-2 pb-0')
   if (isIOS) {
     return (
@@ -111,7 +111,7 @@ function NotchElement({isIOS, isLandscape}: {isIOS: boolean; isLandscape: boolea
   )
 }
 
-function HomeIndicator({isIOS, isLandscape}: {isIOS: boolean; isLandscape: boolean}) {
+function HomeIndicator({isIOS, isLandscape}: {readonly isIOS: boolean; readonly isLandscape: boolean}) {
   if (isIOS) {
     return <div className={cn('bg-white/30 rounded-full', isLandscape ? 'w-[4px] h-[60px]' : 'w-[100px] h-[4px]')} />
   }

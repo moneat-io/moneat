@@ -27,8 +27,8 @@ import {useState} from 'react'
 function PricingLoadingState() {
   return (
     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-      {Array.from({length: 4}).map((_, idx) => (
-        <Card key={`loading-card-${idx}`} className="border-border/60">
+      {Array.from({length: 4}, (_, idx) => `loading-card-${idx}`).map((cardId) => (
+        <Card key={cardId} className="border-border/60">
           <CardHeader>
             <div className="h-5 w-20 rounded bg-muted animate-pulse" />
             <div className="h-4 w-36 rounded bg-muted animate-pulse" />
@@ -36,8 +36,8 @@ function PricingLoadingState() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {Array.from({length: 6}).map((__, featureIdx) => (
-                <div key={`loading-feature-${featureIdx}`} className="h-3 w-full rounded bg-muted animate-pulse" />
+              {Array.from({length: 6}, (_, featureIdx) => `loading-feature-${featureIdx}`).map((featureId) => (
+                <div key={featureId} className="h-3 w-full rounded bg-muted animate-pulse" />
               ))}
             </div>
           </CardContent>
@@ -76,11 +76,11 @@ function TierCard({
   isPending,
   onPaidTierClick,
 }: {
-  tier: PricingCardModel
-  billingInterval: 'monthly' | 'yearly'
-  isAuthenticated: boolean
-  isPending: boolean
-  onPaidTierClick: (tierName: string) => void
+  readonly tier: PricingCardModel
+  readonly billingInterval: 'monthly' | 'yearly'
+  readonly isAuthenticated: boolean
+  readonly isPending: boolean
+  readonly onPaidTierClick: (tierName: string) => void
 }) {
   const isYearly = billingInterval === 'yearly'
   const accentClass = tier.highlight ? 'text-sky-500' : 'text-emerald-500'
@@ -217,12 +217,12 @@ export function PricingSection() {
       api.createBillingCheckoutSession({
         tierName,
         billingInterval: interval,
-        successUrl: `${window.location.origin}/settings?checkout=success&tab=billing`,
-        cancelUrl: `${window.location.origin}/#pricing`,
+        successUrl: `${globalThis.location.origin}/settings?checkout=success&tab=billing`,
+        cancelUrl: `${globalThis.location.origin}/#pricing`,
       }),
     onSuccess: (session) => {
       if (session.url) {
-        window.location.href = session.url
+        globalThis.location.href = session.url
       }
     },
     onError: (err: Error) => {
@@ -295,30 +295,29 @@ export function PricingSection() {
           </div>
         </div>
 
-        {isBillingPlansLoading ? (
-          <PricingLoadingState />
-        ) : isBillingPlansError ? (
-          <PricingErrorState />
-        ) : tiers.length === 0 ? (
-          <PricingEmptyState />
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            {tiers.map((tier) => (
-              <TierCard
-                key={tier.name}
-                tier={tier}
-                billingInterval={billingInterval}
-                isAuthenticated={isAuthenticated}
-                isPending={checkoutMutation.isPending}
-                onPaidTierClick={handlePaidTierClick}
-              />
-            ))}
-          </div>
-        )}
+        {(() => {
+          if (isBillingPlansLoading) return <PricingLoadingState />
+          if (isBillingPlansError) return <PricingErrorState />
+          if (tiers.length === 0) return <PricingEmptyState />
+          return (
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+              {tiers.map((tier) => (
+                <TierCard
+                  key={tier.name}
+                  tier={tier}
+                  billingInterval={billingInterval}
+                  isAuthenticated={isAuthenticated}
+                  isPending={checkoutMutation.isPending}
+                  onPaidTierClick={handlePaidTierClick}
+                />
+              ))}
+            </div>
+          )
+        })()}
 
         <div className="text-center mt-8 pt-8 border-t border-border/40">
           <p className="text-sm text-muted-foreground">
-            Unlimited team members on every plan.{' '}<span className="mx-1.5">·</span>{' '}<span className="text-xs">30-day money-back guarantee</span>
+            Unlimited team members on every plan. <span className="mx-1.5">·</span> <span className="text-xs">30-day money-back guarantee</span>
           </p>
         </div>
       </div>

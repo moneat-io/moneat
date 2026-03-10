@@ -18,7 +18,7 @@ import {Logo} from '@/components/Logo'
 import {cn} from '@/lib/utils'
 
 interface LoginLogoProps {
-  className?: string
+  readonly className?: string
 }
 
 export function LoginLogo({ className }: LoginLogoProps) {

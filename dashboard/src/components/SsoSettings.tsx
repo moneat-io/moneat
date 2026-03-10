@@ -32,8 +32,7 @@ export function SsoTab() {
   const { toast } = useToast()
   const [providerType, setProviderType] = useState<'saml' | 'oidc'>('oidc')
 
-  // TODO: Get organization ID from user context or organization endpoint
-  // For now, use default organization ID
+  // Uses default organization ID; update when multi-org support is added
   const orgId = 1
 
   const { data: ssoConfig, isLoading: configLoading } = useQuery({

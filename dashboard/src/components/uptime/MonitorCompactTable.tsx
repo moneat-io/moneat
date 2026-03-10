@@ -28,7 +28,7 @@ import HeartbeatBar from './HeartbeatBar'
 import {getStatusBadge} from './MonitorStatusBadge'
 
 interface MonitorCompactTableProps {
-  monitors: UptimeMonitor[]
+  readonly monitors: UptimeMonitor[]
 }
 
 function getMonitorIconClass(status: string, isOnline: boolean): string {
@@ -43,7 +43,7 @@ function getUptimeClass(uptime: number): string {
   return 'text-red-600 dark:text-red-400'
 }
 
-function MonitorRow({monitor}: {monitor: UptimeMonitor}) {
+function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {
   const {toast} = useToast()
   const queryClient = useQueryClient()
 
@@ -163,17 +163,7 @@ function MonitorRow({monitor}: {monitor: UptimeMonitor}) {
 
       <TableCell className="pr-4 text-right">
         <div className="flex items-center justify-end gap-1">
-          {monitor.status !== 'paused' ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-              onClick={() => pauseMutation.mutate(monitor.id)}
-              title="Pause Monitor"
-            >
-              <Pause className="h-3.5 w-3.5" />
-            </Button>
-          ) : (
+          {monitor.status === 'paused' ? (
             <Button
               size="sm"
               variant="ghost"
@@ -182,6 +172,16 @@ function MonitorRow({monitor}: {monitor: UptimeMonitor}) {
               title="Resume Monitor"
             >
               <Play className="h-3.5 w-3.5" />
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+              onClick={() => pauseMutation.mutate(monitor.id)}
+              title="Pause Monitor"
+            >
+              <Pause className="h-3.5 w-3.5" />
             </Button>
           )}
           <Button

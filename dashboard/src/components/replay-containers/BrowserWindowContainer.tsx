@@ -18,11 +18,9 @@ import {Globe, Lock} from 'lucide-react'
 import {cn} from '@/lib/utils'
 
 interface BrowserWindowContainerProps {
-  children: React.ReactNode
-  url?: string
-  browserName?: string
-  osName?: string
-  className?: string
+  readonly children: React.ReactNode
+  readonly url?: string
+  readonly className?: string
 }
 
 export function BrowserWindowContainer({

@@ -29,12 +29,12 @@ const BAR_COLORS = [
 ]
 
 interface BarChartProps {
-  data: Record<string, number>
-  title: string
-  height?: number
-  color?: string
-  colors?: string[]
-  layout?: 'vertical' | 'horizontal'
+  readonly data: Record<string, number>
+  readonly title: string
+  readonly height?: number
+  readonly color?: string
+  readonly colors?: string[]
+  readonly layout?: 'vertical' | 'horizontal'
 }
 
 export function BarChart({

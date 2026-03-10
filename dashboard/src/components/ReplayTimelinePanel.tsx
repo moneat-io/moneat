@@ -47,11 +47,10 @@ export type TimelineItem = BaseTimelineItem & {
 }
 
 export interface ReplayTimelinePanelProps {
-  items: TimelineItem[]
-  currentOffsetMs: number
-  durationMs?: number
-  projectId?: number
-  onSeek: (offsetMs: number) => void
+  readonly items: TimelineItem[]
+  readonly currentOffsetMs: number
+  readonly projectId?: number
+  readonly onSeek: (offsetMs: number) => void
 }
 
 type FilterValue = 'all' | 'error' | 'transaction' | 'span'
@@ -139,7 +138,7 @@ function typeColorClasses(type: TimelineItem['type']) {
   }
 }
 
-function TypeIcon({ type, className }: { type: TimelineItem['type']; className?: string }) {
+function TypeIcon({ type, className }: { readonly type: TimelineItem['type']; readonly className?: string }) {
   const colors = typeColorClasses(type)
   switch (type) {
     case 'error':
@@ -154,7 +153,7 @@ function TypeIcon({ type, className }: { type: TimelineItem['type']; className?:
 }
 
 /** Pick a contextual icon based on the breadcrumb category */
-function CategoryIcon({ category, className }: { category?: string; className?: string }) {
+function CategoryIcon({ category, className }: { readonly category?: string; readonly className?: string }) {
   const cat = (category ?? '').toLowerCase()
   if (cat.includes('http') || cat.includes('network'))
     return <Network className={cn('h-3.5 w-3.5 text-blue-500', className)} />
@@ -195,7 +194,7 @@ const PROMOTED_KEYS: Record<string, string> = {
   duration: 'Duration',
 }
 
-function BreadcrumbDetailPanel({ item }: { item: TimelineItem }) {
+function BreadcrumbDetailPanel({ item }: { readonly item: TimelineItem }) {
   const { timezone } = useTimezone()
   const colors = typeColorClasses(item.type)
   const data = item.data ?? {}
@@ -290,8 +289,8 @@ function WaterfallPanel({
   item,
   projectId,
 }: {
-  item: TimelineItem
-  projectId?: number
+  readonly item: TimelineItem
+  readonly projectId?: number
 }) {
   const colors = typeColorClasses(item.type)
 
@@ -393,8 +392,8 @@ function ExpandedItemPanel({
   item,
   projectId,
 }: {
-  item: TimelineItem
-  projectId?: number
+  readonly item: TimelineItem
+  readonly projectId?: number
 }) {
   if (canFetchSpans(item)) {
     return <WaterfallPanel item={item} projectId={projectId} />
@@ -429,20 +428,21 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek 
   }
 
   useEffect(() => {
-    if (scrollIndex < 0 || !listRef.current) return
-    const container = listRef.current
-    const el = container.querySelector<HTMLElement>(`[data-timeline-index="${scrollIndex}"]`)
-    if (el) {
-      const padding = 8
-      const viewTop = container.scrollTop
-      const viewBottom = viewTop + container.clientHeight
-      const elTop = el.offsetTop
-      const elBottom = elTop + el.offsetHeight
+    if (scrollIndex >= 0 && listRef.current) {
+      const container = listRef.current
+      const el = container.querySelector<HTMLElement>(`[data-timeline-index="${scrollIndex}"]`)
+      if (el) {
+        const padding = 8
+        const viewTop = container.scrollTop
+        const viewBottom = viewTop + container.clientHeight
+        const elTop = el.offsetTop
+        const elBottom = elTop + el.offsetHeight
 
-      if (elTop < viewTop + padding) {
-        container.scrollTop = Math.max(0, elTop - padding)
-      } else if (elBottom > viewBottom - padding) {
-        container.scrollTop = Math.max(0, elBottom - container.clientHeight + padding)
+        if (elTop < viewTop + padding) {
+          container.scrollTop = Math.max(0, elTop - padding)
+        } else if (elBottom > viewBottom - padding) {
+          container.scrollTop = Math.max(0, elBottom - container.clientHeight + padding)
+        }
       }
     }
   }, [scrollIndex])
@@ -534,11 +534,11 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek 
 /* ── Timeline list ── */
 
 interface TimelineListProps {
-  items: TimelineItem[]
-  activeIndex: number
-  expandedId: string | null
-  projectId?: number
-  onItemClick: (item: TimelineItem) => void
+  readonly items: TimelineItem[]
+  readonly activeIndex: number
+  readonly expandedId: string | null
+  readonly projectId?: number
+  readonly onItemClick: (item: TimelineItem) => void
 }
 
 const TimelineList = React.forwardRef<HTMLDivElement, TimelineListProps>(function TimelineList(

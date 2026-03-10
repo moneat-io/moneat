@@ -27,7 +27,7 @@ export interface DataSourceTypeOption {
 }
 
 // SVG logos for each data source type
-function PostgreSQLLogo({className}: {className?: string}) {
+function PostgreSQLLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
@@ -42,7 +42,7 @@ function PostgreSQLLogo({className}: {className?: string}) {
   )
 }
 
-function PrometheusLogo({className}: {className?: string}) {
+function PrometheusLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <circle cx="16" cy="16" r="14" fill="#E6522C" />
@@ -54,7 +54,7 @@ function PrometheusLogo({className}: {className?: string}) {
   )
 }
 
-function MySQLLogo({className}: {className?: string}) {
+function MySQLLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <rect x="4" y="6" width="24" height="20" rx="3" fill="#00758F" />
@@ -65,7 +65,7 @@ function MySQLLogo({className}: {className?: string}) {
   )
 }
 
-function MariaDBLogo({className}: {className?: string}) {
+function MariaDBLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <rect x="4" y="6" width="24" height="20" rx="3" fill="#C0765A" />
@@ -76,7 +76,7 @@ function MariaDBLogo({className}: {className?: string}) {
   )
 }
 
-function MSSQLLogo({className}: {className?: string}) {
+function MSSQLLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <rect x="4" y="4" width="24" height="24" rx="2" fill="#CC2927" />
@@ -85,7 +85,7 @@ function MSSQLLogo({className}: {className?: string}) {
   )
 }
 
-function ClickHouseLogo({className}: {className?: string}) {
+function ClickHouseLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <rect x="5" y="4" width="3.5" height="24" rx="0.5" fill="#FFCC00" />
@@ -97,7 +97,7 @@ function ClickHouseLogo({className}: {className?: string}) {
   )
 }
 
-function SQLiteLogo({className}: {className?: string}) {
+function SQLiteLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <rect x="6" y="4" width="20" height="24" rx="2" fill="#003B57" />
@@ -107,7 +107,7 @@ function SQLiteLogo({className}: {className?: string}) {
   )
 }
 
-function CockroachDBLogo({className}: {className?: string}) {
+function CockroachDBLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <circle cx="16" cy="16" r="12" fill="#6933FF" />
@@ -116,7 +116,7 @@ function CockroachDBLogo({className}: {className?: string}) {
   )
 }
 
-function BigQueryLogo({className}: {className?: string}) {
+function BigQueryLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <rect x="4" y="6" width="24" height="20" rx="2" fill="#4285F4" />
@@ -125,7 +125,7 @@ function BigQueryLogo({className}: {className?: string}) {
   )
 }
 
-function SnowflakeLogo({className}: {className?: string}) {
+function SnowflakeLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <path d="M16 4v24M8 8l16 16M8 24l16-16" stroke="#29B5E8" strokeWidth="2" />
@@ -134,7 +134,7 @@ function SnowflakeLogo({className}: {className?: string}) {
   )
 }
 
-function ElasticsearchLogo({className}: {className?: string}) {
+function ElasticsearchLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <circle cx="16" cy="16" r="12" fill="none" stroke="#FEC514" strokeWidth="2.5" />
@@ -145,7 +145,7 @@ function ElasticsearchLogo({className}: {className?: string}) {
   )
 }
 
-function InfluxDBLogo({className}: {className?: string}) {
+function InfluxDBLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <rect x="4" y="4" width="24" height="24" rx="5" fill="#22ADF6" />
@@ -154,7 +154,7 @@ function InfluxDBLogo({className}: {className?: string}) {
   )
 }
 
-function GraphiteLogo({className}: {className?: string}) {
+function GraphiteLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <path d="M4 28L16 4l12 24H4z" fill="#2E2E2E" />
@@ -162,7 +162,7 @@ function GraphiteLogo({className}: {className?: string}) {
   )
 }
 
-function LokiLogo({className}: {className?: string}) {
+function LokiLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <circle cx="16" cy="16" r="12" fill="#F26022" />
@@ -170,7 +170,7 @@ function LokiLogo({className}: {className?: string}) {
   )
 }
 
-function CloudWatchLogo({className}: {className?: string}) {
+function CloudWatchLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <rect x="4" y="6" width="24" height="20" rx="2" fill="#FF9900" />
@@ -179,7 +179,7 @@ function CloudWatchLogo({className}: {className?: string}) {
   )
 }
 
-function MongoLogo({className}: {className?: string}) {
+function MongoLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <path d="M16 4c-2 4-4 10-4 14 0 4 2 8 4 10 2-2 4-6 4-10s-2-10-4-14z" fill="#47A248" />
@@ -188,7 +188,7 @@ function MongoLogo({className}: {className?: string}) {
   )
 }
 
-function RedisLogo({className}: {className?: string}) {
+function RedisLogo({className}: {readonly className?: string}) {
   return (
     <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <circle cx="16" cy="16" r="12" fill="#DC382D" />

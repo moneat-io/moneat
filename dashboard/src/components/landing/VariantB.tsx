@@ -55,8 +55,7 @@ const comparisonRows = [
 
 export function VariantB() {
   return (
-    <>
-      <section id="features" className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-background to-muted/30 scroll-mt-24">
+    <section id="features" className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-background to-muted/30 scroll-mt-24">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl mb-6">
@@ -146,6 +145,5 @@ export function VariantB() {
           </div>
         </div>
       </section>
-    </>
   )
 }

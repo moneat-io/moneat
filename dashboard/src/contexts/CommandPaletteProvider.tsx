@@ -55,14 +55,14 @@ function loadInitialPanelOrientation(): AiPanelOrientation {
   return (saved as AiPanelOrientation | null) ?? 'vertical'
 }
 
-export function CommandPaletteProvider({children}: {children: ReactNode}) {
+export function CommandPaletteProvider({children}: {readonly children: ReactNode}) {
   const {selectedProjectId} = useProject()
 
   // Dialog open state
   const [open, setOpen] = useState(false)
 
   // Chat state — lazy-initialized from localStorage
-  const initialChat = useState(loadInitialActiveChat)[0]
+  const [initialChat] = useState(loadInitialActiveChat)
   const [aiMode, setAiMode] = useState(() => initialChat !== null)
   const [conversationId, setConversationId] = useState<string | null>(
     () => initialChat?.conversationId ?? null,

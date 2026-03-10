@@ -114,17 +114,17 @@ function formatClock(ms: number): string {
 function formatLifecycleDetail(payload: Record<string, unknown>): string {
   const screen = payload.screen ?? 'Screen'
   const state = payload.state ?? ''
-  return `${screen}: ${state}`
+  return `${String(screen)}: ${String(state)}`
 }
 
 function formatClickDetail(payload: Record<string, unknown>): string {
   const viewClass = (payload['view.class'] as string)?.split('.').pop() ?? ''
   const viewId = payload['view.id'] ?? ''
-  return viewId ? `Clicked ${viewClass} (${viewId})` : `Clicked ${viewClass}`
+  return viewId ? `Clicked ${viewClass} (${String(viewId)})` : `Clicked ${viewClass}`
 }
 
 function formatNavigationDetail(payload: Record<string, unknown>): string {
-  return `${payload.from ?? ''} → ${payload.to ?? ''}`
+  return `${String(payload.from ?? '')} → ${String(payload.to ?? '')}`
 }
 
 function formatHttpDetail(payload: Record<string, unknown>): string | undefined {
@@ -139,7 +139,7 @@ function formatDeviceDetail(payload: Record<string, unknown>): string | undefine
   if (payload.action && String(payload.action).includes('BATTERY')) {
     const level = payload.level ?? ''
     const charging = payload.charging ? ' (charging)' : ''
-    return `Battery ${level}%${charging}`
+    return `Battery ${String(level)}%${charging}`
   }
   return payload.action ? String(payload.action) : undefined
 }
@@ -328,7 +328,7 @@ function findSeekTarget(globalMs: number, durationsMs: number[]): GlobalSeekTarg
     offset += segmentDuration
   }
 
-  return { segmentIndex: durationsMs.length - 1, localTimeMs: durationsMs[durationsMs.length - 1] }
+  return { segmentIndex: durationsMs.length - 1, localTimeMs: durationsMs.at(-1) ?? 0 }
 }
 
 export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileReplayViewerProps>(function MobileReplayViewer(
@@ -772,7 +772,9 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
                   setSelectedSegmentIdx((idx) => idx + 1)
                   setCurrentSegmentTimeMs(0)
                 }}
-              />
+              >
+                <track kind="captions" />
+              </video>
             </div>
 
             {!hideControls && (

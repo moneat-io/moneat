@@ -46,7 +46,7 @@ export interface FeaturePageConfig {
   compatNote?: string
 }
 
-export function FeaturePageTemplate({config}: {config: FeaturePageConfig}) {
+export function FeaturePageTemplate({config}: {readonly config: FeaturePageConfig}) {
   useEffect(() => {
     const root = document.documentElement
     const addedDark = !root.classList.contains('dark')

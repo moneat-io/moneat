@@ -37,26 +37,26 @@ export default function HeartbeatBar({heartbeats, maxBars = 100, className}: Hea
     )
 
     if (slotHeartbeats.length === 0) {
-      return {status: 'unknown', count: 0}
+      return {id: `slot-${i}`, status: 'unknown', count: 0}
     }
 
     const upCount = slotHeartbeats.filter((h) => h.status === 1).length
     const downCount = slotHeartbeats.filter((h) => h.status === 0).length
 
     if (downCount > 0) {
-      return {status: 'down', count: slotHeartbeats.length}
+      return {id: `slot-${i}`, status: 'down', count: slotHeartbeats.length}
     } else if (upCount > 0) {
-      return {status: 'up', count: slotHeartbeats.length}
+      return {id: `slot-${i}`, status: 'up', count: slotHeartbeats.length}
     } else {
-      return {status: 'pending', count: slotHeartbeats.length}
+      return {id: `slot-${i}`, status: 'pending', count: slotHeartbeats.length}
     }
   }).reverse()
 
   return (
     <div className={cn("flex gap-[2px] h-10 items-end", className)}>
-      {slots.map((slot, i) => (
+      {slots.map((slot) => (
         <div
-          key={`slot-${i}`}
+          key={slot.id}
           className={cn(
             'flex-1 rounded-sm transition-all',
             slot.status === 'up' && 'bg-emerald-500',
@@ -68,11 +68,11 @@ export default function HeartbeatBar({heartbeats, maxBars = 100, className}: Hea
             height: slot.count > 0 ? '100%' : '20%',
             opacity: slot.count > 0 ? 1 : 0.5,
           }}
-          title={
-            slot.count > 0
-              ? `${slot.count} check${slot.count > 1 ? 's' : ''} - ${slot.status}`
-              : 'No data'
-          }
+          title={(() => {
+            if (slot.count === 0) return 'No data'
+            const plural = slot.count > 1 ? 's' : ''
+            return `${slot.count} check${plural} - ${slot.status}`
+          })()}
         />
       ))}
     </div>

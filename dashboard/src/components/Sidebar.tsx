@@ -63,9 +63,9 @@ export const SIDEBAR_COLLAPSED_WIDTH = 64
 export const SIDEBAR_EXPANDED_WIDTH = 256
 
 interface SidebarProps {
-  isExpanded: boolean
-  onExpandedChange: (expanded: boolean) => void
-  headerHeight: number
+  readonly isExpanded: boolean
+  readonly onExpandedChange: (expanded: boolean) => void
+  readonly headerHeight: number
 }
 
 const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
@@ -90,8 +90,8 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
   useEffect(() => {
     const handler = () => setShowCreateDialog(true)
-    window.addEventListener('open-create-project-dialog', handler)
-    return () => window.removeEventListener('open-create-project-dialog', handler)
+    globalThis.addEventListener('open-create-project-dialog', handler)
+    return () => globalThis.removeEventListener('open-create-project-dialog', handler)
   }, [])
   const [newProjectName, setNewProjectName] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)

@@ -30,9 +30,9 @@ import {useToast} from '@/hooks/useToast'
 import {MonitorFormFields, type MonitorFormData} from './MonitorFormFields'
 
 interface EditMonitorDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  monitor: UptimeMonitor
+  readonly open: boolean
+  readonly onOpenChange: (open: boolean) => void
+  readonly monitor: UptimeMonitor
 }
 
 export default function EditMonitorDialog({open, onOpenChange, monitor}: EditMonitorDialogProps) {

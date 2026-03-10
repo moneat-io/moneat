@@ -74,10 +74,10 @@ export function ScreenshotFrame({
   children,
   fade,
 }: {
-  gradient: string
-  className?: string
-  children?: React.ReactNode
-  fade?: 'bottom' | 'all-edges'
+  readonly gradient: string
+  readonly className?: string
+  readonly children?: React.ReactNode
+  readonly fade?: 'bottom' | 'all-edges'
 }) {
   let maskStyle: React.CSSProperties | undefined
   if (fade === 'all-edges') {

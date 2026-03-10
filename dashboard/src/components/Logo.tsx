@@ -17,9 +17,9 @@
 import {cn} from '@/lib/utils'
 
 interface LogoProps {
-  className?: string
+  readonly className?: string
   /** Show only the pulse mark without the wordmark */
-  markOnly?: boolean
+  readonly markOnly?: boolean
 }
 
 export function Logo({ className, markOnly = false }: LogoProps) {

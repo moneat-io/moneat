@@ -27,17 +27,17 @@ import {
 } from 'lucide-react'
 
 export interface ReplayTimelineScrubberProps {
-  currentOffsetMs: number
-  durationMs: number
-  isPlaying: boolean
-  items: ReplayTimelineItem[]
-  onSeek: (offsetMs: number) => void
-  onPlayPause: () => void
-  onSpeedChange?: (speed: number) => void
-  speed?: number
-  className?: string
-  onFullscreenToggle?: () => void
-  isFullscreen?: boolean
+  readonly currentOffsetMs: number
+  readonly durationMs: number
+  readonly isPlaying: boolean
+  readonly items: ReplayTimelineItem[]
+  readonly onSeek: (offsetMs: number) => void
+  readonly onPlayPause: () => void
+  readonly onSpeedChange?: (speed: number) => void
+  readonly speed?: number
+  readonly className?: string
+  readonly onFullscreenToggle?: () => void
+  readonly isFullscreen?: boolean
 }
 
 function formatClock(ms: number): string {
@@ -117,11 +117,11 @@ export function ReplayTimelineScrubber({
       const onMove = (ev: MouseEvent) => seekFromPointer(ev.clientX)
       const onUp = () => {
         setIsDragging(false)
-        window.removeEventListener('mousemove', onMove)
-        window.removeEventListener('mouseup', onUp)
+        globalThis.removeEventListener('mousemove', onMove)
+        globalThis.removeEventListener('mouseup', onUp)
       }
-      window.addEventListener('mousemove', onMove)
-      window.addEventListener('mouseup', onUp)
+      globalThis.addEventListener('mousemove', onMove)
+      globalThis.addEventListener('mouseup', onUp)
     },
     [seekFromPointer]
   )

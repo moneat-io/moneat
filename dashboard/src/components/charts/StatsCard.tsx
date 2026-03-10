@@ -27,7 +27,7 @@ const ACCENT_STYLES: Record<string, { bar: string; icon: string; text: string }>
   cyan: { bar: 'bg-cyan-500', icon: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400', text: 'text-cyan-600 dark:text-cyan-400' },
 }
 
-export function StatsCardSkeleton({ accent, className }: { accent?: keyof typeof ACCENT_STYLES; className?: string }) {
+export function StatsCardSkeleton({ accent, className }: { readonly accent?: keyof typeof ACCENT_STYLES; readonly className?: string }) {
   const styles = accent ? ACCENT_STYLES[accent] : null
   return (
     <Card className={cn('overflow-hidden', className)}>
@@ -49,20 +49,20 @@ export function StatsCardSkeleton({ accent, className }: { accent?: keyof typeof
 }
 
 interface StatsCardProps {
-  title: string
-  value: string | number
-  icon: LucideIcon
-  trend?: {
+  readonly title: string
+  readonly value: string | number
+  readonly icon: LucideIcon
+  readonly trend?: {
     value: number
     positive: boolean
   }
   /** Optional secondary label beneath the value */
-  subtitle?: string
+  readonly subtitle?: string
   /** Preset accent: blue, amber, emerald, violet, rose, cyan. Adds a top bar and colored icon. */
-  accent?: keyof typeof ACCENT_STYLES
+  readonly accent?: keyof typeof ACCENT_STYLES
   /** Optional color class override for the value text */
-  valueColor?: string
-  className?: string
+  readonly valueColor?: string
+  readonly className?: string
 }
 
 export function StatsCard({ title, value, icon: Icon, trend, subtitle, accent, valueColor, className }: StatsCardProps) {

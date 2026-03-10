@@ -108,10 +108,10 @@ function UptimeHistoryBar({
   isDarkMode,
   timezone,
 }: {
-  history: {date: string; uptime: number}[]
-  historyDays: number
-  isDarkMode: boolean
-  timezone: string
+  readonly history: {date: string; uptime: number}[]
+  readonly historyDays: number
+  readonly isDarkMode: boolean
+  readonly timezone: string
 }) {
   return (
     <div className="mt-3">
@@ -142,7 +142,7 @@ function UptimeHistoryBar({
 
 // ─── Status Banner ───────────────────────────────────────────────────────────
 
-export function StatusBanner({status, isDarkMode}: {status: StatusValue; isDarkMode: boolean}) {
+export function StatusBanner({status, isDarkMode}: {readonly status: StatusValue; readonly isDarkMode: boolean}) {
   const configs = isDarkMode ? STATUS_CONFIG_DARK : STATUS_CONFIG_LIGHT
   const c = configs[status] ?? configs.unknown
   const Icon = c.icon
@@ -164,11 +164,11 @@ export function StatusPageMonitorRow({
   isDarkMode,
   timezone,
 }: {
-  monitor: StatusPageMonitorEntry
-  showHistory: boolean
-  historyDays: number
-  isDarkMode: boolean
-  timezone: string
+  readonly monitor: StatusPageMonitorEntry
+  readonly showHistory: boolean
+  readonly historyDays: number
+  readonly isDarkMode: boolean
+  readonly timezone: string
 }) {
   const statusDotColors = isDarkMode ? STATUS_DOT_COLORS_DARK : STATUS_DOT_COLORS_LIGHT
   const statusColors = isDarkMode ? STATUS_TEXT_COLORS_DARK : STATUS_TEXT_COLORS_LIGHT
@@ -216,14 +216,14 @@ export function StatusPagePreview({
   historyDays,
   monitors = [],
 }: {
-  name: string
-  description?: string | null
-  logoUrl?: string | null
-  primaryColor: string
-  darkMode: boolean
-  showUptimeHistory: boolean
-  historyDays: number
-  monitors?: StatusPageMonitorEntry[]
+  readonly name: string
+  readonly description?: string | null
+  readonly logoUrl?: string | null
+  readonly primaryColor: string
+  readonly darkMode: boolean
+  readonly showUptimeHistory: boolean
+  readonly historyDays: number
+  readonly monitors?: StatusPageMonitorEntry[]
 }) {
   const isDarkMode = darkMode
   const { timezone } = useTimezone()
