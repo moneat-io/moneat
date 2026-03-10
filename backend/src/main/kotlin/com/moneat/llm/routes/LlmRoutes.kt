@@ -40,138 +40,113 @@ fun Route.llmRoutes(
     authenticate("auth-jwt") {
         rateLimit(RateLimitName("api")) {
             route("/v1/llm") {
-                get("/overview") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
-                    val isDemo = call.isDemoUser()
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
-                    if (projectId == null) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
-                        return@get
-                    }
-                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
-                        return@get
-                    }
-                    val range = call.request.queryParameters["range"] ?: "24h"
-                    val demoEpochMs = call.getDemoEpochMs()
-                    call.respond(llmService.getOverview(projectId, range, demoEpochMs))
-                }
-
-                get("/generations") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
-                    val isDemo = call.isDemoUser()
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
-                    if (projectId == null) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
-                        return@get
-                    }
-                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
-                        return@get
-                    }
-                    val range = call.request.queryParameters["range"] ?: "24h"
-                    val model = call.request.queryParameters["model"]
-                    val provider = call.request.queryParameters["provider"]
-                    val type = call.request.queryParameters["type"]
-                    val status = call.request.queryParameters["status"]
-                    val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-                    val pageSize = call.request.queryParameters["pageSize"]?.toIntOrNull() ?: 25
-                    val demoEpochMs = call.getDemoEpochMs()
-                    call.respond(
-                        llmService.getGenerations(projectId, range, model, provider, type, status, page, pageSize, demoEpochMs)
-                    )
-                }
-
-                get("/generations/{id}") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
-                    val isDemo = call.isDemoUser()
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
-                    if (projectId == null) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
-                        return@get
-                    }
-                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
-                        return@get
-                    }
-                    val generationId =
-                        call.parameters["id"] ?: run {
-                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("generation id is required"))
-                            return@get
-                        }
-                    val detail = llmService.getGenerationDetail(projectId, generationId)
-                    if (detail == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Generation not found"))
-                        return@get
-                    }
-                    call.respond(detail)
-                }
-
-                get("/traces/{traceId}") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
-                    val isDemo = call.isDemoUser()
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
-                    if (projectId == null) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
-                        return@get
-                    }
-                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
-                        return@get
-                    }
-                    val traceId =
-                        call.parameters["traceId"] ?: run {
-                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("traceId is required"))
-                            return@get
-                        }
-                    val trace = llmService.getTrace(projectId, traceId)
-                    if (trace == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Trace not found"))
-                        return@get
-                    }
-                    call.respond(trace)
-                }
-
-                get("/models") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
-                    val isDemo = call.isDemoUser()
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
-                    if (projectId == null) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
-                        return@get
-                    }
-                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
-                        return@get
-                    }
-                    val range = call.request.queryParameters["range"] ?: "24h"
-                    val demoEpochMs = call.getDemoEpochMs()
-                    call.respond(llmService.getModels(projectId, range, demoEpochMs))
-                }
-
-                get("/costs") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
-                    val isDemo = call.isDemoUser()
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
-                    if (projectId == null) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
-                        return@get
-                    }
-                    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
-                        return@get
-                    }
-                    val range = call.request.queryParameters["range"] ?: "24h"
-                    val demoEpochMs = call.getDemoEpochMs()
-                    call.respond(llmService.getCosts(projectId, range, demoEpochMs))
-                }
+                get("/overview") { handleLlmOverview(dashboardService, llmService) }
+                get("/generations") { handleLlmGenerations(dashboardService, llmService) }
+                get("/generations/{id}") { handleLlmGenerationDetail(dashboardService, llmService) }
+                get("/traces/{traceId}") { handleLlmTrace(dashboardService, llmService) }
+                get("/models") { handleLlmModels(dashboardService, llmService) }
+                get("/costs") { handleLlmCosts(dashboardService, llmService) }
             }
         }
     }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.requireLlmProjectAccess(
+    dashboardService: DashboardService,
+): Long? {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val isDemo = call.isDemoUser()
+    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+    if (projectId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
+        return null
+    }
+    if (!isDemo && !dashboardService.hasProjectAccess(userId, projectId)) {
+        call.respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
+        return null
+    }
+    return projectId
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleLlmOverview(
+    dashboardService: DashboardService,
+    llmService: LlmDashboardService,
+) {
+    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val range = call.request.queryParameters["range"] ?: "24h"
+    val demoEpochMs = call.getDemoEpochMs()
+    call.respond(llmService.getOverview(projectId, range, demoEpochMs))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleLlmGenerations(
+    dashboardService: DashboardService,
+    llmService: LlmDashboardService,
+) {
+    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val range = call.request.queryParameters["range"] ?: "24h"
+    val model = call.request.queryParameters["model"]
+    val provider = call.request.queryParameters["provider"]
+    val type = call.request.queryParameters["type"]
+    val status = call.request.queryParameters["status"]
+    val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+    val pageSize = call.request.queryParameters["pageSize"]?.toIntOrNull() ?: 25
+    val demoEpochMs = call.getDemoEpochMs()
+    call.respond(llmService.getGenerations(projectId, range, model, provider, type, status, page, pageSize, demoEpochMs))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleLlmGenerationDetail(
+    dashboardService: DashboardService,
+    llmService: LlmDashboardService,
+) {
+    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val generationId =
+        call.parameters["id"] ?: run {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("generation id is required"))
+            return
+        }
+    val detail = llmService.getGenerationDetail(projectId, generationId)
+    if (detail == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse("Generation not found"))
+        return
+    }
+    call.respond(detail)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleLlmTrace(
+    dashboardService: DashboardService,
+    llmService: LlmDashboardService,
+) {
+    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val traceId =
+        call.parameters["traceId"] ?: run {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("traceId is required"))
+            return
+        }
+    val trace = llmService.getTrace(projectId, traceId)
+    if (trace == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse("Trace not found"))
+        return
+    }
+    call.respond(trace)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleLlmModels(
+    dashboardService: DashboardService,
+    llmService: LlmDashboardService,
+) {
+    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val range = call.request.queryParameters["range"] ?: "24h"
+    val demoEpochMs = call.getDemoEpochMs()
+    call.respond(llmService.getModels(projectId, range, demoEpochMs))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleLlmCosts(
+    dashboardService: DashboardService,
+    llmService: LlmDashboardService,
+) {
+    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val range = call.request.queryParameters["range"] ?: "24h"
+    val demoEpochMs = call.getDemoEpochMs()
+    call.respond(llmService.getCosts(projectId, range, demoEpochMs))
 }

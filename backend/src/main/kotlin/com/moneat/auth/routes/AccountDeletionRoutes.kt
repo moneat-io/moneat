@@ -69,222 +69,186 @@ fun Route.accountDeletionRoutes(
     deletionService: AccountDeletionService = GlobalContext.get().get(),
 ) {
     // Get organization details for account deletion confirmation
-    get("/organizations/{orgId}") {
-        val principal = call.principal<JWTPrincipal>()
-        val userId = principal!!.payload.getClaim("userId").asInt()
-
-        val orgId = call.parameters["orgId"]?.toIntOrNull()
-        if (orgId == null) {
-            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
-            return@get
-        }
-
-        val orgWithRole =
-            transaction {
-                Memberships
-                    .innerJoin(Organizations)
-                    .selectAll()
-                    .where {
-                        (Memberships.user_id eq userId) and
-                            (Memberships.organization_id eq orgId) and
-                            (Organizations.deletedAt.isNull())
-                    }.singleOrNull()
-            }
-
-        if (orgWithRole == null) {
-            call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
-            return@get
-        }
-
-        call.respond(
-            OrgDetailsResponse(
-                id = orgId,
-                name = orgWithRole[Organizations.name],
-                role = orgWithRole[Memberships.role]
-            )
-        )
-    }
-
+    get("/organizations/{orgId}") { handleGetOrgForDeletion() }
     // Delete current user account
-    delete("/account") {
-        val principal = call.principal<JWTPrincipal>()
-        val userId = principal!!.payload.getClaim("userId").asInt()
-
-        val request =
-            try {
-                call.receive<DeleteAccountRequest>()
-            } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
-                return@delete
-            }
-
-        // Validate confirmation - user must type their email
-        val userEmail =
-            transaction {
-                com.moneat.shared.models.Users
-                    .selectAll()
-                    .where { com.moneat.shared.models.Users.id eq userId }
-                    .singleOrNull()
-                    ?.get(com.moneat.shared.models.Users.email)
-            }
-
-        if (userEmail == null) {
-            call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
-            return@delete
-        }
-
-        if (!request.confirmation.trim().equals(userEmail, ignoreCase = true)) {
-            call.respond(
-                HttpStatusCode.BadRequest,
-                mapOf(
-                    "error" to "Confirmation does not match your email address"
-                )
-            )
-            return@delete
-        }
-
-        // Validate deletion is allowed
-        val validation = deletionService.validateUserDeletion(userId)
-        if (!validation.canDelete) {
-            call.respond(
-                HttpStatusCode.BadRequest,
-                CannotDeleteUserResponse(
-                    error = validation.errorMessage,
-                    organizations = validation.organizationsAsLastOwner
-                )
-            )
-            return@delete
-        }
-
-        // Perform deletion
-        val success = deletionService.deleteUserAccount(userId)
-        if (success) {
-            logger.info { "User account deleted: $userId" }
-            call.respond(
-                HttpStatusCode.OK,
-                mapOf(
-                    "message" to "Account deleted successfully"
-                )
-            )
-        } else {
-            call.respond(
-                HttpStatusCode.InternalServerError,
-                mapOf(
-                    "error" to "Failed to delete account"
-                )
-            )
-        }
-    }
-
+    delete("/account") { handleDeleteAccount(deletionService) }
     // Delete organization
-    delete("/organizations/{orgId}") {
-        val principal = call.principal<JWTPrincipal>()
-        val userId = principal!!.payload.getClaim("userId").asInt()
-
-        val orgId = call.parameters["orgId"]?.toIntOrNull()
-        if (orgId == null) {
-            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
-            return@delete
-        }
-
-        val request =
-            try {
-                call.receive<DeleteOrganizationRequest>()
-            } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
-                return@delete
-            }
-
-        // Get organization name for confirmation
-        val orgName =
-            transaction {
-                Organizations
-                    .selectAll()
-                    .where { Organizations.id eq orgId }
-                    .singleOrNull()
-                    ?.get(Organizations.name)
-            }
-
-        if (orgName == null) {
-            call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
-            return@delete
-        }
-
-        // Validate confirmation - user must type organization name
-        if (request.confirmation != orgName) {
-            call.respond(
-                HttpStatusCode.BadRequest,
-                mapOf(
-                    "error" to "Confirmation does not match organization name"
-                )
-            )
-            return@delete
-        }
-
-        // Validate deletion is allowed
-        val validation = deletionService.validateOrganizationDeletion(orgId, userId)
-        if (!validation.canDelete) {
-            call.respond(
-                HttpStatusCode.Forbidden,
-                mapOf(
-                    "error" to validation.errorMessage
-                )
-            )
-            return@delete
-        }
-
-        // Perform deletion
-        val success = deletionService.deleteOrganization(orgId, userId)
-        if (success) {
-            logger.info { "Organization deleted: $orgId by user $userId" }
-            call.respond(
-                HttpStatusCode.OK,
-                mapOf(
-                    "message" to "Organization deleted successfully"
-                )
-            )
-        } else {
-            call.respond(
-                HttpStatusCode.InternalServerError,
-                mapOf(
-                    "error" to "Failed to delete organization"
-                )
-            )
-        }
-    }
-
+    delete("/organizations/{orgId}") { handleDeleteOrganization(deletionService) }
     // Validate account deletion (check if user can delete)
-    get("/account/deletion-validation") {
-        val principal = call.principal<JWTPrincipal>()
-        val userId = principal!!.payload.getClaim("userId").asInt()
+    get("/account/deletion-validation") { handleAccountDeletionValidation(deletionService) }
+    // Validate organization deletion (check if user can delete)
+    get("/organizations/{orgId}/deletion-validation") { handleOrgDeletionValidation(deletionService) }
+}
 
-        val validation = deletionService.validateUserDeletion(userId)
-        call.respond(
-            UserDeletionValidationResponse(
-                canDelete = validation.canDelete,
-                error = validation.errorMessage,
-                organizationsAsLastOwner = validation.organizationsAsLastOwner
-            )
-        )
+private suspend fun io.ktor.server.routing.RoutingContext.handleGetOrgForDeletion() {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+
+    val orgId = call.parameters["orgId"]?.toIntOrNull()
+    if (orgId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
+        return
     }
 
-    // Validate organization deletion (check if user can delete)
-    get("/organizations/{orgId}/deletion-validation") {
-        val principal = call.principal<JWTPrincipal>()
-        val userId = principal!!.payload.getClaim("userId").asInt()
-
-        val orgId = call.parameters["orgId"]?.toIntOrNull()
-        if (orgId == null) {
-            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
-            return@get
+    val orgWithRole =
+        transaction {
+            Memberships
+                .innerJoin(Organizations)
+                .selectAll()
+                .where {
+                    (Memberships.user_id eq userId) and
+                        (Memberships.organization_id eq orgId) and
+                        (Organizations.deletedAt.isNull())
+                }.singleOrNull()
         }
 
-        val validation = deletionService.validateOrganizationDeletion(orgId, userId)
+    if (orgWithRole == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
+        return
+    }
+
+    call.respond(
+        OrgDetailsResponse(
+            id = orgId,
+            name = orgWithRole[Organizations.name],
+            role = orgWithRole[Memberships.role]
+        )
+    )
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAccount(
+    deletionService: AccountDeletionService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+
+    val request =
+        try {
+            call.receive<DeleteAccountRequest>()
+        } catch (e: Exception) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            return
+        }
+
+    val userEmail =
+        transaction {
+            com.moneat.shared.models.Users
+                .selectAll()
+                .where { com.moneat.shared.models.Users.id eq userId }
+                .singleOrNull()
+                ?.get(com.moneat.shared.models.Users.email)
+        }
+
+    if (userEmail == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
+        return
+    }
+
+    if (!request.confirmation.trim().equals(userEmail, ignoreCase = true)) {
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Confirmation does not match your email address"))
+        return
+    }
+
+    val validation = deletionService.validateUserDeletion(userId)
+    if (!validation.canDelete) {
         call.respond(
-            OrgDeletionValidationResponse(
-                canDelete = validation.canDelete,
-                error = validation.errorMessage
+            HttpStatusCode.BadRequest,
+            CannotDeleteUserResponse(
+                error = validation.errorMessage,
+                organizations = validation.organizationsAsLastOwner
             )
         )
+        return
     }
+
+    val success = deletionService.deleteUserAccount(userId)
+    if (success) {
+        logger.info { "User account deleted: $userId" }
+        call.respond(HttpStatusCode.OK, mapOf("message" to "Account deleted successfully"))
+    } else {
+        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to delete account"))
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteOrganization(
+    deletionService: AccountDeletionService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+
+    val orgId = call.parameters["orgId"]?.toIntOrNull()
+    if (orgId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
+        return
+    }
+
+    val request =
+        try {
+            call.receive<DeleteOrganizationRequest>()
+        } catch (e: Exception) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            return
+        }
+
+    val orgName =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq orgId }
+                .singleOrNull()
+                ?.get(Organizations.name)
+        }
+
+    if (orgName == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
+        return
+    }
+
+    if (request.confirmation != orgName) {
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Confirmation does not match organization name"))
+        return
+    }
+
+    val validation = deletionService.validateOrganizationDeletion(orgId, userId)
+    if (!validation.canDelete) {
+        call.respond(HttpStatusCode.Forbidden, mapOf("error" to validation.errorMessage))
+        return
+    }
+
+    val success = deletionService.deleteOrganization(orgId, userId)
+    if (success) {
+        logger.info { "Organization deleted: $orgId by user $userId" }
+        call.respond(HttpStatusCode.OK, mapOf("message" to "Organization deleted successfully"))
+    } else {
+        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to delete organization"))
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleAccountDeletionValidation(
+    deletionService: AccountDeletionService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val validation = deletionService.validateUserDeletion(userId)
+    call.respond(
+        UserDeletionValidationResponse(
+            canDelete = validation.canDelete,
+            error = validation.errorMessage,
+            organizationsAsLastOwner = validation.organizationsAsLastOwner
+        )
+    )
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleOrgDeletionValidation(
+    deletionService: AccountDeletionService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val orgId = call.parameters["orgId"]?.toIntOrNull()
+    if (orgId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
+        return
+    }
+    val validation = deletionService.validateOrganizationDeletion(orgId, userId)
+    call.respond(OrgDeletionValidationResponse(canDelete = validation.canDelete, error = validation.errorMessage))
 }

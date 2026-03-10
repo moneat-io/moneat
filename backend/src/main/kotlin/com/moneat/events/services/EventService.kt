@@ -253,7 +253,7 @@ class EventService(
         val traceStatus = traceContext?.get("status")?.jsonPrimitive?.contentOrNull
         val transactionLevel = if (traceStatus == null || traceStatus == "ok") "info" else "error"
 
-        val endTimestampMs = unixSecondsToMillis(transaction.timestamp) ?: System.currentTimeMillis()
+        val endTimestampMs = unixSecondsToMillis(transaction.timestamp ?: (System.currentTimeMillis() / 1000.0))
         val durationMs = durationMs(transaction.start_timestamp, transaction.timestamp)
 
         val contexts = transaction.contexts?.toString() ?: "{}"
