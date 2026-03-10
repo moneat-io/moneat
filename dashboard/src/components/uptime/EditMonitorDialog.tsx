@@ -52,7 +52,7 @@ export default function EditMonitorDialog({open, onOpenChange, monitor}: EditMon
     timeoutSeconds: monitor.timeoutSeconds,
     retries: monitor.retries,
   } : {}
-  const [localFormData, setFormData] = useState<MonitorFormData | undefined>(undefined)
+  const [localFormData, setLocalFormData] = useState<MonitorFormData | undefined>(undefined)
   const formData = (open && localFormData) ? localFormData : serverFormData
 
   const updateMutation = useMutation({
@@ -95,7 +95,7 @@ export default function EditMonitorDialog({open, onOpenChange, monitor}: EditMon
           <MonitorFormFields
             formData={formData}
             monitorType={monitor.type}
-            onChange={setFormData}
+            onChange={setLocalFormData}
             showRetries
           />
         </div>

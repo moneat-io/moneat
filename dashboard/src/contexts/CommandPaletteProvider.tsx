@@ -83,24 +83,24 @@ export function CommandPaletteProvider({children}: {readonly children: ReactNode
   const streamingAssistantMessageId = useRef<string | null>(null)
 
   // Panel display mode — persisted to localStorage
-  const [aiPanelMode, setAiPanelModeState] = useState<AiPanelMode>(loadInitialPanelMode)
-  const [aiPanelSize, setAiPanelSizeState] = useState<number>(loadInitialPanelSize)
-  const [aiPanelOrientation, setAiPanelOrientationState] = useState<AiPanelOrientation>(
+  const [aiPanelModeRaw, setAiPanelModeRaw] = useState<AiPanelMode>(loadInitialPanelMode)
+  const [aiPanelSizeRaw, setAiPanelSizeRaw] = useState<number>(loadInitialPanelSize)
+  const [aiPanelOrientationRaw, setAiPanelOrientationRaw] = useState<AiPanelOrientation>(
     loadInitialPanelOrientation,
   )
 
   const setAiPanelMode = useCallback((mode: AiPanelMode) => {
-    setAiPanelModeState(mode)
+    setAiPanelModeRaw(mode)
     localStorage.setItem('moneat:ai-panel-mode', mode)
   }, [])
 
   const setAiPanelSize = useCallback((size: number) => {
-    setAiPanelSizeState(size)
+    setAiPanelSizeRaw(size)
     localStorage.setItem('moneat:ai-panel-size', String(size))
   }, [])
 
   const setAiPanelOrientation = useCallback((orientation: AiPanelOrientation) => {
-    setAiPanelOrientationState(orientation)
+    setAiPanelOrientationRaw(orientation)
     localStorage.setItem('moneat:ai-panel-orientation', orientation)
   }, [])
 
@@ -392,9 +392,9 @@ export function CommandPaletteProvider({children}: {readonly children: ReactNode
     setAiInput,
     handleAiSubmit,
     handleConfirm,
-    aiPanelMode,
-    aiPanelSize,
-    aiPanelOrientation,
+    aiPanelMode: aiPanelModeRaw,
+    aiPanelSize: aiPanelSizeRaw,
+    aiPanelOrientation: aiPanelOrientationRaw,
     setAiPanelMode,
     setAiPanelSize,
     setAiPanelOrientation,
@@ -403,7 +403,7 @@ export function CommandPaletteProvider({children}: {readonly children: ReactNode
     aiMessages, setAiMessages, toolInvocations, setToolInvocations, pendingConfirmation,
     setPendingConfirmation, registerConnectionCleanup, cleanupConnection, resetAiState,
     chatHistory, startNewChat, restoreChat, isStreaming, isConfirming, aiInput, setAiInput,
-    handleAiSubmit, handleConfirm, aiPanelMode, aiPanelSize, aiPanelOrientation,
+    handleAiSubmit, handleConfirm, aiPanelModeRaw, aiPanelSizeRaw, aiPanelOrientationRaw,
     setAiPanelMode, setAiPanelSize, setAiPanelOrientation,
   ])
 

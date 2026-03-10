@@ -194,6 +194,11 @@ const PROMOTED_KEYS: Record<string, string> = {
   duration: 'Duration',
 }
 
+function serializeValue(value: unknown): string {
+  if (typeof value === 'object' && value !== null) return JSON.stringify(value)
+  return String(value ?? '')
+}
+
 function BreadcrumbDetailPanel({ item }: { readonly item: TimelineItem }) {
   const { timezone } = useTimezone()
   const colors = typeColorClasses(item.type)
@@ -209,7 +214,7 @@ function BreadcrumbDetailPanel({ item }: { readonly item: TimelineItem }) {
     if (key === 'category' || key === 'type') continue
     const label = PROMOTED_KEYS[key]
     if (label) {
-      promoted.push({ label, value: String(value) })
+      promoted.push({ label, value: serializeValue(value) })
     } else {
       extra.push({ key, value })
     }
@@ -258,10 +263,10 @@ function BreadcrumbDetailPanel({ item }: { readonly item: TimelineItem }) {
         {extra.length > 0 && (
           <details className="group">
             <summary className="text-[11px] text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none">
-              {extra.length} more field{extra.length !== 1 ? 's' : ''}
+              {extra.length} more field{extra.length === 1 ? '' : 's'}
             </summary>
             <pre className="mt-1.5 rounded-md border bg-muted/30 px-3 py-2 text-[11px] font-mono overflow-x-auto whitespace-pre-wrap break-all text-muted-foreground">
-{extra.map(({ key, value }) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`).join('\n')}
+{extra.map(({ key, value }) => `${key}: ${serializeValue(value)}`).join('\n')}
             </pre>
           </details>
         )}
@@ -336,7 +341,7 @@ function WaterfallPanel({
           <span className="font-medium">Span Waterfall</span>
           {spans.length > 0 && (
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-              {spans.length} span{spans.length !== 1 ? 's' : ''}
+              {spans.length} span{spans.length === 1 ? '' : 's'}
             </Badge>
           )}
         </div>

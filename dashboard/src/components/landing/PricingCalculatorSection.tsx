@@ -168,11 +168,10 @@ interface SliderInputProps {
 }
 
 function SliderInput({label, sublabel, value, max, logMin, unit, step = 1, onChange}: SliderInputProps) {
-  const isLog = logMin != null
-  const sliderPos = isLog ? toLogPos(value, logMin!, max) : Math.round((value / max) * 100)
+  const sliderPos = logMin != null ? toLogPos(value, logMin, max) : Math.round((value / max) * 100)
 
   const handleSlider = (pos: number) => {
-    const v = isLog ? toLogValue(pos, logMin!, max) : Math.round((pos / 100) * max)
+    const v = logMin != null ? toLogValue(pos, logMin, max) : Math.round((pos / 100) * max)
     onChange(Math.max(0, Math.min(max, v)))
   }
 
@@ -330,7 +329,7 @@ function PlanCard({tier, cost, isBest}: PlanCardProps) {
 // ─── Main section ─────────────────────────────────────────────────────────────────
 
 // Datadog pricing estimate — verified against datadoghq.com/pricing on Feb 27, 2026 (annual commitment rates)
-const DATADOG_LOG_COST_PER_GB = 0.10 // log ingestion only; standard indexing is separate ($1.70/million events)
+const DATADOG_LOG_COST_PER_GB = 0.1 // log ingestion only; standard indexing is separate ($1.70/million events)
 
 interface DatadogExtras {
   hosts: number

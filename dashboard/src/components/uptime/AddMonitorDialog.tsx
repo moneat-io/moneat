@@ -169,14 +169,6 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
     onOpenChange(false)
   }
 
-  const handleDialogOpenChange = (isOpen: boolean) => {
-    if (isOpen) {
-      onOpenChange(true)
-    } else {
-      handleClose()
-    }
-  }
-
   const handleCreate = () => {
     if (!formData.name) {
       toast({title: 'Monitor name is required', variant: 'destructive'})
@@ -184,9 +176,12 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
     }
 
     const rawPort = formData.port
-    const resolvedPort = typeof rawPort === 'string'
-      ? (rawPort === '' ? undefined : Number.parseInt(rawPort, 10) || undefined)
-      : rawPort
+    let resolvedPort: number | undefined
+    if (typeof rawPort === 'string' && rawPort !== '') {
+      resolvedPort = Number.parseInt(rawPort, 10) || undefined
+    } else if (typeof rawPort === 'number') {
+      resolvedPort = rawPort
+    }
 
     const request: CreateUptimeMonitorRequest = {
       name: formData.name,
@@ -209,7 +204,7 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Uptime Monitor</DialogTitle>

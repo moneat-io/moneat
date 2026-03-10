@@ -86,11 +86,36 @@ function computeCompactDomain(chartData: ChartPoint[]): [number, number] {
 
 function filterReleaseMarkers(markers: ReleaseMarker[], chartData: ChartPoint[]) {
   if (chartData.length === 0) return []
-  const min = chartData[0]!.timestamp
+  const min = chartData[0].timestamp
   const max = chartData.at(-1)!.timestamp
   return markers
     .map((m) => ({...m, timestamp: new Date(m.timestamp).getTime()}))
     .filter((m) => m.timestamp >= min && m.timestamp <= max)
+}
+
+const TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: 'hsl(var(--popover) / 0.95)',
+  border: '1px solid hsl(var(--border))',
+  borderRadius: '6px',
+  color: 'hsl(var(--popover-foreground))',
+  padding: '8px 12px',
+  fontSize: '13px',
+}
+
+const TOOLTIP_LABEL_STYLE = {
+  color: 'hsl(var(--popover-foreground))',
+  fontWeight: '500',
+  fontSize: '13px',
+}
+
+const TOOLTIP_ITEM_STYLE = {
+  color: 'hsl(var(--popover-foreground))',
+  fontSize: '13px',
+}
+
+function buildReleaseLineLabel(compact: boolean, version: string) {
+  if (compact) return undefined
+  return {value: version, position: 'top' as const, fill: 'hsl(var(--muted-foreground))', fontSize: 11}
 }
 
 export function EventsChart({
@@ -112,65 +137,55 @@ export function EventsChart({
     ? (ts: number) => new Date(ts).toLocaleString('en-US', {hour: 'numeric'})
     : (ts: number) => formatTime(new Date(ts).toISOString())
 
+  const cfg = compact
+    ? {headerPy: 'py-1', contentPb: 'pb-1', titleSize: 'text-xs leading-tight', margin: {top: 4, right: 2, left: 0, bottom: 0}, xFontSize: 10, xHeight: 16, xMinTickGap: 48, xInterval: 'preserveStartEnd' as const, yDomain: compactDomain, strokeWidth: 2.25, fillOpacity: 0.35}
+    : {headerPy: 'py-2', contentPb: 'pb-3', titleSize: 'text-sm', margin: undefined, xFontSize: 12, xHeight: 30, xMinTickGap: 16, xInterval: 'preserveEnd' as const, yDomain: undefined, strokeWidth: 2, fillOpacity: 0.15}
+
+  const cardClass = cn('border-t-4 border-t-blue-500/50', fillHeight ? 'h-full flex flex-col' : 'h-full')
+  const contentClass = cn('px-4 pt-0', cfg.contentPb, fillHeight && 'flex-1 min-h-0')
+
   return (
-    <Card className={cn("border-t-4 border-t-blue-500/50", fillHeight ? "h-full flex flex-col" : "h-full")}>
-      <CardHeader className={cn("px-4 shrink-0", compact ? "py-1" : "py-2")}>
-        <CardTitle className={cn(compact ? "text-xs leading-tight" : "text-sm")}>{title}</CardTitle>
+    <Card className={cardClass}>
+      <CardHeader className={cn('px-4 shrink-0', cfg.headerPy)}>
+        <CardTitle className={cn(cfg.titleSize)}>{title}</CardTitle>
       </CardHeader>
-      <CardContent className={cn("px-4 pt-0", compact ? "pb-1" : "pb-3", fillHeight && "flex-1 min-h-0")}>
-        <ResponsiveContainer width="100%" height={fillHeight ? "100%" : height}>
-          <AreaChart
-            data={chartData}
-            margin={compact ? {top: 4, right: 2, left: 0, bottom: 0} : undefined}
-          >
+      <CardContent className={contentClass}>
+        <ResponsiveContainer width="100%" height={fillHeight ? '100%' : height}>
+          <AreaChart data={chartData} margin={cfg.margin}>
             {!compact && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
             <XAxis
               dataKey="timestamp"
               type="number"
               domain={['dataMin', 'dataMax']}
               tickFormatter={tickFormatter}
-              fontSize={compact ? 10 : 12}
-              height={compact ? 16 : 30}
-              minTickGap={compact ? 48 : 16}
-              interval={compact ? 'preserveStartEnd' : 'preserveEnd'}
+              fontSize={cfg.xFontSize}
+              height={cfg.xHeight}
+              minTickGap={cfg.xMinTickGap}
+              interval={cfg.xInterval}
               tickLine={false}
               axisLine={false}
               className="fill-muted-foreground"
             />
             <YAxis
               hide={compact}
-              domain={compact ? compactDomain : undefined}
+              domain={cfg.yDomain}
               fontSize={12}
               tickLine={false}
               axisLine={false}
               className="fill-muted-foreground"
             />
             <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--popover) / 0.95)',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '6px',
-                color: 'hsl(var(--popover-foreground))',
-                padding: '8px 12px',
-                fontSize: '13px',
-              }}
-              labelStyle={{
-                color: 'hsl(var(--popover-foreground))',
-                fontWeight: '500',
-                fontSize: '13px',
-              }}
-              itemStyle={{
-                color: 'hsl(var(--popover-foreground))',
-                fontSize: '13px',
-              }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
             />
             <Area
               type="monotone"
               dataKey="count"
               stroke="hsl(var(--chart-1))"
               fill="hsl(var(--chart-1))"
-              strokeWidth={compact ? 2.25 : 2}
-              fillOpacity={compact ? 0.35 : 0.15}
+              strokeWidth={cfg.strokeWidth}
+              fillOpacity={cfg.fillOpacity}
             />
             {releaseLines.map((marker) => (
               <ReferenceLine
@@ -178,12 +193,7 @@ export function EventsChart({
                 x={marker.timestamp}
                 stroke="hsl(var(--muted-foreground))"
                 strokeDasharray="4 4"
-                label={compact ? undefined : {
-                  value: marker.version,
-                  position: 'top',
-                  fill: 'hsl(var(--muted-foreground))',
-                  fontSize: 11,
-                }}
+                label={buildReleaseLineLabel(compact, marker.version)}
               />
             ))}
           </AreaChart>

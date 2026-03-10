@@ -112,36 +112,39 @@ function formatClock(ms: number): string {
 }
 
 function formatLifecycleDetail(payload: Record<string, unknown>): string {
-  const screen = payload.screen ?? 'Screen'
-  const state = payload.state ?? ''
-  return `${String(screen)}: ${String(state)}`
+  const screen = typeof payload.screen === 'string' ? payload.screen : 'Screen'
+  const state = typeof payload.state === 'string' ? payload.state : ''
+  return `${screen}: ${state}`
 }
 
 function formatClickDetail(payload: Record<string, unknown>): string {
   const viewClass = (payload['view.class'] as string)?.split('.').pop() ?? ''
-  const viewId = payload['view.id'] ?? ''
-  return viewId ? `Clicked ${viewClass} (${String(viewId)})` : `Clicked ${viewClass}`
+  const viewId = typeof payload['view.id'] === 'string' ? payload['view.id'] : ''
+  return viewId ? `Clicked ${viewClass} (${viewId})` : `Clicked ${viewClass}`
 }
 
 function formatNavigationDetail(payload: Record<string, unknown>): string {
-  return `${String(payload.from ?? '')} → ${String(payload.to ?? '')}`
+  const from = typeof payload.from === 'string' ? payload.from : ''
+  const to = typeof payload.to === 'string' ? payload.to : ''
+  return `${from} → ${to}`
 }
 
 function formatHttpDetail(payload: Record<string, unknown>): string | undefined {
   const parts: string[] = []
-  if (payload.method) parts.push(String(payload.method))
-  if (payload.url) parts.push(String(payload.url))
-  if (payload.status_code != null) parts.push(String(payload.status_code))
+  if (typeof payload.method === 'string') parts.push(payload.method)
+  if (typeof payload.url === 'string') parts.push(payload.url)
+  if (typeof payload.status_code === 'number' || typeof payload.status_code === 'string') parts.push(String(payload.status_code))
   return parts.length > 0 ? parts.join(' ') : undefined
 }
 
 function formatDeviceDetail(payload: Record<string, unknown>): string | undefined {
-  if (payload.action && String(payload.action).includes('BATTERY')) {
-    const level = payload.level ?? ''
+  const action = typeof payload.action === 'string' ? payload.action : ''
+  if (action.includes('BATTERY')) {
+    const level = typeof payload.level === 'number' ? payload.level : ''
     const charging = payload.charging ? ' (charging)' : ''
-    return `Battery ${String(level)}%${charging}`
+    return `Battery ${level}%${charging}`
   }
-  return payload.action ? String(payload.action) : undefined
+  return action || undefined
 }
 
 function formatBreadcrumbDetail(payload: Record<string, unknown>, category: string): string | undefined {
@@ -161,7 +164,7 @@ function formatBreadcrumbDetail(payload: Record<string, unknown>, category: stri
 
 function getEventDetail(event: ReplayEvent): string | undefined {
   if (event.type !== 5 || !event.data?.payload) return undefined
-  const payload = event.data.payload as Record<string, unknown>
+  const payload = event.data.payload
 
   if (event.data.tag === 'breadcrumb') {
     const category = (payload.category ?? payload.type ?? '') as string
@@ -501,11 +504,11 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
       .map((e) => {
         const wh = getWidthHeight(e)!
         const segmentId = getEventSegmentId(e)
-        const segmentIndex = segmentId !== undefined ? filteredSegmentIndexById.get(segmentId) : undefined
+        const segmentIndex = segmentId === undefined ? undefined : filteredSegmentIndexById.get(segmentId)
         if (segmentIndex === undefined) return null
         const segmentStart = segmentStartTimestampById.get(segmentId!)
         const segmentDuration = segmentDurationsMs[segmentIndex] ?? 0
-        const localMs = segmentStart !== undefined ? clamp(e.timestamp - segmentStart, 0, segmentDuration) : 0
+        const localMs = segmentStart === undefined ? 0 : clamp(e.timestamp - segmentStart, 0, segmentDuration)
         const globalMs = (cumulativeOffsetsMs[segmentIndex] ?? 0) + localMs
         const orientation: ReplayOrientation = wh.width > wh.height ? 'landscape' : 'portrait'
         return { globalMs, orientation }
@@ -551,7 +554,7 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
       if (segmentIndex === undefined) return
       const segmentStart = segmentStartTimestampById.get(segmentId)
       const segmentDuration = segmentDurationsMs[segmentIndex] ?? 0
-      const localMs = segmentStart !== undefined ? clamp(event.timestamp - segmentStart, 0, segmentDuration) : 0
+      const localMs = segmentStart === undefined ? 0 : clamp(event.timestamp - segmentStart, 0, segmentDuration)
       const globalMs = (cumulativeOffsetsMs[segmentIndex] ?? 0) + localMs
 
       const category = (payload.category ?? '') as string
@@ -617,9 +620,9 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
       const segmentStartTimestamp = segmentStartTimestampById.get(segmentId)
 
       const localTimeMs =
-        segmentStartTimestamp !== undefined
-          ? clamp(event.timestamp - segmentStartTimestamp, 0, segmentDuration)
-          : 0
+        segmentStartTimestamp === undefined
+          ? 0
+          : clamp(event.timestamp - segmentStartTimestamp, 0, segmentDuration)
 
       const globalTimeMs = clamp(segmentOffset + localTimeMs, 0, totalDurationMs)
       const percent = clamp((globalTimeMs / totalDurationMs) * 100, 0, 100)
