@@ -19,12 +19,13 @@ package com.moneat.shared.repositories
 import com.moneat.shared.repositories.models.OrganizationRow
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.neq
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+
+private const val MAX_SLUG_RETRIES = 50
 
 class OrganizationRepositoryImpl : OrganizationRepository {
 
@@ -40,36 +41,34 @@ class OrganizationRepositoryImpl : OrganizationRepository {
                 ?.let { OrganizationRow(it[Organizations.id], it[Organizations.name], it[Organizations.slug]) }
         }
 
-    override fun updateOnboardingOrgAndMarkComplete(update: OrganizationRepository.OnboardingUpdate): String =
-        transaction {
-            var slug = update.baseSlug
-            var suffix = 2
-            while (
-                Organizations
-                    .selectAll()
-                    .where { (Organizations.slug eq slug) and (Organizations.id neq update.orgId) }
-                    .count() > 0
-            ) {
+    override fun updateOnboardingOrgAndMarkComplete(update: OrganizationRepository.OnboardingUpdate): String {
+        var slug = update.baseSlug
+        var suffix = 2
+        repeat(MAX_SLUG_RETRIES) {
+            try {
+                val candidateSlug = slug
+                transaction {
+                    Organizations.update({ Organizations.id eq update.orgId }) {
+                        it[name] = update.name
+                        it[Organizations.slug] = candidateSlug
+                        it[company_size] = update.companySize
+                        it[referral_source] = update.referralSource
+                        it[utm_source] = update.utmSource
+                        it[utm_medium] = update.utmMedium
+                        it[utm_campaign] = update.utmCampaign
+                        it[utm_content] = update.utmContent
+                        it[utm_term] = update.utmTerm
+                    }
+                    Users.update({ Users.id eq update.userId }) {
+                        it[onboarding_completed] = true
+                    }
+                }
+                return candidateSlug
+            } catch (_: ExposedSQLException) {
                 slug = "${update.baseSlug}-$suffix"
                 suffix++
             }
-
-            Organizations.update({ Organizations.id eq update.orgId }) {
-                it[name] = update.name
-                it[Organizations.slug] = slug
-                it[company_size] = update.companySize
-                it[referral_source] = update.referralSource
-                it[utm_source] = update.utmSource
-                it[utm_medium] = update.utmMedium
-                it[utm_campaign] = update.utmCampaign
-                it[utm_content] = update.utmContent
-                it[utm_term] = update.utmTerm
-            }
-
-            Users.update({ Users.id eq update.userId }) {
-                it[onboarding_completed] = true
-            }
-
-            slug
         }
+        throw IllegalStateException("Could not generate a unique slug for '${update.baseSlug}' after $MAX_SLUG_RETRIES attempts")
+    }
 }

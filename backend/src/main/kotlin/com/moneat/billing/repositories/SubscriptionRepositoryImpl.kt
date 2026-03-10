@@ -44,7 +44,7 @@ class SubscriptionRepositoryImpl : SubscriptionRepository {
                     (Subscriptions.organization_id eq orgId) and
                         (Subscriptions.status inList ACTIVE_STATUSES)
                 }
-                .orderBy(Subscriptions.id to SortOrder.ASC)
+                .orderBy(Subscriptions.id to SortOrder.DESC)
                 .firstOrNull()
                 ?.toRow()
         }
