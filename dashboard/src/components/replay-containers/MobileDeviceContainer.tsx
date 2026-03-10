@@ -41,7 +41,14 @@ function BatteryIcon({ level, charging, className }: { level?: number | null; ch
   const pct = typeof level === 'number' && Number.isFinite(level) ? Math.max(0, Math.min(level, 100)) : 100
   const fillWidth = Math.round((pct / 100) * 10)
   const isLow = pct <= 20 && !charging
-  const fillColor = isLow ? '#ef4444' : charging ? '#34d399' : 'currentColor'
+  let fillColor: string
+  if (isLow) {
+    fillColor = '#ef4444'
+  } else if (charging) {
+    fillColor = '#34d399'
+  } else {
+    fillColor = 'currentColor'
+  }
 
   return (
     <svg viewBox="0 0 16 10" fill="none" className={className} aria-label={`Battery ${pct}%`}>
@@ -58,7 +65,7 @@ function StatusBar({ platform, compact, context }: { platform: string; compact?:
   const date = typeof context?.deviceTimeMs === 'number' && Number.isFinite(context?.deviceTimeMs)
     ? new Date(context.deviceTimeMs)
     : new Date()
-  const time = isNaN(date.getTime()) ? formatTimeHM12(new Date(), timezone) : formatTimeHM12(date, timezone)
+  const time = Number.isNaN(date.getTime()) ? formatTimeHM12(new Date(), timezone) : formatTimeHM12(date, timezone)
   const batteryLevel = context?.batteryLevel
   const hasBatteryLevel = typeof batteryLevel === 'number' && Number.isFinite(batteryLevel)
 

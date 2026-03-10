@@ -130,6 +130,7 @@ function PlatformMegaMenu() {
   return (
     <div
       ref={containerRef}
+      role="none"
       className="relative"
       onMouseEnter={handleEnter}
       onMouseLeave={handleLeave}

@@ -115,6 +115,11 @@ export function QuotaBar({ percent, size = 'sm', showLabel = true, className }: 
         ? 'bg-amber-500'
         : 'bg-emerald-500'
 
+  const labelColor =
+    percent >= 90 ? 'text-red-600 dark:text-red-400'
+    : percent >= 70 ? 'text-amber-600 dark:text-amber-400'
+    : 'text-muted-foreground'
+
   return (
     <div className={cn('flex items-center gap-2', className)}>
       <div className={cn('flex-1 rounded-full bg-muted overflow-hidden', size === 'sm' ? 'h-1.5' : 'h-2.5')}>
@@ -126,7 +131,7 @@ export function QuotaBar({ percent, size = 'sm', showLabel = true, className }: 
       {showLabel && (
         <span className={cn(
           'text-xs font-medium tabular-nums min-w-[3rem] text-right',
-          percent >= 90 ? 'text-red-600 dark:text-red-400' : percent >= 70 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'
+          labelColor
         )}>
           {percent.toFixed(1)}%
         </span>
@@ -204,7 +209,7 @@ export function ChartTooltipContent({ active, payload, label, formatter }: Chart
       <p className="text-xs font-medium text-muted-foreground mb-1.5">{label}</p>
       <div className="space-y-1">
         {payload.map((entry, i) => (
-          <div key={i} className="flex items-center gap-2 text-sm">
+          <div key={entry.name ?? entry.dataKey ?? `entry-${i}`} className="flex items-center gap-2 text-sm">
             <div
               className="h-2.5 w-2.5 rounded-full shrink-0"
               style={{ backgroundColor: entry.color }}
@@ -261,7 +266,7 @@ export function AdminSkeleton() {
       <div className="h-8 w-40 bg-muted rounded" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-32 bg-muted rounded-xl" />
+          <div key={`skeleton-${i}`} className="h-32 bg-muted rounded-xl" />
         ))}
       </div>
       <div className="h-80 bg-muted rounded-xl" />

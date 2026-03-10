@@ -395,9 +395,10 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
       .map((t, i) => ({t, i}))
       .filter(({t}) => t.monthlyPriceCents > 0)
     if (paidIndexes.length === 0) return -1
-    return paidIndexes.reduce((best, curr) =>
-      costs[curr.i].total < costs[best.i].total ? curr : best,
-    paidIndexes[0]).i
+    return paidIndexes.reduce(
+      (best, curr) => costs[curr.i].total < costs[best.i].total ? curr : best,
+      paidIndexes[0],
+    ).i
   }, [costs, tiers])
 
   const set = (key: keyof Usage) => (v: number) => setUsage((u) => ({...u, [key]: v}))
@@ -537,30 +538,32 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
 
           {/* ── Right: Plan comparison ── */}
           <div className="lg:col-span-3">
-            {isPending ? (
+            {isPending && (
               <div className="grid grid-cols-2 gap-4">
                 {Array.from({length: 4}).map((_, i) => (
-                  <Card key={i} className="border-border/60">
+                  <Card key={`loading-plan-${i}`} className="border-border/60">
                     <CardHeader>
                       <div className="h-4 w-16 bg-muted rounded animate-pulse" />
                       <div className="h-8 w-20 bg-muted rounded animate-pulse mt-2" />
                     </CardHeader>
                     <CardContent className="space-y-2">
                       {Array.from({length: 3}).map((__, j) => (
-                        <div key={j} className="h-3 w-full bg-muted rounded animate-pulse" />
+                        <div key={`loading-feature-${j}`} className="h-3 w-full bg-muted rounded animate-pulse" />
                       ))}
                     </CardContent>
                   </Card>
                 ))}
               </div>
-            ) : tiers.length === 0 ? (
+            )}
+            {!isPending && tiers.length === 0 && (
               <Card className="border-border/60">
                 <CardHeader>
                   <CardTitle>Pricing unavailable</CardTitle>
                   <CardDescription>No plans are currently published.</CardDescription>
                 </CardHeader>
               </Card>
-            ) : (
+            )}
+            {!isPending && tiers.length > 0 && (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   {tiers.map((tier, idx) => (
@@ -573,11 +576,14 @@ export function PricingCalculatorSection({standalone = false}: {standalone?: boo
                   const datadogEst = estimateDatadogCost(usage, ddExtras)
                   const freeIdx = tiers.findIndex((t) => t.tierName === 'FREE')
                   const freeFits = freeIdx >= 0 && costs[freeIdx] && !costs[freeIdx].exceedsFreeLimits
-                  const displayMoneatCost = freeFits
-                    ? 0
-                    : bestPlanIdx >= 0
-                      ? costs[bestPlanIdx].total
-                      : 0
+                  let displayMoneatCost: number
+                  if (freeFits) {
+                    displayMoneatCost = 0
+                  } else if (bestPlanIdx >= 0) {
+                    displayMoneatCost = costs[bestPlanIdx].total
+                  } else {
+                    displayMoneatCost = 0
+                  }
                   const hasUsage =
                     usage.ingestGb > 0 ||
                     usage.pageViews > 0 ||

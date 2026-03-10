@@ -28,7 +28,7 @@ function PricingLoadingState() {
   return (
     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
       {Array.from({length: 4}).map((_, idx) => (
-        <Card key={idx} className="border-border/60">
+        <Card key={`loading-card-${idx}`} className="border-border/60">
           <CardHeader>
             <div className="h-5 w-20 rounded bg-muted animate-pulse" />
             <div className="h-4 w-36 rounded bg-muted animate-pulse" />
@@ -37,7 +37,7 @@ function PricingLoadingState() {
           <CardContent>
             <div className="space-y-2">
               {Array.from({length: 6}).map((__, featureIdx) => (
-                <div key={featureIdx} className="h-3 w-full rounded bg-muted animate-pulse" />
+                <div key={`loading-feature-${featureIdx}`} className="h-3 w-full rounded bg-muted animate-pulse" />
               ))}
             </div>
           </CardContent>
@@ -91,6 +91,7 @@ function TierCard({
   const btnClass = tier.highlight
     ? 'w-full bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
     : 'w-full'
+  const btnVariant: 'default' | 'outline' = tier.highlight ? 'default' : 'outline'
 
   return (
     <Card className={`flex flex-col ${highlightClass}`}>
@@ -174,7 +175,7 @@ function TierCard({
         {isAuthenticated && tier.tierName !== 'FREE' ? (
           <Button
             className={btnClass}
-            variant={tier.highlight ? 'default' : 'outline'}
+            variant={btnVariant}
             size="lg"
             disabled={isPending}
             onClick={() => onPaidTierClick(tier.tierName)}
@@ -185,7 +186,7 @@ function TierCard({
           <Button
             asChild
             className={btnClass}
-            variant={tier.highlight ? 'default' : 'outline'}
+            variant={btnVariant}
             size="lg"
           >
             <Link to={tier.ctaLink}>{tier.cta}</Link>
@@ -317,9 +318,7 @@ export function PricingSection() {
 
         <div className="text-center mt-8 pt-8 border-t border-border/40">
           <p className="text-sm text-muted-foreground">
-            Unlimited team members on every plan.
-            <span className="mx-1.5">·</span>
-            <span className="text-xs">30-day money-back guarantee</span>
+            Unlimited team members on every plan.{' '}<span className="mx-1.5">·</span>{' '}<span className="text-xs">30-day money-back guarantee</span>
           </p>
         </div>
       </div>

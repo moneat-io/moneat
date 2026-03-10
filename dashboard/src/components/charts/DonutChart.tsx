@@ -57,8 +57,8 @@ export function DonutChart({ data, title, height = 300, colors = DEFAULT_COLORS 
               dataKey="value"
               label={({ name, percent }) => `${name} (${((percent ?? 0) * 100).toFixed(0)}%)`}
             >
-              {chartData.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${entry.name}`} fill={colors[index % colors.length]} />
               ))}
             </Pie>
             <Tooltip

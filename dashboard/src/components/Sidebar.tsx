@@ -453,8 +453,9 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
           <div className="space-y-4 mt-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">Project Name</label>
+              <label htmlFor="new-project-name" className="text-sm font-medium mb-2 block">Project Name</label>
               <Input
+                id="new-project-name"
                 placeholder="My awesome app"
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
@@ -463,7 +464,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-3 block">Select Platform</label>
+              <p className="text-sm font-medium mb-3 block">Select Platform</p>
               <div className="mb-3 flex flex-wrap gap-2">
                 {platformFilterTabs.map((tab) => (
                   <Button
@@ -506,7 +507,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
             {/* Target selection for multi-platform frameworks */}
             {selectedPlatform && platforms.find(p => p.id === selectedPlatform)?.targets && (
               <div>
-                <label className="text-sm font-medium mb-3 block">Select Target Platforms</label>
+                <p className="text-sm font-medium mb-3 block">Select Target Platforms</p>
                 <div className="rounded-lg border p-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {platforms.find(p => p.id === selectedPlatform)?.targets?.map(target => (

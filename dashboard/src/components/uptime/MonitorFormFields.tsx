@@ -96,7 +96,7 @@ export function MonitorFormFields({
                 value={formData.port ?? ''}
                 onChange={(e) => {
                   if (e.target.value === '') { onChange({...formData, port: undefined}); return }
-                  const parsed = parseInt(e.target.value, 10)
+                  const parsed = Number.parseInt(e.target.value, 10)
                   onChange({...formData, port: Number.isNaN(parsed) ? undefined : parsed})
                 }}
                 placeholder={monitorType === 'ssl' ? '443' : '80'}
@@ -186,7 +186,7 @@ export function MonitorFormFields({
           value={formData.intervalSeconds ?? ''}
           onChange={(e) => {
             if (e.target.value === '') { onChange({...formData, intervalSeconds: undefined}); return }
-            const parsed = parseInt(e.target.value, 10)
+            const parsed = Number.parseInt(e.target.value, 10)
             onChange({...formData, intervalSeconds: Number.isNaN(parsed) ? undefined : parsed})
           }}
         />
@@ -200,7 +200,7 @@ export function MonitorFormFields({
           value={formData.timeoutSeconds ?? ''}
           onChange={(e) => {
             if (e.target.value === '') { onChange({...formData, timeoutSeconds: undefined}); return }
-            const parsed = parseInt(e.target.value, 10)
+            const parsed = Number.parseInt(e.target.value, 10)
             onChange({...formData, timeoutSeconds: Number.isNaN(parsed) ? undefined : parsed})
           }}
         />
@@ -215,7 +215,7 @@ export function MonitorFormFields({
             value={formData.retries ?? ''}
             onChange={(e) => {
               if (e.target.value === '') { onChange({...formData, retries: undefined}); return }
-              const parsed = parseInt(e.target.value, 10)
+              const parsed = Number.parseInt(e.target.value, 10)
               onChange({...formData, retries: Number.isNaN(parsed) ? undefined : parsed})
             }}
           />

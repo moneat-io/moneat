@@ -128,8 +128,8 @@ export function BarChart({
               radius={4}
               fill={color}
             >
-              {!color && chartData.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={palette[index % palette.length]} />
+              {!color && chartData.map((entry, index) => (
+                <Cell key={`cell-${entry.name}`} fill={palette[index % palette.length]} />
               ))}
             </Bar>
           </RechartsBarChart>

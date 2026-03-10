@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState, useCallback, useRef, useEffect, type ReactNode} from 'react'
+import {useState, useCallback, useRef, useEffect, useMemo, type ReactNode} from 'react'
 import {
   CommandPaletteContext,
   type AiPaletteMessage,
@@ -47,7 +47,7 @@ function loadInitialPanelMode(): AiPanelMode {
 
 function loadInitialPanelSize(): number {
   const saved = localStorage.getItem('moneat:ai-panel-size')
-  return saved ? parseFloat(saved) : 30
+  return saved ? Number.parseFloat(saved) : 30
 }
 
 function loadInitialPanelOrientation(): AiPanelOrientation {
@@ -366,42 +366,49 @@ export function CommandPaletteProvider({children}: {children: ReactNode}) {
     [pendingConfirmation, isConfirming, upsertToolInvocation],
   )
 
+  const contextValue = useMemo(() => ({
+    open,
+    setOpen: setOpenValue,
+    openPalette,
+    aiMode,
+    setAiMode,
+    conversationId,
+    setConversationId,
+    aiMessages,
+    setAiMessages,
+    toolInvocations,
+    setToolInvocations,
+    pendingConfirmation,
+    setPendingConfirmation,
+    registerConnectionCleanup,
+    cleanupConnection,
+    resetAiState,
+    chatHistory,
+    startNewChat,
+    restoreChat,
+    isStreaming,
+    isConfirming,
+    aiInput,
+    setAiInput,
+    handleAiSubmit,
+    handleConfirm,
+    aiPanelMode,
+    aiPanelSize,
+    aiPanelOrientation,
+    setAiPanelMode,
+    setAiPanelSize,
+    setAiPanelOrientation,
+  }), [
+    open, setOpenValue, openPalette, aiMode, setAiMode, conversationId, setConversationId,
+    aiMessages, setAiMessages, toolInvocations, setToolInvocations, pendingConfirmation,
+    setPendingConfirmation, registerConnectionCleanup, cleanupConnection, resetAiState,
+    chatHistory, startNewChat, restoreChat, isStreaming, isConfirming, aiInput, setAiInput,
+    handleAiSubmit, handleConfirm, aiPanelMode, aiPanelSize, aiPanelOrientation,
+    setAiPanelMode, setAiPanelSize, setAiPanelOrientation,
+  ])
+
   return (
-    <CommandPaletteContext.Provider
-      value={{
-        open,
-        setOpen: setOpenValue,
-        openPalette,
-        aiMode,
-        setAiMode,
-        conversationId,
-        setConversationId,
-        aiMessages,
-        setAiMessages,
-        toolInvocations,
-        setToolInvocations,
-        pendingConfirmation,
-        setPendingConfirmation,
-        registerConnectionCleanup,
-        cleanupConnection,
-        resetAiState,
-        chatHistory,
-        startNewChat,
-        restoreChat,
-        isStreaming,
-        isConfirming,
-        aiInput,
-        setAiInput,
-        handleAiSubmit,
-        handleConfirm,
-        aiPanelMode,
-        aiPanelSize,
-        aiPanelOrientation,
-        setAiPanelMode,
-        setAiPanelSize,
-        setAiPanelOrientation,
-      }}
-    >
+    <CommandPaletteContext.Provider value={contextValue}>
       {children}
     </CommandPaletteContext.Provider>
   )

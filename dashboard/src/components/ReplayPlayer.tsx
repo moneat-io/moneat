@@ -131,7 +131,7 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
     const target = document.createElement('div')
     target.className = 'rrweb-player-wrapper'
     while (container.firstChild) {
-      container.removeChild(container.firstChild)
+      container.firstChild.remove()
     }
     container.appendChild(target)
 
@@ -165,7 +165,7 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
     } catch (error) {
       console.error('Failed to initialize replay player:', formatErrorForLogging(error))
       while (target.firstChild) {
-        target.removeChild(target.firstChild)
+        target.firstChild.remove()
       }
       const errorContainer = document.createElement('div')
       errorContainer.style.cssText = 'display: flex; align-items: center; justify-content: center; height: 400px; background: #f5f5f5; border-radius: 8px; padding: 2rem;'
@@ -210,7 +210,7 @@ const rrwebPlayerRef = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(functio
         // ignore
       }
       if (container && target.parentNode === container) {
-        container.removeChild(target)
+        target.remove()
       }
     }
   }, [events, width, height, autoPlay, showController])

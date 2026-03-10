@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import React from 'react'
 import {Link} from '@tanstack/react-router'
 import {Activity, Check, Play, X, Zap} from 'lucide-react'
 import {Button} from '@/components/ui/button'
@@ -96,27 +97,35 @@ export function VariantB() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {comparisonRows.map((row) => (
-                    <TableRow key={row.feature}>
-                      <TableCell className="font-medium">{row.feature}</TableCell>
-                      <TableCell className="text-center text-muted-foreground">{row.sentry}</TableCell>
-                      <TableCell className="text-center">
-                        {row.moneatBetter === true ? (
-                          <span className="inline-flex items-center gap-1 text-primary font-medium">
-                            <Check className="h-4 w-4" />
-                            {row.moneat}
-                          </span>
-                        ) : row.moneatBetter === false ? (
-                          <span className="inline-flex items-center gap-1 text-muted-foreground">
-                            <X className="h-4 w-4" />
-                            {row.moneat}
-                          </span>
-                        ) : (
-                          row.moneat
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {comparisonRows.map((row) => {
+                    let moneatCell: React.ReactNode
+                    if (row.moneatBetter === true) {
+                      moneatCell = (
+                        <span className="inline-flex items-center gap-1 text-primary font-medium">
+                          <Check className="h-4 w-4" />
+                          {row.moneat}
+                        </span>
+                      )
+                    } else if (row.moneatBetter === false) {
+                      moneatCell = (
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <X className="h-4 w-4" />
+                          {row.moneat}
+                        </span>
+                      )
+                    } else {
+                      moneatCell = row.moneat
+                    }
+                    return (
+                      <TableRow key={row.feature}>
+                        <TableCell className="font-medium">{row.feature}</TableCell>
+                        <TableCell className="text-center text-muted-foreground">{row.sentry}</TableCell>
+                        <TableCell className="text-center">
+                          {moneatCell}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </Card>

@@ -35,7 +35,7 @@ export function EventsChartSkeleton({
         <div className={cn("flex items-end justify-between", compact ? "gap-1" : "gap-2", fillHeight ? "h-full" : "h-[300px]")}>
           {[...Array(24)].map((_, i) => (
             <div
-              key={i}
+              key={`bar-${i}`}
               className={cn("flex-1 bg-muted animate-pulse", compact ? "rounded-sm" : "rounded-t")}
               style={{
                 height: `${30 + ((i * 17 + 11) % 70)}%`,

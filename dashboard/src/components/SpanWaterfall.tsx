@@ -182,6 +182,7 @@ function SpanRow({
         </div>
       </div>
       <div
+        role="presentation"
         className="relative px-2 py-1 min-h-6"
         onMouseMove={(e) => onHover(span, e.clientX + 12, e.clientY + 12)}
         onMouseLeave={onLeave}

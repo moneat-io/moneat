@@ -75,7 +75,7 @@ function formatDurationLabel(ms: number): string {
 function formatTimestamp(isoString: string, timezone: string): string {
   if (!isoString) return ''
   const date = new Date(isoString)
-  if (isNaN(date.getTime())) return ''
+  if (Number.isNaN(date.getTime())) return ''
   return formatTimeWithMs(date, timezone)
 }
 
@@ -365,16 +365,18 @@ function WaterfallPanel({
 
       {/* Content */}
       <div className="px-1 py-1">
-        {isLoading ? (
+        {isLoading && (
           <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading spans...
           </div>
-        ) : canRenderWaterfall ? (
+        )}
+        {!isLoading && canRenderWaterfall && (
           <div className="max-h-[300px] overflow-auto rounded-md">
             <SpanWaterfall transaction={effectiveTransaction} spans={spans} />
           </div>
-        ) : (
+        )}
+        {!isLoading && !canRenderWaterfall && (
           <div className="flex flex-col items-center justify-center gap-1.5 py-6 text-xs text-muted-foreground">
             <Activity className="h-5 w-5 opacity-40" />
             <span>No spans found for this trace</span>
@@ -415,7 +417,16 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek 
   const activeErrorIndex = activeItem?.type === 'error' ? errorItems.findIndex((it) => it.id === activeItem.id) : -1
   const activeTransactionIndex = activeItem?.type === 'transaction' ? transactionItems.findIndex((it) => it.id === activeItem.id) : -1
   const activeSpanIndex = activeItem?.type === 'span' ? spanItems.findIndex((it) => it.id === activeItem.id) : -1
-  const scrollIndex = tab === 'all' ? activeIndex : tab === 'error' ? activeErrorIndex : tab === 'transaction' ? activeTransactionIndex : activeSpanIndex
+  let scrollIndex: number
+  if (tab === 'all') {
+    scrollIndex = activeIndex
+  } else if (tab === 'error') {
+    scrollIndex = activeErrorIndex
+  } else if (tab === 'transaction') {
+    scrollIndex = activeTransactionIndex
+  } else {
+    scrollIndex = activeSpanIndex
+  }
 
   useEffect(() => {
     if (scrollIndex < 0 || !listRef.current) return
@@ -452,27 +463,23 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek 
         <div className="px-2 pt-2">
           <TabsList className="w-full grid grid-cols-4 h-9 gap-1 p-1 bg-muted/50">
             <TabsTrigger value="all" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              All
-              <span className="ml-1 text-[10px] font-mono text-muted-foreground">{items.length}</span>
+              All <span className="ml-1 text-[10px] font-mono text-muted-foreground">{items.length}</span>
             </TabsTrigger>
             <TabsTrigger value="error" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-red-600 dark:data-[state=active]:text-red-400">
               <span className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                Errors
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />Errors
               </span>
               <span className="ml-1 text-[10px] font-mono">{errorItems.length}</span>
             </TabsTrigger>
             <TabsTrigger value="transaction" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400">
               <span className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                Txns
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />Txns
               </span>
               <span className="ml-1 text-[10px] font-mono">{transactionItems.length}</span>
             </TabsTrigger>
             <TabsTrigger value="span" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-emerald-600 dark:data-[state=active]:text-emerald-400">
               <span className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                Spans
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Spans
               </span>
               <span className="ml-1 text-[10px] font-mono">{spanItems.length}</span>
             </TabsTrigger>
@@ -554,6 +561,14 @@ const TimelineList = React.forwardRef<HTMLDivElement, TimelineListProps>(functio
             const isActive = index === activeIndex
             const isExpanded = expandedId === item.id
             const colors = typeColorClasses(item.type)
+            let itemBgClass: string
+            if (isActive) {
+              itemBgClass = colors.bgActive
+            } else if (isExpanded) {
+              itemBgClass = colors.bg
+            } else {
+              itemBgClass = 'hover:bg-muted/40'
+            }
 
             return (
               <li key={item.id}>
@@ -564,7 +579,7 @@ const TimelineList = React.forwardRef<HTMLDivElement, TimelineListProps>(functio
                   className={cn(
                     'w-full text-left flex items-center gap-3 px-3 py-2.5 border-l-[3px] transition-all duration-150',
                     colors.border,
-                    isActive ? colors.bgActive : isExpanded ? colors.bg : 'hover:bg-muted/40',
+                    itemBgClass,
                   )}
                 >
                   {/* Expand indicator */}

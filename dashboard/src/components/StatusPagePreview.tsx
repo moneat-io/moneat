@@ -116,8 +116,8 @@ function UptimeHistoryBar({
   return (
     <div className="mt-3">
       <div className="flex items-stretch gap-[1.5px] h-8 w-full">
-        {history.map((point, index) => (
-          <Tooltip key={index}>
+        {history.map((point) => (
+          <Tooltip key={point.date}>
             <TooltipTrigger asChild>
               <div
                 className={`flex-1 rounded-[2px] ${getBarColor(point.uptime, isDarkMode)} transition-opacity hover:opacity-80 cursor-default min-w-[2px]`}

@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import React from 'react'
 import {Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type UptimeMonitor} from '@/lib/api'
@@ -82,13 +83,21 @@ function MonitorRow({monitor}: {monitor: UptimeMonitor}) {
 
   const isOnline = monitor.status === 'up'
   const iconClass = getMonitorIconClass(monitor.status, isOnline)
+  let statusIcon: React.ReactNode
+  if (isOnline) {
+    statusIcon = <CheckCircle2 className="h-4 w-4" />
+  } else if (monitor.status === 'down') {
+    statusIcon = <XCircle className="h-4 w-4" />
+  } else {
+    statusIcon = <Pause className="h-4 w-4" />
+  }
 
   return (
     <TableRow className="group">
       <TableCell className="pl-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className={cn(iconClass)}>
-            {isOnline ? <CheckCircle2 className="h-4 w-4" /> : monitor.status === 'down' ? <XCircle className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            {statusIcon}
           </div>
           <div className="min-w-0">
             <Link

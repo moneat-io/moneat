@@ -56,7 +56,7 @@ export default function HeartbeatBar({heartbeats, maxBars = 100, className}: Hea
     <div className={cn("flex gap-[2px] h-10 items-end", className)}>
       {slots.map((slot, i) => (
         <div
-          key={i}
+          key={`slot-${i}`}
           className={cn(
             'flex-1 rounded-sm transition-all',
             slot.status === 'up' && 'bg-emerald-500',

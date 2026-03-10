@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createContext, ReactNode, useContext, useEffect, useState} from 'react'
+import {createContext, ReactNode, useContext, useEffect, useMemo, useState} from 'react'
 
 interface ProjectContextType {
   selectedProjectId: number | null
@@ -37,8 +37,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   }, [selectedProjectId])
 
+  const contextValue = useMemo(
+    () => ({ selectedProjectId, setSelectedProjectId }),
+    [selectedProjectId, setSelectedProjectId],
+  )
+
   return (
-    <ProjectContext.Provider value={{ selectedProjectId, setSelectedProjectId }}>
+    <ProjectContext.Provider value={contextValue}>
       {children}
     </ProjectContext.Provider>
   )

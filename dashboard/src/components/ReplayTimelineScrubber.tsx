@@ -157,11 +157,24 @@ export function ReplayTimelineScrubber({
       {/* Scrubber track */}
       <div
         ref={trackRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Replay progress"
+        aria-valuemin={0}
+        aria-valuemax={durationMs}
+        aria-valuenow={currentOffsetMs}
         className={cn(
           'relative h-6 w-full cursor-pointer group/scrubber mb-2',
           isDragging && 'select-none'
         )}
         onMouseDown={handleTrackMouseDown}
+        onKeyDown={(e) => {
+          const step = durationMs * 0.05
+          if (e.key === 'ArrowLeft') { e.preventDefault(); onSeek(Math.max(0, currentOffsetMs - step)) }
+          if (e.key === 'ArrowRight') { e.preventDefault(); onSeek(Math.min(durationMs, currentOffsetMs + step)) }
+          if (e.key === 'Home') { e.preventDefault(); onSeek(0) }
+          if (e.key === 'End') { e.preventDefault(); onSeek(durationMs) }
+        }}
       >
         {/* Track background */}
         <div className="absolute top-1/2 left-0 right-0 h-1.5 -translate-y-1/2 rounded-full bg-muted border border-border" />
