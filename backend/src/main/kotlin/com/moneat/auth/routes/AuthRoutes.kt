@@ -58,9 +58,10 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 
-fun Route.authRoutes() {
-    val authService = GlobalContext.get().get<AuthService>()
-    val oauthService = GlobalContext.get().get<OAuthService>()
+fun Route.authRoutes(
+    authService: AuthService = GlobalContext.get().get(),
+    oauthService: OAuthService = GlobalContext.get().get(),
+) {
     val config =
         io.ktor.server.config
             .ApplicationConfig("application.conf")

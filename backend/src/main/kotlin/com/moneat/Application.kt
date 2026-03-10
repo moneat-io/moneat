@@ -31,7 +31,10 @@ import com.moneat.plugins.configureRateLimiting
 import com.moneat.plugins.configureRouting
 import com.moneat.plugins.configureSecurity
 import com.moneat.plugins.configureSerialization
-import io.ktor.server.application.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationStopping
+import io.ktor.server.application.install
+import io.ktor.server.application.log
 import io.ktor.server.netty.EngineMain
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger

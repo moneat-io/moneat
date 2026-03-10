@@ -127,7 +127,15 @@ val authModule = module {
     single { AuthTokenService() }
     single { RefreshTokenService() }
     single { RefreshTokenCleanupService() }
-    single { AuthService(get(), get(), get(), get(), get()) }
+    single {
+        AuthService(
+            userRepository = get(),
+            membershipRepository = get(),
+            organizationRepository = get(),
+            emailService = get(),
+            refreshTokenService = get(),
+        )
+    }
     single { AccountDeletionService(get(), get()) }
     single { ArtifactCleanupService(get(), get()) }
 }
@@ -136,8 +144,21 @@ val authModule = module {
 val billingModule = module {
     single<SubscriptionRepository> { SubscriptionRepositoryImpl() }
 
-    single { StripeService(get(), get(), get()) }
-    single { BillingBackgroundService(get(), get(), get(), get()) }
+    single {
+        StripeService(
+            subscriptionRepository = get(),
+            organizationRepository = get(),
+            pricingTierService = get(),
+        )
+    }
+    single {
+        BillingBackgroundService(
+            stripeService = get(),
+            quotaService = get(),
+            emailService = get(),
+            pricingTierService = get(),
+        )
+    }
     single { AdminBillingService(get()) }
 }
 
@@ -193,7 +214,7 @@ val uptimeModule = module {
 
     single { UptimeService(get(), get()) }
     single { UptimeCheckExecutor() }
-    single { UptimeScheduler(get(), get(), get(), get(), get()) }
+    single { UptimeScheduler(get(), get(), get(), get(), get(), get(), get()) }
     single { StatusPageService(get()) }
 }
 
@@ -204,7 +225,17 @@ val dashboardsModule = module {
     single<DashboardWidgetRepository> { DashboardWidgetRepositoryImpl() }
 
     single { DashboardQueryEngine() }
-    single { DashboardAlertService(get(), get(), get(), get(), get(), get(), get()) }
+    single {
+        DashboardAlertService(
+            emailService = get(),
+            slackService = get(),
+            discordService = get(),
+            incidentService = get(),
+            prefsService = get(),
+            queryEngine = get(),
+            retentionPolicyService = get(),
+        )
+    }
     single {
         CustomDashboardService(
             folderRepository = get(),

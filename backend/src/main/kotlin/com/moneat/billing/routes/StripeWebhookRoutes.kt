@@ -31,8 +31,9 @@ import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 
-fun Route.stripeWebhookRoutes() {
-    val stripeService = GlobalContext.get().get<StripeService>()
+fun Route.stripeWebhookRoutes(
+    stripeService: StripeService = GlobalContext.get().get(),
+) {
 
     post("/api/webhooks/stripe") {
         logger.info { "Received webhook request at /api/webhooks/stripe" }

@@ -51,10 +51,10 @@ import java.util.zip.GZIPInputStream
 
 private val logger = KotlinLogging.logger {}
 
-fun Route.releaseRoutes() {
-    val releaseService = GlobalContext.get().get<ReleaseService>()
-    val authTokenService = GlobalContext.get().get<AuthTokenService>()
-    val logger = KotlinLogging.logger {}
+fun Route.releaseRoutes(
+    releaseService: ReleaseService = GlobalContext.get().get(),
+    authTokenService: AuthTokenService = GlobalContext.get().get(),
+) {
 
     // Sentry-compatible auth verification endpoint (used by sentry-cli login/info)
     authenticate("auth-bearer") {

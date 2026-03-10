@@ -61,8 +61,8 @@ private enum class PeriodWindow(
 }
 
 class DashboardQueryHelper(
-    val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
-    val pricingTierService: PricingTierService = PricingTierService(),
+    private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
+    private val pricingTierService: PricingTierService = PricingTierService(),
 ) {
     val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     val backendUrl: String get() = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")

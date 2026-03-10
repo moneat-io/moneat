@@ -18,7 +18,9 @@ package com.moneat.uptime.services
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.incident.services.IncidentService
+import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
+import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +50,8 @@ class UptimeScheduler(
     private val slackService: SlackService = SlackService(),
     private val discordService: DiscordService = DiscordService(),
     private val incidentService: IncidentService = IncidentService(),
+    private val emailService: EmailService = EmailService(),
+    private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
 ) {
     private var schedulerJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -252,8 +256,6 @@ class UptimeScheduler(
                 .ApplicationConfig("application.conf")
         val baseUrl = config.property("email.frontendUrl").getString()
         val monitorUrl = "$baseUrl/uptime/${monitor.id}"
-        val prefsService = com.moneat.notifications.services.AlertNotificationPreferencesService()
-
         // Send email notifications
         try {
             val emailRecipients =
@@ -263,7 +265,6 @@ class UptimeScheduler(
                     channel = "email"
                 )
 
-            val emailService = com.moneat.notifications.services.EmailService()
             emailRecipients.forEach { (_, email) ->
                 scope.launch {
                     try {

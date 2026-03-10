@@ -54,6 +54,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -62,17 +63,29 @@ import kotlin.time.Clock
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
-import kotlin.test.AfterTest
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
 
 class StatusPageRoutesTest {
     companion object {
         private const val JWT_SECRET = "status-routes-secret"
         private var dbInitialized = false
+
+        @JvmStatic
+        @BeforeAll
+        fun setupKoin() {
+            startTestKoin()
+        }
+
+        @JvmStatic
+        @AfterAll
+        fun teardownKoin() {
+            stopTestKoin()
+        }
     }
 
     @BeforeTest
     fun setupDatabase() {
-        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url = "jdbc:h2:mem:moneat_status_pages;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -772,8 +785,5 @@ class StatusPageRoutesTest {
             assertEquals(HttpStatusCode.OK, response.status)
         }
 
-    @AfterTest
-    fun teardownKoin() {
-        stopTestKoin()
-    }
 }
+

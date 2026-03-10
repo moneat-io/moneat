@@ -20,6 +20,7 @@ import com.moneat.monitor.routes.monitorRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.logs.services.LogService
+import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.models.AlertConfigResponse
 import com.moneat.monitor.models.AlertResponse
@@ -73,6 +74,7 @@ class MonitorRoutesMockTest {
 
     private val mockMonitorService = mockk<MonitorService>(relaxed = true)
     private val mockLogService = mockk<LogService>(relaxed = true)
+    private val mockMonitorAlertService = mockk<MonitorAlertService>(relaxed = true)
 
     @BeforeTest
     fun setupDatabase() {
@@ -173,6 +175,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -203,6 +206,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -230,6 +234,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -259,6 +264,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -295,6 +301,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -336,6 +343,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -367,6 +375,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -408,6 +417,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -444,6 +454,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -470,6 +481,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -499,6 +511,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -527,6 +540,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -570,6 +584,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -602,6 +617,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -631,6 +647,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -662,6 +679,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }
@@ -700,6 +718,7 @@ class MonitorRoutesMockTest {
                     monitorRoutes(
                         monitorService = mockMonitorService,
                         logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
                     )
                 }
             }

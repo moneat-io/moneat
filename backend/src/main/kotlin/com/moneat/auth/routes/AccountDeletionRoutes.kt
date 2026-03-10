@@ -65,8 +65,9 @@ data class OrgDeletionValidationResponse(val canDelete: Boolean, val error: Stri
 @Serializable
 data class CannotDeleteUserResponse(val error: String?, val organizations: List<String>)
 
-fun Route.accountDeletionRoutes() {
-    val deletionService = GlobalContext.get().get<AccountDeletionService>()
+fun Route.accountDeletionRoutes(
+    deletionService: AccountDeletionService = GlobalContext.get().get(),
+) {
 
     // Get organization details for account deletion confirmation
     get("/organizations/{orgId}") {

@@ -44,7 +44,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
-import java.util.*
+import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
 

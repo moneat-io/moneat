@@ -182,6 +182,10 @@ fun Route.adminRoutes() {
     val authService = GlobalContext.get().get<AuthService>()
     val pricingTierService = GlobalContext.get().get<PricingTierService>()
     val attributionAnalyticsService = GlobalContext.get().get<AttributionAnalyticsService>()
+    val emailService = GlobalContext.get().get<EmailService>()
+    val slackService = GlobalContext.get().get<SlackService>()
+    val discordService = GlobalContext.get().get<DiscordService>()
+    val incidentService = GlobalContext.get().get<IncidentService>()
 
     authenticate("auth-jwt") {
         route("/v1/admin") {
@@ -338,8 +342,6 @@ fun Route.adminRoutes() {
                 try {
                     val request = call.receive<TriggerIncidentRequest>()
 
-                    val incidentService =
-                        IncidentService()
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
 
@@ -414,9 +416,6 @@ fun Route.adminRoutes() {
                                 ?.get(com.moneat.shared.models.Memberships.organization_id)
                         }
 
-                    val emailService = GlobalContext.get().get<EmailService>()
-                    val slackService = GlobalContext.get().get<SlackService>()
-                    val discordService = GlobalContext.get().get<DiscordService>()
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
 

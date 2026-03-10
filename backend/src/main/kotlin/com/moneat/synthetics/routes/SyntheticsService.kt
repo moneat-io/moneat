@@ -58,6 +58,10 @@ class SyntheticsService(
         private val logger = KotlinLogging.logger {}
         private val runScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         private const val SUMMARY_COLUMN_COUNT = 5
+        private const val FREE_TIER_LIMIT = 5
+        private const val PRO_TIER_LIMIT = 20
+        private const val TEAM_TIER_LIMIT = 50
+        private const val BUSINESS_TIER_LIMIT = Int.MAX_VALUE
     }
 
     fun createTest(
@@ -507,11 +511,11 @@ class SyntheticsService(
         }
 
         val limit = when (tier) {
-            "FREE" -> 5
-            "PRO" -> 20
-            "TEAM" -> 50
-            "BUSINESS" -> Int.MAX_VALUE
-            else -> 5
+            "FREE" -> FREE_TIER_LIMIT
+            "PRO" -> PRO_TIER_LIMIT
+            "TEAM" -> TEAM_TIER_LIMIT
+            "BUSINESS" -> BUSINESS_TIER_LIMIT
+            else -> FREE_TIER_LIMIT
         }
 
         if (currentCount >= limit) {

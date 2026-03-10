@@ -32,10 +32,11 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 
-fun Route.agentApiKeyRoutes() {
+fun Route.agentApiKeyRoutes(
+    agentApiKeyService: AgentApiKeyService = GlobalContext.get().get(),
+) {
     route("/v1") {
         authenticate("auth-jwt") {
-            val agentApiKeyService = GlobalContext.get().get<AgentApiKeyService>()
 
             get("/agent-api-keys") {
                 val principal = call.principal<JWTPrincipal>()

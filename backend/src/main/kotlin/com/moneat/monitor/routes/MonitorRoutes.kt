@@ -110,6 +110,7 @@ private suspend fun ensureHostAccessible(
 fun Route.monitorRoutes(
     monitorService: MonitorService = GlobalContext.get().get(),
     logService: LogService = GlobalContext.get().get(),
+    monitorAlertService: MonitorAlertService = GlobalContext.get().get(),
 ) {
     route("/v1/monitor") {
         /**
@@ -639,8 +640,7 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val alertService = GlobalContext.get().get<MonitorAlertService>()
-                val periods = alertService.listSilencePeriods(organizationIds.first())
+                val periods = monitorAlertService.listSilencePeriods(organizationIds.first())
                 call.respond(HttpStatusCode.OK, periods)
             }
 
@@ -660,8 +660,7 @@ fun Route.monitorRoutes(
                     return@post
                 }
 
-                val alertService = GlobalContext.get().get<MonitorAlertService>()
-                val period = alertService.createSilencePeriod(organizationIds.first(), userId, request)
+                val period = monitorAlertService.createSilencePeriod(organizationIds.first(), userId, request)
                 call.respond(HttpStatusCode.Created, period)
             }
 
@@ -681,8 +680,7 @@ fun Route.monitorRoutes(
                     return@delete
                 }
 
-                val alertService = GlobalContext.get().get<MonitorAlertService>()
-                val deleted = alertService.deleteSilencePeriod(periodId, organizationIds.first())
+                val deleted = monitorAlertService.deleteSilencePeriod(periodId, organizationIds.first())
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Silence period not found"))
                     return@delete

@@ -34,8 +34,9 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
 
-fun Route.authTokenRoutes() {
-    val authTokenService = GlobalContext.get().get<AuthTokenService>()
+fun Route.authTokenRoutes(
+    authTokenService: AuthTokenService = GlobalContext.get().get(),
+) {
 
     authenticate("auth-jwt") {
         route("/v1/auth-tokens") {
