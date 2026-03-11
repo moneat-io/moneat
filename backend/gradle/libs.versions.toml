@@ -17,7 +17,7 @@ flyway = "12.1.0"
 h2 = "2.4.240"
 mockk = "1.14.9"
 shedlock = "7.6.0"
-koin = "4.0.4"
+koin = "4.1.1"
 
 [libraries]
 # Ktor Server
