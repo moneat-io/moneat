@@ -1,4 +1,4 @@
-import { Moon, Sun, Palette, CloudMoon, Leaf, Sunset, Gamepad2, Check, Newspaper, Monitor } from 'lucide-react'
+import { Moon, Sun, Palette, CloudMoon, Leaf, Sunset, Gamepad2, Check, Newspaper, Monitor, Terminal } from 'lucide-react'
 import { Button } from './ui/button'
 import {
   DropdownMenu,
@@ -8,9 +8,10 @@ import {
 } from './ui/dropdown-menu'
 import { useEffect, useState } from 'react'
 
-type Theme = 'light' | 'dark' | 'midnight' | 'forest' | 'sunset' | 'gamer' | 'retro' | 'retro-dark'
+type Theme = 'light' | 'dark' | 'midnight' | 'forest' | 'sunset' | 'gamer' | 'retro' | 'retro-dark' | 'terminal'
 
 const VT323_FONT_ID = 'vt323-font'
+const IBM_PLEX_MONO_FONT_ID = 'ibm-plex-mono-font'
 
 function loadGamerFont() {
   if (!globalThis.document) return
@@ -19,6 +20,16 @@ function loadGamerFont() {
   link.id = VT323_FONT_ID
   link.rel = 'stylesheet'
   link.href = 'https://fonts.googleapis.com/css2?family=VT323&display=swap'
+  globalThis.document.head.appendChild(link)
+}
+
+function loadTerminalFont() {
+  if (!globalThis.document) return
+  if (globalThis.document.getElementById(IBM_PLEX_MONO_FONT_ID)) return
+  const link = globalThis.document.createElement('link')
+  link.id = IBM_PLEX_MONO_FONT_ID
+  link.rel = 'stylesheet'
+  link.href = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap'
   globalThis.document.head.appendChild(link)
 }
 
@@ -33,7 +44,7 @@ export function ThemeSwitcher() {
     if (!root) return
     
     // Remove all theme classes
-    root.classList.remove('light', 'dark', 'theme-midnight', 'theme-forest', 'theme-sunset', 'theme-gamer', 'theme-retro', 'theme-retro-dark')
+    root.classList.remove('light', 'dark', 'theme-midnight', 'theme-forest', 'theme-sunset', 'theme-gamer', 'theme-retro', 'theme-retro-dark', 'theme-terminal')
 
     if (newTheme === 'light') {
       // No class for light mode (default)
@@ -46,6 +57,7 @@ export function ThemeSwitcher() {
     } else {
       root.classList.add('dark', `theme-${newTheme}`)
       if (newTheme === 'gamer') loadGamerFont()
+      if (newTheme === 'terminal') loadTerminalFont()
     }
   }
 
@@ -106,6 +118,11 @@ export function ThemeSwitcher() {
           <Monitor className="mr-2 h-4 w-4" />
           <span>Retro Dark</span>
           {theme === 'retro-dark' && <Check className="ml-auto h-4 w-4" />}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleThemeChange('terminal')}>
+          <Terminal className="mr-2 h-4 w-4" />
+          <span>Terminal</span>
+          {theme === 'terminal' && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

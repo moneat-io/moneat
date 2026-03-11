@@ -19,9 +19,14 @@ export const docsSidebar: SidebarCategory[] = [
     items: [
       'error-monitoring',
       'issue-tracking',
+      'session-replay',
+      'performance-monitoring',
       'logging',
       'releases',
       'ai-observability',
+      'custom-dashboards',
+      'user-feedback',
+      'infrastructure-monitoring',
       {
         label: 'Datadog Agent',
         link: 'datadog-agent',

@@ -177,6 +177,34 @@
     --chart-5: 27 87% 67%;
   }
 
+  .theme-terminal {
+    --background: 216 33% 4%;
+    --foreground: 120 15% 88%;
+    --card: 216 30% 7%;
+    --card-foreground: 120 15% 88%;
+    --popover: 216 30% 7%;
+    --popover-foreground: 120 15% 88%;
+    --primary: 120 100% 50%;
+    --primary-foreground: 216 33% 4%;
+    --secondary: 216 25% 11%;
+    --secondary-foreground: 120 15% 80%;
+    --muted: 216 25% 11%;
+    --muted-foreground: 120 10% 50%;
+    --accent: 120 25% 12%;
+    --accent-foreground: 120 100% 50%;
+    --destructive: 0 100% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 120 40% 16%;
+    --input: 120 40% 16%;
+    --ring: 120 100% 50%;
+    --radius: 0rem;
+    --chart-1: 120 100% 50%;
+    --chart-2: 180 100% 45%;
+    --chart-3: 120 70% 35%;
+    --chart-4: 90 100% 50%;
+    --chart-5: 160 100% 40%;
+  }
+
   .theme-retro-dark {
     --background: 0 0% 2%;
     --foreground: 0 0% 90%;
@@ -306,6 +334,46 @@
 .theme-gamer h5,
 .theme-gamer h6 {
   font-family: 'VT323', monospace;
+}
+
+/* Slopwar theme: terminal/hacker aesthetic inspired by slopwar.com */
+.theme-terminal,
+.theme-terminal input,
+.theme-terminal textarea,
+.theme-terminal select,
+.theme-terminal button {
+  font-family: 'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
+}
+
+.theme-terminal .rounded-xs,
+.theme-terminal .rounded-sm,
+.theme-terminal .rounded-md,
+.theme-terminal .rounded-lg,
+.theme-terminal .rounded-xl,
+.theme-terminal .rounded-2xl,
+.theme-terminal .rounded-3xl {
+  border-radius: 0;
+}
+
+.theme-terminal *:focus-visible {
+  box-shadow: 0 0 8px hsl(120 100% 50% / 0.4);
+}
+
+.theme-terminal .border,
+.theme-terminal [class*="border-"] {
+  box-shadow: 0 0 4px hsl(120 100% 50% / 0.06);
+}
+
+.theme-terminal .card,
+.theme-terminal .popover,
+.theme-terminal .dialog-content {
+  border-radius: 0;
+  box-shadow: 0 0 12px hsl(120 100% 50% / 0.06);
+}
+
+.theme-terminal .sidebar {
+  border-right-width: 0;
+  box-shadow: 1px 0 0 0 hsl(var(--border)), 0 0 8px hsl(120 100% 50% / 0.04);
 }
 
 @layer base {
