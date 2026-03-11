@@ -162,13 +162,13 @@ class DashboardQueryHelper(
         }
     }
 
-    fun mapEventRow(obj: JsonObject): EventResponse {
+    fun mapEventRow(obj: JsonObject, timestampKey: String = "timestamp"): EventResponse {
         val tagsMap = (obj["tags"] as? JsonObject)?.entries?.associate { (k, v) ->
             k to (v.jsonPrimitive.contentOrNull ?: "")
         } ?: emptyMap()
         return EventResponse(
             eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
-            timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+            timestamp = obj[timestampKey]?.jsonPrimitive?.content ?: "",
             message = obj["message"]?.jsonPrimitive?.content ?: "",
             platform = obj["platform"]?.jsonPrimitive?.content ?: "",
             level = obj["level"]?.jsonPrimitive?.content ?: "error",
