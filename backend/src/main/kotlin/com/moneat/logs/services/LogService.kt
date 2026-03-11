@@ -1378,7 +1378,7 @@ class LogService(private val logRepository: LogRepository) {
                 return null
             }
 
-        return "system_id = toUUID('$parsed')"
+        return "${ClickHouseQueryUtils.orgIdClause(organizationId)} AND system_id = toUUID('$parsed')"
     }
 
     private fun resolveTimestampMs(
