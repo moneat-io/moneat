@@ -7,7 +7,7 @@ description: Monitor SNMP network devices, traps, flow data, and network paths w
 
 ## Overview
 
-Network Device Monitoring (NDM) lets you monitor routers, switches, firewalls, and other SNMP-enabled devices. The Datadog Agent polls devices via SNMP and collects traps, NetFlow/sFlow data, and network path information — all visible in the Moneat dashboard.
+Network Device Monitoring (NDM) lets you monitor routers, switches, firewalls, and other SNMP-enabled devices. The Datadog Agent polls devices via SNMP and collects traps, NetFlow/sFlow data, and network path information - all visible in the Moneat dashboard.
 
 :::info[Enterprise feature]
 Network Device Monitoring requires the Datadog Agent integration, available on Enterprise plans.
@@ -31,7 +31,7 @@ Configure the agent to auto-discover SNMP devices on your network:
 init_config:
 
 instances:
-  - network_address: 10.0.0.0/24
+ - network_address: 10.0.0.0/24
     community_string: "public"
     loader: core
 ```
@@ -45,10 +45,10 @@ Monitor individual devices by IP address:
 init_config:
 
 instances:
-  - ip_address: 10.0.0.1
+ - ip_address: 10.0.0.1
     community_string: "public"
     loader: core
-  - ip_address: 10.0.0.2
+ - ip_address: 10.0.0.2
     community_string: "public"
     loader: core
 ```
@@ -64,7 +64,7 @@ network_devices:
     enabled: true
     port: 162
     community_strings:
-      - "public"
+     - "public"
 ```
 
 ### Enable NetFlow Collection
@@ -77,7 +77,7 @@ network_devices:
   netflow:
     enabled: true
     listeners:
-      - flow_type: netflow5
+     - flow_type: netflow5
         port: 2055
 ```
 
@@ -142,10 +142,10 @@ Shows network path traces between endpoints:
 
 ## Use Cases
 
-- **Device inventory** — Maintain a live inventory of all SNMP devices on your network
-- **Outage detection** — Receive traps for device failures and link-down events
-- **Traffic analysis** — Use flow data to identify bandwidth-heavy connections and unusual traffic patterns
-- **Path troubleshooting** — Trace network paths to diagnose routing issues
+- **Device inventory** - Maintain a live inventory of all SNMP devices on your network
+- **Outage detection** - Receive traps for device failures and link-down events
+- **Traffic analysis** - Use flow data to identify bandwidth-heavy connections and unusual traffic patterns
+- **Path troubleshooting** - Trace network paths to diagnose routing issues
 
 :::tip[Start with SNMP device discovery using a broad network range, then narrow down to specific subnets once you confirm which devices are reporting.]
 :::

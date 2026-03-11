@@ -9,7 +9,7 @@ Install and configure Sentry-compatible SDKs for your platform to start capturin
 
 ## Sentry SDK Compatibility
 
-Moneat uses the Sentry protocol for event ingestion, which means you can use any official Sentry SDK to send errors to Moneat. Simply point the DSN to your Moneat instance and everything works out of the box — no custom SDK needed.
+Moneat uses the Sentry protocol for event ingestion. You can use any official Sentry SDK to send errors to Moneat by pointing the DSN to your Moneat instance.
 
 :::info[90+ platforms supported]
 Any platform with a Sentry SDK works with Moneat. This includes all major languages, frameworks, and mobile platforms.
@@ -37,12 +37,12 @@ Moneat works with any Sentry SDK. For platforms not listed above, refer to the [
 
 These SDK options work across all platforms:
 
-- `dsn` — Your Moneat project DSN (required)
-- `release` — Your app version for release tracking
-- `environment` — Deployment environment (production, staging, etc.)
-- `tracesSampleRate` — Percentage of transactions to capture (0.0 to 1.0)
-- `beforeSend` — Callback to modify or filter events before sending
-- `sampleRate` — Percentage of error events to capture (0.0 to 1.0)
+- `dsn` - Your Moneat project DSN (required)
+- `release` - Your app version for release tracking
+- `environment` - Deployment environment (production, staging, etc.)
+- `tracesSampleRate` - Percentage of transactions to capture (0.0 to 1.0)
+- `beforeSend` - Callback to modify or filter events before sending
+- `sampleRate` - Percentage of error events to capture (0.0 to 1.0)
 
 :::tip[Start with full sampling]
 Set `tracesSampleRate: 1.0` during development. In production, lower it to reduce data volume and costs (e.g., 0.1 for 10% sampling).

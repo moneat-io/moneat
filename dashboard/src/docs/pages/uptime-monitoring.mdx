@@ -7,7 +7,7 @@ description: Monitor your endpoints and services with HTTP checks and heartbeat 
 
 ## Overview
 
-Moneat's uptime monitoring lets you track the availability of your websites, APIs, and background services. Get alerted instantly when something goes down, and track uptime history and response times over time.
+Uptime monitoring tracks the availability of your websites, APIs, and background services. Get alerted when something goes down, and track uptime history and response times.
 
 ## Monitor Types
 
@@ -15,15 +15,15 @@ Moneat's uptime monitoring lets you track the availability of your websites, API
 
 HTTP monitors send periodic requests to a URL and check the response. You can configure:
 
-- **URL** — The endpoint to check
-- **Check interval** — How often to check (e.g., every 1, 5, or 10 minutes)
-- **Expected status code** — The HTTP status code that indicates success (default: 200)
-- **Timeout** — How long to wait before marking the check as failed
-- **HTTP method** — GET, POST, HEAD, etc.
+- **URL** - The endpoint to check
+- **Check interval** - How often to check (e.g., every 1, 5, or 10 minutes)
+- **Expected status code** - The HTTP status code that indicates success (default: 200)
+- **Timeout** - How long to wait before marking the check as failed
+- **HTTP method** - GET, POST, HEAD, etc.
 
 ### Push / Heartbeat Monitors
 
-Heartbeat monitors work in reverse — instead of Moneat checking your service, your service sends a "heartbeat" ping to Moneat at regular intervals. If Moneat doesn't receive a ping within the expected window, it marks the service as down. Ideal for cron jobs, background workers, and scheduled tasks.
+Heartbeat monitors work in reverse: your service sends a ping to Moneat at regular intervals. If Moneat doesn't receive a ping within the expected window, it marks the service as down. Useful for cron jobs, background workers, and scheduled tasks.
 
 **Heartbeat Ping (cURL)**
 
@@ -48,7 +48,7 @@ Navigate to **Uptime** in the sidebar to view and manage your monitors. From the
 
 ## Alerting
 
-When a monitor detects a failure, Moneat can create an incident and notify your team through the configured escalation policy. This integrates with the on-call system — so the right person gets paged when your service goes down.
+When a monitor detects a failure, Moneat can create an incident and notify your team through the configured escalation policy. This integrates with the on-call system so the right person gets paged when your service goes down.
 
 :::info[Connect your monitors to escalation policies in the monitor settings to enable automatic incident creation on downtime.]
 :::

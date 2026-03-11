@@ -33,7 +33,7 @@ To collect logs from specific applications, create a configuration file in the a
 ```yaml
 # /etc/datadog-agent/conf.d/myapp.d/conf.yaml
 logs:
-  - type: file
+ - type: file
     path: /var/log/myapp/*.log
     service: my-application
     source: python
@@ -121,4 +121,4 @@ Use the time picker in the dashboard alongside queries to narrow results to a sp
 
 ## Log Retention
 
-Logs ingested via the Datadog Agent are stored in ClickHouse alongside logs from other sources. Retention periods depend on your plan tier — check [Billing & Plans](/docs/billing) for details.
+Logs ingested via the Datadog Agent are stored in ClickHouse alongside logs from other sources. Retention periods depend on your plan tier. Check [Billing & Plans](/docs/billing) for details.

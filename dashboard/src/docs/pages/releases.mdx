@@ -17,9 +17,9 @@ Create releases using the Sentry-compatible release API. This is typically done 
 
 ```bash
 curl -X POST https://api.moneat.io/api/0/organizations/{org_slug}/releases/ \
-  -H "Authorization: Bearer <auth_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: Bearer <auth_token>" \
+ -H "Content-Type: application/json" \
+ -d '{
     "version": "1.2.3",
     "projects": ["my-project"]
   }'
@@ -53,7 +53,7 @@ Upload source maps as part of your release process. Use the release API or `sent
 
 ```bash
 sentry-cli releases files 1.2.3 upload-sourcemaps ./dist \
-  --url-prefix '~/static/js'
+ --url-prefix '~/static/js'
 ```
 
 Or upload via the API directly:
@@ -62,9 +62,9 @@ Or upload via the API directly:
 
 ```bash
 curl -X POST https://api.moneat.io/api/0/organizations/{org_slug}/releases/1.2.3/files/ \
-  -H "Authorization: Bearer <auth_token>" \
-  -F file=@./dist/app.js.map \
-  -F name="~/static/js/app.js.map"
+ -H "Authorization: Bearer <auth_token>" \
+ -F file=@./dist/app.js.map \
+ -F name="~/static/js/app.js.map"
 ```
 
 :::tip[Build tool plugins]
@@ -75,10 +75,10 @@ Most build tools have Sentry plugins that automatically upload source maps durin
 
 Once releases are created, you can view them in the **Releases** section of the dashboard. Each release shows:
 
-- **Version** — The release identifier
-- **New issues** — Issues first seen in this release
-- **Resolved issues** — Issues resolved in this release
-- **Date** — When the release was created and finalized
+- **Version** - The release identifier
+- **New issues** - Issues first seen in this release
+- **Resolved issues** - Issues resolved in this release
+- **Date** - When the release was created and finalized
 
 ## SDK Configuration
 
@@ -95,7 +95,7 @@ Sentry.init({
 
 API tokens used for release management need the following scopes:
 
-- `releases:write` — Create and update releases
-- `releases:read` — List and view releases
+- `releases:write` - Create and update releases
+- `releases:read` - List and view releases
 
 See [API Tokens](/docs/api-tokens) for how to create tokens with the right scopes.

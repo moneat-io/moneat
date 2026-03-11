@@ -7,7 +7,7 @@ description: Enable continuous profiling with the Datadog Agent to collect CPU, 
 
 ## Overview
 
-Continuous profiling captures real-time performance data from your applications — CPU usage, memory allocations, wall-clock time, and more. Moneat ingests profiles from both the Sentry SDK and the Datadog Agent, so you can use whichever fits your stack.
+Continuous profiling captures real-time performance data from your applications - CPU usage, memory allocations, wall-clock time, and more. Moneat ingests profiles from both the Sentry SDK and the Datadog Agent, so you can use whichever fits your stack.
 
 ## Enable Profiling with the Datadog Agent
 
@@ -37,8 +37,8 @@ If you're running the Agent in Docker, pass the profiling endpoint as an environ
 
 ```bash
 docker run -e DD_APM_ENABLED=true \
-           -e DD_DD_URL=https://api.moneat.io/dd \
-           -e DD_APM_PROFILING_DD_URL=https://api.moneat.io/dd/profiling/v1/input \
+          -e DD_DD_URL=https://api.moneat.io/dd \
+          -e DD_APM_PROFILING_DD_URL=https://api.moneat.io/dd/profiling/v1/input \
            datadog/agent:latest
 ```
 :::
@@ -57,7 +57,7 @@ Once the Agent is running, instrument your applications as described below.
 
 ## How profiling works
 
-Configuring `datadog.yaml` tells the Agent to **accept and forward profiles** — it does not automatically profile every process on the host. Each application you want to profile must be individually instrumented with the Datadog language-specific profiler, which handles the actual data collection and sends it to the Agent.
+Configuring `datadog.yaml` tells the Agent to **accept and forward profiles** - it does not automatically profile every process on the host. Each application you want to profile must be individually instrumented with the Datadog language-specific profiler, which handles the actual data collection and sends it to the Agent.
 
 The Agent then forwards those profiles to Moneat.
 
@@ -65,7 +65,7 @@ The Agent then forwards those profiles to Moneat.
 
 Each profiler sends data to the Agent at `localhost:8126` by default. In Docker environments, set `DD_AGENT_HOST` to the Agent container's hostname instead.
 
-:::tip[`DD_SERVICE` controls how your app appears in the Profiles dashboard — use something descriptive like `payments-service` or `user-api`.]
+:::tip[`DD_SERVICE` controls how your app appears in the Profiles dashboard - use something descriptive like `payments-service` or `user-api`.]
 :::
 
 ### Java
@@ -109,29 +109,29 @@ services:
   datadog-agent:
     image: datadog/agent:latest
     environment:
-      - DD_APM_ENABLED=true
-      - DD_APM_NON_LOCAL_TRAFFIC=true
-      - DD_DD_URL=https://api.moneat.io/dd
-      - DD_APM_PROFILING_DD_URL=https://api.moneat.io/dd/profiling/v1/input
-      - DD_API_KEY=<YOUR_MONEAT_AGENT_KEY>
+     - DD_APM_ENABLED=true
+     - DD_APM_NON_LOCAL_TRAFFIC=true
+     - DD_DD_URL=https://api.moneat.io/dd
+     - DD_APM_PROFILING_DD_URL=https://api.moneat.io/dd/profiling/v1/input
+     - DD_API_KEY=<YOUR_MONEAT_AGENT_KEY>
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /proc/:/host/proc/:ro
-      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+     - /var/run/docker.sock:/var/run/docker.sock:ro
+     - /proc/:/host/proc/:ro
+     - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
     pid: host
 
   my-java-app:
     build: .
     environment:
-      - DD_AGENT_HOST=datadog-agent
-      - DD_SERVICE=my-java-app
-      - DD_ENV=production
-      - DD_PROFILING_ENABLED=true
+     - DD_AGENT_HOST=datadog-agent
+     - DD_SERVICE=my-java-app
+     - DD_ENV=production
+     - DD_PROFILING_ENABLED=true
       # DD_API_KEY must be a 32-character hex string for the Java profiler's
-      # format check. It is only validated locally — the agent uses its own key.
-      - DD_API_KEY=00000000000000000000000000000000
+      # format check. It is only validated locally - the agent uses its own key.
+     - DD_API_KEY=00000000000000000000000000000000
     depends_on:
-      - datadog-agent
+     - datadog-agent
 ```
 
 `DD_AGENT_HOST=datadog-agent` tells the Java profiler to send profiles to the Agent container rather than `localhost`.
@@ -169,10 +169,10 @@ services:
   my-python-app:
     build: .
     environment:
-      - DD_AGENT_HOST=datadog-agent
-      - DD_SERVICE=my-python-app
-      - DD_ENV=production
-      - DD_PROFILING_ENABLED=true
+     - DD_AGENT_HOST=datadog-agent
+     - DD_SERVICE=my-python-app
+     - DD_ENV=production
+     - DD_PROFILING_ENABLED=true
 ```
 
 ---
@@ -215,16 +215,16 @@ services:
   my-node-app:
     build: .
     environment:
-      - DD_AGENT_HOST=datadog-agent
-      - DD_SERVICE=my-node-app
-      - DD_ENV=production
-      - DD_PROFILING_ENABLED=true
+     - DD_AGENT_HOST=datadog-agent
+     - DD_SERVICE=my-node-app
+     - DD_ENV=production
+     - DD_PROFILING_ENABLED=true
 ```
 
 :::note[React and other browser apps]
-React runs in the browser, not on a server, so the Datadog Agent cannot profile it — there is no process for the Agent to attach to. If you have a **Node.js backend** serving your React app, you can profile that using the setup above.
+React runs in the browser, not on a server, so the Datadog Agent cannot profile it - there is no process for the Agent to attach to. If you have a **Node.js backend** serving your React app, you can profile that using the setup above.
 
-For profiling browser-side JavaScript (React, Vue, Angular, etc.), use the **Sentry SDK** instead — see the [Profiling with the Sentry SDK](#profiling-with-the-sentry-sdk) section below.
+For profiling browser-side JavaScript (React, Vue, Angular, etc.), use the **Sentry SDK** instead - see the [Profiling with the Sentry SDK](#profiling-with-the-sentry-sdk) section below.
 :::
 
 ---
@@ -266,7 +266,7 @@ func main() {
 }
 ```
 
-**Docker:** Set `DD_AGENT_HOST` in your container environment (no JAR or binary download needed — the profiler is linked into your binary):
+**Docker:** Set `DD_AGENT_HOST` in your container environment (no JAR or binary download needed - the profiler is linked into your binary):
 
 ```yaml
 # docker-compose.yaml
@@ -274,9 +274,9 @@ services:
   my-go-app:
     build: .
     environment:
-      - DD_AGENT_HOST=datadog-agent
-      - DD_SERVICE=my-go-app
-      - DD_ENV=production
+     - DD_AGENT_HOST=datadog-agent
+     - DD_SERVICE=my-go-app
+     - DD_ENV=production
 ```
 
 ---
@@ -320,10 +320,10 @@ services:
   my-ruby-app:
     build: .
     environment:
-      - DD_AGENT_HOST=datadog-agent
-      - DD_SERVICE=my-ruby-app
-      - DD_ENV=production
-      - DD_PROFILING_ENABLED=true
+     - DD_AGENT_HOST=datadog-agent
+     - DD_SERVICE=my-ruby-app
+     - DD_ENV=production
+     - DD_PROFILING_ENABLED=true
 ```
 
 ---
@@ -379,10 +379,10 @@ services:
   my-dotnet-app:
     build: .
     environment:
-      - DD_AGENT_HOST=datadog-agent
-      - DD_SERVICE=my-dotnet-app
-      - DD_ENV=production
-      - DD_PROFILING_ENABLED=true
+     - DD_AGENT_HOST=datadog-agent
+     - DD_SERVICE=my-dotnet-app
+     - DD_ENV=production
+     - DD_PROFILING_ENABLED=true
 ```
 
 ---
@@ -423,10 +423,10 @@ services:
   my-php-app:
     build: .
     environment:
-      - DD_AGENT_HOST=datadog-agent
-      - DD_SERVICE=my-php-app
-      - DD_ENV=production
-      - DD_PROFILING_ENABLED=true
+     - DD_AGENT_HOST=datadog-agent
+     - DD_SERVICE=my-php-app
+     - DD_ENV=production
+     - DD_PROFILING_ENABLED=true
 ```
 
 ## Supported Profile Types
@@ -452,20 +452,20 @@ Navigate to **Profiles** in the dashboard and select the **Datadog Agent** tab.
 
 ### Filtering
 
-- **Service** — Search by service name to focus on a specific application
-- **Type** — Filter by profile type (CPU, heap, wall, etc.)
+- **Service** - Search by service name to focus on a specific application
+- **Type** - Filter by profile type (CPU, heap, wall, etc.)
 
 ### Profile Details
 
 Each profile entry shows:
 
-- **Service** — The application or service that generated the profile
-- **Type** — The kind of profile (CPU, heap, wall, etc.)
-- **Environment** — The deployment environment (production, staging)
-- **Host** — The host where the profile was collected
-- **Duration** — How long the profiling session lasted
-- **Size** — The profile data size
-- **Time** — When the profile was captured
+- **Service** - The application or service that generated the profile
+- **Type** - The kind of profile (CPU, heap, wall, etc.)
+- **Environment** - The deployment environment (production, staging)
+- **Host** - The host where the profile was collected
+- **Duration** - How long the profiling session lasted
+- **Size** - The profile data size
+- **Time** - When the profile was captured
 
 Click on any profile to view its detailed flamegraph and drill into specific functions.
 

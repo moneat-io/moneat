@@ -11,7 +11,7 @@ Moneat receives error events through a Sentry-compatible ingestion API. When you
 
 ## Ingestion Endpoint
 
-Events are sent to the envelope endpoint using the Sentry protocol. The SDK handles this automatically — you don't need to call this directly.
+Events are sent to the envelope endpoint using the Sentry protocol. The SDK handles this automatically.
 
 ```http
 POST /api/{projectId}/envelope/
@@ -23,15 +23,15 @@ The endpoint also supports `gzip` compression for reduced bandwidth. Events are 
 
 ## Event Data
 
-Each error event contains rich context that helps you diagnose issues quickly:
+Each error event contains:
 
-- **Exception details** — Type, message, and full stack trace
-- **Breadcrumbs** — Trail of events leading up to the error
-- **Tags** — Key-value pairs for filtering (e.g., environment, release)
-- **User context** — User ID, email, IP address
-- **Device/OS info** — Platform, browser, OS version
-- **Request data** — URL, method, headers (for web apps)
-- **Custom context** — Any additional data you attach via the SDK
+- **Exception details** - Type, message, and full stack trace
+- **Breadcrumbs** - Trail of events leading up to the error
+- **Tags** - Key-value pairs for filtering (e.g., environment, release)
+- **User context** - User ID, email, IP address
+- **Device/OS info** - Platform, browser, OS version
+- **Request data** - URL, method, headers (for web apps)
+- **Custom context** - Any additional data attached via the SDK
 
 ## Error Grouping
 

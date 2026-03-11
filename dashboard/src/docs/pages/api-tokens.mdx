@@ -7,7 +7,7 @@ description: Create and manage API tokens for programmatic access to Moneat's AP
 
 ## Overview
 
-API tokens let you interact with Moneat's API programmatically. Use them in CI/CD pipelines to create releases, upload source maps, or build custom integrations. Tokens are scoped — you control exactly what each token can access.
+API tokens let you interact with Moneat's API programmatically. Use them in CI/CD pipelines to create releases, upload source maps, or build custom integrations. Tokens are scoped so you control exactly what each token can access.
 
 ## Creating a Token
 
@@ -23,7 +23,7 @@ API tokens let you interact with Moneat's API programmatically. Use them in CI/C
     },
     {
       title: 'Select scopes',
-      content: 'Choose the permissions your token needs. Use the principle of least privilege — only grant the scopes that are actually required.',
+      content: 'Choose the permissions your token needs. Only grant the scopes that are actually required.',
     },
     {
       title: 'Copy and save',
@@ -40,8 +40,8 @@ The token is only displayed once when created. Store it securely in your CI/CD s
 
 Scopes define what a token can do. Available scopes include:
 
-- `releases:read` — View releases and their details
-- `releases:write` — Create, update, and finalize releases; upload source maps
+- `releases:read` - View releases and their details
+- `releases:write` - Create, update, and finalize releases; upload source maps
 
 Additional scopes may be added as new API features are released.
 
@@ -72,9 +72,9 @@ sentry-cli releases new 1.0.0
 
 From the API Tokens settings page, you can:
 
-- **Rename** — Update the token's name for better organization
-- **Update scopes** — Add or remove permissions
-- **Revoke** — Permanently disable a token. This is immediate and cannot be undone.
+- **Rename** - Update the token's name
+- **Update scopes** - Add or remove permissions
+- **Revoke** - Permanently disable a token. This is immediate and cannot be undone.
 
 :::danger[Compromised tokens]
 If you suspect a token has been compromised, revoke it immediately and create a new one. Revocation takes effect instantly across all API requests.

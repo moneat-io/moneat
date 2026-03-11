@@ -24,10 +24,10 @@ These query parameters are accepted by all endpoints (unless noted otherwise):
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `period` | `string` | `30d` | Date range preset: `today`, `7d`, `30d`, `month`, `6mo`, `12mo`, `custom` |
-| `date_from` | `string` | — | Start date in `YYYY-MM-DD` format. Required when `period=custom`. |
-| `date_to` | `string` | — | End date in `YYYY-MM-DD` format. Required when `period=custom`. |
+| `date_from` | `string` | - | Start date in `YYYY-MM-DD` format. Required when `period=custom`. |
+| `date_to` | `string` | - | End date in `YYYY-MM-DD` format. Required when `period=custom`. |
 | `comparison` | `string` | `previous_period` | Comparison mode: `previous_period`, `year_over_year`, `none` |
-| `filters[]` | `string[]` | — | Filter expressions in `property:operator:value` format. See [Filtering](./filtering). |
+| `filters[]` | `string[]` | - | Filter expressions in `property:operator:value` format. See [Filtering](./filtering). |
 | `limit` | `integer` | `100` | Maximum number of results for breakdown endpoints. |
 
 ---
@@ -125,7 +125,7 @@ Top pages ranked by visitor count.
 
 ### GET `/entry-pages`
 
-Top entry (landing) pages — the first page visitors see when they arrive.
+Top entry (landing) pages - the first page visitors see when they arrive.
 
 **Response:** Same structure as `/pages`.
 
@@ -133,7 +133,7 @@ Top entry (landing) pages — the first page visitors see when they arrive.
 
 ### GET `/exit-pages`
 
-Top exit pages — the last page visitors see before leaving.
+Top exit pages - the last page visitors see before leaving.
 
 **Response:**
 
@@ -267,7 +267,7 @@ Custom event names and occurrence counts.
 
 Current number of active visitors (last 5 minutes).
 
-**No query parameters** — this endpoint does not accept period or filter parameters.
+**No query parameters** - this endpoint does not accept period or filter parameters.
 
 **Response:**
 

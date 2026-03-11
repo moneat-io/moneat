@@ -18,8 +18,8 @@ The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standa
 
 The MCP server runs as an enterprise module inside the Ktor backend process. It uses **SSE (Server-Sent Events) transport** following the MCP specification, exposing two endpoints:
 
-- `GET /v1/mcp/sse` — SSE connection endpoint
-- `POST /v1/mcp/message` — JSON-RPC message endpoint
+- `GET /v1/mcp/sse` - SSE connection endpoint
+- `POST /v1/mcp/message` - JSON-RPC message endpoint
 
 Since the module runs inside the application process, MCP tools call existing services directly without HTTP round-trips.
 

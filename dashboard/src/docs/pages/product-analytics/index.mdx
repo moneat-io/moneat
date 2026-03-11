@@ -5,38 +5,25 @@ description: Privacy-focused, cookie-free web analytics for your projects. Track
 
 # Product Analytics
 
-Moneat Product Analytics provides privacy-focused, cookie-free web analytics built directly into your observability platform. Track pageviews, visitors, referral sources, and custom events — all without cookies, personal data storage, or third-party scripts.
+Moneat Product Analytics provides cookie-free web analytics. Track pageviews, visitors, referral sources, and custom events without cookies, personal data storage, or third-party scripts.
 
 :::info[Enterprise Feature]
 Product Analytics is available on Enterprise plans. See [Billing & Plans](/docs/billing) for details.
 :::
 
-## Why Moneat Analytics?
-
-Most analytics tools require cookie banners, track users across sites, and send data to third-party servers. Moneat takes a different approach:
-
-| | Moneat Analytics | Traditional Analytics |
-|---|---|---|
-| **Cookies** | None | Requires cookies + consent banner |
-| **Personal data** | Never stored | Stores IP, device fingerprints, user profiles |
-| **Hosting** | Your infrastructure | Third-party servers |
-| **Script size** | ~670 bytes gzipped | 30–80 KB |
-| **GDPR/CCPA** | Compliant by design | Requires consent flows |
-| **Cross-site tracking** | Impossible | Common |
-
 ## Key Features
 
-- **Cookie-free sessions** — Derived from server-side hashing (daily salt + domain + IP + User-Agent), never from client storage
-- **No personal data stored** — IP addresses and User-Agent strings are used transiently for enrichment, then discarded
-- **Sub-1 KB tracking script** — ~670 bytes gzipped, minimal performance impact
-- **SPA support** — Automatic tracking of client-side navigations via the History API
-- **Custom events** — Track conversions, signups, downloads, and any user interaction
-- **Respects Do Not Track** — Honors the browser's DNT setting by default
-- **Real-time visitors** — See active visitors using Redis HyperLogLog
-- **Funnel analysis** — Measure conversion through ordered event sequences
-- **UTM campaign tracking** — Full attribution with source, medium, campaign, term, and content
-- **Advanced filtering** — Segment data by page, source, country, browser, device, and more
-- **Comparison periods** — Compare metrics against the previous period or year-over-year
+- **Cookie-free sessions** - Derived from server-side hashing (daily salt + domain + IP + User-Agent), never from client storage
+- **No personal data stored** - IP addresses and User-Agent strings are used transiently for enrichment, then discarded
+- **Sub-1 KB tracking script** - ~670 bytes gzipped, minimal performance impact
+- **SPA support** - Automatic tracking of client-side navigations via the History API
+- **Custom events** - Track conversions, signups, downloads, and any user interaction
+- **Respects Do Not Track** - Honors the browser's DNT setting by default
+- **Real-time visitors** - See active visitors using Redis HyperLogLog
+- **Funnel analysis** - Measure conversion through ordered event sequences
+- **UTM campaign tracking** - Full attribution with source, medium, campaign, term, and content
+- **Advanced filtering** - Segment data by page, source, country, browser, device, and more
+- **Comparison periods** - Compare metrics against the previous period or year-over-year
 
 ## How It Works
 
@@ -89,10 +76,10 @@ Navigate to **Analytics** in the sidebar. Data appears within seconds of the fir
 
 **Next steps:**
 
-- [Setup & Installation](./setup) — Script tag, NPM package, and SPA configuration
-- [Dashboard Guide](./dashboard) — Understanding KPIs, charts, and breakdown tables
-- [Custom Events](./custom-events) — Track conversions and user interactions
-- [Funnels](./funnels) — Measure conversion through multi-step flows
-- [Filtering & Segmentation](./filtering) — Slice data by any dimension
-- [API Reference](./api-reference) — Full endpoint documentation
-- [Privacy Architecture](./privacy) — Technical details on how privacy is enforced
+- [Setup & Installation](./setup) - Script tag, NPM package, and SPA configuration
+- [Dashboard Guide](./dashboard) - Understanding KPIs, charts, and breakdown tables
+- [Custom Events](./custom-events) - Track conversions and user interactions
+- [Funnels](./funnels) - Measure conversion through multi-step flows
+- [Filtering & Segmentation](./filtering) - Slice data by any dimension
+- [API Reference](./api-reference) - Full endpoint documentation
+- [Privacy Architecture](./privacy) - Technical details on how privacy is enforced

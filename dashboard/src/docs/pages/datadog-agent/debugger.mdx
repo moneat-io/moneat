@@ -28,10 +28,10 @@ Add the Dynamic Instrumentation flags when launching your application:
 
 ```bash
 java -javaagent:/path/to/dd-java-agent.jar \
-  -Ddd.service=my-service \
-  -Ddd.dynamic.instrumentation.enabled=true \
-  -Ddd.trace.agent.url=https://api.moneat.io/dd \
-  -jar myapp.jar
+ -Ddd.service=my-service \
+ -Ddd.dynamic.instrumentation.enabled=true \
+ -Ddd.trace.agent.url=https://api.moneat.io/dd \
+ -jar myapp.jar
 ```
 
 ### Python Example
@@ -61,18 +61,18 @@ Navigate to **Monitoring → Debugger** in the dashboard and click **Create Prob
 
 Specify where in your code the probe should be inserted:
 
-- **Service** — the name of the instrumented service (must match `DD_SERVICE`)
-- **File / Class** — the source file path or fully qualified class name (e.g., `com.example.OrderService`)
-- **Method or Line** — the method name, or a specific line number within the file
+- **Service** - the name of the instrumented service (must match `DD_SERVICE`)
+- **File / Class** - the source file path or fully qualified class name (e.g., `com.example.OrderService`)
+- **Method or Line** - the method name, or a specific line number within the file
 
 ### 3. Configure capture options
 
 Depending on the probe type, you can set:
 
-- **Condition** — a boolean expression evaluated at the probe site (e.g., `user.id == 42`); the probe only fires when the condition is `true`
-- **Message template** (log probes) — a template string that can reference in-scope variables using `{}` (e.g., `"Order {orderId} placed by {user.email}"`)
-- **Metric name and type** (metric probes) — the metric name and whether it is a `count`, `gauge`, or `histogram`
-- **Capture depth** (snapshot probes) — how many levels deep to capture nested objects
+- **Condition** - a boolean expression evaluated at the probe site (e.g., `user.id == 42`); the probe only fires when the condition is `true`
+- **Message template** (log probes) - a template string that can reference in-scope variables using `{}` (e.g., `"Order {orderId} placed by {user.email}"`)
+- **Metric name and type** (metric probes) - the metric name and whether it is a `count`, `gauge`, or `histogram`
+- **Capture depth** (snapshot probes) - how many levels deep to capture nested objects
 
 ### 4. Save and activate
 
@@ -99,11 +99,11 @@ Shows diagnostics for all configured probes:
 
 Probe statuses include:
 
-- **Received** — The agent has received the probe configuration
-- **Installed** — The probe has been injected into the running application
-- **Emitting** — The probe is actively capturing and sending data
-- **Error** — The probe encountered an error during installation or execution
-- **Blocked** — The probe was blocked (e.g., rate limiting or security rules)
+- **Received** - The agent has received the probe configuration
+- **Installed** - The probe has been injected into the running application
+- **Emitting** - The probe is actively capturing and sending data
+- **Error** - The probe encountered an error during installation or execution
+- **Blocked** - The probe was blocked (e.g., rate limiting or security rules)
 
 ### Probe Logs
 
@@ -118,9 +118,9 @@ Displays log output captured by active log probes:
 
 ## Use Cases
 
-- **Debug production issues** — Add a log probe to capture variable values at a specific line without redeploying
-- **Validate fixes** — Instrument a code path to confirm a bug fix is working before removing the probe
-- **Ad-hoc metrics** — Create metric probes to count method invocations or measure execution time for specific code paths
+- **Debug production issues** - Add a log probe to capture variable values at a specific line without redeploying
+- **Validate fixes** - Instrument a code path to confirm a bug fix is working before removing the probe
+- **Ad-hoc metrics** - Create metric probes to count method invocations or measure execution time for specific code paths
 
 :::tip[Start with log probes]
 Capture context around a known issue. Once you identify the root cause, remove the probe to avoid unnecessary overhead.
