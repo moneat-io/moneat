@@ -713,7 +713,7 @@ fun Route.integrationRoutes() {
                         ?.get(Memberships.organization_id)
                 } ?: return@post call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
 
-            val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+            val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
             val (success, message) = discordService.testConnection(organizationId, frontendUrl)
 
             call.respond(
@@ -816,11 +816,11 @@ fun Route.integrationCallbackRoutes() {
                 logger.info("Slack OAuth completed for organization $organizationId")
 
                 // Redirect to frontend settings page
-                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
                 call.respondRedirect("$frontendUrl/settings?tab=integrations&slack=connected")
             } else {
                 logger.error("Slack OAuth failed: ${oauthResponse.error}")
-                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
                 call.respondRedirect(
                     "$frontendUrl/settings?tab=integrations&slack=error&message=${URLEncoder.encode(
                         oauthResponse.error ?: "Unknown error",
@@ -910,11 +910,11 @@ fun Route.integrationCallbackRoutes() {
 
                 logger.info("Discord OAuth completed for organization $organizationId")
 
-                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
                 call.respondRedirect("$frontendUrl/settings?tab=integrations&discord=connected")
             } else {
                 logger.error("Discord OAuth failed: ${oauthResponse.error}")
-                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
                 call.respondRedirect(
                     "$frontendUrl/settings?tab=integrations&discord=error&message=${URLEncoder.encode(
                         oauthResponse.error ?: "Unknown error",

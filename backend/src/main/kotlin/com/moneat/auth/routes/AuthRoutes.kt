@@ -301,7 +301,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGitHubOAuth(oaut
         call.respondRedirect(authUrl)
     } catch (e: Exception) {
         logger.error(e) { "GitHub OAuth init failed" }
-        val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
     }
 }
@@ -333,15 +333,15 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGitHubCallback(o
         val authResponse = oauthService.findOrCreateOAuthUser(userData)
 
         AuthCookieUtils.setAuthCookie(call, authResponse.token)
-        val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/auth/oauth/callback")
     } catch (e: IllegalArgumentException) {
         logger.error(e) { "GitHub OAuth callback failed: ${e.message}" }
-        val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
     } catch (e: Exception) {
         logger.error(e) { "GitHub OAuth callback error" }
-        val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
     }
 }
@@ -372,7 +372,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAppleOAuth(oauth
         call.respondRedirect(authUrl)
     } catch (e: Exception) {
         logger.error(e) { "Apple OAuth init failed" }
-        val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
     }
 }
@@ -401,15 +401,15 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAppleCallback(oa
         val authResponse = oauthService.findOrCreateOAuthUser(userData)
 
         AuthCookieUtils.setAuthCookie(call, authResponse.token)
-        val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/auth/oauth/callback")
     } catch (e: IllegalArgumentException) {
         logger.error(e) { "Apple OAuth callback failed: ${e.message}" }
-        val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
     } catch (e: Exception) {
         logger.error(e) { "Apple OAuth callback error" }
-        val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
     }
 }

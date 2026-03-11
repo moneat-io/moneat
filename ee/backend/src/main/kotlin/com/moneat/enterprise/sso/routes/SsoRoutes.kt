@@ -38,6 +38,7 @@ private val logger = KotlinLogging.logger {}
 
 fun Route.ssoRoutes() {
     val ssoService = SsoService()
+    val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
 
     route("/auth/sso") {
         // Public SSO flow endpoints
@@ -78,16 +79,13 @@ fun Route.ssoRoutes() {
                 val callbackData = ssoService.handleSamlResponse(samlResponse, relayState)
 
                 AuthCookieUtils.setAuthCookie(call, callbackData.token)
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/auth/sso/callback")
+                call.respondRedirect("$frontendUrl/auth/sso/callback")
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "SAML ACS failed: ${e.message}" }
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/login?error=sso_failed")
+                call.respondRedirect("$frontendUrl/login?error=sso_failed")
             } catch (e: Exception) {
                 logger.error(e) { "SAML ACS error" }
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/login?error=sso_failed")
+                call.respondRedirect("$frontendUrl/login?error=sso_failed")
             }
         }
 
@@ -99,16 +97,13 @@ fun Route.ssoRoutes() {
                 val callbackData = ssoService.handleOidcCallback(code, state)
 
                 AuthCookieUtils.setAuthCookie(call, callbackData.token)
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/auth/sso/callback")
+                call.respondRedirect("$frontendUrl/auth/sso/callback")
             } catch (e: IllegalArgumentException) {
                 logger.error(e) { "OIDC callback failed: ${e.message}" }
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/login?error=sso_failed")
+                call.respondRedirect("$frontendUrl/login?error=sso_failed")
             } catch (e: Exception) {
                 logger.error(e) { "OIDC callback error" }
-                val dashboardUrl = EnvConfig.get("DASHBOARD_URL", "https://moneat.io")
-                call.respondRedirect("$dashboardUrl/login?error=sso_failed")
+                call.respondRedirect("$frontendUrl/login?error=sso_failed")
             }
         }
     }

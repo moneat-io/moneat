@@ -30,7 +30,7 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 fun Application.configureHTTP() {
-    val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+    val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
 
     install(CORS) {
         allowMethod(HttpMethod.Options)
