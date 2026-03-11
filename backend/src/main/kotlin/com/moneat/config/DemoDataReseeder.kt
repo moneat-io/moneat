@@ -1629,7 +1629,9 @@ object DemoDataReseeder {
 
     private suspend fun purgeLogsDemoData() {
         runCatching {
-            ClickHouseClient.execute("ALTER TABLE logs DELETE WHERE organization_id = $P1")
+            ClickHouseClient.execute(
+                "ALTER TABLE logs DELETE WHERE organization_id = $P1 OR organization_id = 0"
+            )
         }.onFailure { logger.warn { "Purge logs failed (non-fatal): ${it.message}" } }
     }
 

@@ -141,7 +141,7 @@ class LogService(private val logRepository: LogRepository) {
                 """
             (
                 toUUID('${escapeSql(entry.logId)}'),
-                ${batch.organizationId},
+                ${batch.effectiveOrganizationId},
                 toUUID('${escapeSql(systemIdValue)}'),
                 fromUnixTimestamp64Milli(${entry.timestampMs}),
                 '${escapeSql(entry.level)}',
