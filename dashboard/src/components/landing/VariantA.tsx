@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {Link} from '@tanstack/react-router'
+import {useState, useEffect} from 'react'
 import {
   Activity,
   ArrowRight,
@@ -32,6 +33,7 @@ import {
   Server,
   Shield,
   ShieldCheck,
+  Star,
   Zap,
   type LucideIcon,
 } from 'lucide-react'
@@ -332,6 +334,17 @@ const stats = [
 // ────────────────────────────────────────────────────────────────
 
 export function VariantA() {
+  const [stars, setStars] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch('https://api.github.com/repos/moneat-io/moneat')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.stargazers_count != null) setStars(data.stargazers_count)
+      })
+      .catch(() => {})
+  }, [])
+
   return (
     <>
       {/* ── Hero ─────────────────────────────────────────── */}
@@ -461,7 +474,7 @@ export function VariantA() {
                   Open source. Self-hostable. Yours to own.
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-6">
-                  Run Moneat on your own infrastructure with a single <code className="text-sm bg-muted px-1.5 py-0.5 rounded">docker compose up</code>.
+                  Run Moneat on your own infrastructure with an easy installer.
                   Full source code, no vendor lock-in, no data leaving your network.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
@@ -472,27 +485,20 @@ export function VariantA() {
                     </a>
                   </Button>
                   <Button asChild variant="ghost" className="gap-2 text-muted-foreground">
-                    <a href="/docs" target="_blank" rel="noopener noreferrer">
+                    <a href="/docs/self-hosting" target="_blank" rel="noopener noreferrer">
                       <Server className="h-4 w-4" />
                       Self-host docs
                     </a>
                   </Button>
                 </div>
               </div>
-              <div className="flex gap-6 sm:gap-10 text-center shrink-0">
-                <div>
-                  <div className="text-3xl font-bold text-foreground">15+</div>
-                  <div className="text-xs text-muted-foreground mt-1">Features</div>
+              {stars != null && (
+                <div className="flex items-center gap-2 shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 backdrop-blur-sm">
+                  <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                  <span className="text-sm font-semibold text-amber-200">{stars.toLocaleString()}</span>
+                  <span className="text-xs text-amber-300/70">stars on GitHub</span>
                 </div>
-                <div>
-                  <div className="text-3xl font-bold text-foreground">700+</div>
-                  <div className="text-xs text-muted-foreground mt-1">Commits</div>
-                </div>
-                <div>
-                  <div className="text-3xl font-bold text-foreground">10+</div>
-                  <div className="text-xs text-muted-foreground mt-1">SDK platforms</div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
