@@ -286,7 +286,7 @@ export default function CreateProbeDialog({open, onOpenChange, probe}: CreatePro
                   setSelectedType(option.value)
                   setStep(2)
                 }}
-                className="h-auto justify-start flex items-start rounded-xl border p-4 text-left transition-colors hover:bg-accent"
+                className="h-auto justify-start flex items-start rounded-xl border p-4 text-left whitespace-normal transition-colors hover:bg-accent"
               >
                 <div className={cn('mr-4 rounded-lg p-2', option.bgClassName)}>
                   <option.icon className={cn('h-6 w-6', option.iconClassName)} />
