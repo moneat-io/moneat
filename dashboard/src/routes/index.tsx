@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link} from '@tanstack/react-router'
+import {createFileRoute, Link, Navigate} from '@tanstack/react-router'
 import {LandingPage} from '@/components/landing/LandingPage'
 import {useQuery} from '@tanstack/react-query'
 import {useState, useEffect} from 'react'
@@ -209,6 +209,7 @@ export const Route = createFileRoute('/')({
 function IndexPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(api.isAuthenticated())
   const [isChecking, setIsChecking] = useState(true)
+  const { data: features, isLoading: featuresLoading } = useEnterpriseFeatures()
 
   useEffect(() => {
     async function checkAuth() {
@@ -223,11 +224,14 @@ function IndexPage() {
   }, []) // Re-run when component mounts
 
   // Show nothing while checking auth to avoid flash
-  if (isChecking) {
+  if (isChecking || (!isAuthenticated && featuresLoading)) {
     return null
   }
 
   if (!isAuthenticated) {
+    if (features?.selfHost) {
+      return <Navigate to="/login" />
+    }
     return <LandingPage />
   }
   return <DashboardPage />
