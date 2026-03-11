@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createRootRoute, Outlet, useRouterState, useNavigate} from '@tanstack/react-router'
+import {createRootRoute, Outlet, Link, useRouterState, useNavigate} from '@tanstack/react-router'
 import {useCallback, useEffect, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/Sidebar'
@@ -31,6 +31,7 @@ import {useCommandPalette} from '../hooks/useCommandPalette'
 
 export const Route = createRootRoute({
   component: RootComponent,
+  notFoundComponent: NotFoundPage,
 })
 
 const STATIC_TITLES: Record<string, string> = {
@@ -150,6 +151,54 @@ function getDocumentTitle(pathname: string, isAuthenticated: boolean): string {
   }
 
   return 'Moneat | Error, Performance, and Replay Monitoring'
+}
+
+function NotFoundPage() {
+  return (
+    <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 text-center">
+      <div className="mb-6 select-none">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 48 48"
+          className="h-16 w-16 mx-auto mb-6"
+          aria-hidden="true"
+        >
+          <circle
+            cx="24" cy="24" r="18"
+            fill="none" stroke="#38bdf8" strokeWidth="2"
+            strokeDasharray="4 3"
+          />
+          <line
+            x1="18" y1="18" x2="30" y2="30"
+            stroke="#38bdf8" strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+          <line
+            x1="30" y1="18" x2="18" y2="30"
+            stroke="#38bdf8" strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+        </svg>
+        <p className="text-8xl font-bold text-slate-800 leading-none tracking-tight">
+          404
+        </p>
+      </div>
+      <h1 className="text-2xl font-semibold text-white mb-3">
+        Page not found
+      </h1>
+      <p className="text-slate-400 max-w-sm mb-10">
+        The page you're looking for doesn't exist or may have been moved.
+      </p>
+      <div className="flex items-center gap-4">
+        <Link
+          to="/"
+          className="px-5 py-2.5 text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-md shadow-sky-500/25 transition-colors"
+        >
+          Go to overview
+        </Link>
+      </div>
+    </div>
+  )
 }
 
 function RootComponent() {
