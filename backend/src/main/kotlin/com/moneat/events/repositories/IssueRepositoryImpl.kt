@@ -203,7 +203,7 @@ class IssueRepositoryImpl(
         val query = """
             SELECT
                 toString(event_id) as event_id,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as event_ts,
                 message,
                 platform,
                 level,
@@ -225,7 +225,7 @@ class IssueRepositoryImpl(
         """.trimIndent()
 
         val rows = queryHelper.executeJsonEachRowQuery(query, "Issue events") ?: return emptyList()
-        return rows.map { queryHelper.mapEventRow(it) }
+        return rows.map { queryHelper.mapEventRow(it, "event_ts") }
     }
 
     override suspend fun getIssueTransactions(
@@ -242,7 +242,7 @@ class IssueRepositoryImpl(
                 transaction_name as name,
                 transaction_op as op,
                 duration_ms as duration,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as event_ts,
                 JSONExtractString(contexts, 'trace', 'status') as status,
                 JSONExtractString(contexts, 'trace', 'trace_id') as trace_id
             FROM `$clickhouseDb`.events
@@ -261,7 +261,7 @@ class IssueRepositoryImpl(
                 name = obj["name"]?.jsonPrimitive?.content ?: "",
                 op = obj["op"]?.jsonPrimitive?.content ?: "",
                 duration = obj["duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
-                timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+                timestamp = obj["event_ts"]?.jsonPrimitive?.content ?: "",
                 status = obj["status"]?.jsonPrimitive?.contentOrNull,
                 traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull
             )
