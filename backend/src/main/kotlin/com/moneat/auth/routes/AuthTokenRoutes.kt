@@ -32,92 +32,93 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
+import org.koin.core.context.GlobalContext
 
-fun Route.authTokenRoutes() {
-    val authTokenService = AuthTokenService()
-
+fun Route.authTokenRoutes(
+    authTokenService: AuthTokenService = GlobalContext.get().get(),
+) {
     authenticate("auth-jwt") {
         route("/v1/auth-tokens") {
-            // Create a new auth token
-            post {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                val request = call.receive<CreateAuthTokenRequest>()
-
-                try {
-                    val tokenResponse =
-                        authTokenService.generateToken(
-                            userId = userId,
-                            name = request.name,
-                            scopes = request.scopes,
-                            expiresInDays = request.expiresInDays
-                        )
-                    call.respond(HttpStatusCode.Created, tokenResponse)
-                } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-                }
-            }
-
-            // List all tokens for the current user
-            get {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                val tokens = authTokenService.listUserTokens(userId)
-                call.respond(tokens)
-            }
-
-            // Revoke a token
-            delete("/{tokenId}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                val tokenId = call.parameters["tokenId"]?.toIntOrNull()
-                if (tokenId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid token ID"))
-                    return@delete
-                }
-
-                val success = authTokenService.revokeToken(userId, tokenId)
-                if (success) {
-                    call.respond(HttpStatusCode.NoContent)
-                } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Token not found"))
-                }
-            }
-
-            // Update a token (name and/or scopes)
-            put("/{tokenId}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                val tokenId = call.parameters["tokenId"]?.toIntOrNull()
-                if (tokenId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid token ID"))
-                    return@put
-                }
-
-                val request = call.receive<UpdateAuthTokenRequest>()
-
-                try {
-                    val success =
-                        authTokenService.updateToken(
-                            userId = userId,
-                            tokenId = tokenId,
-                            name = request.name,
-                            scopes = request.scopes
-                        )
-
-                    if (success) {
-                        call.respond(HttpStatusCode.OK)
-                    } else {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Token not found"))
-                    }
-                } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-                }
-            }
+            post { handleCreateAuthToken(authTokenService) }
+            get { handleListAuthTokens(authTokenService) }
+            delete("/{tokenId}") { handleRevokeAuthToken(authTokenService) }
+            put("/{tokenId}") { handleUpdateAuthToken(authTokenService) }
         }
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleCreateAuthToken(
+    authTokenService: AuthTokenService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val request = call.receive<CreateAuthTokenRequest>()
+    try {
+        val tokenResponse =
+            authTokenService.generateToken(
+                userId = userId,
+                name = request.name,
+                scopes = request.scopes,
+                expiresInDays = request.expiresInDays
+            )
+        call.respond(HttpStatusCode.Created, tokenResponse)
+    } catch (e: IllegalArgumentException) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleListAuthTokens(
+    authTokenService: AuthTokenService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val tokens = authTokenService.listUserTokens(userId)
+    call.respond(tokens)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleRevokeAuthToken(
+    authTokenService: AuthTokenService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val tokenId = call.parameters["tokenId"]?.toIntOrNull()
+    if (tokenId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid token ID"))
+        return
+    }
+    val success = authTokenService.revokeToken(userId, tokenId)
+    if (success) {
+        call.respond(HttpStatusCode.NoContent)
+    } else {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse("Token not found"))
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAuthToken(
+    authTokenService: AuthTokenService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val tokenId = call.parameters["tokenId"]?.toIntOrNull()
+    if (tokenId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid token ID"))
+        return
+    }
+    val request = call.receive<UpdateAuthTokenRequest>()
+    try {
+        val success =
+            authTokenService.updateToken(
+                userId = userId,
+                tokenId = tokenId,
+                name = request.name,
+                scopes = request.scopes
+            )
+        if (success) {
+            call.respond(HttpStatusCode.OK)
+        } else {
+            call.respond(HttpStatusCode.NotFound, ErrorResponse("Token not found"))
+        }
+    } catch (e: IllegalArgumentException) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
     }
 }

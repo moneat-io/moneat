@@ -1,0 +1,51 @@
+---
+title: Custom Dashboards
+description: Build dashboards with drag-and-drop widgets and custom data sources.
+---
+
+# Custom Dashboards
+
+Custom dashboards let you combine data from multiple sources into a single view. Create widgets that query events, transactions, replays, infrastructure metrics, or external data sources.
+
+## Creating a Dashboard
+
+Navigate to **Dashboards** in the sidebar and click **New Dashboard**. Give it a title, then add widgets. Dashboards can be organized into folders.
+
+## Widget Types
+
+| Type | Description |
+|------|-------------|
+| Timeseries | Line/area chart over time |
+| Bar | Vertical bar chart |
+| Donut | Pie/donut chart |
+| Stat | Single value display |
+| Gauge | Gauge visualization |
+| Bar Gauge | Horizontal bar gauge |
+| Table | Tabular data |
+| Heatmap | Heatmap grid |
+| Top List | Ranked list of values |
+| Text | Markdown text block |
+
+Widgets are positioned on a 12-column grid and can be resized by dragging.
+
+## Data Sources
+
+Built-in data sources include events, transactions, and replays. You can also add custom data sources under **Dashboards > Data Sources**:
+
+- Prometheus
+- ClickHouse
+- PostgreSQL
+- MySQL
+- InfluxDB
+- Redis
+- Elasticsearch
+
+Each data source stores its connection credentials encrypted.
+
+## Grafana Import
+
+You can import existing Grafana dashboards via **Dashboards > Import**. Paste the Grafana dashboard JSON and Moneat will convert panels, grid layout, queries, and variables. Supported Grafana panel types include timeseries, bar chart, pie chart, stat, table, heatmap, gauge, text, and graph.
+
+## Alerts
+
+Dashboard widgets can have alert conditions attached. When a threshold is crossed, alerts are routed through your configured notification channels (Slack, Discord, webhooks) or escalation policies.

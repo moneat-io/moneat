@@ -5,7 +5,7 @@ description: Track conversions, signups, downloads, and any user interaction wit
 
 # Custom Events
 
-Custom events let you track specific user interactions beyond pageviews — signups, purchases, downloads, button clicks, and anything else that matters to your product.
+Custom events let you track specific user interactions beyond pageviews - signups, purchases, downloads, button clicks, and anything else that matters to your product.
 
 ## Tracking Events
 
@@ -43,13 +43,13 @@ Each custom event consists of:
 Choose clear, consistent event names:
 
 ```javascript
-// ✅ Good — descriptive, consistent casing
+// Good - descriptive, consistent casing
 moneat.track('Signup')
 moneat.track('Add to Cart')
 moneat.track('Purchase')
 moneat.track('Download Whitepaper')
 
-// ❌ Avoid — inconsistent, too generic
+// Avoid - inconsistent, too generic
 moneat.track('click')
 moneat.track('btn_click_signup_v2')
 moneat.track('event1')
@@ -86,9 +86,9 @@ Property values are always strings. Properties are stored as a `Map<String, Stri
 
 Custom events appear in the **Events** tab of the analytics breakdown tables. Each event shows:
 
-- **Event name** — The name passed to `track()`
-- **Visitors** — Unique visitors who triggered this event
-- **Occurrences** — Total number of times the event was triggered
+- **Event name** - The name passed to `track()`
+- **Visitors** - Unique visitors who triggered this event
+- **Occurrences** - Total number of times the event was triggered
 
 Click any event name to filter the dashboard to sessions that included that event.
 

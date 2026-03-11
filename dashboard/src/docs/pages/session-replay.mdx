@@ -1,0 +1,44 @@
+---
+title: Session Replay
+description: Record and replay user sessions to see exactly what happened before an error.
+---
+
+# Session Replay
+
+Session replay records DOM changes, clicks, scrolls, and network activity during a user session. Replays are linked to errors and traces, so you can see exactly what the user did leading up to a problem.
+
+## How It Works
+
+Replay data is captured by the Sentry SDK's replay integration and sent to Moneat via the standard envelope endpoint. Web replays use rrweb to record DOM mutations. Mobile replays capture video segments.
+
+### Enable in the Sentry SDK
+
+```javascript
+import * as Sentry from "@sentry/browser";
+
+Sentry.init({
+  dsn: "https://<public_key>@api.moneat.io/api/<project_id>",
+  integrations: [Sentry.replayIntegration()],
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1.0,
+});
+```
+
+## Viewing Replays
+
+Navigate to **Replays** in the sidebar to see recorded sessions. Each replay shows:
+
+- Full session playback with a timeline scrubber
+- Errors and transactions overlaid on the timeline
+- Browser, OS, and user metadata
+
+Click any error or transaction marker on the timeline to jump to that point in the recording.
+
+## Linked Context
+
+Replays are connected to errors and traces by shared IDs. From an issue detail page, you can jump directly to any replay where that error occurred. The replay detail page also lists all errors and transactions that happened during the session.
+
+## Supported Platforms
+
+- **Web** - rrweb-based DOM recording via any Sentry JavaScript SDK with the replay integration
+- **Mobile** - Video-based recording via Sentry Android and iOS SDKs

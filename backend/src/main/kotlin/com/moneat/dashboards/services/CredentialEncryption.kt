@@ -26,7 +26,7 @@ import javax.crypto.spec.SecretKeySpec
 
 /**
  * AES-256-GCM encryption for custom data source credentials.
- * Key is derived from DATA_SOURCE_ENCRYPTION_KEY env var (falls back to JWT_SECRET).
+ * Key is derived from DATA_SOURCE_ENCRYPTION_KEY env var.
  * Format: Base64(IV + ciphertext + tag)
  */
 object CredentialEncryption {
@@ -37,9 +37,9 @@ object CredentialEncryption {
 
     private val secretKey: SecretKey by lazy {
         val keyStr = EnvConfig.get("DATA_SOURCE_ENCRYPTION_KEY")
-            ?: EnvConfig.get("JWT_SECRET")
             ?: throw IllegalStateException(
-                "No encryption key configured. Set DATA_SOURCE_ENCRYPTION_KEY or JWT_SECRET."
+                "DATA_SOURCE_ENCRYPTION_KEY is required for custom data source credentials. " +
+                    "Set it to a 32+ character secret (e.g. openssl rand -base64 32)."
             )
 
         // Derive a 256-bit key from the secret using SHA-256

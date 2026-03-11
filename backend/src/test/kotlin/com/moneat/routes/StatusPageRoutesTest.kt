@@ -60,11 +60,27 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
 
 class StatusPageRoutesTest {
     companion object {
         private const val JWT_SECRET = "status-routes-secret"
         private var dbInitialized = false
+
+        @JvmStatic
+        @BeforeAll
+        fun setupKoin() {
+            startTestKoin()
+        }
+
+        @JvmStatic
+        @AfterAll
+        fun teardownKoin() {
+            stopTestKoin()
+        }
     }
 
     @BeforeTest

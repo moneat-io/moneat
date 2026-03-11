@@ -7,14 +7,7 @@ description: Inventory all software packages across your infrastructure and trac
 
 ## What is SBOM?
 
-A **Software Bill of Materials** (SBOM) is a complete inventory of every software package, library, and dependency running in your infrastructure. Think of it as an ingredients list for your software — it tells you exactly what's installed, what version it is, and where it's running.
-
-SBOMs are critical for:
-
-- **Security** — Quickly identify which hosts or containers are affected when a new CVE (Common Vulnerabilities and Exposure) is disclosed
-- **Compliance** — Meet regulatory requirements (e.g., executive orders, supply chain security mandates) that require organizations to maintain software inventories
-- **License management** — Track open-source licenses across your stack
-- **Incident response** — When a vulnerability like Log4Shell hits, instantly answer "are we affected?" instead of manually auditing every system
+A **Software Bill of Materials** (SBOM) is an inventory of software packages, libraries, and dependencies running in your infrastructure. It tracks what's installed, what version, and where it's running.
 
 ## Overview
 
@@ -48,12 +41,12 @@ For container image scanning, ensure the agent has access to the container runti
 
 ```bash
 docker run -d \
-  --name dd-agent \
-  -e DD_DD_URL="https://api.moneat.io/dd" \
-  -e DD_API_KEY="YOUR_AGENT_API_KEY" \
-  -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v /proc/:/host/proc/:ro \
-  -v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
+ --name dd-agent \
+ -e DD_DD_URL="https://api.moneat.io/dd" \
+ -e DD_API_KEY="YOUR_AGENT_API_KEY" \
+ -v /var/run/docker.sock:/var/run/docker.sock:ro \
+ -v /proc/:/host/proc/:ro \
+ -v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
   datadog/agent:latest
 ```
 
@@ -80,10 +73,10 @@ Packages with known CVEs are highlighted so you can prioritize updates.
 
 ## Use Cases
 
-- **Vulnerability response** — When a new CVE is announced, search your SBOM to instantly see every host and container running the affected package and version
-- **Patch prioritization** — Sort by CVE count to focus on the most vulnerable packages first
-- **Audit and compliance** — Export your software inventory for security audits or compliance reporting
-- **Drift detection** — Compare package versions across hosts to identify inconsistent environments
+- **Vulnerability response** - When a new CVE is announced, search your SBOM to instantly see every host and container running the affected package and version
+- **Patch prioritization** - Sort by CVE count to focus on the most vulnerable packages first
+- **Audit and compliance** - Export your software inventory for security audits or compliance reporting
+- **Drift detection** - Compare package versions across hosts to identify inconsistent environments
 
 :::tip[Enable both `container_image` and `host` scanning for complete coverage. Container images often contain different packages than the host OS.]
 :::

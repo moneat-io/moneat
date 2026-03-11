@@ -32,7 +32,7 @@ import {
     ShieldCheck,
     Users,
 } from 'lucide-react'
-import {AdminSkeleton, formatBytes, formatNumber, SectionHeader} from '@/components/admin-components'
+import {AdminSkeleton, formatBytes, formatNumber, SectionHeader} from '@/components/AdminComponents'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime} from '@/lib/date-format'
 

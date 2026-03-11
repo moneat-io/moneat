@@ -19,13 +19,13 @@ import {useState, useEffect} from 'react'
 import {useMutation, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {platforms, type PlatformType} from '@/routes/projects'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
-import {Logo} from '@/components/logo'
+import {Logo} from '@/components/Logo'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {cn} from '@/lib/utils'
 import {Copy, Check, AlertCircle, Loader2, ArrowRight} from 'lucide-react'
@@ -184,19 +184,26 @@ function OnboardingPage() {
     try {
       // Retrieve UTM parameters from localStorage
       const utmParamsStr = localStorage.getItem('utm_params')
-      const utmParams = utmParamsStr ? JSON.parse(utmParamsStr) : {}
+      let utmParams: Record<string, string | undefined> = {}
+      if (utmParamsStr) {
+        try {
+          utmParams = JSON.parse(utmParamsStr) as Record<string, string | undefined>
+        } catch {
+          localStorage.removeItem('utm_params')
+        }
+      }
       
-      await api.completeOnboarding(
-        organizationName, 
-        companySize, 
-        slug, 
+      await api.completeOnboarding({
+        organizationName,
+        companySize,
+        slug,
         referralSource,
-        utmParams.utmSource,
-        utmParams.utmMedium,
-        utmParams.utmCampaign,
-        utmParams.utmContent,
-        utmParams.utmTerm
-      )
+        utmSource: utmParams.utmSource,
+        utmMedium: utmParams.utmMedium,
+        utmCampaign: utmParams.utmCampaign,
+        utmContent: utmParams.utmContent,
+        utmTerm: utmParams.utmTerm,
+      })
       
       // Clean up UTM params after successful onboarding
       localStorage.removeItem('utm_params')

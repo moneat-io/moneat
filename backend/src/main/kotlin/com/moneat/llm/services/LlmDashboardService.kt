@@ -17,6 +17,7 @@
 package com.moneat.llm.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.isClickHouseError
 import com.moneat.llm.models.LlmCostBreakdown
 import com.moneat.llm.models.LlmCostsResponse
 import com.moneat.llm.models.LlmGenerationDetailResponse
@@ -57,7 +58,7 @@ class LlmDashboardService {
     private suspend fun extractBody(response: HttpResponse): String? {
         if (response.status != HttpStatusCode.OK) return null
         val body = response.bodyAsText()
-        if (body.startsWith("Code:") && body.contains("DB::Exception")) {
+        if (body.isClickHouseError()) {
             logger.warn { "ClickHouse error: ${body.take(200)}" }
             return null
         }

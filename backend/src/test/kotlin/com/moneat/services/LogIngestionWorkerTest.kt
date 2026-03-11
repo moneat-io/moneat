@@ -18,6 +18,7 @@ package com.moneat.services
 
 import com.moneat.logs.models.QueuedLogBatch
 import com.moneat.logs.models.QueuedLogEntry
+import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogIngestionWorker
 import com.moneat.logs.services.LogService
 import kotlinx.coroutines.runBlocking
@@ -43,7 +44,7 @@ class LogIngestionWorkerTest {
             val worker = LogIngestionWorker("log:q", "log:dlq", 1)
             val dlq = mutableListOf<String>()
             val message =
-                LogService().encodeQueueMessage(
+                LogService(LogRepositoryImpl()).encodeQueueMessage(
                     QueuedLogBatch(
                         organizationId = 99L,
                         source = "sdk",

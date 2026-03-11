@@ -18,9 +18,10 @@ package com.moneat.analytics.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.config.isClickHouseError
 import com.moneat.analytics.models.EnrichedAnalyticsEvent
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -138,7 +139,7 @@ class AnalyticsIngestionWorker(
 
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (response.isClickHouseError(body)) {
             throw RuntimeException("ClickHouse insert failed: $body")
         }
     }
@@ -151,6 +152,6 @@ class AnalyticsIngestionWorker(
         private const val BRPOP_TIMEOUT = 5L
         private const val ERROR_BACKOFF_MS = 1000L
 
-        fun escapeCH(s: String): String = s.replace("\\", "\\\\").replace("'", "\\'")
+        fun escapeCH(s: String): String = ClickHouseSqlUtils.escapeSql(s)
     }
 }

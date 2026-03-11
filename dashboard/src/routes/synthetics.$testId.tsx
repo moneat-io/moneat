@@ -22,7 +22,7 @@ import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {cn} from '@/lib/utils'
 import {ArrowLeft, Play, Clock, Activity, AlertTriangle, CheckCircle2} from 'lucide-react'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {
   LineChart,
   Line,

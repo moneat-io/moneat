@@ -32,6 +32,10 @@ import kotlin.test.assertFailsWith
 
 class CustomDataSourceExecutorTest {
 
+    private companion object {
+        private const val PROMETHEUS_EXAMPLE_URL = "https://example.com"
+    }
+
     private val executor = CustomDataSourceExecutor()
     private val postgresHandler = PostgresHandler(ConcurrentHashMap())
     private val prometheusHandler = PrometheusHandler()
@@ -162,48 +166,109 @@ class CustomDataSourceExecutorTest {
         postgresHandler.validateSqlQuery("SELECT my_dblink_config FROM settings")
     }
 
+    // --- Encoding / comment-injection bypass tests ---
+
+    @Test
+    fun `validateSqlQuery rejects comment-split INSERT keyword`() {
+        // INS/**/ERT is parsed as INSERT by MySQL/MariaDB; must be caught after comment stripping
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT 1 UNION ALL INS/**/ERT INTO users VALUES ('x')")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery rejects comment-split DROP keyword`() {
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT 1; DRO/**/P TABLE users")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery rejects MySQL conditional comment wrapping forbidden function`() {
+        // /*!pg_read_file*/ strips to pg_read_file which must still be caught
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT /*!pg_read_file*/('/etc/passwd')")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery rejects full-width Unicode forbidden keyword`() {
+        // Full-width ＩＮＳＥＲＴ normalises to INSERT via NFKC and must be caught
+        assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery("SELECT 1 FROM t WHERE ＩＮＳＥＲＴ = 1")
+        }
+    }
+
+    @Test
+    fun `validateSqlQuery allows legitimate inline comment`() {
+        postgresHandler.validateSqlQuery("SELECT /* fetch all */ * FROM users LIMIT 10")
+    }
+
     // --- Prometheus URL building (PrometheusHandler uses HttpApiHandler.buildUrl) ---
 
     @Test
     fun `buildPrometheusUrl with plain host and explicit port`() {
-        val url = prometheusHandler.buildUrl("prometheus.example.com", 9090)
+        val url = prometheusHandler.buildUrlString("prometheus.example.com", 9090)
         assertEquals("http://prometheus.example.com:9090", url)
     }
 
     @Test
     fun `buildPrometheusUrl with plain host and null port`() {
-        val url = prometheusHandler.buildUrl("prometheus.example.com", null)
+        val url = prometheusHandler.buildUrlString("prometheus.example.com", null)
         assertEquals("http://prometheus.example.com", url)
     }
 
     @Test
     fun `buildPrometheusUrl with http prefix`() {
-        val url = prometheusHandler.buildUrl("http://prometheus.example.com", 9090)
+        val url = prometheusHandler.buildUrlString("http://prometheus.example.com", 9090)
         assertEquals("http://prometheus.example.com:9090", url)
     }
 
     @Test
     fun `buildPrometheusUrl with https prefix and default port`() {
-        val url = prometheusHandler.buildUrl("https://prometheus.example.com", 443)
-        assertEquals("https://prometheus.example.com", url)
+        val url = prometheusHandler.buildUrl(PROMETHEUS_EXAMPLE_URL, 443)
+        assertEquals(PROMETHEUS_EXAMPLE_URL, url)
     }
 
     @Test
     fun `buildPrometheusUrl with https prefix and custom port`() {
-        val url = prometheusHandler.buildUrl("https://prometheus.example.com", 9090)
-        assertEquals("https://prometheus.example.com:9090", url)
+        val url = prometheusHandler.buildUrl(PROMETHEUS_EXAMPLE_URL, 9090)
+        assertEquals("https://example.com:9090", url)
     }
 
     @Test
     fun `buildPrometheusUrl with host already containing port`() {
-        val url = prometheusHandler.buildUrl("prometheus.example.com:9090", 9090)
+        val url = prometheusHandler.buildUrlString("prometheus.example.com:9090", 9090)
         assertEquals("http://prometheus.example.com:9090", url)
     }
 
     @Test
     fun `buildPrometheusUrl strips trailing slash`() {
-        val url = prometheusHandler.buildUrl("prometheus.example.com/", 9090)
+        val url = prometheusHandler.buildUrlString("prometheus.example.com/", 9090)
         assertEquals("http://prometheus.example.com:9090", url)
+    }
+
+    // --- SSRF validation (HttpApiHandler.buildUrl) ---
+
+    @Test
+    fun `buildUrl blocks cloud metadata address`() {
+        assertFailsWith<IllegalArgumentException> {
+            prometheusHandler.buildUrl("169.254.169.254", 80)
+        }
+    }
+
+    @Test
+    fun `buildUrl blocks loopback address`() {
+        assertFailsWith<IllegalArgumentException> {
+            prometheusHandler.buildUrl("127.0.0.1", 9090)
+        }
+    }
+
+    @Test
+    fun `buildUrl blocks private RFC1918 address`() {
+        assertFailsWith<IllegalArgumentException> {
+            prometheusHandler.buildUrl("192.168.1.1", 9090)
+        }
     }
 
     // --- Prometheus step resolution ---

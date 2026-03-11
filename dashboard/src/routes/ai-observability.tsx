@@ -16,7 +16,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {Brain, DollarSign, Clock, Layers, BarChart3, Zap} from 'lucide-react'
-import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/feature-page-template'
+import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
 
 const config: FeaturePageConfig = {
   slug: 'ai-observability',

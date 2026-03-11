@@ -21,12 +21,12 @@ import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime as formatDateTimeUtil} from '@/lib/date-format'
-import {ReplayPlayer, type ReplayPlayerHandle} from '@/components/replay-player'
-import {MobileReplayViewer, type MobileReplayViewerHandle} from '@/components/mobile-replay-viewer'
-import {ReplayTimelinePanel} from '@/components/replay-timeline-panel'
-import {ReplayTimelineScrubber} from '@/components/replay-timeline-scrubber'
-import {BrowserWindowContainer} from '@/components/replay-containers/browser-window-container'
-import {MobileDeviceContainer} from '@/components/replay-containers/mobile-device-container'
+import {ReplayPlayer, type ReplayPlayerHandle} from '@/components/ReplayPlayer'
+import {MobileReplayViewer, type MobileReplayViewerHandle, type ReplayStatusBarContext} from '@/components/MobileReplayViewer'
+import {ReplayTimelinePanel} from '@/components/ReplayTimelinePanel'
+import {ReplayTimelineScrubber} from '@/components/ReplayTimelineScrubber'
+import {BrowserWindowContainer} from '@/components/replay-containers/BrowserWindowContainer'
+import {MobileDeviceContainer} from '@/components/replay-containers/MobileDeviceContainer'
 import {Badge} from '@/components/ui/badge'
 import {
     AlertCircle,
@@ -321,7 +321,7 @@ function ReplayDetailPage() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [detailsExpanded, setDetailsExpanded] = useState(false)
   const [mobileReplayOrientation, setMobileReplayOrientation] = useState<'portrait' | 'landscape'>('portrait')
-  const [mobileStatusBarContext, setMobileStatusBarContext] = useState<import('@/components/mobile-replay-viewer').ReplayStatusBarContext>({})
+  const [mobileStatusBarContext, setMobileStatusBarContext] = useState<ReplayStatusBarContext>({})
   const replayPlayerRef = useRef<ReplayPlayerHandle>(null)
   const mobileReplayViewerRef = useRef<MobileReplayViewerHandle>(null)
 
@@ -608,8 +608,6 @@ function ReplayDetailPage() {
             ) : (
               <BrowserWindowContainer
                 url={replay.urls?.[0]}
-                browserName={replay.browserName}
-                osName={replay.osName}
               >
                 <div className="w-full h-[450px] flex flex-col items-center justify-center gap-3 bg-black">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -639,8 +637,6 @@ function ReplayDetailPage() {
           ) : hasRecording ? (
             <BrowserWindowContainer
               url={replay.urls?.[0]}
-              browserName={replay.browserName}
-              osName={replay.osName}
             >
               <ReplayPlayer
                 ref={replayPlayerRef}
@@ -669,7 +665,6 @@ function ReplayDetailPage() {
               <ReplayTimelinePanel
                 items={timelineItems}
                 currentOffsetMs={currentOffsetMs}
-                durationMs={durationMs}
                 projectId={replay.projectId}
                 onSeek={handleSeek}
               />

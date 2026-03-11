@@ -16,6 +16,7 @@
 
 package com.moneat.routes
 
+import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
@@ -37,6 +38,10 @@ import io.ktor.server.testing.testApplication
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 
 class LogRoutesTest {
     private val jwtSecret = "log-routes-secret"
@@ -50,8 +55,13 @@ class LogRoutesTest {
     private fun setupApp(block: io.ktor.server.application.Application.() -> Unit) =
         block.also { }
 
+    @BeforeTest
+    fun setupKoin() {
+        startTestKoin()
+    }
+
     @Test
-    fun `otlp endpoint accepts empty payload without auth`() =
+    fun `otlp endpoint returns 401 without auth even for empty payload`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -67,7 +77,7 @@ class LogRoutesTest {
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
-                routing { logRoutes() }
+                routing { logIngestRoutes() }
             }
 
             val response =
@@ -75,8 +85,8 @@ class LogRoutesTest {
                     setBody("""{"resourceLogs":[]}""")
                 }
 
-            assertEquals(HttpStatusCode.Accepted, response.status)
-            assertTrue(response.bodyAsText().contains("accepted"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertTrue(response.bodyAsText().contains("Missing or invalid"))
         }
 
     @Test
@@ -96,7 +106,7 @@ class LogRoutesTest {
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
-                routing { logRoutes() }
+                routing { logIngestRoutes() }
             }
 
             val payload =
@@ -159,4 +169,9 @@ class LogRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertTrue(response.bodyAsText().contains("Missing tag key"))
         }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
+    }
 }

@@ -4,6 +4,10 @@
 
 package com.moneat.enterprise.mcp.tools
 
+import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
+import com.moneat.dashboards.repositories.DashboardRepositoryImpl
+import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
+import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.enterprise.mcp.models.McpContext
 import com.moneat.enterprise.mcp.protocol.InputSchema
@@ -12,7 +16,12 @@ import com.moneat.enterprise.mcp.protocol.ToolCallResult
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-private val dashboardService = CustomDashboardService()
+private val dashboardService = CustomDashboardService(
+    DashboardFolderRepositoryImpl(),
+    DashboardRepositoryImpl(),
+    DashboardWidgetRepositoryImpl(),
+    ProjectRepositoryImpl { col, _, _ -> col },
+)
 
 class ListDashboardsTool : McpTool {
     override val name = "list_dashboards"

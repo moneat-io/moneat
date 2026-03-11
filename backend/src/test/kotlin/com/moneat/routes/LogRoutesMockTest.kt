@@ -16,7 +16,6 @@
 
 package com.moneat.routes
 
-import com.moneat.billing.services.BillingQuotaService
 import com.moneat.logs.services.LogService
 import com.moneat.logs.routes.logRoutes
 import com.auth0.jwt.JWT
@@ -54,6 +53,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class LogRoutesMockTest {
     companion object {
@@ -62,10 +64,10 @@ class LogRoutesMockTest {
     }
 
     private val mockLogService = mockk<LogService>(relaxed = true)
-    private val mockQuotaService = mockk<BillingQuotaService>(relaxed = true)
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url = "jdbc:h2:mem:moneat_log_mock;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -140,7 +142,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs") {
@@ -156,7 +158,7 @@ class LogRoutesMockTest {
             // Request without auth header → 401 (or 403 if auth rejects)
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs")
@@ -176,7 +178,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/tag-values?key=service") {
@@ -193,7 +195,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/tag-values") {
@@ -220,7 +222,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/filters") {
@@ -245,7 +247,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/aggregate") {
@@ -271,7 +273,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/top?field=service") {
@@ -288,7 +290,7 @@ class LogRoutesMockTest {
 
             application {
                 installAuth()
-                routing { logRoutes(logService = mockLogService, quotaService = mockQuotaService) }
+                routing { logRoutes(logService = mockLogService) }
             }
 
             val response = client.get("/v1/logs/top") {
@@ -296,4 +298,9 @@ class LogRoutesMockTest {
             }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
+    }
 }

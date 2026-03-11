@@ -4,26 +4,11 @@ plugins {
     alias(libs.plugins.ktor)
     alias(libs.plugins.shadow)
     alias(libs.plugins.detekt)
-    alias(libs.plugins.sonarqube)
     jacoco
 }
 
 kotlin {
     jvmToolchain(17)
-}
-
-sonar {
-    properties {
-        property("sonar.projectKey", "moneat")
-        property("sonar.projectName", "moneat")
-        property("sonar.sources", "src/main/kotlin")
-        property("sonar.tests", "src/test/kotlin,src/integrationTest/kotlin")
-        property(
-            "sonar.coverage.jacoco.xmlReportPaths",
-            "${layout.buildDirectory.get()}/reports/jacoco/test/jacocoTestReport.xml"
-        )
-        property("sonar.kotlin.detekt.reportPaths", "${layout.buildDirectory.get()}/reports/detekt/detekt.xml")
-    }
 }
 
 group = "com.moneat"
@@ -162,6 +147,11 @@ dependencies {
 
     // Detekt formatting (ktlint via Detekt)
     detektPlugins(libs.detekt.formatting)
+
+    // Koin - dependency injection
+    implementation(libs.koin.ktor)
+    implementation(libs.koin.logger.slf4j)
+    testImplementation(libs.koin.test)
 
     // Testing
     testImplementation(libs.ktor.server.test.host)

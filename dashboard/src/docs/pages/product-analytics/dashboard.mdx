@@ -1,6 +1,6 @@
 ---
 title: Dashboard Guide
-description: Understand the analytics dashboard — KPIs, time series charts, breakdown tables, and real-time visitor tracking.
+description: Understand the analytics dashboard - KPIs, time series charts, breakdown tables, and real-time visitor tracking.
 ---
 
 # Dashboard Guide
@@ -11,7 +11,7 @@ The analytics dashboard gives you a complete view of your website's traffic and 
 
 A live badge in the dashboard header shows the number of active visitors on your site right now. This count reflects unique visitors in the last 5 minutes and updates automatically every 30 seconds.
 
-Real-time counting uses Redis HyperLogLog — a probabilistic data structure that provides approximate counts without storing any visitor identifiers.
+Real-time counting uses Redis HyperLogLog - a probabilistic data structure that provides approximate counts without storing any visitor identifiers.
 
 ## KPI Cards
 
@@ -29,9 +29,9 @@ The top of the dashboard displays five key performance indicators:
 
 Each KPI card shows a trend indicator comparing the current period to the previous one:
 
-- **Green arrow up** — Metric improved (or increased for visitors/pageviews)
-- **Red arrow down** — Metric declined
-- **Bounce rate is inverted** — A decrease in bounce rate shows as green (improvement)
+- **Green arrow up** - Metric improved (or increased for visitors/pageviews)
+- **Red arrow down** - Metric declined
+- **Bounce rate is inverted** - A decrease in bounce rate shows as green (improvement)
 
 The comparison period is automatically determined based on your selected date range:
 
@@ -69,11 +69,11 @@ The lower section of the dashboard contains tabbed breakdown tables that let you
 
 Top pages ranked by visitor count. Each row shows:
 
-- **Path** — The page URL path
-- **Visitors** — Unique visitors to that page
-- **Pageviews** — Total views (including repeat visits)
-- **Bounce Rate** — Percentage of single-page sessions entering on this page
-- **Duration** — Average session duration for visitors who viewed this page
+- **Path** - The page URL path
+- **Visitors** - Unique visitors to that page
+- **Pageviews** - Total views (including repeat visits)
+- **Bounce Rate** - Percentage of single-page sessions entering on this page
+- **Duration** - Average session duration for visitors who viewed this page
 
 Click any page to add it as a filter and see all metrics scoped to that page.
 
@@ -89,10 +89,10 @@ The last page visitors view before leaving your site. High exit rates on key pag
 
 Where your traffic comes from. Shows the referrer domain for each visitor. Common values include:
 
-- **Direct / None** — Visitors who typed your URL directly or used a bookmark
-- **Google, Bing, DuckDuckGo** — Search engine traffic
-- **twitter.com, linkedin.com** — Social media referrals
-- **Custom referrers** — Links from other websites
+- **Direct / None** - Visitors who typed your URL directly or used a bookmark
+- **Google, Bing, DuckDuckGo** - Search engine traffic
+- **twitter.com, linkedin.com** - Social media referrals
+- **Custom referrers** - Links from other websites
 
 ### Locations
 
@@ -128,9 +128,9 @@ Lists all custom events tracked via `moneat.track()` or `trackEvent()`, with vis
 
 All breakdown tables support:
 
-- **Column sorting** — Click any column header to sort ascending/descending
-- **Expand rows** — Tables show 10 rows by default; click "Show all" to see the full list
-- **Visual bars** — Each row includes a proportional bar showing its share of the maximum value
+- **Column sorting** - Click any column header to sort ascending/descending
+- **Expand rows** - Tables show 10 rows by default; click "Show all" to see the full list
+- **Visual bars** - Each row includes a proportional bar showing its share of the maximum value
 
 ## Date Range Picker
 

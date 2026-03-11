@@ -66,15 +66,16 @@ import kotlin.time.Instant
 
 private val logger = KotlinLogging.logger {}
 
-class DashboardAlertService {
+class DashboardAlertService(
+    private val emailService: EmailService = EmailService(),
+    private val slackService: SlackService = SlackService(),
+    private val discordService: DiscordService = DiscordService(),
+    private val incidentService: IncidentService = IncidentService(),
+    private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
+    private val queryEngine: DashboardQueryEngine = DashboardQueryEngine(),
+    private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
+) {
     private val config = ApplicationConfig("application.conf")
-    private val emailService = EmailService()
-    private val slackService = SlackService()
-    private val discordService = DiscordService()
-    private val incidentService = IncidentService()
-    private val prefsService = AlertNotificationPreferencesService()
-    private val queryEngine = DashboardQueryEngine()
-    private val retentionPolicyService = RetentionPolicyService()
     private val json = Json { ignoreUnknownKeys = true }
     private val pendingSinceFallback = ConcurrentHashMap<Long, Instant>()
 

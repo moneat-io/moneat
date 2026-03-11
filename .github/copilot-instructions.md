@@ -102,6 +102,34 @@ dashboard/src/
 └── contexts/                # React contexts (auth, etc.)
 ```
 
+### Dashboard: TypeScript & ESLint (Sonar-friendly)
+To avoid Sonar/ESLint code smells in `dashboard/`:
+
+**Exports & globals:**
+- ❌ **Don't export mutable `let`**: `export let x = null`
+- ✅ **Use `const` with object/ref**: `export const x = { current: null }` for test hooks, etc.
+- ✅ **Prefer `globalThis.window`** over `window` (SSR-safe)
+- ✅ **Prefer `globalThis.sessionStorage`** / `globalThis.localStorage` over bare globals
+
+**Assignments & operators:**
+- ✅ **Use nullish coalescing assignment** when assigning only if null: `x ??= value` instead of `if (!x) x = value`
+
+**Strings & DOM:**
+- ❌ **Avoid nested template literals**: `` `${base}/path${qs ? `?${qs}` : ''}` ``
+- ✅ **Use `urlWithQuery(path, qs)`** from `dashboard/src/lib/api/utils.ts` or string concat: `path + (qs ? '?' + qs : '')`
+- ✅ **Use `child.remove()`** instead of `parent.removeChild(child)`
+
+**Regex:**
+- ✅ **Use `RegExp.exec()`** instead of `string.match()` when you need capture groups
+
+**Functions & types:**
+- ✅ **Limit parameters to ≤7** – use an options object for functions with many params
+- ✅ **Use type aliases** for repeated union types: `type Status = 'a' | 'b' | 'c'`
+- ✅ **Re-export with `export { X } from './path'`** instead of import-then-export
+
+**Complexity:**
+- **Keep cognitive complexity ≤15** – extract helpers, use early returns, avoid deep nesting
+
 ## Key Conventions
 
 ### Detekt Code Style Guidelines
@@ -123,12 +151,41 @@ dashboard/src/
   ./gradlew detektFormat    # Auto-fix formatting
   ```
 
+- **SonarQube** runs in CI (`.github/workflows/sonar.yml`). Follow the "Kotlin: Validation & Control Flow" and "Dashboard: TypeScript & ESLint" guidelines below to avoid common Sonar code smells.
+
 While some rules are currently disabled in `detekt.yml`, always follow best practices for new code:
 - Use explicit imports (no wildcards)
 - Keep lines ≤ 120 characters
 - Extract complex conditions into named variables
 - Limit function parameters (prefer data classes)
 - Use descriptive variable/function names
+
+### Frontend TypeScript Code Style Guidelines
+The dashboard code is checked by SonarCloud. Follow these rules when writing TypeScript/React code:
+
+- ❌ **Don't use `typeof x !== 'undefined'`** — compare directly: `x !== undefined`
+- ❌ **Don't duplicate module imports** — merge all imports from the same path into one statement
+- ❌ **Don't use nested template literals** — use a helper (e.g. `urlWithQuery`) or a variable instead
+- ❌ **Don't leave unused imports** — remove or convert to a re-export if needed
+- ❌ **Don't add unnecessary type assertions** — avoid `as SomeType` when TypeScript already narrows the type
+- ✅ **Extract repeated union types into a named type alias** — e.g. `type IncidentSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null`
+- ✅ **Define helper functions at module scope** when they don't close over instance state — avoids the "move function to outer scope" smell
+
+### Kotlin: Validation & Control Flow (Sonar-friendly)
+To avoid Sonar code smells and keep code consistent:
+
+- ❌ **Don't use if-throw for validation**: `if (x !in valid) throw IllegalArgumentException("msg")`
+- ✅ **Use `require()` for internal argument preconditions**: `require(x in valid) { "Invalid value" }` — use only in internal helpers/library code, not Ktor handlers (throws `IllegalArgumentException` → HTTP 500 unless mapped by `StatusPages`)
+- ✅ **Use `check()` for internal state preconditions**: `check(existing == null) { "Already exists" }` — same caveat; use only where `IllegalStateException` is appropriate internally
+- ✅ **Replace if-throw with `check()` for response validation**: `check(!response.isError()) { "Error: ${body.take(500)}" }` instead of `if (response.isError()) throw IllegalStateException(...)` — Sonar prefers this pattern
+- ✅ **In Ktor route handlers**, throw `BadRequestException` (or domain-specific exceptions) for client validation errors, or explicitly map `IllegalArgumentException`/`IllegalStateException` to 4xx/409 via the `StatusPages` plugin — do not rely on `require()`/`check()` inside handlers unless `StatusPages` maps them
+
+- **Remove unused local variables** – delete any variable that is never read.
+
+- **Keep cognitive complexity low (≤15)** – extract helper functions when logic gets nested:
+  - Use `runCatching { }.getOrNull()` only in non-suspending, synchronous helpers (e.g., parsing/mapping functions). **Avoid in suspending/coroutine contexts**: `runCatching` swallows all `Throwable`s including `CancellationException`, which can break coroutine cancellation. In suspend functions, use try/catch that rethrows `CancellationException`, or avoid `runCatching` entirely.
+  - Extract complex parsing or mapping into private functions
+  - Prefer early returns over nested conditionals
 
 ### Exposed DSL (Kotlin Database ORM)
 **CRITICAL:** Always use the current Exposed DSL syntax to avoid deprecation warnings:
@@ -149,6 +206,15 @@ Users.selectAll().where { (Users.id eq userId) and (Users.active eq true) }
 
 This applies to all tables and joins. The project uses `-Werror` (warnings as errors), so deprecated DSL will cause build failures.
 
+### Repository Layer
+When adding or extending the repository layer:
+
+- ❌ **NEVER put domain models in the same file as a repository interface**
+- ✅ **ALWAYS put domain models in separate files** — e.g. `ProjectRow` in `repositories/models/ProjectRow.kt` or `models/ProjectRow.kt`, not in `ProjectRepository.kt`
+- Repository interfaces live in `{domain}/repositories/{Entity}Repository.kt`
+- Implementations live in `{domain}/repositories/{Entity}RepositoryImpl.kt`
+- Domain models (data classes returned by repositories) live in their own files under `{domain}/repositories/models/` or `{domain}/models/`
+
 ### Database Migrations
 - **PostgreSQL**: Uses Flyway; migrations in `backend/src/main/resources/db/migration/*.sql`
 - **ClickHouse**: Custom versioned migrations in `backend/src/main/resources/db/clickhouse_migration/V*__*.sql`
@@ -167,7 +233,7 @@ Fingerprint logic is in `EventService.kt` - modify carefully as it affects group
 - Development: `.env` file (not committed; see `.env.example`)
 - Production: Environment variables passed to Docker containers
 - **CRITICAL**: See `ESSENTIAL_ENV_VARS.md` for complete list of required variables
-- Required vars: `JWT_SECRET`, `DATABASE_PASSWORD`, `CLICKHOUSE_PASSWORD`, `FRONTEND_URL`, `BACKEND_URL`
+- Required vars: `JWT_SECRET`, `DATA_SOURCE_ENCRYPTION_KEY`, `DATABASE_PASSWORD`, `CLICKHOUSE_PASSWORD`, `FRONTEND_URL`, `BACKEND_URL`
 - Application validates environment on startup and fails fast if critical variables are missing or unsafe
 - **NEVER use `System.getenv()` directly** - Always use `EnvConfig.get()` which handles both environment variables and `.env` files consistently
 

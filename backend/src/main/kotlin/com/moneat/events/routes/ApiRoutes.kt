@@ -75,10 +75,12 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import org.koin.core.context.GlobalContext
 import kotlin.time.Clock
 
 fun Route.apiRoutes() {
-    val dashboardService = DashboardService()
+    val koin = GlobalContext.get()
+    val dashboardService = koin.get<DashboardService>()
 
     // Public routes (no auth required)
     route("/v1") {
@@ -1306,7 +1308,7 @@ fun Route.apiRoutes() {
                         return@get
                     }
 
-                    val prefsService = AlertNotificationPreferencesService()
+                    val prefsService = koin.get<AlertNotificationPreferencesService>()
                     val preferences = prefsService.getPreferences(userId, organizationId)
 
                     call.respond(AlertNotificationPreferencesResponse(preferences = preferences))
@@ -1345,7 +1347,7 @@ fun Route.apiRoutes() {
                             return@put
                         }
 
-                    val prefsService = AlertNotificationPreferencesService()
+                    val prefsService = koin.get<AlertNotificationPreferencesService>()
                     try {
                         val updated =
                             prefsService.updatePreference(

@@ -24,11 +24,11 @@ Synthetic testing requires the Datadog Agent integration, available on Enterpris
 
 Navigate to **Synthetics** in the sidebar and click **New Test**.
 
-### Step 1 — Select type
+### Step 1 - Select type
 
 Choose **API Test** for a single request, or **Multistep API Test** to chain multiple requests together.
 
-### Step 2 — Configure the request
+### Step 2 - Configure the request
 
 **For API tests:**
 
@@ -45,13 +45,13 @@ Choose **API Test** for a single request, or **Multistep API Test** to chain mul
 
 Add one or more steps. Each step has its own name, URL, method, body, and can extract variables from the response to use in later steps.
 
-**Variable extraction** — in any step, add an extraction with:
-- **Variable name** — what to call the extracted value (e.g., `AUTH_TOKEN`)
-- **Source** — `json_path` (e.g., `$.token`) or `header` (e.g., `Set-Cookie`)
+**Variable extraction** - in any step, add an extraction with:
+- **Variable name** - what to call the extracted value (e.g., `AUTH_TOKEN`)
+- **Source** - `json_path` (e.g., `$.token`) or `header` (e.g., `Set-Cookie`)
 
 Reference extracted variables in later steps using `{{AUTH_TOKEN}}`.
 
-### Step 3 — Add assertions
+### Step 3 - Add assertions
 
 Assertions define what a passing response looks like. The default assertion checks that the status code equals 200.
 
@@ -64,7 +64,7 @@ Assertions define what a passing response looks like. The default assertion chec
 
 Available operators: `equals`, `not_equals`, `contains`, `less_than`, `greater_than`.
 
-### Step 4 — Set the schedule
+### Step 4 - Set the schedule
 
 | Field | Description |
 |---|---|
@@ -77,9 +77,9 @@ Click **Create Test** to save. The test starts running on the next scheduled int
 
 The **Synthetics** page shows all configured tests with their current status, last run time, and interval. From the table you can:
 
-- **Run** — trigger an immediate test run with the ▶ button
-- **Delete** — remove the test permanently
+- **Run** - trigger an immediate test run
+- **Delete** - remove the test permanently
 
 ## Viewing Results
 
-The **Test Results** table below the tests list shows every run — whether triggered by Moneat's scheduler or reported by a Datadog Agent — with test name, type, pass/fail status, duration, and probe location.
+The **Test Results** table below the tests list shows every run - whether triggered by Moneat's scheduler or reported by a Datadog Agent - with test name, type, pass/fail status, duration, and probe location.

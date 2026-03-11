@@ -8,16 +8,16 @@ kotlinx-datetime = "0.7.1-0.6.x-compat"
 junit = "6.0.3"
 testcontainers = "2.0.3"
 detekt = "1.23.8"
-sonarqube = "7.2.3.7755"
 shadow = "9.3.2"
 jacoco = "0.8.14"
-opentelemetry = "1.59.0"
+opentelemetry = "1.60.1"
 opentelemetry-instrumentation = "2.1.0-alpha"
 sentry = "8.34.1"
-flyway = "12.0.3"
+flyway = "12.1.0"
 h2 = "2.4.240"
 mockk = "1.14.9"
 shedlock = "7.6.0"
+koin = "4.0.4"
 
 [libraries]
 # Ktor Server
@@ -71,7 +71,7 @@ commons-codec = { module = "commons-codec:commons-codec", version = "1.21.0" }
 
 # SSO
 java-saml-core = { module = "com.onelogin:java-saml-core", version = "2.9.0" }
-oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.33" }
+oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.34" }
 
 # Billing
 stripe-java = { module = "com.stripe:stripe-java", version = "31.4.1" }
@@ -132,10 +132,14 @@ google-cloud-bigquery = { module = "com.google.cloud:google-cloud-bigquery", ver
 # Detekt
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
 
+# Koin - dependency injection
+koin-ktor = { module = "io.insert-koin:koin-ktor", version.ref = "koin" }
+koin-logger-slf4j = { module = "io.insert-koin:koin-logger-slf4j", version.ref = "koin" }
+koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin" }
+
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ktor = { id = "io.ktor.plugin", version.ref = "ktor" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
-sonarqube = { id = "org.sonarqube", version.ref = "sonarqube" }

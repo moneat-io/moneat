@@ -19,6 +19,7 @@ package com.moneat.monitor.routes
 import com.moneat.monitor.models.CreateAgentApiKeyRequest
 import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.utils.ErrorResponse
+import org.koin.core.context.GlobalContext
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -31,11 +32,11 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 
-fun Route.agentApiKeyRoutes() {
+fun Route.agentApiKeyRoutes(
+    agentApiKeyService: AgentApiKeyService = GlobalContext.get().get(),
+) {
     route("/v1") {
         authenticate("auth-jwt") {
-            val agentApiKeyService = AgentApiKeyService()
-
             get("/agent-api-keys") {
                 val principal = call.principal<JWTPrincipal>()
                 val orgId = principal!!.payload.getClaim("orgId").asInt()

@@ -12,9 +12,9 @@
 3. Click **Create Token**
 4. Give it a descriptive name (e.g., "MCP - Cursor IDE")
 5. Select scopes based on the tools you need:
-   - **Read-only tools**: `project:read`, `event:read`, `org:read`
-   - **Mutating tools** (e.g., `create_dashboard`, `create_host`, `update_issue_status`, `create_uptime_monitor`): also add `project:write`
-   - **Release tools**: also add `releases:read` and/or `releases:write`
+  - **Read-only tools**: `project:read`, `event:read`, `org:read`
+  - **Mutating tools** (e.g., `create_dashboard`, `create_host`, `update_issue_status`, `create_uptime_monitor`): also add `project:write`
+  - **Release tools**: also add `releases:read` and/or `releases:write`
 6. Copy the generated token (it won't be shown again)
 
 ## Connecting from Cursor IDE
@@ -58,8 +58,8 @@ curl -N -H "Authorization: Bearer YOUR_TOKEN" \
 # In another terminal, send a tools/list request to the session endpoint
 endpoint="https://your-moneat-instance/v1/mcp/message?sessionId=SESSION_ID"
 curl -X POST "$endpoint" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+ -H "Content-Type: application/json" \
+ -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
 ## Authentication

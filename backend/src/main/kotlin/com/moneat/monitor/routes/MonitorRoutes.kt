@@ -47,6 +47,7 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.koin.core.context.GlobalContext
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -107,8 +108,9 @@ private suspend fun ensureHostAccessible(
 }
 
 fun Route.monitorRoutes(
-    monitorService: MonitorService = MonitorService(),
-    logService: LogService = LogService(),
+    monitorService: MonitorService = GlobalContext.get().get(),
+    logService: LogService = GlobalContext.get().get(),
+    monitorAlertService: MonitorAlertService = GlobalContext.get().get(),
 ) {
     route("/v1/monitor") {
         /**
@@ -638,8 +640,7 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val alertService = MonitorAlertService()
-                val periods = alertService.listSilencePeriods(organizationIds.first())
+                val periods = monitorAlertService.listSilencePeriods(organizationIds.first())
                 call.respond(HttpStatusCode.OK, periods)
             }
 
@@ -659,8 +660,7 @@ fun Route.monitorRoutes(
                     return@post
                 }
 
-                val alertService = MonitorAlertService()
-                val period = alertService.createSilencePeriod(organizationIds.first(), userId, request)
+                val period = monitorAlertService.createSilencePeriod(organizationIds.first(), userId, request)
                 call.respond(HttpStatusCode.Created, period)
             }
 
@@ -680,8 +680,7 @@ fun Route.monitorRoutes(
                     return@delete
                 }
 
-                val alertService = MonitorAlertService()
-                val deleted = alertService.deleteSilencePeriod(periodId, organizationIds.first())
+                val deleted = monitorAlertService.deleteSilencePeriod(periodId, organizationIds.first())
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Silence period not found"))
                     return@delete

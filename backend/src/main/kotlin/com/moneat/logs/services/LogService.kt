@@ -18,6 +18,8 @@ package com.moneat.logs.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.config.isClickHouseError
+import com.moneat.logs.repositories.LogRepository
 import com.moneat.logs.models.AgentLogEntry
 import com.moneat.logs.models.LogAggregateBucket
 import com.moneat.logs.models.LogAggregateResponse
@@ -37,8 +39,7 @@ import com.moneat.logs.models.QueuedLogEntry
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -66,7 +67,7 @@ private data class LogWithCursor(
     val timestampMs: Long
 )
 
-class LogService {
+class LogService(private val logRepository: LogRepository) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracking = UsageTrackingService.instance
@@ -140,7 +141,7 @@ class LogService {
                 """
             (
                 toUUID('${escapeSql(entry.logId)}'),
-                ${batch.organizationId},
+                ${batch.effectiveOrganizationId},
                 toUUID('${escapeSql(systemIdValue)}'),
                 fromUnixTimestamp64Milli(${entry.timestampMs}),
                 '${escapeSql(entry.level)}',
@@ -188,10 +189,9 @@ class LogService {
             $rows
             """.trimIndent()
 
-        val response = ClickHouseClient.execute(insert)
-        if (!response.status.isSuccess()) {
-            val errorBody = response.bodyAsText()
-            throw IllegalStateException("Failed to insert logs into ClickHouse: ${errorBody.take(600)}")
+        val insertSuccess = logRepository.executeClickHouseInsert(insert)
+        check(insertSuccess) {
+            "Failed to insert logs into ClickHouse"
         }
 
         val totalBytes = batch.logs.sumOf { it.message.length + it.body.length }
@@ -380,9 +380,8 @@ class LogService {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val response = ClickHouseClient.execute(query)
-        val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        val body = logRepository.executeClickHouseQuery(query)
+        if (body.isClickHouseError()) {
             logger.error("ClickHouse query failed. WHERE clause: $whereClause")
             logger.error("Full query: $query")
             throw IllegalStateException("Failed to query logs: ${body.take(1000)}")
@@ -405,10 +404,9 @@ class LogService {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val totalCountResponse = ClickHouseClient.execute(totalCountQuery)
-        val totalCountBody = totalCountResponse.bodyAsText()
+        val totalCountBody = logRepository.executeClickHouseQuery(totalCountQuery)
         val totalCount =
-            if (totalCountResponse.status.isSuccess() && !totalCountBody.trimStart().startsWith("Code:")) {
+            if (!totalCountBody.isClickHouseError()) {
                 try {
                     val jsonElement = Json.parseToJsonElement(totalCountBody.trim())
                     jsonElement.jsonObject["count"]?.jsonPrimitive?.longOrNull ?: 0L
@@ -563,10 +561,9 @@ class LogService {
         logger.debug {
             "Aggregate logs SQL for org $organizationId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, groupBy=$validGroupBy):\n$sql"
         }
-        val response = ClickHouseClient.execute(sql)
-        val body = response.bodyAsText()
+        val body = logRepository.executeClickHouseQuery(sql)
         logger.debug { "Aggregate logs response body (first 500 chars): ${body.take(500)}" }
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        if (body.isClickHouseError()) {
             logger.warn { "Failed to aggregate logs: ${body.take(600)}" }
             return LogAggregateResponse(buckets = emptyList(), totalCount = 0, interval = resolvedInterval)
         }
@@ -697,9 +694,8 @@ class LogService {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val response = ClickHouseClient.execute(sql)
-        val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        val body = logRepository.executeClickHouseQuery(sql)
+        if (body.isClickHouseError()) {
             logger.warn { "Failed to query top values: ${body.take(600)}" }
             return LogTopResponse(field = field, values = emptyList(), totalCount = 0)
         }
@@ -720,12 +716,11 @@ class LogService {
             SELECT count() AS cnt FROM `$clickhouseDb`.logs WHERE $whereClause
             FORMAT JSONEachRow
             """.trimIndent()
-        val totalResponse = ClickHouseClient.execute(totalSql)
-        val totalBody = totalResponse.bodyAsText()
+        val totalResponse = logRepository.executeClickHouseQuery(totalSql)
         val totalCount =
             try {
                 json
-                    .parseToJsonElement(totalBody.trim())
+                    .parseToJsonElement(totalResponse.trim())
                     .jsonObject["cnt"]
                     ?.jsonPrimitive
                     ?.longOrNull ?: 0L
@@ -813,9 +808,8 @@ class LogService {
             """.trimIndent()
 
         logger.debug { "Export CSV SQL: $sql" }
-        val response = ClickHouseClient.execute(sql)
-        val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        val body = logRepository.executeClickHouseQuery(sql)
+        if (body.isClickHouseError()) {
             logger.error { "ClickHouse export error. SQL: $sql\nError: ${body.take(600)}" }
             throw IllegalStateException("Failed to export logs: ${body.take(600)}")
         }
@@ -915,9 +909,8 @@ class LogService {
     }
 
     private suspend fun queryValueCounts(query: String): List<LogFilterOptionWithCount> {
-        val response = ClickHouseClient.execute(query)
-        val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        val body = logRepository.executeClickHouseQuery(query)
+        if (body.isClickHouseError()) {
             logger.warn { "Failed to query value counts: ${body.take(600)}" }
             return emptyList()
         }
@@ -1062,9 +1055,8 @@ class LogService {
     }
 
     private suspend fun queryDistinctLines(query: String): List<String> {
-        val response = ClickHouseClient.execute(query)
-        val body = response.bodyAsText()
-        if (!response.status.isSuccess() || body.trimStart().startsWith("Code:")) {
+        val body = logRepository.executeClickHouseQuery(query)
+        if (body.isClickHouseError()) {
             logger.warn { "Failed to query log filter values: ${body.take(600)}" }
             return emptyList()
         }
@@ -1386,7 +1378,7 @@ class LogService {
                 return null
             }
 
-        return "system_id = toUUID('$parsed')"
+        return "${ClickHouseQueryUtils.orgIdClause(organizationId)} AND system_id = toUUID('$parsed')"
     }
 
     private fun resolveTimestampMs(
@@ -1445,10 +1437,6 @@ class LogService {
                     "'${escapeSql(key)}', '${escapeSql(mapValue)}'"
                 }
         return "map($pairs)"
-    }
-
-    private fun escapeSql(value: String?): String {
-        return ClickHouseSqlUtils.escapeSql(value)
     }
 
     private fun buildSimpleSearchCondition(term: String): String {

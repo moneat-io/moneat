@@ -18,12 +18,11 @@ package com.moneat.llm.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.RedisConfig
+import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.services.EventService
 import com.moneat.llm.models.LlmIngestPayload
 import com.moneat.llm.services.LlmIngestionWorker
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.NotificationService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.header
@@ -34,15 +33,14 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
 fun Route.llmIngestRoutes() {
-    val emailService = EmailService()
-    val notificationService = NotificationService(emailService)
-    val eventService = EventService(notificationService)
-    val quotaService = BillingQuotaService()
+    val eventService = GlobalContext.get().get<EventService>()
+    val quotaService = GlobalContext.get().get<BillingQuotaService>()
 
     route("/api/{projectId}") {
         post("/llm/") {
@@ -75,14 +73,7 @@ fun Route.llmIngestRoutes() {
             try {
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
-                val decompressedBytes =
-                    if (contentEncoding == "gzip") {
-                        java.util.zip
-                            .GZIPInputStream(bodyBytes.inputStream())
-                            .readBytes()
-                    } else {
-                        bodyBytes
-                    }
+                val decompressedBytes = DecompressionService.decompress(bodyBytes, contentEncoding)
 
                 val payload = json.decodeFromString<LlmIngestPayload>(decompressedBytes.decodeToString())
 

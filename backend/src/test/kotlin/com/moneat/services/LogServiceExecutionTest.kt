@@ -18,6 +18,7 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.logs.models.LogQueryRequest
+import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
@@ -72,7 +73,7 @@ class LogServiceExecutionTest {
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
 
                 val result =
-                    LogService().queryLogs(
+                    LogService(LogRepositoryImpl()).queryLogs(
                         organizationId = 42L,
                         request = LogQueryRequest(limit = 1)
                     )
@@ -94,7 +95,7 @@ class LogServiceExecutionTest {
     fun `queryLogs returns empty result for invalid system id filter`() =
         runBlocking {
             val result =
-                LogService().queryLogs(
+                LogService(LogRepositoryImpl()).queryLogs(
                     organizationId = 42L,
                     request = LogQueryRequest(systemId = "not-a-uuid")
                 )
@@ -127,7 +128,7 @@ class LogServiceExecutionTest {
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
 
                 val result =
-                    LogService().aggregateLogs(
+                    LogService(LogRepositoryImpl()).aggregateLogs(
                         organizationId = 7L,
                         from = "2026-02-01T10:00:00Z",
                         to = "2026-02-01T12:00:00Z",

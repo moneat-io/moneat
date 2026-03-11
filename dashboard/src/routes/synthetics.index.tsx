@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import {cn} from '@/lib/utils'
 import {Play, Trash2, Pause, Search, Filter} from 'lucide-react'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {useState, useMemo} from 'react'
 
 export const Route = createFileRoute('/synthetics/')({

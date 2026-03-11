@@ -1,6 +1,6 @@
 ---
 title: Privacy Architecture
-description: Technical details on how Moneat Analytics protects user privacy — no cookies, no personal data storage, GDPR-compliant by design.
+description: Technical details on how Moneat Analytics protects user privacy - no cookies, no personal data storage, GDPR-compliant by design.
 ---
 
 # Privacy Architecture
@@ -39,7 +39,7 @@ The salt is a cryptographically random value stored in Redis with a **48-hour TT
 
 - A new salt is generated at midnight UTC each day
 - The previous day's salt is kept for an additional 24 hours to handle timezone edge cases
-- After expiry, the salt is permanently deleted — old session IDs can never be regenerated
+- After expiry, the salt is permanently deleted - old session IDs can never be regenerated
 
 ```
 Day 1: salt_abc123 → session_id_X for visitor A
@@ -81,32 +81,32 @@ After step 4, there is **no way** to identify the original visitor from the stor
 
 | Field | Stored | Example |
 |-------|--------|---------|
-| Session ID (hash) | ✅ | `a1b2c3d4e5f6...` |
-| Page path | ✅ | `/pricing` |
-| Referrer source | ✅ | `Google` |
-| UTM parameters | ✅ | `utm_source=newsletter` |
-| Country code | ✅ | `US` |
-| Region | ✅ | `California` |
-| City | ✅ | `San Francisco` |
-| Browser name | ✅ | `Chrome` |
-| Browser version | ✅ | `120` |
-| OS name | ✅ | `macOS` |
-| Device type | ✅ | `Desktop` |
-| Screen width | ✅ | `1920` |
-| Custom event name | ✅ | `Signup` |
-| Custom properties | ✅ | `{ "plan": "pro" }` |
+| Session ID (hash) | Yes | `a1b2c3d4e5f6...` |
+| Page path | Yes | `/pricing` |
+| Referrer source | Yes | `Google` |
+| UTM parameters | Yes | `utm_source=newsletter` |
+| Country code | Yes | `US` |
+| Region | Yes | `California` |
+| City | Yes | `San Francisco` |
+| Browser name | Yes | `Chrome` |
+| Browser version | Yes | `120` |
+| OS name | Yes | `macOS` |
+| Device type | Yes | `Desktop` |
+| Screen width | Yes | `1920` |
+| Custom event name | Yes | `Signup` |
+| Custom properties | Yes | `{ "plan": "pro" }` |
 
 ## What Is Never Stored
 
 | Field | Stored | Notes |
 |-------|--------|-------|
-| IP address | ❌ | Used transiently for GeoIP + session hash, then discarded |
-| User-Agent string | ❌ | Used transiently for UA parsing + session hash, then discarded |
-| Cookies | ❌ | None set, none read |
-| User IDs | ❌ | Not collected |
-| Email addresses | ❌ | Not collected |
-| Device fingerprints | ❌ | Not collected |
-| localStorage/sessionStorage | ❌ | Not accessed |
+| IP address | No | Used transiently for GeoIP + session hash, then discarded |
+| User-Agent string | No | Used transiently for UA parsing + session hash, then discarded |
+| Cookies | No | None set, none read |
+| User IDs | No | Not collected |
+| Email addresses | No | Not collected |
+| Device fingerprints | No | Not collected |
+| localStorage/sessionStorage | No | Not accessed |
 
 ## Do Not Track
 
@@ -145,13 +145,3 @@ Moneat Analytics is **compliant by design** with GDPR, CCPA, PECR, and similar p
 While Moneat Analytics is designed to be privacy-compliant, consult your legal team for advice specific to your jurisdiction and use case.
 :::
 
-## Comparison with Other Analytics Tools
-
-| Feature | Moneat | Google Analytics | Plausible | Matomo |
-|---------|--------|------------------|-----------|--------|
-| Cookies | None | Multiple | None | Optional |
-| Personal data stored | None | Yes (IP, device ID) | None | Optional |
-| Cookie banner needed | No | Yes | No | Depends |
-| Hosted on your infra | Yes | No (Google servers) | Optional | Optional |
-| Cross-site tracking | Impossible | Yes | No | No |
-| Script size | ~670 B | ~45 KB | ~1 KB | ~22 KB |

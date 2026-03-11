@@ -17,18 +17,24 @@
 package com.moneat.org.routes
 
 import com.moneat.auth.services.AuthService
+import com.moneat.billing.services.AdminBillingService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.isClickHouseError
 import com.moneat.events.models.TriggerIncidentRequest
 import com.moneat.incident.models.AlertSource
 import com.moneat.incident.models.IncidentEvent
 import com.moneat.incident.models.IncidentSeverity
 import com.moneat.incident.models.IncidentStatus
 import com.moneat.incident.services.IncidentService
+import com.moneat.notifications.services.DiscordService
+import com.moneat.notifications.services.EmailService
+import com.moneat.notifications.services.SlackService
 import com.moneat.org.services.AdminOrgDetail
 import com.moneat.org.services.AdminOrgUsagePoint
 import com.moneat.org.services.AdminService
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.AttributionAnalyticsService
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.createRouteScopedPlugin
@@ -59,6 +65,7 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 private val adminJson = Json { ignoreUnknownKeys = true }
@@ -114,7 +121,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
     val response = ClickHouseClient.execute(query)
     val body = response.bodyAsText().trim()
 
-    if (response.status != HttpStatusCode.OK || body.startsWith("Code:")) {
+    if (response.isClickHouseError(body)) {
         logger.warn { "Failed to query telemetry_pulses: ${body.take(200)}" }
         return ReceivedTelemetryStatus(deploymentCount = 0, lastSeenAt = null, deployments = emptyList())
     }
@@ -171,10 +178,14 @@ private data class AdminSuccessResponse(
 )
 
 fun Route.adminRoutes() {
-    val adminService = AdminService()
-    val authService = AuthService()
-    val pricingTierService = PricingTierService()
-    val attributionAnalyticsService = com.moneat.shared.services.AttributionAnalyticsService()
+    val adminService = GlobalContext.get().get<AdminService>()
+    val authService = GlobalContext.get().get<AuthService>()
+    val pricingTierService = GlobalContext.get().get<PricingTierService>()
+    val attributionAnalyticsService = GlobalContext.get().get<AttributionAnalyticsService>()
+    val emailService = GlobalContext.get().get<EmailService>()
+    val slackService = GlobalContext.get().get<SlackService>()
+    val discordService = GlobalContext.get().get<DiscordService>()
+    val incidentService = GlobalContext.get().get<IncidentService>()
 
     authenticate("auth-jwt") {
         route("/v1/admin") {
@@ -331,8 +342,6 @@ fun Route.adminRoutes() {
                 try {
                     val request = call.receive<TriggerIncidentRequest>()
 
-                    val incidentService =
-                        IncidentService()
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
 
@@ -407,9 +416,6 @@ fun Route.adminRoutes() {
                                 ?.get(com.moneat.shared.models.Memberships.organization_id)
                         }
 
-                    val emailService = com.moneat.notifications.services.EmailService()
-                    val slackService = com.moneat.notifications.services.SlackService()
-                    val discordService = com.moneat.notifications.services.DiscordService()
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
 
@@ -887,7 +893,7 @@ fun Route.adminRoutes() {
                 }
 
                 // Promotional credit management
-                val adminBillingService = com.moneat.billing.services.AdminBillingService()
+                val adminBillingService = GlobalContext.get().get<AdminBillingService>()
 
                 post("/organizations/{orgId}/promotional-credits") {
                     val principal = call.principal<JWTPrincipal>()

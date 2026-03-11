@@ -9,6 +9,7 @@ import com.moneat.enterprise.mcp.protocol.InputSchema
 import com.moneat.enterprise.mcp.protocol.McpTool
 import com.moneat.enterprise.mcp.protocol.ToolCallResult
 import com.moneat.logs.models.LogQueryRequest
+import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
@@ -17,7 +18,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-private val logService = LogService()
+private val logService = LogService(LogRepositoryImpl())
 
 private const val DEFAULT_LOG_LIMIT = 100
 private const val MAX_LOG_LIMIT = 1000

@@ -39,7 +39,7 @@ import {
     Unlock
 } from 'lucide-react'
 import {useState} from 'react'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate} from '@/lib/date-format'
 

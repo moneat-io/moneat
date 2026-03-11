@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport,} from "@/components/ui/toast"
-import {useToast} from "@/hooks/use-toast"
+import {useToast} from "@/hooks/useToast"
 
 export function Toaster() {
   const { toasts } = useToast()

@@ -69,7 +69,7 @@ Agent: "You have 5 uptime monitors:
 - payments.example.com: DOWN (last check failed 2m ago)
 - docs.example.com: UP (99.99% uptime, avg 112ms)
 
-⚠️ payments.example.com is currently DOWN."
+Note: payments.example.com is currently DOWN."
 
 User: "What happened with payments?"
 

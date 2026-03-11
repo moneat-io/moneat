@@ -31,6 +31,7 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.koin.core.context.GlobalContext
 import java.time.DateTimeException
 import java.time.ZoneId
 
@@ -48,7 +49,7 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
 }
 
 fun Route.summaryRoutes(
-    summaryService: SummaryService = SummaryService()
+    summaryService: SummaryService = GlobalContext.get().get(),
 ) {
     route("/v1/summary") {
         authenticate("auth-jwt") {

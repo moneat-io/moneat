@@ -43,8 +43,8 @@ import org.jetbrains.exposed.v1.jdbc.update
 private val logger = KotlinLogging.logger {}
 
 class AccountDeletionService(
-    private val stripeService: StripeService = StripeService(),
-    private val emailService: EmailService = EmailService()
+    private val stripeService: StripeService,
+    private val emailService: EmailService,
 ) {
 
     data class DeletionValidationResult(

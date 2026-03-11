@@ -37,6 +37,7 @@ class OAuthServiceTest {
                     "GITHUB_OAUTH_CLIENT_ID" to "client-123",
                     "GITHUB_OAUTH_CLIENT_SECRET" to "secret-123",
                     "BACKEND_URL" to "https://api.test.local",
+                    "FRONTEND_URL" to "https://api.test.local",
                     "GITHUB_OAUTH_BASE_URL" to server.baseUrl
                 )
             ) {
@@ -81,6 +82,7 @@ class OAuthServiceTest {
                 mapOf(
                     "GITHUB_OAUTH_CLIENT_ID" to "client-123",
                     "GITHUB_OAUTH_CLIENT_SECRET" to "secret-123",
+                    "FRONTEND_URL" to "https://api.test.local",
                     "GITHUB_OAUTH_BASE_URL" to server.baseUrl,
                     "GITHUB_API_BASE_URL" to server.baseUrl
                 )
@@ -132,6 +134,7 @@ class OAuthServiceTest {
                 mapOf(
                     "GITHUB_OAUTH_CLIENT_ID" to "client-123",
                     "GITHUB_OAUTH_CLIENT_SECRET" to "secret-123",
+                    "FRONTEND_URL" to "https://api.test.local",
                     "GITHUB_OAUTH_BASE_URL" to server.baseUrl,
                     "GITHUB_API_BASE_URL" to server.baseUrl
                 )
@@ -180,6 +183,7 @@ class OAuthServiceTest {
                 mapOf(
                     "GITHUB_OAUTH_CLIENT_ID" to "client-123",
                     "GITHUB_OAUTH_CLIENT_SECRET" to "secret-123",
+                    "FRONTEND_URL" to "https://api.test.local",
                     "GITHUB_OAUTH_BASE_URL" to server.baseUrl,
                     "GITHUB_API_BASE_URL" to server.baseUrl
                 )

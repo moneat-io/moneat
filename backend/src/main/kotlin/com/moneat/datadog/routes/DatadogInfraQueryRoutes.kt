@@ -17,10 +17,11 @@
 package com.moneat.datadog.routes
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.isClickHouseError
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.isSuccess
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -302,7 +303,7 @@ fun Route.datadogInfraQueryRoutes() {
 private suspend fun executeCount(sql: String): Long {
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
-    if (!resp.status.isSuccess() || body.startsWith("Code:")) {
+    if (resp.isClickHouseError(body)) {
         logger.warn { "ClickHouse query failed (${resp.status.value}): ${body.take(200)}" }
         return 0L
     }
@@ -320,7 +321,7 @@ private suspend fun executeRows(
 ): List<JsonObject> {
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
-    if (!resp.status.isSuccess() || body.startsWith("Code:")) {
+    if (resp.isClickHouseError(body)) {
         logger.warn { "ClickHouse query failed (${resp.status.value}): ${body.take(200)}" }
         return emptyList()
     }
@@ -341,10 +342,4 @@ private fun JsonObject.s(key: String): String {
     } else {
         el.toString()
     }
-}
-
-private fun escapeSql(value: String): String {
-    return value
-        .replace("\\", "\\\\")
-        .replace("'", "\\'")
 }

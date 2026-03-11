@@ -38,7 +38,7 @@ class TwilioService {
     private val authToken = EnvConfig.get("TWILIO_AUTH_TOKEN", "")
     private val fromNumber = EnvConfig.get("TWILIO_FROM_NUMBER", "")
     private val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
-    private val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+    private val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
 
     private val httpClient = HttpClient(CIO)
 

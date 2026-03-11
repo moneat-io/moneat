@@ -50,6 +50,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import kotlin.test.AfterTest
 
 class AccountDeletionRoutesTest {
     private val jwtSecret = "test-secret-for-account-deletion-routes"
@@ -60,6 +63,7 @@ class AccountDeletionRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
+        startTestKoin()
         if (!dbInitialized) {
             Database.connect(
                 url =
@@ -491,4 +495,9 @@ class AccountDeletionRoutesTest {
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
+
+    @AfterTest
+    fun teardownKoin() {
+        stopTestKoin()
+    }
 }

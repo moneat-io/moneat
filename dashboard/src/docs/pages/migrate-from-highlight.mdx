@@ -5,16 +5,16 @@ description: Step-by-step guide to migrate from highlight.io to Moneat using an 
 
 # Migrate from Highlight.io
 
-Moneat is Sentry-protocol compatible, which means migrating from highlight.io is straightforward — you swap the SDK and point your DSN at Moneat. This guide provides a copy-paste AI prompt you can use to automate the migration across your codebase.
+Moneat is Sentry-protocol compatible, which means migrating from highlight.io is straightforward: swap the SDK and point your DSN at Moneat. This guide provides a copy-paste AI prompt you can use to automate the migration across your codebase.
 
 ## Overview
 
 The migration involves:
 
-1. **Replacing packages** — swap `@highlight-run/*` / `highlight.io` packages for the equivalent `@sentry/*` packages
-2. **Updating initialization** — convert `H.init(projectID, opts)` to `Sentry.init({ dsn, ... })`
-3. **Converting API calls** — map highlight.io methods to their Sentry equivalents
-4. **Updating environment variables** — replace `HIGHLIGHT_PROJECT_ID` with a Sentry DSN
+1. **Replacing packages** - swap `@highlight-run/*` / `highlight.io` packages for the equivalent `@sentry/*` packages
+2. **Updating initialization** - convert `H.init(projectID, opts)` to `Sentry.init({ dsn, ... })`
+3. **Converting API calls** - map highlight.io methods to their Sentry equivalents
+4. **Updating environment variables** - replace `HIGHLIGHT_PROJECT_ID` with a Sentry DSN
 
 ## Finding Your DSN
 
@@ -44,7 +44,7 @@ Follow these instructions precisely and completely:
 
 ---
 
-## STEP 1 — SCAN THE CODEBASE
+## STEP 1 - SCAN THE CODEBASE
 
 Search for all files that reference highlight.io. Look for:
 - Import statements: `@highlight-run`, `highlight.io`, `highlight_io`, `github.com/highlight/highlight`
@@ -57,7 +57,7 @@ List every file found before making any changes.
 
 ---
 
-## STEP 2 — REPLACE PACKAGES
+## STEP 2 - REPLACE PACKAGES
 
 ### JavaScript / TypeScript
 
@@ -100,7 +100,7 @@ Also add framework-specific packages as needed:
 
 ---
 
-## STEP 3 — CONVERT ENVIRONMENT VARIABLES
+## STEP 3 - CONVERT ENVIRONMENT VARIABLES
 
 Replace all references to `HIGHLIGHT_PROJECT_ID` (and `NEXT_PUBLIC_HIGHLIGHT_PROJECT_ID`) with a Sentry DSN variable:
 
@@ -113,7 +113,7 @@ Update `.env`, `.env.local`, `.env.example`, and any CI/CD configuration files t
 
 ---
 
-## STEP 4 — CONVERT INITIALIZATION
+## STEP 4 - CONVERT INITIALIZATION
 
 ### Browser / React
 
@@ -257,7 +257,7 @@ import * as Sentry from '@sentry/nestjs';
 Sentry.init({ dsn: process.env.SENTRY_DSN });
 ```
 
-### Python — Flask
+### Python - Flask
 
 Old:
 ```python
@@ -279,7 +279,7 @@ sentry_sdk.init(
 )
 ```
 
-### Python — Django
+### Python - Django
 
 Old:
 ```python
@@ -295,7 +295,7 @@ sentry_sdk.init(
 )
 ```
 
-### Python — FastAPI
+### Python - FastAPI
 
 Old:
 ```python
@@ -371,7 +371,7 @@ setupHonoErrorHandler(app);
 
 ---
 
-## STEP 5 — CONVERT API CALLS
+## STEP 5 - CONVERT API CALLS
 
 ### Browser / JS API
 
@@ -422,7 +422,7 @@ H.startSpan('my-span', {}, ctx, async () => { /* work */ });
 Sentry.startSpan({ name: 'my-span' }, async () => { /* work */ });
 ```
 
-**No direct equivalent — add TODO comments:**
+**No direct equivalent - add TODO comments:**
 ```ts
 // Old
 H.track('button_clicked', { buttonId: 'cta' });
@@ -460,7 +460,7 @@ Sentry.captureException(err, { extra: { extra: 'data' } });
 // Old
 H.log('user signed in', 'info', { userId: 'u_123' });
 
-// New — enable logs in init: { _experiments: { enableLogs: true } }
+// New - enable logs in init: { _experiments: { enableLogs: true } }
 Sentry.logger.info('user signed in', { userId: 'u_123' });
 ```
 
@@ -498,7 +498,7 @@ sentry.CaptureException(err)
 
 **HTTP middleware:**
 ```go
-// Old — Chi
+// Old - Chi
 r.Use(highlightChi.NewMiddleware())
 
 // New
@@ -506,14 +506,14 @@ import sentryhttp "github.com/getsentry/sentry-go/http"
 sentryHandler := sentryhttp.New(sentryhttp.Options{})
 r.Use(sentryHandler.Handle)
 
-// Old — Gin
+// Old - Gin
 r.Use(highlightGin.Middleware())
 
 // New
 import sentrygin "github.com/getsentry/sentry-go/gin"
 r.Use(sentrygin.New(sentrygin.Options{}))
 
-// Old — Echo
+// Old - Echo
 e.Use(highlightEcho.Middleware())
 
 // New
@@ -545,7 +545,7 @@ with sentry_sdk.start_span(op='task', description='do_work'):
 
 ---
 
-## STEP 6 — CLEANUP
+## STEP 6 - CLEANUP
 
 1. Remove all remaining `import { H } from 'highlight.run'` (and equivalent) statements that are no longer used.
 2. Remove any highlight.io-specific configuration files (e.g. `highlight.config.ts`).
@@ -559,11 +559,11 @@ with sentry_sdk.start_span(op='task', description='do_work'):
 
 Add the following TODO comments wherever these features were used, as they have no direct Sentry equivalent:
 
-- **`H.track(event, metadata)`** — Sentry does not have a client-side event tracking API. Use `Sentry.captureMessage()` as a rough substitute, or integrate a dedicated analytics tool (e.g. PostHog, Amplitude).
-- **`H.getSessionURL()`** — Sentry Replay does not expose a public URL for the current session. Remove or replace.
-- **`H.recordMetric()` / `H.recordCount()` / `H.recordHistogram()`** — No direct SDK equivalent. Consider StatsD, Prometheus, or a dedicated metrics service.
-- **`H.parseHeaders()` `sessionId` / `requestId`** — Sentry uses trace IDs instead of highlight-specific session/request IDs. Update downstream code to use `Sentry.getActiveSpan()` if needed.
-- **Session replay network body recording** — Configure via `replayIntegration({ networkDetailAllowUrls, networkCaptureBodies: true })` in the browser SDK.
+- **`H.track(event, metadata)`** - Sentry does not have a client-side event tracking API. Use `Sentry.captureMessage()` as a rough substitute, or integrate a dedicated analytics tool (e.g. PostHog, Amplitude).
+- **`H.getSessionURL()`** - Sentry Replay does not expose a public URL for the current session. Remove or replace.
+- **`H.recordMetric()` / `H.recordCount()` / `H.recordHistogram()`** - No direct SDK equivalent. Consider StatsD, Prometheus, or a dedicated metrics service.
+- **`H.parseHeaders()` `sessionId` / `requestId`** - Sentry uses trace IDs instead of highlight-specific session/request IDs. Update downstream code to use `Sentry.getActiveSpan()` if needed.
+- **Session replay network body recording** - Configure via `replayIntegration({ networkDetailAllowUrls, networkCaptureBodies: true })` in the browser SDK.
 ````
 
 ---
@@ -578,13 +578,13 @@ Quick-reference tables for the most common migrations.
 |---|---|
 | `H.init(projectID, opts)` | `Sentry.init({ dsn, integrations: [replayIntegration(), browserTracingIntegration()], ... })` |
 | `H.identify(id, metadata)` | `Sentry.setUser({ id, ...metadata })` |
-| `H.track(event, metadata)` | ⚠️ No direct equivalent — see TODO note above |
+| `H.track(event, metadata)` | N/A No direct equivalent - see TODO note above |
 | `H.consumeError(err, msg, payload)` | `Sentry.captureException(err, { extra: { message: msg, ...payload } })` |
 | `H.error(msg, payload)` | `Sentry.captureMessage(msg, { level: 'error', extra: payload })` |
 | `H.addSessionFeedback({...})` | `Sentry.captureFeedback({...})` |
 | `H.startSpan(name, opts, ctx, fn)` | `Sentry.startSpan({ name, ...opts }, fn)` |
-| `H.getSessionURL()` | ⚠️ No equivalent |
-| `H.recordMetric/Count/Histogram()` | ⚠️ No equivalent |
+| `H.getSessionURL()` | N/A No equivalent |
+| `H.recordMetric/Count/Histogram()` | N/A No equivalent |
 
 ### Node.js
 

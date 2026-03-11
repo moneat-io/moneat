@@ -21,6 +21,7 @@ import com.moneat.shared.models.SidebarPreferenceEvents
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 
@@ -66,43 +67,42 @@ object SidebarPreferenceService {
         source: String
     ): List<String> {
         val normalized = normalizeHiddenItems(hiddenItems)
+        return transaction {
+            val currentItems =
+                Memberships
+                    .selectAll()
+                    .where { Memberships.id eq membershipId }
+                    .map { it[Memberships.sidebar_hidden_items] }
+                    .firstOrNull() ?: emptyList()
 
-        // Get current preferences
-        val currentItems =
-            Memberships
-                .selectAll()
-                .where { Memberships.id eq membershipId }
-                .map { it[Memberships.sidebar_hidden_items] }
-                .firstOrNull() ?: emptyList()
-
-        // Update membership
-        Memberships.update({ Memberships.id eq membershipId }) {
-            it[sidebar_hidden_items] = normalized
-        }
-
-        // Log event only if preferences actually changed
-        if (normalized.sorted() != currentItems.sorted()) {
-            SidebarPreferenceEvents.insert {
-                it[SidebarPreferenceEvents.membership_id] = membershipId
-                it[SidebarPreferenceEvents.user_id] = userId
-                it[SidebarPreferenceEvents.organization_id] = organizationId
-                it[SidebarPreferenceEvents.hidden_items] = normalized
-                it[SidebarPreferenceEvents.event_source] = source
-                it[created_at] = Clock.System.now()
+            Memberships.update({ Memberships.id eq membershipId }) {
+                it[sidebar_hidden_items] = normalized
             }
-        }
 
-        return normalized
+            if (normalized.sorted() != currentItems.sorted()) {
+                SidebarPreferenceEvents.insert {
+                    it[SidebarPreferenceEvents.membership_id] = membershipId
+                    it[SidebarPreferenceEvents.user_id] = userId
+                    it[SidebarPreferenceEvents.organization_id] = organizationId
+                    it[SidebarPreferenceEvents.hidden_items] = normalized
+                    it[SidebarPreferenceEvents.event_source] = source
+                    it[created_at] = Clock.System.now()
+                }
+            }
+
+            normalized
+        }
     }
 
     /**
      * Get sidebar preferences for a membership
      */
-    fun getPreferences(membershipId: Int): List<String> {
-        return Memberships
-            .selectAll()
-            .where { Memberships.id eq membershipId }
-            .map { it[Memberships.sidebar_hidden_items] }
-            .firstOrNull() ?: emptyList()
-    }
+    fun getPreferences(membershipId: Int): List<String> =
+        transaction {
+            Memberships
+                .selectAll()
+                .where { Memberships.id eq membershipId }
+                .map { it[Memberships.sidebar_hidden_items] }
+                .firstOrNull() ?: emptyList()
+        }
 }

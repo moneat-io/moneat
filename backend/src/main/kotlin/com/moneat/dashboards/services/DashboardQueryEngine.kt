@@ -17,6 +17,7 @@
 package com.moneat.dashboards.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.isClickHouseError
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.DataSource
 import com.moneat.dashboards.models.DataSourceField
@@ -348,7 +349,7 @@ class DashboardQueryEngine {
             val response = ClickHouseClient.execute(sql)
             val body = response.bodyAsText()
 
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+            if (response.isClickHouseError(body)) {
                 logger.error { "ClickHouse error: ${body.take(400)}" }
                 return emptyList()
             }

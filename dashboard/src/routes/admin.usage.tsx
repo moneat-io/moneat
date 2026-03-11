@@ -31,7 +31,7 @@ import {
     formatNumber,
     MetricCard,
     SectionHeader,
-} from '@/components/admin-components'
+} from '@/components/AdminComponents'
 
 export const Route = createFileRoute('/admin/usage')({
   component: AdminUsagePage,

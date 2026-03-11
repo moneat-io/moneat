@@ -1,0 +1,37 @@
+---
+title: Performance Monitoring
+description: Distributed tracing, transaction tracking, and service maps.
+---
+
+# Performance Monitoring
+
+Moneat supports two performance monitoring paths: Sentry-compatible transactions and Datadog-compatible APM traces. Both store data in ClickHouse and are accessible from the **Performance** section in the sidebar.
+
+## Sentry Transactions
+
+When using a Sentry SDK with `tracesSampleRate` configured, the SDK sends transaction and span data to Moneat via the envelope endpoint. Transactions represent top-level operations (e.g. an HTTP request or a page load) and contain child spans for individual units of work.
+
+The performance overview shows:
+
+- Transaction groups with p50, p75, and p95 latencies
+- Throughput (transactions per minute)
+- Failure rate and Apdex score
+- Slowest transactions over time
+
+Click a transaction to see its span waterfall and any related errors.
+
+## Datadog APM Traces
+
+If you run the Datadog Agent, APM traces are ingested via the standard Datadog trace endpoints. Spans are stored in ClickHouse with service, resource, and operation metadata.
+
+The traces view shows:
+
+- Trace list with service and duration filters
+- Trace detail with a span waterfall
+- Resource-level aggregated stats (hits, errors, latency percentiles)
+
+## Service Map
+
+The service map is built from Datadog APM spans. It shows services as nodes and inter-service calls as edges, with error rates and average durations per edge. The map uses automatic layout via Dagre.
+
+Available at **Performance > Service Map**.

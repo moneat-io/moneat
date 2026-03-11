@@ -16,12 +16,14 @@
 
 package com.moneat.services
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
 import com.moneat.uptime.models.UptimeMonitors
+import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -40,7 +42,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 class UptimeServiceTest {
-    private val service = UptimeService()
+    private val service = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
 
     companion object {
         private var db: org.jetbrains.exposed.v1.jdbc.Database? = null

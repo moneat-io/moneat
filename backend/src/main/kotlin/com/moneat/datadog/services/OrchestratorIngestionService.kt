@@ -21,6 +21,7 @@ import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdManifestPayload
 import com.moneat.datadog.models.DdOrchestratorPayload
 import com.moneat.shared.services.UsageTrackingService
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -236,7 +237,7 @@ object OrchestratorIngestionService {
         json.decodeFromString(encoded)
 
     internal fun escapeSql(value: String): String =
-        value.replace("\\", "\\\\").replace("'", "\\'")
+        ClickHouseSqlUtils.escapeSql(value)
 
     internal fun mapToSqlMap(map: Map<String, String>): String {
         if (map.isEmpty()) return "map()"

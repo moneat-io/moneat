@@ -17,7 +17,7 @@
 import {useQuery} from '@tanstack/react-query'
 import {ChevronDown, Search, Plus, Settings, LogOut, Sparkles} from 'lucide-react'
 import {api} from '@/lib/api'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
 import {cn} from '@/lib/utils'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
@@ -32,7 +32,7 @@ import {Button} from '@/components/ui/button'
 import {getPlatformInfo} from '@/routes/projects'
 import {Package} from 'lucide-react'
 import {useNavigate} from '@tanstack/react-router'
-import {Logo} from '@/components/logo'
+import {Logo} from '@/components/Logo'
 
 export const TOPBAR_HEIGHT = 49
 
@@ -117,52 +117,54 @@ export function AppTopBar({sidebarWidth, isSidebarExpanded}: AppTopBarProps) {
           </kbd>
         </button>
         <div className="flex items-center gap-3 ml-auto lg:absolute lg:right-4 lg:top-1/2 lg:-translate-y-1/2 lg:ml-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-2 rounded-md border px-2.5 py-1 text-sm transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {activeProject && (
-                <div
-                  className="h-5 w-5 rounded flex items-center justify-center flex-shrink-0"
-                  style={{backgroundColor: platformInfo?.color || '#4b5563'}}
-                >
-                  <PlatformIcon className="h-3 w-3 text-white" />
-                </div>
-              )}
-              <span className="hidden sm:inline truncate max-w-[140px] text-foreground">
-                {activeProject?.name ?? 'No project'}
-              </span>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            {projects?.map((project) => {
-              const pId = getProjectPlatform(project)
-              const pInfo = getPlatformInfo(pId) || getPlatformInfo('other')
-              const PIco = pInfo?.icon || Package
-              return (
-                <DropdownMenuItem
-                  key={project.id}
-                  onClick={() => setSelectedProjectId(project.id)}
-                  className={cn(
-                    'flex items-center gap-2',
-                    project.id === activeProject?.id && 'bg-accent'
-                  )}
-                >
+        {projects && projects.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 rounded-md border px-2.5 py-1 text-sm transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {activeProject && (
                   <div
                     className="h-5 w-5 rounded flex items-center justify-center flex-shrink-0"
-                    style={{backgroundColor: pInfo?.color || '#4b5563'}}
+                    style={{backgroundColor: platformInfo?.color || '#4b5563'}}
                   >
-                    <PIco className="h-3 w-3 text-white" />
+                    <PlatformIcon className="h-3 w-3 text-white" />
                   </div>
-                  <span className="truncate">{project.name}</span>
-                </DropdownMenuItem>
-              )
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                )}
+                <span className="hidden sm:inline truncate max-w-[140px] text-foreground">
+                  {activeProject?.name}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {projects?.map((project) => {
+                const pId = getProjectPlatform(project)
+                const pInfo = getPlatformInfo(pId) || getPlatformInfo('other')
+                const PIco = pInfo?.icon || Package
+                return (
+                  <DropdownMenuItem
+                    key={project.id}
+                    onClick={() => setSelectedProjectId(project.id)}
+                    className={cn(
+                      'flex items-center gap-2',
+                      project.id === activeProject?.id && 'bg-accent'
+                    )}
+                  >
+                    <div
+                      className="h-5 w-5 rounded flex items-center justify-center flex-shrink-0"
+                      style={{backgroundColor: pInfo?.color || '#4b5563'}}
+                    >
+                      <PIco className="h-3 w-3 text-white" />
+                    </div>
+                    <span className="truncate">{project.name}</span>
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         <Button
           size="sm"

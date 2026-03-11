@@ -1,0 +1,36 @@
+---
+title: User Feedback
+description: Collect and manage user feedback submitted through Sentry SDKs.
+---
+
+# User Feedback
+
+User feedback lets your users report problems directly from your application. Feedback is ingested via the Sentry envelope endpoint and stored alongside your error and replay data.
+
+## Submitting Feedback
+
+Use the Sentry SDK's feedback API to capture feedback from users:
+
+```javascript
+Sentry.captureFeedback({
+  message: "The checkout button doesn't work",
+  email: "user@example.com",
+  name: "Jane",
+});
+```
+
+Feedback can optionally be linked to an error event or a session replay by including the associated event ID or replay ID.
+
+## Viewing Feedback
+
+Navigate to **Feedback** in the sidebar. The list view shows:
+
+- Total, unresolved, resolved, and archived counts
+- Search and status filtering
+- Bulk actions (resolve, archive)
+
+Click a feedback entry to see the full message, submitter details (name, email, URL), environment and SDK metadata, tags, and links to any associated error or replay.
+
+## Status Management
+
+Each feedback entry has a status: **unresolved**, **resolved**, or **archived**. Update the status from the detail page or in bulk from the list view.

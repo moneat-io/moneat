@@ -17,13 +17,13 @@
 import {createFileRoute, Link, Outlet, redirect, useMatches} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api, formatErrorForLogging} from '@/lib/api'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {useMemo, useState} from 'react'
 import {Card, CardContent} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
 import {Badge} from '@/components/ui/badge'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
-import {StatsCard} from '@/components/charts/stats-card'
+import {StatsCard} from '@/components/charts/StatsCard'
 import {Activity, AlertCircle, Flame, Package, Search, ShieldCheck, Users} from 'lucide-react'
 
 export const Route = createFileRoute('/releases')({

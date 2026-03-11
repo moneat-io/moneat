@@ -21,6 +21,7 @@ import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogMetricV1
 import com.moneat.datadog.models.DatadogSketchPayload
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
@@ -271,11 +272,5 @@ object DatadogMetricService {
             "count" -> "count"
             else -> "gauge"
         }
-    }
-
-    private fun escapeSql(value: String): String {
-        return value
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
     }
 }

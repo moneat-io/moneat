@@ -106,7 +106,7 @@ class OAuthService {
     private val jwtIssuer = config.property("jwt.issuer").getString()
     private val jwtAudience = config.property("jwt.audience").getString()
     private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
-    private val dashboardUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+    private val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
 
     private val githubClientId = EnvConfig.get("GITHUB_OAUTH_CLIENT_ID")
     private val githubClientSecret = EnvConfig.get("GITHUB_OAUTH_CLIENT_SECRET")
@@ -140,7 +140,7 @@ class OAuthService {
             throw IllegalStateException("GitHub OAuth is not configured")
         }
 
-        val redirectUri = "$backendUrl/auth/github/callback"
+        val redirectUri = "$frontendUrl/auth/github/callback"
         return "$githubOauthBaseUrl/login/oauth/authorize?" +
             "client_id=$githubClientId&" +
             "redirect_uri=${redirectUri.encodeURLParameter()}&" +
@@ -234,7 +234,7 @@ class OAuthService {
             throw IllegalStateException("Apple Sign In is not configured")
         }
 
-        val redirectUri = "$backendUrl/auth/apple/callback"
+        val redirectUri = "$frontendUrl/auth/apple/callback"
         return "https://appleid.apple.com/auth/authorize?" +
             "client_id=$appleClientId&" +
             "redirect_uri=${redirectUri.encodeURLParameter()}&" +

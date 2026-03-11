@@ -51,6 +51,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import org.koin.core.context.GlobalContext
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 import java.security.MessageDigest
@@ -216,8 +217,8 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
 }
 
 fun Route.integrationRoutes() {
-    val slackService = SlackService()
-    val discordService = DiscordService()
+    val slackService = GlobalContext.get().get<SlackService>()
+    val discordService = GlobalContext.get().get<DiscordService>()
 
     route("/integrations") {
         // List all integrations for the organization
@@ -712,7 +713,7 @@ fun Route.integrationRoutes() {
                         ?.get(Memberships.organization_id)
                 } ?: return@post call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
 
-            val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+            val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
             val (success, message) = discordService.testConnection(organizationId, frontendUrl)
 
             call.respond(
@@ -725,8 +726,8 @@ fun Route.integrationRoutes() {
 
 // Unauthenticated routes for OAuth callbacks
 fun Route.integrationCallbackRoutes() {
-    val slackService = SlackService()
-    val discordService = DiscordService()
+    val slackService = GlobalContext.get().get<SlackService>()
+    val discordService = GlobalContext.get().get<DiscordService>()
 
     route("/integrations") {
         // Slack OAuth callback (no auth required - called by Slack)
@@ -815,11 +816,11 @@ fun Route.integrationCallbackRoutes() {
                 logger.info("Slack OAuth completed for organization $organizationId")
 
                 // Redirect to frontend settings page
-                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
                 call.respondRedirect("$frontendUrl/settings?tab=integrations&slack=connected")
             } else {
                 logger.error("Slack OAuth failed: ${oauthResponse.error}")
-                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
                 call.respondRedirect(
                     "$frontendUrl/settings?tab=integrations&slack=error&message=${URLEncoder.encode(
                         oauthResponse.error ?: "Unknown error",
@@ -909,11 +910,11 @@ fun Route.integrationCallbackRoutes() {
 
                 logger.info("Discord OAuth completed for organization $organizationId")
 
-                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
                 call.respondRedirect("$frontendUrl/settings?tab=integrations&discord=connected")
             } else {
                 logger.error("Discord OAuth failed: ${oauthResponse.error}")
-                val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")
+                val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
                 call.respondRedirect(
                     "$frontendUrl/settings?tab=integrations&discord=error&message=${URLEncoder.encode(
                         oauthResponse.error ?: "Unknown error",

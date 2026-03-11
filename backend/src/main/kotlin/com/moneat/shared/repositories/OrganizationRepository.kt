@@ -1,0 +1,45 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.shared.repositories
+
+import com.moneat.shared.repositories.models.OrganizationRow
+
+/**
+ * Repository for organization data access.
+ * Used across auth, billing, org, and other domains.
+ */
+interface OrganizationRepository {
+    fun findById(id: Int): OrganizationRow?
+    fun findBySlug(slug: String): OrganizationRow?
+
+    data class OnboardingUpdate(
+        val orgId: Int,
+        val userId: Int,
+        val baseSlug: String,
+        val name: String,
+        val companySize: String,
+        val referralSource: String,
+        val utmSource: String?,
+        val utmMedium: String?,
+        val utmCampaign: String?,
+        val utmContent: String?,
+        val utmTerm: String?,
+    )
+
+    /** Atomically ensures slug uniqueness, updates org fields, and marks user onboarding complete. */
+    fun updateOnboardingOrgAndMarkComplete(update: OnboardingUpdate): String
+}

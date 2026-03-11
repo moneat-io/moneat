@@ -9,11 +9,13 @@ import com.moneat.enterprise.mcp.protocol.InputSchema
 import com.moneat.enterprise.mcp.protocol.McpTool
 import com.moneat.enterprise.mcp.protocol.ToolCallResult
 import com.moneat.monitor.services.AgentApiKeyService
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-private val monitorService = MonitorService()
+private val monitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 private val agentApiKeyService = AgentApiKeyService()
 
 class ListHostsTool : McpTool {

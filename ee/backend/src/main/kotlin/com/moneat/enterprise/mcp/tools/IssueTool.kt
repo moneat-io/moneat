@@ -17,7 +17,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 
-private val dashboardService = DashboardService()
+private val dashboardService = DashboardService.create()
 
 private const val DEFAULT_PAGE = 1
 private const val DEFAULT_LIMIT = 25

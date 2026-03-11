@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {Calendar, Plus, Users, Clock, Trash2, Pencil, RotateCcw, GripVertical, ChevronDown, ChevronUp, Globe, Slack} from 'lucide-react'
 import {useState} from 'react'
 import {ScheduleEditor, type OnCallScheduleData} from '@/components/on-call/ScheduleEditor'

@@ -7,13 +7,13 @@ description: Deploy the Datadog-compatible agent to start collecting infrastruct
 
 ## Deploy the Agent
 
-Go to **Monitoring → Hosts** in the dashboard and click **Add Host**. Moneat will generate a ready-to-run Docker command with your API key and endpoint already filled in — just paste it on your server.
+Go to **Monitoring → Hosts** in the dashboard and click **Add Host**. Moneat will generate a ready-to-run Docker command with your API key and endpoint already filled in - just paste it on your server.
 
 The agent collects system metrics, processes, containers, APM traces, and logs.
 
 ## Full Configuration (datadog.yaml)
 
-The generated Docker command covers basic metrics, APM, and logs. For full functionality — including container images, SBOM, database monitoring, synthetics, profiling, and other advanced tracks — the agent requires a `datadog.yaml` file that redirects each telemetry type to Moneat.
+The generated Docker command covers basic metrics, APM, and logs. For full functionality - including container images, SBOM, database monitoring, synthetics, profiling, and other advanced tracks - the agent requires a `datadog.yaml` file that redirects each telemetry type to Moneat.
 
 Copy the configuration below and save it to `/etc/datadog-agent/datadog.yaml` on your host (or mount it into the Docker container at that path):
 
@@ -77,7 +77,7 @@ database_monitoring:
   activity:
     dd_url: https://api.moneat.io
 
-# Continuous Profiling — full URL required (agent uses it verbatim, no path appended)
+# Continuous Profiling - full URL required (agent uses it verbatim, no path appended)
 apm_config:
   profiling_dd_url: https://api.moneat.io/dd/profiling/v1/input
 ```
@@ -86,17 +86,17 @@ Mount this file when running the agent in Docker:
 
 ```bash
 docker run \
-  -e DD_API_KEY=<YOUR_KEY> \
-  -v /path/to/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro \
-  -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v /proc/:/host/proc/:ro \
-  -v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
-  --pid host \
+ -e DD_API_KEY=<YOUR_KEY> \
+ -v /path/to/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro \
+ -v /var/run/docker.sock:/var/run/docker.sock:ro \
+ -v /proc/:/host/proc/:ro \
+ -v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
+ --pid host \
   gcr.io/datadoghq/agent:7
 ```
 
 :::info[How dd_url routing works]
-The agent strips any path from `dd_url` and appends `/api/v2/{trackType}` itself — so `https://api.moneat.io` is the correct value for most tracks. The exception is `apm_config.profiling_dd_url`, which the agent uses verbatim (no path is appended), so the full path must be specified.
+The agent strips any path from `dd_url` and appends `/api/v2/{trackType}` itself - so `https://api.moneat.io` is the correct value for most tracks. The exception is `apm_config.profiling_dd_url`, which the agent uses verbatim (no path is appended), so the full path must be specified.
 :::
 
 Without this configuration, tracks like container images, SBOM, database monitoring, and profiling will attempt to send to Datadog's servers instead of Moneat.

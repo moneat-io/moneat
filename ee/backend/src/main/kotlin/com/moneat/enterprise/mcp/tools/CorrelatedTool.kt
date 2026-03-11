@@ -13,7 +13,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-private val correlatedService = DashboardService()
+private val correlatedService = DashboardService.create()
 
 private const val DEFAULT_FEEDBACK_LIMIT = 50
 private const val MAX_FEEDBACK_LIMIT = 200

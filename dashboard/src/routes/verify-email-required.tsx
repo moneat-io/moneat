@@ -18,7 +18,7 @@ import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useState, useEffect} from 'react'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
-import {Logo} from '@/components/logo'
+import {Logo} from '@/components/Logo'
 import {api} from '@/lib/api'
 import {Helmet} from 'react-helmet-async'
 

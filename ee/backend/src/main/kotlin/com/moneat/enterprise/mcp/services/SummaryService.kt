@@ -4,9 +4,13 @@
 
 package com.moneat.enterprise.mcp.services
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
+import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -25,8 +29,8 @@ private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
 class SummaryService(
-    private val monitorService: MonitorService = MonitorService(),
-    private val uptimeService: UptimeService = UptimeService(),
+    private val monitorService: MonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl()),
+    private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl()),
 ) {
 
     // ── Infrastructure Summary ────────────────────────────────────────────────

@@ -19,6 +19,7 @@ package com.moneat.events.services
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import com.moneat.events.models.SentryEnvelope
+import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.utils.SentryUtils
@@ -45,11 +46,12 @@ private val logger = KotlinLogging.logger {}
 class IngestionWorker(
     private val queueKey: String,
     private val dlqKey: String,
-    private val workerCount: Int
+    private val workerCount: Int,
+    private val eventService: EventService = run {
+        val emailService = EmailService()
+        EventService(NotificationService(emailService), EventRepositoryImpl())
+    },
 ) {
-    private val emailService = EmailService()
-    private val notificationService = NotificationService(emailService)
-    private val eventService = EventService(notificationService)
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()

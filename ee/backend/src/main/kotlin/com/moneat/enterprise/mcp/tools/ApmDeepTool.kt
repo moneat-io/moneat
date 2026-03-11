@@ -14,7 +14,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 
-private val apmDeepService = DashboardService()
+private val apmDeepService = DashboardService.create()
 
 private const val DEFAULT_RELATED_LIMIT = 20
 private const val MAX_RELATED_LIMIT = 100

@@ -347,7 +347,12 @@ describe('ApiClient - Projects and Issues', () => {
         })
       )
 
-      const user = await api.completeOnboarding('Acme Corp', '10-50', 'acme-corp', 'search')
+      const user = await api.completeOnboarding({
+        organizationName: 'Acme Corp',
+        companySize: '10-50',
+        slug: 'acme-corp',
+        referralSource: 'search',
+      })
       expect(user).toEqual(mockUser)
     })
 

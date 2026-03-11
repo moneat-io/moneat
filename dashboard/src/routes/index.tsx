@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link} from '@tanstack/react-router'
-import {LandingPage} from '@/components/landing/landing-page'
+import {createFileRoute, Link, Navigate} from '@tanstack/react-router'
+import {LandingPage} from '@/components/landing/LandingPage'
 import {useQuery} from '@tanstack/react-query'
 import {useState, useEffect} from 'react'
 import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
-import {useProject} from '@/contexts/project-context'
+import {useProject} from '@/contexts/ProjectContext'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
-import HeartbeatBar from '@/components/uptime/heartbeat-bar'
+import HeartbeatBar from '@/components/uptime/HeartbeatBar'
 import {
   Activity,
   AlertCircle,
@@ -49,8 +49,8 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react'
-import {StatsCard, StatsCardSkeleton} from '@/components/charts/stats-card'
-import {EventsChart, EventsChartSkeleton} from '@/components/charts/events-chart'
+import {StatsCard, StatsCardSkeleton} from '@/components/charts/StatsCard'
+import {EventsChart, EventsChartSkeleton} from '@/components/charts/EventsChart'
 import {getNow} from '@/lib/demo'
 
 // ─── Subtle badge colors ─────────────────────────────────────────────
@@ -209,6 +209,7 @@ export const Route = createFileRoute('/')({
 function IndexPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(api.isAuthenticated())
   const [isChecking, setIsChecking] = useState(true)
+  const { data: features, isLoading: featuresLoading } = useEnterpriseFeatures()
 
   useEffect(() => {
     async function checkAuth() {
@@ -223,11 +224,14 @@ function IndexPage() {
   }, []) // Re-run when component mounts
 
   // Show nothing while checking auth to avoid flash
-  if (isChecking) {
+  if (isChecking || (!isAuthenticated && featuresLoading)) {
     return null
   }
 
   if (!isAuthenticated) {
+    if (features?.selfHost) {
+      return <Navigate to="/login" />
+    }
     return <LandingPage />
   }
   return <DashboardPage />

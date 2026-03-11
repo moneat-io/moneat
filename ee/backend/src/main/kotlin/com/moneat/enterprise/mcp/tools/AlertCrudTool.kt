@@ -12,12 +12,14 @@ import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.CreateSilencePeriodRequest
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-private val alertMonitorService = MonitorService()
+private val alertMonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 private val silenceAlertService = MonitorAlertService()
 
 class CreateAlertTool : McpTool {

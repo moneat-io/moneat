@@ -24,7 +24,7 @@ import {Alert, AlertDescription} from '@/components/ui/alert'
 import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {
   Bell,
   Mail,
@@ -40,7 +40,7 @@ import {
   Phone,
   MessageSquare,
 } from 'lucide-react'
-import {SectionHeader} from '@/components/admin-components'
+import {SectionHeader} from '@/components/AdminComponents'
 
 const SlackLogo = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>

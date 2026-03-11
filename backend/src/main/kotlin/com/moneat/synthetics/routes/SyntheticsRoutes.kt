@@ -18,6 +18,7 @@ package com.moneat.synthetics.routes
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Memberships
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -45,6 +46,7 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 
@@ -69,12 +71,6 @@ private fun orgIdsToChCondition(orgIds: List<Int>): String {
 private fun parseLimit(limitParam: String?): Int {
     val limit = limitParam?.toIntOrNull() ?: DEFAULT_LIMIT
     return limit.coerceIn(1, MAX_LIMIT)
-}
-
-private fun escapeSql(value: String): String {
-    return value
-        .replace("\\", "\\\\")
-        .replace("'", "\\'")
 }
 
 private fun snakeToCamel(snake: String): String {
@@ -113,6 +109,7 @@ private suspend fun executeChQuery(query: String): List<JsonObject>? {
 }
 
 fun Route.syntheticsRoutes() {
+    val syntheticsService = GlobalContext.get().get<SyntheticsService>()
     route("/v1") {
         authenticate("auth-jwt") {
             // --- Synthetic Test Results ---
@@ -204,7 +201,7 @@ fun Route.syntheticsRoutes() {
                     )
                     return@get
                 }
-                val tests = SyntheticsService().listTests(orgIds.first())
+                val tests = syntheticsService.listTests(orgIds.first())
                 call.respond(HttpStatusCode.OK, tests)
             }
 
@@ -229,7 +226,7 @@ fun Route.syntheticsRoutes() {
                     )
                     return@get
                 }
-                val test = SyntheticsService().getTest(
+                val test = syntheticsService.getTest(
                     testId,
                     orgIds.first()
                 )
@@ -331,7 +328,7 @@ fun Route.syntheticsRoutes() {
                     )
                     return@get
                 }
-                val summary = SyntheticsService().getTestSummary(
+                val summary = syntheticsService.getTestSummary(
                     testId,
                     orgIds
                 )
@@ -359,7 +356,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val request = call.receive<CreateSyntheticTestRequest>()
                 val test = try {
-                    SyntheticsService().createTest(
+                    syntheticsService.createTest(
                         orgIds.first(),
                         request
                     )
@@ -395,7 +392,7 @@ fun Route.syntheticsRoutes() {
                     return@put
                 }
                 val request = call.receive<UpdateSyntheticTestRequest>()
-                val test = SyntheticsService().updateTest(
+                val test = syntheticsService.updateTest(
                     testId,
                     orgIds.first(),
                     request
@@ -431,7 +428,7 @@ fun Route.syntheticsRoutes() {
                     )
                     return@delete
                 }
-                val deleted = SyntheticsService().deleteTest(
+                val deleted = syntheticsService.deleteTest(
                     testId,
                     orgIds.first()
                 )
@@ -466,7 +463,7 @@ fun Route.syntheticsRoutes() {
                     )
                     return@post
                 }
-                val started = SyntheticsService().runTestNow(
+                val started = syntheticsService.runTestNow(
                     testId,
                     orgIds.first()
                 )
@@ -497,7 +494,7 @@ fun Route.syntheticsRoutes() {
                     )
                     return@get
                 }
-                val variables = SyntheticsService().listVariables(
+                val variables = syntheticsService.listVariables(
                     orgIds.first()
                 )
                 call.respond(HttpStatusCode.OK, variables)
@@ -516,7 +513,7 @@ fun Route.syntheticsRoutes() {
                     return@post
                 }
                 val request = call.receive<SyntheticVariableRequest>()
-                val variable = SyntheticsService().createVariable(
+                val variable = syntheticsService.createVariable(
                     orgIds.first(),
                     request
                 )
@@ -544,7 +541,7 @@ fun Route.syntheticsRoutes() {
                     return@put
                 }
                 val request = call.receive<SyntheticVariableRequest>()
-                val variable = SyntheticsService().updateVariable(
+                val variable = syntheticsService.updateVariable(
                     varId,
                     orgIds.first(),
                     request
@@ -579,7 +576,7 @@ fun Route.syntheticsRoutes() {
                     )
                     return@delete
                 }
-                val deleted = SyntheticsService().deleteVariable(
+                val deleted = syntheticsService.deleteVariable(
                     varId,
                     orgIds.first()
                 )

@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {AlertTriangle, CheckCircle, Clock, MessageSquare, ArrowLeft, Zap, UserPlus, Bell, CheckCircle2, Eye, Send} from 'lucide-react'
 import {useState, useEffect, useRef} from 'react'
 import {cn} from '@/lib/utils'

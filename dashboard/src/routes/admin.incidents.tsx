@@ -23,14 +23,14 @@ import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
-import {useToast} from '@/hooks/use-toast'
+import {useToast} from '@/hooks/useToast'
 import {
   AlertTriangle,
   Server,
   Activity,
   AlertCircle
 } from 'lucide-react'
-import {SectionHeader} from '@/components/admin-components'
+import {SectionHeader} from '@/components/AdminComponents'
 
 export const Route = createFileRoute('/admin/incidents')({
   component: AdminIncidentsPage,

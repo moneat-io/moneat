@@ -1,0 +1,44 @@
+---
+title: Infrastructure Monitoring
+description: Monitor hosts, containers, processes, and network connections via the Datadog Agent.
+---
+
+# Infrastructure Monitoring
+
+Infrastructure monitoring collects host metrics, container stats, process details, and network connections from machines running the Datadog Agent. Data is ingested via Datadog-compatible endpoints and stored in ClickHouse.
+
+## Setup
+
+Install and configure the Datadog Agent pointed at your Moneat instance. See the [Datadog Agent setup](/docs/datadog-agent/agent-setup) page for instructions.
+
+The Process Agent must be enabled to collect container, process, and network data. Add to your `datadog.yaml`:
+
+```yaml
+process_config:
+  process_collection:
+    enabled: true
+  container_collection:
+    enabled: true
+```
+
+## What's Monitored
+
+### Hosts
+
+CPU, memory, disk, and network metrics per host. The host list shows current status and key metrics. Click a host to see historical charts, running containers, and associated logs.
+
+### Containers
+
+Container name, image, state, CPU usage, memory usage, and network I/O. Containers are grouped by host.
+
+### Processes
+
+Running processes with PID, name, command, user, CPU percentage, memory (RSS/VMS), state, and thread count.
+
+### Network
+
+Active network connections with local/remote addresses, protocol, direction, and bytes sent/received.
+
+## Additional Tabs
+
+The monitoring section also includes views for Kubernetes resources, database query monitoring, debugger data, SBOM (software bill of materials), and network devices. These depend on the corresponding Datadog Agent integrations being configured.

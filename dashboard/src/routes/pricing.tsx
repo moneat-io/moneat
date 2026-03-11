@@ -16,9 +16,9 @@
 
 import {useEffect} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
-import {PricingSection} from '@/components/landing/pricing-section'
-import {PricingCalculatorSection} from '@/components/landing/pricing-calculator-section'
-import {LandingNavbar, LandingFooter} from '@/components/landing/landing-navbar'
+import {PricingSection} from '@/components/landing/PricingSection'
+import {PricingCalculatorSection} from '@/components/landing/PricingCalculatorSection'
+import {LandingNavbar, LandingFooter} from '@/components/landing/LandingNavbar'
 import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/pricing')({

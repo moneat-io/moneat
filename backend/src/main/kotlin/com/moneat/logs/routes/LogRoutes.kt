@@ -19,9 +19,9 @@ package com.moneat.logs.routes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.routes.extractPublicKeyFromDsn
-import com.moneat.events.services.DashboardService
 import com.moneat.events.services.EventService
 import com.moneat.logs.models.CreateLogApiKeyRequest
 import com.moneat.logs.models.CreateLogIndexRequest
@@ -57,6 +57,7 @@ import io.lettuce.core.RedisURI
 import io.lettuce.core.pubsub.RedisPubSubAdapter
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import org.koin.core.context.GlobalContext
 import java.time.Instant
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -65,14 +66,10 @@ private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
 fun Route.logRoutes(
-    logService: LogService = LogService(),
-    quotaService: BillingQuotaService = BillingQuotaService(),
-    logApiKeyService: LogApiKeyService = LogApiKeyService(),
-    logIndexService: LogIndexService = LogIndexService(),
+    logService: LogService = GlobalContext.get().get(),
+    logApiKeyService: LogApiKeyService = GlobalContext.get().get(),
+    logIndexService: LogIndexService = GlobalContext.get().get(),
 ) {
-    val eventService = EventService()
-    val dashboardService = DashboardService()
-
     route("/v1") {
         authenticate("auth-jwt") {
             post("/logs/api-keys") {
@@ -202,125 +199,6 @@ fun Route.logRoutes(
                     logIndexService.testFilter(orgId, filterQuery)
                 call.respond(HttpStatusCode.OK, result)
             }
-        }
-
-        post("/logs/otlp") {
-            val bodyBytes = call.receive<ByteArray>()
-            val encoding = call.request.header(HttpHeaders.ContentEncoding)
-            val payloadBytes =
-                if (encoding == "gzip") {
-                    java.util.zip
-                        .GZIPInputStream(bodyBytes.inputStream())
-                        .readBytes()
-                } else {
-                    bodyBytes
-                }
-
-            val payload = payloadBytes.decodeToString()
-            val parsedEntries = logService.parseOtlpJson(payload)
-            if (parsedEntries.isEmpty()) {
-                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
-                return@post
-            }
-
-            val organizationId: Int? =
-                extractOrgIdFromLogApiKey(call, logApiKeyService)
-                    ?: extractOrgIdFromLegacyDsn(call, eventService)
-
-            if (organizationId == null) {
-                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid log API key or DSN"))
-                return@post
-            }
-
-            if (quotaService.isEnforcementEnabled()) {
-                val billableBytes = logService.estimateBillableBytes(parsedEntries)
-                val reservation =
-                    quotaService.reserveUnits(
-                        organizationId = organizationId,
-                        requestedUnits = parsedEntries.size,
-                        eventType = "log",
-                        requestedBytes = billableBytes
-                    )
-                if (!reservation.allowed) {
-                    call.respond(
-                        HttpStatusCode.TooManyRequests,
-                        mapOf(
-                            "error" to "Quota exceeded",
-                            "reason" to reservation.reason,
-                            "usage" to reservation.usage
-                        )
-                    )
-                    return@post
-                }
-            }
-
-            val queueKey =
-                call.application.environment.config
-                    .propertyOrNull("logs.queueKey")
-                    ?.getString()
-                    ?: "moneat:logs:queue"
-            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), parsedEntries, queueKey)
-            call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
-        }
-
-        post("/logs/ingest") {
-            val organizationId = extractOrgIdFromLogApiKey(call, logApiKeyService)
-            if (organizationId == null) {
-                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid log API key"))
-                return@post
-            }
-
-            val bodyBytes = call.receive<ByteArray>()
-            val encoding = call.request.header(HttpHeaders.ContentEncoding)
-            val payloadBytes =
-                if (encoding == "gzip") {
-                    java.util.zip.GZIPInputStream(bodyBytes.inputStream()).readBytes()
-                } else {
-                    bodyBytes
-                }
-
-            val entries =
-                try {
-                    json.decodeFromString<List<com.moneat.logs.models.LogIngestEntry>>(payloadBytes.decodeToString())
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
-                    return@post
-                }
-
-            if (entries.isEmpty()) {
-                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
-                return@post
-            }
-
-            if (quotaService.isEnforcementEnabled()) {
-                val billableBytes = logService.estimateBillableBytes(entries)
-                val reservation =
-                    quotaService.reserveUnits(
-                        organizationId = organizationId,
-                        requestedUnits = entries.size,
-                        eventType = "log",
-                        requestedBytes = billableBytes
-                    )
-                if (!reservation.allowed) {
-                    call.respond(
-                        HttpStatusCode.TooManyRequests,
-                        mapOf(
-                            "error" to "Quota exceeded",
-                            "reason" to reservation.reason,
-                            "usage" to reservation.usage
-                        )
-                    )
-                    return@post
-                }
-            }
-
-            val queueKey =
-                call.application.environment.config
-                    .propertyOrNull("logs.queueKey")
-                    ?.getString()
-                    ?: "moneat:logs:queue"
-            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), entries, queueKey)
-            call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
         }
 
         authenticate("auth-jwt") {
@@ -677,7 +555,7 @@ private fun extractOrgIdFromLogApiKey(
 
 private fun extractOrgIdFromLegacyDsn(
     call: io.ktor.server.application.ApplicationCall,
-    eventService: com.moneat.events.services.EventService
+    eventService: EventService
 ): Int? {
     val dsnLikeHeader =
         call.request.header("x-moneat-dsn")
@@ -739,5 +617,133 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
         Pair(userId, orgId)
     } catch (_: Exception) {
         null
+    }
+}
+
+fun Route.logIngestRoutes(
+    logService: LogService = GlobalContext.get().get(),
+    quotaService: BillingQuotaService = GlobalContext.get().get(),
+    logApiKeyService: LogApiKeyService = GlobalContext.get().get(),
+    eventService: EventService = GlobalContext.get().get(),
+) {
+    route("/v1") {
+        post("/logs/otlp") {
+            val organizationId: Int? =
+                extractOrgIdFromLogApiKey(call, logApiKeyService)
+                    ?: extractOrgIdFromLegacyDsn(call, eventService)
+
+            if (organizationId == null) {
+                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid log API key or DSN"))
+                return@post
+            }
+
+            val bodyBytes = call.receive<ByteArray>()
+            val encoding = call.request.header(HttpHeaders.ContentEncoding)
+            val payloadBytes = try {
+                DecompressionService.decompress(bodyBytes, encoding)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
+                return@post
+            }
+
+            val payload = payloadBytes.decodeToString()
+            val parsedEntries = logService.parseOtlpJson(payload)
+            if (parsedEntries.isEmpty()) {
+                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
+                return@post
+            }
+
+            if (quotaService.isEnforcementEnabled()) {
+                val billableBytes = logService.estimateBillableBytes(parsedEntries)
+                val reservation =
+                    quotaService.reserveUnits(
+                        organizationId = organizationId,
+                        requestedUnits = parsedEntries.size,
+                        eventType = "log",
+                        requestedBytes = billableBytes
+                    )
+                if (!reservation.allowed) {
+                    call.respond(
+                        HttpStatusCode.TooManyRequests,
+                        mapOf(
+                            "error" to "Quota exceeded",
+                            "reason" to reservation.reason,
+                            "usage" to reservation.usage
+                        )
+                    )
+                    return@post
+                }
+            }
+
+            val queueKey =
+                call.application.environment.config
+                    .propertyOrNull("logs.queueKey")
+                    ?.getString()
+                    ?: "moneat:logs:queue"
+            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), parsedEntries, queueKey)
+            call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
+        }
+
+        post("/logs/ingest") {
+            val organizationId = extractOrgIdFromLogApiKey(call, logApiKeyService)
+            if (organizationId == null) {
+                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid log API key"))
+                return@post
+            }
+
+            val bodyBytes = call.receive<ByteArray>()
+            val encoding = call.request.header(HttpHeaders.ContentEncoding)
+            val payloadBytes = try {
+                DecompressionService.decompress(bodyBytes, encoding)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
+                return@post
+            }
+
+            val entries =
+                try {
+                    json.decodeFromString<List<com.moneat.logs.models.LogIngestEntry>>(
+                        payloadBytes.decodeToString()
+                    )
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
+                    return@post
+                }
+
+            if (entries.isEmpty()) {
+                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
+                return@post
+            }
+
+            if (quotaService.isEnforcementEnabled()) {
+                val billableBytes = logService.estimateBillableBytes(entries)
+                val reservation =
+                    quotaService.reserveUnits(
+                        organizationId = organizationId,
+                        requestedUnits = entries.size,
+                        eventType = "log",
+                        requestedBytes = billableBytes
+                    )
+                if (!reservation.allowed) {
+                    call.respond(
+                        HttpStatusCode.TooManyRequests,
+                        mapOf(
+                            "error" to "Quota exceeded",
+                            "reason" to reservation.reason,
+                            "usage" to reservation.usage
+                        )
+                    )
+                    return@post
+                }
+            }
+
+            val queueKey =
+                call.application.environment.config
+                    .propertyOrNull("logs.queueKey")
+                    ?.getString()
+                    ?: "moneat:logs:queue"
+            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), entries, queueKey)
+            call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
+        }
     }
 }

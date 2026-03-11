@@ -4,6 +4,7 @@ import tsPlugin from '@typescript-eslint/eslint-plugin'
 import tsParser from '@typescript-eslint/parser'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
+import checkFile from 'eslint-plugin-check-file'
 
 export default [
   { ignores: ['dist', 'public/docs/**', 'public/blog/**'] },
@@ -38,6 +39,42 @@ export default [
       // TypeScript handles undefined variable checking; disabling avoids false positives
       // for React namespace, browser/Node types, and other TS-resolved globals.
       'no-undef': 'off',
+    },
+  },
+  // Enforce PascalCase for component .tsx files (excluding ui/ which follows shadcn convention)
+  {
+    files: ['src/components/**/*.tsx'],
+    ignores: ['src/components/ui/**', 'src/components/**/__tests__/**'],
+    plugins: { 'check-file': checkFile },
+    rules: {
+      'check-file/filename-naming-convention': [
+        'error',
+        { '**/*.tsx': 'PASCAL_CASE' },
+      ],
+    },
+  },
+  // Enforce camelCase for hook files (useXxx convention)
+  {
+    files: ['src/hooks/**/*.{ts,tsx}'],
+    ignores: ['src/hooks/**/__tests__/**'],
+    plugins: { 'check-file': checkFile },
+    rules: {
+      'check-file/filename-naming-convention': [
+        'error',
+        { '**/*.{ts,tsx}': 'CAMEL_CASE' },
+      ],
+    },
+  },
+  // Enforce PascalCase for context files
+  {
+    files: ['src/contexts/**/*.{ts,tsx}'],
+    ignores: ['src/contexts/**/__tests__/**'],
+    plugins: { 'check-file': checkFile },
+    rules: {
+      'check-file/filename-naming-convention': [
+        'error',
+        { '**/*.{ts,tsx}': 'PASCAL_CASE' },
+      ],
     },
   },
 ]
