@@ -30,7 +30,7 @@ Add the Dynamic Instrumentation flags when launching your application:
 java -javaagent:/path/to/dd-java-agent.jar \
  -Ddd.service=my-service \
  -Ddd.dynamic.instrumentation.enabled=true \
- -Ddd.trace.agent.url=https://api.moneat.io/dd \
+ -Ddd.trace.agent.url={{INGEST_URL}} \
  -jar myapp.jar
 ```
 
@@ -39,7 +39,7 @@ java -javaagent:/path/to/dd-java-agent.jar \
 ```bash
 DD_DYNAMIC_INSTRUMENTATION_ENABLED=true \
 DD_SERVICE=my-service \
-DD_TRACE_AGENT_URL=https://api.moneat.io/dd \
+DD_TRACE_AGENT_URL={{INGEST_URL}} \
 ddtrace-run python myapp.py
 ```
 

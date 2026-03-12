@@ -18,6 +18,9 @@ import {useState} from 'react'
 import {AlertCircle, Check, Copy, Server, TerminalSquare} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
+const INGEST_URL = BACKEND_URL.replace(/\/$/, '') + '/dd'
+
 interface ContainerLogSetupGuideProps {
   compact?: boolean
 }
@@ -137,7 +140,7 @@ export function ContainerLogSetupGuide({compact = false}: ContainerLogSetupGuide
   -v /var/run/docker.sock:/var/run/docker.sock:ro \\
   -v /opt/datadog-agent/run:/opt/datadog-agent/run:rw \\
   -e DD_API_KEY="<your-api-key>" \\
-  -e DD_DD_URL="https://api.moneat.io" \\
+  -e DD_DD_URL="${INGEST_URL}" \\
   -e DD_LOGS_ENABLED=true \\
   -e DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true \\
   datadog/agent:latest`} />
@@ -150,7 +153,7 @@ export function ContainerLogSetupGuide({compact = false}: ContainerLogSetupGuide
   -v /var/run/docker.sock:/var/run/docker.sock:ro \\
   -v /opt/datadog-agent/run:/opt/datadog-agent/run:rw \\
   -e DD_API_KEY="<your-api-key>" \\
-  -e DD_DD_URL="https://api.moneat.io" \\
+  -e DD_DD_URL="${INGEST_URL}" \\
   `}<span className="rounded bg-blue-500/10 px-1 font-bold text-blue-600">{`-e DD_LOGS_ENABLED=true`}</span>{` \\
   `}<span className="rounded bg-blue-500/10 px-1 font-bold text-blue-600">{`-e DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true`}</span>{` \\
   datadog/agent:latest`}
@@ -179,7 +182,7 @@ export function ContainerLogSetupGuide({compact = false}: ContainerLogSetupGuide
       - /opt/datadog-agent/run:/opt/datadog-agent/run:rw
     environment:
       DD_API_KEY: "<your-api-key>"
-      DD_DD_URL: "https://api.moneat.io"
+      DD_DD_URL: "${INGEST_URL}"
       DD_LOGS_ENABLED: "true"
       DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"`} />
               </div>
@@ -195,7 +198,7 @@ export function ContainerLogSetupGuide({compact = false}: ContainerLogSetupGuide
       - /opt/datadog-agent/run:/opt/datadog-agent/run:rw
     environment:
       DD_API_KEY: "<your-api-key>"
-      DD_DD_URL: "https://api.moneat.io"
+      DD_DD_URL: "${INGEST_URL}"
       `}<span className="rounded bg-blue-500/10 px-1 font-bold text-blue-600">{`DD_LOGS_ENABLED: "true"`}</span>{`
       `}<span className="rounded bg-blue-500/10 px-1 font-bold text-blue-600">{`DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"`}</span>
                   </code>
