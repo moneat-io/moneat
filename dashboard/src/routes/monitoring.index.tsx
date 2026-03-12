@@ -59,7 +59,7 @@ import {
   ServerOff,
   Terminal,
   Trash2,
-  Zap,
+  FileCode,
 } from 'lucide-react'
 import {useEffect, useMemo, useState} from 'react'
 import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
@@ -111,6 +111,53 @@ type AgentOptions = {
   processes: boolean
 }
 
+function getDatadogYaml(options: AgentOptions): string {
+  const backendUrl = BACKEND_URL.replace(/\/$/, '')
+  const ingestUrl = backendUrl + '/dd'
+
+  let yaml = `# Datadog Agent configuration for Moneat
+docker_query_timeout: 15`
+
+  if (options.apm) {
+    yaml += `
+
+# Continuous Profiling (agent uses this URL verbatim)
+apm_config:
+  profiling_dd_url: ${ingestUrl}/profiling/v1/input`
+  }
+
+  yaml += `
+
+# EPForwarder tracks (cannot be set via env vars)
+container_lifecycle:
+  dd_url: ${backendUrl}
+container_image:
+  dd_url: ${backendUrl}
+sbom:
+  dd_url: ${backendUrl}
+network_devices:
+  metadata:
+    dd_url: ${backendUrl}
+  snmp_traps:
+    forwarder:
+      dd_url: ${backendUrl}
+  netflow:
+    forwarder:
+      dd_url: ${backendUrl}
+synthetics:
+  forwarder:
+    dd_url: ${backendUrl}
+database_monitoring:
+  metrics:
+    dd_url: ${backendUrl}
+  samples:
+    dd_url: ${backendUrl}
+  activity:
+    dd_url: ${backendUrl}`
+
+  return yaml
+}
+
 function getDockerRunCommand(apiKey: string, options: AgentOptions): string {
   const ingestUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
   
@@ -136,7 +183,8 @@ function getDockerRunCommand(apiKey: string, options: AgentOptions): string {
   --name dd-agent \\
   --restart always \\
   --network host \\
-${envs}${dockerSocket}
+${envs}
+  -v /etc/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro \\${dockerSocket}
   -v /proc/:/host/proc/:ro \\
   -v /sys/:/host/sys/:ro \\
   gcr.io/datadoghq/agent:7`
@@ -160,8 +208,8 @@ function getDockerComposeCommand(apiKey: string, options: AgentOptions): string 
   }
 
   const volumes = options.container
-    ? `    volumes:\n      - /proc/:/host/proc/:ro\n      - /sys/:/host/sys/:ro\n      - /var/run/docker.sock:/var/run/docker.sock:ro`
-    : `    volumes:\n      - /proc/:/host/proc/:ro\n      - /sys/:/host/sys/:ro`
+    ? `    volumes:\n      - /etc/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro\n      - /proc/:/host/proc/:ro\n      - /sys/:/host/sys/:ro\n      - /var/run/docker.sock:/var/run/docker.sock:ro`
+    : `    volumes:\n      - /etc/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro\n      - /proc/:/host/proc/:ro\n      - /sys/:/host/sys/:ro`
 
   return `cat > docker-compose.yml <<'EOF'
 services:
@@ -197,6 +245,7 @@ function AddHostDialog({
   })
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   const [copied, setCopied] = useState(false)
+  const [copiedYaml, setCopiedYaml] = useState(false)
   const [installType, setInstallType] = useState<'docker' | 'compose'>('docker')
 
   useEffect(() => {
@@ -257,6 +306,7 @@ function AddHostDialog({
         processes: true,
       })
       setCopied(false)
+      setCopiedYaml(false)
     }, 200)
   }
 
@@ -291,6 +341,18 @@ function AddHostDialog({
     }
   }
 
+  const handleCopyYaml = async () => {
+    const yaml = getDatadogYaml(options)
+    try {
+      await navigator.clipboard.writeText(yaml)
+      setCopiedYaml(true)
+      toast({title: 'Copied!', description: 'YAML config copied to clipboard'})
+      setTimeout(() => setCopiedYaml(false), 2000)
+    } catch {
+      toast({title: 'Copy failed', description: 'Please copy the config manually', variant: 'destructive'})
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       if (!open) {
@@ -299,7 +361,7 @@ function AddHostDialog({
         setIsOpen(true)
       }
     }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         {!createdKey ? (
           <>
             <DialogHeader>
@@ -344,68 +406,131 @@ function AddHostDialog({
                 Agent Key Created
               </DialogTitle>
               <DialogDescription>
-                Deploy the Datadog-compatible agent on your server using Docker or Docker Compose.
+                Configure and deploy the Datadog-compatible agent on your server.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-5 py-4">
+            <div className="space-y-5 py-4 max-h-[70vh] overflow-y-auto">
+              {/* Options toggles */}
+              <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">Container Monitoring</p>
+                    <p className="text-xs text-muted-foreground">
+                      Mounts Docker socket for container metrics and stats.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={options.container}
+                    onCheckedChange={(c) => setOptions({...options, container: c})}
+                  />
+                </div>
+                
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">APM & Profiling</p>
+                    <p className="text-xs text-muted-foreground">
+                      Enable tracing and continuous profiling collection.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={options.apm}
+                    onCheckedChange={(c) => setOptions({...options, apm: c})}
+                  />
+                </div>
+
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">Log Collection</p>
+                    <p className="text-xs text-muted-foreground">
+                      Enable log forwarding from containers and files.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={options.logs}
+                    onCheckedChange={(c) => setOptions({...options, logs: c})}
+                  />
+                </div>
+
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">Live Processes</p>
+                    <p className="text-xs text-muted-foreground">
+                      Monitor running processes and their resource usage.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={options.processes}
+                    onCheckedChange={(c) => setOptions({...options, processes: c})}
+                  />
+                </div>
+              </div>
+
+              {/* Step 1: datadog.yaml */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2 text-sm font-medium">
-                  <Terminal className="h-3.5 w-3.5 text-blue-500" />
-                  Installation Command
+                  <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0">1</span>
+                  <FileCode className="h-3.5 w-3.5 text-blue-500" />
+                  Save configuration file
                 </Label>
-                <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-medium">Container Monitoring</p>
-                      <p className="text-xs text-muted-foreground">
-                        Mounts Docker socket for container metrics and stats.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={options.container}
-                      onCheckedChange={(c) => setOptions({...options, container: c})}
-                    />
+                <p className="text-xs text-muted-foreground">
+                  Save this as <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">/etc/datadog-agent/datadog.yaml</code> on your server.
+                  This configures advanced telemetry tracks that cannot be set via environment variables.
+                </p>
+                <div className="relative group">
+                  <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
+                    <SyntaxHighlighter
+                      language="yaml"
+                      style={isDark ? oneDark : oneLight}
+                      customStyle={{
+                        margin: 0,
+                        padding: '1rem',
+                        paddingRight: '5rem',
+                        fontSize: '0.8125rem',
+                        lineHeight: 1.6,
+                        background: 'transparent',
+                      }}
+                      codeTagProps={{
+                        style: {
+                          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                        },
+                      }}
+                      showLineNumbers={false}
+                      wrapLongLines={false}
+                    >
+                      {getDatadogYaml(options)}
+                    </SyntaxHighlighter>
                   </div>
-                  
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-medium">APM & Profiling</p>
-                      <p className="text-xs text-muted-foreground">
-                        Enable tracing and continuous profiling collection.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={options.apm}
-                      onCheckedChange={(c) => setOptions({...options, apm: c})}
-                    />
-                  </div>
-
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-medium">Log Collection</p>
-                      <p className="text-xs text-muted-foreground">
-                        Enable log forwarding from containers and files.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={options.logs}
-                      onCheckedChange={(c) => setOptions({...options, logs: c})}
-                    />
-                  </div>
-
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-medium">Live Processes</p>
-                      <p className="text-xs text-muted-foreground">
-                        Monitor running processes and their resource usage.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={options.processes}
-                      onCheckedChange={(c) => setOptions({...options, processes: c})}
-                    />
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="absolute top-2.5 right-2.5 h-8 gap-1.5 text-xs"
+                    onClick={handleCopyYaml}
+                  >
+                    {copiedYaml ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-500" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </>
+                    )}
+                  </Button>
                 </div>
+              </div>
+
+              {/* Step 2: Run the agent */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-sm font-medium">
+                  <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0">2</span>
+                  <Terminal className="h-3.5 w-3.5 text-blue-500" />
+                  Run the agent
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Run this command on your server to start the agent. It mounts the config file from step 1.
+                </p>
                 <Tabs value={installType} onValueChange={(v) => setInstallType(v as 'docker' | 'compose')} className="w-full">
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="docker">Docker</TabsTrigger>
@@ -504,30 +629,6 @@ function AddHostDialog({
                 </Tabs>
               </div>
 
-              <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-4 space-y-3">
-                <h4 className="font-medium text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                  <Zap className="h-4 w-4" />
-                  Quick Start
-                </h4>
-                <ol className="text-sm text-blue-600 dark:text-blue-300/80 space-y-2 list-none">
-                  <li className="flex items-start gap-2.5">
-                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0 mt-0.5">1</span>
-                    <span>Copy the command above</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0 mt-0.5">2</span>
-                    <span>SSH into your server</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0 mt-0.5">3</span>
-                    <span>Paste and run the command</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0 mt-0.5">4</span>
-                    <span>Host metrics will appear within minutes</span>
-                  </li>
-                </ol>
-              </div>
             </div>
             <DialogFooter>
               <Button onClick={handleClose} className="w-full sm:w-auto">
