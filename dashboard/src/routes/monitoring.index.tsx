@@ -168,23 +168,26 @@ function getDockerRunCommand(apiKey: string, options: AgentOptions): string {
   }
   
   if (options.logs) {
-    envs += `\n  -e DD_LOGS_ENABLED=true \\\n  -e DD_LOGS_CONFIG_DD_URL="${ingestUrl}" \\`
+    envs += `\n  -e DD_LOGS_ENABLED=true \\\n  -e DD_LOGS_CONFIG_DD_URL="${ingestUrl}" \\\n  -e DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true \\`
   }
   
   if (options.processes) {
     envs += `\n  -e DD_PROCESS_AGENT_ENABLED=true \\\n  -e DD_PROCESS_CONFIG_PROCESS_DD_URL="${ingestUrl}" \\`
   }
 
-  const dockerSocket = options.container
+  let volumes = options.container
     ? `\n  -v /var/run/docker.sock:/var/run/docker.sock:ro \\`
     : ''
+  if (options.logs) {
+    volumes += `\n  -v /var/lib/docker/containers:/var/lib/docker/containers:ro \\`
+  }
     
   return `docker run -d \\
   --name dd-agent \\
   --restart always \\
   --network host \\
 ${envs}
-  -v /etc/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro \\${dockerSocket}
+  -v /etc/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro \\${volumes}
   -v /proc/:/host/proc/:ro \\
   -v /sys/:/host/sys/:ro \\
   gcr.io/datadoghq/agent:7`
@@ -200,16 +203,19 @@ function getDockerComposeCommand(apiKey: string, options: AgentOptions): string 
   }
   
   if (options.logs) {
-    envs += `\n      - DD_LOGS_ENABLED=true\n      - DD_LOGS_CONFIG_DD_URL=${ingestUrl}`
+    envs += `\n      - DD_LOGS_ENABLED=true\n      - DD_LOGS_CONFIG_DD_URL=${ingestUrl}\n      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true`
   }
   
   if (options.processes) {
     envs += `\n      - DD_PROCESS_AGENT_ENABLED=true\n      - DD_PROCESS_CONFIG_PROCESS_DD_URL=${ingestUrl}`
   }
 
-  const volumes = options.container
+  let volumes = options.container
     ? `    volumes:\n      - /etc/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro\n      - /proc/:/host/proc/:ro\n      - /sys/:/host/sys/:ro\n      - /var/run/docker.sock:/var/run/docker.sock:ro`
     : `    volumes:\n      - /etc/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro\n      - /proc/:/host/proc/:ro\n      - /sys/:/host/sys/:ro`
+  if (options.logs) {
+    volumes += `\n      - /var/lib/docker/containers:/var/lib/docker/containers:ro`
+  }
 
   return `cat > docker-compose.yml <<'EOF'
 services:
@@ -349,7 +355,21 @@ function AddHostDialog({
       toast({title: 'Copied!', description: 'YAML config copied to clipboard'})
       setTimeout(() => setCopiedYaml(false), 2000)
     } catch {
-      toast({title: 'Copy failed', description: 'Please copy the config manually', variant: 'destructive'})
+      try {
+        const textarea = document.createElement('textarea')
+        textarea.value = yaml
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+        setCopiedYaml(true)
+        toast({title: 'Copied!', description: 'YAML config copied to clipboard'})
+        setTimeout(() => setCopiedYaml(false), 2000)
+      } catch {
+        toast({title: 'Copy failed', description: 'Please copy the config manually', variant: 'destructive'})
+      }
     }
   }
 
