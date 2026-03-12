@@ -26,10 +26,10 @@ Add the following to your `datadog.yaml`:
 # datadog.yaml
 apm_config:
   enabled: true
-  profiling_dd_url: "https://api.moneat.io/dd/profiling/v1/input"
+  profiling_dd_url: "{{INGEST_URL}}/profiling/v1/input"
 
 # Point to your Moneat instance
-dd_url: "https://api.moneat.io/dd"
+dd_url: "{{INGEST_URL}}"
 ```
 
 :::note[Docker]
@@ -37,8 +37,8 @@ If you're running the Agent in Docker, pass the profiling endpoint as an environ
 
 ```bash
 docker run -e DD_APM_ENABLED=true \
-          -e DD_DD_URL=https://api.moneat.io/dd \
-          -e DD_APM_PROFILING_DD_URL=https://api.moneat.io/dd/profiling/v1/input \
+          -e DD_DD_URL={{INGEST_URL}} \
+          -e DD_APM_PROFILING_DD_URL={{INGEST_URL}}/profiling/v1/input \
            datadog/agent:latest
 ```
 :::
@@ -111,8 +111,8 @@ services:
     environment:
      - DD_APM_ENABLED=true
      - DD_APM_NON_LOCAL_TRAFFIC=true
-     - DD_DD_URL=https://api.moneat.io/dd
-     - DD_APM_PROFILING_DD_URL=https://api.moneat.io/dd/profiling/v1/input
+     - DD_DD_URL={{INGEST_URL}}
+     - DD_APM_PROFILING_DD_URL={{INGEST_URL}}/profiling/v1/input
      - DD_API_KEY=<YOUR_MONEAT_AGENT_KEY>
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock:ro

@@ -253,7 +253,7 @@ class MonitorService(
         val query =
             """
             SELECT
-                toInt32(tags['host_id']) as host_id,
+                toInt32OrZero(tags['host_id']) as host_id,
                 argMax(CASE WHEN metric_name='system.cpu.percent' THEN value END, timestamp) as cpu_percent,
                 argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp) as mem_total,
                 argMax(CASE WHEN metric_name='system.mem.used' THEN value END, timestamp) as mem_used,
@@ -268,7 +268,7 @@ class MonitorService(
                 argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent
             FROM `$clickhouseDb`.metrics
             WHERE organization_id = $organizationId
-              AND toInt32(tags['host_id']) IN ($hostIdList)
+              AND toInt32OrZero(tags['host_id']) IN ($hostIdList)
               AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
             GROUP BY host_id
             FORMAT JSONCompact

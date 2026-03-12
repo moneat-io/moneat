@@ -45,7 +45,7 @@ spec:
           image: datadog/agent:latest
           env:
            - name: DD_DD_URL
-              value: "https://api.moneat.io/dd"
+              value: "{{INGEST_URL}}"
            - name: DD_API_KEY
               value: "YOUR_AGENT_API_KEY"
            - name: DD_KUBERNETES_KUBELET_NODENAME

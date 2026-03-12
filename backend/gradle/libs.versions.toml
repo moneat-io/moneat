@@ -12,12 +12,12 @@ shadow = "9.3.2"
 jacoco = "0.8.14"
 opentelemetry = "1.60.1"
 opentelemetry-instrumentation = "2.1.0-alpha"
-sentry = "8.34.1"
+sentry = "8.35.0"
 flyway = "12.1.0"
 h2 = "2.4.240"
 mockk = "1.14.9"
 shedlock = "7.6.0"
-koin = "4.0.4"
+koin = "4.1.1"
 
 [libraries]
 # Ktor Server
@@ -122,11 +122,11 @@ mariadb-java-client = { module = "org.mariadb.jdbc:mariadb-java-client", version
 mssql-jdbc = { module = "com.microsoft.sqlserver:mssql-jdbc", version = "13.2.1.jre11" }
 clickhouse-jdbc = { module = "com.clickhouse:clickhouse-jdbc", version = "0.9.7" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version = "3.46.1.0" }
-snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "4.0.1" }
+snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "4.0.2" }
 
 # Non-JDBC data clients / SDKs
 mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version = "5.6.4" }
-aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.31" }
+aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.35" }
 google-cloud-bigquery = { module = "com.google.cloud:google-cloud-bigquery", version = "2.60.0" }
 
 # Detekt
