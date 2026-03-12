@@ -100,6 +100,27 @@ const TIER_HOST_LIMITS: Record<string, number> = {
   TEAM: Infinity,
 }
 
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
 type StatusFilter = 'all' | 'online' | 'offline'
 type SortField = 'hostname' | 'cores' | 'memory' | 'lastSeen'
 type SortDir = 'asc' | 'desc'
@@ -269,27 +290,20 @@ function AddHostDialog({
       setKeyName('')
     },
     onError: (error: Error) => {
-      if (error.message.includes('limit')) {
-        toast({
-          title: 'Host Limit Reached',
-          description: (
-            <>
-              You&apos;ve reached the maximum number of hosts for your plan.{' '}
-              <Link to="/settings" search={{tab: 'billing'}} className="underline font-medium">
-                Upgrade your plan
-              </Link>{' '}
-              to add more hosts.
-            </>
-          ),
-          variant: 'destructive',
-        })
-      } else {
-        toast({
-          title: 'Error',
-          description: 'Failed to create agent key. Please try again.',
-          variant: 'destructive',
-        })
-      }
+      const isLimit = error.message.includes('limit')
+      toast({
+        title: isLimit ? 'Host Limit Reached' : 'Error',
+        description: isLimit ? (
+          <>
+            You&apos;ve reached the maximum number of hosts for your plan.{' '}
+            <Link to="/settings" search={{tab: 'billing'}} className="underline font-medium">
+              Upgrade your plan
+            </Link>{' '}
+            to add more hosts.
+          </>
+        ) : 'Failed to create agent key. Please try again.',
+        variant: 'destructive',
+      })
     },
   })
 
@@ -317,70 +331,33 @@ function AddHostDialog({
   }
 
   const handleCopyCommand = async () => {
-    if (createdKey) {
-      const command =
-        installType === 'docker'
-          ? getDockerRunCommand(createdKey, options)
-          : getDockerComposeCommand(createdKey, options)
-      try {
-        await navigator.clipboard.writeText(command)
-        setCopied(true)
-        toast({title: 'Copied!', description: 'Command copied to clipboard'})
-        setTimeout(() => setCopied(false), 2000)
-      } catch {
-        try {
-          const textarea = document.createElement('textarea')
-          textarea.value = command
-          textarea.style.position = 'fixed'
-          textarea.style.opacity = '0'
-          document.body.appendChild(textarea)
-          textarea.select()
-          document.execCommand('copy')
-          document.body.removeChild(textarea)
-          setCopied(true)
-          toast({title: 'Copied!', description: 'Command copied to clipboard'})
-          setTimeout(() => setCopied(false), 2000)
-        } catch {
-          toast({title: 'Copy failed', description: 'Please copy the command manually', variant: 'destructive'})
-        }
-      }
+    if (!createdKey) return
+    const command = installType === 'docker'
+      ? getDockerRunCommand(createdKey, options)
+      : getDockerComposeCommand(createdKey, options)
+    const ok = await copyToClipboard(command)
+    if (ok) {
+      setCopied(true)
+      toast({title: 'Copied!', description: 'Command copied to clipboard'})
+      setTimeout(() => setCopied(false), 2000)
+    } else {
+      toast({title: 'Copy failed', description: 'Please copy the command manually', variant: 'destructive'})
     }
   }
 
   const handleCopyYaml = async () => {
-    const yaml = getDatadogYaml(options)
-    try {
-      await navigator.clipboard.writeText(yaml)
+    const ok = await copyToClipboard(getDatadogYaml(options))
+    if (ok) {
       setCopiedYaml(true)
       toast({title: 'Copied!', description: 'YAML config copied to clipboard'})
       setTimeout(() => setCopiedYaml(false), 2000)
-    } catch {
-      try {
-        const textarea = document.createElement('textarea')
-        textarea.value = yaml
-        textarea.style.position = 'fixed'
-        textarea.style.opacity = '0'
-        document.body.appendChild(textarea)
-        textarea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textarea)
-        setCopiedYaml(true)
-        toast({title: 'Copied!', description: 'YAML config copied to clipboard'})
-        setTimeout(() => setCopiedYaml(false), 2000)
-      } catch {
-        toast({title: 'Copy failed', description: 'Please copy the config manually', variant: 'destructive'})
-      }
+    } else {
+      toast({title: 'Copy failed', description: 'Please copy the config manually', variant: 'destructive'})
     }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!open) {
-        handleClose()
-      } else {
-        setIsOpen(true)
-      }
-    }}>
+    <Dialog open={isOpen} onOpenChange={(open) => (open ? setIsOpen(true) : handleClose())}>
       <DialogContent className="max-w-4xl">
         {!createdKey ? (
           <>
