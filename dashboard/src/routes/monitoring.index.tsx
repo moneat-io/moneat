@@ -121,6 +121,40 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
+async function copyWithToast(
+  text: string,
+  setCopied: (v: boolean) => void,
+  successDesc: string,
+  errorDesc: string,
+  toast: (opts: { title: string; description: React.ReactNode; variant?: 'destructive' }) => void
+) {
+  const ok = await copyToClipboard(text)
+  if (ok) {
+    setCopied(true)
+    toast({title: 'Copied!', description: successDesc})
+    setTimeout(() => setCopied(false), 2000)
+  } else {
+    toast({title: 'Copy failed', description: errorDesc, variant: 'destructive'})
+  }
+}
+
+function getCreateKeyErrorToast(error: Error) {
+  const isLimit = error.message.includes('limit')
+  return {
+    title: isLimit ? 'Host Limit Reached' : 'Error' as const,
+    description: isLimit ? (
+      <>
+        You&apos;ve reached the maximum number of hosts for your plan.{' '}
+        <Link to="/settings" search={{tab: 'billing'}} className="underline font-medium">
+          Upgrade your plan
+        </Link>{' '}
+        to add more hosts.
+      </>
+    ) : 'Failed to create agent key. Please try again.',
+    variant: 'destructive' as const,
+  }
+}
+
 type StatusFilter = 'all' | 'online' | 'offline'
 type SortField = 'hostname' | 'cores' | 'memory' | 'lastSeen'
 type SortDir = 'asc' | 'desc'
@@ -289,22 +323,7 @@ function AddHostDialog({
       setCreatedKey(data.key)
       setKeyName('')
     },
-    onError: (error: Error) => {
-      const isLimit = error.message.includes('limit')
-      toast({
-        title: isLimit ? 'Host Limit Reached' : 'Error',
-        description: isLimit ? (
-          <>
-            You&apos;ve reached the maximum number of hosts for your plan.{' '}
-            <Link to="/settings" search={{tab: 'billing'}} className="underline font-medium">
-              Upgrade your plan
-            </Link>{' '}
-            to add more hosts.
-          </>
-        ) : 'Failed to create agent key. Please try again.',
-        variant: 'destructive',
-      })
-    },
+    onError: (error: Error) => toast(getCreateKeyErrorToast(error)),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -330,30 +349,16 @@ function AddHostDialog({
     }, 200)
   }
 
-  const handleCopyCommand = async () => {
+  const handleCopyCommand = () => {
     if (!createdKey) return
     const command = installType === 'docker'
       ? getDockerRunCommand(createdKey, options)
       : getDockerComposeCommand(createdKey, options)
-    const ok = await copyToClipboard(command)
-    if (ok) {
-      setCopied(true)
-      toast({title: 'Copied!', description: 'Command copied to clipboard'})
-      setTimeout(() => setCopied(false), 2000)
-    } else {
-      toast({title: 'Copy failed', description: 'Please copy the command manually', variant: 'destructive'})
-    }
+    copyWithToast(command, setCopied, 'Command copied to clipboard', 'Please copy the command manually', toast)
   }
 
-  const handleCopyYaml = async () => {
-    const ok = await copyToClipboard(getDatadogYaml(options))
-    if (ok) {
-      setCopiedYaml(true)
-      toast({title: 'Copied!', description: 'YAML config copied to clipboard'})
-      setTimeout(() => setCopiedYaml(false), 2000)
-    } else {
-      toast({title: 'Copy failed', description: 'Please copy the config manually', variant: 'destructive'})
-    }
+  const handleCopyYaml = () => {
+    copyWithToast(getDatadogYaml(options), setCopiedYaml, 'YAML config copied to clipboard', 'Please copy the config manually', toast)
   }
 
   return (
