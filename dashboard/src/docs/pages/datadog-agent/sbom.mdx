@@ -42,7 +42,7 @@ For container image scanning, ensure the agent has access to the container runti
 ```bash
 docker run -d \
  --name dd-agent \
- -e DD_DD_URL="https://api.moneat.io/dd" \
+ -e DD_DD_URL="{{INGEST_URL}}" \
  -e DD_API_KEY="YOUR_AGENT_API_KEY" \
  -v /var/run/docker.sock:/var/run/docker.sock:ro \
  -v /proc/:/host/proc/:ro \

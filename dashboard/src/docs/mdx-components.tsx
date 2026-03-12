@@ -6,6 +6,21 @@ import Admonition from './components/Admonition'
 import StepList from './components/StepList'
 import SdkSetup from './components/SdkSetup'
 
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io').replace(/\/$/, '')
+
+const DOC_TOKENS: Record<string, string> = {
+  '{{BACKEND_URL}}': BACKEND_URL,
+  '{{INGEST_URL}}': BACKEND_URL + '/dd',
+}
+
+function interpolateTokens(text: string): string {
+  let result = text
+  for (const [token, value] of Object.entries(DOC_TOKENS)) {
+    result = result.replaceAll(token, value)
+  }
+  return result
+}
+
 export function MdxPre(props: ComponentPropsWithoutRef<'pre'>) {
   const child = props.children
   if (isValidElement(child)) {
@@ -14,7 +29,7 @@ export function MdxPre(props: ComponentPropsWithoutRef<'pre'>) {
     if (match) {
       return (
         <SyntaxHighlighter language={match[1]} style={oneDark} customStyle={{borderRadius: '0.375rem'}}>
-          {String(children).replace(/\n$/, '')}
+          {interpolateTokens(String(children).replace(/\n$/, ''))}
         </SyntaxHighlighter>
       )
     }
