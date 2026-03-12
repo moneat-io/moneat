@@ -375,7 +375,7 @@ class LogService(private val logRepository: LogRepository) {
                 toString(system_id) AS system_id_text
             FROM `$clickhouseDb`.logs
             WHERE $whereClause
-            ORDER BY timestamp DESC, log_id DESC
+            ORDER BY timestamp DESC, toString(log_id) DESC
             LIMIT ${limit + 1}
             FORMAT JSONEachRow
             """.trimIndent()
