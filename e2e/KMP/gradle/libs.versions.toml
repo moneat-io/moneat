@@ -10,7 +10,7 @@ ktor = "3.4.1"
 materialIconsCore = "1.7.3"
 navigationCompose = "2.9.2"
 lifecycleCompose = "2.9.6"
-sentry = "8.34.1"
+sentry = "8.35.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
