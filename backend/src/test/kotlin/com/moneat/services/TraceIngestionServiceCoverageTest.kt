@@ -50,12 +50,6 @@ import kotlin.test.assertTrue
  */
 class TraceIngestionServiceCoverageTest {
 
-    companion object {
-        private const val WEB_REQUEST = "web.request"
-        private const val GET_USERS = "GET /users"
-        private const val DD_MEASURED = "_dd.measured"
-    }
-
     @BeforeTest
     fun setup() {
         mockkObject(ClickHouseClient)
@@ -67,7 +61,7 @@ class TraceIngestionServiceCoverageTest {
         unmockkObject(ClickHouseClient)
     }
 
-    // ──── parseJsonTraces ────
+    // ===================== parseJsonTraces =====================
 
     @Test
     fun `parseJsonTraces parses single trace with one span`() {
@@ -75,9 +69,9 @@ class TraceIngestionServiceCoverageTest {
             "trace_id": "12345",
             "span_id": "67890",
             "parent_id": "0",
-            "name": "$WEB_REQUEST",
+            "name": "web.request",
             "service": "api",
-            "resource": "$GET_USERS",
+            "resource": "GET /users",
             "type": "web",
             "start": 1700000000000000000,
             "duration": 500000000,
@@ -91,9 +85,9 @@ class TraceIngestionServiceCoverageTest {
         assertEquals(1, traces[0].size)
 
         val span = traces[0][0]
-        assertEquals(WEB_REQUEST, span.name)
+        assertEquals("web.request", span.name)
         assertEquals("api", span.service)
-        assertEquals(GET_USERS, span.resource)
+        assertEquals("GET /users", span.resource)
         assertEquals("web", span.type)
         assertEquals(0, span.error)
         assertEquals("GET", span.meta["http.method"])
@@ -151,7 +145,7 @@ class TraceIngestionServiceCoverageTest {
         assertTrue(traces.isEmpty())
     }
 
-    // ──── parseMsgpackTraces ────
+    // ===================== parseMsgpackTraces =====================
 
     @Test
     fun `parseMsgpackTraces parses single trace round-trip`() {
@@ -170,7 +164,7 @@ class TraceIngestionServiceCoverageTest {
                         duration = 500000000L,
                         error = 0,
                         meta = mapOf("http.status_code" to "200"),
-                        metrics = mapOf(DD_MEASURED to 1.0)
+                        metrics = mapOf("_dd.measured" to 1.0)
                     )
                 )
             )
@@ -185,7 +179,7 @@ class TraceIngestionServiceCoverageTest {
         assertEquals("frontend", span.service)
         assertEquals("GET /", span.resource)
         assertEquals("200", span.meta["http.status_code"])
-        assertEquals(1.0, span.metrics[DD_MEASURED])
+        assertEquals(1.0, span.metrics["_dd.measured"])
     }
 
     @Test
@@ -237,7 +231,7 @@ class TraceIngestionServiceCoverageTest {
         assertTrue(traces[0][0].metrics.isEmpty())
     }
 
-    // ──── parseTraceId ────
+    // ===================== parseTraceId =====================
 
     @Test
     fun `parseTraceId with valid numeric string`() {
@@ -272,7 +266,7 @@ class TraceIngestionServiceCoverageTest {
         assertNull(TraceIngestionService.parseTraceId("0xDEAD"))
     }
 
-    // ──── insertTraces via mock ClickHouse ────
+    // ===================== insertTraces via mock ClickHouse =====================
 
     @Test
     fun `insertTraces sends correct SQL to ClickHouse`() = runBlocking {
@@ -290,11 +284,11 @@ class TraceIngestionServiceCoverageTest {
             listOf(
                 DdSpan(
                     traceId = 1u, spanId = 10u, parentId = 0u,
-                    name = WEB_REQUEST, service = "api", resource = "GET /test",
+                    name = "web.request", service = "api", resource = "GET /test",
                     type = "web", start = 1700000000000000000L,
                     duration = 500000000L, error = 0,
                     meta = mapOf("env" to "prod", "http.method" to "GET"),
-                    metrics = mapOf(DD_MEASURED to 1.0)
+                    metrics = mapOf("_dd.measured" to 1.0)
                 )
             )
         )
@@ -323,7 +317,7 @@ class TraceIngestionServiceCoverageTest {
         // No exception means success
     }
 
-    // ──── insertTraceStats via mock ClickHouse ────
+    // ===================== insertTraceStats via mock ClickHouse =====================
 
     @Test
     fun `insertTraceStats sends correct SQL`() = runBlocking {
@@ -345,7 +339,7 @@ class TraceIngestionServiceCoverageTest {
                         DdStatsEntry(
                             name = "web.request",
                             service = "api-service",
-                            resource = GET_USERS,
+                            resource = "GET /users",
                             type = "web",
                             httpStatusCode = 200,
                             synthetics = false,
@@ -387,7 +381,7 @@ class TraceIngestionServiceCoverageTest {
         TraceIngestionService.insertTraceStats(organizationId = 1, payload = payload)
     }
 
-    // ──── listTraces via mock ClickHouse ────
+    // ===================== listTraces via mock ClickHouse =====================
 
     @Test
     fun `listTraces returns empty result for blank response`() = runBlocking {
@@ -409,12 +403,7 @@ class TraceIngestionServiceCoverageTest {
     @Test
     fun `listTraces with service filter`() = runBlocking {
         coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "TabSeparated" }) } returns "1"
-        coEvery {
-            ClickHouseClient.executeWithFormat(
-                any(),
-                match { it == "" }
-            )
-        } returns """
+        coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "" }) } returns """
             {"trace_id":"123","root_service":"api","root_resource":"GET /","root_name":"web.request","span_count":5,"duration_ns":500000000,"start_ns":1700000000000000000,"has_error":0}
         """.trimIndent()
 
@@ -435,7 +424,7 @@ class TraceIngestionServiceCoverageTest {
         assertFalse(result.traces[0].hasError)
     }
 
-    // ──── getTraceDetail ────
+    // ===================== getTraceDetail =====================
 
     @Test
     fun `getTraceDetail returns null for invalid trace id`() = runBlocking {
@@ -453,9 +442,7 @@ class TraceIngestionServiceCoverageTest {
 
     @Test
     fun `getTraceDetail returns spans`() = runBlocking {
-        coEvery {
-            ClickHouseClient.executeWithFormat(any(), any())
-        } returns """
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } returns """
             {"span_id":"10","trace_id":"100","parent_id":"0","name":"root","service":"web","resource":"GET /","type":"web","start_ns":1700000000000000000,"duration":500000000,"error":0,"meta":{},"metrics":{},"host":"web-01","env":"prod","version":"1.0"}
             {"span_id":"20","trace_id":"100","parent_id":"10","name":"db.query","service":"pg","resource":"SELECT","type":"sql","start_ns":1700000000100000000,"duration":200000000,"error":0,"meta":{},"metrics":{},"host":"web-01","env":"prod","version":"1.0"}
         """.trimIndent()
@@ -468,7 +455,7 @@ class TraceIngestionServiceCoverageTest {
         assertEquals("db.query", result.spans[1].name)
     }
 
-    // ──── getServiceMap ────
+    // ===================== getServiceMap =====================
 
     @Test
     fun `getServiceMap returns empty result for blank response`() = runBlocking {
@@ -502,7 +489,7 @@ class TraceIngestionServiceCoverageTest {
         assertTrue(result.services[1].callsTo.isEmpty())
     }
 
-    // ──── getApmErrors ────
+    // ===================== getApmErrors =====================
 
     @Test
     fun `getApmErrors returns empty for blank response`() = runBlocking {
@@ -523,14 +510,9 @@ class TraceIngestionServiceCoverageTest {
     @Test
     fun `getApmErrors returns error groups`() = runBlocking {
         coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "TabSeparated" }) } returns "2"
-        coEvery {
-            ClickHouseClient.executeWithFormat(
-                any(),
-                match { it == "" }
-            )
-        } returns """
+        coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "" }) } returns """
             {"service":"api","resource":"POST /data","error_msg":"timeout","error_type":"TimeoutError","error_count":15,"last_seen":"2024-01-15 10:00:00","sample_trace_id":"trace-1"}
-            {"service":"api","resource":"$GET_USERS","error_msg":"not found","error_type":"NotFoundError","error_count":3,"last_seen":"2024-01-15 09:00:00","sample_trace_id":"trace-2"}
+            {"service":"api","resource":"GET /users","error_msg":"not found","error_type":"NotFoundError","error_count":3,"last_seen":"2024-01-15 09:00:00","sample_trace_id":"trace-2"}
         """.trimIndent()
 
         val result = TraceIngestionService.getApmErrors(
@@ -547,7 +529,7 @@ class TraceIngestionServiceCoverageTest {
         assertEquals(15L, result.errors[0].count)
     }
 
-    // ──── listResourceStats ────
+    // ===================== listResourceStats =====================
 
     @Test
     fun `listResourceStats returns empty for blank response`() = runBlocking {
@@ -568,13 +550,8 @@ class TraceIngestionServiceCoverageTest {
     @Test
     fun `listResourceStats calculates error rate and avg duration`() = runBlocking {
         coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "TabSeparated" }) } returns "1"
-        coEvery {
-            ClickHouseClient.executeWithFormat(
-                any(),
-                match { it == "" }
-            )
-        } returns """
-            {"service":"api","resource":"$GET_USERS","name":"web.request","type":"web","total_hits":100,"total_errors":10,"ok_sum":90000000000.0,"ok_count":90}
+        coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "" }) } returns """
+            {"service":"api","resource":"GET /users","name":"web.request","type":"web","total_hits":100,"total_errors":10,"ok_sum":90000000000.0,"ok_count":90}
         """.trimIndent()
 
         val result = TraceIngestionService.listResourceStats(
@@ -588,14 +565,14 @@ class TraceIngestionServiceCoverageTest {
         assertEquals(1, result.resources.size)
         val res = result.resources[0]
         assertEquals("api", res.service)
-        assertEquals(GET_USERS, res.resource)
+        assertEquals("GET /users", res.resource)
         assertEquals(100L, res.totalHits)
         assertEquals(10L, res.totalErrors)
         assertEquals(0.1, res.errorRate)
         assertEquals(1000000000L, res.avgDurationNs)
     }
 
-    // ──── Helper: MessagePack trace packing ────
+    // ===================== Helper: MessagePack trace packing =====================
 
     private data class TestSpanData(
         val traceId: Long = 1L,
@@ -619,37 +596,23 @@ class TraceIngestionServiceCoverageTest {
             packer.packArrayHeader(trace.size)
             for (span in trace) {
                 packer.packMapHeader(12)
-                packer.packString("trace_id")
-                packer.packBigInteger(java.math.BigInteger.valueOf(span.traceId))
-                packer.packString("span_id")
-                packer.packBigInteger(java.math.BigInteger.valueOf(span.spanId))
-                packer.packString("parent_id")
-                packer.packBigInteger(java.math.BigInteger.valueOf(span.parentId))
-                packer.packString("name")
-                packer.packString(span.name)
-                packer.packString("service")
-                packer.packString(span.service)
-                packer.packString("resource")
-                packer.packString(span.resource)
-                packer.packString("type")
-                packer.packString(span.type)
-                packer.packString("start")
-                packer.packLong(span.start)
-                packer.packString("duration")
-                packer.packLong(span.duration)
-                packer.packString("error")
-                packer.packInt(span.error)
-                packer.packString("meta")
-                packer.packMapHeader(span.meta.size)
+                packer.packString("trace_id"); packer.packBigInteger(java.math.BigInteger.valueOf(span.traceId))
+                packer.packString("span_id"); packer.packBigInteger(java.math.BigInteger.valueOf(span.spanId))
+                packer.packString("parent_id"); packer.packBigInteger(java.math.BigInteger.valueOf(span.parentId))
+                packer.packString("name"); packer.packString(span.name)
+                packer.packString("service"); packer.packString(span.service)
+                packer.packString("resource"); packer.packString(span.resource)
+                packer.packString("type"); packer.packString(span.type)
+                packer.packString("start"); packer.packLong(span.start)
+                packer.packString("duration"); packer.packLong(span.duration)
+                packer.packString("error"); packer.packInt(span.error)
+                packer.packString("meta"); packer.packMapHeader(span.meta.size)
                 for ((k, v) in span.meta) {
-                    packer.packString(k)
-                    packer.packString(v)
+                    packer.packString(k); packer.packString(v)
                 }
-                packer.packString("metrics")
-                packer.packMapHeader(span.metrics.size)
+                packer.packString("metrics"); packer.packMapHeader(span.metrics.size)
                 for ((k, v) in span.metrics) {
-                    packer.packString(k)
-                    packer.packDouble(v)
+                    packer.packString(k); packer.packDouble(v)
                 }
             }
         }

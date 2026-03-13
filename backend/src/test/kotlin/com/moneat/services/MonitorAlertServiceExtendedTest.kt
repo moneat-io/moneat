@@ -138,7 +138,7 @@ class MonitorAlertServiceExtendedTest {
             } get Hosts.id
         }
 
-    // ──── isThresholdTriggered edge cases ────
+    // ===================== isThresholdTriggered edge cases =====================
 
     @Test
     fun `isThresholdTriggered with negative values`() {
@@ -162,7 +162,7 @@ class MonitorAlertServiceExtendedTest {
         assertTrue(service.isThresholdTriggered(">", 1.0000001, 1.0))
     }
 
-    // ──── isThrottledByInterval edge cases ────
+    // ===================== isThrottledByInterval edge cases =====================
 
     @Test
     fun `isThrottledByInterval returns true at exactly MIN_ALERT_INTERVAL boundary`() {
@@ -178,7 +178,7 @@ class MonitorAlertServiceExtendedTest {
         assertFalse(service.isThrottledByInterval(pastBoundary, now))
     }
 
-    // ──── silence period DB logic ────
+    // ===================== silence period DB logic =====================
 
     @Test
     fun `createSilencePeriod fields roundtrip correctly`() {
@@ -207,8 +207,7 @@ class MonitorAlertServiceExtendedTest {
 
         repeat(3) { i ->
             service.createSilencePeriod(
-                orgId,
-                userId,
+                orgId, userId,
                 CreateSilencePeriodRequest(
                     reason = "Window $i",
                     startsAt = (now + (i * 60).seconds).toEpochMilliseconds(),
@@ -227,8 +226,7 @@ class MonitorAlertServiceExtendedTest {
         val now = Clock.System.now()
 
         service.createSilencePeriod(
-            orgId,
-            userId,
+            orgId, userId,
             CreateSilencePeriodRequest(
                 reason = "First",
                 startsAt = (now - 2.hours).toEpochMilliseconds(),
@@ -236,8 +234,7 @@ class MonitorAlertServiceExtendedTest {
             )
         )
         service.createSilencePeriod(
-            orgId,
-            userId,
+            orgId, userId,
             CreateSilencePeriodRequest(
                 reason = "Second",
                 startsAt = (now - 1.hours).toEpochMilliseconds(),
@@ -261,8 +258,7 @@ class MonitorAlertServiceExtendedTest {
         val now = Clock.System.now()
 
         service.createSilencePeriod(
-            orgId,
-            userId,
+            orgId, userId,
             CreateSilencePeriodRequest(
                 reason = "Maintenance",
                 startsAt = (now - 1.hours).toEpochMilliseconds(),
@@ -282,7 +278,7 @@ class MonitorAlertServiceExtendedTest {
         assertTrue(p.createdAt > 0)
     }
 
-    // ──── checkHostStatuses DB scenarios ────
+    // ===================== checkHostStatuses DB scenarios =====================
 
     @Test
     fun `host with pending status is not changed to down`() {
@@ -393,7 +389,7 @@ class MonitorAlertServiceExtendedTest {
         )
     }
 
-    // ──── Host alert CRUD ────
+    // ===================== Host alert CRUD =====================
 
     @Test
     fun `host alert can be created and queried`() {
@@ -451,7 +447,7 @@ class MonitorAlertServiceExtendedTest {
         assertEquals("global", settings.first()[HostAlertSettings.scope])
     }
 
-    // ──── AlertData model construction ────
+    // ===================== AlertData model construction =====================
 
     @Test
     fun `AlertData model construction with all fields`() {
@@ -506,7 +502,7 @@ class MonitorAlertServiceExtendedTest {
         assertEquals(null, alert.lastTriggeredAt)
     }
 
-    // ──── Cleanup expired silence periods ────
+    // ===================== Cleanup expired silence periods =====================
 
     @Test
     fun `expired silence periods can be deleted`() {
@@ -516,8 +512,7 @@ class MonitorAlertServiceExtendedTest {
 
         // Create an expired period
         service.createSilencePeriod(
-            orgId,
-            userId,
+            orgId, userId,
             CreateSilencePeriodRequest(
                 reason = "Old window",
                 startsAt = (now - 3.hours).toEpochMilliseconds(),
@@ -527,8 +522,7 @@ class MonitorAlertServiceExtendedTest {
 
         // Create a current period
         service.createSilencePeriod(
-            orgId,
-            userId,
+            orgId, userId,
             CreateSilencePeriodRequest(
                 reason = "Active window",
                 startsAt = (now - 30.minutes).toEpochMilliseconds(),
@@ -548,7 +542,7 @@ class MonitorAlertServiceExtendedTest {
         assertEquals("Active window", remaining.first().reason)
     }
 
-    // ──── Organization alert templates ────
+    // ===================== Organization alert templates =====================
 
     @Test
     fun `organization alert template CRUD`() {
@@ -580,7 +574,7 @@ class MonitorAlertServiceExtendedTest {
         assertEquals(180, template[OrganizationAlertTemplates.duration_seconds])
     }
 
-    // ──── Host display name fallback ────
+    // ===================== Host display name fallback =====================
 
     @Test
     fun `host uses display_name when set otherwise hostname`() {
@@ -626,7 +620,7 @@ class MonitorAlertServiceExtendedTest {
         assertEquals("ip-172-16-0-2", nameWithoutDisplay)
     }
 
-    // ──── Companion object constants ────
+    // ===================== Companion object constants =====================
 
     @Test
     fun `companion object constants have expected values`() {
