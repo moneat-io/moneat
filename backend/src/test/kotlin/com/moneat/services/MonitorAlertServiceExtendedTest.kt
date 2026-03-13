@@ -207,7 +207,8 @@ class MonitorAlertServiceExtendedTest {
 
         repeat(3) { i ->
             service.createSilencePeriod(
-                orgId, userId,
+                orgId,
+                userId,
                 CreateSilencePeriodRequest(
                     reason = "Window $i",
                     startsAt = (now + (i * 60).seconds).toEpochMilliseconds(),
@@ -226,7 +227,8 @@ class MonitorAlertServiceExtendedTest {
         val now = Clock.System.now()
 
         service.createSilencePeriod(
-            orgId, userId,
+            orgId,
+            userId,
             CreateSilencePeriodRequest(
                 reason = "First",
                 startsAt = (now - 2.hours).toEpochMilliseconds(),
@@ -234,7 +236,8 @@ class MonitorAlertServiceExtendedTest {
             )
         )
         service.createSilencePeriod(
-            orgId, userId,
+            orgId,
+            userId,
             CreateSilencePeriodRequest(
                 reason = "Second",
                 startsAt = (now - 1.hours).toEpochMilliseconds(),
@@ -258,7 +261,8 @@ class MonitorAlertServiceExtendedTest {
         val now = Clock.System.now()
 
         service.createSilencePeriod(
-            orgId, userId,
+            orgId,
+            userId,
             CreateSilencePeriodRequest(
                 reason = "Maintenance",
                 startsAt = (now - 1.hours).toEpochMilliseconds(),
@@ -512,7 +516,8 @@ class MonitorAlertServiceExtendedTest {
 
         // Create an expired period
         service.createSilencePeriod(
-            orgId, userId,
+            orgId,
+            userId,
             CreateSilencePeriodRequest(
                 reason = "Old window",
                 startsAt = (now - 3.hours).toEpochMilliseconds(),
@@ -522,7 +527,8 @@ class MonitorAlertServiceExtendedTest {
 
         // Create a current period
         service.createSilencePeriod(
-            orgId, userId,
+            orgId,
+            userId,
             CreateSilencePeriodRequest(
                 reason = "Active window",
                 startsAt = (now - 30.minutes).toEpochMilliseconds(),

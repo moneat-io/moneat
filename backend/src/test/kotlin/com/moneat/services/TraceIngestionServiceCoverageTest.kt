@@ -403,7 +403,14 @@ class TraceIngestionServiceCoverageTest {
     @Test
     fun `listTraces with service filter`() = runBlocking {
         coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "TabSeparated" }) } returns "1"
-        coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "" }) } returns """
+        coEvery {
+            ClickHouseClient.executeWithFormat(
+                any(),
+                match {
+                    it == ""
+                }
+            )
+        } returns """
             {"trace_id":"123","root_service":"api","root_resource":"GET /","root_name":"web.request","span_count":5,"duration_ns":500000000,"start_ns":1700000000000000000,"has_error":0}
         """.trimIndent()
 
@@ -442,7 +449,9 @@ class TraceIngestionServiceCoverageTest {
 
     @Test
     fun `getTraceDetail returns spans`() = runBlocking {
-        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } returns """
+        coEvery {
+            ClickHouseClient.executeWithFormat(any(), any())
+        } returns """
             {"span_id":"10","trace_id":"100","parent_id":"0","name":"root","service":"web","resource":"GET /","type":"web","start_ns":1700000000000000000,"duration":500000000,"error":0,"meta":{},"metrics":{},"host":"web-01","env":"prod","version":"1.0"}
             {"span_id":"20","trace_id":"100","parent_id":"10","name":"db.query","service":"pg","resource":"SELECT","type":"sql","start_ns":1700000000100000000,"duration":200000000,"error":0,"meta":{},"metrics":{},"host":"web-01","env":"prod","version":"1.0"}
         """.trimIndent()
@@ -510,7 +519,14 @@ class TraceIngestionServiceCoverageTest {
     @Test
     fun `getApmErrors returns error groups`() = runBlocking {
         coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "TabSeparated" }) } returns "2"
-        coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "" }) } returns """
+        coEvery {
+            ClickHouseClient.executeWithFormat(
+                any(),
+                match {
+                    it == ""
+                }
+            )
+        } returns """
             {"service":"api","resource":"POST /data","error_msg":"timeout","error_type":"TimeoutError","error_count":15,"last_seen":"2024-01-15 10:00:00","sample_trace_id":"trace-1"}
             {"service":"api","resource":"GET /users","error_msg":"not found","error_type":"NotFoundError","error_count":3,"last_seen":"2024-01-15 09:00:00","sample_trace_id":"trace-2"}
         """.trimIndent()
@@ -550,7 +566,14 @@ class TraceIngestionServiceCoverageTest {
     @Test
     fun `listResourceStats calculates error rate and avg duration`() = runBlocking {
         coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "TabSeparated" }) } returns "1"
-        coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "" }) } returns """
+        coEvery {
+            ClickHouseClient.executeWithFormat(
+                any(),
+                match {
+                    it == ""
+                }
+            )
+        } returns """
             {"service":"api","resource":"GET /users","name":"web.request","type":"web","total_hits":100,"total_errors":10,"ok_sum":90000000000.0,"ok_count":90}
         """.trimIndent()
 
@@ -596,23 +619,37 @@ class TraceIngestionServiceCoverageTest {
             packer.packArrayHeader(trace.size)
             for (span in trace) {
                 packer.packMapHeader(12)
-                packer.packString("trace_id"); packer.packBigInteger(java.math.BigInteger.valueOf(span.traceId))
-                packer.packString("span_id"); packer.packBigInteger(java.math.BigInteger.valueOf(span.spanId))
-                packer.packString("parent_id"); packer.packBigInteger(java.math.BigInteger.valueOf(span.parentId))
-                packer.packString("name"); packer.packString(span.name)
-                packer.packString("service"); packer.packString(span.service)
-                packer.packString("resource"); packer.packString(span.resource)
-                packer.packString("type"); packer.packString(span.type)
-                packer.packString("start"); packer.packLong(span.start)
-                packer.packString("duration"); packer.packLong(span.duration)
-                packer.packString("error"); packer.packInt(span.error)
-                packer.packString("meta"); packer.packMapHeader(span.meta.size)
+                packer.packString("trace_id")
+                packer.packBigInteger(java.math.BigInteger.valueOf(span.traceId))
+                packer.packString("span_id")
+                packer.packBigInteger(java.math.BigInteger.valueOf(span.spanId))
+                packer.packString("parent_id")
+                packer.packBigInteger(java.math.BigInteger.valueOf(span.parentId))
+                packer.packString("name")
+                packer.packString(span.name)
+                packer.packString("service")
+                packer.packString(span.service)
+                packer.packString("resource")
+                packer.packString(span.resource)
+                packer.packString("type")
+                packer.packString(span.type)
+                packer.packString("start")
+                packer.packLong(span.start)
+                packer.packString("duration")
+                packer.packLong(span.duration)
+                packer.packString("error")
+                packer.packInt(span.error)
+                packer.packString("meta")
+                packer.packMapHeader(span.meta.size)
                 for ((k, v) in span.meta) {
-                    packer.packString(k); packer.packString(v)
+                    packer.packString(k)
+                    packer.packString(v)
                 }
-                packer.packString("metrics"); packer.packMapHeader(span.metrics.size)
+                packer.packString("metrics")
+                packer.packMapHeader(span.metrics.size)
                 for ((k, v) in span.metrics) {
-                    packer.packString(k); packer.packDouble(v)
+                    packer.packString(k)
+                    packer.packDouble(v)
                 }
             }
         }
