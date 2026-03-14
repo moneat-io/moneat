@@ -17,6 +17,7 @@
 package com.moneat.datadog.services
 
 import com.moneat.datadog.models.DatadogConnection
+import com.moneat.testsupport.TestIpConstants
 import com.moneat.datadog.models.DatadogConnectionsPayload
 import com.moneat.datadog.models.DatadogContainer
 import com.moneat.datadog.models.DatadogContainerPayload
@@ -128,9 +129,9 @@ class DatadogInfraServiceTest {
             connections = listOf(
                 DatadogConnection(
                     pid = 1234,
-                    localAddr = "10.0.0.1",
+                    localAddr = TestIpConstants.IP_1,
                     localPort = 8080,
-                    remoteAddr = "10.0.0.2",
+                    remoteAddr = TestIpConstants.IP_2,
                     remotePort = 443,
                     protocol = "tcp",
                     family = "IPv4",
@@ -154,9 +155,9 @@ class DatadogInfraServiceTest {
         val c = batch.connections[0]
         assertEquals("web-01", c.host)
         assertEquals(1234, c.pid)
-        assertEquals("10.0.0.1", c.localAddr)
+        assertEquals(TestIpConstants.IP_1, c.localAddr)
         assertEquals(8080, c.localPort)
-        assertEquals("10.0.0.2", c.remoteAddr)
+        assertEquals(TestIpConstants.IP_2, c.remoteAddr)
         assertEquals(443, c.remotePort)
         assertEquals("tcp", c.protocol)
         assertEquals("IPv4", c.family)

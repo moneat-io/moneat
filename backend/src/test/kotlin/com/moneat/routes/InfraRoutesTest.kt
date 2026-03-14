@@ -25,6 +25,7 @@ import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.TestIpConstants
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
@@ -54,9 +55,6 @@ import kotlin.test.assertTrue
 class InfraRoutesTest {
     companion object {
         private const val INFRA_EVENTS_PATH = "/v1/infra/events"
-
-        // RFC 5737 TEST-NET-1: reserved for documentation/examples; safe for test fixtures
-        private const val TEST_IP = "192.0.2.1"
     }
 
     @BeforeTest
@@ -571,7 +569,7 @@ class InfraRoutesTest {
         testApplication {
             val (userId, _) = seedUserAndOrg()
             stubClickHouseOk(
-                """{"device_ip":"$TEST_IP","vendor":"cisco"}"""
+                """{"device_ip":"${TestIpConstants.IP_1}","vendor":"cisco"}"""
             )
 
             application {
@@ -583,7 +581,7 @@ class InfraRoutesTest {
                 withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains(TEST_IP))
+            assertTrue(response.bodyAsText().contains(TestIpConstants.IP_1))
         }
 
     @Test
@@ -610,7 +608,7 @@ class InfraRoutesTest {
         testApplication {
             val (userId, _) = seedUserAndOrg()
             stubClickHouseOk(
-                """{"source_ip":"$TEST_IP","dest_ip":"192.0.2.2"}"""
+                """{"source_ip":"${TestIpConstants.IP_1}","dest_ip":"${TestIpConstants.IP_2}"}"""
             )
 
             application {
@@ -622,7 +620,7 @@ class InfraRoutesTest {
                 withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains(TEST_IP))
+            assertTrue(response.bodyAsText().contains(TestIpConstants.IP_1))
         }
 
     @Test
@@ -649,7 +647,7 @@ class InfraRoutesTest {
         testApplication {
             val (userId, _) = seedUserAndOrg()
             stubClickHouseOk(
-                """{"trap_oid":"1.3.6.1","source_ip":"10.0.0.5"}"""
+                """{"trap_oid":"1.3.6.1","source_ip":"${TestIpConstants.IP_5}"}"""
             )
 
             application {
@@ -661,7 +659,7 @@ class InfraRoutesTest {
                 withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("10.0.0.5"))
+            assertTrue(response.bodyAsText().contains(TestIpConstants.IP_5))
         }
 
     @Test

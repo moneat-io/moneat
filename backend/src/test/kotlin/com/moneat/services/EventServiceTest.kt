@@ -28,6 +28,7 @@ import com.moneat.events.models.StackFrame
 import com.moneat.events.models.StackTrace
 import com.moneat.events.models.UserInfo
 import com.moneat.events.repositories.EventRepository
+import com.moneat.testsupport.TestIpConstants
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.services.EventService
 import io.mockk.every
@@ -364,7 +365,7 @@ class EventServiceTest {
                 id = "user-123",
                 email = "test@example.com",
                 username = "testuser",
-                ip_address = "192.168.1.1"
+                ip_address = TestIpConstants.IP_1
             )
 
         val tags =

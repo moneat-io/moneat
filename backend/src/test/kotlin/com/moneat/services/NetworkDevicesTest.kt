@@ -34,6 +34,7 @@ import com.moneat.datadog.networkdevices.QueuedNdmFlowEntry
 import com.moneat.datadog.networkdevices.QueuedNdmPathEntry
 import com.moneat.datadog.networkdevices.QueuedNdmTrapEntry
 import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.TestIpConstants
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import io.lettuce.core.api.sync.RedisCommands
@@ -127,7 +128,7 @@ class NetworkDevicesTest {
             devices = listOf(
                 DdNdmDevice(
                     deviceId = "dev1",
-                    ipAddress = "10.0.0.1",
+                    ipAddress = TestIpConstants.IP_1,
                     hostname = "switch-1",
                     vendor = "Cisco",
                     model = "C9300",
@@ -151,7 +152,7 @@ class NetworkDevicesTest {
         assertEquals(orgId, batch.organizationId)
         assertEquals(1, batch.devices.size)
         assertEquals("dev1", batch.devices[0].deviceId)
-        assertEquals("10.0.0.1", batch.devices[0].ipAddress)
+        assertEquals(TestIpConstants.IP_1, batch.devices[0].ipAddress)
         assertEquals("Cisco", batch.devices[0].vendor)
         assertEquals(mapOf("env" to "prod", "site" to "dc1"), batch.devices[0].tags)
     }
@@ -173,7 +174,7 @@ class NetworkDevicesTest {
             type = "ndmtraps",
             traps = listOf(
                 DdNdmTrap(
-                    deviceIp = "10.0.0.1",
+                    deviceIp = TestIpConstants.IP_1,
                     oid = "1.3.6.1.4.1.9.9.43",
                     severity = "warning",
                     message = "Link down",
@@ -190,7 +191,7 @@ class NetworkDevicesTest {
         val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
         assertEquals("traps", batch.batchType)
         assertEquals(1, batch.traps.size)
-        assertEquals("10.0.0.1", batch.traps[0].deviceIp)
+        assertEquals(TestIpConstants.IP_1, batch.traps[0].deviceIp)
         assertEquals("warning", batch.traps[0].severity)
     }
 
@@ -204,8 +205,8 @@ class NetworkDevicesTest {
             type = "ndmflow",
             flows = listOf(
                 DdNdmFlow(
-                    srcIp = "192.168.1.10",
-                    dstIp = "10.0.0.5",
+                    srcIp = TestIpConstants.IP_10,
+                    dstIp = TestIpConstants.IP_5,
                     srcPort = 443,
                     dstPort = 54321,
                     protocol = "TCP",
@@ -226,7 +227,7 @@ class NetworkDevicesTest {
         val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
         assertEquals("flows", batch.batchType)
         assertEquals(1, batch.flows.size)
-        assertEquals("192.168.1.10", batch.flows[0].srcIp)
+        assertEquals(TestIpConstants.IP_10, batch.flows[0].srcIp)
         assertEquals(443, batch.flows[0].srcPort)
         assertEquals(1024L, batch.flows[0].bytes)
         assertEquals(mapOf("env" to "staging"), batch.flows[0].tags)
@@ -242,9 +243,9 @@ class NetworkDevicesTest {
             type = "netpath",
             paths = listOf(
                 DdNdmPath(
-                    source = "10.0.0.1",
-                    destination = "10.0.1.1",
-                    hops = listOf("10.0.0.1", "10.0.0.254", "10.0.1.1"),
+                    source = TestIpConstants.IP_1,
+                    destination = TestIpConstants.IP_OTHER,
+                    hops = listOf(TestIpConstants.IP_1, TestIpConstants.IP_254, TestIpConstants.IP_OTHER),
                     hopRtts = listOf(1.2, 3.4, 5.6),
                     tags = listOf("dc:east"),
                 )
@@ -259,7 +260,7 @@ class NetworkDevicesTest {
         val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
         assertEquals("paths", batch.batchType)
         assertEquals(1, batch.paths.size)
-        assertEquals("10.0.0.1", batch.paths[0].source)
+        assertEquals(TestIpConstants.IP_1, batch.paths[0].source)
         assertEquals(3, batch.paths[0].hops.size)
         assertEquals(listOf(1.2, 3.4, 5.6), batch.paths[0].hopRtts)
     }
@@ -337,7 +338,7 @@ class NetworkDevicesTest {
             devices = listOf(
                 QueuedNdmDeviceEntry(
                     deviceId = "d1",
-                    ipAddress = "10.0.0.1",
+                    ipAddress = TestIpConstants.IP_1,
                     hostname = "sw1",
                     vendor = "Cisco",
                     model = "C9300",
@@ -363,7 +364,7 @@ class NetworkDevicesTest {
             batchType = "traps",
             traps = listOf(
                 QueuedNdmTrapEntry(
-                    deviceIp = "10.0.0.1",
+                    deviceIp = TestIpConstants.IP_1,
                     oid = "1.3.6",
                     severity = "critical",
                     message = "down",
@@ -464,7 +465,7 @@ class NetworkDevicesTest {
                 devices = listOf(
                     QueuedNdmDeviceEntry(
                         deviceId = "d1",
-                        ipAddress = "10.0.0.1",
+                        ipAddress = TestIpConstants.IP_1,
                         hostname = "sw1",
                         vendor = "Cisco",
                         model = "C9300",
@@ -486,7 +487,7 @@ class NetworkDevicesTest {
             assertTrue(sql.contains("INSERT INTO"), "Expected INSERT statement")
             assertTrue(sql.contains("ndm_devices"), "Expected ndm_devices table")
             assertTrue(sql.contains("d1"), "Expected device_id")
-            assertTrue(sql.contains("10.0.0.1"), "Expected ip_address")
+            assertTrue(sql.contains(TestIpConstants.IP_1), "Expected ip_address")
             assertTrue(sql.contains("Cisco"), "Expected vendor")
         }
     }
@@ -565,7 +566,7 @@ class NetworkDevicesTest {
                 batchType = "traps",
                 traps = listOf(
                     QueuedNdmTrapEntry(
-                        deviceIp = "10.0.0.1",
+                        deviceIp = TestIpConstants.IP_1,
                         oid = "1.3.6.1",
                         severity = "warning",
                         message = "Link down",
@@ -580,7 +581,7 @@ class NetworkDevicesTest {
             assertEquals(1, captured.size)
             val sql = captured[0]
             assertTrue(sql.contains("ndm_traps"))
-            assertTrue(sql.contains("10.0.0.1"))
+            assertTrue(sql.contains(TestIpConstants.IP_1))
             assertTrue(sql.contains("1.3.6.1"))
             assertTrue(sql.contains("warning"))
         }
@@ -713,9 +714,9 @@ class NetworkDevicesTest {
                 batchType = "paths",
                 paths = listOf(
                     QueuedNdmPathEntry(
-                        source = "10.0.0.1",
-                        destination = "10.0.1.1",
-                        hops = listOf("10.0.0.1", "10.0.0.254"),
+                        source = TestIpConstants.IP_1,
+                        destination = TestIpConstants.IP_OTHER,
+                        hops = listOf(TestIpConstants.IP_1, TestIpConstants.IP_254),
                         hopRtts = listOf(1.5, 3.0),
                         tags = mapOf("dc" to "east"),
                         timestampMs = 1700000000000L,
@@ -728,8 +729,8 @@ class NetworkDevicesTest {
             assertEquals(1, captured.size)
             val sql = captured[0]
             assertTrue(sql.contains("network_paths"))
-            assertTrue(sql.contains("10.0.0.1"))
-            assertTrue(sql.contains("10.0.0.254"))
+            assertTrue(sql.contains(TestIpConstants.IP_1))
+            assertTrue(sql.contains(TestIpConstants.IP_254))
         }
     }
 
@@ -989,7 +990,7 @@ class NetworkDevicesTest {
             devices = listOf(
                 DdNdmDevice(
                     deviceId = "roundtrip-dev",
-                    ipAddress = "172.16.0.1",
+                    ipAddress = TestIpConstants.IP_OTHER,
                     vendor = "Juniper",
                     tags = listOf("env:test"),
                 )
@@ -1014,7 +1015,7 @@ class NetworkDevicesTest {
             NdmIngestionService.insertBatch(batch)
 
             assertTrue(captured[0].contains("roundtrip-dev"))
-            assertTrue(captured[0].contains("172.16.0.1"))
+            assertTrue(captured[0].contains(TestIpConstants.IP_OTHER))
         }
     }
 }

@@ -267,7 +267,7 @@ class CustomDataSourceExecutorTest {
     @Test
     fun `buildUrl blocks private RFC1918 address`() {
         assertFailsWith<IllegalArgumentException> {
-            prometheusHandler.buildUrl("192.168.1.1", 9090)
+            prometheusHandler.buildUrl("192.168.1.1", 9090) // NOSONAR - must use real RFC1918 IP to test blocking
         }
     }
 

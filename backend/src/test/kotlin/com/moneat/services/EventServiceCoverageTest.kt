@@ -47,6 +47,7 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.TestIpConstants
 import io.mockk.coEvery
 import io.mockk.verify
 import io.mockk.coVerify
@@ -766,7 +767,7 @@ class EventServiceCoverageTest {
                     id = "uid-1",
                     email = "user@test.com",
                     username = "testuser",
-                    ip_address = "10.0.0.1"
+                    ip_address = TestIpConstants.IP_1
                 ),
                 tags = mapOf("service" to "api", "region" to "us-east"),
                 sdk = SdkInfo(name = "sentry-python", version = "1.5.0"),
@@ -799,7 +800,7 @@ class EventServiceCoverageTest {
         assertEquals("uid-1", data.userId)
         assertEquals("user@test.com", data.userEmail)
         assertEquals("testuser", data.userUsername)
-        assertEquals("10.0.0.1", data.userIpAddress)
+        assertEquals(TestIpConstants.IP_1, data.userIpAddress)
         assertEquals("sentry-python", data.sdkName)
         assertEquals("1.5.0", data.sdkVersion)
     }
