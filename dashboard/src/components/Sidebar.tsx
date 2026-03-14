@@ -60,7 +60,7 @@ import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseF
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
 export const SIDEBAR_COLLAPSED_WIDTH = 64
-export const SIDEBAR_EXPANDED_WIDTH = 256
+export const SIDEBAR_EXPANDED_WIDTH = 192
 
 interface SidebarProps {
   readonly isExpanded: boolean
@@ -200,6 +200,8 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     return platform.category === platformFilter
   })
 
+  type NavGroupId = 'core' | 'infrastructure' | 'insights' | 'operations' | 'analytics' | 'management'
+
   interface NavItem {
     key: string
     icon: React.ComponentType<{className?: string}>
@@ -207,45 +209,71 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     href: string
     requiresProject: boolean
     badge?: string
+    group: NavGroupId
   }
 
   const baseNavItems: NavItem[] = [
     // Core Observability
-    { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false },
-    { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false },
-    { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false },
-    { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false },
+    { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false, group: 'core' },
+    { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false, group: 'core' },
+    { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false, group: 'core' },
+    { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false, group: 'core' },
     ...(hasEnterpriseModule(features, 'datadog') ? [
-      { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, badge: 'Beta' as const },
+      { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, group: 'core' },
     ] : []),
     // Infrastructure & Uptime
-    { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false },
-    { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false },
-    { key: 'status-pages', icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false },
+    { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false, group: 'infrastructure' },
+    { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false, group: 'infrastructure' },
+    { key: 'status-pages', icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false, group: 'infrastructure' },
     // Insights & Tools
-    { key: 'dashboards', icon: LayoutDashboard, label: 'Dashboards', href: '/dashboards', requiresProject: false, badge: 'Beta' },
-    { key: 'replays', icon: Play, label: 'Replays', href: '/replays', requiresProject: false },
-    { key: 'feedback', icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false },
-    { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false },
-    { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false },
-    // Enterprise-gated features
+    { key: 'dashboards', icon: LayoutDashboard, label: 'Dashboards', href: '/dashboards', requiresProject: false, group: 'insights' },
+    { key: 'replays', icon: Play, label: 'Replays', href: '/replays', requiresProject: false, group: 'insights' },
+    { key: 'feedback', icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false, group: 'insights' },
+    { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false, group: 'insights' },
+    { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false, group: 'insights' },
+    // Operations (enterprise)
     ...(hasEnterpriseModule(features, 'datadog') ? [
-      { key: 'security', icon: ShieldAlert, label: 'Security', href: '/security', requiresProject: false, badge: 'Beta' as const },
-      { key: 'synthetics', icon: FlaskConical, label: 'Synthetics', href: '/synthetics', requiresProject: false, badge: 'Beta' as const },
+      { key: 'security', icon: ShieldAlert, label: 'Security', href: '/security', requiresProject: false, group: 'operations' },
+      { key: 'synthetics', icon: FlaskConical, label: 'Synthetics', href: '/synthetics', requiresProject: false, group: 'operations' },
     ] : []),
-    ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
-    { key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false },
+    ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, group: 'operations', ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
+    { key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, group: 'analytics' },
     // Management
-    ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false }] : []),
+    ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false, group: 'management' }] : []),
   ]
 
   const navItems = baseNavItems.filter(item => {
     return isSidebarItemVisible(item.key, user?.sidebarHiddenItems || [])
   })
 
+  const groupLabels: Record<NavGroupId, string> = {
+    core: 'Observability',
+    infrastructure: 'Infrastructure',
+    insights: 'Insights',
+    operations: 'Operations',
+    analytics: 'Analytics',
+    management: 'Management',
+  }
+
+  const navGroups = (['core', 'infrastructure', 'insights', 'operations', 'analytics', 'management'] as const).map(groupId => ({
+    id: groupId,
+    label: groupLabels[groupId],
+    items: navItems.filter(item => item.group === groupId),
+  })).filter(g => g.items.length > 0)
+
   const projectNavItems = activeProjectId ? [
     { icon: Rocket, label: 'Setup Guide', href: `/projects/${activeProjectId}` },
   ] : []
+
+  const FadingDivider = () => (
+    <div
+      className="h-px my-2 bg-border shrink-0"
+      style={{
+        maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
+        WebkitMaskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
+      }}
+    />
+  )
 
   const renderSidebarContent = () => (
     <>
@@ -258,68 +286,83 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
             : 'py-2 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]'
         )}
       >
-        <div className={cn('space-y-1', !isExpanded && 'px-2')}>
-          {navItems.map((item) => {
-            const isActive = item.href === '/'
-              ? currentPath === '/'
-              : currentPath === item.href ||
-                (currentPath.startsWith(item.href + '/') &&
-                  !navItems.some(
-                    (other) =>
-                      other.href !== item.href &&
-                      (currentPath === other.href || currentPath.startsWith(other.href + '/')) &&
-                      other.href.startsWith(item.href + '/')
-                  ))
-            const Icon = item.icon
+        <div className={cn(!isExpanded && 'px-2')}>
+          {navGroups.map((group, groupIndex) => (
+            <div key={group.id}>
+              {groupIndex > 0 && <FadingDivider />}
+              {isExpanded && (
+                <div className="px-3 pt-1 pb-1">
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                    {group.label}
+                  </span>
+                </div>
+              )}
+              <div className={cn('space-y-1')}>
+                {group.items.map((item) => {
+                  const isActive = item.href === '/'
+                    ? currentPath === '/'
+                    : currentPath === item.href ||
+                      (currentPath.startsWith(item.href + '/') &&
+                        !navItems.some(
+                          (other) =>
+                            other.href !== item.href &&
+                            (currentPath === other.href || currentPath.startsWith(other.href + '/')) &&
+                            other.href.startsWith(item.href + '/')
+                        ))
+                  const Icon = item.icon
 
-            const linkContent = (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={cn(
-                  'flex items-center gap-3 py-2 rounded-md transition-colors',
-                  isExpanded ? 'px-3' : 'px-2',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-                  !isExpanded && 'justify-center'
-                )}
-              >
-                <Icon className="h-5 w-5 flex-shrink-0" />
-                {isExpanded && (
-                  <div className="flex items-center gap-2 flex-1">
-                    <span className="text-sm font-medium">{item.label}</span>
-                    {item.badge && (
-                      <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-medium">
-                        {item.badge}
-                      </Badge>
-                    )}
-                  </div>
-                )}
-              </Link>
-            )
+                  const linkContent = (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      className={cn(
+                        'flex items-center gap-3 py-2 rounded-md transition-colors',
+                        isExpanded ? 'px-3' : 'px-2',
+                        isActive
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-accent text-muted-foreground hover:text-foreground',
+                        !isExpanded && 'justify-center'
+                      )}
+                    >
+                      <Icon className="h-5 w-5 flex-shrink-0" />
+                      {isExpanded && (
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="text-sm font-medium">{item.label}</span>
+                          {item.badge && (
+                            <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-medium">
+                              {item.badge}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </Link>
+                  )
 
-            if (!isExpanded) {
-              return (
-                <Tooltip key={item.href}>
-                  <TooltipTrigger asChild>
-                    {linkContent}
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                </Tooltip>
-              )
-            }
+                  if (!isExpanded) {
+                    return (
+                      <Tooltip key={item.href}>
+                        <TooltipTrigger asChild>
+                          {linkContent}
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          <p>{item.label}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )
+                  }
 
-            return linkContent
-          })}
+                  return linkContent
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </nav>
 
       {/* Setup Guide - at bottom, above divider */}
       {projectNavItems.length > 0 && (
-        <div className="p-2">
+        <div className="p-2 pt-0">
+          <FadingDivider />
           {projectNavItems.map((item) => {
             const isActive = currentPath === item.href
             const Icon = item.icon
@@ -434,7 +477,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
       <div
         className={cn(
           'sidebar fixed left-0 bg-card border-r flex flex-col transition-all duration-300 z-40',
-          isExpanded ? 'w-64' : 'w-16'
+          isExpanded ? 'w-48' : 'w-16'
         )}
         style={{top: headerHeight, height: `calc(100vh - ${headerHeight}px)`}}
       >
