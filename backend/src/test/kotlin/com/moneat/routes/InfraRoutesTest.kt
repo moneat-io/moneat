@@ -26,6 +26,7 @@ import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.TestIpConstants
+import com.moneat.testsupport.TestOidConstants
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
@@ -647,7 +648,7 @@ class InfraRoutesTest {
         testApplication {
             val (userId, _) = seedUserAndOrg()
             stubClickHouseOk(
-                """{"trap_oid":"1.3.6.1","source_ip":"${TestIpConstants.IP_5}"}"""
+                """{"trap_oid":"${TestOidConstants.OID_TRAP_TEST}","source_ip":"${TestIpConstants.IP_5}"}"""
             )
 
             application {

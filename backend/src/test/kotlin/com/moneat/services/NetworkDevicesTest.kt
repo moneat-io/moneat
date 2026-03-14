@@ -34,6 +34,7 @@ import com.moneat.datadog.networkdevices.QueuedNdmFlowEntry
 import com.moneat.datadog.networkdevices.QueuedNdmPathEntry
 import com.moneat.datadog.networkdevices.QueuedNdmTrapEntry
 import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.TestOidConstants
 import com.moneat.testsupport.TestIpConstants
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
@@ -175,7 +176,7 @@ class NetworkDevicesTest {
             traps = listOf(
                 DdNdmTrap(
                     deviceIp = TestIpConstants.IP_1,
-                    oid = "1.3.6.1.4.1.9.9.43",
+                    oid = TestOidConstants.OID_CISCO,
                     severity = "warning",
                     message = "Link down",
                     variables = mapOf("ifIndex" to "42"),
@@ -567,7 +568,7 @@ class NetworkDevicesTest {
                 traps = listOf(
                     QueuedNdmTrapEntry(
                         deviceIp = TestIpConstants.IP_1,
-                        oid = "1.3.6.1",
+                        oid = TestOidConstants.OID_TRAP_TEST,
                         severity = "warning",
                         message = "Link down",
                         variables = mapOf("ifIndex" to "1"),
@@ -582,7 +583,7 @@ class NetworkDevicesTest {
             val sql = captured[0]
             assertTrue(sql.contains("ndm_traps"))
             assertTrue(sql.contains(TestIpConstants.IP_1))
-            assertTrue(sql.contains("1.3.6.1"))
+            assertTrue(sql.contains(TestOidConstants.OID_TRAP_TEST))
             assertTrue(sql.contains("warning"))
         }
     }
