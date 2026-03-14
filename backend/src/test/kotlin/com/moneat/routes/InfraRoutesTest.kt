@@ -54,6 +54,9 @@ import kotlin.test.assertTrue
 class InfraRoutesTest {
     companion object {
         private const val INFRA_EVENTS_PATH = "/v1/infra/events"
+
+        // RFC 5737 TEST-NET-1: reserved for documentation/examples; safe for test fixtures
+        private const val TEST_IP = "192.0.2.1"
     }
 
     @BeforeTest
@@ -568,7 +571,7 @@ class InfraRoutesTest {
         testApplication {
             val (userId, _) = seedUserAndOrg()
             stubClickHouseOk(
-                """{"device_ip":"10.0.0.1","vendor":"cisco"}"""
+                """{"device_ip":"$TEST_IP","vendor":"cisco"}"""
             )
 
             application {
@@ -580,7 +583,7 @@ class InfraRoutesTest {
                 withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("10.0.0.1"))
+            assertTrue(response.bodyAsText().contains(TEST_IP))
         }
 
     @Test
@@ -607,7 +610,7 @@ class InfraRoutesTest {
         testApplication {
             val (userId, _) = seedUserAndOrg()
             stubClickHouseOk(
-                """{"source_ip":"10.0.0.1","dest_ip":"10.0.0.2"}"""
+                """{"source_ip":"$TEST_IP","dest_ip":"192.0.2.2"}"""
             )
 
             application {
@@ -619,7 +622,7 @@ class InfraRoutesTest {
                 withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("10.0.0.1"))
+            assertTrue(response.bodyAsText().contains(TEST_IP))
         }
 
     @Test
