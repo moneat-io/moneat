@@ -206,7 +206,15 @@ function RootComponent() {
   const navigate = useNavigate()
   const currentPath = router.location.pathname
   const [isAuthenticated, setIsAuthenticated] = useState(api.isAuthenticated())
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false)
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
+    if (typeof window === 'undefined') return true
+    const saved = localStorage.getItem('moneat:sidebar-expanded')
+    return saved !== null ? saved === 'true' : true
+  })
+  const handleSidebarExpandedChange = useCallback((expanded: boolean) => {
+    setIsSidebarExpanded(expanded)
+    localStorage.setItem('moneat:sidebar-expanded', String(expanded))
+  }, [])
   const [onboardingChecked, setOnboardingChecked] = useState(false)
   const [authCheckComplete, setAuthCheckComplete] = useState(false)
   const [headerHeight, setHeaderHeight] = useState(TOPBAR_HEIGHT)
@@ -321,7 +329,7 @@ function RootComponent() {
           </div>
           <Sidebar
             isExpanded={isSidebarExpanded}
-            onExpandedChange={setIsSidebarExpanded}
+            onExpandedChange={handleSidebarExpandedChange}
             headerHeight={headerHeight}
           />
           <AuthenticatedContent sidebarWidth={sidebarWidth} headerHeight={headerHeight} />
