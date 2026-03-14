@@ -376,7 +376,7 @@ function AuthenticatedContent({
 
   return (
     <div
-      className="transition-[margin-left] duration-300"
+      className="relative z-0 transition-[margin-left] duration-300"
       style={{
         marginLeft: sidebarWidth,
         paddingTop: headerHeight,
