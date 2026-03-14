@@ -12,6 +12,7 @@
 <p align="center">
   <a href="#license"><img src="https://img.shields.io/badge/License-AGPLv3%20%2B%20Enterprise-blue.svg?style=flat-square" alt="License: AGPLv3 + Enterprise"></a>
   <a href="https://github.com/moneat-io/moneat/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome"></a>
+  <a href="https://github.com/moneat-io/moneat/actions/workflows/test.yml"><img src="https://img.shields.io/endpoint?style=flat-square&url=https://raw.githubusercontent.com/moneat-io/moneat/develop/badges/coverage-badge.json" alt="Global Code Coverage"></a>
   <a href="https://discord.gg/Fanh3mem"><img src="https://img.shields.io/badge/Discord-community-5865F2.svg?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/moneat-io/moneat/commits"><img src="https://img.shields.io/github/commit-activity/m/moneat-io/moneat?style=flat-square" alt="Commit Activity"></a>
   <a href="https://github.com/moneat-io/moneat/stargazers"><img src="https://img.shields.io/github/stars/moneat-io/moneat?style=flat-square" alt="GitHub Stars"></a>
