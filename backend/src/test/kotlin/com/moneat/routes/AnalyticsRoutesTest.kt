@@ -100,23 +100,6 @@ class AnalyticsRoutesTest {
         } get Users.id
     }
 
-    private fun seedOrg(): Int = transaction {
-        Organizations.insert {
-            it[name] = "Analytics Org"
-            it[slug] = "analytics-org-${System.nanoTime()}"
-        } get Organizations.id
-    }
-
-    private fun seedMembership(userId: Int, orgId: Int) {
-        transaction {
-            Memberships.insert {
-                it[user_id] = userId
-                it[organization_id] = orgId
-                it[role] = "owner"
-            }
-        }
-    }
-
     private fun installRoutes(app: Application) {
         app.installAuth()
         app.routing {

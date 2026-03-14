@@ -77,6 +77,16 @@ class EventApiRoutesTest {
         private const val DEFAULT_PAGE = 1
         private const val DEFAULT_LIMIT = 25
         private const val SENTINEL_PROJECT_ID = 999L
+        private const val ISSUE_DETAIL_1 = "issue-detail-1"
+        private const val ISSUE_EV_2 = "issue-ev-2"
+        private const val ISSUE_TXN_2 = "issue-txn-2"
+        private const val TXN_DETAIL_1 = "txn-detail-1"
+        private const val TXN_REL_2 = "txn-rel-2"
+        private const val GET_API_USERS = "GET /api/users"
+        private const val HTTP_SERVER = "http.server"
+        private const val DB_QUERY = "db.query"
+        private const val TIMESTAMP_2026_01_01 = "2026-01-01T00:00:00Z"
+        private const val TIMESTAMP_2026_01_02 = "2026-01-02T00:00:00Z"
     }
 
     private lateinit var mockDashboardService: DashboardService
@@ -266,13 +276,13 @@ class EventApiRoutesTest {
     @Test
     fun `GET issue detail returns 200 with issue data`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        coEvery { mockDashboardService.hasIssueAccess(userId, "issue-detail-1") } returns true
+        coEvery { mockDashboardService.hasIssueAccess(userId, ISSUE_DETAIL_1) } returns true
         coEvery {
-            mockDashboardService.getIssue("issue-detail-1", any())
+            mockDashboardService.getIssue(ISSUE_DETAIL_1, any())
         } returns sampleIssueDetail()
 
         application { installTestApp() }
-        val response = client.get("/v1/issues/issue-detail-1") {
+        val response = client.get("/v1/issues/$ISSUE_DETAIL_1") {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -313,17 +323,17 @@ class EventApiRoutesTest {
     @Test
     fun `GET issue events respects limit parameter`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        coEvery { mockDashboardService.hasIssueAccess(userId, "issue-ev-2") } returns true
+        coEvery { mockDashboardService.hasIssueAccess(userId, ISSUE_EV_2) } returns true
         coEvery {
-            mockDashboardService.getIssueEvents("issue-ev-2", 5, any())
+            mockDashboardService.getIssueEvents(ISSUE_EV_2, 5, any())
         } returns emptyList()
 
         application { installTestApp() }
-        val response = client.get("/v1/issues/issue-ev-2/events?limit=5") {
+        val response = client.get("/v1/issues/$ISSUE_EV_2/events?limit=5") {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        coVerify { mockDashboardService.getIssueEvents("issue-ev-2", 5, any()) }
+        coVerify { mockDashboardService.getIssueEvents(ISSUE_EV_2, 5, any()) }
     }
 
     // ─── GET /v1/issues/{issueId}/transactions ───────────────────────────────
@@ -341,23 +351,23 @@ class EventApiRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("GET /api/users"))
+        assertTrue(response.bodyAsText().contains(GET_API_USERS))
     }
 
     @Test
     fun `GET issue transactions respects limit parameter`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        coEvery { mockDashboardService.hasIssueAccess(userId, "issue-txn-2") } returns true
+        coEvery { mockDashboardService.hasIssueAccess(userId, ISSUE_TXN_2) } returns true
         coEvery {
-            mockDashboardService.getIssueTransactions("issue-txn-2", 5, any())
+            mockDashboardService.getIssueTransactions(ISSUE_TXN_2, 5, any())
         } returns emptyList()
 
         application { installTestApp() }
-        val response = client.get("/v1/issues/issue-txn-2/transactions?limit=5") {
+        val response = client.get("/v1/issues/$ISSUE_TXN_2/transactions?limit=5") {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        coVerify { mockDashboardService.getIssueTransactions("issue-txn-2", 5, any()) }
+        coVerify { mockDashboardService.getIssueTransactions(ISSUE_TXN_2, 5, any()) }
     }
 
     // ─── GET /v1/projects/{projectId}/transactions ───────────────────────────
@@ -375,7 +385,7 @@ class EventApiRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("GET /api/users"))
+        assertTrue(response.bodyAsText().contains(GET_API_USERS))
     }
 
     @Test
@@ -383,17 +393,17 @@ class EventApiRoutesTest {
         val (userId, projectId) = seedUserWithProject()
         every { mockDashboardService.hasProjectAccess(userId, projectId) } returns true
         coEvery {
-            mockDashboardService.getTransactions(projectId, "30d", "production", "http.server", any())
+            mockDashboardService.getTransactions(projectId, "30d", "production", HTTP_SERVER, any())
         } returns emptyList()
 
         application { installTestApp() }
-        val url = "/v1/projects/$projectId/transactions?period=30d&environment=production&operation=http.server"
+        val url = "/v1/projects/$projectId/transactions?period=30d&environment=production&operation=$HTTP_SERVER"
         val response = client.get(url) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         coVerify {
-            mockDashboardService.getTransactions(projectId, "30d", "production", "http.server", any())
+            mockDashboardService.getTransactions(projectId, "30d", "production", HTTP_SERVER, any())
         }
     }
 
@@ -420,17 +430,17 @@ class EventApiRoutesTest {
         val (userId, projectId) = seedUserWithProject()
         every { mockDashboardService.hasProjectAccess(userId, projectId) } returns true
         coEvery {
-            mockDashboardService.getPerformanceStats(projectId, "24h", "staging", "db.query", any())
+            mockDashboardService.getPerformanceStats(projectId, "24h", "staging", DB_QUERY, any())
         } returns samplePerformanceStats()
 
         application { installTestApp() }
-        val url = "/v1/projects/$projectId/transactions/stats?period=24h&environment=staging&operation=db.query"
+        val url = "/v1/projects/$projectId/transactions/stats?period=24h&environment=staging&operation=$DB_QUERY"
         val response = client.get(url) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         coVerify {
-            mockDashboardService.getPerformanceStats(projectId, "24h", "staging", "db.query", any())
+            mockDashboardService.getPerformanceStats(projectId, "24h", "staging", DB_QUERY, any())
         }
     }
 
@@ -439,17 +449,17 @@ class EventApiRoutesTest {
     @Test
     fun `GET transaction detail returns 200`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        coEvery { mockDashboardService.hasTransactionAccess(userId, "txn-detail-1") } returns true
+        coEvery { mockDashboardService.hasTransactionAccess(userId, TXN_DETAIL_1) } returns true
         coEvery {
-            mockDashboardService.getTransaction("txn-detail-1")
+            mockDashboardService.getTransaction(TXN_DETAIL_1)
         } returns sampleTransactionDetail()
 
         application { installTestApp() }
-        val response = client.get("/v1/transactions/txn-detail-1") {
+        val response = client.get("/v1/transactions/$TXN_DETAIL_1") {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("txn-detail-1"))
+        assertTrue(response.bodyAsText().contains(TXN_DETAIL_1))
     }
 
     @Test
@@ -480,7 +490,7 @@ class EventApiRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("db.query"))
+        assertTrue(response.bodyAsText().contains(DB_QUERY))
     }
 
     @Test
@@ -517,17 +527,17 @@ class EventApiRoutesTest {
     @Test
     fun `GET related errors respects limit parameter`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        coEvery { mockDashboardService.hasTransactionAccess(userId, "txn-rel-2") } returns true
+        coEvery { mockDashboardService.hasTransactionAccess(userId, TXN_REL_2) } returns true
         coEvery {
-            mockDashboardService.getRelatedErrorsForTransaction("txn-rel-2", 5)
+            mockDashboardService.getRelatedErrorsForTransaction(TXN_REL_2, 5)
         } returns emptyList()
 
         application { installTestApp() }
-        val response = client.get("/v1/transactions/txn-rel-2/related-errors?limit=5") {
+        val response = client.get("/v1/transactions/$TXN_REL_2/related-errors?limit=5") {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        coVerify { mockDashboardService.getRelatedErrorsForTransaction("txn-rel-2", 5) }
+        coVerify { mockDashboardService.getRelatedErrorsForTransaction(TXN_REL_2, 5) }
     }
 
     // ─── GET /v1/events/{eventId}/issue ──────────────────────────────────────
@@ -628,23 +638,23 @@ class EventApiRoutesTest {
         culprit = "com.app.Main",
         level = "error",
         platform = "java",
-        firstSeen = "2026-01-01T00:00:00Z",
-        lastSeen = "2026-01-02T00:00:00Z",
+        firstSeen = TIMESTAMP_2026_01_01,
+        lastSeen = TIMESTAMP_2026_01_02,
         eventCount = 10,
         userCount = 3,
         status = "unresolved"
     )
 
     private fun sampleIssueDetail() = IssueDetailResponse(
-        id = "issue-detail-1",
+        id = ISSUE_DETAIL_1,
         projectId = 1L,
         projectName = "Test Project",
         title = "NullPointerException",
         culprit = "com.app.Main",
         level = "error",
         platform = "java",
-        firstSeen = "2026-01-01T00:00:00Z",
-        lastSeen = "2026-01-02T00:00:00Z",
+        firstSeen = TIMESTAMP_2026_01_01,
+        lastSeen = TIMESTAMP_2026_01_02,
         eventCount = 10,
         userCount = 3,
         status = "unresolved",
@@ -654,7 +664,7 @@ class EventApiRoutesTest {
 
     private fun sampleEvent() = EventResponse(
         eventId = "evt-1",
-        timestamp = "2026-01-02T00:00:00Z",
+        timestamp = TIMESTAMP_2026_01_02,
         message = "NullPointerException in Main",
         platform = "java",
         level = "error",
@@ -668,17 +678,17 @@ class EventApiRoutesTest {
 
     private fun sampleIssueTransaction() = IssueTransactionResponse(
         eventId = "txn-1",
-        name = "GET /api/users",
-        op = "http.server",
+        name = GET_API_USERS,
+        op = HTTP_SERVER,
         duration = 150.0,
-        timestamp = "2026-01-02T00:00:00Z",
+        timestamp = TIMESTAMP_2026_01_02,
         status = "ok",
         traceId = "trace-1"
     )
 
     private fun sampleTransactionSummary() = TransactionSummaryResponse(
-        name = "GET /api/users",
-        op = "http.server",
+        name = GET_API_USERS,
+        op = HTTP_SERVER,
         latestEventId = "txn-1",
         count = 100,
         p50 = 50.0,
@@ -689,13 +699,13 @@ class EventApiRoutesTest {
     )
 
     private fun sampleTransactionDetail() = TransactionDetailResponse(
-        eventId = "txn-detail-1",
-        name = "GET /api/users",
-        op = "http.server",
+        eventId = TXN_DETAIL_1,
+        name = GET_API_USERS,
+        op = HTTP_SERVER,
         startTimestamp = 1704067200.0,
         duration = 150.0,
         traceId = "trace-1",
-        timestamp = "2026-01-01T00:00:00Z",
+        timestamp = TIMESTAMP_2026_01_01,
         environment = "production",
         release = "1.0.0",
         status = "ok",
@@ -708,7 +718,7 @@ class EventApiRoutesTest {
         spans = listOf(
             SpanResponse(
                 spanId = "span-1",
-                op = "db.query",
+                op = DB_QUERY,
                 description = "SELECT * FROM users",
                 startTimestamp = 1704067200.0,
                 endTimestamp = 1704067200.05,
@@ -719,14 +729,14 @@ class EventApiRoutesTest {
 
     private fun samplePerformanceStats() = PerformanceStatsResponse(
         apdex = 0.95,
-        throughput = listOf(TimelinePoint("2026-01-01T00:00:00Z", 100)),
+        throughput = listOf(TimelinePoint(TIMESTAMP_2026_01_01, 100)),
         slowestTransactions = listOf(
             SlowTransactionResponse(
                 eventId = "slow-1",
                 name = "GET /api/heavy",
-                op = "http.server",
+                op = HTTP_SERVER,
                 duration = 5000.0,
-                timestamp = "2026-01-01T00:00:00Z"
+                timestamp = TIMESTAMP_2026_01_01
             )
         ),
         totalTransactions = 1000,

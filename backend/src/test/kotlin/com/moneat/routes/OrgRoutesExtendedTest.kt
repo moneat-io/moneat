@@ -64,6 +64,9 @@ class OrgRoutesExtendedTest {
     companion object {
         private const val OWNER_EMAIL = "owner@ext.test"
         private const val MEMBER_EMAIL = "member@ext.test"
+        private const val EMAIL_A_EXT = "a@ext.test"
+        private const val EMAIL_B_EXT = "b@ext.test"
+        private const val EMAIL_OK_EXT = "ok@ext.test"
     }
 
     private val mockMembershipService = mockk<OrgMembershipService>(relaxed = true)
@@ -195,11 +198,11 @@ class OrgRoutesExtendedTest {
         val ownerId = seedUser(OWNER_EMAIL)
         seedMembership(orgId, ownerId, "owner")
 
-        val emails = listOf("a@ext.test", "b@ext.test")
+        val emails = listOf(EMAIL_A_EXT, EMAIL_B_EXT)
         every {
             mockInvitationService.bulkInvite(orgId, emails, "member", ownerId)
         } returns BulkInviteResult(
-            success = listOf("a@ext.test", "b@ext.test"),
+            success = listOf(EMAIL_A_EXT, EMAIL_B_EXT),
             failed = emptyList()
         )
 
@@ -211,12 +214,12 @@ class OrgRoutesExtendedTest {
             val response = client.post("/v1/org/invitations/bulk") {
                 header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
                 contentType(ContentType.Application.Json)
-                setBody("""{"emails":["a@ext.test","b@ext.test"],"role":"member"}""")
+                setBody("""{"emails":["$EMAIL_A_EXT","$EMAIL_B_EXT"],"role":"member"}""")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             val body = response.bodyAsText()
-            assertTrue(body.contains("a@ext.test"))
-            assertTrue(body.contains("b@ext.test"))
+            assertTrue(body.contains(EMAIL_A_EXT))
+            assertTrue(body.contains(EMAIL_B_EXT))
             verify { mockInvitationService.bulkInvite(orgId, emails, "member", ownerId) }
         }
     }
@@ -227,11 +230,11 @@ class OrgRoutesExtendedTest {
         val ownerId = seedUser(OWNER_EMAIL)
         seedMembership(orgId, ownerId, "owner")
 
-        val emails = listOf("ok@ext.test", "bad@ext.test")
+        val emails = listOf(EMAIL_OK_EXT, "bad@ext.test")
         every {
             mockInvitationService.bulkInvite(orgId, emails, "member", ownerId)
         } returns BulkInviteResult(
-            success = listOf("ok@ext.test"),
+            success = listOf(EMAIL_OK_EXT),
             failed = listOf(BulkInviteFailure("bad@ext.test", "Already a member"))
         )
 
@@ -243,11 +246,11 @@ class OrgRoutesExtendedTest {
             val response = client.post("/v1/org/invitations/bulk") {
                 header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
                 contentType(ContentType.Application.Json)
-                setBody("""{"emails":["ok@ext.test","bad@ext.test"],"role":"member"}""")
+                setBody("""{"emails":["$EMAIL_OK_EXT","bad@ext.test"],"role":"member"}""")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             val body = response.bodyAsText()
-            assertTrue(body.contains("ok@ext.test"))
+            assertTrue(body.contains(EMAIL_OK_EXT))
             assertTrue(body.contains("Already a member"))
         }
     }

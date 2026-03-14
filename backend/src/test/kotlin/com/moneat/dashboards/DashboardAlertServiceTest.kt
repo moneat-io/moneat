@@ -208,27 +208,30 @@ class DashboardAlertServiceTest {
             } get DashboardWidgets.id
         }
 
-    @Suppress("LongParameterList")
+    private data class AlertRequestOverrides(
+        val name: String = "High Error Rate",
+        val condition: String = ">",
+        val threshold: Double = 100.0,
+        val metricIndex: Int = 0,
+        val durationSeconds: Int = 0,
+        val incidentSeverity: String? = null,
+        val enabled: Boolean = true,
+        val notificationChannels: NotificationChannels = NotificationChannels(),
+    )
+
     private fun buildCreateRequest(
         widgetId: Long,
-        name: String = "High Error Rate",
-        condition: String = ">",
-        threshold: Double = 100.0,
-        metricIndex: Int = 0,
-        durationSeconds: Int = 0,
-        incidentSeverity: String? = null,
-        enabled: Boolean = true,
-        notificationChannels: NotificationChannels = NotificationChannels()
+        overrides: AlertRequestOverrides = AlertRequestOverrides(),
     ): CreateDashboardAlertRequest = CreateDashboardAlertRequest(
         widgetId = widgetId,
-        name = name,
-        condition = condition,
-        threshold = threshold,
-        metricIndex = metricIndex,
-        durationSeconds = durationSeconds,
-        incidentSeverity = incidentSeverity,
-        enabled = enabled,
-        notificationChannels = notificationChannels,
+        name = overrides.name,
+        condition = overrides.condition,
+        threshold = overrides.threshold,
+        metricIndex = overrides.metricIndex,
+        durationSeconds = overrides.durationSeconds,
+        incidentSeverity = overrides.incidentSeverity,
+        enabled = overrides.enabled,
+        notificationChannels = overrides.notificationChannels,
     )
 
     // ---- createAlert tests ----
@@ -270,7 +273,7 @@ class DashboardAlertServiceTest {
             dashboardId = dashboardId,
             orgId = ORG_ID,
             createdBy = CREATED_BY,
-            request = buildCreateRequest(widgetId, notificationChannels = channels),
+            request = buildCreateRequest(widgetId, AlertRequestOverrides(notificationChannels = channels)),
         )
 
         assertTrue(response.notificationChannels.email)
@@ -289,9 +292,7 @@ class DashboardAlertServiceTest {
             createdBy = CREATED_BY,
             request = buildCreateRequest(
                 widgetId,
-                metricIndex = 2,
-                durationSeconds = 300,
-                incidentSeverity = "CRITICAL",
+                AlertRequestOverrides(metricIndex = 2, durationSeconds = 300, incidentSeverity = "CRITICAL"),
             ),
         )
 
@@ -310,7 +311,7 @@ class DashboardAlertServiceTest {
                 dashboardId = dashboardId,
                 orgId = ORG_ID,
                 createdBy = CREATED_BY,
-                request = buildCreateRequest(widgetId, condition = "INVALID"),
+                request = buildCreateRequest(widgetId, AlertRequestOverrides(condition = "INVALID")),
             )
         }
     }
@@ -342,13 +343,13 @@ class DashboardAlertServiceTest {
             dashboardId,
             ORG_ID,
             CREATED_BY,
-            buildCreateRequest(widgetId, name = "Alert A"),
+            buildCreateRequest(widgetId, AlertRequestOverrides(name = "Alert A")),
         )
         service.createAlert(
             dashboardId,
             ORG_ID,
             CREATED_BY,
-            buildCreateRequest(widgetId, name = "Alert B"),
+            buildCreateRequest(widgetId, AlertRequestOverrides(name = "Alert B")),
         )
 
         val alerts = service.listAlerts(dashboardId, ORG_ID)
@@ -415,7 +416,7 @@ class DashboardAlertServiceTest {
             dashboardId,
             ORG_ID,
             CREATED_BY,
-            buildCreateRequest(widgetId, condition = ">", threshold = 100.0),
+            buildCreateRequest(widgetId, AlertRequestOverrides(condition = ">", threshold = 100.0)),
         )
 
         val updated = service.updateAlert(
@@ -439,7 +440,7 @@ class DashboardAlertServiceTest {
             dashboardId,
             ORG_ID,
             CREATED_BY,
-            buildCreateRequest(widgetId, enabled = true),
+            buildCreateRequest(widgetId),
         )
 
         val disabled = service.updateAlert(
@@ -600,7 +601,7 @@ class DashboardAlertServiceTest {
             dashboardId,
             ORG_ID,
             CREATED_BY,
-            buildCreateRequest(widgetId, name = "Lifecycle Alert", threshold = 50.0),
+            buildCreateRequest(widgetId, AlertRequestOverrides(name = "Lifecycle Alert", threshold = 50.0)),
         )
         assertEquals("Lifecycle Alert", created.name)
 
@@ -634,7 +635,7 @@ class DashboardAlertServiceTest {
                 dashboardId,
                 ORG_ID,
                 CREATED_BY,
-                buildCreateRequest(widgetId, name = "Alert $cond", condition = cond),
+                buildCreateRequest(widgetId, AlertRequestOverrides(name = "Alert $cond", condition = cond)),
             )
             assertEquals(cond, response.condition)
         }

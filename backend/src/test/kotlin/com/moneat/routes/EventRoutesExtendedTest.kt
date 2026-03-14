@@ -95,6 +95,12 @@ class EventRoutesExtendedTest {
         private const val ISSUE_ALERTS_FALSE = """{"issueAlerts":false}"""
         private const val DEFAULT_PAGE = 1
         private const val DEFAULT_PAGE_SIZE = 25
+        private const val V1_PROJECTS = "/v1/projects"
+        private const val DSN_KEY_AT_HOST = "https://key@host/1"
+        private const val TRACE_ABC = "trace-abc"
+        private const val REPLAY_D1 = "replay-d1"
+        private const val TIMESTAMP_2026_01_01 = "2026-01-01T00:00:00Z"
+        private const val URL_EXAMPLE_COM = "https://example.com"
     }
 
     private val mockDashboardService = mockk<DashboardService>(relaxed = true)
@@ -193,7 +199,7 @@ class EventRoutesExtendedTest {
         } returns listOf(sampleProject())
 
         application { installTestApp() }
-        val response = client.get("/v1/projects") {
+        val response = client.get(V1_PROJECTS) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -203,7 +209,7 @@ class EventRoutesExtendedTest {
     @Test
     fun `GET projects returns 401 without auth`() = testApplication {
         application { installTestApp() }
-        val response = client.get("/v1/projects")
+        val response = client.get(V1_PROJECTS)
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
@@ -217,7 +223,7 @@ class EventRoutesExtendedTest {
         } returns sampleProject()
 
         application { installTestApp() }
-        val response = client.post("/v1/projects") {
+        val response = client.post(V1_PROJECTS) {
             withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":"New Project"}""")
@@ -234,7 +240,7 @@ class EventRoutesExtendedTest {
         } throws IllegalStateException("project_limit_reached")
 
         application { installTestApp() }
-        val response = client.post("/v1/projects") {
+        val response = client.post(V1_PROJECTS) {
             withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":"New Project"}""")
@@ -251,7 +257,7 @@ class EventRoutesExtendedTest {
         } throws IllegalStateException("Invalid project name")
 
         application { installTestApp() }
-        val response = client.post("/v1/projects") {
+        val response = client.post(V1_PROJECTS) {
             withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":""}""")
@@ -376,7 +382,7 @@ class EventRoutesExtendedTest {
         every { mockDashboardService.hasProjectAccess(userId, projectId) } returns true
         every {
             mockDashboardService.addProjectTarget(projectId, "flutter")
-        } returns ProjectKeyResponse(platformTarget = "flutter", dsn = "https://key@host/1")
+        } returns ProjectKeyResponse(platformTarget = "flutter", dsn = DSN_KEY_AT_HOST)
 
         application { installTestApp() }
         val response = client.post("/v1/projects/$projectId/targets") {
@@ -458,15 +464,15 @@ class EventRoutesExtendedTest {
         val (userId, projectId) = seedUserWithProject()
         coEvery { mockDashboardService.hasTraceAccess(userId, projectId) } returns true
         coEvery {
-            mockDashboardService.getTraceDetails(projectId, "trace-abc")
+            mockDashboardService.getTraceDetails(projectId, TRACE_ABC)
         } returns sampleTraceDetail(projectId)
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$projectId/traces/trace-abc") {
+        val response = client.get("/v1/projects/$projectId/traces/$TRACE_ABC") {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("trace-abc"))
+        assertTrue(response.bodyAsText().contains(TRACE_ABC))
     }
 
     @Test
@@ -475,7 +481,7 @@ class EventRoutesExtendedTest {
         coEvery { mockDashboardService.hasTraceAccess(userId, projectId) } returns false
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$projectId/traces/trace-abc") {
+        val response = client.get("/v1/projects/$projectId/traces/$TRACE_ABC") {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -589,17 +595,17 @@ class EventRoutesExtendedTest {
     @Test
     fun `GET replay detail returns 200`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        coEvery { mockDashboardService.hasReplayAccess(userId, "replay-d1") } returns true
+        coEvery { mockDashboardService.hasReplayAccess(userId, REPLAY_D1) } returns true
         coEvery {
-            mockDashboardService.getReplay("replay-d1", any())
+            mockDashboardService.getReplay(REPLAY_D1, any())
         } returns sampleReplayDetail()
 
         application { installTestApp() }
-        val response = client.get("/v1/replays/replay-d1") {
+        val response = client.get("/v1/replays/$REPLAY_D1") {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("replay-d1"))
+        assertTrue(response.bodyAsText().contains(REPLAY_D1))
     }
 
     @Test
@@ -1039,8 +1045,8 @@ class EventRoutesExtendedTest {
         name = TEST_PROJECT_NAME,
         slug = "test-project",
         framework = "kotlin",
-        keys = listOf(ProjectKeyResponse(platformTarget = null, dsn = "https://key@host/1")),
-        dsn = "https://key@host/1"
+        keys = listOf(ProjectKeyResponse(platformTarget = null, dsn = DSN_KEY_AT_HOST)),
+        dsn = DSN_KEY_AT_HOST
     )
 
     private fun sampleProjectStats() = ProjectStatsResponse(
@@ -1048,18 +1054,18 @@ class EventRoutesExtendedTest {
         totalIssues = 20,
         unresolvedIssues = 10,
         affectedUsers = 50,
-        eventsTimeline = listOf(TimelinePoint("2026-01-01T00:00:00Z", 100)),
+        eventsTimeline = listOf(TimelinePoint(TIMESTAMP_2026_01_01, 100)),
         eventsByLevel = mapOf("error" to 400L, "warning" to 100L),
         eventsByPlatform = mapOf("java" to 500L),
         eventsByBrowser = emptyMap(),
         eventsByEnvironment = mapOf("production" to 500L),
         issuesByStatus = mapOf("unresolved" to 10L, "resolved" to 10L),
         topIssues = listOf(TopIssue("issue-1", "NPE", 100)),
-        usersTimeline = listOf(TimelinePoint("2026-01-01T00:00:00Z", 50))
+        usersTimeline = listOf(TimelinePoint(TIMESTAMP_2026_01_01, 50))
     )
 
     private fun sampleTraceDetail(projectId: Long) = TraceDetailResponse(
-        traceId = "trace-abc",
+        traceId = TRACE_ABC,
         projectId = projectId,
         spans = listOf(
             SpanResponse(
@@ -1092,7 +1098,7 @@ class EventRoutesExtendedTest {
             startTimestamp = 1704067200.0,
             duration = 100.0,
             traceId = "trace-1",
-            timestamp = "2026-01-01T00:00:00Z",
+            timestamp = TIMESTAMP_2026_01_01,
             environment = "production",
             release = "1.0.0",
             status = "ok",
@@ -1104,10 +1110,10 @@ class EventRoutesExtendedTest {
     private fun sampleReplayListItem(projectId: Long = 1L) = ReplayListItem(
         replayId = "replay-1",
         projectId = projectId,
-        startedAt = "2026-01-01T00:00:00Z",
+        startedAt = TIMESTAMP_2026_01_01,
         finishedAt = "2026-01-01T00:05:00Z",
         durationMs = 300000.0,
-        urls = listOf("https://example.com"),
+        urls = listOf(URL_EXAMPLE_COM),
         errorCount = 2,
         user = null,
         browserName = "Chrome",
@@ -1118,12 +1124,12 @@ class EventRoutesExtendedTest {
     )
 
     private fun sampleReplayDetail() = ReplayDetailResponse(
-        replayId = "replay-d1",
+        replayId = REPLAY_D1,
         projectId = 1L,
-        startedAt = "2026-01-01T00:00:00Z",
+        startedAt = TIMESTAMP_2026_01_01,
         finishedAt = "2026-01-01T00:05:00Z",
         durationMs = 300000.0,
-        urls = listOf("https://example.com"),
+        urls = listOf(URL_EXAMPLE_COM),
         errorCount = 2,
         errorIds = listOf("err-1"),
         traceIds = listOf("trace-1"),
@@ -1145,9 +1151,9 @@ class EventRoutesExtendedTest {
         message = "Great app!",
         contactEmail = "user@test.com",
         name = "Test User",
-        url = "https://example.com",
+        url = URL_EXAMPLE_COM,
         status = "new",
-        timestamp = "2026-01-01T00:00:00Z",
+        timestamp = TIMESTAMP_2026_01_01,
         environment = "production",
         release = "1.0.0",
         platform = "javascript",
@@ -1161,9 +1167,9 @@ class EventRoutesExtendedTest {
         message = "Bug report",
         contactEmail = "user@test.com",
         name = "Test User",
-        url = "https://example.com",
+        url = URL_EXAMPLE_COM,
         status = "new",
-        timestamp = "2026-01-01T00:00:00Z",
+        timestamp = TIMESTAMP_2026_01_01,
         environment = "production",
         release = "1.0.0",
         platform = "javascript",
@@ -1177,7 +1183,7 @@ class EventRoutesExtendedTest {
 
     private fun sampleRelease() = ReleaseListResponse(
         version = "1.0.0",
-        firstSeen = "2026-01-01T00:00:00Z",
+        firstSeen = TIMESTAMP_2026_01_01,
         lastSeen = "2026-01-02T00:00:00Z",
         eventCount = 100,
         newIssueCount = 5,
@@ -1187,7 +1193,7 @@ class EventRoutesExtendedTest {
 
     private fun sampleReleaseStats() = ReleaseDetailStats(
         version = "1.0.0",
-        firstSeen = "2026-01-01T00:00:00Z",
+        firstSeen = TIMESTAMP_2026_01_01,
         lastSeen = "2026-01-02T00:00:00Z",
         totalEvents = 100,
         newIssues = 5,
@@ -1195,7 +1201,7 @@ class EventRoutesExtendedTest {
         crashFreeSessionRate = 0.98,
         crashFreeUserRate = 0.99,
         userCount = 50,
-        eventsTimeline = listOf(TimelinePoint("2026-01-01T00:00:00Z", 100)),
+        eventsTimeline = listOf(TimelinePoint(TIMESTAMP_2026_01_01, 100)),
         eventsByLevel = mapOf("error" to 80L, "warning" to 20L),
         topIssues = listOf(TopIssue("issue-1", "NPE", 50))
     )

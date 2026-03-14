@@ -449,7 +449,7 @@ class SyntheticsRoutesExtendedTest {
                 withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
-            assertTrue(r.bodyAsText().contains("My API Test"))
+            assertTrue(r.bodyAsText().contains(MY_API_TEST))
         }
 
     @Test
@@ -465,7 +465,7 @@ class SyntheticsRoutesExtendedTest {
                 withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
-            assertTrue(r.bodyAsText().contains("My API Test"))
+            assertTrue(r.bodyAsText().contains(MY_API_TEST))
         }
 
     @Test
@@ -494,12 +494,12 @@ class SyntheticsRoutesExtendedTest {
                 withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(
-                    """{"name":"My API Test","testType":"api",""" +
+                    """{"name":"$MY_API_TEST","testType":"api",""" +
                         """"url":"https://example.com"}"""
                 )
             }
             assertEquals(HttpStatusCode.Created, r.status)
-            assertTrue(r.bodyAsText().contains("My API Test"))
+            assertTrue(r.bodyAsText().contains(MY_API_TEST))
         }
 
     @Test
