@@ -55,11 +55,11 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.TestDatabaseHelper
 
 class UptimeRoutesMockTest {
     companion object {
-        private const val JWT_SECRET = "uptime-mock-secret"
         private var dbInitialized = false
     }
 
@@ -84,7 +84,7 @@ class UptimeRoutesMockTest {
         install(Authentication) {
             jwt("auth-jwt") {
                 verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
+                    JWT.require(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
                         .withIssuer("moneat").withAudience("moneat-users").build()
                 )
                 validate { JWTPrincipal(it.payload) }
@@ -94,7 +94,7 @@ class UptimeRoutesMockTest {
 
     private fun token(userId: Int): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
-            .withClaim("userId", userId).sign(Algorithm.HMAC256(JWT_SECRET))
+            .withClaim("userId", userId).sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUser(): Int =
         transaction {

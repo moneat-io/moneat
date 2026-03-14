@@ -59,6 +59,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
@@ -67,7 +68,6 @@ import org.junit.jupiter.api.BeforeAll
 
 class StatusPageRoutesTest {
     companion object {
-        private const val JWT_SECRET = "status-routes-secret"
         private var dbInitialized = false
 
         @JvmStatic
@@ -105,7 +105,7 @@ class StatusPageRoutesTest {
         install(Authentication) {
             jwt("auth-jwt") {
                 verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
+                    JWT.require(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
                         .withIssuer("moneat").withAudience("moneat-users").build()
                 )
                 validate { JWTPrincipal(it.payload) }
@@ -117,7 +117,7 @@ class StatusPageRoutesTest {
         JWT.create()
             .withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", userId)
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+            .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUser(): Int =
         transaction {

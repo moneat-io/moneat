@@ -69,3 +69,24 @@ fun defaultEmptyClickHouseHandler(): (HttpExchange) -> Unit = { exchange ->
     }
     exchange.respond(200, body, "text/plain")
 }
+
+/**
+ * Builds a ClickHouse mock handler that responds based on query content.
+ * Rules are checked in order; first matching substring wins.
+ *
+ * @param rules Pairs of (query substring to match, response body)
+ * @param defaultBody Response when no rule matches
+ * @param contentType Content-Type header value
+ * @param captureQueries If non-null, appends each query before handling
+ */
+fun queryBasedClickHouseHandler(
+    vararg rules: Pair<String, String>,
+    defaultBody: String = "",
+    contentType: String = "text/plain",
+    captureQueries: MutableList<String>? = null
+): (HttpExchange) -> Unit = { exchange ->
+    val query = exchange.requestBodyText()
+    captureQueries?.add(query)
+    val body = rules.firstOrNull { query.contains(it.first) }?.second ?: defaultBody
+    exchange.respond(200, body, contentType)
+}

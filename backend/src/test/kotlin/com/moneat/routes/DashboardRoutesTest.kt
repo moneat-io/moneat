@@ -16,8 +16,6 @@
 
 package com.moneat.routes
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.DashboardAlertResponse
 import com.moneat.dashboards.models.DashboardResponse
@@ -38,25 +36,20 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import com.moneat.shared.services.RetentionPolicyService
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installJwtAuth
+import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
@@ -73,7 +66,6 @@ import kotlin.test.assertTrue
 
 class DashboardRoutesTest {
     companion object {
-        private const val JWT_SECRET = "dashboard-mock-secret"
         private const val TEST_DASHBOARD = "Test Dashboard"
         private const val DEFAULT_TIMESTAMP = "2024-01-01T00:00:00"
         private const val TEST_DS = "Test DS"
@@ -123,26 +115,11 @@ class DashboardRoutesTest {
     }
 
     private fun Application.installAuth() {
-        install(ContentNegotiation) { json() }
-        install(Authentication) {
-            jwt("auth-jwt") {
-                verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
-                        .withIssuer("moneat")
-                        .withAudience("moneat-users")
-                        .build()
-                )
-                validate { JWTPrincipal(it.payload) }
-            }
-        }
+        installJwtAuth()
     }
 
     private fun token(userId: Int): String =
-        JWT.create()
-            .withIssuer("moneat")
-            .withAudience("moneat-users")
-            .withClaim("userId", userId)
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+        RouteTestSupport.createToken(userId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -264,7 +241,7 @@ class DashboardRoutesTest {
             val userId = seedUser()
             application { installRoutes(this) }
             val r = client.get(DASHBOARDS_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
@@ -284,10 +261,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(DASHBOARDS_PATH) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains(TEST_DASHBOARD))
@@ -306,10 +280,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.post(DASHBOARDS_PATH) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"New Dash"}""")
             }
@@ -328,10 +299,7 @@ class DashboardRoutesTest {
         application { installRoutes(this) }
 
         val r = client.get(DASHBOARDS_1) {
-            header(
-                HttpHeaders.Authorization,
-                "Bearer ${token(userId)}"
-            )
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         assertTrue(r.bodyAsText().contains(TEST_DASHBOARD))
@@ -344,10 +312,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get("/v1/dashboards/abc") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -364,10 +329,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(DASHBOARDS_99) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -385,10 +347,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put(DASHBOARDS_1) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"Updated"}""")
             }
@@ -407,10 +366,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put(DASHBOARDS_99) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"X"}""")
             }
@@ -429,10 +385,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete("/v1/dashboards/1") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)
         }
@@ -449,10 +402,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete(DASHBOARDS_99) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -470,10 +420,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get("/v1/dashboards/folders") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("Test Folder"))
@@ -492,10 +439,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.post("/v1/dashboards/folders") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"New Folder"}""")
             }
@@ -515,10 +459,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put("/v1/dashboards/folders/1") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Renamed"}""")
             }
@@ -537,10 +478,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put("/v1/dashboards/folders/99") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_X)
             }
@@ -554,10 +492,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put("/v1/dashboards/folders/abc") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_X)
             }
@@ -576,10 +511,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete("/v1/dashboards/folders/1") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)
         }
@@ -596,10 +528,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete("/v1/dashboards/folders/99") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -617,10 +546,7 @@ class DashboardRoutesTest {
         application { installRoutes(this) }
 
         val r = client.post("/v1/dashboards/1/favorite") {
-            header(
-                HttpHeaders.Authorization,
-                "Bearer ${token(userId)}"
-            )
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         assertTrue(r.bodyAsText().contains("is_favorited"))
@@ -638,10 +564,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put("/v1/dashboards/1/folder") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"folder_id":2}""")
             }
@@ -660,10 +583,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put("/v1/dashboards/99/folder") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"folder_id":2}""")
             }
@@ -679,10 +599,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.post("/v1/dashboards/abc/query") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"queryConfig":{}}""")
             }
@@ -697,10 +614,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.post("/v1/dashboards/abc/query/batch") {
-                    header(
-                        HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
-                    )
+                    withAuth(token(userId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"queries":[]}""")
                 }
@@ -716,10 +630,7 @@ class DashboardRoutesTest {
             val r = client.post(
                 "/v1/dashboards/abc/variables/resolve"
             ) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("{}")
             }
@@ -735,10 +646,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.post("/v1/dashboards/import") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(
                     """{"format":"datadog","json":"not-json"}"""
@@ -754,10 +662,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.post("/v1/dashboards/import") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(
                     """{"format":"unknown","json":"{}"}"""
@@ -781,10 +686,7 @@ class DashboardRoutesTest {
             val r = client.get(
                 "/v1/dashboards/1/export/moneat"
             ) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
         }
@@ -803,10 +705,7 @@ class DashboardRoutesTest {
             val r = client.get(
                 "/v1/dashboards/99/export/moneat"
             ) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -826,10 +725,7 @@ class DashboardRoutesTest {
             val r = client.get(
                 "/v1/dashboards/1/export/xml"
             ) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -843,10 +739,7 @@ class DashboardRoutesTest {
             val r = client.get(
                 "/v1/dashboards/abc/export/moneat"
             ) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -864,10 +757,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get("/v1/dashboards/1/alerts") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("Test Alert"))
@@ -891,10 +781,7 @@ class DashboardRoutesTest {
                  "duration_seconds":60}
             """.trimIndent()
             val r = client.post("/v1/dashboards/1/alerts") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
@@ -915,10 +802,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.put("/v1/dashboards/1/alerts/1") {
-                    header(
-                        HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
-                    )
+                    withAuth(token(userId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":false}""")
                 }
@@ -938,10 +822,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.put("/v1/dashboards/1/alerts/99") {
-                    header(
-                        HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
-                    )
+                    withAuth(token(userId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":false}""")
                 }
@@ -961,10 +842,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.delete("/v1/dashboards/1/alerts/1") {
-                    header(
-                        HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
-                    )
+                    withAuth(token(userId))
                 }
             assertEquals(HttpStatusCode.NoContent, r.status)
         }
@@ -982,10 +860,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.delete("/v1/dashboards/1/alerts/99") {
-                    header(
-                        HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
-                    )
+                    withAuth(token(userId))
                 }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -998,10 +873,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.get("/v1/dashboards/abc/alerts") {
-                    header(
-                        HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
-                    )
+                    withAuth(token(userId))
                 }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -1024,10 +896,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.get("/v1/dashboards/datasources") {
-                    header(
-                        HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
-                    )
+                    withAuth(token(userId))
                 }
             assertEquals(HttpStatusCode.OK, r.status)
         }
@@ -1043,10 +912,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.get("/v1/dashboards/templates") {
-                    header(
-                        HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
-                    )
+                    withAuth(token(userId))
                 }
             assertEquals(HttpStatusCode.OK, r.status)
         }
@@ -1069,10 +935,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get("/v1/search?q=test") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
         }
@@ -1092,10 +955,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get("/v1/datasources") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains(TEST_DS))
@@ -1118,10 +978,7 @@ class DashboardRoutesTest {
                  "host":"localhost","port":5432}
             """.trimIndent()
             val r = client.post("/v1/datasources") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
@@ -1147,10 +1004,7 @@ class DashboardRoutesTest {
                  "username":"u","password":"p"}
             """.trimIndent()
             val r = client.post("/v1/datasources/test") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
@@ -1171,10 +1025,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(DATASOURCES_1) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains(TEST_DS))
@@ -1192,10 +1043,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(DATASOURCES_99) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -1213,10 +1061,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put(DATASOURCES_1) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Updated DS"}""")
             }
@@ -1235,10 +1080,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put(DATASOURCES_99) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_X)
             }
@@ -1257,10 +1099,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete("/v1/datasources/1") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)
         }
@@ -1277,10 +1116,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete(DATASOURCES_99) {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -1292,10 +1128,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get("/v1/datasources/abc") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${token(userId)}"
-                )
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }

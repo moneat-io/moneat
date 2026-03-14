@@ -18,6 +18,9 @@ package com.moneat.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installJwtAuth
+import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.analytics.models.AnalyticsOverviewResponse
 import com.moneat.analytics.models.BreakdownResponse
 import com.moneat.analytics.models.BreakdownRow
@@ -38,13 +41,7 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
@@ -62,7 +59,6 @@ import kotlin.test.assertTrue
 
 class AnalyticsRoutesTest {
     companion object {
-        private const val JWT_SECRET = "analytics-mock-secret"
         private const val PROJECT_ID = 1L
         private const val OVERVIEW_PERIOD_30D = "/overview?period=30d"
         private var db: Database? = null
@@ -91,26 +87,10 @@ class AnalyticsRoutesTest {
     }
 
     private fun Application.installAuth() {
-        install(ContentNegotiation) { json() }
-        install(Authentication) {
-            jwt("auth-jwt") {
-                verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
-                        .withIssuer("moneat")
-                        .withAudience("moneat-users")
-                        .build()
-                )
-                validate { JWTPrincipal(it.payload) }
-            }
-        }
+        installJwtAuth()
     }
 
-    private fun token(userId: Int): String =
-        JWT.create()
-            .withIssuer("moneat")
-            .withAudience("moneat-users")
-            .withClaim("userId", userId)
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+    private fun token(userId: Int): String = RouteTestSupport.createToken(userId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -214,7 +194,7 @@ class AnalyticsRoutesTest {
         stubNoAccess(userId)
         application { installRoutes(this) }
         val r = client.get(authedGet(OVERVIEW_PERIOD_30D)) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, r.status)
     }
@@ -224,7 +204,7 @@ class AnalyticsRoutesTest {
         val userId = seedUser()
         application { installRoutes(this) }
         val r = client.get("/v1/analytics/invalid/overview?period=30d") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.BadRequest, r.status)
     }
@@ -240,7 +220,7 @@ class AnalyticsRoutesTest {
         } returns overviewResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/overview")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         val body = r.bodyAsText()
@@ -257,7 +237,7 @@ class AnalyticsRoutesTest {
         } returns overviewResponse.copy(compVisitors = 80, compPageviews = 200)
         application { installRoutes(this) }
         val r = client.get(authedGet("/overview?period=30d&comparison=previous_period")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         val body = r.bodyAsText()
@@ -270,7 +250,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         application { installRoutes(this) }
         val r = client.get(authedGet("/overview?period=custom")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.BadRequest, r.status)
     }
@@ -286,7 +266,7 @@ class AnalyticsRoutesTest {
         val r = client.get(
             authedGet("/overview?period=custom&date_from=2024-01-01&date_to=2024-01-31")
         ) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -302,7 +282,7 @@ class AnalyticsRoutesTest {
         } returns timeseriesResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/timeseries?period=7d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         val body = r.bodyAsText()
@@ -315,7 +295,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         application { installRoutes(this) }
         val r = client.get(authedGet("/timeseries?period=custom&from=bad")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.BadRequest, r.status)
     }
@@ -331,7 +311,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/pages?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         assertTrue(r.bodyAsText().contains("\"results\""))
@@ -346,7 +326,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/pages?period=30d&limit=10")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         coVerify(exactly = 1) {
@@ -365,7 +345,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/entry-pages?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -381,7 +361,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/exit-pages?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -399,7 +379,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/sources?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -417,7 +397,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/utm/source?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -433,7 +413,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/utm/medium?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -449,7 +429,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/utm/campaign?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -467,7 +447,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/locations?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -485,7 +465,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/devices?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -501,7 +481,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/devices?period=30d&type=browser")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -517,7 +497,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/devices?period=30d&type=os")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -533,7 +513,7 @@ class AnalyticsRoutesTest {
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/events?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -547,7 +527,7 @@ class AnalyticsRoutesTest {
         every { mockAnalyticsService.getRealtime(PROJECT_ID) } returns realtimeResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/realtime")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         assertTrue(r.bodyAsText().contains("\"visitors\""))
@@ -564,7 +544,7 @@ class AnalyticsRoutesTest {
         } returns funnelResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/funnel?period=30d&steps=/home&steps=/signup")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         val body = r.bodyAsText()
@@ -577,7 +557,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         application { installRoutes(this) }
         val r = client.get(authedGet("/funnel?period=30d&steps=/home")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.BadRequest, r.status)
     }
@@ -588,7 +568,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         application { installRoutes(this) }
         val r = client.get(authedGet("/funnel?period=30d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.BadRequest, r.status)
     }
@@ -604,7 +584,7 @@ class AnalyticsRoutesTest {
         } returns overviewResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/overview?period=today")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -618,7 +598,7 @@ class AnalyticsRoutesTest {
         } returns overviewResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/overview?period=7d")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -632,7 +612,7 @@ class AnalyticsRoutesTest {
         } returns overviewResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/overview?period=6mo")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -646,7 +626,7 @@ class AnalyticsRoutesTest {
         } returns overviewResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/overview?period=12mo")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -660,7 +640,7 @@ class AnalyticsRoutesTest {
         } returns overviewResponse.copy(compVisitors = 90, compPageviews = 210)
         application { installRoutes(this) }
         val r = client.get(authedGet("/overview?period=30d&comparison=year_over_year")) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }
@@ -678,7 +658,7 @@ class AnalyticsRoutesTest {
         val r = client.get(
             authedGet("/pages?period=30d&filters=country_code:is:US&filters=browser:is:Chrome")
         ) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
     }

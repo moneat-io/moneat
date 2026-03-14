@@ -37,6 +37,7 @@ import com.moneat.shared.models.Users
 import com.moneat.shared.services.AttributionAnalyticsResponse
 import com.moneat.shared.services.AttributionAnalyticsService
 import com.moneat.shared.services.AttributionSummary
+import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
@@ -80,7 +81,6 @@ import kotlin.test.assertTrue
 class OrgRoutesFullCoverageTest {
 
     companion object {
-        private const val JWT_SECRET = "org-full-coverage-secret"
         private const val DISCORD_CHANNEL_BODY = """{"channelId":"D456","channelName":"alerts"}"""
     }
 
@@ -134,7 +134,7 @@ class OrgRoutesFullCoverageTest {
         install(Authentication) {
             jwt("auth-jwt") {
                 verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
+                    JWT.require(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
                         .withIssuer("moneat").withAudience("moneat-users").build()
                 )
                 validate { JWTPrincipal(it.payload) }
@@ -148,7 +148,7 @@ class OrgRoutesFullCoverageTest {
         .withClaim("userId", userId)
         .withClaim("orgId", orgId)
         .withClaim("email", "user$userId@test.com")
-        .sign(Algorithm.HMAC256(JWT_SECRET))
+        .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedOrg(name: String): Int = transaction {
         Organizations.insert {

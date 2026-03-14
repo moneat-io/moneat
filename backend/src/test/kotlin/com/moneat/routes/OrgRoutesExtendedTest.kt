@@ -62,7 +62,6 @@ import kotlin.test.assertTrue
 class OrgRoutesExtendedTest {
 
     companion object {
-        private const val JWT_SECRET = "org-extended-test-secret"
         private const val OWNER_EMAIL = "owner@ext.test"
         private const val MEMBER_EMAIL = "member@ext.test"
     }
@@ -81,11 +80,11 @@ class OrgRoutesExtendedTest {
     }
 
     private fun Application.installAuth() {
-        installJwtAuth(JWT_SECRET)
+        installJwtAuth()
     }
 
     private fun token(userId: Int, orgId: Int): String =
-        createToken(JWT_SECRET, userId, orgId)
+        createToken(userId, orgId)
 
     private fun seedOrg(name: String): Int = transaction {
         Organizations.insert {

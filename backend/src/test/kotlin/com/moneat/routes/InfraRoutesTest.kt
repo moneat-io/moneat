@@ -16,13 +16,14 @@
 
 package com.moneat.routes
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.config.ClickHouseClient
 import com.moneat.monitor.routes.infraRoutes
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installJwtAuth
+import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -30,13 +31,7 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
@@ -58,7 +53,6 @@ import kotlin.test.assertTrue
 
 class InfraRoutesTest {
     companion object {
-        private const val JWT_SECRET = "infra-mock-secret"
         private const val INFRA_EVENTS_PATH = "/v1/infra/events"
     }
 
@@ -83,26 +77,10 @@ class InfraRoutesTest {
     }
 
     private fun Application.installAuth() {
-        install(ContentNegotiation) { json() }
-        install(Authentication) {
-            jwt("auth-jwt") {
-                verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
-                        .withIssuer("moneat")
-                        .withAudience("moneat-users")
-                        .build()
-                )
-                validate { JWTPrincipal(it.payload) }
-            }
-        }
+        installJwtAuth()
     }
 
-    private fun token(userId: Int): String =
-        JWT.create()
-            .withIssuer("moneat")
-            .withAudience("moneat-users")
-            .withClaim("userId", userId)
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+    private fun token(userId: Int): String = RouteTestSupport.createToken(userId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -174,7 +152,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get(INFRA_EVENTS_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"events\":[]"))
@@ -193,7 +171,7 @@ class InfraRoutesTest {
         }
 
         val response = client.get(INFRA_EVENTS_PATH) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("web-01"))
@@ -211,7 +189,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get(INFRA_EVENTS_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"events\":[]"))
@@ -233,7 +211,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/service-checks") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("http_check"))
@@ -250,7 +228,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/service-checks") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(
@@ -272,7 +250,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/processes") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("nginx"))
@@ -289,7 +267,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/processes") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"processes\":[]"))
@@ -311,7 +289,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/containers") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("redis"))
@@ -328,7 +306,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/containers") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"containers\":[]"))
@@ -350,7 +328,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/connections") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("web-01"))
@@ -367,7 +345,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/connections") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(
@@ -391,7 +369,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/k8s-resources") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("api-server"))
@@ -408,7 +386,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/k8s-resources") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(
@@ -432,7 +410,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/dbm/queries") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("SELECT 1"))
@@ -449,7 +427,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/dbm/queries") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"queries\":[]"))
@@ -471,7 +449,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/debugger/logs") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("probe-1"))
@@ -488,7 +466,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/debugger/logs") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"logs\":[]"))
@@ -558,7 +536,7 @@ class InfraRoutesTest {
         }
 
         val response = client.get("/v1/infra/sbom") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("openssl"))
@@ -575,7 +553,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/sbom") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(
@@ -599,7 +577,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("10.0.0.1"))
@@ -616,7 +594,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"devices\":[]"))
@@ -638,7 +616,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/flows") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("10.0.0.1"))
@@ -655,7 +633,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/flows") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"flows\":[]"))
@@ -677,7 +655,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/traps") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("10.0.0.5"))
@@ -694,7 +672,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/traps") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"traps\":[]"))
@@ -716,7 +694,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/paths") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("8.8.8.8"))
@@ -733,7 +711,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/paths") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"paths\":[]"))

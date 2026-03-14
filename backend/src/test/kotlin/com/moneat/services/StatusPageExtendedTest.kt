@@ -36,6 +36,7 @@ import com.moneat.statuspage.models.UpdateIncidentRequest
 import com.moneat.statuspage.models.UpdateStatusPageRequest
 import com.moneat.statuspage.routes.statusPageRoutes
 import com.moneat.statuspage.services.StatusPageService
+import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
@@ -81,7 +82,6 @@ class StatusPageExtendedTest {
     private var orgId: Int = 0
 
     companion object {
-        private const val JWT_SECRET = "status-ext-test-secret"
         private var db: Database? = null
 
         @JvmStatic
@@ -124,7 +124,7 @@ class StatusPageExtendedTest {
         install(Authentication) {
             jwt("auth-jwt") {
                 verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
+                    JWT.require(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
                         .withIssuer("moneat").withAudience("moneat-users").build()
                 )
                 validate { JWTPrincipal(it.payload) }
@@ -136,7 +136,7 @@ class StatusPageExtendedTest {
         JWT.create()
             .withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", userId)
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+            .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUser(): Int =
         transaction {

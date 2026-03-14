@@ -35,25 +35,21 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installJwtAuth
+import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.patch
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
@@ -77,7 +73,6 @@ import kotlin.time.Duration.Companion.seconds
 
 class EventApiRoutesTest {
     companion object {
-        private const val JWT_SECRET = "event-api-test-secret"
         private var db: Database? = null
         private const val DEFAULT_PAGE = 1
         private const val DEFAULT_LIMIT = 25
@@ -108,16 +103,7 @@ class EventApiRoutesTest {
     }
 
     private fun Application.installTestApp() {
-        install(ContentNegotiation) { json() }
-        install(Authentication) {
-            jwt("auth-jwt") {
-                verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
-                        .withIssuer("moneat").withAudience("moneat-users").build()
-                )
-                validate { JWTPrincipal(it.payload) }
-            }
-        }
+        installJwtAuth()
         install(RateLimit) {
             register(RateLimitName("api")) {
                 requestKey { "test-user" }
@@ -128,17 +114,14 @@ class EventApiRoutesTest {
     }
 
     private fun token(userId: Int): String =
-        JWT.create().withIssuer("moneat").withAudience("moneat-users")
-            .withClaim("userId", userId)
-            .withClaim("email", "user$userId@test.com")
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+        RouteTestSupport.createToken(userId)
 
     private fun demoToken(): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", -1)
             .withClaim("email", "demo@moneat.dev")
             .withClaim("isDemo", true)
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+            .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUserWithProject(): Pair<Int, Long> {
         val orgId = transaction {
@@ -203,7 +186,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$SENTINEL_PROJECT_ID/issues") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -215,7 +198,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/issues/issue-no-access") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -227,7 +210,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/transactions/txn-no-access") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -244,7 +227,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/issues") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issue-1"))
@@ -260,7 +243,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/issues?page=3&limit=10&status=resolved") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         coVerify { mockDashboardService.getIssues(projectId, 3, 10, "resolved", any()) }
@@ -272,7 +255,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/not-a-number/issues") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
@@ -289,7 +272,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/issues/issue-detail-1") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("NullPointerException"))
@@ -303,7 +286,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/issues/missing") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -320,7 +303,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/issues/issue-ev-1/events") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("evt-1"))
@@ -336,7 +319,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/issues/issue-ev-2/events?limit=5") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         coVerify { mockDashboardService.getIssueEvents("issue-ev-2", 5, any()) }
@@ -354,7 +337,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/issues/issue-txn-1/transactions") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("GET /api/users"))
@@ -370,7 +353,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/issues/issue-txn-2/transactions?limit=5") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         coVerify { mockDashboardService.getIssueTransactions("issue-txn-2", 5, any()) }
@@ -388,7 +371,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/transactions") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("GET /api/users"))
@@ -405,7 +388,7 @@ class EventApiRoutesTest {
         application { installTestApp() }
         val url = "/v1/projects/$projectId/transactions?period=30d&environment=production&operation=http.server"
         val response = client.get(url) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         coVerify {
@@ -425,7 +408,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/transactions/stats") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("apdex"))
@@ -442,7 +425,7 @@ class EventApiRoutesTest {
         application { installTestApp() }
         val url = "/v1/projects/$projectId/transactions/stats?period=24h&environment=staging&operation=db.query"
         val response = client.get(url) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         coVerify {
@@ -462,7 +445,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/transactions/txn-detail-1") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("txn-detail-1"))
@@ -476,7 +459,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/transactions/txn-missing") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -493,7 +476,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/transactions/txn-span-1/spans") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("db.query"))
@@ -507,7 +490,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/transactions/txn-span-missing/spans") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -524,7 +507,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/transactions/txn-rel-1/related-errors") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("evt-1"))
@@ -540,7 +523,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/transactions/txn-rel-2/related-errors?limit=5") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         coVerify { mockDashboardService.getRelatedErrorsForTransaction("txn-rel-2", 5) }
@@ -557,7 +540,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/events/evt-lookup-1/issue") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issue-found-1"))
@@ -571,7 +554,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/events/evt-no-access/issue") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -585,7 +568,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/events/evt-no-issue/issue") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -599,7 +582,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.patch("/v1/issues/issue-patch-1") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"status":"resolved"}""")
         }
@@ -613,7 +596,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.patch("/v1/issues/issue-patch-no") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"status":"resolved"}""")
         }
@@ -630,7 +613,7 @@ class EventApiRoutesTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/1/issues") {
-            header(HttpHeaders.Authorization, "Bearer ${demoToken()}")
+            withAuth(demoToken())
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }

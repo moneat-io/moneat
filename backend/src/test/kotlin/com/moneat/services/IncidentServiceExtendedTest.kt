@@ -27,12 +27,11 @@ import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
 import com.moneat.incident.models.IncidentSeverity
 import com.moneat.incident.models.IncidentStatus
-import com.moneat.incident.services.IncidentProvider
-import com.moneat.incident.services.IncidentProviderRegistry
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.EscalationPolicyAlertSources
 import com.moneat.shared.models.Organizations
+import com.moneat.testsupport.IncidentTestHelper
 import com.moneat.testsupport.TestDatabaseHelper
 import io.mockk.coEvery
 import io.mockk.every
@@ -139,18 +138,14 @@ class IncidentServiceExtendedTest {
 
     @Test
     fun `fireAlert dispatches to registered provider and logs success`() = runBlocking {
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.sendAlert(any(), any()) } returns Result.success("inc-123")
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            sendAlertResult = Result.success("inc-123")
+        )
 
         service.fireAlert(makeEvent())
 
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
         assertEquals("inc-123", logs[0][IncidentEventLog.providerIncidentId])
@@ -159,18 +154,14 @@ class IncidentServiceExtendedTest {
 
     @Test
     fun `fireAlert logs failure when provider returns error`() = runBlocking {
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.sendAlert(any(), any()) } returns Result.failure(Exception("API down"))
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            sendAlertResult = Result.failure(Exception("API down"))
+        )
 
         service.fireAlert(makeEvent())
 
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertEquals(false, logs[0][IncidentEventLog.success])
         assertEquals("API down", logs[0][IncidentEventLog.errorMessage])
@@ -178,18 +169,14 @@ class IncidentServiceExtendedTest {
 
     @Test
     fun `fireAlert logs failure when provider throws exception`() = runBlocking {
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.sendAlert(any(), any()) } throws RuntimeException("Connection timeout")
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            sendAlertThrows = RuntimeException("Connection timeout")
+        )
 
         service.fireAlert(makeEvent())
 
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertEquals(false, logs[0][IncidentEventLog.success])
         assertEquals("Connection timeout", logs[0][IncidentEventLog.errorMessage])
@@ -197,24 +184,16 @@ class IncidentServiceExtendedTest {
 
     @Test
     fun `fireAlert skips when no routing rule matches source`() = runBlocking {
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(testProviderType)
 
         // HOST_DOWN has no routing rule configured
         service.fireAlert(makeEvent(source = AlertSource.HOST_DOWN))
 
-        val count = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .count()
-        }
-        assertEquals(0L, count)
+        assertEquals(0L, IncidentTestHelper.getEventLogCount(orgId))
     }
 
     @Test
     fun `fireAlert skips when no enabled providers exist`() = runBlocking {
-        // Create an org with no provider configs
         val emptyOrgId = transaction {
             Organizations.insert {
                 it[name] = "Empty Org"
@@ -224,12 +203,7 @@ class IncidentServiceExtendedTest {
 
         service.fireAlert(makeEvent().copy(organizationId = emptyOrgId))
 
-        val count = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq emptyOrgId }
-                .count()
-        }
-        assertEquals(0L, count)
+        assertEquals(0L, IncidentTestHelper.getEventLogCount(emptyOrgId))
     }
 
     @Test
@@ -258,11 +232,10 @@ class IncidentServiceExtendedTest {
             }
         }
 
-        // Register a real provider for the known type to avoid double-logging
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.sendAlert(any(), any()) } returns Result.success("ok")
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            sendAlertResult = Result.success("ok")
+        )
 
         service.fireAlert(makeEvent())
 
@@ -280,18 +253,14 @@ class IncidentServiceExtendedTest {
 
     @Test
     fun `resolveAlert dispatches to registered provider and logs success`() = runBlocking {
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.resolveAlert(any(), any()) } returns Result.success("resolved-1")
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            resolveAlertResult = Result.success("resolved-1")
+        )
 
         service.resolveAlert(orgId, AlertSource.UPTIME_MONITOR, "dedup-1")
 
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
         assertEquals(IncidentStatus.RESOLVED.name, logs[0][IncidentEventLog.incidentStatus])
@@ -301,18 +270,14 @@ class IncidentServiceExtendedTest {
 
     @Test
     fun `resolveAlert logs failure when provider returns error`() = runBlocking {
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.resolveAlert(any(), any()) } returns Result.failure(Exception("Resolve failed"))
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            resolveAlertResult = Result.failure(Exception("Resolve failed"))
+        )
 
         service.resolveAlert(orgId, AlertSource.UPTIME_MONITOR, "dedup-2")
 
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertEquals(false, logs[0][IncidentEventLog.success])
         assertEquals("Resolve failed", logs[0][IncidentEventLog.errorMessage])
@@ -320,18 +285,14 @@ class IncidentServiceExtendedTest {
 
     @Test
     fun `resolveAlert logs failure when provider throws exception`() = runBlocking {
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.resolveAlert(any(), any()) } throws RuntimeException("Network error")
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            resolveAlertThrows = RuntimeException("Network error")
+        )
 
         service.resolveAlert(orgId, AlertSource.UPTIME_MONITOR, "dedup-3")
 
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertEquals(false, logs[0][IncidentEventLog.success])
         assertEquals("Network error", logs[0][IncidentEventLog.errorMessage])
@@ -339,18 +300,11 @@ class IncidentServiceExtendedTest {
 
     @Test
     fun `resolveAlert skips when no routing rule matches source`() = runBlocking {
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(testProviderType)
 
         service.resolveAlert(orgId, AlertSource.ERROR_ALERT, "dedup-4")
 
-        val count = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .count()
-        }
-        assertEquals(0L, count)
+        assertEquals(0L, IncidentTestHelper.getEventLogCount(orgId))
     }
 
     @Test
@@ -364,12 +318,7 @@ class IncidentServiceExtendedTest {
 
         service.resolveAlert(emptyOrgId, AlertSource.UPTIME_MONITOR, "dedup-5")
 
-        val count = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq emptyOrgId }
-                .count()
-        }
-        assertEquals(0L, count)
+        assertEquals(0L, IncidentTestHelper.getEventLogCount(emptyOrgId))
     }
 
     // ==================== resolveIncidentSeverity edge cases ====================
@@ -447,20 +396,14 @@ class IncidentServiceExtendedTest {
             }
         }
 
-        // Also register the test provider so the rest of fireAlert works
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.sendAlert(any(), any()) } returns Result.success("inc-esc")
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            sendAlertResult = Result.success("inc-esc")
+        )
 
         service.fireAlert(makeEvent())
 
-        // Verify the event log was written (provider dispatch still happened)
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertTrue(logs.isNotEmpty())
         assertTrue(logs[0][IncidentEventLog.success])
 
@@ -474,19 +417,14 @@ class IncidentServiceExtendedTest {
         mockkObject(FeatureRegistry)
         every { FeatureRegistry.getOnCallBridge() } returns null
 
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.sendAlert(any(), any()) } returns Result.success("ok")
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            sendAlertResult = Result.success("ok")
+        )
 
         service.fireAlert(makeEvent())
 
-        // Alert dispatch should still succeed
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
 
@@ -501,20 +439,14 @@ class IncidentServiceExtendedTest {
         mockkObject(FeatureRegistry)
         every { FeatureRegistry.getOnCallBridge() } returns bridge
 
-        // No escalation policies inserted - should skip
-
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.sendAlert(any(), any()) } returns Result.success("ok")
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            sendAlertResult = Result.success("ok")
+        )
 
         service.fireAlert(makeEvent())
 
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
 
@@ -541,19 +473,14 @@ class IncidentServiceExtendedTest {
             }
         }
 
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.sendAlert(any(), any()) } returns Result.success("ok")
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            sendAlertResult = Result.success("ok")
+        )
 
         service.fireAlert(makeEvent())
 
-        // Alert dispatch should still succeed even though escalation was deferred
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
 
@@ -596,22 +523,17 @@ class IncidentServiceExtendedTest {
 
         service.fireAlert(makeEvent().copy(organizationId = disabledOrgId))
 
-        val count = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq disabledOrgId }
-                .count()
-        }
-        assertEquals(0L, count)
+        assertEquals(0L, IncidentTestHelper.getEventLogCount(disabledOrgId))
     }
 
     // ==================== event metadata in logs ====================
 
     @Test
     fun `fireAlert preserves event metadata in log entry`() = runBlocking {
-        val provider = mockk<IncidentProvider>()
-        every { provider.providerType } returns testProviderType
-        coEvery { provider.sendAlert(any(), any()) } returns Result.success("meta-1")
-        IncidentProviderRegistry.register(provider)
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            sendAlertResult = Result.success("meta-1")
+        )
 
         val eventWithMeta = IncidentEvent(
             title = "Metadata Alert",
@@ -629,11 +551,7 @@ class IncidentServiceExtendedTest {
 
         service.fireAlert(eventWithMeta)
 
-        val logs = transaction {
-            IncidentEventLog.selectAll()
-                .where { IncidentEventLog.organizationId eq orgId }
-                .toList()
-        }
+        val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         val metadata = logs[0][IncidentEventLog.metadata]
         assertTrue(metadata != null && metadata.contains("db-primary"))

@@ -16,8 +16,6 @@
 
 package com.moneat.routes
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -29,34 +27,28 @@ import com.moneat.synthetics.routes.SyntheticVariableResponse
 import com.moneat.synthetics.routes.SyntheticsService
 import com.moneat.synthetics.routes.UpdateSyntheticTestRequest
 import com.moneat.synthetics.routes.syntheticsRoutes
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installJwtAuth
+import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -71,7 +63,6 @@ import kotlin.test.assertTrue
 
 class SyntheticsRoutesExtendedTest {
     companion object {
-        private const val JWT_SECRET = "synth-routes-test-secret"
         private var db: Database? = null
         private const val TEST_UUID = "11111111-1111-1111-1111-111111111111"
         private const val MY_API_TEST = "My API Test"
@@ -112,37 +103,12 @@ class SyntheticsRoutesExtendedTest {
     }
 
     private fun Application.installTestApp() {
-        install(ContentNegotiation) {
-            json(
-                Json {
-                    prettyPrint = true
-                    isLenient = true
-                    ignoreUnknownKeys = true
-                    encodeDefaults = true
-                    coerceInputValues = true
-                }
-            )
-        }
-        install(Authentication) {
-            jwt("auth-jwt") {
-                verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
-                        .withIssuer("moneat")
-                        .withAudience("moneat-users")
-                        .build()
-                )
-                validate { JWTPrincipal(it.payload) }
-            }
-        }
+        installJwtAuth()
         routing { syntheticsRoutes() }
     }
 
     private fun token(userId: Int): String =
-        JWT.create()
-            .withIssuer("moneat")
-            .withAudience("moneat-users")
-            .withClaim("userId", userId)
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+        RouteTestSupport.createToken(userId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -252,7 +218,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.get(SYNTHETICS_TESTS_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
@@ -263,7 +229,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.get("/v1/synthetics/tests/$TEST_UUID") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
@@ -274,7 +240,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.post(SYNTHETICS_TESTS_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"test"}""")
             }
@@ -287,7 +253,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.put("/v1/synthetics/tests/$TEST_UUID") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"updated"}""")
             }
@@ -300,7 +266,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.delete("/v1/synthetics/tests/$TEST_UUID") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
@@ -311,7 +277,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.post("/v1/synthetics/tests/$TEST_UUID/run") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
@@ -322,7 +288,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.get("/v1/synthetics/tests/$TEST_UUID/summary") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
@@ -333,7 +299,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.get(SYNTHETICS_VARIABLES_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
@@ -344,7 +310,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.post(SYNTHETICS_VARIABLES_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_VAR_VALUE)
             }
@@ -357,7 +323,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.put(SYNTHETICS_VARIABLES_1_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_VAR_VALUE)
             }
@@ -370,7 +336,7 @@ class SyntheticsRoutesExtendedTest {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.delete(SYNTHETICS_VARIABLES_1_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
@@ -383,7 +349,7 @@ class SyntheticsRoutesExtendedTest {
             val (userId, _) = seedUserAndOrg()
             application { installTestApp() }
             val r = client.get("/v1/synthetics/tests/not-a-uuid") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -394,7 +360,7 @@ class SyntheticsRoutesExtendedTest {
             val (userId, _) = seedUserAndOrg()
             application { installTestApp() }
             val r = client.put("/v1/synthetics/tests/bad-id") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"updated"}""")
             }
@@ -407,7 +373,7 @@ class SyntheticsRoutesExtendedTest {
             val (userId, _) = seedUserAndOrg()
             application { installTestApp() }
             val r = client.delete("/v1/synthetics/tests/bad-id") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -418,7 +384,7 @@ class SyntheticsRoutesExtendedTest {
             val (userId, _) = seedUserAndOrg()
             application { installTestApp() }
             val r = client.post("/v1/synthetics/tests/bad-id/run") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -429,7 +395,7 @@ class SyntheticsRoutesExtendedTest {
             val (userId, _) = seedUserAndOrg()
             application { installTestApp() }
             val r = client.get("/v1/synthetics/tests/bad-id/results") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -440,7 +406,7 @@ class SyntheticsRoutesExtendedTest {
             val (userId, _) = seedUserAndOrg()
             application { installTestApp() }
             val r = client.get("/v1/synthetics/tests/bad-id/summary") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -451,7 +417,7 @@ class SyntheticsRoutesExtendedTest {
             val (userId, _) = seedUserAndOrg()
             application { installTestApp() }
             val r = client.put("$SYNTHETICS_VARIABLES_PATH/abc") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_VAR_VALUE)
             }
@@ -464,7 +430,7 @@ class SyntheticsRoutesExtendedTest {
             val (userId, _) = seedUserAndOrg()
             application { installTestApp() }
             val r = client.delete("$SYNTHETICS_VARIABLES_PATH/abc") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -480,7 +446,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.get(SYNTHETICS_TESTS_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("My API Test"))
@@ -496,7 +462,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.get("/v1/synthetics/tests/$TEST_UUID") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("My API Test"))
@@ -510,7 +476,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.get("/v1/synthetics/tests/$TEST_UUID") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -525,7 +491,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.post(SYNTHETICS_TESTS_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(
                     """{"name":"My API Test","testType":"api",""" +
@@ -546,7 +512,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.post(SYNTHETICS_TESTS_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"test","url":"https://example.com"}""")
             }
@@ -566,7 +532,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.put("/v1/synthetics/tests/$TEST_UUID") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Updated Test"}""")
             }
@@ -586,7 +552,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.put("/v1/synthetics/tests/$TEST_UUID") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Updated Test"}""")
             }
@@ -603,7 +569,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.delete("/v1/synthetics/tests/$TEST_UUID") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("true"))
@@ -619,7 +585,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.delete("/v1/synthetics/tests/$TEST_UUID") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -636,7 +602,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.post("/v1/synthetics/tests/$TEST_UUID/run") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Accepted, r.status)
         }
@@ -651,7 +617,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.post("/v1/synthetics/tests/$TEST_UUID/run") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -675,7 +641,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.get("/v1/synthetics/tests/$TEST_UUID/summary") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("99.5"))
@@ -691,7 +657,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.get("/v1/synthetics/tests/$TEST_UUID/summary") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -707,7 +673,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.get(SYNTHETICS_VARIABLES_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("API_KEY"))
@@ -725,7 +691,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.post(SYNTHETICS_VARIABLES_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(
                     """{"name":"API_KEY","value":"test-key-123"}"""
@@ -748,7 +714,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.put(SYNTHETICS_VARIABLES_1_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(
                     """{"name":"API_KEY","value":"updated-key"}"""
@@ -770,7 +736,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.put("$SYNTHETICS_VARIABLES_PATH/99") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_VAR_VALUE)
             }
@@ -787,7 +753,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.delete(SYNTHETICS_VARIABLES_1_PATH) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("true"))
@@ -803,7 +769,7 @@ class SyntheticsRoutesExtendedTest {
             application { installTestApp() }
 
             val r = client.delete("$SYNTHETICS_VARIABLES_PATH/99") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }

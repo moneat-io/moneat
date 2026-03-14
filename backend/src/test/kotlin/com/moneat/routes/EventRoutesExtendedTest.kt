@@ -44,28 +44,24 @@ import com.moneat.shared.models.OnCallPhoneConsentEvents
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installJwtAuth
+import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
@@ -93,7 +89,6 @@ import kotlin.time.Duration.Companion.seconds
 
 class EventRoutesExtendedTest {
     companion object {
-        private const val JWT_SECRET = "extended-test-secret"
         private var db: Database? = null
         private const val TEST_PROJECT_NAME = "Test Project"
         private const val SENTINEL_ID = 999L
@@ -137,27 +132,7 @@ class EventRoutesExtendedTest {
     }
 
     private fun Application.installTestApp() {
-        install(ContentNegotiation) {
-            json(
-                Json {
-                    prettyPrint = true
-                    isLenient = true
-                    ignoreUnknownKeys = true
-                    encodeDefaults = true
-                    classDiscriminator = "#type"
-                    coerceInputValues = true
-                }
-            )
-        }
-        install(Authentication) {
-            jwt("auth-jwt") {
-                verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
-                        .withIssuer("moneat").withAudience("moneat-users").build()
-                )
-                validate { JWTPrincipal(it.payload) }
-            }
-        }
+        installJwtAuth()
         install(RateLimit) {
             register(RateLimitName("api")) {
                 requestKey { "test-user" }
@@ -168,17 +143,14 @@ class EventRoutesExtendedTest {
     }
 
     private fun token(userId: Int): String =
-        JWT.create().withIssuer("moneat").withAudience("moneat-users")
-            .withClaim("userId", userId)
-            .withClaim("email", "user$userId@test.com")
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+        RouteTestSupport.createToken(userId)
 
     private fun demoToken(): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", -1)
             .withClaim("email", "demo@moneat.dev")
             .withClaim("isDemo", true)
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+            .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUserWithProject(): Pair<Int, Long> {
         val orgId = transaction {
@@ -222,7 +194,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains(TEST_PROJECT_NAME))
@@ -246,7 +218,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.post("/v1/projects") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":"New Project"}""")
         }
@@ -263,7 +235,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.post("/v1/projects") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":"New Project"}""")
         }
@@ -280,7 +252,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.post("/v1/projects") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":""}""")
         }
@@ -297,7 +269,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }
@@ -309,7 +281,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$SENTINEL_ID") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -322,7 +294,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -333,7 +305,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/abc") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
@@ -348,7 +320,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.put("/v1/projects/$projectId") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":"Updated Name"}""")
         }
@@ -362,7 +334,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.put("/v1/projects/$SENTINEL_ID") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":"Updated Name"}""")
         }
@@ -379,7 +351,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.delete("/v1/projects/$projectId") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NoContent, response.status)
     }
@@ -391,7 +363,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.delete("/v1/projects/$SENTINEL_ID") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -408,7 +380,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.post("/v1/projects/$projectId/targets") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"target":"flutter"}""")
         }
@@ -426,7 +398,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.post("/v1/projects/$projectId/targets") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"target":"flutter"}""")
         }
@@ -445,7 +417,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/stats") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("totalEvents"))
@@ -458,7 +430,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$SENTINEL_ID/stats") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -473,7 +445,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/stats?period=24h") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         coVerify { mockDashboardService.getProjectStats(projectId, "24h", any(), any()) }
@@ -491,7 +463,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/traces/trace-abc") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("trace-abc"))
@@ -504,7 +476,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/traces/trace-abc") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -517,7 +489,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/traces/missing") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -534,7 +506,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/spans/span-abc") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("db.query"))
@@ -547,7 +519,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/spans/span-abc") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -560,7 +532,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/spans/missing") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -577,7 +549,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/replays") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("replay-1"))
@@ -590,7 +562,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$SENTINEL_ID/replays") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -606,7 +578,7 @@ class EventRoutesExtendedTest {
         application { installTestApp() }
         val url = "/v1/projects/$projectId/replays?page=2&limit=10&environment=production&period=30d"
         val response = client.get(url) {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         coVerify {
@@ -624,7 +596,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/replays/replay-d1") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("replay-d1"))
@@ -637,7 +609,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/replays/replay-no") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -650,7 +622,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/replays/replay-miss") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -665,7 +637,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/replays/replay-rec/recording") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }
@@ -678,7 +650,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/replays/replay-rec-m/recording") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -693,7 +665,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/replays/replay-tl/timeline") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }
@@ -708,7 +680,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/issues/issue-rep-1/replays") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }
@@ -720,7 +692,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/issues/issue-rep-no/replays") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -737,7 +709,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/feedback") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("fb-1"))
@@ -750,7 +722,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$SENTINEL_ID/feedback") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -765,7 +737,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/feedback/fb-d1") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("fb-d1"))
@@ -778,7 +750,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/feedback/fb-no") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -791,7 +763,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/feedback/fb-miss") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -804,7 +776,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.patch("/v1/feedback/fb-patch") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"status":"resolved"}""")
         }
@@ -818,7 +790,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.patch("/v1/feedback/fb-p-no") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"status":"resolved"}""")
         }
@@ -837,7 +809,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/releases") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("1.0.0"))
@@ -850,7 +822,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$SENTINEL_ID/releases") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -865,7 +837,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/releases/1.0.0/stats") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("1.0.0"))
@@ -879,7 +851,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$projectId/releases/9.9.9/stats") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -891,7 +863,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/$SENTINEL_ID/releases/1.0.0/stats") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -904,7 +876,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/user") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("email"))
@@ -925,7 +897,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/notification-preferences") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issueAlerts"))
@@ -958,7 +930,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.put("/v1/notification-preferences/$SENTINEL_ID") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody(ISSUE_ALERTS_FALSE)
         }
@@ -972,7 +944,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.delete("/v1/notification-preferences/$projectId") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NoContent, response.status)
     }
@@ -984,7 +956,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.delete("/v1/notification-preferences/$SENTINEL_ID") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
@@ -1000,7 +972,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/alert-notification-preferences") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("preferences"))
@@ -1016,7 +988,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/1/replays") {
-            header(HttpHeaders.Authorization, "Bearer ${demoToken()}")
+            withAuth(demoToken())
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }
@@ -1029,7 +1001,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/1/feedback") {
-            header(HttpHeaders.Authorization, "Bearer ${demoToken()}")
+            withAuth(demoToken())
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }
@@ -1042,7 +1014,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/1/stats") {
-            header(HttpHeaders.Authorization, "Bearer ${demoToken()}")
+            withAuth(demoToken())
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }
@@ -1055,7 +1027,7 @@ class EventRoutesExtendedTest {
 
         application { installTestApp() }
         val response = client.get("/v1/projects/1/releases") {
-            header(HttpHeaders.Authorization, "Bearer ${demoToken()}")
+            withAuth(demoToken())
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }

@@ -16,8 +16,6 @@
 
 package com.moneat.routes
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.models.DdApiKeys
@@ -56,6 +54,9 @@ import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installJwtAuth
+import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -64,15 +65,11 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.response.respond
 import io.ktor.server.routing.routing
@@ -96,7 +93,6 @@ import kotlin.test.assertTrue
 class DatadogRoutesExtendedTest {
 
     companion object {
-        private const val JWT_SECRET = "JWT_SECRET_PLACEHOLDER"
         private const val TEST_ORG_ID = 1
         private const val TEST_API_KEY = "TEST_API_KEY_PLACEHOLDER"
         private const val DD_API_KEY_HEADER = "DD-API-KEY"
@@ -196,30 +192,14 @@ class DatadogRoutesExtendedTest {
     }
 
     private fun Application.installAuth() {
-        install(ContentNegotiation) { json() }
-        install(Authentication) {
-            jwt("auth-jwt") {
-                verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
-                        .withIssuer("moneat")
-                        .withAudience("moneat-users")
-                        .build()
-                )
-                validate { JWTPrincipal(it.payload) }
-            }
-        }
+        installJwtAuth()
     }
 
     private fun jwtToken(
         userId: Int = 1,
         orgId: Int = TEST_ORG_ID,
     ): String =
-        JWT.create()
-            .withIssuer("moneat")
-            .withAudience("moneat-users")
-            .withClaim("userId", userId)
-            .withClaim("orgId", orgId)
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+        RouteTestSupport.createToken(userId, orgId)
 
     private fun seedUserAndOrg(): Pair<Int, Int> {
         val orgId = transaction {
@@ -363,7 +343,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogHostQueryRoutes() }
         }
         val response = client.get("/v1/hosts") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains(TEST_HOST))
@@ -379,7 +359,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogHostQueryRoutes() }
         }
         val response = client.get("/v1/hosts/42") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains(TEST_HOST))
@@ -394,7 +374,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogHostQueryRoutes() }
         }
         val response = client.get("/v1/hosts/999") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -407,7 +387,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogHostQueryRoutes() }
         }
         val response = client.get("/v1/hosts/abc") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
@@ -421,7 +401,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogHostQueryRoutes() }
         }
         val response = client.delete("/v1/hosts/42") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.NoContent, response.status)
     }
@@ -435,7 +415,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogHostQueryRoutes() }
         }
         val response = client.delete("/v1/hosts/99") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -1147,7 +1127,7 @@ class DatadogRoutesExtendedTest {
             datadogRoutes()
         }
         val response = client.get(AGENT_API_KEYS_PATH) {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("keys"))
@@ -1168,7 +1148,7 @@ class DatadogRoutesExtendedTest {
             datadogRoutes()
         }
         val response = client.post(AGENT_API_KEYS_PATH) {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":"test key"}""")
         }
@@ -1184,7 +1164,7 @@ class DatadogRoutesExtendedTest {
             datadogRoutes()
         }
         val response = client.delete("$AGENT_API_KEYS_PATH/42") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.NoContent, response.status)
     }
@@ -1199,10 +1179,7 @@ class DatadogRoutesExtendedTest {
                 datadogRoutes()
             }
             val response = client.delete("$AGENT_API_KEYS_PATH/999") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${jwtToken(userId, orgId)}"
-                )
+                withAuth(jwtToken(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
@@ -1230,7 +1207,7 @@ class DatadogRoutesExtendedTest {
             routing { traceDashboardRoutes() }
         }
         val response = client.get("/v1/traces/resources") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }
@@ -1246,7 +1223,7 @@ class DatadogRoutesExtendedTest {
             routing { traceDashboardRoutes() }
         }
         val response = client.get("/v1/traces") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }
@@ -1263,10 +1240,7 @@ class DatadogRoutesExtendedTest {
                 routing { traceDashboardRoutes() }
             }
             val response = client.get("/v1/traces/12345") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${jwtToken(userId, orgId)}"
-                )
+                withAuth(jwtToken(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
@@ -1280,10 +1254,7 @@ class DatadogRoutesExtendedTest {
                 routing { traceDashboardRoutes() }
             }
             val response = client.get("/v1/traces/not-a-number") {
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer ${jwtToken(userId, orgId)}"
-                )
+                withAuth(jwtToken(userId, orgId))
             }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
@@ -1299,7 +1270,7 @@ class DatadogRoutesExtendedTest {
             routing { traceDashboardRoutes() }
         }
         val response = client.get("/v1/services/map") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }
@@ -1315,7 +1286,7 @@ class DatadogRoutesExtendedTest {
             routing { traceDashboardRoutes() }
         }
         val response = client.get("/v1/apm-errors") {
-            header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
+            withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
     }

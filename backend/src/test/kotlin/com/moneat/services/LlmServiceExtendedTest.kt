@@ -20,6 +20,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.llm.models.LlmGenerationIngest
 import com.moneat.llm.services.LlmDashboardService
 import com.moneat.llm.services.LlmIngestionWorker
+import com.moneat.testsupport.queryBasedClickHouseHandler
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import com.moneat.testsupport.withClickHouseMockServer
@@ -56,26 +57,11 @@ class LlmServiceExtendedTest {
     @Test
     fun `getGenerations parses list with pagination`() =
         runBlocking {
-            withClickHouseMockServer({ exchange ->
-                val query = exchange.requestBodyText()
-                when {
-                    query.contains("count() as total") -> {
-                        exchange.respond(
-                            200,
-                            """{"total":42}""",
-                            contentType = "text/plain"
-                        )
-                    }
-                    query.contains("ORDER BY timestamp DESC") -> {
-                        exchange.respond(
-                            200,
-                            buildGenerationRow("gen-1", "gpt-4o-mini", "openai"),
-                            contentType = "text/plain"
-                        )
-                    }
-                    else -> exchange.respond(200, "", contentType = "text/plain")
-                }
-            }) { _ ->
+            val handler = queryBasedClickHouseHandler(
+                "count() as total" to """{"total":42}""",
+                "ORDER BY timestamp DESC" to buildGenerationRow("gen-1", "gpt-4o-mini", "openai")
+            )
+            withClickHouseMockServer(handler) { _ ->
                 val result = LlmDashboardService().getGenerations(
                     projectId = 5,
                     range = "24h",
@@ -99,10 +85,12 @@ class LlmServiceExtendedTest {
     fun `getGenerations includes filter clauses in query`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            withClickHouseMockServer({ exchange ->
-                queries += exchange.requestBodyText()
-                exchange.respond(200, """{"total":0}""", contentType = "text/plain")
-            }) { _ ->
+            withClickHouseMockServer(
+                queryBasedClickHouseHandler(
+                    defaultBody = """{"total":0}""",
+                    captureQueries = queries
+                )
+            ) { _ ->
                 LlmDashboardService().getGenerations(
                     projectId = 5,
                     range = "7d",
@@ -125,17 +113,11 @@ class LlmServiceExtendedTest {
     @Test
     fun `getGenerations returns empty list when clickhouse has no data`() =
         runBlocking {
-            withClickHouseMockServer({ exchange ->
-                val query = exchange.requestBodyText()
-                when {
-                    query.contains("count() as total") -> {
-                        exchange.respond(200, """{"total":0}""", contentType = "text/plain")
-                    }
-                    else -> {
-                        exchange.respond(200, "\n", contentType = "text/plain")
-                    }
-                }
-            }) { _ ->
+            val handler = queryBasedClickHouseHandler(
+                "count() as total" to """{"total":0}""",
+                defaultBody = "\n"
+            )
+            withClickHouseMockServer(handler) { _ ->
                 val result = LlmDashboardService().getGenerations(
                     projectId = 5,
                     range = "24h",
@@ -158,10 +140,9 @@ class LlmServiceExtendedTest {
         runBlocking {
             @Suppress("MaximumLineLength")
             val detailJson = """{"generation_id":"gen-99","trace_id":"t1","span_id":"s1","parent_span_id":"ps1","ts":"2026-03-01T12:00:00.000Z","duration_ms":200.0,"name":"summarize","model":"claude-3","provider":"anthropic","type":"chat","input":"hello","output":"world","input_tokens":5,"output_tokens":10,"total_tokens":15,"cost_usd":0.005,"temperature":0.7,"max_tokens":512,"top_p":0.9,"status":"success","error_message":"","status_code":200,"user_id":"user-1","session_id":"sess-1","environment":"production","release":"v2.0","tags":{"env":"prod","team":"ml"},"metadata":"{}"}"""
-            withClickHouseMockServer({ exchange ->
-                exchange.requestBodyText()
-                exchange.respond(200, detailJson, contentType = "text/plain")
-            }) { _ ->
+            withClickHouseMockServer(
+                queryBasedClickHouseHandler(defaultBody = detailJson)
+            ) { _ ->
                 val detail = LlmDashboardService().getGenerationDetail(
                     projectId = 10,
                     generationId = "gen-99"
@@ -181,14 +162,11 @@ class LlmServiceExtendedTest {
     @Test
     fun `getGenerationDetail returns null for clickhouse error body`() =
         runBlocking {
-            withClickHouseMockServer({ exchange ->
-                exchange.requestBodyText()
-                exchange.respond(
-                    200,
-                    "Code: 60. DB::Exception: Table not found",
-                    contentType = "text/plain"
+            withClickHouseMockServer(
+                queryBasedClickHouseHandler(
+                    defaultBody = "Code: 60. DB::Exception: Table not found"
                 )
-            }) { _ ->
+            ) { _ ->
                 val detail = LlmDashboardService().getGenerationDetail(
                     projectId = 10,
                     generationId = "nonexistent"
