@@ -306,14 +306,23 @@ jobs:
           backend_total = 0
           if backend_report:
               root = ET.parse(backend_report).getroot()
+              # JaCoCo XML: root may have direct <counter> children, or only nested in <package>
               line_counter = next(
-                  (counter for counter in root.findall("counter") if counter.attrib.get("type") == "LINE"),
+                  (c for c in root.findall("counter") if c.attrib.get("type") == "LINE"),
                   None,
               )
               if line_counter is not None:
                   missed = int(line_counter.attrib.get("missed", "0"))
                   backend_covered = int(line_counter.attrib.get("covered", "0"))
                   backend_total = missed + backend_covered
+              else:
+                  # Fallback: aggregate from package-level counters (some JaCoCo formats)
+                  for pkg in root.findall("package"):
+                      for c in pkg.findall("counter"):
+                          if c.attrib.get("type") == "LINE":
+                              backend_covered += int(c.attrib.get("covered", "0"))
+                              backend_total += int(c.attrib.get("missed", "0")) + int(c.attrib.get("covered", "0"))
+                              break
 
           frontend_covered = 0
           frontend_total = 0
