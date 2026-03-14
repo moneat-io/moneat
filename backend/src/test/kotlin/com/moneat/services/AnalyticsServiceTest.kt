@@ -20,9 +20,9 @@ import com.moneat.analytics.models.AnalyticsFilter
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
-import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
+import com.moneat.testsupport.withClickHouseMockServer
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.every
 import io.mockk.mockkObject
@@ -51,7 +51,7 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getOverview returns metrics from ClickHouse`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(
                 200,
@@ -59,9 +59,7 @@ class AnalyticsServiceTest {
                 """.trimIndent(),
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val result = service.getOverview(projectId, dateFrom, dateTo, emptyList(), null, null)
 
@@ -78,7 +76,7 @@ class AnalyticsServiceTest {
     @Test
     fun `getOverview with comparison period returns both metric sets`() = runBlocking {
         var callCount = 0
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             callCount++
             if (callCount == 1) {
@@ -96,9 +94,7 @@ class AnalyticsServiceTest {
                     contentType = "text/plain"
                 )
             }
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val compFrom = LocalDate.of(2025, 12, 1)
             val compTo = LocalDate.of(2025, 12, 31)
@@ -114,12 +110,10 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getOverview returns zeros when ClickHouse returns empty body`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val result = service.getOverview(projectId, dateFrom, dateTo, emptyList(), null, null)
 
@@ -135,7 +129,7 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getTimeseries returns list of data points`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(
                 200,
@@ -143,9 +137,7 @@ class AnalyticsServiceTest {
 {"date":"2026-01-02","visitors":15,"pageviews":30}""",
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val result = service.getTimeseries(projectId, dateFrom, dateTo, emptyList())
 
@@ -160,12 +152,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getTimeseries uses hourly interval for short date ranges`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val shortFrom = LocalDate.of(2026, 1, 1)
             val shortTo = LocalDate.of(2026, 1, 2)
@@ -178,12 +168,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getTimeseries uses daily interval for long date ranges`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             service.getTimeseries(projectId, dateFrom, dateTo, emptyList())
 
@@ -193,12 +181,10 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getTimeseries returns empty list for blank response`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val result = service.getTimeseries(projectId, dateFrom, dateTo, emptyList())
 
@@ -210,7 +196,7 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getBreakdown returns breakdown rows for session dimension`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(
                 200,
@@ -218,9 +204,7 @@ class AnalyticsServiceTest {
 {"name":"Firefox","visitors":30,"pageviews":80}""",
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val result = service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "browser")
 
@@ -235,16 +219,14 @@ class AnalyticsServiceTest {
     @Test
     fun `getBreakdown queries events table for pathname dimension`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(
                 200,
                 """{"name":"/home","visitors":100,"pageviews":200}""",
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "pathname")
 
@@ -255,12 +237,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getBreakdown queries sessions table for session dimensions`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "browser")
 
@@ -270,12 +250,10 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getBreakdown returns empty results for blank response`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val result = service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "os")
 
@@ -288,12 +266,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getPages queries pathname dimension`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             service.getPages(projectId, dateFrom, dateTo, emptyList())
 
@@ -304,12 +280,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getEntryPages queries entry_page dimension`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             service.getEntryPages(projectId, dateFrom, dateTo, emptyList())
 
@@ -320,12 +294,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getExitPages queries exit_page dimension`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             service.getExitPages(projectId, dateFrom, dateTo, emptyList())
 
@@ -376,7 +348,7 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getFunnel returns funnel with cumulative visitors and dropoff`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(
                 200,
@@ -385,9 +357,7 @@ class AnalyticsServiceTest {
 {"level":3,"cnt":10}""",
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val steps = listOf("page_load", "signup_click", "signup_complete")
             val result = service.getFunnel(projectId, dateFrom, dateTo, steps)
@@ -413,12 +383,10 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getFunnel returns empty counts when ClickHouse returns blank`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val steps = listOf("step_a", "step_b")
             val result = service.getFunnel(projectId, dateFrom, dateTo, steps)
@@ -433,7 +401,7 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getEvents returns custom event breakdown`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(
                 200,
@@ -441,9 +409,7 @@ class AnalyticsServiceTest {
 {"name":"form_submit","visitors":10,"pageviews":15}""",
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val result = service.getEvents(projectId, dateFrom, dateTo, emptyList())
 
@@ -457,12 +423,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getEvents excludes pageview events in query`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             service.getEvents(projectId, dateFrom, dateTo, emptyList())
 
@@ -475,12 +439,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getTimeseries applies is filter`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val filters = listOf(AnalyticsFilter("browser", "is", "Chrome"))
             service.getTimeseries(projectId, dateFrom, dateTo, filters)
@@ -492,12 +454,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getTimeseries applies is_not filter`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val filters = listOf(AnalyticsFilter("browser", "is_not", "IE"))
             service.getTimeseries(projectId, dateFrom, dateTo, filters)
@@ -509,12 +469,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getTimeseries applies contains filter`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val filters = listOf(AnalyticsFilter("browser", "contains", "Chrome"))
             service.getTimeseries(projectId, dateFrom, dateTo, filters)
@@ -526,12 +484,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getTimeseries applies not_contains filter`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val filters = listOf(AnalyticsFilter("browser", "not_contains", "IE"))
             service.getTimeseries(projectId, dateFrom, dateTo, filters)
@@ -543,16 +499,14 @@ class AnalyticsServiceTest {
     @Test
     fun `getOverview applies source filter mapped to referrer_source`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(
                 200,
                 """{"visitors":5,"pageviews":10,"bounce_rate":50.0,"avg_visit_duration":60.0,"views_per_visit":2.0}""",
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val filters = listOf(AnalyticsFilter("source", "is", "google"))
             service.getOverview(projectId, dateFrom, dateTo, filters, null, null)
@@ -564,16 +518,14 @@ class AnalyticsServiceTest {
     @Test
     fun `getOverview applies country filter mapped to country_code`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(
                 200,
                 """{"visitors":5,"pageviews":10,"bounce_rate":50.0,"avg_visit_duration":60.0,"views_per_visit":2.0}""",
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val filters = listOf(AnalyticsFilter("country", "is", "US"))
             service.getOverview(projectId, dateFrom, dateTo, filters, null, null)
@@ -593,15 +545,11 @@ class AnalyticsServiceTest {
         )
         for (dimension in sessionDimensions) {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries.add(exchange.requestBodyText())
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.close()
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
-
+            }) { server ->
                 service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), dimension)
-
                 assertTrue(
                     queries.any { it.contains("analytics_sessions_hourly") },
                     "Expected sessions table for dimension '$dimension'"
@@ -615,15 +563,11 @@ class AnalyticsServiceTest {
         val eventDimensions = listOf("pathname", "utm_term", "utm_content")
         for (dimension in eventDimensions) {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries.add(exchange.requestBodyText())
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.close()
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
-
+            }) { server ->
                 service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), dimension)
-
                 assertTrue(
                     queries.any { it.contains("analytics_events") },
                     "Expected events table for dimension '$dimension'"
@@ -635,12 +579,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getBreakdown uses custom limit`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "browser", limit = 10)
 
@@ -653,12 +595,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getOverview query includes project_id and date range`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             service.getOverview(projectId, dateFrom, dateTo, emptyList(), null, null)
 
@@ -671,12 +611,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getFunnel query includes windowFunnel`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             service.getFunnel(projectId, dateFrom, dateTo, listOf("step1", "step2"))
 
@@ -689,12 +627,10 @@ class AnalyticsServiceTest {
     @Test
     fun `filters with unknown property are ignored`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val filters = listOf(AnalyticsFilter("nonexistent_prop", "is", "value"))
             service.getTimeseries(projectId, dateFrom, dateTo, filters)
@@ -707,12 +643,10 @@ class AnalyticsServiceTest {
     @Test
     fun `page filter resolves for events alias only`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             // getTimeseries uses alias "s" (sessions table), so "page" filter should be skipped
             val filters = listOf(AnalyticsFilter("page", "is", "/home"))
@@ -725,12 +659,10 @@ class AnalyticsServiceTest {
     @Test
     fun `getEvents applies page filter since it uses events alias`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val filters = listOf(AnalyticsFilter("page", "is", "/home"))
             service.getEvents(projectId, dateFrom, dateTo, filters)
@@ -743,7 +675,7 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getTimeseries handles malformed JSON rows gracefully`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(
                 200,
@@ -752,9 +684,7 @@ not valid json
 {"date":"2026-01-02","visitors":15,"pageviews":30}""",
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val result = service.getTimeseries(projectId, dateFrom, dateTo, emptyList())
 
@@ -765,16 +695,14 @@ not valid json
 
     @Test
     fun `getOverview handles missing JSON fields with defaults`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(
                 200,
                 """{"visitors":5}""",
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
 
             val result = service.getOverview(projectId, dateFrom, dateTo, emptyList(), null, null)
 

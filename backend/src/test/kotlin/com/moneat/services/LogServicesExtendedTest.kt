@@ -21,9 +21,9 @@ import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.logs.services.LogService
-import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
+import com.moneat.testsupport.withClickHouseMockServer
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
@@ -55,11 +55,72 @@ class LogServicesExtendedTest {
         return LogService(repo)
     }
 
+    private suspend fun LogService.topValuesWithEmptyFilters(
+        orgId: Long,
+        field: String,
+        limit: Int = 10
+    ) = topValues(
+        organizationId = orgId,
+        field = field,
+        limit = limit,
+        from = null,
+        to = null,
+        query = null,
+        levels = emptyList(),
+        service = null,
+        environment = null,
+        tags = emptyMap(),
+        excludeService = null,
+        excludeEnvironment = null,
+        excludeContainerName = null,
+        excludeTags = emptyMap()
+    )
+
+    private suspend fun LogService.exportCsvWithEmptyFilters(orgId: Long, limit: Int = 100) =
+        exportCsv(
+            organizationId = orgId,
+            from = null,
+            to = null,
+            query = null,
+            levels = emptyList(),
+            service = null,
+            environment = null,
+            tags = emptyMap(),
+            excludeService = null,
+            excludeEnvironment = null,
+            excludeContainerName = null,
+            excludeTags = emptyMap(),
+            limit = limit
+        )
+
+    private suspend fun LogService.aggregateLogsWithEmptyFilters(
+        orgId: Long,
+        from: String? = null,
+        to: String? = null,
+        interval: String = "1h",
+        groupBy: String? = null
+    ) = aggregateLogs(
+        organizationId = orgId,
+        from = from,
+        to = to,
+        interval = interval,
+        query = null,
+        levels = emptyList(),
+        service = null,
+        environment = null,
+        tags = emptyMap(),
+        excludeService = null,
+        excludeEnvironment = null,
+        excludeContainerName = null,
+        excludeTags = emptyMap(),
+        groupBy = groupBy
+    )
+
     // ==================== topValues ====================
 
     @Test
     fun `topValues returns field values with counts`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             when {
                 query.contains("AS field_value") -> {
@@ -77,27 +138,9 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
-
-            val result = service.topValues(
-                organizationId = 1L,
-                field = "service",
-                limit = 10,
-                from = null,
-                to = null,
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap()
-            )
-
+            val result = service.topValuesWithEmptyFilters(1L, "service")
             assertEquals("service", result.field)
             assertEquals(2, result.values.size)
             assertEquals("api", result.values[0].value)
@@ -108,29 +151,12 @@ class LogServicesExtendedTest {
 
     @Test
     fun `topValues returns empty on ClickHouse error`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(200, "Code: 62. DB::Exception", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
-            val result = service.topValues(
-                organizationId = 1L,
-                field = "service",
-                limit = 10,
-                from = null,
-                to = null,
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap()
-            )
-
+            val result = service.topValuesWithEmptyFilters(1L, "service")
             assertEquals("service", result.field)
             assertTrue(result.values.isEmpty())
             assertEquals(0L, result.totalCount)
@@ -140,7 +166,7 @@ class LogServicesExtendedTest {
     @Test
     fun `topValues uses tag key expression for non-standard fields`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             when {
@@ -156,27 +182,10 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
-            val result = service.topValues(
-                organizationId = 1L,
-                field = "region",
-                limit = 5,
-                from = null,
-                to = null,
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap()
-            )
-
+            val result = service.topValuesWithEmptyFilters(1L, "region", 5)
             assertEquals("region", result.field)
             assertEquals(1, result.values.size)
             assertTrue(capturedQueries.any { it.contains("tags['region']") })
@@ -186,7 +195,7 @@ class LogServicesExtendedTest {
     @Test
     fun `topValues with filters applies conditions`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             when {
@@ -198,8 +207,7 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             service.topValues(
@@ -231,7 +239,7 @@ class LogServicesExtendedTest {
 
     @Test
     fun `exportCsv returns CSV with header and rows`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(
                 200,
                 """
@@ -239,26 +247,10 @@ class LogServicesExtendedTest {
                 """.trimIndent(),
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
-            val csv = service.exportCsv(
-                organizationId = 1L,
-                from = null,
-                to = null,
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap(),
-                limit = 100
-            )
-
+            val csv = service.exportCsvWithEmptyFilters(1L)
             assertTrue(csv.startsWith("timestamp,level,service,environment,host,message,"))
             assertTrue(csv.contains("error"))
             assertTrue(csv.contains("api"))
@@ -268,28 +260,13 @@ class LogServicesExtendedTest {
 
     @Test
     fun `exportCsv throws on ClickHouse error`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(200, "Code: 62. DB::Exception: Syntax error", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             try {
-                service.exportCsv(
-                    organizationId = 1L,
-                    from = null,
-                    to = null,
-                    query = null,
-                    levels = emptyList(),
-                    service = null,
-                    environment = null,
-                    tags = emptyMap(),
-                    excludeService = null,
-                    excludeEnvironment = null,
-                    excludeContainerName = null,
-                    excludeTags = emptyMap(),
-                    limit = 100
-                )
+                service.exportCsvWithEmptyFilters(1L)
                 assertTrue(false, "Should have thrown")
             } catch (e: IllegalStateException) {
                 assertTrue(e.message!!.contains("Failed to export logs"))
@@ -299,33 +276,17 @@ class LogServicesExtendedTest {
 
     @Test
     fun `exportCsv escapes values with commas and quotes`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(
                 200,
                 """{"timestamp":"2026-02-01","level":"info","service":"api","environment":"prod","host":"h1","message":"hello, \"world\"","container_name":"","trace_id":"","span_id":"","tags":"{}"}
                 """.trimIndent(),
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
-            val csv = service.exportCsv(
-                organizationId = 1L,
-                from = null,
-                to = null,
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap(),
-                limit = 100
-            )
-
+            val csv = service.exportCsvWithEmptyFilters(1L)
             // The message contains a comma so it should be quoted in CSV
             assertTrue(csv.contains("\"hello,"))
         }
@@ -335,7 +296,7 @@ class LogServicesExtendedTest {
 
     @Test
     fun `getFilterOptions returns services environments and tagKeys`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             when {
                 query.contains("DISTINCT service") -> {
@@ -349,8 +310,7 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             val result = service.getFilterOptions(
@@ -369,10 +329,9 @@ class LogServicesExtendedTest {
 
     @Test
     fun `getFilterOptions handles ClickHouse error gracefully`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(200, "Code: 62. DB::Exception", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             val result = service.getFilterOptions(
@@ -391,7 +350,7 @@ class LogServicesExtendedTest {
 
     @Test
     fun `getFilterOptionsWithCounts returns services and environments with counts`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             when {
                 query.contains("service AS val") -> {
@@ -416,8 +375,7 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             val result = service.getFilterOptionsWithCounts(
@@ -440,10 +398,9 @@ class LogServicesExtendedTest {
 
     @Test
     fun `getTagValues returns distinct tag values`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(200, "us-east\nus-west\neu-west\n", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             val result = service.getTagValues(
@@ -473,12 +430,11 @@ class LogServicesExtendedTest {
     @Test
     fun `getTagValues maps status to level for top-level fields`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             exchange.respond(200, "info\nerror\n", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             val result = service.getTagValues(
@@ -497,11 +453,10 @@ class LogServicesExtendedTest {
     @Test
     fun `getTagValues with time range applies time filters`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             capturedQueries.add(exchange.requestBodyText())
             exchange.respond(200, "val1\n", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             service.getTagValues(
@@ -588,7 +543,7 @@ class LogServicesExtendedTest {
     @Test
     fun `queryLogs with time range and level filters`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             when {
@@ -600,8 +555,7 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             val result = service.queryLogs(
@@ -630,7 +584,7 @@ class LogServicesExtendedTest {
     @Test
     fun `queryLogs with exclude filters`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             when {
@@ -642,8 +596,7 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             service.queryLogs(
@@ -666,7 +619,7 @@ class LogServicesExtendedTest {
     @Test
     fun `queryLogs with query string uses parser`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             when {
@@ -678,8 +631,7 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             service.queryLogs(
@@ -695,7 +647,7 @@ class LogServicesExtendedTest {
     @Test
     fun `queryLogs with tag filters includes tag conditions`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             when {
@@ -707,8 +659,7 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             service.queryLogs(
@@ -727,7 +678,7 @@ class LogServicesExtendedTest {
     @Test
     fun `queryLogs with valid systemId applies system filter`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             when {
@@ -739,8 +690,7 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             service.queryLogs(
@@ -758,7 +708,7 @@ class LogServicesExtendedTest {
     @Test
     fun `queryLogs with hostId applies host filter`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             when {
@@ -770,8 +720,7 @@ class LogServicesExtendedTest {
                 }
                 else -> exchange.respond(200, "", contentType = "text/plain")
             }
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             service.queryLogs(
@@ -786,10 +735,9 @@ class LogServicesExtendedTest {
 
     @Test
     fun `queryLogs ClickHouse error in main query throws`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(200, "Code: 62. DB::Exception: Syntax error", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             try {
@@ -808,7 +756,7 @@ class LogServicesExtendedTest {
 
     @Test
     fun `aggregateLogs with no groupBy returns _total buckets`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(
                 200,
                 """
@@ -817,27 +765,14 @@ class LogServicesExtendedTest {
                 """.trimIndent(),
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
-            val result = service.aggregateLogs(
-                organizationId = 1L,
+            val result = service.aggregateLogsWithEmptyFilters(
+                1L,
                 from = "2026-02-01T10:00:00Z",
-                to = "2026-02-01T12:00:00Z",
-                interval = "1h",
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap(),
-                groupBy = null
+                to = "2026-02-01T12:00:00Z"
             )
-
             assertEquals(2, result.buckets.size)
             assertEquals(30L, result.totalCount)
             // No groupBy means groups map is empty
@@ -847,29 +782,12 @@ class LogServicesExtendedTest {
 
     @Test
     fun `aggregateLogs returns empty on ClickHouse error`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(200, "Code: 62. DB::Exception", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
-            val result = service.aggregateLogs(
-                organizationId = 1L,
-                from = null,
-                to = null,
-                interval = "1h",
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap(),
-                groupBy = null
-            )
-
+            val result = service.aggregateLogsWithEmptyFilters(1L)
             assertTrue(result.buckets.isEmpty())
             assertEquals(0L, result.totalCount)
         }
@@ -878,12 +796,11 @@ class LogServicesExtendedTest {
     @Test
     fun `aggregateLogs with exclude filters`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
             service.aggregateLogs(
@@ -913,7 +830,7 @@ class LogServicesExtendedTest {
     @Test
     fun `aggregateLogs ignores invalid groupBy values`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             capturedQueries.add(query)
             exchange.respond(
@@ -921,27 +838,15 @@ class LogServicesExtendedTest {
                 """{"bucket":"2026-02-01T10:00:00Z","cnt":5}""",
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
-            val result = service.aggregateLogs(
-                organizationId = 1L,
+            val result = service.aggregateLogsWithEmptyFilters(
+                1L,
                 from = "2026-02-01T10:00:00Z",
                 to = "2026-02-01T12:00:00Z",
-                interval = "1h",
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap(),
                 groupBy = "invalidField"
             )
-
             // Invalid groupBy is ignored — treated as null
             assertTrue(result.buckets[0].groups.isEmpty())
             // The SQL should NOT contain "GROUP BY bucket, group_value"
@@ -952,7 +857,7 @@ class LogServicesExtendedTest {
 
     @Test
     fun `aggregateLogs with groupBy service`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(
                 200,
                 """
@@ -961,27 +866,15 @@ class LogServicesExtendedTest {
                 """.trimIndent(),
                 contentType = "text/plain"
             )
-        }.use { server ->
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
-            val result = service.aggregateLogs(
-                organizationId = 1L,
+            val result = service.aggregateLogsWithEmptyFilters(
+                1L,
                 from = "2026-02-01T10:00:00Z",
                 to = "2026-02-01T12:00:00Z",
-                interval = "1h",
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap(),
                 groupBy = "service"
             )
-
             assertEquals(1, result.buckets.size)
             assertEquals(15L, result.buckets[0].count)
             assertEquals(10L, result.buckets[0].groups["api"])

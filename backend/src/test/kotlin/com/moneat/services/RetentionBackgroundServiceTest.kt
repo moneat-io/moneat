@@ -21,10 +21,10 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.RetentionPolicyService
-import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
+import com.moneat.testsupport.withClickHouseMockServer
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -148,20 +148,8 @@ class RetentionBackgroundServiceTest {
 
     @Test
     fun `runSweep skips when no organizations found`() = runBlocking {
-        val queries = CopyOnWriteArrayList<String>()
         mockRetention()
-
-        MockHttpServer { exchange ->
-            queries.add(exchange.requestBodyText())
-            exchange.respond(200, "")
-        }.use { server ->
-            ClickHouseClient.init(
-                server.baseUrl,
-                "testdb",
-                "default",
-                ""
-            )
-            invokeRunSweep()
+        withSweep { queries ->
             assertTrue(queries.isEmpty(), "No queries expected")
         }
     }
@@ -169,89 +157,30 @@ class RetentionBackgroundServiceTest {
     @Test
     fun `runSweep submits core deletes for project-scoped tables`() =
         runBlocking {
-            val queries = CopyOnWriteArrayList<String>()
             val orgId = seedOrg()
             val projectId = seedProject(orgId)
-            mockRetention(
-                core = mapOf(orgId to CORE_RETENTION),
-                log = mapOf(orgId to LOG_RETENTION),
-                replay = mapOf(orgId to REPLAY_RETENTION),
-                llm = mapOf(orgId to LLM_RETENTION),
-                analytics = mapOf(orgId to ANALYTICS_RETENTION)
-            )
+            mockAllRetention(orgId)
 
-            MockHttpServer { exchange ->
-                queries.add(exchange.requestBodyText())
-                exchange.respond(200, "")
-            }.use { server ->
-                ClickHouseClient.init(
-                    server.baseUrl,
-                    "testdb",
-                    "default",
-                    ""
-                )
-                invokeRunSweep()
-
-                val tables = listOf(
+            withSweep { queries ->
+                listOf(
                     "events",
                     "spans",
                     "sessions",
                     "user_feedback",
                     "issues"
-                )
-                for (table in tables) {
-                    assertTrue(
-                        queries.any {
-                            it.contains("`testdb`.`$table`") &&
-                                it.contains(
-                                    "project_id IN ($projectId)"
-                                ) &&
-                                it.contains(
-                                    "INTERVAL $CORE_RETENTION DAY"
-                                )
-                        },
-                        "Missing DELETE for $table"
-                    )
-                }
+                ).forEach { assertProjectScopedDelete(queries, it, projectId, CORE_RETENTION) }
             }
         }
 
     @Test
     fun `runSweep submits org-scoped deletes`() = runBlocking {
-        val queries = CopyOnWriteArrayList<String>()
         val orgId = seedOrg()
         seedProject(orgId)
-        mockRetention(
-            core = mapOf(orgId to CORE_RETENTION),
-            log = mapOf(orgId to LOG_RETENTION),
-            replay = mapOf(orgId to REPLAY_RETENTION),
-            llm = mapOf(orgId to LLM_RETENTION),
-            analytics = mapOf(orgId to ANALYTICS_RETENTION)
-        )
+        mockAllRetention(orgId)
 
-        MockHttpServer { exchange ->
-            queries.add(exchange.requestBodyText())
-            exchange.respond(200, "")
-        }.use { server ->
-            ClickHouseClient.init(
-                server.baseUrl,
-                "testdb",
-                "default",
-                ""
-            )
-            invokeRunSweep()
-
-            for (table in listOf("metrics", "containers")) {
-                assertTrue(
-                    queries.any {
-                        it.contains("`testdb`.`$table`") &&
-                            it.contains(
-                                "organization_id IN ($orgId)"
-                            ) &&
-                            it.contains("now64(3)")
-                    },
-                    "Missing org-scoped DELETE for $table"
-                )
+        withSweep { queries ->
+            listOf("metrics", "containers").forEach {
+                assertOrgScopedDelete(queries, it, orgId)
             }
         }
     }
@@ -259,29 +188,11 @@ class RetentionBackgroundServiceTest {
     @Test
     fun `runSweep submits log deletes with separate retention`() =
         runBlocking {
-            val queries = CopyOnWriteArrayList<String>()
             val orgId = seedOrg()
             val projectId = seedProject(orgId)
-            mockRetention(
-                core = mapOf(orgId to CORE_RETENTION),
-                log = mapOf(orgId to LOG_RETENTION),
-                replay = mapOf(orgId to REPLAY_RETENTION),
-                llm = mapOf(orgId to LLM_RETENTION),
-                analytics = mapOf(orgId to ANALYTICS_RETENTION)
-            )
+            mockAllRetention(orgId)
 
-            MockHttpServer { exchange ->
-                queries.add(exchange.requestBodyText())
-                exchange.respond(200, "")
-            }.use { server ->
-                ClickHouseClient.init(
-                    server.baseUrl,
-                    "testdb",
-                    "default",
-                    ""
-                )
-                invokeRunSweep()
-
+            withSweep { queries ->
                 val logQ = queries.filter {
                     it.contains("`testdb`.logs")
                 }
@@ -307,129 +218,39 @@ class RetentionBackgroundServiceTest {
 
     @Test
     fun `runSweep submits replay deletes`() = runBlocking {
-        val queries = CopyOnWriteArrayList<String>()
         val orgId = seedOrg()
         seedProject(orgId)
-        mockRetention(
-            core = mapOf(orgId to CORE_RETENTION),
-            log = mapOf(orgId to LOG_RETENTION),
-            replay = mapOf(orgId to REPLAY_RETENTION),
-            llm = mapOf(orgId to LLM_RETENTION),
-            analytics = mapOf(orgId to ANALYTICS_RETENTION)
-        )
+        mockAllRetention(orgId)
 
-        MockHttpServer { exchange ->
-            queries.add(exchange.requestBodyText())
-            exchange.respond(200, "")
-        }.use { server ->
-            ClickHouseClient.init(
-                server.baseUrl,
-                "testdb",
-                "default",
-                ""
-            )
-            invokeRunSweep()
-
-            val tables = listOf(
-                "replay_events",
-                "replay_segments"
-            )
-            for (t in tables) {
-                assertTrue(
-                    queries.any {
-                        it.contains("`testdb`.`$t`") &&
-                            it.contains(
-                                "INTERVAL $REPLAY_RETENTION DAY"
-                            )
-                    },
-                    "Missing replay DELETE for $t"
-                )
+        withSweep { queries ->
+            listOf("replay_events", "replay_segments").forEach {
+                assertTableDeleteWithRetention(queries, it, REPLAY_RETENTION)
             }
         }
     }
 
     @Test
     fun `runSweep submits LLM deletes`() = runBlocking {
-        val queries = CopyOnWriteArrayList<String>()
         val orgId = seedOrg()
         seedProject(orgId)
-        mockRetention(
-            core = mapOf(orgId to CORE_RETENTION),
-            log = mapOf(orgId to LOG_RETENTION),
-            replay = mapOf(orgId to REPLAY_RETENTION),
-            llm = mapOf(orgId to LLM_RETENTION),
-            analytics = mapOf(orgId to ANALYTICS_RETENTION)
-        )
+        mockAllRetention(orgId)
 
-        MockHttpServer { exchange ->
-            queries.add(exchange.requestBodyText())
-            exchange.respond(200, "")
-        }.use { server ->
-            ClickHouseClient.init(
-                server.baseUrl,
-                "testdb",
-                "default",
-                ""
-            )
-            invokeRunSweep()
-
-            val tables = listOf(
-                "llm_generations",
-                "llm_generations_hourly_mv"
-            )
-            for (t in tables) {
-                assertTrue(
-                    queries.any {
-                        it.contains("`testdb`.`$t`") &&
-                            it.contains(
-                                "INTERVAL $LLM_RETENTION DAY"
-                            )
-                    },
-                    "Missing LLM DELETE for $t"
-                )
+        withSweep { queries ->
+            listOf("llm_generations", "llm_generations_hourly_mv").forEach {
+                assertTableDeleteWithRetention(queries, it, LLM_RETENTION)
             }
         }
     }
 
     @Test
     fun `runSweep submits analytics deletes`() = runBlocking {
-        val queries = CopyOnWriteArrayList<String>()
         val orgId = seedOrg()
         seedProject(orgId)
-        mockRetention(
-            core = mapOf(orgId to CORE_RETENTION),
-            log = mapOf(orgId to LOG_RETENTION),
-            replay = mapOf(orgId to REPLAY_RETENTION),
-            llm = mapOf(orgId to LLM_RETENTION),
-            analytics = mapOf(orgId to ANALYTICS_RETENTION)
-        )
+        mockAllRetention(orgId)
 
-        MockHttpServer { exchange ->
-            queries.add(exchange.requestBodyText())
-            exchange.respond(200, "")
-        }.use { server ->
-            ClickHouseClient.init(
-                server.baseUrl,
-                "testdb",
-                "default",
-                ""
-            )
-            invokeRunSweep()
-
-            val tables = listOf(
-                "analytics_events",
-                "analytics_sessions_hourly"
-            )
-            for (t in tables) {
-                assertTrue(
-                    queries.any {
-                        it.contains("`testdb`.`$t`") &&
-                            it.contains(
-                                "INTERVAL $ANALYTICS_RETENTION DAY"
-                            )
-                    },
-                    "Missing analytics DELETE for $t"
-                )
+        withSweep { queries ->
+            listOf("analytics_events", "analytics_sessions_hourly").forEach {
+                assertTableDeleteWithRetention(queries, it, ANALYTICS_RETENTION)
             }
         }
     }
@@ -439,31 +260,19 @@ class RetentionBackgroundServiceTest {
         runBlocking {
             val orgId = seedOrg()
             seedProject(orgId)
-            mockRetention(
-                core = mapOf(orgId to CORE_RETENTION),
-                log = mapOf(orgId to LOG_RETENTION),
-                replay = mapOf(orgId to REPLAY_RETENTION),
-                llm = mapOf(orgId to LLM_RETENTION),
-                analytics = mapOf(orgId to ANALYTICS_RETENTION)
-            )
+            mockAllRetention(orgId)
 
-            MockHttpServer { exchange ->
-                exchange.respond(500, "DB error")
-            }.use { server ->
-                ClickHouseClient.init(
-                    server.baseUrl,
-                    "testdb",
-                    "default",
-                    ""
-                )
-                invokeRunSweep()
+            withClickHouseMockServer(
+                { exchange -> exchange.respond(500, "DB error") },
+                database = "testdb"
+            ) {
+                runBlocking { invokeRunSweep() }
             }
         }
 
     @Test
     fun `runSweep groups orgs with same retention into batch`() =
         runBlocking {
-            val queries = CopyOnWriteArrayList<String>()
             val org1 = seedOrg("Org 1")
             val org2 = seedOrg("Org 2")
             val p1 = seedProject(org1, "proj-1")
@@ -492,18 +301,7 @@ class RetentionBackgroundServiceTest {
                 )
             )
 
-            MockHttpServer { exchange ->
-                queries.add(exchange.requestBodyText())
-                exchange.respond(200, "")
-            }.use { server ->
-                ClickHouseClient.init(
-                    server.baseUrl,
-                    "testdb",
-                    "default",
-                    ""
-                )
-                invokeRunSweep()
-
+            withSweep { queries ->
                 val eventsQ = queries.first {
                     it.contains("`testdb`.`events`")
                 }
@@ -518,29 +316,10 @@ class RetentionBackgroundServiceTest {
     @Test
     fun `runSweep skips project deletes when org has no projects`() =
         runBlocking {
-            val queries = CopyOnWriteArrayList<String>()
             val orgId = seedOrg()
+            mockAllRetention(orgId)
 
-            mockRetention(
-                core = mapOf(orgId to CORE_RETENTION),
-                log = mapOf(orgId to LOG_RETENTION),
-                replay = mapOf(orgId to REPLAY_RETENTION),
-                llm = mapOf(orgId to LLM_RETENTION),
-                analytics = mapOf(orgId to ANALYTICS_RETENTION)
-            )
-
-            MockHttpServer { exchange ->
-                queries.add(exchange.requestBodyText())
-                exchange.respond(200, "")
-            }.use { server ->
-                ClickHouseClient.init(
-                    server.baseUrl,
-                    "testdb",
-                    "default",
-                    ""
-                )
-                invokeRunSweep()
-
+            withSweep { queries ->
                 val projQ = queries.filter {
                     it.contains("project_id")
                 }
@@ -577,5 +356,76 @@ class RetentionBackgroundServiceTest {
     @Test
     fun `stop is safe when no sweep is running`() {
         service.stop()
+    }
+
+    private fun mockAllRetention(orgId: Int) {
+        mockRetention(
+            core = mapOf(orgId to CORE_RETENTION),
+            log = mapOf(orgId to LOG_RETENTION),
+            replay = mapOf(orgId to REPLAY_RETENTION),
+            llm = mapOf(orgId to LLM_RETENTION),
+            analytics = mapOf(orgId to ANALYTICS_RETENTION)
+        )
+    }
+
+    private fun assertProjectScopedDelete(
+        queries: List<String>,
+        table: String,
+        projectId: Long,
+        retentionDays: Int
+    ) {
+        assertTrue(
+            queries.any {
+                it.contains("`testdb`.`$table`") &&
+                    it.contains("project_id IN ($projectId)") &&
+                    it.contains("INTERVAL $retentionDays DAY")
+            },
+            "Missing DELETE for $table"
+        )
+    }
+
+    private fun assertOrgScopedDelete(
+        queries: List<String>,
+        table: String,
+        orgId: Int
+    ) {
+        assertTrue(
+            queries.any {
+                it.contains("`testdb`.`$table`") &&
+                    it.contains("organization_id IN ($orgId)") &&
+                    it.contains("now64(3)")
+            },
+            "Missing org-scoped DELETE for $table"
+        )
+    }
+
+    private fun assertTableDeleteWithRetention(
+        queries: List<String>,
+        table: String,
+        retentionDays: Int
+    ) {
+        assertTrue(
+            queries.any {
+                it.contains("`testdb`.`$table`") &&
+                    it.contains("INTERVAL $retentionDays DAY")
+            },
+            "Missing DELETE for $table"
+        )
+    }
+
+    private suspend fun withSweep(block: suspend (CopyOnWriteArrayList<String>) -> Unit) {
+        val queries = CopyOnWriteArrayList<String>()
+        withClickHouseMockServer(
+            { exchange ->
+                queries.add(exchange.requestBodyText())
+                exchange.respond(200, "")
+            },
+            database = "testdb"
+        ) {
+            runBlocking {
+                invokeRunSweep()
+                block(queries)
+            }
+        }
     }
 }

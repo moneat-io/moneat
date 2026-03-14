@@ -20,9 +20,9 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.llm.models.LlmGenerationIngest
 import com.moneat.llm.services.LlmDashboardService
 import com.moneat.llm.services.LlmIngestionWorker
-import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
+import com.moneat.testsupport.withClickHouseMockServer
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -56,7 +56,7 @@ class LlmServiceExtendedTest {
     @Test
     fun `getGenerations parses list with pagination`() =
         runBlocking {
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 val query = exchange.requestBodyText()
                 when {
                     query.contains("count() as total") -> {
@@ -75,8 +75,7 @@ class LlmServiceExtendedTest {
                     }
                     else -> exchange.respond(200, "", contentType = "text/plain")
                 }
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val result = LlmDashboardService().getGenerations(
                     projectId = 5,
                     range = "24h",
@@ -100,11 +99,10 @@ class LlmServiceExtendedTest {
     fun `getGenerations includes filter clauses in query`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, """{"total":0}""", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 LlmDashboardService().getGenerations(
                     projectId = 5,
                     range = "7d",
@@ -127,7 +125,7 @@ class LlmServiceExtendedTest {
     @Test
     fun `getGenerations returns empty list when clickhouse has no data`() =
         runBlocking {
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 val query = exchange.requestBodyText()
                 when {
                     query.contains("count() as total") -> {
@@ -137,8 +135,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val result = LlmDashboardService().getGenerations(
                     projectId = 5,
                     range = "24h",
@@ -161,11 +158,10 @@ class LlmServiceExtendedTest {
         runBlocking {
             @Suppress("MaximumLineLength")
             val detailJson = """{"generation_id":"gen-99","trace_id":"t1","span_id":"s1","parent_span_id":"ps1","ts":"2026-03-01T12:00:00.000Z","duration_ms":200.0,"name":"summarize","model":"claude-3","provider":"anthropic","type":"chat","input":"hello","output":"world","input_tokens":5,"output_tokens":10,"total_tokens":15,"cost_usd":0.005,"temperature":0.7,"max_tokens":512,"top_p":0.9,"status":"success","error_message":"","status_code":200,"user_id":"user-1","session_id":"sess-1","environment":"production","release":"v2.0","tags":{"env":"prod","team":"ml"},"metadata":"{}"}"""
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(200, detailJson, contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val detail = LlmDashboardService().getGenerationDetail(
                     projectId = 10,
                     generationId = "gen-99"
@@ -185,15 +181,14 @@ class LlmServiceExtendedTest {
     @Test
     fun `getGenerationDetail returns null for clickhouse error body`() =
         runBlocking {
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(
                     200,
                     "Code: 60. DB::Exception: Table not found",
                     contentType = "text/plain"
                 )
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val detail = LlmDashboardService().getGenerationDetail(
                     projectId = 10,
                     generationId = "nonexistent"
@@ -205,11 +200,10 @@ class LlmServiceExtendedTest {
     @Test
     fun `getGenerationDetail returns null for non-OK status`() =
         runBlocking {
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(500, "internal error", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val detail = LlmDashboardService().getGenerationDetail(
                     projectId = 10,
                     generationId = "gen-1"
@@ -223,7 +217,7 @@ class LlmServiceExtendedTest {
     @Test
     fun `getCosts parses breakdown and timeline`() =
         runBlocking {
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 val query = exchange.requestBodyText()
                 when {
                     query.contains("GROUP BY model, provider") -> {
@@ -245,8 +239,7 @@ class LlmServiceExtendedTest {
                     }
                     else -> exchange.respond(200, "", contentType = "text/plain")
                 }
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val costs = LlmDashboardService().getCosts(projectId = 10, range = "7d")
                 assertEquals(2.3, costs.totalCost)
                 assertEquals(2, costs.breakdown.size)
@@ -265,11 +258,10 @@ class LlmServiceExtendedTest {
                 {"model":"gpt-4o","provider":"openai","call_count":100,"total_tokens":20000,"total_cost":5.0,"avg_duration_ms":400.0,"error_rate":2.0}
                 {"model":"claude-3","provider":"anthropic","call_count":50,"total_tokens":10000,"total_cost":2.5,"avg_duration_ms":300.0,"error_rate":0.0}
             """.trimIndent()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(200, modelsJson, contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val models = LlmDashboardService().getModels(projectId = 10, range = "24h")
                 assertEquals(2, models.size)
                 assertEquals("gpt-4o", models[0].model)
@@ -282,11 +274,10 @@ class LlmServiceExtendedTest {
     @Test
     fun `getModels returns empty list for empty response`() =
         runBlocking {
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val models = LlmDashboardService().getModels(projectId = 10, range = "24h")
                 assertTrue(models.isEmpty())
             }
@@ -297,11 +288,10 @@ class LlmServiceExtendedTest {
     @Test
     fun `getTrace returns null for empty response`() =
         runBlocking {
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val trace = LlmDashboardService().getTrace(
                     projectId = 10,
                     traceId = "no-such-trace"
@@ -315,7 +305,7 @@ class LlmServiceExtendedTest {
     @Test
     fun `getOverview returns zeros when clickhouse returns empty aggregates`() =
         runBlocking {
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 val query = exchange.requestBodyText()
                 when {
                     query.contains("count() as total_generations") -> {
@@ -329,8 +319,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val result = LlmDashboardService().getOverview(projectId = 10, range = "24h")
                 assertEquals(0L, result.totalGenerations)
                 assertEquals(0L, result.totalTokens)
@@ -346,7 +335,7 @@ class LlmServiceExtendedTest {
     fun `getOverview uses toInt64 clause for negative project IDs`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 val query = exchange.requestBodyText()
                 queries += query
                 when {
@@ -357,8 +346,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 LlmDashboardService().getOverview(projectId = -1, range = "24h")
                 assertTrue(queries.any { it.contains("toInt64(project_id) = -1") })
             }
@@ -370,7 +358,7 @@ class LlmServiceExtendedTest {
     fun `getOverview uses demo epoch in time clause`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 val query = exchange.requestBodyText()
                 queries += query
                 when {
@@ -381,8 +369,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 LlmDashboardService().getOverview(
                     projectId = 10,
                     range = "24h",
@@ -398,7 +385,7 @@ class LlmServiceExtendedTest {
     fun `getOverview maps range 1h to five-minute buckets`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 val query = exchange.requestBodyText()
                 queries += query
                 when {
@@ -409,8 +396,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 LlmDashboardService().getOverview(projectId = 10, range = "1h")
                 assertTrue(queries.any { it.contains("toStartOfFiveMinutes") })
                 assertTrue(queries.any { it.contains("1 HOUR") })
@@ -421,7 +407,7 @@ class LlmServiceExtendedTest {
     fun `getOverview maps range 30d to daily buckets`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 val query = exchange.requestBodyText()
                 queries += query
                 when {
@@ -432,8 +418,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 LlmDashboardService().getOverview(projectId = 10, range = "30d")
                 assertTrue(queries.any { it.contains("toStartOfDay") })
                 assertTrue(queries.any { it.contains("30 DAY") })
@@ -444,7 +429,7 @@ class LlmServiceExtendedTest {
     fun `getOverview maps unknown range to 24h defaults`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 val query = exchange.requestBodyText()
                 queries += query
                 when {
@@ -455,8 +440,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 LlmDashboardService().getOverview(projectId = 10, range = "unknown")
                 assertTrue(queries.any { it.contains("toStartOfHour") })
                 assertTrue(queries.any { it.contains("24 HOUR") })
@@ -469,12 +453,11 @@ class LlmServiceExtendedTest {
     fun `insertGenerations is no-op for empty list`() =
         runBlocking {
             var called = false
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 called = true
                 exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 LlmIngestionWorker("q", "dlq", 1).insertGenerations(1, emptyList())
                 assertTrue(!called, "ClickHouse should not be called for empty list")
             }
@@ -488,11 +471,10 @@ class LlmServiceExtendedTest {
             val types = listOf("completion", "embedding", "tool_call", "agent", "chain", "retriever")
             for (typeStr in types) {
                 val queries = mutableListOf<String>()
-                MockHttpServer { exchange ->
+                withClickHouseMockServer({ exchange ->
                     queries += exchange.requestBodyText()
                     exchange.respond(200, "", contentType = "text/plain")
-                }.use { server ->
-                    ClickHouseClient.init(server.baseUrl, "test", "default", "")
+                }) { server ->
                     val gen = LlmGenerationIngest(model = "test", type = typeStr)
                     LlmIngestionWorker("q", "dlq", 1).insertGenerations(1, listOf(gen))
                     assertTrue(
@@ -510,11 +492,10 @@ class LlmServiceExtendedTest {
     fun `insertGenerations parses ISO timestamp`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val gen = LlmGenerationIngest(
                     model = "test",
                     timestamp = "2026-03-01T12:00:00Z"
@@ -532,11 +513,10 @@ class LlmServiceExtendedTest {
     fun `insertGenerations parses numeric timestamp`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val gen = LlmGenerationIngest(
                     model = "test",
                     timestamp = "1700000000000"
@@ -554,11 +534,10 @@ class LlmServiceExtendedTest {
     fun `insertGenerations uses current time for blank timestamp`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val gen = LlmGenerationIngest(model = "test", timestamp = "")
                 LlmIngestionWorker("q", "dlq", 1).insertGenerations(1, listOf(gen))
                 val query = queries.single()
@@ -575,11 +554,10 @@ class LlmServiceExtendedTest {
     fun `insertGenerations formats empty tags as empty map`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val gen = LlmGenerationIngest(model = "test", tags = emptyMap())
                 LlmIngestionWorker("q", "dlq", 1).insertGenerations(1, listOf(gen))
                 val query = queries.single()
@@ -591,11 +569,10 @@ class LlmServiceExtendedTest {
     fun `insertGenerations formats populated tags as clickhouse map`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val gen = LlmGenerationIngest(
                     model = "test",
                     tags = mapOf("env" to "prod", "team" to "ml")
@@ -613,11 +590,10 @@ class LlmServiceExtendedTest {
     fun `insertGenerations maps error status correctly`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val gen = LlmGenerationIngest(model = "test", status = "error")
                 LlmIngestionWorker("q", "dlq", 1).insertGenerations(1, listOf(gen))
                 val query = queries.single()
@@ -631,11 +607,10 @@ class LlmServiceExtendedTest {
     fun `insertGenerations serializes json metadata`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val gen = LlmGenerationIngest(
                     model = "test",
                     metadata = buildJsonObject { put("key", "value") }
@@ -674,11 +649,10 @@ class LlmServiceExtendedTest {
     fun `insertGenerations computes total tokens from input and output`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 val gen = LlmGenerationIngest(
                     model = "test",
                     inputTokens = 100,
@@ -699,11 +673,10 @@ class LlmServiceExtendedTest {
     fun `getCosts uses demo epoch in time clause`() =
         runBlocking {
             val queries = mutableListOf<String>()
-            MockHttpServer { exchange ->
+            withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }.use { server ->
-                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            }) { server ->
                 LlmDashboardService().getCosts(
                     projectId = 10,
                     range = "7d",
