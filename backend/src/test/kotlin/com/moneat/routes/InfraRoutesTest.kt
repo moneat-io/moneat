@@ -47,6 +47,7 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkObject
 import io.mockk.unmockkStatic
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.AfterTest
@@ -58,19 +59,16 @@ import kotlin.test.assertTrue
 class InfraRoutesTest {
     companion object {
         private const val JWT_SECRET = "infra-mock-secret"
-        private var dbInitialized = false
     }
 
     @BeforeTest
     fun setup() {
-        if (!dbInitialized) {
-            Database.connect(
-                url = "jdbc:h2:mem:moneat_infra_routes;" +
-                    "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-                driver = "org.h2.Driver"
-            )
-            dbInitialized = true
-        }
+        val db = Database.connect(
+            url = "jdbc:h2:mem:moneat_infra_routes;" +
+                "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver"
+        )
+        TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
 
         mockkObject(ClickHouseClient)

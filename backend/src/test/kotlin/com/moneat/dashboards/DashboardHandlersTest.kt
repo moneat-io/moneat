@@ -25,6 +25,7 @@ import com.moneat.dashboards.services.handlers.GraphiteHandler
 import com.moneat.dashboards.services.handlers.InfluxDBHandler
 import com.moneat.dashboards.services.handlers.JdbcHandlerCommon
 import com.moneat.dashboards.services.handlers.LokiHandler
+import com.moneat.dashboards.services.handlers.MySQLHandler
 import com.moneat.dashboards.services.handlers.PostgresHandler
 import com.moneat.dashboards.services.handlers.PrometheusHandler
 import com.moneat.dashboards.services.handlers.UnsupportedHandler
@@ -33,6 +34,7 @@ import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -45,26 +47,41 @@ import kotlin.test.assertTrue
 class DashboardHandlersTest {
 
     companion object {
-        inline fun <T> withSelfHosted(block: () -> T): T {
-            val prev = System.getProperty("SELF_HOSTED")
-            try {
-                System.setProperty("SELF_HOSTED", "true")
-                return block()
-            } finally {
-                if (prev != null) {
-                    System.setProperty("SELF_HOSTED", prev)
-                } else {
-                    System.clearProperty("SELF_HOSTED")
+        private const val DEFAULT_HOST = "127.0.0.1"
+        private const val DEFAULT_PORT = 9090
+        private const val DEFAULT_LIMIT = 100
+        private const val DEFAULT_ROW_ID = 1L
+
+        private val selfHostedLock = Any()
+
+        fun <T> withSelfHosted(block: () -> T): T {
+            synchronized(selfHostedLock) {
+                val prev = System.getProperty("SELF_HOSTED")
+                try {
+                    System.setProperty("SELF_HOSTED", "true")
+                    return block()
+                } finally {
+                    if (prev != null) {
+                        System.setProperty("SELF_HOSTED", prev)
+                    } else {
+                        System.clearProperty("SELF_HOSTED")
+                    }
                 }
             }
         }
 
-        fun extractPort(baseUrl: String): Int =
-            baseUrl.substringAfterLast(":").toInt()
+        fun extractPort(baseUrl: String): Int {
+            val port = URI.create(baseUrl).port
+            if (port == -1) {
+                throw IllegalArgumentException("URL has no explicit port: $baseUrl")
+            }
+            return port
+        }
     }
 
     private val prometheusHandler = PrometheusHandler()
     private val postgresHandler = PostgresHandler(ConcurrentHashMap())
+    private val mysqlHandler = MySQLHandler(ConcurrentHashMap())
 
     // ==================== UnsupportedHandler ====================
 
@@ -88,7 +105,7 @@ class DashboardHandlersTest {
         assertFailsWith<IllegalArgumentException> {
             runBlocking {
                 handler.executeQuery(
-                    1L,
+                    DEFAULT_ROW_ID,
                     "h",
                     null,
                     null,
@@ -122,18 +139,18 @@ class DashboardHandlersTest {
     fun `buildUrlString normalizes bare IPv6 literal`() {
         val url = prometheusHandler.buildUrlString(
             "2001:db8::1",
-            9090
+            DEFAULT_PORT
         )
-        assertEquals("http://[2001:db8::1]:9090", url)
+        assertEquals("http://[2001:db8::1]:$DEFAULT_PORT", url)
     }
 
     @Test
     fun `buildUrlString preserves bracketed IPv6`() {
         val url = prometheusHandler.buildUrlString(
             "[2001:db8::1]",
-            9090
+            DEFAULT_PORT
         )
-        assertEquals("http://[2001:db8::1]:9090", url)
+        assertEquals("http://[2001:db8::1]:$DEFAULT_PORT", url)
     }
 
     @Test
@@ -145,10 +162,10 @@ class DashboardHandlersTest {
     @Test
     fun `buildUrlString skips port when host already has port`() {
         val url = prometheusHandler.buildUrlString(
-            "[::1]:9090",
+            "[::1]:$DEFAULT_PORT",
             3000
         )
-        assertEquals("http://[::1]:9090", url)
+        assertEquals("http://[::1]:$DEFAULT_PORT", url)
     }
 
     // ==================== PrometheusHandler: internal parsing ====================
@@ -158,7 +175,7 @@ class DashboardHandlersTest {
         val body = """{"status":"success","data":{"resultType":"vector",""" +
             """"result":[{"metric":{"__name__":"m"},""" +
             """"value":[1,"NaN"]}]}}"""
-        val rows = prometheusHandler.parsePrometheusResponse(body, 100)
+        val rows = prometheusHandler.parsePrometheusResponse(body, DEFAULT_LIMIT)
         assertEquals(1, rows.size)
         assertEquals(JsonNull, rows[0]["m"])
     }
@@ -168,7 +185,7 @@ class DashboardHandlersTest {
         val body = """{"status":"success","data":{"resultType":"vector",""" +
             """"result":[{"metric":{"__name__":"m"},""" +
             """"value":[1,"+Inf"]}]}}"""
-        val rows = prometheusHandler.parsePrometheusResponse(body, 100)
+        val rows = prometheusHandler.parsePrometheusResponse(body, DEFAULT_LIMIT)
         assertEquals(JsonNull, rows[0]["m"])
     }
 
@@ -177,14 +194,14 @@ class DashboardHandlersTest {
         val body = """{"status":"success","data":{"resultType":"vector",""" +
             """"result":[{"metric":{"__name__":"m"},""" +
             """"value":[1,"-Inf"]}]}}"""
-        val rows = prometheusHandler.parsePrometheusResponse(body, 100)
+        val rows = prometheusHandler.parsePrometheusResponse(body, DEFAULT_LIMIT)
         assertEquals(JsonNull, rows[0]["m"])
     }
 
     @Test
     fun `parsePrometheusResponse returns empty for missing data`() {
         val body = """{"status":"error","errorType":"bad_data"}"""
-        val result = prometheusHandler.parsePrometheusResponse(body, 100)
+        val result = prometheusHandler.parsePrometheusResponse(body, DEFAULT_LIMIT)
         assertTrue(result.isEmpty())
     }
 
@@ -204,7 +221,7 @@ class DashboardHandlersTest {
             """"result":[""" +
             """{"metric":{"__name__":"a"},"values":[[1,"10"]]},""" +
             """{"metric":{"__name__":"b"},"values":[[2,"20"]]}]}}"""
-        val rows = prometheusHandler.parsePrometheusResponse(body, 100)
+        val rows = prometheusHandler.parsePrometheusResponse(body, DEFAULT_LIMIT)
         assertEquals(2, rows.size)
         assertEquals(JsonPrimitive(10.0), rows[0]["a"])
         assertEquals(JsonPrimitive(20.0), rows[1]["b"])
@@ -215,7 +232,7 @@ class DashboardHandlersTest {
         val body = """{"status":"success","data":{"resultType":"vector",""" +
             """"result":[{"metric":{"job":"api"},""" +
             """"value":[1700000000,"42"]}]}}"""
-        val rows = prometheusHandler.parsePrometheusResponse(body, 100)
+        val rows = prometheusHandler.parsePrometheusResponse(body, DEFAULT_LIMIT)
         assertEquals(1, rows.size)
         assertEquals(JsonPrimitive(42.0), rows[0]["value"])
         assertEquals(JsonPrimitive("api"), rows[0]["job"])
@@ -289,7 +306,7 @@ class DashboardHandlersTest {
                     val result = PrometheusHandler().testConnection(
                         TestConnectionRequest(
                             sourceType = "prometheus",
-                            host = "127.0.0.1",
+                            host = DEFAULT_HOST,
                             port = port
                         )
                     )
@@ -316,13 +333,13 @@ class DashboardHandlersTest {
                 }.use { server ->
                     val port = extractPort(server.baseUrl)
                     val rows = PrometheusHandler().executeQuery(
-                        1L,
-                        "127.0.0.1",
+                        DEFAULT_ROW_ID,
+                        DEFAULT_HOST,
                         port,
                         null,
                         DataSourceCredentials(),
                         "up",
-                        100,
+                        DEFAULT_LIMIT,
                         null
                     )
                     assertEquals(1, rows.size)
@@ -346,13 +363,13 @@ class DashboardHandlersTest {
                 }.use { server ->
                     val port = extractPort(server.baseUrl)
                     val rows = PrometheusHandler().executeQuery(
-                        1L,
-                        "127.0.0.1",
+                        DEFAULT_ROW_ID,
+                        DEFAULT_HOST,
                         port,
                         null,
                         DataSourceCredentials(),
                         "up",
-                        100,
+                        DEFAULT_LIMIT,
                         TimeRangeDef("now-1h", "now")
                     )
                     assertEquals(2, rows.size)
@@ -369,13 +386,13 @@ class DashboardHandlersTest {
                 }.use { server ->
                     val port = extractPort(server.baseUrl)
                     val rows = PrometheusHandler().executeQuery(
-                        1L,
-                        "127.0.0.1",
+                        DEFAULT_ROW_ID,
+                        DEFAULT_HOST,
                         port,
                         null,
                         DataSourceCredentials(),
                         "up",
-                        100,
+                        DEFAULT_LIMIT,
                         null
                     )
                     assertTrue(rows.isEmpty())
@@ -394,7 +411,7 @@ class DashboardHandlersTest {
                 }.use { server ->
                     val port = extractPort(server.baseUrl)
                     val fields = PrometheusHandler().getSchema(
-                        "127.0.0.1",
+                        DEFAULT_HOST,
                         port,
                         null,
                         DataSourceCredentials()
@@ -418,7 +435,7 @@ class DashboardHandlersTest {
                     val port = extractPort(server.baseUrl)
                     val vals =
                         PrometheusHandler().executeLabelValuesQuery(
-                            "127.0.0.1",
+                            DEFAULT_HOST,
                             port,
                             DataSourceCredentials(),
                             "label_values(up, instance)"
@@ -440,7 +457,7 @@ class DashboardHandlersTest {
                     val port = extractPort(server.baseUrl)
                     val vals =
                         PrometheusHandler().executeLabelValuesQuery(
-                            "127.0.0.1",
+                            DEFAULT_HOST,
                             port,
                             DataSourceCredentials(),
                             "label_values(job)"
@@ -455,7 +472,7 @@ class DashboardHandlersTest {
         runBlocking {
             val vals = prometheusHandler.executeLabelValuesQuery(
                 "example.com",
-                9090,
+                DEFAULT_PORT,
                 DataSourceCredentials(),
                 "invalid_query"
             )
@@ -476,7 +493,7 @@ class DashboardHandlersTest {
                         ElasticsearchHandler().testConnection(
                             TestConnectionRequest(
                                 sourceType = "elasticsearch",
-                                host = "127.0.0.1",
+                                host = DEFAULT_HOST,
                                 port = port
                             )
                         )
@@ -497,7 +514,7 @@ class DashboardHandlersTest {
                         ElasticsearchHandler().testConnection(
                             TestConnectionRequest(
                                 sourceType = "elasticsearch",
-                                host = "127.0.0.1",
+                                host = DEFAULT_HOST,
                                 port = port
                             )
                         )
@@ -521,13 +538,13 @@ class DashboardHandlersTest {
                     val port = extractPort(server.baseUrl)
                     val rows =
                         ElasticsearchHandler().executeQuery(
-                            1L,
-                            "127.0.0.1",
+                            DEFAULT_ROW_ID,
+                            DEFAULT_HOST,
                             port,
                             "myindex",
                             DataSourceCredentials(),
                             """{"query":{"match_all":{}}}""",
-                            100,
+                            DEFAULT_LIMIT,
                             null
                         )
                     assertEquals(1, rows.size)
@@ -565,13 +582,13 @@ class DashboardHandlersTest {
                     val port = extractPort(server.baseUrl)
                     val rows =
                         ElasticsearchHandler().executeQuery(
-                            1L,
-                            "127.0.0.1",
+                            DEFAULT_ROW_ID,
+                            DEFAULT_HOST,
                             port,
                             null,
                             DataSourceCredentials(),
                             "error timeout",
-                            100,
+                            DEFAULT_LIMIT,
                             null
                         )
                     assertEquals(1, rows.size)
@@ -590,13 +607,13 @@ class DashboardHandlersTest {
                     val port = extractPort(server.baseUrl)
                     val rows =
                         ElasticsearchHandler().executeQuery(
-                            1L,
-                            "127.0.0.1",
+                            DEFAULT_ROW_ID,
+                            DEFAULT_HOST,
                             port,
                             null,
                             DataSourceCredentials(),
                             """{"query":{}}""",
-                            100,
+                            DEFAULT_LIMIT,
                             null
                         )
                     assertTrue(rows.isEmpty())
@@ -616,7 +633,7 @@ class DashboardHandlersTest {
                     val port = extractPort(server.baseUrl)
                     val fields =
                         ElasticsearchHandler().getSchema(
-                            "127.0.0.1",
+                            DEFAULT_HOST,
                             port,
                             null,
                             DataSourceCredentials()
@@ -640,7 +657,7 @@ class DashboardHandlersTest {
                 val result = LokiHandler().testConnection(
                     TestConnectionRequest(
                         sourceType = "loki",
-                        host = "127.0.0.1",
+                        host = DEFAULT_HOST,
                         port = port
                     )
                 )
@@ -659,7 +676,7 @@ class DashboardHandlersTest {
                 val result = LokiHandler().testConnection(
                     TestConnectionRequest(
                         sourceType = "loki",
-                        host = "127.0.0.1",
+                        host = DEFAULT_HOST,
                         port = port
                     )
                 )
@@ -685,13 +702,13 @@ class DashboardHandlersTest {
                 }.use { server ->
                     val port = extractPort(server.baseUrl)
                     val rows = LokiHandler().executeQuery(
-                        1L,
-                        "127.0.0.1",
+                        DEFAULT_ROW_ID,
+                        DEFAULT_HOST,
                         port,
                         null,
                         DataSourceCredentials(),
                         """{job="api"}""",
-                        100,
+                        DEFAULT_LIMIT,
                         null
                     )
                     assertEquals(2, rows.size)
@@ -721,7 +738,7 @@ class DashboardHandlersTest {
             }.use { server ->
                 val port = extractPort(server.baseUrl)
                 val fields = LokiHandler().getSchema(
-                    "127.0.0.1",
+                    DEFAULT_HOST,
                     port,
                     null,
                     DataSourceCredentials()
@@ -745,7 +762,7 @@ class DashboardHandlersTest {
                     val port = extractPort(server.baseUrl)
                     val vals =
                         LokiHandler().executeLabelValuesQuery(
-                            "127.0.0.1",
+                            DEFAULT_HOST,
                             port,
                             DataSourceCredentials(),
                             """label_values({job="api"}, inst)"""
@@ -770,7 +787,7 @@ class DashboardHandlersTest {
                 val result = GraphiteHandler().testConnection(
                     TestConnectionRequest(
                         sourceType = "graphite",
-                        host = "127.0.0.1",
+                        host = DEFAULT_HOST,
                         port = port
                     )
                 )
@@ -792,13 +809,13 @@ class DashboardHandlersTest {
                 }.use { server ->
                     val port = extractPort(server.baseUrl)
                     val rows = GraphiteHandler().executeQuery(
-                        1L,
-                        "127.0.0.1",
+                        DEFAULT_ROW_ID,
+                        DEFAULT_HOST,
                         port,
                         null,
                         DataSourceCredentials(),
                         "server.cpu",
-                        100,
+                        DEFAULT_LIMIT,
                         null
                     )
                     assertEquals(2, rows.size)
@@ -824,7 +841,7 @@ class DashboardHandlersTest {
                 }.use { server ->
                     val port = extractPort(server.baseUrl)
                     val fields = GraphiteHandler().getSchema(
-                        "127.0.0.1",
+                        DEFAULT_HOST,
                         port,
                         null,
                         DataSourceCredentials()
@@ -848,7 +865,7 @@ class DashboardHandlersTest {
                 val result = InfluxDBHandler().testConnection(
                     TestConnectionRequest(
                         sourceType = "influxdb",
-                        host = "127.0.0.1",
+                        host = DEFAULT_HOST,
                         port = port,
                         apiKey = "my-token"
                     )
@@ -876,13 +893,13 @@ class DashboardHandlersTest {
                         apiKey = "tok"
                     )
                     val rows = InfluxDBHandler().executeQuery(
-                        1L,
-                        "127.0.0.1",
+                        DEFAULT_ROW_ID,
+                        DEFAULT_HOST,
                         port,
                         "moneat",
                         creds,
                         "filter(fn: (r) => r._m == \"cpu\")",
-                        100,
+                        DEFAULT_LIMIT,
                         null
                     )
                     assertEquals(2, rows.size)
@@ -912,7 +929,7 @@ class DashboardHandlersTest {
                         apiKey = "tok"
                     )
                     val fields = InfluxDBHandler().getSchema(
-                        "127.0.0.1",
+                        DEFAULT_HOST,
                         port,
                         "moneat",
                         creds
@@ -970,7 +987,7 @@ class DashboardHandlersTest {
     @Test
     fun `validateSqlQuery rejects EXEC keyword`() {
         assertFailsWith<IllegalArgumentException> {
-            postgresHandler.validateSqlQuery(
+            mysqlHandler.validateSqlQuery(
                 "SELECT EXEC FROM t"
             )
         }
@@ -979,7 +996,7 @@ class DashboardHandlersTest {
     @Test
     fun `validateSqlQuery rejects EXECUTE keyword`() {
         assertFailsWith<IllegalArgumentException> {
-            postgresHandler.validateSqlQuery(
+            mysqlHandler.validateSqlQuery(
                 "SELECT EXECUTE FROM t"
             )
         }
@@ -988,7 +1005,7 @@ class DashboardHandlersTest {
     @Test
     fun `validateSqlQuery rejects COPY keyword`() {
         assertFailsWith<IllegalArgumentException> {
-            postgresHandler.validateSqlQuery(
+            mysqlHandler.validateSqlQuery(
                 "SELECT COPY FROM t"
             )
         }

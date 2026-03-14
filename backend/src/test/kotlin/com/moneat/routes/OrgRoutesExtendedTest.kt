@@ -16,8 +16,6 @@
 
 package com.moneat.routes
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.events.models.BulkInviteFailure
 import com.moneat.events.models.BulkInviteResult
 import com.moneat.events.models.InvitationDetailsResponse
@@ -30,6 +28,8 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrgInvitations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.RouteTestSupport.createToken
+import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -42,13 +42,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.every
@@ -58,6 +52,7 @@ import io.mockk.runs
 import io.mockk.verify
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -70,7 +65,6 @@ class OrgRoutesExtendedTest {
         private const val JWT_SECRET = "org-extended-test-secret"
         private const val OWNER_EMAIL = "owner@ext.test"
         private const val MEMBER_EMAIL = "member@ext.test"
-        private var dbInitialized = false
     }
 
     private val mockMembershipService = mockk<OrgMembershipService>(relaxed = true)
@@ -78,36 +72,20 @@ class OrgRoutesExtendedTest {
 
     @BeforeTest
     fun setupDatabase() {
-        if (!dbInitialized) {
-            Database.connect(
-                url = "jdbc:h2:mem:moneat_org_ext;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-                driver = "org.h2.Driver"
-            )
-            dbInitialized = true
-        }
+        val db = Database.connect(
+            url = "jdbc:h2:mem:moneat_org_ext;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver"
+        )
+        TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, OrgInvitations)
     }
 
     private fun Application.installAuth() {
-        install(ContentNegotiation) { json() }
-        install(Authentication) {
-            jwt("auth-jwt") {
-                verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
-                        .withIssuer("moneat").withAudience("moneat-users").build()
-                )
-                validate { JWTPrincipal(it.payload) }
-            }
-        }
+        installJwtAuth(JWT_SECRET)
     }
 
-    private fun token(userId: Int, orgId: Int): String = JWT.create()
-        .withIssuer("moneat")
-        .withAudience("moneat-users")
-        .withClaim("userId", userId)
-        .withClaim("orgId", orgId)
-        .withClaim("email", "user$userId@test.com")
-        .sign(Algorithm.HMAC256(JWT_SECRET))
+    private fun token(userId: Int, orgId: Int): String =
+        createToken(JWT_SECRET, userId, orgId)
 
     private fun seedOrg(name: String): Int = transaction {
         Organizations.insert {

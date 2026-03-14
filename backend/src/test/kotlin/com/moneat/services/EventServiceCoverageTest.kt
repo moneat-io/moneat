@@ -48,6 +48,7 @@ import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
 import com.moneat.testsupport.TestDatabaseHelper
 import io.mockk.coEvery
+import io.mockk.verify
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -115,8 +116,8 @@ class EventServiceCoverageTest {
             ProjectKeyVerification(false, null)
         every { eventRepository.verifyProjectKey(testProjectId, "valid-key") } returns
             ProjectKeyVerification(true, "jvm")
-        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
         every { eventRepository.getOrganizationIdForProject(any()) } returns null
+        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
 
         coEvery { eventRepository.insertErrorEvent(any()) } returns true
         coEvery { eventRepository.insertTransaction(any()) } returns true
@@ -839,7 +840,8 @@ class EventServiceCoverageTest {
         )
 
         assertTrue(fbSlot.isCaptured)
-        assertTrue(fbSlot.captured.timestampMs > 0)
+        val expectedEpochMs = java.time.Instant.parse("2024-01-15T10:30:45Z").toEpochMilli()
+        assertEquals(expectedEpochMs, fbSlot.captured.timestampMs)
     }
 
     @Test
@@ -870,9 +872,11 @@ class EventServiceCoverageTest {
                 items = listOf(EnvelopeItem("feedback", fbJson))
             )
         )
+        val after = System.currentTimeMillis()
 
         assertTrue(fbSlot.isCaptured)
         assertTrue(fbSlot.captured.timestampMs >= before)
+        assertTrue(fbSlot.captured.timestampMs <= after)
     }
 
     // ===================== storeReplayEvent =====================
@@ -991,7 +995,7 @@ class EventServiceCoverageTest {
 
         assertTrue(result1.isValid)
         assertTrue(result2.isValid)
-        // Repository should only be called once due to caching
+        verify(exactly = 1) { eventRepository.verifyProjectKey(testProjectId, "valid-key") }
     }
 
     @Test
@@ -1003,6 +1007,7 @@ class EventServiceCoverageTest {
 
         assertEquals(testOrgId, result1)
         assertEquals(testOrgId, result2)
+        verify(exactly = 1) { eventRepository.getOrganizationIdForProject(testProjectId) }
     }
 
     // ===================== storeTransaction when insert fails =====================
@@ -1044,7 +1049,7 @@ class EventServiceCoverageTest {
     // ===================== storeEvent when insert fails =====================
 
     @Test
-    fun `storeEvent returns false when insert fails`() = runBlocking {
+    fun `processEnvelope does not throw when insert fails`() = runBlocking {
         coEvery { eventRepository.insertErrorEvent(any()) } returns false
 
         val eventJson = Json.encodeToString(
@@ -1111,6 +1116,13 @@ class EventServiceCoverageTest {
                 timestamp = 1700000006.0
             ),
             SentrySpan(
+                span_id = "s5b",
+                op = "ai.pipeline",
+                description = "Pipeline",
+                start_timestamp = 1700000005.5,
+                timestamp = 1700000006.0
+            ),
+            SentrySpan(
                 span_id = "s6",
                 op = "ai.retriever",
                 description = "Retriever",
@@ -1160,7 +1172,8 @@ class EventServiceCoverageTest {
         assertEquals("tool_call", types[2])
         assertEquals("agent", types[3])
         assertEquals("chain", types[4])
-        assertEquals("retriever", types[5])
-        assertEquals("completion", types[6])
+        assertEquals("chain", types[5])
+        assertEquals("retriever", types[6])
+        assertEquals("completion", types[7])
     }
 }

@@ -56,3 +56,16 @@ fun HttpExchange.respond(
     sendResponseHeaders(status, bytes.size.toLong())
     responseBody.use { it.write(bytes) }
 }
+
+/**
+ * Default ClickHouse handler that returns empty data for common query patterns.
+ * Use when tests only need "no data" responses.
+ */
+fun defaultEmptyClickHouseHandler(): (HttpExchange) -> Unit = { exchange ->
+    val query = exchange.requestBodyText()
+    val body = when {
+        query.contains("count() as total") -> """{"total":0}"""
+        else -> """{"data":[]}"""
+    }
+    exchange.respond(200, body, "text/plain")
+}

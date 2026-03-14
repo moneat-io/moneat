@@ -48,10 +48,12 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -62,7 +64,7 @@ class AnalyticsRoutesTest {
     companion object {
         private const val JWT_SECRET = "analytics-mock-secret"
         private const val PROJECT_ID = 1L
-        private var dbInitialized = false
+        private var db: Database? = null
     }
 
     private val mockAnalyticsService = mockk<AnalyticsService>(relaxed = true)
@@ -70,15 +72,15 @@ class AnalyticsRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
-        if (!dbInitialized) {
-            Database.connect(
+        if (db == null) {
+            db = Database.connect(
                 url = "jdbc:h2:mem:moneat_analytics_routes_mock;" +
                     "MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;" +
                     "DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            dbInitialized = true
         }
+        TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(
             Users,
             Organizations,
@@ -353,6 +355,9 @@ class AnalyticsRoutesTest {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getPages(PROJECT_ID, any(), any(), any(), 10)
+        }
     }
 
     // ─── Entry Pages ───────────────────────────────────────────

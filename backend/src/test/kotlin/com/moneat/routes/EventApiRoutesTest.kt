@@ -64,6 +64,7 @@ import io.mockk.every
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
@@ -77,7 +78,10 @@ import kotlin.time.Duration.Companion.seconds
 class EventApiRoutesTest {
     companion object {
         private const val JWT_SECRET = "event-api-test-secret"
-        private var dbInitialized = false
+        private var db: Database? = null
+        private const val DEFAULT_PAGE = 1
+        private const val DEFAULT_LIMIT = 25
+        private const val SENTINEL_PROJECT_ID = 999L
     }
 
     private val mockDashboardService = mockk<DashboardService>(relaxed = true)
@@ -88,13 +92,13 @@ class EventApiRoutesTest {
         loadKoinModules(
             module { single<DashboardService> { mockDashboardService } }
         )
-        if (!dbInitialized) {
-            Database.connect(
+        if (db == null) {
+            db = Database.connect(
                 url = "jdbc:h2:mem:moneat_event_api;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            dbInitialized = true
         }
+        TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, Projects)
     }
 
@@ -195,10 +199,10 @@ class EventApiRoutesTest {
     @Test
     fun `GET issues returns 403 when user lacks project access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_PROJECT_ID) } returns false
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/999/issues") {
+        val response = client.get("/v1/projects/$SENTINEL_PROJECT_ID/issues") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -235,7 +239,7 @@ class EventApiRoutesTest {
         val (userId, projectId) = seedUserWithProject()
         every { mockDashboardService.hasProjectAccess(userId, projectId) } returns true
         coEvery {
-            mockDashboardService.getIssues(projectId, 1, 25, null, any())
+            mockDashboardService.getIssues(projectId, DEFAULT_PAGE, DEFAULT_LIMIT, null, any())
         } returns listOf(sampleIssue(projectId))
 
         application { installTestApp() }

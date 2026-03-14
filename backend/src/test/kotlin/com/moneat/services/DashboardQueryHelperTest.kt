@@ -27,6 +27,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,6 +43,11 @@ class DashboardQueryHelperTest {
     @BeforeTest
     fun setup() {
         helper = DashboardQueryHelper(retentionPolicyService, pricingTierService)
+    }
+
+    @AfterTest
+    fun teardown() {
+        ClickHouseClient.close()
     }
 
     // ============ normalizeUuid ============

@@ -64,6 +64,7 @@ import io.mockk.every
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -73,7 +74,7 @@ import kotlin.test.assertTrue
 class DashboardRoutesTest {
     companion object {
         private const val JWT_SECRET = "dashboard-mock-secret"
-        private var dbInitialized = false
+        private var db: Database? = null
     }
 
     private val mockDashboardService =
@@ -95,15 +96,15 @@ class DashboardRoutesTest {
 
     @BeforeTest
     fun setupDatabase() {
-        if (!dbInitialized) {
-            Database.connect(
+        if (db == null) {
+            db = Database.connect(
                 url = "jdbc:h2:mem:moneat_dashboard_mock;" +
                     "MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;" +
                     "DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            dbInitialized = true
         }
+        TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(
             Users,
             Organizations,

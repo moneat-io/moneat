@@ -59,7 +59,7 @@ class AnalyticsServiceTest {
                 """.trimIndent(),
                 contentType = "text/plain"
             )
-        }) { server ->
+        }) { _ ->
 
             val result = service.getOverview(projectId, dateFrom, dateTo, emptyList(), null, null)
 
@@ -94,7 +94,7 @@ class AnalyticsServiceTest {
                     contentType = "text/plain"
                 )
             }
-        }) { server ->
+        }) { _ ->
 
             val compFrom = LocalDate.of(2025, 12, 1)
             val compTo = LocalDate.of(2025, 12, 31)
@@ -113,7 +113,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val result = service.getOverview(projectId, dateFrom, dateTo, emptyList(), null, null)
 
@@ -137,7 +137,7 @@ class AnalyticsServiceTest {
 {"date":"2026-01-02","visitors":15,"pageviews":30}""",
                 contentType = "text/plain"
             )
-        }) { server ->
+        }) { _ ->
 
             val result = service.getTimeseries(projectId, dateFrom, dateTo, emptyList())
 
@@ -155,7 +155,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val shortFrom = LocalDate.of(2026, 1, 1)
             val shortTo = LocalDate.of(2026, 1, 2)
@@ -171,7 +171,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             service.getTimeseries(projectId, dateFrom, dateTo, emptyList())
 
@@ -184,7 +184,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val result = service.getTimeseries(projectId, dateFrom, dateTo, emptyList())
 
@@ -204,7 +204,7 @@ class AnalyticsServiceTest {
 {"name":"Firefox","visitors":30,"pageviews":80}""",
                 contentType = "text/plain"
             )
-        }) { server ->
+        }) { _ ->
 
             val result = service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "browser")
 
@@ -226,7 +226,7 @@ class AnalyticsServiceTest {
                 """{"name":"/home","visitors":100,"pageviews":200}""",
                 contentType = "text/plain"
             )
-        }) { server ->
+        }) { _ ->
 
             service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "pathname")
 
@@ -240,7 +240,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "browser")
 
@@ -253,7 +253,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val result = service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "os")
 
@@ -269,7 +269,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             service.getPages(projectId, dateFrom, dateTo, emptyList())
 
@@ -283,7 +283,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             service.getEntryPages(projectId, dateFrom, dateTo, emptyList())
 
@@ -297,7 +297,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             service.getExitPages(projectId, dateFrom, dateTo, emptyList())
 
@@ -357,7 +357,7 @@ class AnalyticsServiceTest {
 {"level":3,"cnt":10}""",
                 contentType = "text/plain"
             )
-        }) { server ->
+        }) { _ ->
 
             val steps = listOf("page_load", "signup_click", "signup_complete")
             val result = service.getFunnel(projectId, dateFrom, dateTo, steps)
@@ -386,7 +386,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val steps = listOf("step_a", "step_b")
             val result = service.getFunnel(projectId, dateFrom, dateTo, steps)
@@ -409,7 +409,7 @@ class AnalyticsServiceTest {
 {"name":"form_submit","visitors":10,"pageviews":15}""",
                 contentType = "text/plain"
             )
-        }) { server ->
+        }) { _ ->
 
             val result = service.getEvents(projectId, dateFrom, dateTo, emptyList())
 
@@ -426,7 +426,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             service.getEvents(projectId, dateFrom, dateTo, emptyList())
 
@@ -442,7 +442,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val filters = listOf(AnalyticsFilter("browser", "is", "Chrome"))
             service.getTimeseries(projectId, dateFrom, dateTo, filters)
@@ -457,7 +457,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val filters = listOf(AnalyticsFilter("browser", "is_not", "IE"))
             service.getTimeseries(projectId, dateFrom, dateTo, filters)
@@ -472,7 +472,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val filters = listOf(AnalyticsFilter("browser", "contains", "Chrome"))
             service.getTimeseries(projectId, dateFrom, dateTo, filters)
@@ -487,7 +487,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val filters = listOf(AnalyticsFilter("browser", "not_contains", "IE"))
             service.getTimeseries(projectId, dateFrom, dateTo, filters)
@@ -506,7 +506,7 @@ class AnalyticsServiceTest {
                 """{"visitors":5,"pageviews":10,"bounce_rate":50.0,"avg_visit_duration":60.0,"views_per_visit":2.0}""",
                 contentType = "text/plain"
             )
-        }) { server ->
+        }) { _ ->
 
             val filters = listOf(AnalyticsFilter("source", "is", "google"))
             service.getOverview(projectId, dateFrom, dateTo, filters, null, null)
@@ -525,7 +525,7 @@ class AnalyticsServiceTest {
                 """{"visitors":5,"pageviews":10,"bounce_rate":50.0,"avg_visit_duration":60.0,"views_per_visit":2.0}""",
                 contentType = "text/plain"
             )
-        }) { server ->
+        }) { _ ->
 
             val filters = listOf(AnalyticsFilter("country", "is", "US"))
             service.getOverview(projectId, dateFrom, dateTo, filters, null, null)
@@ -548,7 +548,7 @@ class AnalyticsServiceTest {
             withClickHouseMockServer({ exchange ->
                 queries.add(exchange.requestBodyText())
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), dimension)
                 assertTrue(
                     queries.any { it.contains("analytics_sessions_hourly") },
@@ -566,7 +566,7 @@ class AnalyticsServiceTest {
             withClickHouseMockServer({ exchange ->
                 queries.add(exchange.requestBodyText())
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), dimension)
                 assertTrue(
                     queries.any { it.contains("analytics_events") },
@@ -582,7 +582,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "browser", limit = 10)
 
@@ -598,7 +598,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             service.getOverview(projectId, dateFrom, dateTo, emptyList(), null, null)
 
@@ -614,7 +614,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             service.getFunnel(projectId, dateFrom, dateTo, listOf("step1", "step2"))
 
@@ -630,7 +630,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val filters = listOf(AnalyticsFilter("nonexistent_prop", "is", "value"))
             service.getTimeseries(projectId, dateFrom, dateTo, filters)
@@ -646,7 +646,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             // getTimeseries uses alias "s" (sessions table), so "page" filter should be skipped
             val filters = listOf(AnalyticsFilter("page", "is", "/home"))
@@ -662,7 +662,7 @@ class AnalyticsServiceTest {
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
             exchange.respond(200, "", contentType = "text/plain")
-        }) { server ->
+        }) { _ ->
 
             val filters = listOf(AnalyticsFilter("page", "is", "/home"))
             service.getEvents(projectId, dateFrom, dateTo, filters)
@@ -684,7 +684,7 @@ not valid json
 {"date":"2026-01-02","visitors":15,"pageviews":30}""",
                 contentType = "text/plain"
             )
-        }) { server ->
+        }) { _ ->
 
             val result = service.getTimeseries(projectId, dateFrom, dateTo, emptyList())
 
@@ -702,7 +702,7 @@ not valid json
                 """{"visitors":5}""",
                 contentType = "text/plain"
             )
-        }) { server ->
+        }) { _ ->
 
             val result = service.getOverview(projectId, dateFrom, dateTo, emptyList(), null, null)
 

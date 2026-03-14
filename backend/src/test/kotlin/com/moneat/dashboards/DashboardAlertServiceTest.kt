@@ -30,11 +30,8 @@ import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.RetentionPolicyService
+import com.moneat.testsupport.TestDatabaseHelper
 import io.mockk.mockk
-import org.jetbrains.exposed.v1.core.AutoIncColumnType
-import org.jetbrains.exposed.v1.core.Column
-import org.jetbrains.exposed.v1.core.ColumnType
-import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -86,9 +83,11 @@ class DashboardAlertServiceTest {
         }
         TransactionManager.defaultDatabase = db
 
-        transaction { exec("DROP ALL OBJECTS") }
-        resetAutoIncNullable(Dashboards, DashboardWidgets, DashboardWidgetAlerts)
-        patchJsonbForH2(Dashboards, DashboardWidgets, DashboardWidgetAlerts)
+        TestDatabaseHelper.resetSchemaForH2WithJsonb(
+            Dashboards,
+            DashboardWidgets,
+            DashboardWidgetAlerts
+        )
         transaction {
             exec(
                 """
@@ -159,55 +158,20 @@ class DashboardAlertServiceTest {
                     duration_seconds INT DEFAULT 0 NOT NULL,
                     incident_severity VARCHAR(20),
                     enabled BOOLEAN DEFAULT TRUE NOT NULL,
-                    notification_channels TEXT NOT NULL,
-                    last_triggered_at TIMESTAMP,
+                    notification_channels TEXT NOT NULL, -- H2: JSONB unsupported; production uses JSONB
+                    last_triggered_at TIMESTAMP DEFAULT NOW(),
                     last_value DOUBLE PRECISION,
                     created_by BIGINT NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    updated_at TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
                     CONSTRAINT fk_alerts_widget_id FOREIGN KEY (widget_id)
-                        REFERENCES dashboard_widgets(id),
+                        REFERENCES dashboard_widgets(id) ON DELETE CASCADE,
                     CONSTRAINT fk_alerts_dashboard_id FOREIGN KEY (dashboard_id)
-                        REFERENCES dashboards(id)
+                        REFERENCES dashboards(id) ON DELETE CASCADE,
+                    CONSTRAINT chk_dwa_condition CHECK (condition IN ('>', '<', '>=', '<=', '=='))
                 )
                 """.trimIndent()
             )
-        }
-    }
-
-    private fun resetAutoIncNullable(vararg tables: Table) {
-        tables.forEach { table ->
-            table.columns.forEach { column ->
-                val colType = column.columnType
-                if (colType is AutoIncColumnType) {
-                    colType.nullable = false
-                }
-            }
-        }
-    }
-
-    /**
-     * Replaces JSONB column types with H2-compatible TEXT-based types so
-     * Exposed insert/select operations work without PGobject.
-     */
-    private fun patchJsonbForH2(vararg tables: Table) {
-        val h2TextJson = object : ColumnType<String>() {
-            override fun sqlType(): String = "TEXT"
-            override fun valueFromDB(value: Any): String = when (value) {
-                is String -> value
-                else -> value.toString()
-            }
-            override fun notNullValueToDB(value: String): Any = value
-        }
-        val field = Column::class.java.getDeclaredField("columnType")
-        field.isAccessible = true
-        val jsonbClassName = "com.moneat.dashboards.models.JsonbColumnType"
-        tables.forEach { table ->
-            table.columns.forEach { col ->
-                if (col.columnType::class.qualifiedName == jsonbClassName) {
-                    field.set(col, h2TextJson)
-                }
-            }
         }
     }
 

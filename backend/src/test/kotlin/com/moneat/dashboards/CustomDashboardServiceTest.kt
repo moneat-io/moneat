@@ -62,7 +62,7 @@ class CustomDashboardServiceTest {
         private const val ORG_ID = 1L
         private const val OTHER_ORG_ID = 999L
         private const val USER_ID_LONG = 100L
-        private const val USER_ID_INT = 1
+        private const val USER_ID_INT = 100
         private const val PROJECT_ID = 10L
     }
 

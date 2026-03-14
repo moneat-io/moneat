@@ -31,6 +31,7 @@ import com.moneat.shared.models.Projects
 import com.moneat.summary.services.SummaryService
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.withSummaryServiceMockServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import com.moneat.uptime.models.UptimeMonitorResponse
@@ -404,19 +405,15 @@ class SummaryServiceTest {
         val issueJson = """{"data":[
             {"issue_id":"iss-1","title":"NullPointer","event_count":5,"pid":1}
         ]}"""
-        MockHttpServer(
-            mockClickHouseHandler(scalarTotal = 20, issueData = issueJson)
-        ).use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
-            TransactionManager.defaultDatabase = db
-
-            seedOrgAndProject()
-            every { monitorService.listHosts(ORG_ID) } returns emptyList()
-            every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
-
+        withSummaryServiceMockServer(
+            mockClickHouseHandler(scalarTotal = 20, issueData = issueJson),
+            db,
+            ORG_ID,
+            { seedOrgAndProject() },
+            monitorService,
+            uptimeService
+        ) {
             val result = service.getOvernightSummary(ORG_ID, "UTC")
-
             assertEquals("UTC", result.timezone)
             assertNotNull(result.windowStart)
             assertNotNull(result.windowEnd)
@@ -428,34 +425,28 @@ class SummaryServiceTest {
 
     @Test
     fun `getOvernightSummary detects error spike`() = runBlocking {
-        // The overnight window is yesterday 22:00-today 08:00 and the baseline is
-        // day-before-yesterday 22:00-yesterday 08:00. Differentiate by date substring.
         val zone = java.time.ZoneId.of("UTC")
         val today = java.time.ZonedDateTime.now(zone).toLocalDate()
-        val dayBefore = today.minusDays(2).toString() // baseline window start date
-        MockHttpServer { exchange ->
-            val query = exchange.requestBodyText()
-            val body = when {
-                query.contains("event_type = 'error'") && query.contains("count() as total") -> {
-                    // Return low value for baseline (contains day-before-yesterday) and high for overnight
-                    if (query.contains(dayBefore)) """{"total":10}""" else """{"total":100}"""
+        val dayBefore = today.minusDays(2).toString()
+        withSummaryServiceMockServer(
+            { exchange ->
+                val query = exchange.requestBodyText()
+                val body = when {
+                    query.contains("event_type = 'error'") && query.contains("count() as total") ->
+                        if (query.contains(dayBefore)) """{"total":10}""" else """{"total":100}"""
+                    query.contains("issue_id") -> """{"data":[]}"""
+                    query.contains("count() as total") -> """{"total":0}"""
+                    else -> ""
                 }
-                query.contains("issue_id") -> """{"data":[]}"""
-                query.contains("count() as total") -> """{"total":0}"""
-                else -> ""
-            }
-            exchange.respond(200, body, "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
-            TransactionManager.defaultDatabase = db
-
-            seedOrgAndProject()
-            every { monitorService.listHosts(ORG_ID) } returns emptyList()
-            every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
-
+                exchange.respond(200, body, "text/plain")
+            },
+            db,
+            ORG_ID,
+            { seedOrgAndProject() },
+            monitorService,
+            uptimeService
+        ) {
             val result = service.getOvernightSummary(ORG_ID, "UTC")
-
             assertTrue(result.errorSpikes.spikeDetected)
             assertEquals(100L, result.errorSpikes.overnightCount)
             assertEquals(10L, result.errorSpikes.baselineCount)
@@ -464,27 +455,25 @@ class SummaryServiceTest {
 
     @Test
     fun `getOvernightSummary includes host status changes for offline hosts`() = runBlocking {
-        MockHttpServer(mockClickHouseHandler()).use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
-            TransactionManager.defaultDatabase = db
-
-            seedOrgAndProject()
-            // Compute a time within the overnight window (yesterday 22:00 to today 08:00 UTC)
-            val zone = java.time.ZoneId.of("UTC")
-            val today = java.time.ZonedDateTime.now(zone).toLocalDate()
-            val withinWindow = today.minusDays(1).atTime(23, 0)
-                .atZone(zone).toInstant().toEpochMilli()
-            val offlineHost = makeHost(
-                id = 10,
-                status = "offline",
-                lastSeenAt = kotlin.time.Instant.fromEpochMilliseconds(withinWindow)
-            )
+        val zone = java.time.ZoneId.of("UTC")
+        val today = java.time.ZonedDateTime.now(zone).toLocalDate()
+        val withinWindow = today.minusDays(1).atTime(23, 0)
+            .atZone(zone).toInstant().toEpochMilli()
+        val offlineHost = makeHost(
+            id = 10,
+            status = "offline",
+            lastSeenAt = kotlin.time.Instant.fromEpochMilliseconds(withinWindow)
+        )
+        withSummaryServiceMockServer(
+            mockClickHouseHandler(),
+            db,
+            ORG_ID,
+            { seedOrgAndProject() },
+            monitorService,
+            uptimeService
+        ) {
             every { monitorService.listHosts(ORG_ID) } returns listOf(offlineHost)
-            every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
-
             val result = service.getOvernightSummary(ORG_ID, "UTC")
-
             assertEquals(1, result.hostStatusChanges.size)
             assertEquals("offline", result.hostStatusChanges.first().currentStatus)
             assertEquals("online", result.hostStatusChanges.first().previousStatus)
@@ -493,19 +482,18 @@ class SummaryServiceTest {
 
     @Test
     fun `getOvernightSummary includes down uptime monitors`() = runBlocking {
-        MockHttpServer(mockClickHouseHandler()).use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
-            TransactionManager.defaultDatabase = db
-
-            seedOrgAndProject()
-            every { monitorService.listHosts(ORG_ID) } returns emptyList()
+        withSummaryServiceMockServer(
+            mockClickHouseHandler(),
+            db,
+            ORG_ID,
+            { seedOrgAndProject() },
+            monitorService,
+            uptimeService
+        ) {
             every { uptimeService.listMonitors(ORG_ID) } returns listOf(
                 makeMonitor(id = "mon-down", name = "Down Monitor", status = "down")
             )
-
             val result = service.getOvernightSummary(ORG_ID, "UTC")
-
             assertEquals(1, result.uptimeIncidents.size)
             assertEquals("mon-down", result.uptimeIncidents.first().monitorId)
         }
@@ -513,28 +501,24 @@ class SummaryServiceTest {
 
     @Test
     fun `getOvernightSummary log volume change percent`() = runBlocking {
-        MockHttpServer { exchange ->
-            val query = exchange.requestBodyText()
-            val body = when {
-                query.contains("logs") && query.contains("count() as total") ->
-                    """{"total":30}"""
-                query.contains("count() as total") -> """{"total":5}"""
-                query.contains("issue_id") -> """{"data":[]}"""
-                else -> ""
-            }
-            exchange.respond(200, body, "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
-            TransactionManager.defaultDatabase = db
-
-            seedOrgAndProject()
-            every { monitorService.listHosts(ORG_ID) } returns emptyList()
-            every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
-
+        withSummaryServiceMockServer(
+            { exchange ->
+                val query = exchange.requestBodyText()
+                val body = when {
+                    query.contains("logs") && query.contains("count() as total") -> """{"total":30}"""
+                    query.contains("count() as total") -> """{"total":5}"""
+                    query.contains("issue_id") -> """{"data":[]}"""
+                    else -> ""
+                }
+                exchange.respond(200, body, "text/plain")
+            },
+            db,
+            ORG_ID,
+            { seedOrgAndProject() },
+            monitorService,
+            uptimeService
+        ) {
             val result = service.getOvernightSummary(ORG_ID, "UTC")
-
-            // Both overnight and previous night get the same mock value (30)
             assertEquals(30L, result.logErrorVolume.overnightErrors)
             assertEquals(30L, result.logErrorVolume.previousNightErrors)
             assertEquals(0.0, result.logErrorVolume.changePercent)
@@ -543,49 +527,47 @@ class SummaryServiceTest {
 
     @Test
     fun `getOvernightSummary log volume zero baseline gives zero change percent`() = runBlocking {
-        MockHttpServer { exchange ->
-            val query = exchange.requestBodyText()
-            val body = when {
-                query.contains("logs") -> """{"total":0}"""
-                query.contains("count() as total") -> """{"total":0}"""
-                query.contains("issue_id") -> """{"data":[]}"""
-                else -> ""
-            }
-            exchange.respond(200, body, "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
-            TransactionManager.defaultDatabase = db
-
-            seedOrgAndProject()
-            every { monitorService.listHosts(ORG_ID) } returns emptyList()
-            every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
-
+        withSummaryServiceMockServer(
+            { exchange ->
+                val query = exchange.requestBodyText()
+                val body = when {
+                    query.contains("logs") -> """{"total":0}"""
+                    query.contains("count() as total") -> """{"total":0}"""
+                    query.contains("issue_id") -> """{"data":[]}"""
+                    else -> ""
+                }
+                exchange.respond(200, body, "text/plain")
+            },
+            db,
+            ORG_ID,
+            { seedOrgAndProject() },
+            monitorService,
+            uptimeService
+        ) {
             val result = service.getOvernightSummary(ORG_ID, "UTC")
-
             assertEquals(0.0, result.logErrorVolume.changePercent)
         }
     }
 
     @Test
     fun `getOvernightSummary with no projects returns empty issues`() = runBlocking {
-        MockHttpServer(mockClickHouseHandler()).use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
-            TransactionManager.defaultDatabase = db
-
-            transaction {
-                Organizations.insert {
-                    it[id] = ORG_ID
-                    it[name] = "Test Org"
-                    it[slug] = "test-org"
+        withSummaryServiceMockServer(
+            mockClickHouseHandler(),
+            db,
+            ORG_ID,
+            {
+                transaction {
+                    Organizations.insert {
+                        it[id] = ORG_ID
+                        it[name] = "Test Org"
+                        it[slug] = "test-org"
+                    }
                 }
-            }
-            every { monitorService.listHosts(ORG_ID) } returns emptyList()
-            every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
-
+            },
+            monitorService,
+            uptimeService
+        ) {
             val result = service.getOvernightSummary(ORG_ID, "UTC")
-
             assertTrue(result.newIssues.isEmpty())
         }
     }

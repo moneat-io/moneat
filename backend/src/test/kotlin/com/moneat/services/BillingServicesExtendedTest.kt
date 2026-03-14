@@ -1160,7 +1160,7 @@ class BillingServicesExtendedTest {
         paygEnabled: Boolean,
         paygRateMicrosPerUnit: Long,
         overageRateCentsPerGb: Int,
-        monthlyGbLimit: Long = 10
+        monthlyGbLimit: Long = 10L * BYTES_PER_GB
     ): Int {
         return PricingTierConfigs.insert {
             it[PricingTierConfigs.tier_name] = tierName

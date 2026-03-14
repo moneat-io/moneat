@@ -18,6 +18,8 @@ package com.moneat.services
 
 import com.moneat.notifications.services.DiscordService
 import com.moneat.shared.models.OrganizationIntegrations
+import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.respond
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.coroutines.runBlocking
@@ -27,6 +29,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -194,326 +197,286 @@ class DiscordServiceBuildersTest {
             assertTrue(error.contains("not configured"))
         }
 
-    // ── Embed building with configured integration ──────────────────────
-    // Embeds are built before the HTTP call; bot token is blank so sendMessage returns early.
+    // ── Embed builder unit tests ────────────────────────────────────────
+    // Assert on DiscordEmbed fields to verify embed construction.
 
     @Test
-    fun `sendHostAlert builds embed with configured integration`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org HA")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendHostAlert(
-                organizationId = orgId,
-                hostName = "api-prod-1",
-                metric = "Memory Usage",
-                condition = ">",
-                threshold = "85%",
-                currentValue = "92%",
-                hostId = 42,
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildHostAlertEmbed returns embed with expected title fields color url`() {
+        val embed = DiscordService.buildHostAlertEmbed(
+            hostName = "api-prod-1",
+            metric = "Memory Usage",
+            condition = ">",
+            threshold = "85%",
+            currentValue = "92%",
+            hostId = 42,
+            baseUrl = "https://app.moneat.io",
+            timestamp = "2024-01-15T10:00:00Z"
+        )
+        assertEquals("⚠️ Host Alert", embed.title)
+        assertEquals("**api-prod-1** triggered an alert", embed.description)
+        assertEquals("https://app.moneat.io/monitoring/hosts/42", embed.url)
+        assertEquals(0xECB22E, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals(4, fields.size)
+        assertEquals("Host", fields[0].name)
+        assertEquals("api-prod-1", fields[0].value)
+        assertEquals("Metric", fields[1].name)
+        assertEquals("Memory Usage", fields[1].value)
+        assertEquals("Condition", fields[2].name)
+        assertEquals("> 85%", fields[2].value)
+        assertEquals("Current Value", fields[3].name)
+        assertEquals("92%", fields[3].value)
+        assertEquals("Moneat Alert", embed.footer?.text)
+    }
 
     @Test
-    fun `sendHostDown builds embed with configured integration`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org HD")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendHostDown(
-                organizationId = orgId,
-                hostName = "db-primary",
-                lastSeen = "2024-06-15T10:30:00Z",
-                hostId = 7,
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildHostDownEmbed returns embed with expected title fields color url`() {
+        val embed = DiscordService.buildHostDownEmbed(
+            hostName = "db-primary",
+            lastSeen = "2024-06-15T10:30:00Z",
+            hostId = 7,
+            baseUrl = "https://app.moneat.io"
+        )
+        assertEquals("🔴 Host Down", embed.title)
+        assertEquals("**db-primary** is not responding", embed.description)
+        assertEquals("https://app.moneat.io/monitoring/hosts/7", embed.url)
+        assertEquals(0xE01E5A, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals(2, fields.size)
+        assertEquals("Host", fields[0].name)
+        assertEquals("db-primary", fields[0].value)
+        assertEquals("Last Seen", fields[1].name)
+        assertEquals("2024-06-15T10:30:00Z", fields[1].value)
+    }
 
     @Test
-    fun `sendHostUp builds embed with configured integration`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org HU")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendHostUp(
-                organizationId = orgId,
-                hostName = "cache-node-3",
-                hostId = 15,
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildHostUpEmbed returns embed with expected title fields color url`() {
+        val embed = DiscordService.buildHostUpEmbed(
+            hostName = "cache-node-3",
+            hostId = 15,
+            baseUrl = "https://app.moneat.io"
+        )
+        assertEquals("✅ Host Recovered", embed.title)
+        assertEquals("**cache-node-3** is back online", embed.description)
+        assertEquals("https://app.moneat.io/monitoring/hosts/15", embed.url)
+        assertEquals(0x2EB67D, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals(2, fields.size)
+        assertEquals("Host", fields[0].name)
+        assertEquals("cache-node-3", fields[0].value)
+        assertEquals("Status", fields[1].name)
+        assertEquals("Online", fields[1].value)
+    }
 
     @Test
-    fun `sendUptimeAlert builds embed for down monitor with error message`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org UD")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendUptimeAlert(
-                organizationId = orgId,
-                monitorUrl = "https://api.moneat.io/health",
-                isDown = true,
-                statusCode = null,
-                responseTime = 5000L,
-                errorMessage = "Connection refused",
-                monitorId = UUID.randomUUID(),
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildUptimeAlertEmbed down with error message includes status and response time`() {
+        val monitorId = UUID.fromString("11111111-1111-1111-1111-111111111111")
+        val embed = DiscordService.buildUptimeAlertEmbed(
+            monitorUrl = "https://api.moneat.io/health",
+            isDown = true,
+            statusCode = null,
+            responseTime = 5000L,
+            errorMessage = "Connection refused",
+            monitorId = monitorId,
+            baseUrl = "https://app.moneat.io"
+        )
+        assertEquals("🔴 Uptime Monitor Down", embed.title)
+        assertEquals("Monitor detected a failure", embed.description)
+        assertEquals("https://app.moneat.io/monitoring?monitor=$monitorId", embed.url)
+        assertEquals(0xE01E5A, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals(3, fields.size)
+        assertEquals("URL", fields[0].name)
+        assertEquals("https://api.moneat.io/health", fields[0].value)
+        assertEquals("Status", fields[1].name)
+        assertEquals("Connection refused", fields[1].value)
+        assertEquals("Response Time", fields[2].name)
+        assertEquals("5000ms", fields[2].value)
+    }
 
     @Test
-    fun `sendUptimeAlert builds embed for down monitor with status code`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org US")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendUptimeAlert(
-                organizationId = orgId,
-                monitorUrl = "https://api.moneat.io/health",
-                isDown = true,
-                statusCode = 503,
-                responseTime = 1200L,
-                errorMessage = null,
-                monitorId = UUID.randomUUID(),
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildUptimeAlertEmbed down with status code uses HTTP status`() {
+        val monitorId = UUID.randomUUID()
+        val embed = DiscordService.buildUptimeAlertEmbed(
+            monitorUrl = "https://api.moneat.io/health",
+            isDown = true,
+            statusCode = 503,
+            responseTime = 1200L,
+            errorMessage = null,
+            monitorId = monitorId,
+            baseUrl = "https://app.moneat.io"
+        )
+        assertEquals("🔴 Uptime Monitor Down", embed.title)
+        val fields = requireNotNull(embed.fields)
+        assertEquals("HTTP 503", fields[1].value)
+        assertEquals("1200ms", fields[2].value)
+    }
 
     @Test
-    fun `sendUptimeAlert builds embed for down monitor with unknown status`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org UU")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendUptimeAlert(
-                organizationId = orgId,
-                monitorUrl = "https://api.moneat.io/health",
-                isDown = true,
-                statusCode = null,
-                responseTime = null,
-                errorMessage = null,
-                monitorId = UUID.randomUUID(),
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildUptimeAlertEmbed down with unknown status uses Unknown`() {
+        val monitorId = UUID.randomUUID()
+        val embed = DiscordService.buildUptimeAlertEmbed(
+            monitorUrl = "https://api.moneat.io/health",
+            isDown = true,
+            statusCode = null,
+            responseTime = null,
+            errorMessage = null,
+            monitorId = monitorId,
+            baseUrl = "https://app.moneat.io"
+        )
+        assertEquals("🔴 Uptime Monitor Down", embed.title)
+        val fields = requireNotNull(embed.fields)
+        assertEquals("Unknown", fields[1].value)
+        assertEquals(2, fields.size)
+    }
 
     @Test
-    fun `sendUptimeAlert builds embed for recovered monitor`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org UR")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendUptimeAlert(
-                organizationId = orgId,
-                monitorUrl = "https://api.moneat.io/health",
-                isDown = false,
-                statusCode = 200,
-                responseTime = 45L,
-                errorMessage = null,
-                monitorId = UUID.randomUUID(),
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildUptimeAlertEmbed recovered uses green color and recovery message`() {
+        val monitorId = UUID.randomUUID()
+        val embed = DiscordService.buildUptimeAlertEmbed(
+            monitorUrl = "https://api.moneat.io/health",
+            isDown = false,
+            statusCode = 200,
+            responseTime = 45L,
+            errorMessage = null,
+            monitorId = monitorId,
+            baseUrl = "https://app.moneat.io"
+        )
+        assertEquals("✅ Uptime Monitor Recovered", embed.title)
+        assertEquals("Monitor has recovered", embed.description)
+        assertEquals(0x2EB67D, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals("HTTP 200", fields[1].value)
+        assertEquals("45ms", fields[2].value)
+    }
 
     @Test
-    fun `sendUptimeAlert builds embed without response time`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org UNR")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendUptimeAlert(
-                organizationId = orgId,
-                monitorUrl = "https://api.moneat.io/health",
-                isDown = true,
-                statusCode = 500,
-                responseTime = null,
-                errorMessage = null,
-                monitorId = UUID.randomUUID(),
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildDashboardAlertEmbed CRITICAL severity uses red color`() {
+        val embed = DiscordService.buildDashboardAlertEmbed(
+            alertName = "Error Spike",
+            dashboardTitle = "Production Overview",
+            widgetTitle = "Error Rate",
+            condition = ">",
+            threshold = "5%",
+            currentValue = "12%",
+            severity = "CRITICAL",
+            dashboardId = 10L,
+            baseUrl = "https://app.moneat.io"
+        )
+        assertEquals("📊 Dashboard Alert: Error Spike", embed.title)
+        assertEquals("Alert triggered on **Error Rate** in *Production Overview*", embed.description)
+        assertEquals("https://app.moneat.io/dashboards/10", embed.url)
+        assertEquals(0xE01E5A, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals("Production Overview", fields[0].value)
+        assertEquals("Error Rate", fields[1].value)
+        assertEquals("> 5%", fields[2].value)
+        assertEquals("12%", fields[3].value)
+    }
 
     @Test
-    fun `sendDashboardAlert builds embed with CRITICAL severity`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org DC")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendDashboardAlert(
-                organizationId = orgId,
-                alertName = "Error Spike",
-                dashboardTitle = "Production Overview",
-                widgetTitle = "Error Rate",
-                condition = ">",
-                threshold = "5%",
-                currentValue = "12%",
-                severity = "CRITICAL",
-                dashboardId = 10L,
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildDashboardAlertEmbed MEDIUM severity uses yellow color`() {
+        val embed = DiscordService.buildDashboardAlertEmbed(
+            alertName = "Throughput Low",
+            dashboardTitle = "Service Health",
+            widgetTitle = "RPS",
+            condition = "<",
+            threshold = "100",
+            currentValue = "45",
+            severity = "MEDIUM",
+            dashboardId = 12L,
+            baseUrl = "https://app.moneat.io"
+        )
+        assertEquals(0xECB22E, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals("< 100", fields[2].value)
+        assertEquals("45", fields[3].value)
+    }
 
     @Test
-    fun `sendDashboardAlert builds embed with HIGH severity`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org DH")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendDashboardAlert(
-                organizationId = orgId,
-                alertName = "Latency Spike",
-                dashboardTitle = "API Metrics",
-                widgetTitle = "P99 Latency",
-                condition = ">",
-                threshold = "500ms",
-                currentValue = "750ms",
-                severity = "HIGH",
-                dashboardId = 11L,
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildDashboardAlertEmbed null severity defaults to yellow`() {
+        val embed = DiscordService.buildDashboardAlertEmbed(
+            alertName = "Custom Alert",
+            dashboardTitle = "Custom Dashboard",
+            widgetTitle = "Widget",
+            condition = "=",
+            threshold = "0",
+            currentValue = "1",
+            severity = null,
+            dashboardId = 14L,
+            baseUrl = "https://app.moneat.io"
+        )
+        assertEquals(0xECB22E, embed.color)
+    }
 
     @Test
-    fun `sendDashboardAlert builds embed with MEDIUM severity`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org DM")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendDashboardAlert(
-                organizationId = orgId,
-                alertName = "Throughput Low",
-                dashboardTitle = "Service Health",
-                widgetTitle = "RPS",
-                condition = "<",
-                threshold = "100",
-                currentValue = "45",
-                severity = "MEDIUM",
-                dashboardId = 12L,
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildErrorAlertEmbed fatal level uses red color`() {
+        val embed = DiscordService.buildErrorAlertEmbed(
+            projectName = "Backend API",
+            issueTitle = "OutOfMemoryError",
+            level = "fatal",
+            firstSeen = "2024-06-15T10:30:00Z",
+            eventCount = 3,
+            userCount = 2,
+            issueUrl = "https://app.moneat.io/issues/600"
+        )
+        assertEquals("🐛 New Issue Detected", embed.title)
+        assertEquals("**OutOfMemoryError**", embed.description)
+        assertEquals("https://app.moneat.io/issues/600", embed.url)
+        assertEquals(0xE01E5A, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals("Backend API", fields[0].value)
+        assertEquals("FATAL", fields[1].value)
+        assertEquals("3", fields[3].value)
+        assertEquals("2", fields[4].value)
+    }
 
     @Test
-    fun `sendDashboardAlert builds embed with LOW severity`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org DL")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendDashboardAlert(
-                organizationId = orgId,
-                alertName = "Cache Miss Rate",
-                dashboardTitle = "Infrastructure",
-                widgetTitle = "Cache Hits",
-                condition = "<",
-                threshold = "90%",
-                currentValue = "85%",
-                severity = "LOW",
-                dashboardId = 13L,
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildErrorAlertEmbed warning level uses yellow color`() {
+        val embed = DiscordService.buildErrorAlertEmbed(
+            projectName = "Worker",
+            issueTitle = "Deprecated API usage",
+            level = "warning",
+            firstSeen = "2024-06-15T11:00:00Z",
+            eventCount = 100,
+            userCount = 50,
+            issueUrl = "https://app.moneat.io/issues/501"
+        )
+        assertEquals(0xECB22E, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals("WARNING", fields[1].value)
+    }
 
     @Test
-    fun `sendDashboardAlert builds embed with null severity`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org DN")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendDashboardAlert(
-                organizationId = orgId,
-                alertName = "Custom Alert",
-                dashboardTitle = "Custom Dashboard",
-                widgetTitle = "Widget",
-                condition = "=",
-                threshold = "0",
-                currentValue = "1",
-                severity = null,
-                dashboardId = 14L,
-                baseUrl = "https://app.moneat.io"
-            )
-            assertFalse(result)
-        }
+    fun `buildErrorAlertEmbed info level uses green color`() {
+        val embed = DiscordService.buildErrorAlertEmbed(
+            projectName = "Frontend",
+            issueTitle = "Feature flag evaluated",
+            level = "info",
+            firstSeen = "2024-06-15T12:00:00Z",
+            eventCount = 1,
+            userCount = 1,
+            issueUrl = "https://app.moneat.io/issues/502"
+        )
+        assertEquals(0x2EB67D, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals("INFO", fields[1].value)
+    }
 
     @Test
-    fun `sendErrorAlert builds embed with fatal level`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org EF")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendErrorAlert(
-                organizationId = orgId,
-                projectName = "Backend API",
-                issueTitle = "OutOfMemoryError",
-                level = "fatal",
-                firstSeen = "2024-06-15T10:30:00Z",
-                eventCount = 3,
-                userCount = 2,
-                issueUrl = "https://app.moneat.io/issues/600"
-            )
-            assertFalse(result)
-        }
-
-    @Test
-    fun `sendErrorAlert builds embed with error level`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org EE")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendErrorAlert(
-                organizationId = orgId,
-                projectName = "Backend API",
-                issueTitle = "NullPointerException in UserService",
-                level = "error",
-                firstSeen = "2024-06-15T10:30:00Z",
-                eventCount = 42,
-                userCount = 15,
-                issueUrl = "https://app.moneat.io/issues/500"
-            )
-            assertFalse(result)
-        }
-
-    @Test
-    fun `sendErrorAlert builds embed with warning level`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org EW")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendErrorAlert(
-                organizationId = orgId,
-                projectName = "Worker",
-                issueTitle = "Deprecated API usage",
-                level = "warning",
-                firstSeen = "2024-06-15T11:00:00Z",
-                eventCount = 100,
-                userCount = 50,
-                issueUrl = "https://app.moneat.io/issues/501"
-            )
-            assertFalse(result)
-        }
-
-    @Test
-    fun `sendErrorAlert builds embed with info level`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org EI")
-            seedDiscordIntegration(orgId)
-            val result = discordService.sendErrorAlert(
-                organizationId = orgId,
-                projectName = "Frontend",
-                issueTitle = "Feature flag evaluated",
-                level = "info",
-                firstSeen = "2024-06-15T12:00:00Z",
-                eventCount = 1,
-                userCount = 1,
-                issueUrl = "https://app.moneat.io/issues/502"
-            )
-            assertFalse(result)
-        }
-
-    @Test
-    fun `testConnection builds embed with configured integration`() =
-        runBlocking {
-            val orgId = seedOrg("Embed Org TC")
-            seedDiscordIntegration(orgId)
-            val (success, _) = discordService.testConnection(orgId, "https://app.moneat.io")
-            assertFalse(success)
-        }
+    fun `buildTestConnectionEmbed returns embed with guild id and status`() {
+        val embed = DiscordService.buildTestConnectionEmbed(
+            guildId = "123456789012345678",
+            baseUrl = "https://app.moneat.io"
+        )
+        assertEquals("✅ Discord Integration Test", embed.title)
+        assertEquals("Your Discord integration is working correctly!", embed.description)
+        assertEquals("https://app.moneat.io", embed.url)
+        assertEquals(0x2EB67D, embed.color)
+        val fields = requireNotNull(embed.fields)
+        assertEquals("Connected", fields[0].value)
+        assertEquals("123456789012345678", fields[1].value)
+    }
 
     // ── Disabled / misconfigured integration ────────────────────────────
 
@@ -609,13 +572,18 @@ class DiscordServiceBuildersTest {
     @Test
     fun `exchangeOAuthCode handles connection failure`() =
         runBlocking {
-            val response = discordService.exchangeOAuthCode(
-                code = "fake-code",
-                clientId = "fake-client-id",
-                clientSecret = "fake-secret",
-                redirectUri = "https://app.moneat.io/callback"
-            )
-            assertNotNull(response.error)
+            MockHttpServer { exchange ->
+                exchange.respond(500, "internal server error", "text/plain")
+            }.use { server ->
+                val service = DiscordService(discordApiBaseUrl = server.baseUrl)
+                val response = service.exchangeOAuthCode(
+                    code = "fake-code",
+                    clientId = "fake-client-id",
+                    clientSecret = "fake-secret",
+                    redirectUri = "https://app.moneat.io/callback"
+                )
+                assertNotNull(response.error)
+            }
         }
 
     @Test

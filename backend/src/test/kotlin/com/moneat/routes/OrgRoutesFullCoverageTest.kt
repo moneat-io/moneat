@@ -67,6 +67,7 @@ import io.mockk.every
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
@@ -80,7 +81,6 @@ class OrgRoutesFullCoverageTest {
 
     companion object {
         private const val JWT_SECRET = "org-full-coverage-secret"
-        private var dbInitialized = false
     }
 
     private val mockAdminService = mockk<AdminService>(relaxed = true)
@@ -109,13 +109,11 @@ class OrgRoutesFullCoverageTest {
                 single<AdminBillingService> { mockAdminBillingService }
             }
         )
-        if (!dbInitialized) {
-            Database.connect(
-                url = "jdbc:h2:mem:moneat_org_full;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-                driver = "org.h2.Driver"
-            )
-            dbInitialized = true
-        }
+        val db = Database.connect(
+            url = "jdbc:h2:mem:moneat_org_full;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver"
+        )
+        TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(
             Users,
             Organizations,
@@ -853,13 +851,12 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.post("/v1/admin/billing/tiers/ /versions") {
+            val response = client.post("/v1/admin/billing/tiers/some-tier/versions") {
                 header(HttpHeaders.Authorization, "Bearer ${token(adminId, 1)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{}""")
             }
-            // Blank tier name leads to 400
-            assertTrue(response.status == HttpStatusCode.BadRequest || response.status == HttpStatusCode.NotFound)
+            assertEquals(HttpStatusCode.BadRequest, response.status)
         }
     }
 

@@ -80,6 +80,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
@@ -93,7 +94,9 @@ import kotlin.time.Duration.Companion.seconds
 class EventRoutesExtendedTest {
     companion object {
         private const val JWT_SECRET = "extended-test-secret"
-        private var dbInitialized = false
+        private var db: Database? = null
+        private const val TEST_PROJECT_NAME = "Test Project"
+        private const val SENTINEL_ID = 999L
     }
 
     private val mockDashboardService = mockk<DashboardService>(relaxed = true)
@@ -108,13 +111,13 @@ class EventRoutesExtendedTest {
                 single<AlertNotificationPreferencesService> { mockAlertPrefsService }
             }
         )
-        if (!dbInitialized) {
-            Database.connect(
+        if (db == null) {
+            db = Database.connect(
                 url = "jdbc:h2:mem:moneat_ext_routes;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            dbInitialized = true
         }
+        TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(
             Users,
             Organizations,
@@ -219,7 +222,7 @@ class EventRoutesExtendedTest {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("Test Project"))
+        assertTrue(response.bodyAsText().contains(TEST_PROJECT_NAME))
     }
 
     @Test
@@ -245,7 +248,7 @@ class EventRoutesExtendedTest {
             setBody("""{"name":"New Project"}""")
         }
         assertEquals(HttpStatusCode.Created, response.status)
-        assertTrue(response.bodyAsText().contains("Test Project"))
+        assertTrue(response.bodyAsText().contains(TEST_PROJECT_NAME))
     }
 
     @Test
@@ -299,10 +302,10 @@ class EventRoutesExtendedTest {
     @Test
     fun `GET project detail returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/999") {
+        val response = client.get("/v1/projects/$SENTINEL_ID") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -352,10 +355,10 @@ class EventRoutesExtendedTest {
     @Test
     fun `PUT project returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
 
         application { installTestApp() }
-        val response = client.put("/v1/projects/999") {
+        val response = client.put("/v1/projects/$SENTINEL_ID") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             contentType(ContentType.Application.Json)
             setBody("""{"name":"Updated Name"}""")
@@ -381,10 +384,10 @@ class EventRoutesExtendedTest {
     @Test
     fun `DELETE project returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
 
         application { installTestApp() }
-        val response = client.delete("/v1/projects/999") {
+        val response = client.delete("/v1/projects/$SENTINEL_ID") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -448,10 +451,10 @@ class EventRoutesExtendedTest {
     @Test
     fun `GET project stats returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/999/stats") {
+        val response = client.get("/v1/projects/$SENTINEL_ID/stats") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -580,10 +583,10 @@ class EventRoutesExtendedTest {
     @Test
     fun `GET replays returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/999/replays") {
+        val response = client.get("/v1/projects/$SENTINEL_ID/replays") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -740,10 +743,10 @@ class EventRoutesExtendedTest {
     @Test
     fun `GET feedback list returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/999/feedback") {
+        val response = client.get("/v1/projects/$SENTINEL_ID/feedback") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -840,10 +843,10 @@ class EventRoutesExtendedTest {
     @Test
     fun `GET releases returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/999/releases") {
+        val response = client.get("/v1/projects/$SENTINEL_ID/releases") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -881,10 +884,10 @@ class EventRoutesExtendedTest {
     @Test
     fun `GET release stats returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/999/releases/1.0.0/stats") {
+        val response = client.get("/v1/projects/$SENTINEL_ID/releases/1.0.0/stats") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -948,10 +951,10 @@ class EventRoutesExtendedTest {
     @Test
     fun `PUT project notification-preferences returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
 
         application { installTestApp() }
-        val response = client.put("/v1/notification-preferences/999") {
+        val response = client.put("/v1/notification-preferences/$SENTINEL_ID") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             contentType(ContentType.Application.Json)
             setBody("""{"issueAlerts":false}""")
@@ -974,10 +977,10 @@ class EventRoutesExtendedTest {
     @Test
     fun `DELETE project notification-preferences returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, 999L) } returns false
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
 
         application { installTestApp() }
-        val response = client.delete("/v1/notification-preferences/999") {
+        val response = client.delete("/v1/notification-preferences/$SENTINEL_ID") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -988,7 +991,7 @@ class EventRoutesExtendedTest {
     @Test
     fun `GET alert-notification-preferences returns 200`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        coEvery {
+        every {
             mockAlertPrefsService.getPreferences(userId, any())
         } returns emptyList()
 
@@ -1058,7 +1061,7 @@ class EventRoutesExtendedTest {
 
     private fun sampleProject() = ProjectResponse(
         id = 1L,
-        name = "Test Project",
+        name = TEST_PROJECT_NAME,
         slug = "test-project",
         framework = "kotlin",
         keys = listOf(ProjectKeyResponse(platformTarget = null, dsn = "https://key@host/1")),

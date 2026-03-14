@@ -58,6 +58,7 @@ import io.mockk.mockk
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
@@ -70,7 +71,7 @@ import kotlin.test.assertTrue
 class SyntheticsRoutesExtendedTest {
     companion object {
         private const val JWT_SECRET = "synth-routes-test-secret"
-        private var dbInitialized = false
+        private var db: Database? = null
         private const val TEST_UUID = "11111111-1111-1111-1111-111111111111"
     }
 
@@ -82,14 +83,14 @@ class SyntheticsRoutesExtendedTest {
         loadKoinModules(
             module { single<SyntheticsService> { mockService } }
         )
-        if (!dbInitialized) {
-            Database.connect(
+        if (db == null) {
+            db = Database.connect(
                 url = "jdbc:h2:mem:moneat_synth_routes;" +
                     "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
-            dbInitialized = true
         }
+        TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(
             Users,
             Organizations,

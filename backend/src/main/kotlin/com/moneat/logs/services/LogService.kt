@@ -356,7 +356,7 @@ class LogService(private val logRepository: LogRepository) {
         val query =
             """
             SELECT
-                toString(log_id) AS log_id,
+                toString(log_id) AS log_id_str,
                 toString(level) AS level_text,
                 message,
                 body,
@@ -1085,7 +1085,7 @@ class LogService(private val logRepository: LogRepository) {
                     val hostIdFromTags = tagsMap["host_id"]?.toIntOrNull()
                     val log =
                         LogEntryResponse(
-                            logId = obj["log_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                            logId = obj["log_id_str"]?.jsonPrimitive?.content ?: return@mapNotNull null,
                             timestamp = Instant.ofEpochMilli(timestampMs).toString(),
                             level =
                             normalizeLevel(

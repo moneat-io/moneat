@@ -37,12 +37,14 @@ import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.io.File
-import java.util.*
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -344,11 +346,12 @@ class DatadogServicesExtendedTest {
 
         @BeforeEach
         fun setup() {
-            Database.connect(
+            val db = Database.connect(
                 "jdbc:h2:mem:test_debugger_probes_${UUID.randomUUID()}" +
                     ";DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
                 driver = "org.h2.Driver"
             )
+            TransactionManager.defaultDatabase = db
             TestDatabaseHelper.resetSchema(Users, Organizations, DebuggerProbes)
             seedParentRows()
         }
@@ -785,6 +788,8 @@ class DatadogServicesExtendedTest {
 
         private lateinit var storageDir: File
 
+        private var originalProfileStoragePath: String? = null
+
         @BeforeEach
         fun setup() {
             storageDir = File(
@@ -792,7 +797,18 @@ class DatadogServicesExtendedTest {
                 "moneat-profile-test-${UUID.randomUUID()}"
             )
             storageDir.mkdirs()
+            originalProfileStoragePath = System.getProperty("PROFILE_STORAGE_PATH")
             System.setProperty("PROFILE_STORAGE_PATH", storageDir.absolutePath)
+        }
+
+        @AfterEach
+        fun teardown() {
+            if (originalProfileStoragePath != null) {
+                System.setProperty("PROFILE_STORAGE_PATH", originalProfileStoragePath!!)
+            } else {
+                System.clearProperty("PROFILE_STORAGE_PATH")
+            }
+            storageDir.deleteRecursively()
         }
 
         @Test

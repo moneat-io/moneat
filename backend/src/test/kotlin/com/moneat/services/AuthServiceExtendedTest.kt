@@ -37,6 +37,7 @@ import com.moneat.shared.models.UsageRecords
 import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.Users
 import com.moneat.shared.repositories.MembershipRepositoryImpl
+import com.moneat.config.EnvConfig
 import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.testsupport.TestDatabaseHelper
 import io.mockk.every
@@ -47,6 +48,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -69,6 +71,8 @@ class AuthServiceExtendedTest {
 
     companion object {
         private var db: Database? = null
+        private const val TERMS_VERSION = "2026-02-08"
+        private const val PRIVACY_VERSION = "2026-02-08"
     }
 
     @BeforeTest
@@ -199,24 +203,29 @@ class AuthServiceExtendedTest {
 
     @Test
     fun `validateAndRotate returns null for expired token`() {
-        val (userId, _) = insertUserWithOrg()
+        val (userId, orgId) = insertUserWithOrg()
         val service = RefreshTokenService()
 
-        // Insert an already-expired token directly
+        val response = service.generateRefreshToken(
+            userId,
+            "test@example.com",
+            orgId,
+            "owner"
+        )
+        val rawToken = response.refreshToken
+        val tokenHash = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(rawToken.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
         transaction {
-            RefreshTokens.insert {
-                it[RefreshTokens.user_id] = userId
-                it[token_hash] = "expired-hash"
-                it[created_at] = System.currentTimeMillis() - 100_000
+            RefreshTokens.update(
+                { (RefreshTokens.user_id eq userId) and (RefreshTokens.token_hash eq tokenHash) }
+            ) {
                 it[expires_at] = System.currentTimeMillis() - 1000
-                it[last_used_at] = null
-                it[revoked] = false
             }
         }
 
-        // Can't validate because we don't know the raw token for the hash,
-        // but we can verify the service returns null for unknown hashes
-        assertNull(service.validateAndRotate("some-token-that-wont-match"))
+        assertNull(service.validateAndRotate(rawToken))
     }
 
     @Test
@@ -593,8 +602,8 @@ class AuthServiceExtendedTest {
                 name = "Refresh User",
                 acceptTerms = true,
                 acceptPrivacy = true,
-                termsVersion = "2026-02-08",
-                privacyVersion = "2026-02-08"
+                termsVersion = TERMS_VERSION,
+                privacyVersion = PRIVACY_VERSION
             )
         )
 
@@ -718,8 +727,8 @@ class AuthServiceExtendedTest {
                 name = "Invited User",
                 acceptTerms = true,
                 acceptPrivacy = true,
-                termsVersion = "2026-02-08",
-                privacyVersion = "2026-02-08"
+                termsVersion = TERMS_VERSION,
+                privacyVersion = PRIVACY_VERSION
             ),
             inviteToken = inviteToken
         )
@@ -775,8 +784,8 @@ class AuthServiceExtendedTest {
                     name = "Late User",
                     acceptTerms = true,
                     acceptPrivacy = true,
-                    termsVersion = "2026-02-08",
-                    privacyVersion = "2026-02-08"
+                    termsVersion = TERMS_VERSION,
+                    privacyVersion = PRIVACY_VERSION
                 ),
                 inviteToken = inviteToken
             )
@@ -814,8 +823,8 @@ class AuthServiceExtendedTest {
                     name = "Wrong User",
                     acceptTerms = true,
                     acceptPrivacy = true,
-                    termsVersion = "2026-02-08",
-                    privacyVersion = "2026-02-08"
+                    termsVersion = TERMS_VERSION,
+                    privacyVersion = PRIVACY_VERSION
                 ),
                 inviteToken = inviteToken
             )
@@ -893,32 +902,34 @@ class AuthServiceExtendedTest {
 
     @Test
     fun `generateRefreshToken for demo user produces viewer role token`() {
-        val demoUserId = -1
-        val demoOrgId = -1
-
-        // Insert demo user in DB
+        // Insert demo user in DB using EnvConfig.Demo constants
         transaction {
             Users.insert {
-                it[id] = demoUserId
-                it[email] = "demo@moneat.dev"
+                it[id] = EnvConfig.Demo.USER_ID.toInt()
+                it[email] = EnvConfig.Demo.USER_EMAIL
                 it[password_hash] = ""
                 it[name] = "Demo"
                 it[email_verified] = true
             }
             Organizations.insert {
-                it[id] = demoOrgId
+                it[id] = EnvConfig.Demo.ORG_ID.toInt()
                 it[name] = "Demo Org"
                 it[slug] = "demo-org"
             }
             Memberships.insert {
-                it[user_id] = demoUserId
-                it[organization_id] = demoOrgId
+                it[user_id] = EnvConfig.Demo.USER_ID.toInt()
+                it[organization_id] = EnvConfig.Demo.ORG_ID.toInt()
                 it[role] = "owner"
             }
         }
 
         val service = RefreshTokenService()
-        val result = service.generateRefreshToken(demoUserId, "demo@moneat.dev", demoOrgId, "owner")
+        val result = service.generateRefreshToken(
+            EnvConfig.Demo.USER_ID.toInt(),
+            EnvConfig.Demo.USER_EMAIL,
+            EnvConfig.Demo.ORG_ID.toInt(),
+            "owner"
+        )
 
         val decoded = com.auth0.jwt.JWT.decode(result.accessToken)
         assertEquals("viewer", decoded.getClaim("orgRole").asString())
@@ -942,8 +953,8 @@ class AuthServiceExtendedTest {
                 name = "First User",
                 acceptTerms = true,
                 acceptPrivacy = true,
-                termsVersion = "2026-02-08",
-                privacyVersion = "2026-02-08"
+                termsVersion = TERMS_VERSION,
+                privacyVersion = PRIVACY_VERSION
             )
         )
 

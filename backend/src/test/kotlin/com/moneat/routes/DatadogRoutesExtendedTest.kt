@@ -85,6 +85,7 @@ import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -98,19 +99,19 @@ class DatadogRoutesExtendedTest {
         private const val JWT_SECRET = "dd-routes-test-secret"
         private const val TEST_ORG_ID = 1
         private const val TEST_API_KEY = "test-dd-api-key-abc123"
-        private var dbInitialized = false
+        private var db: Database? = null
     }
 
     @BeforeTest
     fun setup() {
-        if (!dbInitialized) {
-            Database.connect(
+        if (db == null) {
+            db = Database.connect(
                 url = "jdbc:h2:mem:moneat_dd_routes_ext;" +
                     "DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
                 driver = "org.h2.Driver"
             )
-            dbInitialized = true
         }
+        TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(
             Users,
             Organizations,

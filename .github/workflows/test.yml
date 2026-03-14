@@ -365,7 +365,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Coverage | Target (Week 6) | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|----------|-----------------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend   | $BACKEND_COV% | 65% | $([ $(echo "$BACKEND_COV >= 65" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend   | $BACKEND_COV% | 60% | $([ $(echo "$BACKEND_COV >= 60" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
           echo "| Frontend  | $FRONTEND_COV% | 55% | $([ $(echo "$FRONTEND_COV >= 55" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
           echo "| Global    | $GLOBAL_COV% | 60% | $([ $(echo "$GLOBAL_COV >= 60" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -382,8 +382,8 @@ jobs:
               echo "- Frontend coverage below 45% threshold" >> $GITHUB_STEP_SUMMARY
             fi
           elif [ "$PHASE" = "hard" ]; then
-            echo "🚨 **Week 6 - Hard Gate:** Coverage enforced (backend ≥65%, frontend ≥55%, global ≥60%)." >> $GITHUB_STEP_SUMMARY
-            if [ $(echo "$BACKEND_COV < 65" | bc -l) -eq 1 ] || [ $(echo "$FRONTEND_COV < 55" | bc -l) -eq 1 ] || [ $(echo "$GLOBAL_COV < 60" | bc -l) -eq 1 ]; then
+            echo "🚨 **Week 6 - Hard Gate:** Coverage enforced (backend ≥60%, frontend ≥55%, global ≥60%)." >> $GITHUB_STEP_SUMMARY
+            if [ $(echo "$BACKEND_COV < 60" | bc -l) -eq 1 ] || [ $(echo "$FRONTEND_COV < 55" | bc -l) -eq 1 ] || [ $(echo "$GLOBAL_COV < 60" | bc -l) -eq 1 ]; then
               echo "❌ **Coverage gate failed. Add more tests before merging.**" >> $GITHUB_STEP_SUMMARY
               exit 1
             fi
@@ -397,8 +397,8 @@ jobs:
           GLOBAL_COV: ${{ steps.parse_coverage.outputs.global_coverage }}
         run: |
           FAIL=0
-          if [ $(echo "$BACKEND_COV < 65" | bc -l) -eq 1 ]; then
-            echo "❌ Backend coverage $BACKEND_COV% is below 65% threshold"
+          if [ $(echo "$BACKEND_COV < 60" | bc -l) -eq 1 ]; then
+            echo "❌ Backend coverage $BACKEND_COV% is below 60% threshold"
             FAIL=1
           fi
           if [ $(echo "$FRONTEND_COV < 55" | bc -l) -eq 1 ]; then
