@@ -19,8 +19,7 @@ import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 import { clearAuthStorage } from '@/test/utils'
-
-const API_BASE = 'http://localhost:8080'
+import { LOGS_API_BASE, emptyLogsResponse } from './logs-test-helpers'
 
 describe('Logs API', () => {
   beforeEach(() => {
@@ -32,7 +31,7 @@ describe('Logs API', () => {
   describe('getLogs', () => {
     it('fetches logs with default options', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('limit')).toBe('100')
           return HttpResponse.json({
@@ -72,14 +71,14 @@ describe('Logs API', () => {
 
     it('passes query params correctly', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('q')).toBe('error')
           expect(url.searchParams.get('service')).toBe('api')
           expect(url.searchParams.get('environment')).toBe('prod')
           expect(url.searchParams.get('limit')).toBe('50')
           expect(url.searchParams.get('cursor')).toBe('abc')
-          return HttpResponse.json({ logs: [], has_more: false })
+          return emptyLogsResponse()
         })
       )
 
@@ -94,11 +93,11 @@ describe('Logs API', () => {
 
     it('passes level and tag filters', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.getAll('level')).toEqual(['error', 'warn'])
           expect(url.searchParams.getAll('tag')).toEqual(['env:prod'])
-          return HttpResponse.json({ logs: [], has_more: false })
+          return emptyLogsResponse()
         })
       )
 
@@ -114,7 +113,7 @@ describe('Logs API', () => {
   describe('getSystemLogs', () => {
     it('fetches system logs by systemId', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/monitor/systems/sys-1/logs`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/monitor/systems/sys-1/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('limit')).toBe('100')
           return HttpResponse.json({
@@ -144,13 +143,13 @@ describe('Logs API', () => {
 
     it('passes query and filter options', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/monitor/systems/sys-2/logs`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/monitor/systems/sys-2/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('query')).toBe('timeout')
           expect(url.searchParams.get('service')).toBe('web')
           expect(url.searchParams.get('from')).toBe('2024-01-01')
           expect(url.searchParams.get('to')).toBe('2024-01-02')
-          return HttpResponse.json({ logs: [], has_more: false })
+          return emptyLogsResponse()
         })
       )
 
@@ -168,7 +167,7 @@ describe('Logs API', () => {
   describe('getLogFilters', () => {
     it('fetches log filter options', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/filters`, () => {
+        http.get(`${LOGS_API_BASE}/v1/logs/filters`, () => {
           return HttpResponse.json({
             services: [{ value: 'api', count: 10 }],
             environments: ['production'],
@@ -187,7 +186,7 @@ describe('Logs API', () => {
 
     it('passes from/to params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/filters`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/filters`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('from')).toBe('2024-01-01')
           expect(url.searchParams.get('to')).toBe('2024-01-31')
@@ -209,7 +208,7 @@ describe('Logs API', () => {
   describe('getLogApiKeys', () => {
     it('fetches log API keys', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/api-keys`, () => {
+        http.get(`${LOGS_API_BASE}/v1/logs/api-keys`, () => {
           return HttpResponse.json({
             keys: [
               {
@@ -236,7 +235,7 @@ describe('Logs API', () => {
   describe('createLogApiKey', () => {
     it('creates a new log API key', async () => {
       server.use(
-        http.post(`${API_BASE}/v1/logs/api-keys`, async ({ request }) => {
+        http.post(`${LOGS_API_BASE}/v1/logs/api-keys`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.name).toBe('new-key')
           return HttpResponse.json({
@@ -258,7 +257,7 @@ describe('Logs API', () => {
   describe('deleteLogApiKey', () => {
     it('deletes a log API key by id', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/logs/api-keys/5`, () => {
+        http.delete(`${LOGS_API_BASE}/v1/logs/api-keys/5`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
@@ -272,7 +271,7 @@ describe('Logs API', () => {
   describe('getLogTagValues', () => {
     it('fetches tag values for a given key', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/tag-values`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/tag-values`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('key')).toBe('env')
           return HttpResponse.json({
@@ -289,7 +288,7 @@ describe('Logs API', () => {
 
     it('passes optional from/to/limit params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/tag-values`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/tag-values`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('key')).toBe('host')
           expect(url.searchParams.get('from')).toBe('2024-01-01')
@@ -312,7 +311,7 @@ describe('Logs API', () => {
   describe('getLogAggregate', () => {
     it('fetches aggregated log data', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/aggregate`, () => {
+        http.get(`${LOGS_API_BASE}/v1/logs/aggregate`, () => {
           return HttpResponse.json({
             buckets: [
               { timestamp: '2024-01-01T00:00:00Z', count: 42, groups: {} },
@@ -332,7 +331,7 @@ describe('Logs API', () => {
 
     it('passes interval and groupBy params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/aggregate`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/aggregate`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('interval')).toBe('5m')
           expect(url.searchParams.get('groupBy')).toBe('service')
@@ -353,7 +352,7 @@ describe('Logs API', () => {
   describe('getLogTop', () => {
     it('fetches top log values for a field', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/top`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/top`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('field')).toBe('service')
           return HttpResponse.json({
@@ -376,7 +375,7 @@ describe('Logs API', () => {
 
     it('passes optional limit param', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/top`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/top`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('field')).toBe('host')
           expect(url.searchParams.get('limit')).toBe('5')

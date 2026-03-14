@@ -28,9 +28,8 @@ const TEST_PASSWORD_RESET = 'newPass123'
 
 describe('authMethods', () => {
   beforeEach(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-    sessionStorage.setItem('authenticated', 'true')
+    globalThis.localStorage?.clear()
+    globalThis.sessionStorage?.clear()
   })
 
   // ──── signup ────
@@ -59,7 +58,7 @@ describe('authMethods', () => {
         privacyAccepted: true,
       })
       expect(result).toEqual(authResponse)
-      expect(sessionStorage.getItem('authenticated')).toBe('true')
+      expect(globalThis.sessionStorage?.getItem('authenticated')).toBe('true')
     })
 
     it('signs up with invite token', async () => {
@@ -77,7 +76,7 @@ describe('authMethods', () => {
         privacyAccepted: true,
       }, 'inv-123')
       expect(result).toEqual(authResponse)
-      expect(sessionStorage.getItem('authenticated')).toBe('true')
+      expect(globalThis.sessionStorage?.getItem('authenticated')).toBe('true')
     })
   })
 
@@ -96,7 +95,7 @@ describe('authMethods', () => {
 
       const result = await api.login('a@b.com', TEST_PASSWORD)
       expect(result).toEqual(authResponse)
-      expect(sessionStorage.getItem('authenticated')).toBe('true')
+      expect(globalThis.sessionStorage?.getItem('authenticated')).toBe('true')
     })
   })
 
@@ -232,8 +231,8 @@ describe('authMethods', () => {
 
       const result = await api.demoLogin()
       expect(result).toEqual(data)
-      expect(sessionStorage.getItem('authenticated')).toBe('true')
-      expect(sessionStorage.getItem('demoEpochMs')).toBe('1700000000000')
+      expect(globalThis.sessionStorage?.getItem('authenticated')).toBe('true')
+      expect(globalThis.sessionStorage?.getItem('demoEpochMs')).toBe('1700000000000')
     })
   })
 
@@ -322,17 +321,19 @@ describe('authMethods', () => {
 
   describe('isAuthenticated', () => {
     it('returns true when authenticated flag is set', () => {
+      globalThis.sessionStorage?.setItem('authenticated', 'true')
       expect(api.isAuthenticated()).toBe(true)
     })
 
     it('returns false when authenticated flag is not set', () => {
-      sessionStorage.clear()
+      globalThis.sessionStorage?.clear()
       expect(api.isAuthenticated()).toBe(false)
     })
   })
 
   describe('logout', () => {
     it('clears session storage and calls logout endpoint', async () => {
+      globalThis.sessionStorage?.setItem('authenticated', 'true')
       server.use(
         http.post(`${API_BASE}/auth/logout`, () =>
           new HttpResponse(null, { status: 204 })
@@ -340,7 +341,7 @@ describe('authMethods', () => {
       )
 
       await api.logout()
-      expect(sessionStorage.getItem('authenticated')).toBeNull()
+      expect(globalThis.sessionStorage?.getItem('authenticated')).toBeNull()
     })
   })
 
@@ -354,10 +355,11 @@ describe('authMethods', () => {
 
       const result = await api.checkAuth()
       expect(result).toBe(true)
-      expect(sessionStorage.getItem('authenticated')).toBe('true')
+      expect(globalThis.sessionStorage?.getItem('authenticated')).toBe('true')
     })
 
     it('returns false when user endpoint responds 401', async () => {
+      globalThis.sessionStorage?.setItem('authenticated', 'true')
       server.use(
         http.get(`${API_BASE}/v1/user`, () =>
           new HttpResponse(null, { status: 401 })

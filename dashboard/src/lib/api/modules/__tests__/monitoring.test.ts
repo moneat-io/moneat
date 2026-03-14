@@ -792,9 +792,9 @@ describe('Monitoring API module', () => {
       )
       const result = await api.createSilencePeriod({
         reason: 'deploy',
-        startsAt: 1700200000,
-        endsAt: 1700203600,
-      } as never)
+        starts_at: 1700200000,
+        ends_at: 1700203600,
+      })
       expect(result.id).toBe(3)
       expect(result.organizationId).toBe(10)
       expect(result.startsAt).toBe(1700200000)

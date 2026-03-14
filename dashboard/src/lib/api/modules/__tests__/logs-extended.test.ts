@@ -19,8 +19,7 @@ import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 import { clearAuthStorage } from '@/test/utils'
-
-const API_BASE = 'http://localhost:8080'
+import { LOGS_API_BASE, emptyLogsResponse } from './logs-test-helpers'
 
 describe('Logs API – extended coverage', () => {
   beforeEach(() => {
@@ -32,12 +31,12 @@ describe('Logs API – extended coverage', () => {
   describe('getLogs – exclude filters', () => {
     it('passes excludeService, excludeEnvironment, excludeContainerName', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('excludeService')).toBe('noisy-svc')
           expect(url.searchParams.get('excludeEnvironment')).toBe('dev')
           expect(url.searchParams.get('excludeContainerName')).toBe('sidecar')
-          return HttpResponse.json({ logs: [], has_more: false })
+          return emptyLogsResponse()
         })
       )
 
@@ -50,10 +49,10 @@ describe('Logs API – extended coverage', () => {
 
     it('passes excludeTags as excludeTag params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.getAll('excludeTag')).toEqual(['team:infra'])
-          return HttpResponse.json({ logs: [], has_more: false })
+          return emptyLogsResponse()
         })
       )
 
@@ -64,10 +63,10 @@ describe('Logs API – extended coverage', () => {
 
     it('passes containerName param', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('containerName')).toBe('web-app')
-          return HttpResponse.json({ logs: [], has_more: false })
+          return emptyLogsResponse()
         })
       )
 
@@ -76,11 +75,11 @@ describe('Logs API – extended coverage', () => {
 
     it('passes from/to time range params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('from')).toBe('2024-06-01T00:00:00Z')
           expect(url.searchParams.get('to')).toBe('2024-06-02T00:00:00Z')
-          return HttpResponse.json({ logs: [], has_more: false })
+          return emptyLogsResponse()
         })
       )
 
@@ -96,7 +95,7 @@ describe('Logs API – extended coverage', () => {
   describe('getSystemLogs – extended params', () => {
     it('passes cursor, limit, environment, containerName, levels, tags', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/monitor/systems/sys-3/logs`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/monitor/systems/sys-3/logs`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('cursor')).toBe('cur123')
           expect(url.searchParams.get('limit')).toBe('25')
@@ -132,7 +131,7 @@ describe('Logs API – extended coverage', () => {
   describe('getLogAggregate – filter params', () => {
     it('passes exclude filters to aggregate endpoint', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/aggregate`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/aggregate`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('excludeService')).toBe('healthcheck')
           expect(url.searchParams.get('excludeEnvironment')).toBe('test')
@@ -158,7 +157,7 @@ describe('Logs API – extended coverage', () => {
 
     it('passes query, levels, service, environment, tags', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/aggregate`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/aggregate`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('q')).toBe('timeout')
           expect(url.searchParams.getAll('level')).toEqual(['error'])
@@ -180,7 +179,7 @@ describe('Logs API – extended coverage', () => {
 
     it('handles missing bucket fields with defaults', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/aggregate`, () => {
+        http.get(`${LOGS_API_BASE}/v1/logs/aggregate`, () => {
           return HttpResponse.json({
             buckets: [{ timestamp: '2024-01-01T00:00:00Z' }],
           })
@@ -200,7 +199,7 @@ describe('Logs API – extended coverage', () => {
   describe('getLogTop – filter params', () => {
     it('passes exclude filters to top endpoint', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/top`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/top`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('field')).toBe('service')
           expect(url.searchParams.get('excludeService')).toBe('internal')
@@ -225,7 +224,7 @@ describe('Logs API – extended coverage', () => {
 
     it('passes query, levels, service, environment, tags', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/top`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/top`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('q')).toBe('error')
           expect(url.searchParams.getAll('level')).toEqual(['error', 'fatal'])
@@ -252,7 +251,7 @@ describe('Logs API – extended coverage', () => {
 
     it('handles response using totalCount (camelCase) fallback', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/top`, () => {
+        http.get(`${LOGS_API_BASE}/v1/logs/top`, () => {
           return HttpResponse.json({
             values: [{ value: 'x' }],
             totalCount: 99,
@@ -273,7 +272,7 @@ describe('Logs API – extended coverage', () => {
     it('downloads CSV blob and triggers link click', async () => {
       const csvContent = 'timestamp,level,message\n2024-01-01,error,fail'
       server.use(
-        http.get(`${API_BASE}/v1/logs/export`, ({ request }) => {
+        http.get(`${LOGS_API_BASE}/v1/logs/export`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('limit')).toBe('500')
           expect(url.searchParams.get('q')).toBe('error')
@@ -313,7 +312,7 @@ describe('Logs API – extended coverage', () => {
 
     it('throws on non-ok response', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs/export`, () => {
+        http.get(`${LOGS_API_BASE}/v1/logs/export`, () => {
           return new HttpResponse(null, { status: 500 })
         })
       )
@@ -327,7 +326,7 @@ describe('Logs API – extended coverage', () => {
   describe('getLogs – field mapping', () => {
     it('maps camelCase response fields correctly', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs`, () => {
+        http.get(`${LOGS_API_BASE}/v1/logs`, () => {
           return HttpResponse.json({
             logs: [
               {
@@ -373,7 +372,7 @@ describe('Logs API – extended coverage', () => {
 
     it('defaults missing optional fields', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/logs`, () => {
+        http.get(`${LOGS_API_BASE}/v1/logs`, () => {
           return HttpResponse.json({
             logs: [
               {

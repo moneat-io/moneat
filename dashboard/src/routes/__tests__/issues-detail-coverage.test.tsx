@@ -1,7 +1,7 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
-import { renderRouteWithProviders, clearAuthStorage } from '@/test/utils'
+import { renderRoute, clearAuthStorage } from '@/test/utils'
 
 const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -179,8 +179,7 @@ describe('Issue Detail - full data coverage', () => {
       spans: [{ spanId: 's1' }],
     })
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     // Issue header (appears multiple times in title + breadcrumb)
     expect((await screen.findAllByText('TypeError: Cannot read property')).length).toBeGreaterThan(0)
@@ -243,8 +242,7 @@ describe('Issue Detail - full data coverage', () => {
   it('renders resolved issue with Unresolve button', async () => {
     mockApi.getIssue.mockResolvedValue({ ...mockIssue, status: 'resolved' })
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText('Resolved')).toBeInTheDocument()
     expect(screen.getByText('Unresolve')).toBeInTheDocument()
@@ -253,8 +251,7 @@ describe('Issue Detail - full data coverage', () => {
   it('renders ignored issue with Unignore button', async () => {
     mockApi.getIssue.mockResolvedValue({ ...mockIssue, status: 'ignored' })
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText('Ignored')).toBeInTheDocument()
     expect(screen.getByText('Unignore')).toBeInTheDocument()
@@ -263,8 +260,7 @@ describe('Issue Detail - full data coverage', () => {
   it('renders resolvedInNextRelease status', async () => {
     mockApi.getIssue.mockResolvedValue({ ...mockIssue, status: 'resolvedInNextRelease' })
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText('Resolves in Next Release')).toBeInTheDocument()
   })
@@ -274,8 +270,7 @@ describe('Issue Detail - full data coverage', () => {
     mockApi.getIssue.mockResolvedValue(mockIssue)
     mockApi.getIssueEvents.mockResolvedValue([eventNoException])
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText('No stack trace available')).toBeInTheDocument()
   })
@@ -283,8 +278,7 @@ describe('Issue Detail - full data coverage', () => {
   it('renders issue with fatal level styling', async () => {
     mockApi.getIssue.mockResolvedValue({ ...mockIssue, level: 'fatal' })
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText('FATAL')).toBeInTheDocument()
   })
@@ -292,8 +286,7 @@ describe('Issue Detail - full data coverage', () => {
   it('renders issue with warning level', async () => {
     mockApi.getIssue.mockResolvedValue({ ...mockIssue, level: 'warning' })
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText('WARNING')).toBeInTheDocument()
   })
@@ -301,8 +294,7 @@ describe('Issue Detail - full data coverage', () => {
   it('renders issue with info level', async () => {
     mockApi.getIssue.mockResolvedValue({ ...mockIssue, level: 'info' })
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText('INFO')).toBeInTheDocument()
   })
@@ -310,8 +302,7 @@ describe('Issue Detail - full data coverage', () => {
   it('renders issue with debug level', async () => {
     mockApi.getIssue.mockResolvedValue({ ...mockIssue, level: 'debug' })
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText('DEBUG')).toBeInTheDocument()
   })
@@ -321,8 +312,7 @@ describe('Issue Detail - full data coverage', () => {
     mockApi.getIssue.mockResolvedValue(mockIssue)
     mockApi.getIssueEvents.mockResolvedValue([eventNoContexts])
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText('No context entries')).toBeInTheDocument()
     expect(screen.getByText('env:')).toBeInTheDocument()
@@ -333,8 +323,7 @@ describe('Issue Detail - full data coverage', () => {
     mockApi.getIssue.mockResolvedValue(mockIssue)
     mockApi.getIssueEvents.mockResolvedValue([eventBadBreadcrumbs])
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText('not valid json{{{')).toBeInTheDocument()
   })
@@ -344,8 +333,7 @@ describe('Issue Detail - full data coverage', () => {
     mockApi.getIssue.mockResolvedValue(mockIssue)
     mockApi.getIssueEvents.mockResolvedValue([eventBadException])
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(await screen.findByText(/Raw stack trace/)).toBeInTheDocument()
   })
@@ -353,8 +341,7 @@ describe('Issue Detail - full data coverage', () => {
   it('renders loading state', () => {
     mockApi.getIssue.mockReturnValue(new Promise(() => {}))
 
-    const Component = (IssueDetailRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssueDetailRoute)
 
     expect(screen.getByText('Loading...')).toBeInTheDocument()
   })

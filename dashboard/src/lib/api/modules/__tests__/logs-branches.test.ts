@@ -308,6 +308,8 @@ describe('Logs API – branch coverage', () => {
       )
 
       const origCreate = document.createElement.bind(document)
+      const origCreateObjectURL = URL.createObjectURL.bind(URL)
+      const origRevokeObjectURL = URL.revokeObjectURL.bind(URL)
       URL.createObjectURL = () => 'blob:url'
       URL.revokeObjectURL = () => {}
       document.createElement = ((tag: string) => {
@@ -326,6 +328,8 @@ describe('Logs API – branch coverage', () => {
         })
       } finally {
         document.createElement = origCreate
+        URL.createObjectURL = origCreateObjectURL
+        URL.revokeObjectURL = origRevokeObjectURL
       }
     })
   })

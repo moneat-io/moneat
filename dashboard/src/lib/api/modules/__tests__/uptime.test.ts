@@ -74,8 +74,9 @@ describe('Uptime API', () => {
 
     const result = await api.createUptimeMonitor({
       name: 'Web Monitor',
+      type: 'http',
       url: 'https://web.example.com',
-    } as never)
+    })
     expect(result).toEqual(mock)
   })
 
@@ -92,7 +93,7 @@ describe('Uptime API', () => {
       })
     )
 
-    const result = await api.updateUptimeMonitor('mon-1', { name: 'Updated Monitor' } as never)
+    const result = await api.updateUptimeMonitor('mon-1', { name: 'Updated Monitor' })
     expect(result).toEqual(mock)
   })
 

@@ -58,6 +58,20 @@ beforeEach(() => {
   clearAuthStorage()
 })
 
+function renderAlertForm(props: {
+  dashboardId?: number
+  widgetId?: number
+  queryConfigs?: QueryDsl[]
+} = {}) {
+  return renderWithQueryClient(
+    <AlertConfigForm
+      dashboardId={props.dashboardId ?? 5}
+      widgetId={props.widgetId ?? 10}
+      queryConfigs={props.queryConfigs ?? [baseQuery]}
+    />
+  )
+}
+
 describe('AlertConfigForm', () => {
   // ──── Initial render – no alerts ────
   describe('initial render with no alerts', () => {
@@ -70,18 +84,14 @@ describe('AlertConfigForm', () => {
     })
 
     it('renders "Add alert" button when no alerts exist', async () => {
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
+      renderAlertForm()
       await waitFor(() => {
         expect(screen.getByText('Add alert')).toBeInTheDocument()
       })
     })
 
     it('does not show form initially', () => {
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
+      renderAlertForm()
       expect(screen.queryByPlaceholderText('Alert name')).not.toBeInTheDocument()
     })
   })
@@ -98,10 +108,8 @@ describe('AlertConfigForm', () => {
 
     it('shows form when "Add alert" is clicked', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       expect(screen.getByPlaceholderText('Alert name')).toBeInTheDocument()
       expect(screen.getByText('Create Alert')).toBeInTheDocument()
       expect(screen.getByText('Cancel')).toBeInTheDocument()
@@ -109,10 +117,8 @@ describe('AlertConfigForm', () => {
 
     it('hides form when Cancel is clicked', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       expect(screen.getByPlaceholderText('Alert name')).toBeInTheDocument()
       await user.click(screen.getByText('Cancel'))
       expect(screen.queryByPlaceholderText('Alert name')).not.toBeInTheDocument()
@@ -131,10 +137,8 @@ describe('AlertConfigForm', () => {
 
     it('renders all condition options', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       const conditionSelect = screen.getByDisplayValue('>')
       expect(conditionSelect).toBeInTheDocument()
       expect(conditionSelect.querySelectorAll('option')).toHaveLength(5)
@@ -142,20 +146,16 @@ describe('AlertConfigForm', () => {
 
     it('renders all severity options including None', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       const severitySelect = screen.getByDisplayValue('None')
       expect(severitySelect.querySelectorAll('option')).toHaveLength(5)
     })
 
     it('renders notification channel checkboxes', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       expect(screen.getByText('Email')).toBeInTheDocument()
       expect(screen.getByText('Slack')).toBeInTheDocument()
       expect(screen.getByText('Discord')).toBeInTheDocument()
@@ -163,20 +163,16 @@ describe('AlertConfigForm', () => {
 
     it('Create Alert button is disabled when name is empty', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       const createBtn = screen.getByText('Create Alert')
       expect(createBtn.closest('button')).toBeDisabled()
     })
 
     it('Create Alert button is enabled when name is provided', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       await user.type(screen.getByPlaceholderText('Alert name'), 'My alert')
       const createBtn = screen.getByText('Create Alert')
       expect(createBtn.closest('button')).not.toBeDisabled()
@@ -184,10 +180,8 @@ describe('AlertConfigForm', () => {
 
     it('can change condition select', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       const conditionSelect = screen.getByDisplayValue('>')
       await user.selectOptions(conditionSelect, '<')
       expect(conditionSelect).toHaveValue('<')
@@ -195,10 +189,8 @@ describe('AlertConfigForm', () => {
 
     it('can change severity select', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       const severitySelect = screen.getByDisplayValue('None')
       await user.selectOptions(severitySelect, 'CRITICAL')
       expect(severitySelect).toHaveValue('CRITICAL')
@@ -206,10 +198,8 @@ describe('AlertConfigForm', () => {
 
     it('can set severity back to None (null)', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       const severitySelect = screen.getByDisplayValue('None')
       await user.selectOptions(severitySelect, 'HIGH')
       expect(severitySelect).toHaveValue('HIGH')
@@ -219,10 +209,8 @@ describe('AlertConfigForm', () => {
 
     it('can change threshold input', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       // Threshold and duration both start at 0; threshold has no placeholder
       const zeroInputs = screen.getAllByDisplayValue('0')
       const thresholdInput = zeroInputs.find(el => !el.getAttribute('placeholder'))!
@@ -233,10 +221,8 @@ describe('AlertConfigForm', () => {
 
     it('can change duration_seconds input', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       const durationInput = screen.getByPlaceholderText('0')
       await user.clear(durationInput)
       await user.type(durationInput, '60')
@@ -245,10 +231,8 @@ describe('AlertConfigForm', () => {
 
     it('can toggle notification channel checkboxes', async () => {
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
       const checkboxes = screen.getAllByRole('checkbox')
       // All should be checked initially
       expect(checkboxes[0]).toBeChecked()
@@ -269,11 +253,9 @@ describe('AlertConfigForm', () => {
         )
       )
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
-      await user.click(screen.getByText('Add alert'))
-      await user.type(screen.getByPlaceholderText('Alert name'), 'New alert')
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
+      await user.type(await screen.findByPlaceholderText('Alert name'), 'New alert')
       await user.click(screen.getByText('Create Alert'))
 
       // After success, form should be hidden
@@ -294,9 +276,7 @@ describe('AlertConfigForm', () => {
           ])
         )
       )
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
+      renderAlertForm()
       await waitFor(() => {
         expect(screen.getByText('High errors')).toBeInTheDocument()
       })
@@ -312,9 +292,7 @@ describe('AlertConfigForm', () => {
           ])
         )
       )
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
+      renderAlertForm()
       await waitFor(() => {
         expect(screen.getByText('Widget 10 alert')).toBeInTheDocument()
       })
@@ -329,9 +307,7 @@ describe('AlertConfigForm', () => {
           ])
         )
       )
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
+      renderAlertForm()
       await waitFor(() => {
         expect(screen.getByText('FIRING')).toBeInTheDocument()
       })
@@ -345,9 +321,7 @@ describe('AlertConfigForm', () => {
           ])
         )
       )
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
+      renderAlertForm()
       await waitFor(() => {
         expect(screen.getByText('Idle alert')).toBeInTheDocument()
       })
@@ -362,9 +336,7 @@ describe('AlertConfigForm', () => {
           ])
         )
       )
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
+      renderAlertForm()
       await waitFor(() => {
         expect(screen.getByText('Disabled alert')).toBeInTheDocument()
       })
@@ -377,52 +349,57 @@ describe('AlertConfigForm', () => {
   // ──── Toggle alert enabled/disabled ────
   describe('toggle alert', () => {
     it('toggles an enabled alert to disabled', async () => {
+      let putCalled = false
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
             makeAlert({id: 1, widget_id: 10, name: 'Toggle me', enabled: true}),
           ])
         ),
-        http.put(`${API_BASE}/v1/dashboards/:dashId/alerts/:alertId`, () =>
-          HttpResponse.json(makeAlert({id: 1, enabled: false}))
-        )
+        http.put(`${API_BASE}/v1/dashboards/:dashId/alerts/:alertId`, () => {
+          putCalled = true
+          return HttpResponse.json(makeAlert({id: 1, enabled: false}))
+        })
       )
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
+      renderAlertForm()
       await waitFor(() => {
         expect(screen.getByText('Toggle me')).toBeInTheDocument()
       })
       const toggleBtn = screen.getByTitle('Disable')
       await user.click(toggleBtn)
-      // Just verifying the click doesn't error
+      await waitFor(() => {
+        expect(putCalled).toBe(true)
+      })
     })
   })
 
   // ──── Delete alert ────
   describe('delete alert', () => {
     it('calls delete when trash button is clicked', async () => {
+      let deleteCalled = false
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
             makeAlert({id: 1, widget_id: 10, name: 'Delete me'}),
           ])
         ),
-        http.delete(`${API_BASE}/v1/dashboards/:dashId/alerts/:alertId`, () =>
-          new HttpResponse(null, {status: 204})
-        )
+        http.delete(`${API_BASE}/v1/dashboards/:dashId/alerts/:alertId`, () => {
+          deleteCalled = true
+          return new HttpResponse(null, {status: 204})
+        })
       )
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={[baseQuery]} />
-      )
+      renderAlertForm()
       await waitFor(() => {
         expect(screen.getByText('Delete me')).toBeInTheDocument()
       })
-      // Find the trash button — it's the last button in the alert row
-      const deleteButtons = document.querySelectorAll('button.text-muted-foreground')
-      await user.click(deleteButtons[deleteButtons.length - 1])
+      const alertRow = screen.getByText('Delete me').closest('div[class*="justify-between"]')
+      const buttons = alertRow!.querySelectorAll('button')
+      await user.click(buttons[buttons.length - 1])
+      await waitFor(() => {
+        expect(deleteCalled).toBe(true)
+      })
     })
   })
 
@@ -436,13 +413,7 @@ describe('AlertConfigForm', () => {
           ])
         )
       )
-      renderWithQueryClient(
-        <AlertConfigForm
-          dashboardId={5}
-          widgetId={10}
-          queryConfigs={[baseQuery]}
-        />
-      )
+      renderAlertForm()
       await waitFor(() => {
         expect(screen.getByText(/total_count/)).toBeInTheDocument()
       })
@@ -460,13 +431,7 @@ describe('AlertConfigForm', () => {
           ])
         )
       )
-      renderWithQueryClient(
-        <AlertConfigForm
-          dashboardId={5}
-          widgetId={10}
-          queryConfigs={[queryWithoutAlias]}
-        />
-      )
+      renderAlertForm({queryConfigs: [queryWithoutAlias]})
       await waitFor(() => {
         expect(screen.getByText(/avg\(duration_ms\)/)).toBeInTheDocument()
       })
@@ -484,13 +449,7 @@ describe('AlertConfigForm', () => {
           ])
         )
       )
-      renderWithQueryClient(
-        <AlertConfigForm
-          dashboardId={5}
-          widgetId={10}
-          queryConfigs={[queryNoField]}
-        />
-      )
+      renderAlertForm({queryConfigs: [queryNoField]})
       await waitFor(() => {
         expect(screen.getByText(/count\(\)/)).toBeInTheDocument()
       })
@@ -508,13 +467,7 @@ describe('AlertConfigForm', () => {
           ])
         )
       )
-      renderWithQueryClient(
-        <AlertConfigForm
-          dashboardId={5}
-          widgetId={10}
-          queryConfigs={[emptyMetricsQuery]}
-        />
-      )
+      renderAlertForm({queryConfigs: [emptyMetricsQuery]})
       await waitFor(() => {
         expect(screen.getByText(/count\(\)/)).toBeInTheDocument()
       })
@@ -528,13 +481,7 @@ describe('AlertConfigForm', () => {
           ])
         )
       )
-      renderWithQueryClient(
-        <AlertConfigForm
-          dashboardId={5}
-          widgetId={10}
-          queryConfigs={[baseQuery]}
-        />
-      )
+      renderAlertForm()
       await waitFor(() => {
         expect(screen.getByText(/metric/)).toBeInTheDocument()
       })
@@ -554,10 +501,8 @@ describe('AlertConfigForm', () => {
         )
       )
       const user = userEvent.setup()
-      renderWithQueryClient(
-        <AlertConfigForm dashboardId={5} widgetId={10} queryConfigs={queries} />
-      )
-      await user.click(screen.getByText('Add alert'))
+      renderAlertForm({queryConfigs: queries})
+      await user.click(await screen.findByText('Add alert'))
       const metricSelect = screen.getByDisplayValue('errors')
       expect(metricSelect.querySelectorAll('option')).toHaveLength(2)
     })

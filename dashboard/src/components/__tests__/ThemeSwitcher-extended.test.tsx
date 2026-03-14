@@ -61,33 +61,47 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+const themeSelectionCases: Array<{
+  theme: string
+  displayName: string
+  dark: boolean
+  themeClass: string
+}> = [
+  { theme: 'forest', displayName: 'Forest', dark: true, themeClass: 'theme-forest' },
+  { theme: 'sunset', displayName: 'Sunset', dark: true, themeClass: 'theme-sunset' },
+  { theme: 'retro', displayName: 'Retro', dark: false, themeClass: 'theme-retro' },
+  { theme: 'retro-dark', displayName: 'Retro Dark', dark: true, themeClass: 'theme-retro-dark' },
+]
+
+const localStoragePersistenceCases: Array<{
+  theme: string
+  themeClass: string
+  dark: boolean
+  fontId?: string
+}> = [
+  { theme: 'forest', themeClass: 'theme-forest', dark: true },
+  { theme: 'retro', themeClass: 'theme-retro', dark: false },
+  { theme: 'retro-dark', themeClass: 'theme-retro-dark', dark: true },
+  { theme: 'gamer', themeClass: 'theme-gamer', dark: true, fontId: 'vt323-font' },
+  { theme: 'terminal', themeClass: 'theme-terminal', dark: true, fontId: 'ibm-plex-mono-font' },
+]
+
 describe('ThemeSwitcher – extended branch coverage', () => {
-  // ──── Theme: forest ────
-  describe('forest theme', () => {
-    it('applies dark and theme-forest classes', async () => {
-      const user = userEvent.setup()
-      render(<ThemeSwitcher />)
-      await selectTheme(user, 'Forest')
-      expect(localStorage.getItem('theme')).toBe('forest')
-      expect(document.documentElement.classList.contains('dark')).toBe(true)
-      expect(document.documentElement.classList.contains('theme-forest')).toBe(true)
-    })
+  describe('theme selection', () => {
+    it.each(themeSelectionCases)(
+      'applies correct classes for $displayName',
+      async ({ theme, displayName, dark, themeClass }) => {
+        const user = userEvent.setup()
+        render(<ThemeSwitcher />)
+        await selectTheme(user, displayName)
+        expect(localStorage.getItem('theme')).toBe(theme)
+        expect(document.documentElement.classList.contains(themeClass)).toBe(true)
+        expect(document.documentElement.classList.contains('dark')).toBe(dark)
+      }
+    )
   })
 
-  // ──── Theme: sunset ────
-  describe('sunset theme', () => {
-    it('applies dark and theme-sunset classes', async () => {
-      const user = userEvent.setup()
-      render(<ThemeSwitcher />)
-      await selectTheme(user, 'Sunset')
-      expect(localStorage.getItem('theme')).toBe('sunset')
-      expect(document.documentElement.classList.contains('dark')).toBe(true)
-      expect(document.documentElement.classList.contains('theme-sunset')).toBe(true)
-    })
-  })
-
-  // ──── Theme: gamer (loads VT323 font) ────
-  describe('gamer theme', () => {
+  describe('gamer theme (VT323 font)', () => {
     it('applies dark and theme-gamer classes and loads VT323 font', async () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
@@ -110,32 +124,7 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     })
   })
 
-  // ──── Theme: retro ────
-  describe('retro theme', () => {
-    it('applies theme-retro class without dark', async () => {
-      const user = userEvent.setup()
-      render(<ThemeSwitcher />)
-      await selectTheme(user, 'Retro')
-      expect(localStorage.getItem('theme')).toBe('retro')
-      expect(document.documentElement.classList.contains('theme-retro')).toBe(true)
-      expect(document.documentElement.classList.contains('dark')).toBe(false)
-    })
-  })
-
-  // ──── Theme: retro-dark ────
-  describe('retro-dark theme', () => {
-    it('applies dark and theme-retro-dark classes', async () => {
-      const user = userEvent.setup()
-      render(<ThemeSwitcher />)
-      await selectTheme(user, 'Retro Dark')
-      expect(localStorage.getItem('theme')).toBe('retro-dark')
-      expect(document.documentElement.classList.contains('dark')).toBe(true)
-      expect(document.documentElement.classList.contains('theme-retro-dark')).toBe(true)
-    })
-  })
-
-  // ──── Theme: terminal (loads IBM Plex Mono font) ────
-  describe('terminal theme', () => {
+  describe('terminal theme (IBM Plex Mono font)', () => {
     it('applies dark and theme-terminal classes and loads IBM Plex Mono font', async () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
@@ -158,7 +147,6 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     })
   })
 
-  // ──── Theme: dark (default) ────
   describe('dark theme', () => {
     it('applies dark class and removes other theme classes', async () => {
       localStorage.setItem('theme', 'midnight')
@@ -171,7 +159,6 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     })
   })
 
-  // ──── Theme: light ────
   describe('light theme', () => {
     it('removes all theme classes for light mode', async () => {
       localStorage.setItem('theme', 'gamer')
@@ -184,42 +171,19 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     })
   })
 
-  // ──── Persistence: loads saved theme on mount ────
   describe('localStorage persistence', () => {
-    it('loads forest theme from localStorage', () => {
-      localStorage.setItem('theme', 'forest')
-      render(<ThemeSwitcher />)
-      expect(document.documentElement.classList.contains('theme-forest')).toBe(true)
-      expect(document.documentElement.classList.contains('dark')).toBe(true)
-    })
-
-    it('loads retro theme from localStorage', () => {
-      localStorage.setItem('theme', 'retro')
-      render(<ThemeSwitcher />)
-      expect(document.documentElement.classList.contains('theme-retro')).toBe(true)
-      expect(document.documentElement.classList.contains('dark')).toBe(false)
-    })
-
-    it('loads retro-dark theme from localStorage', () => {
-      localStorage.setItem('theme', 'retro-dark')
-      render(<ThemeSwitcher />)
-      expect(document.documentElement.classList.contains('theme-retro-dark')).toBe(true)
-      expect(document.documentElement.classList.contains('dark')).toBe(true)
-    })
-
-    it('loads gamer theme from localStorage and adds font', () => {
-      localStorage.setItem('theme', 'gamer')
-      render(<ThemeSwitcher />)
-      expect(document.documentElement.classList.contains('theme-gamer')).toBe(true)
-      expect(document.getElementById('vt323-font')).toBeTruthy()
-    })
-
-    it('loads terminal theme from localStorage and adds font', () => {
-      localStorage.setItem('theme', 'terminal')
-      render(<ThemeSwitcher />)
-      expect(document.documentElement.classList.contains('theme-terminal')).toBe(true)
-      expect(document.getElementById('ibm-plex-mono-font')).toBeTruthy()
-    })
+    it.each(localStoragePersistenceCases)(
+      'loads $theme from localStorage',
+      ({ theme, themeClass, dark, fontId }) => {
+        localStorage.setItem('theme', theme)
+        render(<ThemeSwitcher />)
+        expect(document.documentElement.classList.contains(themeClass)).toBe(true)
+        expect(document.documentElement.classList.contains('dark')).toBe(dark)
+        if (fontId) {
+          expect(document.getElementById(fontId)).toBeTruthy()
+        }
+      }
+    )
   })
 
   // ──── Theme removal: switching removes previous theme ────

@@ -1,7 +1,7 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
-import { renderRouteWithProviders, clearAuthStorage } from '@/test/utils'
+import { renderRoute, clearAuthStorage } from '@/test/utils'
 
 const { mockNavigate, mockApi } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -119,8 +119,7 @@ describe('Performance Index - data coverage', () => {
   })
 
   it('renders performance page with stats, charts, and transaction table', async () => {
-    const Component = (PerformanceRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(PerformanceRoute)
 
     // Header
     expect(await screen.findByText('Performance')).toBeInTheDocument()
@@ -149,8 +148,7 @@ describe('Performance Index - data coverage', () => {
     mockApi.getTransactions.mockResolvedValue([])
     mockApi.getPerformanceStats.mockResolvedValue(null)
 
-    const Component = (PerformanceRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(PerformanceRoute)
 
     expect(await screen.findByText('No transaction data for this period')).toBeInTheDocument()
   })
@@ -160,8 +158,7 @@ describe('Performance Index - data coverage', () => {
     mockApi.getTransactions.mockReturnValue(new Promise(() => {}))
     mockApi.getPerformanceStats.mockReturnValue(new Promise(() => {}))
 
-    const Component = (PerformanceRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(PerformanceRoute)
 
     // Initially shows no-projects or loading depending on timing
     // The projects query needs to resolve first

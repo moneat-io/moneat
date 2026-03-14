@@ -51,12 +51,16 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+function renderToolbar(props: Record<string, unknown> = {}) {
+  return render(<DashboardToolbar {...defaultProps} {...props} />)
+}
+
 describe('DashboardToolbar – extended branch coverage', () => {
   // ──── Title editing branches ────
   describe('title editing', () => {
     it('does not enter title edit mode when not in editing mode', async () => {
       const user = userEvent.setup()
-      render(<DashboardToolbar {...defaultProps} isEditing={false} />)
+      renderToolbar({isEditing: false})
       await user.click(screen.getByText('Test Dashboard'))
       // Should NOT show an input
       expect(screen.queryByDisplayValue('Test Dashboard')).not.toBeInTheDocument()
@@ -64,7 +68,7 @@ describe('DashboardToolbar – extended branch coverage', () => {
 
     it('enters title edit mode when in editing mode and title is clicked', async () => {
       const user = userEvent.setup()
-      render(<DashboardToolbar {...defaultProps} isEditing={true} />)
+      renderToolbar({isEditing: true})
       await user.click(screen.getByText('Test Dashboard'))
       expect(screen.getByDisplayValue('Test Dashboard')).toBeInTheDocument()
     })
@@ -72,7 +76,7 @@ describe('DashboardToolbar – extended branch coverage', () => {
     it('does not call onTitleChange when title is unchanged on blur', async () => {
       const user = userEvent.setup()
       const onTitleChange = vi.fn()
-      render(<DashboardToolbar {...defaultProps} isEditing={true} onTitleChange={onTitleChange} />)
+      renderToolbar({isEditing: true, onTitleChange})
       await user.click(screen.getByText('Test Dashboard'))
       // Just blur without changing
       await user.tab()
@@ -82,7 +86,7 @@ describe('DashboardToolbar – extended branch coverage', () => {
     it('does not call onTitleChange when title is trimmed to empty', async () => {
       const user = userEvent.setup()
       const onTitleChange = vi.fn()
-      render(<DashboardToolbar {...defaultProps} isEditing={true} onTitleChange={onTitleChange} />)
+      renderToolbar({isEditing: true, onTitleChange})
       await user.click(screen.getByText('Test Dashboard'))
       const input = screen.getByDisplayValue('Test Dashboard')
       await user.clear(input)
@@ -94,7 +98,7 @@ describe('DashboardToolbar – extended branch coverage', () => {
     it('saves title on Enter key press', async () => {
       const user = userEvent.setup()
       const onTitleChange = vi.fn()
-      render(<DashboardToolbar {...defaultProps} isEditing={true} onTitleChange={onTitleChange} />)
+      renderToolbar({isEditing: true, onTitleChange})
       await user.click(screen.getByText('Test Dashboard'))
       const input = screen.getByDisplayValue('Test Dashboard')
       await user.clear(input)
@@ -103,11 +107,11 @@ describe('DashboardToolbar – extended branch coverage', () => {
     })
 
     it('title has cursor-pointer class only when editing', () => {
-      const {rerender} = render(<DashboardToolbar {...defaultProps} isEditing={false} />)
+      const {rerender} = renderToolbar({isEditing: false})
       const titleEl = screen.getByText('Test Dashboard')
       expect(titleEl.className).not.toContain('cursor-pointer')
 
-      rerender(<DashboardToolbar {...defaultProps} isEditing={true} />)
+      rerender(<DashboardToolbar {...defaultProps} isEditing />)
       const titleEditing = screen.getByText('Test Dashboard')
       expect(titleEditing.className).toContain('cursor-pointer')
     })
@@ -132,49 +136,30 @@ describe('DashboardToolbar – extended branch coverage', () => {
     }
 
     it('does not render variables section when variables is undefined', () => {
-      render(<DashboardToolbar {...defaultProps} variables={undefined} />)
+      renderToolbar({variables: undefined})
       expect(screen.queryByText('Environment')).not.toBeInTheDocument()
     })
 
     it('does not render variables section when variables is empty array', () => {
-      render(<DashboardToolbar {...defaultProps} variables={[]} />)
+      renderToolbar({variables: []})
       expect(screen.queryByText('Environment')).not.toBeInTheDocument()
     })
 
     it('renders textbox variable as input', () => {
-      render(
-        <DashboardToolbar
-          {...defaultProps}
-          variables={[textboxVar]}
-          variableValues={{env: 'staging'}}
-        />
-      )
+      renderToolbar({variables: [textboxVar], variableValues: {env: 'staging'}})
       expect(screen.getByText('Environment')).toBeInTheDocument()
       expect(screen.getByDisplayValue('staging')).toBeInTheDocument()
     })
 
     it('uses v.current for textbox when variableValues is missing that key', () => {
-      render(
-        <DashboardToolbar
-          {...defaultProps}
-          variables={[textboxVar]}
-          variableValues={{}}
-        />
-      )
+      renderToolbar({variables: [textboxVar], variableValues: {}})
       expect(screen.getByDisplayValue('production')).toBeInTheDocument()
     })
 
     it('calls onVariableChange when textbox value changes', async () => {
       const user = userEvent.setup()
       const onVariableChange = vi.fn()
-      render(
-        <DashboardToolbar
-          {...defaultProps}
-          variables={[textboxVar]}
-          variableValues={{env: 'prod'}}
-          onVariableChange={onVariableChange}
-        />
-      )
+      renderToolbar({variables: [textboxVar], variableValues: {env: 'prod'}, onVariableChange})
       const input = screen.getByDisplayValue('prod')
       await user.clear(input)
       await user.type(input, 'dev')
@@ -182,24 +167,12 @@ describe('DashboardToolbar – extended branch coverage', () => {
     })
 
     it('uses variable name as label when label is null', () => {
-      render(
-        <DashboardToolbar
-          {...defaultProps}
-          variables={[selectVarNoOptions]}
-          variableValues={{}}
-        />
-      )
+      renderToolbar({variables: [selectVarNoOptions], variableValues: {}})
       expect(screen.getByText('empty_var')).toBeInTheDocument()
     })
 
     it('shows variable settings gear icon when editing and onVariableSettings is provided', () => {
-      render(
-        <DashboardToolbar
-          {...defaultProps}
-          isEditing={true}
-          variables={[textboxVar]}
-        />
-      )
+      renderToolbar({isEditing: true, variables: [textboxVar]})
       // The gear icon button should be rendered in the variables section
       // There should be TWO variable settings buttons: one in the variable section, one in the toolbar
       const buttons = screen.getAllByText('Variables')
@@ -207,13 +180,7 @@ describe('DashboardToolbar – extended branch coverage', () => {
     })
 
     it('does not show variable settings gear in variables section when not editing', () => {
-      render(
-        <DashboardToolbar
-          {...defaultProps}
-          isEditing={false}
-          variables={[textboxVar]}
-        />
-      )
+      renderToolbar({isEditing: false, variables: [textboxVar]})
       // Only the toolbar buttons should be present, no Variables button when not editing
       expect(screen.queryByText('Variables')).not.toBeInTheDocument()
     })
@@ -222,21 +189,21 @@ describe('DashboardToolbar – extended branch coverage', () => {
   // ──── Time range presets – active styling ────
   describe('time range active state', () => {
     it('highlights the matching time range preset', () => {
-      render(<DashboardToolbar {...defaultProps} timeRange={{from: 'now-7d', to: 'now'}} />)
+      renderToolbar({timeRange: {from: 'now-7d', to: 'now'}})
       const btn7d = screen.getByText('7d')
       expect(btn7d.className).toContain('bg-background')
       expect(btn7d.className).toContain('shadow-sm')
     })
 
     it('does not highlight non-active time range presets', () => {
-      render(<DashboardToolbar {...defaultProps} timeRange={{from: 'now-7d', to: 'now'}} />)
+      renderToolbar({timeRange: {from: 'now-7d', to: 'now'}})
       const btn1h = screen.getByText('1h')
       expect(btn1h.className).toContain('text-muted-foreground')
       expect(btn1h.className).not.toContain('shadow-sm')
     })
 
     it('applies inactive style to custom time range (no preset match)', () => {
-      render(<DashboardToolbar {...defaultProps} timeRange={{from: 'now-3h', to: 'now'}} />)
+      renderToolbar({timeRange: {from: 'now-3h', to: 'now'}})
       // No preset should be active
       const allPresets = ['15m', '1h', '4h', '24h', '7d', '30d']
       for (const preset of allPresets) {
@@ -249,14 +216,14 @@ describe('DashboardToolbar – extended branch coverage', () => {
   // ──── Auto-refresh toggle ────
   describe('auto-refresh', () => {
     it('renders with default variant when autoRefresh is true', () => {
-      render(<DashboardToolbar {...defaultProps} autoRefresh={true} />)
+      renderToolbar({autoRefresh: true})
       // The auto-refresh button should have 'animate-spin' class on its icon
       const spinIcons = document.querySelectorAll('.animate-spin')
       expect(spinIcons.length).toBeGreaterThanOrEqual(1)
     })
 
     it('does not have animate-spin when autoRefresh is false', () => {
-      render(<DashboardToolbar {...defaultProps} autoRefresh={false} />)
+      renderToolbar({autoRefresh: false})
       const spinIcons = document.querySelectorAll('.animate-spin')
       expect(spinIcons.length).toBe(0)
     })
@@ -264,13 +231,7 @@ describe('DashboardToolbar – extended branch coverage', () => {
     it('calls onAutoRefreshChange(false) when autoRefresh is true and button is clicked', async () => {
       const user = userEvent.setup()
       const onAutoRefreshChange = vi.fn()
-      render(
-        <DashboardToolbar
-          {...defaultProps}
-          autoRefresh={true}
-          onAutoRefreshChange={onAutoRefreshChange}
-        />
-      )
+      renderToolbar({autoRefresh: true, onAutoRefreshChange})
       // Find the button with the spinning icon
       const spinIcon = document.querySelector('.animate-spin')
       const refreshBtn = spinIcon?.closest('button')
@@ -284,13 +245,7 @@ describe('DashboardToolbar – extended branch coverage', () => {
   // ──── Editing vs non-editing action buttons ────
   describe('action buttons', () => {
     it('does not show onVariableSettings in editing toolbar when callback is undefined', () => {
-      render(
-        <DashboardToolbar
-          {...defaultProps}
-          isEditing={true}
-          onVariableSettings={undefined}
-        />
-      )
+      renderToolbar({isEditing: true, onVariableSettings: undefined})
       expect(screen.queryByText('Variables')).not.toBeInTheDocument()
       // Widget and Done should still be visible
       expect(screen.getByText('Widget')).toBeInTheDocument()
@@ -308,13 +263,7 @@ describe('DashboardToolbar – extended branch coverage', () => {
         options: [],
         default_value: 'us-central1',
       }
-      render(
-        <DashboardToolbar
-          {...defaultProps}
-          variables={[varWithDefault]}
-          variableValues={{}}
-        />
-      )
+      renderToolbar({variables: [varWithDefault], variableValues: {}})
       expect(screen.getByDisplayValue('us-central1')).toBeInTheDocument()
     })
 
@@ -325,13 +274,7 @@ describe('DashboardToolbar – extended branch coverage', () => {
         type: 'textbox',
         options: [],
       }
-      render(
-        <DashboardToolbar
-          {...defaultProps}
-          variables={[varNoValues]}
-          variableValues={{}}
-        />
-      )
+      renderToolbar({variables: [varNoValues], variableValues: {}})
       const input = screen.getByPlaceholderText('test')
       expect(input).toHaveValue('')
     })

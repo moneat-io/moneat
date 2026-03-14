@@ -1,7 +1,7 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, fireEvent } from '@testing-library/react'
-import { renderRouteWithProviders, clearAuthStorage } from '@/test/utils'
+import { renderRoute, clearAuthStorage } from '@/test/utils'
 
 const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -130,8 +130,7 @@ describe('Issues Index - data coverage', () => {
   })
 
   it('renders issues list with projects and issues data', async () => {
-    const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssuesIndexRoute)
 
     // Should show the dashboard header
     expect(await screen.findByText('Dashboard')).toBeInTheDocument()
@@ -157,8 +156,7 @@ describe('Issues Index - data coverage', () => {
   })
 
   it('renders search and filter controls', async () => {
-    const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssuesIndexRoute)
 
     // Wait for issues to load so the select-all appears
     await screen.findByText(/app.main: TypeError: null ref/)
@@ -167,8 +165,7 @@ describe('Issues Index - data coverage', () => {
   })
 
   it('filters issues by search query', async () => {
-    const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssuesIndexRoute)
 
     await screen.findByText('Dashboard')
     const searchInput = screen.getByPlaceholderText('Search issues...')
@@ -178,8 +175,7 @@ describe('Issues Index - data coverage', () => {
   })
 
   it('shows no issues match filters when search has no results', async () => {
-    const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssuesIndexRoute)
 
     await screen.findByText('Dashboard')
     const searchInput = screen.getByPlaceholderText('Search issues...')
@@ -191,15 +187,13 @@ describe('Issues Index - data coverage', () => {
   it('shows empty state when issues list is empty for default filter', async () => {
     mockApi.getIssues.mockResolvedValue([])
 
-    const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssuesIndexRoute)
 
     expect(await screen.findByText('No issues yet')).toBeInTheDocument()
   })
 
   it('switches to APM Errors tab', async () => {
-    const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssuesIndexRoute)
 
     await screen.findByText('Dashboard')
     const apmTab = screen.getByText('APM Errors')
@@ -233,8 +227,7 @@ describe('Issues Index - data coverage', () => {
       totalCount: 2,
     })
 
-    const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssuesIndexRoute)
 
     await screen.findByText('Dashboard')
     fireEvent.click(screen.getByText('APM Errors'))
@@ -245,8 +238,7 @@ describe('Issues Index - data coverage', () => {
   })
 
   it('renders project settings and new project buttons', async () => {
-    const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRouteWithProviders(Component)
+    renderRoute(IssuesIndexRoute)
 
     await screen.findByText('Dashboard')
     expect(screen.getByText('New Project')).toBeInTheDocument()

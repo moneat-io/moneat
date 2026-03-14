@@ -44,6 +44,24 @@ function setImportJson(json: string) {
   fireEvent.change(textarea, {target: {value: json}})
 }
 
+function renderImportModal(props: {onOpenChange?: ReturnType<typeof vi.fn>} = {}) {
+  const onOpenChange = props.onOpenChange ?? vi.fn()
+  return renderWithQueryClient(
+    <ImportExportModal open={true} onOpenChange={onOpenChange} mode="import" />
+  )
+}
+
+function renderExportModal(props: {dashboardId?: number} = {}) {
+  return renderWithQueryClient(
+    <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={props.dashboardId} />
+  )
+}
+
+async function submitImport(json: string) {
+  setImportJson(json)
+  await userEvent.setup().click(screen.getByText('Import'))
+}
+
 beforeEach(() => {
   clearAuthStorage()
   vi.clearAllMocks()
@@ -60,11 +78,8 @@ describe('ImportExportModal – extended branch coverage', () => {
   describe('import – auto-navigate on zero warnings', () => {
     it('navigates to new dashboard when import succeeds with no warnings', async () => {
       const onOpenChange = vi.fn()
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={onOpenChange} mode="import" />
-      )
-      setImportJson('{"title":"test"}')
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal({onOpenChange})
+      await submitImport('{"title":"test"}')
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith({
           to: '/dashboards/$dashboardId',
@@ -82,12 +97,8 @@ describe('ImportExportModal – extended branch coverage', () => {
         dashboard: {id: 99},
         warnings: ['Unsupported panel type: heatmap', 'Unknown variable: $region'],
       })
-      const onOpenChange = vi.fn()
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={onOpenChange} mode="import" />
-      )
-      setImportJson('{"title":"test"}')
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport('{"title":"test"}')
       await waitFor(() => {
         expect(screen.getByText('Import Warnings')).toBeInTheDocument()
       })
@@ -105,17 +116,13 @@ describe('ImportExportModal – extended branch coverage', () => {
         warnings: ['Some warning'],
       })
       const onOpenChange = vi.fn()
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={onOpenChange} mode="import" />
-      )
-      setImportJson('{"title":"test"}')
-      const user = userEvent.setup()
-      await user.click(screen.getByText('Import'))
+      renderImportModal({onOpenChange})
+      await submitImport('{"title":"test"}')
 
       await waitFor(() => {
         expect(screen.getByText('View Dashboard')).toBeInTheDocument()
       })
-      await user.click(screen.getByText('View Dashboard'))
+      await userEvent.setup().click(screen.getByText('View Dashboard'))
       expect(mockNavigate).toHaveBeenCalledWith({
         to: '/dashboards/$dashboardId',
         params: {dashboardId: '99'},
@@ -131,11 +138,8 @@ describe('ImportExportModal – extended branch coverage', () => {
         dashboard: {id: 10},
         warnings: ['warn'],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson('{"title":"test"}')
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport('{"title":"test"}')
       await waitFor(() => {
         expect(screen.getByText('Close')).toBeInTheDocument()
       })
@@ -146,12 +150,8 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Import: invalid JSON – falls through to mutation ────
   describe('import – invalid JSON input', () => {
     it('falls through to importMutation when JSON is unparseable', async () => {
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson('not-json-at-all')
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport('not-json-at-all')
 
       await waitFor(() => {
         expect(mockedApi.importDashboard).toHaveBeenCalledWith('grafana', 'not-json-at-all')
@@ -171,12 +171,8 @@ describe('ImportExportModal – extended branch coverage', () => {
           },
         ],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson(json)
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport(json)
 
       // prometheus is not built-in so mapper modal should show
       await waitFor(() => {
@@ -196,12 +192,8 @@ describe('ImportExportModal – extended branch coverage', () => {
           },
         ],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson(json)
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport(json)
 
       await waitFor(() => {
         expect(screen.getByText('Map Data Sources')).toBeInTheDocument()
@@ -217,12 +209,8 @@ describe('ImportExportModal – extended branch coverage', () => {
           },
         ],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson(json)
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport(json)
 
       await waitFor(() => {
         expect(screen.getByText('Map Data Sources')).toBeInTheDocument()
@@ -244,12 +232,8 @@ describe('ImportExportModal – extended branch coverage', () => {
           },
         ],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson(json)
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport(json)
 
       await waitFor(() => {
         expect(screen.getByText('Map Data Sources')).toBeInTheDocument()
@@ -266,12 +250,8 @@ describe('ImportExportModal – extended branch coverage', () => {
           {type: 'stat', datasource: {type: 'logs'}, targets: []},
         ],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson(json)
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport(json)
 
       await waitFor(() => {
         expect(mockedApi.importDashboard).toHaveBeenCalledWith('grafana', json)
@@ -289,17 +269,13 @@ describe('ImportExportModal – extended branch coverage', () => {
         __inputs: [{name: 'DS_REDIS', type: 'datasource', pluginId: 'redis-datasource'}],
         panels: [{type: 'stat', datasource: '${DS_REDIS}', targets: []}],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
+      renderImportModal()
 
       await waitFor(() => {
         // Wait for custom data sources query to resolve
       })
 
-      setImportJson(json)
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      await submitImport(json)
 
       // Mapper should appear since there are unmapped sources
       await waitFor(() => {
@@ -311,9 +287,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Import: no file selected in file upload ────
   describe('import – file upload empty', () => {
     it('does nothing when file input fires without a file', () => {
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
+      renderImportModal()
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
       expect(fileInput).toBeTruthy()
       fireEvent.change(fileInput, {target: {files: []}})
@@ -326,9 +300,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Import: file upload reads content ────
   describe('import – file upload reads file', () => {
     it('reads uploaded file and populates the editor', async () => {
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
+      renderImportModal()
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
       const blob = new Blob(['{"title":"from file"}'], {type: 'application/json'})
       const file = new File([blob], 'dashboard.json', {type: 'application/json'})
@@ -353,9 +325,7 @@ describe('ImportExportModal – extended branch coverage', () => {
       globalThis.URL.createObjectURL = mockCreateObjectURL
       globalThis.URL.revokeObjectURL = mockRevokeObjectURL
 
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={5} />
-      )
+      renderExportModal({dashboardId: 5})
 
       await userEvent.setup().click(screen.getByText('Export as Moneat JSON'))
 
@@ -373,9 +343,7 @@ describe('ImportExportModal – extended branch coverage', () => {
       globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:mock')
       globalThis.URL.revokeObjectURL = vi.fn()
 
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={3} />
-      )
+      renderExportModal({dashboardId: 3})
 
       await userEvent.setup().click(screen.getByText('Export as Grafana JSON'))
 
@@ -388,9 +356,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Export: no dashboardId returns early ────
   describe('export – no dashboardId', () => {
     it('does not call exportDashboard when dashboardId is undefined', async () => {
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" />
-      )
+      renderExportModal()
 
       await userEvent.setup().click(screen.getByText('Export as Moneat JSON'))
 
@@ -405,9 +371,7 @@ describe('ImportExportModal – extended branch coverage', () => {
       mockedApi.exportDashboard.mockRejectedValue(new Error('Network error'))
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
-      )
+      renderExportModal({dashboardId: 1})
 
       await userEvent.setup().click(screen.getByText('Export as Moneat JSON'))
 
@@ -421,30 +385,22 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Import: Experimental badge shown only in import mode ────
   describe('UI mode differences', () => {
     it('shows Experimental badge in import mode', () => {
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
+      renderImportModal()
       expect(screen.getByText('Experimental')).toBeInTheDocument()
     })
 
     it('does not show Experimental badge in export mode', () => {
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
-      )
+      renderExportModal({dashboardId: 1})
       expect(screen.queryByText('Experimental')).not.toBeInTheDocument()
     })
 
     it('shows correct description text for import mode', () => {
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
+      renderImportModal()
       expect(screen.getByText('Import a dashboard from Grafana JSON format')).toBeInTheDocument()
     })
 
     it('shows correct description text for export mode', () => {
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
-      )
+      renderExportModal({dashboardId: 1})
       expect(screen.getByText('Export this dashboard in various formats')).toBeInTheDocument()
     })
   })
@@ -459,12 +415,8 @@ describe('ImportExportModal – extended branch coverage', () => {
         ],
         panels: [{type: 'graph', targets: []}],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson(json)
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport(json)
 
       // Should show mapper for prometheus but not for constant
       await waitFor(() => {
@@ -481,12 +433,8 @@ describe('ImportExportModal – extended branch coverage', () => {
           {type: 'graph', datasource: 'graphite', targets: []},
         ],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson(json)
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport(json)
 
       await waitFor(() => {
         expect(screen.getByText('Map Data Sources')).toBeInTheDocument()
@@ -502,12 +450,8 @@ describe('ImportExportModal – extended branch coverage', () => {
           {type: 'text', datasource: 'events'},
         ],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson(json)
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport(json)
 
       await waitFor(() => {
         expect(mockedApi.importDashboard).toHaveBeenCalled()
@@ -523,12 +467,8 @@ describe('ImportExportModal – extended branch coverage', () => {
           {type: 'graph', datasource: 'events', targets: [{datasource: null, refId: 'A'}]},
         ],
       })
-      renderWithQueryClient(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
-      )
-      setImportJson(json)
-
-      await userEvent.setup().click(screen.getByText('Import'))
+      renderImportModal()
+      await submitImport(json)
 
       await waitFor(() => {
         expect(mockedApi.importDashboard).toHaveBeenCalled()

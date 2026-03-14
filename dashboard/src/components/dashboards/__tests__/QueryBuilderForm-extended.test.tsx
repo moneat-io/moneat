@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import React from 'react'
 import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {screen, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -73,6 +72,10 @@ beforeEach(() => {
   )
 })
 
+function renderQueryBuilder(dsl: QueryDsl = defaultDsl, onChange = vi.fn()) {
+  return renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={onChange} />)
+}
+
 describe('QueryBuilderForm – extended branch coverage', () => {
   // ──── Custom source: raw query mode ────
   describe('custom data source', () => {
@@ -82,7 +85,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         dataSource: 'custom:1',
         rawQuery: 'SELECT * FROM my_table',
       }
-      renderWithQueryClient(<QueryBuilderForm value={customDsl} onChange={vi.fn()} />)
+      renderQueryBuilder(customDsl)
       await waitFor(() => {
         expect(screen.getByText('SQL Query')).toBeInTheDocument()
       })
@@ -106,7 +109,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         dataSource: 'custom:2',
         rawQuery: 'rate(http_requests_total[5m])',
       }
-      renderWithQueryClient(<QueryBuilderForm value={promDsl} onChange={vi.fn()} />)
+      renderQueryBuilder(promDsl)
       await waitFor(() => {
         expect(screen.getByText('PromQL Query')).toBeInTheDocument()
       })
@@ -119,7 +122,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         dataSource: 'custom:1',
         limit: 200,
       }
-      renderWithQueryClient(<QueryBuilderForm value={customDsl} onChange={vi.fn()} />)
+      renderQueryBuilder(customDsl)
       await waitFor(() => {
         expect(screen.getByDisplayValue('200')).toBeInTheDocument()
       })
@@ -132,10 +135,16 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         dataSource: 'custom:1',
         rawQuery: '',
       }
-      renderWithQueryClient(<QueryBuilderForm value={customDsl} onChange={onChange} />)
+      renderQueryBuilder(customDsl, onChange)
       await waitFor(() => {
         expect(screen.getByText('SQL Query')).toBeInTheDocument()
       })
+      const sqlEditor = screen.getByPlaceholderText('SELECT * FROM my_table LIMIT 100')
+      const { fireEvent } = await import('@testing-library/react')
+      fireEvent.change(sqlEditor, { target: { value: 'SELECT 1' } })
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({...customDsl, rawQuery: 'SELECT 1'})
+      )
     })
   })
 
@@ -146,14 +155,14 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         ...defaultDsl,
         dataSource: '__unmapped:grafana-prom',
       }
-      renderWithQueryClient(<QueryBuilderForm value={unmappedDsl} onChange={vi.fn()} />)
+      renderQueryBuilder(unmappedDsl)
       await waitFor(() => {
         expect(screen.getByText('Unmapped Data Source')).toBeInTheDocument()
       })
     })
 
     it('does not show unmapped warning for built-in source', () => {
-      renderWithQueryClient(<QueryBuilderForm value={defaultDsl} onChange={vi.fn()} />)
+      renderQueryBuilder()
       expect(screen.queryByText('Unmapped Data Source')).not.toBeInTheDocument()
     })
 
@@ -162,7 +171,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         ...defaultDsl,
         dataSource: 'custom:1',
       }
-      renderWithQueryClient(<QueryBuilderForm value={customDsl} onChange={vi.fn()} />)
+      renderQueryBuilder(customDsl)
       expect(screen.queryByText('Unmapped Data Source')).not.toBeInTheDocument()
     })
   })
@@ -179,7 +188,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
           {function: 'avg', field: 'duration_ms', alias: 'b'},
         ],
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={onChange} />)
+      renderQueryBuilder(dsl, onChange)
       // Each metric row has a trash button; find the one nearest alias 'a'
       const aliasA = screen.getByDisplayValue('a')
       const metricRow = aliasA.closest('.flex.items-center')
@@ -199,7 +208,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
     it('calls onChange when metric function is changed', async () => {
       const user = userEvent.setup()
       const onChange = vi.fn()
-      renderWithQueryClient(<QueryBuilderForm value={defaultDsl} onChange={onChange} />)
+      renderQueryBuilder(undefined, onChange)
       // Find the function select (it's a <select> element with value 'count')
       const allWithCount = screen.getAllByDisplayValue('count')
       const funcSelect = allWithCount.find(el => el.tagName === 'SELECT')!
@@ -214,7 +223,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
     it('calls onChange when metric alias is changed', async () => {
       const user = userEvent.setup()
       const onChange = vi.fn()
-      renderWithQueryClient(<QueryBuilderForm value={defaultDsl} onChange={onChange} />)
+      renderQueryBuilder(undefined, onChange)
       // Find the alias input (it's an <input> element with value 'count')
       const allWithCount = screen.getAllByDisplayValue('count')
       const aliasField = allWithCount.find(el => el.tagName === 'INPUT')!
@@ -229,7 +238,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
     it('adds a time group by when Time button is clicked', async () => {
       const user = userEvent.setup()
       const onChange = vi.fn()
-      renderWithQueryClient(<QueryBuilderForm value={defaultDsl} onChange={onChange} />)
+      renderQueryBuilder(undefined, onChange)
       await user.click(screen.getByText('Time'))
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -241,7 +250,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
     it('adds a field group by when Field button is clicked', async () => {
       const user = userEvent.setup()
       const onChange = vi.fn()
-      renderWithQueryClient(<QueryBuilderForm value={defaultDsl} onChange={onChange} />)
+      renderQueryBuilder(undefined, onChange)
       await user.click(screen.getByText('Field'))
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -255,7 +264,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         ...defaultDsl,
         groupBy: [{field: 'timestamp', type: 'time', interval: 'auto'}],
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={vi.fn()} />)
+      renderQueryBuilder(dsl)
       expect(screen.getByDisplayValue('Auto')).toBeInTheDocument()
     })
 
@@ -264,7 +273,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         ...defaultDsl,
         groupBy: [{field: 'level', type: 'field'}],
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={vi.fn()} />)
+      renderQueryBuilder(dsl)
       expect(screen.getByText('field')).toBeInTheDocument()
     })
 
@@ -275,7 +284,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         ...defaultDsl,
         groupBy: [{field: 'timestamp', type: 'time', interval: 'auto'}],
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={onChange} />)
+      renderQueryBuilder(dsl, onChange)
       const intervalSelect = screen.getByDisplayValue('Auto')
       await user.selectOptions(intervalSelect, '1 HOUR')
       expect(onChange).toHaveBeenCalledWith(
@@ -292,7 +301,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         ...defaultDsl,
         groupBy: [{field: 'timestamp', type: 'time', interval: 'auto'}],
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={onChange} />)
+      renderQueryBuilder(dsl, onChange)
       const trashButtons = document.querySelectorAll('button.text-muted-foreground')
       // Last trash button should be for group by (after metrics)
       await user.click(trashButtons[trashButtons.length - 1])
@@ -305,15 +314,23 @@ describe('QueryBuilderForm – extended branch coverage', () => {
   // ──── Filters: update and remove ────
   describe('filters', () => {
     it('calls onChange when filter field is changed', async () => {
+      const user = userEvent.setup()
       const onChange = vi.fn()
       const dsl: QueryDsl = {
         ...defaultDsl,
         filters: [{field: 'level', op: 'eq', value: 'error'}],
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={onChange} />)
+      renderQueryBuilder(dsl, onChange)
       await waitFor(() => {
         expect(screen.getByDisplayValue('error')).toBeInTheDocument()
       })
+      const fieldSelect = await screen.findByDisplayValue('level')
+      await user.selectOptions(fieldSelect, 'duration_ms')
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: [expect.objectContaining({field: 'duration_ms', op: 'eq', value: 'error'})],
+        })
+      )
     })
 
     it('calls onChange when filter op is changed', async () => {
@@ -323,45 +340,37 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         ...defaultDsl,
         filters: [{field: 'level', op: 'eq', value: 'error'}],
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={onChange} />)
-      const opSelects = document.querySelectorAll('select')
-      // Find the op select (it has '=' as display value)
-      const opSelect = Array.from(opSelects).find(s => s.value === 'eq')
-      if (opSelect) {
-        await user.selectOptions(opSelect, 'neq')
-        expect(onChange).toHaveBeenCalledWith(
-          expect.objectContaining({
-            filters: [expect.objectContaining({op: 'neq'})],
-          })
-        )
-      }
+      renderQueryBuilder(dsl, onChange)
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('error')).toBeInTheDocument()
+      })
+      const opSelect = screen.getByDisplayValue('=')
+      await user.selectOptions(opSelect, 'neq')
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: [expect.objectContaining({op: 'neq'})],
+        })
+      )
     })
 
-    it('hides value input when filter op is is_null', () => {
-      const dsl: QueryDsl = {
-        ...defaultDsl,
-        filters: [{field: 'level', op: 'is_null', value: ''}],
+    it.each(['is_null', 'is_not_null'] as const)(
+      'hides value input when filter op is %s',
+      (op) => {
+        const dsl: QueryDsl = {
+          ...defaultDsl,
+          filters: [{field: 'level', op, value: ''}],
+        }
+        renderQueryBuilder(dsl)
+        expect(screen.queryByPlaceholderText('value')).not.toBeInTheDocument()
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={vi.fn()} />)
-      // No value input should be present for is_null
-      expect(screen.queryByPlaceholderText('value')).not.toBeInTheDocument()
-    })
-
-    it('hides value input when filter op is is_not_null', () => {
-      const dsl: QueryDsl = {
-        ...defaultDsl,
-        filters: [{field: 'level', op: 'is_not_null', value: ''}],
-      }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={vi.fn()} />)
-      expect(screen.queryByPlaceholderText('value')).not.toBeInTheDocument()
-    })
+    )
 
     it('shows value input when filter op is eq', () => {
       const dsl: QueryDsl = {
         ...defaultDsl,
         filters: [{field: 'level', op: 'eq', value: 'warn'}],
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={vi.fn()} />)
+      renderQueryBuilder(dsl)
       expect(screen.getByDisplayValue('warn')).toBeInTheDocument()
     })
 
@@ -372,7 +381,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         ...defaultDsl,
         filters: [{field: 'level', op: 'eq', value: 'error'}],
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={onChange} />)
+      renderQueryBuilder(dsl, onChange)
       const trashButtons = document.querySelectorAll('button.text-muted-foreground')
       // Find the last trash button (should be for the filter)
       await user.click(trashButtons[trashButtons.length - 1])
@@ -388,7 +397,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
         ...defaultDsl,
         filters: [{field: 'level', op: 'eq', value: ''}],
       }
-      renderWithQueryClient(<QueryBuilderForm value={dsl} onChange={onChange} />)
+      renderQueryBuilder(dsl, onChange)
       const valueInput = screen.getByPlaceholderText('value')
       await user.type(valueInput, 'critical')
       expect(onChange).toHaveBeenCalled()
@@ -399,7 +408,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
   describe('limit', () => {
     it('calls onChange with parsed int when limit changes', async () => {
       const onChange = vi.fn()
-      renderWithQueryClient(<QueryBuilderForm value={defaultDsl} onChange={onChange} />)
+      renderQueryBuilder(undefined, onChange)
       const limitInput = screen.getByDisplayValue('100') as HTMLInputElement
       // Use fireEvent for number input to avoid character-append behavior
       const {fireEvent} = await import('@testing-library/react')
@@ -412,7 +421,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
     it('defaults to 100 when non-numeric value is entered', async () => {
       const user = userEvent.setup()
       const onChange = vi.fn()
-      renderWithQueryClient(<QueryBuilderForm value={defaultDsl} onChange={onChange} />)
+      renderQueryBuilder(undefined, onChange)
       const limitInput = screen.getByDisplayValue('100')
       await user.clear(limitInput)
       // After clearing, the onChange fires with empty string → parseInt('') → NaN → || 100
@@ -425,7 +434,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
   // ──── Metric field: none option and string fields filtered ────
   describe('metric field select', () => {
     it('includes (none) option for metric field', async () => {
-      renderWithQueryClient(<QueryBuilderForm value={defaultDsl} onChange={vi.fn()} />)
+      renderQueryBuilder()
       await waitFor(() => {
         // The metric field select should have (none) as first option
         const fieldSelects = document.querySelectorAll('select')
@@ -438,21 +447,21 @@ describe('QueryBuilderForm – extended branch coverage', () => {
     })
 
     it('filters out String-type fields from metric field options', async () => {
-      renderWithQueryClient(<QueryBuilderForm value={defaultDsl} onChange={vi.fn()} />)
+      renderQueryBuilder()
       await waitFor(() => {
         const fieldSelects = document.querySelectorAll('select')
         const metricFieldSelect = Array.from(fieldSelects).find(s => {
           const opts = Array.from(s.options)
           return opts.some(o => o.textContent === '(none)')
         })
-        if (metricFieldSelect) {
-          const options = Array.from(metricFieldSelect.options).map(o => o.textContent)
-          // level and user_id are String type and should not be in the list
-          expect(options).not.toContain('level')
-          expect(options).not.toContain('user_id')
-          // duration_ms is Float64 and should be present
-          expect(options).toContain('duration_ms')
-        }
+        expect(metricFieldSelect).toBeTruthy()
+        expect(metricFieldSelect).toBeInTheDocument()
+        const options = Array.from(metricFieldSelect!.options).map(o => o.textContent)
+        // level and user_id are String type and should not be in the list
+        expect(options).not.toContain('level')
+        expect(options).not.toContain('user_id')
+        // duration_ms is Float64 and should be present
+        expect(options).toContain('duration_ms')
       })
     })
   })
