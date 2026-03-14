@@ -717,7 +717,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.patch("/v1/admin/users/42") {
+            val response = client.patch("$V1_ADMIN_USERS/42") {
                 header(HttpHeaders.Authorization, "Bearer ${token(adminId, 1)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"isAdmin":true}""")
@@ -737,7 +737,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.patch("/v1/admin/users/999") {
+            val response = client.patch("$V1_ADMIN_USERS/999") {
                 header(HttpHeaders.Authorization, "Bearer ${token(adminId, 1)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"isAdmin":false}""")
@@ -755,7 +755,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.patch("/v1/admin/users/abc") {
+            val response = client.patch("$V1_ADMIN_USERS/abc") {
                 header(HttpHeaders.Authorization, "Bearer ${token(adminId, 1)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"isAdmin":true}""")
@@ -775,7 +775,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.patch("/v1/admin/users/42") {
+            val response = client.patch("$V1_ADMIN_USERS/42") {
                 header(HttpHeaders.Authorization, "Bearer ${token(adminId, 1)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Bad"}""")
@@ -801,7 +801,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.delete("/v1/admin/users") {
+            val response = client.delete(V1_ADMIN_USERS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(adminId, 1)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"userIds":[10,20]}""")
@@ -822,7 +822,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.delete("/v1/admin/users") {
+            val response = client.delete(V1_ADMIN_USERS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(adminId, 1)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"userIds":[1]}""")

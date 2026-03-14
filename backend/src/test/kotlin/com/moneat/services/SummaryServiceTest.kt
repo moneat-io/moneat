@@ -228,10 +228,10 @@ class SummaryServiceTest {
     private fun mockClickHouseHandler(
         scalarTotal: Long = 10L,
         issueData: String = DATA_EMPTY_JSON,
-        dailyData: String = """{"data":[]}""",
-        latencyData: String = """{"data":[]}""",
-        logData: String = """{"data":[]}""",
-        spikeData: String = """{"data":[]}"""
+        dailyData: String = DATA_EMPTY_JSON,
+        latencyData: String = DATA_EMPTY_JSON,
+        logData: String = DATA_EMPTY_JSON,
+        spikeData: String = DATA_EMPTY_JSON
     ): (com.sun.net.httpserver.HttpExchange) -> Unit = { exchange ->
         val query = exchange.requestBodyText()
         val body = when {
@@ -442,8 +442,8 @@ class SummaryServiceTest {
                 val body = when {
                     query.contains("event_type = 'error'") && query.contains(COUNT_AS_TOTAL) ->
                         if (query.contains(dayBefore)) """{"total":10}""" else """{"total":100}"""
-                    query.contains("issue_id") -> """{"data":[]}"""
-                    query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
+                    query.contains("issue_id") -> DATA_EMPTY_JSON
+                    query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
                     else -> ""
                 }
                 exchange.respond(200, body, TEXT_PLAIN)
@@ -515,7 +515,7 @@ class SummaryServiceTest {
                 val body = when {
                     query.contains("logs") && query.contains(COUNT_AS_TOTAL) -> """{"total":30}"""
                     query.contains(COUNT_AS_TOTAL) -> """{"total":5}"""
-                    query.contains("issue_id") -> """{"data":[]}"""
+                    query.contains("issue_id") -> DATA_EMPTY_JSON
                     else -> ""
                 }
                 exchange.respond(200, body, TEXT_PLAIN)
@@ -539,9 +539,9 @@ class SummaryServiceTest {
             { exchange ->
                 val query = exchange.requestBodyText()
                 val body = when {
-                    query.contains("logs") -> """{"total":0}"""
-                    query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                    query.contains("issue_id") -> """{"data":[]}"""
+                    query.contains("logs") -> TOTAL_ZERO_JSON
+                    query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                    query.contains("issue_id") -> DATA_EMPTY_JSON
                     else -> ""
                 }
                 exchange.respond(200, body, TEXT_PLAIN)
@@ -567,8 +567,8 @@ class SummaryServiceTest {
                 transaction {
                     Organizations.insert {
                         it[id] = ORG_ID
-                        it[name] = "Test Org"
-                        it[slug] = "test-org"
+                        it[name] = TEST_ORG
+                        it[slug] = TEST_ORG_SLUG
                     }
                 }
             },
@@ -640,9 +640,9 @@ class SummaryServiceTest {
                     scalarCallCount++
                     if (scalarCallCount <= 1) """{"total":50}""" else """{"total":200}"""
                 }
-                query.contains("toDate(timestamp)") -> """{"data":[]}"""
-                query.contains("quantile") -> """{"data":[]}"""
-                query.contains("issue_id") -> """{"data":[]}"""
+                query.contains("toDate(timestamp)") -> DATA_EMPTY_JSON
+                query.contains("quantile") -> DATA_EMPTY_JSON
+                query.contains("issue_id") -> DATA_EMPTY_JSON
                 else -> ""
             }
             exchange.respond(200, body, TEXT_PLAIN)
@@ -666,8 +666,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -690,8 +690,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -721,8 +721,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -747,8 +747,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -779,8 +779,8 @@ class SummaryServiceTest {
             transaction {
                 Organizations.insert {
                     it[id] = ORG_ID
-                    it[name] = "Test Org"
-                    it[slug] = "test-org"
+                    it[name] = TEST_ORG
+                    it[slug] = TEST_ORG_SLUG
                 }
             }
             every { monitorService.listHosts(ORG_ID) } returns emptyList()
@@ -810,7 +810,7 @@ class SummaryServiceTest {
                 query.contains("min(timestamp) as first_seen") -> spikeJson
                 query.contains("service_name as service") -> logJson
                 query.contains(COUNT_AS_TOTAL) -> """{"total":5}"""
-                query.contains("issue_id") -> """{"data":[]}"""
+                query.contains("issue_id") -> DATA_EMPTY_JSON
                 else -> ""
             }
             exchange.respond(200, body, TEXT_PLAIN)
@@ -849,8 +849,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -881,8 +881,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -908,8 +908,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -940,8 +940,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -967,8 +967,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -997,8 +997,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -1034,8 +1034,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -1060,8 +1060,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -1093,8 +1093,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -1129,7 +1129,7 @@ class SummaryServiceTest {
     @Test
     fun `ClickHouse error returns safe defaults`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(500, "Internal Server Error", "text/plain")
+            exchange.respond(500, "Internal Server Error", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -1149,7 +1149,7 @@ class SummaryServiceTest {
     @Test
     fun `ClickHouse blank response returns safe defaults`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(200, "", "text/plain")
+            exchange.respond(200, "", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -1171,8 +1171,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -1197,8 +1197,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -1227,8 +1227,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -1255,8 +1255,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
@@ -1267,8 +1267,8 @@ class SummaryServiceTest {
             transaction {
                 Organizations.insert {
                     it[id] = ORG_ID
-                    it[name] = "Test Org"
-                    it[slug] = "test-org"
+                    it[name] = TEST_ORG
+                    it[slug] = TEST_ORG_SLUG
                 }
                 Projects.insert {
                     it[id] = 1L
@@ -1310,8 +1310,8 @@ class SummaryServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             val body = when {
-                query.contains(COUNT_AS_TOTAL) -> """{"total":0}"""
-                else -> """{"data":[]}"""
+                query.contains(COUNT_AS_TOTAL) -> TOTAL_ZERO_JSON
+                else -> DATA_EMPTY_JSON
             }
             exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->

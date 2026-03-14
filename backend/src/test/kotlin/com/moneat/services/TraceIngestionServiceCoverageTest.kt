@@ -345,7 +345,7 @@ class TraceIngestionServiceCoverageTest {
                         DdStatsEntry(
                             name = "web.request",
                             service = "api-service",
-                            resource = "GET /users",
+                            resource = GET_USERS,
                             type = "web",
                             httpStatusCode = 200,
                             synthetics = false,
@@ -530,7 +530,7 @@ class TraceIngestionServiceCoverageTest {
             )
         } returns """
             {"service":"api","resource":"POST /data","error_msg":"timeout","error_type":"TimeoutError","error_count":15,"last_seen":"2024-01-15 10:00:00","sample_trace_id":"trace-1"}
-            {"service":"api","resource":"GET /users","error_msg":"not found","error_type":"NotFoundError","error_count":3,"last_seen":"2024-01-15 09:00:00","sample_trace_id":"trace-2"}
+            {"service":"api","resource":"$GET_USERS","error_msg":"not found","error_type":"NotFoundError","error_count":3,"last_seen":"2024-01-15 09:00:00","sample_trace_id":"trace-2"}
         """.trimIndent()
 
         val result = TraceIngestionService.getApmErrors(
@@ -574,7 +574,7 @@ class TraceIngestionServiceCoverageTest {
                 match { it == "" }
             )
         } returns """
-            {"service":"api","resource":"GET /users","name":"web.request","type":"web","total_hits":100,"total_errors":10,"ok_sum":90000000000.0,"ok_count":90}
+            {"service":"api","resource":"$GET_USERS","name":"web.request","type":"web","total_hits":100,"total_errors":10,"ok_sum":90000000000.0,"ok_count":90}
         """.trimIndent()
 
         val result = TraceIngestionService.listResourceStats(
@@ -588,7 +588,7 @@ class TraceIngestionServiceCoverageTest {
         assertEquals(1, result.resources.size)
         val res = result.resources[0]
         assertEquals("api", res.service)
-        assertEquals("GET /users", res.resource)
+        assertEquals(GET_USERS, res.resource)
         assertEquals(100L, res.totalHits)
         assertEquals(10L, res.totalErrors)
         assertEquals(0.1, res.errorRate)

@@ -206,7 +206,7 @@ class LogServicesExtendedTest {
                 levels = listOf("error"),
                 service = "api",
                 environment = "prod",
-                tags = mapOf("region" to "us-east"),
+                tags = mapOf("region" to US_EAST),
                 excludeService = "worker",
                 excludeEnvironment = "staging",
                 excludeContainerName = "test-container",
@@ -309,8 +309,8 @@ class LogServicesExtendedTest {
 
             val result = service.getFilterOptions(
                 organizationId = 1L,
-                from = "2026-01-01T00:00:00Z",
-                to = "2026-01-02T00:00:00Z"
+                from = FROM_2026_01_01,
+                to = TO_2026_01_02
             )
 
             assertTrue(result.services.isEmpty())
@@ -337,8 +337,8 @@ class LogServicesExtendedTest {
 
             val result = service.getFilterOptionsWithCounts(
                 organizationId = 1L,
-                from = "2026-01-01T00:00:00Z",
-                to = "2026-01-02T00:00:00Z"
+                from = FROM_2026_01_01,
+                to = TO_2026_01_02
             )
 
             assertEquals(2, result.services.size)
@@ -356,7 +356,7 @@ class LogServicesExtendedTest {
     @Test
     fun `getTagValues returns distinct tag values`() = runBlocking {
         withClickHouseMockServer(
-            queryBasedClickHouseHandler(defaultBody = "us-east\nus-west\neu-west\n")
+            queryBasedClickHouseHandler(defaultBody = "$US_EAST\nus-west\neu-west\n")
         ) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
@@ -368,7 +368,7 @@ class LogServicesExtendedTest {
             )
 
             assertEquals("region", result.key)
-            assertEquals(listOf("us-east", "us-west", "eu-west"), result.values)
+            assertEquals(listOf(US_EAST, "us-west", "eu-west"), result.values)
         }
     }
 
@@ -422,8 +422,8 @@ class LogServicesExtendedTest {
             service.getTagValues(
                 organizationId = 1L,
                 key = "service",
-                from = "2026-01-01T00:00:00Z",
-                to = "2026-01-02T00:00:00Z"
+                from = FROM_2026_01_01,
+                to = TO_2026_01_02
             )
 
             val allQueries = capturedQueries.joinToString("\n")
@@ -463,15 +463,15 @@ class LogServicesExtendedTest {
     @Test
     fun `buildTagCondition handles actual tag key`() {
         val service = newService()
-        val result = service.buildTagCondition("region", "us-east")
+        val result = service.buildTagCondition("region", US_EAST)
         assertTrue(result.contains(HAS_TAGS_REGION))
-        assertTrue(result.contains("tags['region'] = 'us-east'"))
+        assertTrue(result.contains("tags['region'] = '$US_EAST'"))
     }
 
     @Test
     fun `buildTagCondition handles actual tag key with exclude`() {
         val service = newService()
-        val result = service.buildTagCondition("region", "us-east", exclude = true)
+        val result = service.buildTagCondition("region", US_EAST, exclude = true)
         assertTrue(result.startsWith("NOT"))
         assertTrue(result.contains(HAS_TAGS_REGION))
     }
@@ -516,8 +516,8 @@ class LogServicesExtendedTest {
             val result = service.queryLogs(
                 organizationId = 42L,
                 request = LogQueryRequest(
-                    from = "2026-01-01T00:00:00Z",
-                    to = "2026-01-02T00:00:00Z",
+                    from = FROM_2026_01_01,
+                    to = TO_2026_01_02,
                     levels = listOf("error", "warning"),
                     service = "api",
                     environment = "prod",
@@ -584,13 +584,13 @@ class LogServicesExtendedTest {
             service.queryLogs(
                 organizationId = 42L,
                 request = LogQueryRequest(
-                    tags = mapOf("region" to "us-east")
+                    tags = mapOf("region" to US_EAST)
                 )
             )
 
             val allQueries = capturedQueries.joinToString("\n")
             assertTrue(allQueries.contains(HAS_TAGS_REGION))
-            assertTrue(allQueries.contains("tags['region'] = 'us-east'"))
+            assertTrue(allQueries.contains("tags['region'] = '$US_EAST'"))
         }
     }
 

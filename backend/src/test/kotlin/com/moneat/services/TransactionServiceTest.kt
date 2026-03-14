@@ -39,6 +39,7 @@ class TransactionServiceTest {
     companion object {
         private const val TXN_UUID = "01234567-89ab-cdef-0123-456789abcdef"
         private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
+        private const val TRACE_1 = "trace-1"
     }
 
     private val retentionPolicyService = mockk<RetentionPolicyService>()
@@ -207,7 +208,7 @@ class TransactionServiceTest {
     fun `getTransaction returns detail for valid event`() = runBlocking {
         val eventId = TXN_UUID
         val row = """
-{"event_id":"$eventId","name":"GET /api","op":"http.server","start_ts_ms":"1000","duration":"250.0","trace_id":"trace-1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{"env":"prod"},"contexts":"{}","breadcrumbs":"[]","request":"{}"}
+{"event_id":"$eventId","name":"GET /api","op":"http.server","start_ts_ms":"1000","duration":"250.0","trace_id":"$TRACE_1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{"env":"prod"},"contexts":"{}","breadcrumbs":"[]","request":"{}"}
         """.trimIndent()
         MockHttpServer { exchange ->
             exchange.respond(200, row, CONTENT_TYPE_TEXT_PLAIN)
@@ -219,7 +220,7 @@ class TransactionServiceTest {
             assertEquals(eventId, detail.eventId)
             assertEquals("GET /api", detail.name)
             assertEquals("http.server", detail.op)
-            assertEquals("trace-1", detail.traceId)
+            assertEquals(TRACE_1, detail.traceId)
             assertEquals("prod", detail.environment)
             assertEquals(1.0, detail.startTimestamp)
         }
@@ -243,16 +244,16 @@ class TransactionServiceTest {
 
     @Test
     fun `getTraceDetails assembles spans into trace`() = runBlocking {
-        val body = """{"span_id":"s1","parent_span_id":"","trace_id":"trace-1","transaction_id":"tx-1","op":"http.server","description":"GET /","start_ts_ms":"1000","end_ts_ms":"2500","duration_ms":"1500","status":"ok","tags":{},"data":"{}"}
-{"span_id":"s2","parent_span_id":"s1","trace_id":"trace-1","transaction_id":"tx-1","op":"db","description":"SELECT","start_ts_ms":"1200","end_ts_ms":"1800","duration_ms":"600","status":"ok","tags":{},"data":"{}"}"""
+        val body = """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_1","transaction_id":"tx-1","op":"http.server","description":"GET /","start_ts_ms":"1000","end_ts_ms":"2500","duration_ms":"1500","status":"ok","tags":{},"data":"{}"}
+{"span_id":"s2","parent_span_id":"s1","trace_id":"$TRACE_1","transaction_id":"tx-1","op":"db","description":"SELECT","start_ts_ms":"1200","end_ts_ms":"1800","duration_ms":"600","status":"ok","tags":{},"data":"{}"}"""
         MockHttpServer { exchange ->
             exchange.respond(200, body, CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
-            val trace = service.getTraceDetails(projectId = 1, traceId = "trace-1")
+            val trace = service.getTraceDetails(projectId = 1, traceId = TRACE_1)
             assertNotNull(trace)
-            assertEquals("trace-1", trace.traceId)
+            assertEquals(TRACE_1, trace.traceId)
             assertEquals(2, trace.spans.size)
             assertEquals(1.0, trace.startTimestamp)
             assertEquals(2.5, trace.endTimestamp)

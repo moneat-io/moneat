@@ -51,6 +51,8 @@ class UptimeServiceTest {
 
     companion object {
         private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
+        private const val EXAMPLE_COM_URL = "https://example.com"
+        private const val NO_HOSTNAME_CONFIGURED = "No hostname configured"
     }
 
     @BeforeTest
@@ -132,7 +134,7 @@ class UptimeServiceTest {
                 it[name] = "monitor-$monitorId"
                 it[type] = "http"
                 it[UptimeMonitors.active] = active
-                it[url] = "https://example.com/health"
+                it[url] = "$EXAMPLE_COM_URL/health"
                 it[method] = "GET"
                 it[maxRedirects] = 10
                 it[ignoreTls] = false
@@ -290,7 +292,7 @@ class UptimeServiceTest {
                     CreateUptimeMonitorRequest(
                         name = "HTTP Health",
                         type = "http",
-                        url = "https://example.com",
+                        url = EXAMPLE_COM_URL,
                         intervalSeconds = 60,
                         timeoutSeconds = 10
                     )
@@ -311,7 +313,7 @@ class UptimeServiceTest {
                     CreateUptimeMonitorRequest(
                         name = "Original",
                         type = "http",
-                        url = "https://example.com",
+                        url = EXAMPLE_COM_URL,
                         intervalSeconds = 60,
                         timeoutSeconds = 10
                     )
@@ -353,7 +355,7 @@ class UptimeServiceTest {
                     CreateUptimeMonitorRequest(
                         name = "Deletable",
                         type = "http",
-                        url = "https://example.com",
+                        url = EXAMPLE_COM_URL,
                         intervalSeconds = 60,
                         timeoutSeconds = 10
                     )
@@ -481,7 +483,7 @@ class UptimeServiceTest {
         runBlocking {
             val result = executor.executeCheck(executorMonitor(type = "ping"))
             assertEquals(0, result.status)
-            assertTrue(result.message.contains("No hostname configured"))
+            assertTrue(result.message.contains(NO_HOSTNAME_CONFIGURED))
         }
 
     @Test
@@ -489,7 +491,7 @@ class UptimeServiceTest {
         runBlocking {
             val result = executor.executeCheck(executorMonitor(type = "dns"))
             assertEquals(0, result.status)
-            assertTrue(result.message.contains("No hostname configured"))
+            assertTrue(result.message.contains(NO_HOSTNAME_CONFIGURED))
         }
 
     @Test
@@ -497,7 +499,7 @@ class UptimeServiceTest {
         runBlocking {
             val result = executor.executeCheck(executorMonitor(type = "ssl"))
             assertEquals(0, result.status)
-            assertTrue(result.message.contains("No hostname configured"))
+            assertTrue(result.message.contains(NO_HOSTNAME_CONFIGURED))
         }
 
     @Test

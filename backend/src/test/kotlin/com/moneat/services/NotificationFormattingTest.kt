@@ -166,7 +166,7 @@ class NotificationFormattingTest {
         val encoded = json.encodeToString(attachment)
         val obj = Json.parseToJsonElement(encoded).jsonObject
 
-        assertEquals("#E01E5A", obj["color"]?.jsonPrimitive?.content)
+        assertEquals(COLOR_E01E5A, obj["color"]?.jsonPrimitive?.content)
         assertEquals("Error alert", obj["fallback"]?.jsonPrimitive?.content)
         assertEquals(1, obj["blocks"]?.jsonArray?.size)
     }
@@ -299,7 +299,7 @@ class NotificationFormattingTest {
                 DiscordService.DiscordField("Status", "down", false)
             ),
             footer = DiscordService.DiscordFooter("Moneat Alert"),
-            timestamp = "2025-01-01T00:00:00Z"
+            timestamp = TIMESTAMP_2025_01_01
         )
         val encoded = json.encodeToString(embed)
         val obj = Json.parseToJsonElement(encoded).jsonObject
@@ -685,7 +685,7 @@ class NotificationFormattingTest {
         data class LevelMapping(val level: String, val expectedEmoji: String, val expectedColor: String)
 
         val testCases = listOf(
-            LevelMapping("error", "🔴", "#E01E5A"),
+            LevelMapping("error", "🔴", COLOR_E01E5A),
             LevelMapping("warning", "⚠️", COLOR_ECB22E),
             LevelMapping("info", "ℹ️", COLOR_2EB67D),
             LevelMapping("debug", "⚠️", COLOR_ECB22E)
@@ -700,7 +700,7 @@ class NotificationFormattingTest {
                 else -> "⚠️"
             }
             val color = when (levelLower) {
-                "error" -> "#E01E5A"
+                "error" -> COLOR_E01E5A
                 "warning" -> COLOR_ECB22E
                 "info" -> COLOR_2EB67D
                 else -> COLOR_ECB22E
@@ -725,16 +725,16 @@ class NotificationFormattingTest {
         assertEquals("⚠️", mediumEmoji)
 
         val critColor = when ("CRITICAL") {
-            "CRITICAL" -> "#E01E5A"
-            "HIGH" -> "#E01E5A"
+            "CRITICAL" -> COLOR_E01E5A
+            "HIGH" -> COLOR_E01E5A
             "MEDIUM" -> COLOR_ECB22E
             else -> COLOR_ECB22E
         }
-        assertEquals("#E01E5A", critColor)
+        assertEquals(COLOR_E01E5A, critColor)
 
         val medColor = when ("MEDIUM") {
-            "CRITICAL" -> "#E01E5A"
-            "HIGH" -> "#E01E5A"
+            "CRITICAL" -> COLOR_E01E5A
+            "HIGH" -> COLOR_E01E5A
             "MEDIUM" -> COLOR_ECB22E
             else -> COLOR_ECB22E
         }
@@ -771,7 +771,7 @@ class NotificationFormattingTest {
         assertTrue(isDown)
         assertEquals("🔴", if (isDown) "🔴" else "🟢")
         assertEquals(MONITOR_DOWN, if (isDown) MONITOR_DOWN else MONITOR_RECOVERED)
-        assertEquals("#E01E5A", if (isDown) "#E01E5A" else "#2EB67D")
+        assertEquals(COLOR_E01E5A, if (isDown) COLOR_E01E5A else COLOR_2EB67D)
 
         val upStatus = "UP"
         val isUp = upStatus.lowercase() == "down"
@@ -793,7 +793,7 @@ class NotificationFormattingTest {
             issueUrl = ISSUES_1_URL,
             projectName = "Backend",
             environment = "production",
-            timestamp = "2025-01-01T00:00:00Z",
+            timestamp = TIMESTAMP_2025_01_01,
             stackTrace = "  at Main.run (Main.kt:10)",
             settingsUrl = SETTINGS_NOTIFICATIONS_URL,
             unsubscribeUrl = "$SETTINGS_NOTIFICATIONS_URL?project=1"

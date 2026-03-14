@@ -48,6 +48,11 @@ import kotlin.time.Instant
 
 class UptimeExtendedTest {
 
+    companion object {
+        private const val JSON_PATH_STATUS = "$.status"
+        private const val LOCALHOST = "127.0.0.1"
+    }
+
     private val executor = UptimeCheckExecutor()
 
     @AfterTest
@@ -428,7 +433,7 @@ class UptimeExtendedTest {
                     MonitorParams(
                         type = "json_query",
                         url = server.baseUrl,
-                        jsonPath = "$.status",
+                        jsonPath = JSON_PATH_STATUS,
                         jsonExpectedValue = "ok"
                     )
                 )
@@ -449,7 +454,7 @@ class UptimeExtendedTest {
                     MonitorParams(
                         type = "json_query",
                         url = server.baseUrl,
-                        jsonPath = "$.status",
+                        jsonPath = JSON_PATH_STATUS,
                         jsonExpectedValue = null
                     )
                 )
@@ -469,7 +474,7 @@ class UptimeExtendedTest {
                     MonitorParams(
                         type = "json_query",
                         url = server.baseUrl,
-                        jsonPath = "$.status",
+                        jsonPath = JSON_PATH_STATUS,
                         jsonExpectedValue = "ok"
                     )
                 )
@@ -500,7 +505,7 @@ class UptimeExtendedTest {
         ServerSocket(0).use { serverSocket ->
             val port = serverSocket.localPort
             val result = executor.executeCheck(
-                monitor(MonitorParams(type = "tcp", hostname = "127.0.0.1", port = port))
+                monitor(MonitorParams(type = "tcp", hostname = LOCALHOST, port = port))
             )
             assertEquals(1, result.status)
             assertTrue(result.message.contains("TCP connection successful"))
@@ -513,7 +518,7 @@ class UptimeExtendedTest {
         // Use a port from a closed server socket
         val port = ServerSocket(0).use { it.localPort }
         val result = executor.executeCheck(
-            monitor(MonitorParams(type = "tcp", hostname = "127.0.0.1", port = port, timeoutSeconds = 2))
+            monitor(MonitorParams(type = "tcp", hostname = LOCALHOST, port = port, timeoutSeconds = 2))
         )
         assertEquals(0, result.status)
         assertTrue(result.message.contains("TCP connection failed"))
@@ -653,7 +658,7 @@ class UptimeExtendedTest {
     @Test
     fun `ping check reports result for localhost`() = runBlocking {
         val result = executor.executeCheck(
-            monitor(MonitorParams(type = "ping", hostname = "127.0.0.1", timeoutSeconds = 5))
+            monitor(MonitorParams(type = "ping", hostname = LOCALHOST, timeoutSeconds = 5))
         )
         // localhost may or may not be reachable depending on OS permissions
         assertTrue(result.status == 0 || result.status == 1)
