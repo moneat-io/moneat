@@ -385,8 +385,8 @@ class NetworkDevicesTest {
             batchType = "flows",
             flows = listOf(
                 QueuedNdmFlowEntry(
-                    srcIp = "1.2.3.4",
-                    dstIp = "5.6.7.8",
+                    srcIp = TestIpConstants.IP_SRC,
+                    dstIp = TestIpConstants.IP_DST,
                     srcPort = 80,
                     dstPort = 12345,
                     protocol = "UDP",
@@ -623,8 +623,8 @@ class NetworkDevicesTest {
                 batchType = "flows",
                 flows = listOf(
                     QueuedNdmFlowEntry(
-                        srcIp = "1.2.3.4",
-                        dstIp = "5.6.7.8",
+                        srcIp = TestIpConstants.IP_SRC,
+                        dstIp = TestIpConstants.IP_DST,
                         srcPort = 80,
                         dstPort = 12345,
                         protocol = "TCP",
@@ -643,7 +643,7 @@ class NetworkDevicesTest {
             assertEquals(1, captured.size)
             val sql = captured[0]
             assertTrue(sql.contains("ndm_flows"))
-            assertTrue(sql.contains("1.2.3.4"))
+            assertTrue(sql.contains(TestIpConstants.IP_SRC))
             assertTrue(sql.contains("TCP"))
             assertTrue(sql.contains("4096"))
         }

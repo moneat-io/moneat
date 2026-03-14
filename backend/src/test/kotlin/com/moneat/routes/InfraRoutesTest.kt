@@ -686,7 +686,7 @@ class InfraRoutesTest {
         testApplication {
             val (userId, _) = seedUserAndOrg()
             stubClickHouseOk(
-                """{"destination":"8.8.8.8","hop_count":"5"}"""
+                """{"destination":"${TestIpConstants.IP_PATH_DEST}","hop_count":"5"}"""
             )
 
             application {
@@ -698,7 +698,7 @@ class InfraRoutesTest {
                 withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("8.8.8.8"))
+            assertTrue(response.bodyAsText().contains(TestIpConstants.IP_PATH_DEST))
         }
 
     @Test
