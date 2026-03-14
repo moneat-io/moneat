@@ -329,6 +329,10 @@ tasks.test {
     useJUnitPlatform()
     finalizedBy(tasks.jacocoTestReport)
 
+    // Run test classes in parallel (each class has its own H2 in-memory DB so isolation is safe)
+    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(1)
+    jvmArgs("-Xmx1g")
+
     testLogging {
         events("passed", "skipped", "failed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
