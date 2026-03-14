@@ -55,7 +55,7 @@ class LlmServiceExtendedTest {
         ClickHouseClient.close()
     }
 
-    // --- LlmDashboardService: getGenerations ---
+    // ──── LlmDashboardService: getGenerations ────
 
     @Test
     fun `getGenerations parses list with pagination`() =
@@ -136,7 +136,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmDashboardService: getGenerationDetail (success path) ---
+    // ──── LlmDashboardService: getGenerationDetail (success path) ────
 
     @Test
     fun `getGenerationDetail parses full detail response`() =
@@ -193,7 +193,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmDashboardService: getCosts ---
+    // ──── LlmDashboardService: getCosts ────
 
     @Test
     fun `getCosts parses breakdown and timeline`() =
@@ -229,7 +229,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmDashboardService: getModels ---
+    // ──── LlmDashboardService: getModels ────
 
     @Test
     fun `getModels returns model stats list`() =
@@ -264,7 +264,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmDashboardService: getTrace empty case ---
+    // ──── LlmDashboardService: getTrace empty case ────
 
     @Test
     fun `getTrace returns null for empty response`() =
@@ -281,7 +281,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmDashboardService: getOverview with empty data ---
+    // ──── LlmDashboardService: getOverview with empty data ────
 
     @Test
     fun `getOverview returns zeros when clickhouse returns empty aggregates`() =
@@ -310,7 +310,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmDashboardService: negative project ID ---
+    // ──── LlmDashboardService: negative project ID ────
 
     @Test
     fun `getOverview uses toInt64 clause for negative project IDs`() =
@@ -333,7 +333,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmDashboardService: demoEpochMs ---
+    // ──── LlmDashboardService: demoEpochMs ────
 
     @Test
     fun `getOverview uses demo epoch in time clause`() =
@@ -360,7 +360,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmDashboardService: range-to-interval mapping ---
+    // ──── LlmDashboardService: range-to-interval mapping ────
 
     @Test
     fun `getOverview maps range 1h to five-minute buckets`() =
@@ -428,7 +428,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmIngestionWorker: insertGenerations empty list ---
+    // ──── LlmIngestionWorker: insertGenerations empty list ────
 
     @Test
     fun `insertGenerations is no-op for empty list`() =
@@ -444,7 +444,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmIngestionWorker: type mapping via insertGenerations ---
+    // ──── LlmIngestionWorker: type mapping via insertGenerations ────
 
     @Test
     fun `insertGenerations maps known types correctly`() =
@@ -467,7 +467,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmIngestionWorker: timestamp parsing via insertGenerations ---
+    // ──── LlmIngestionWorker: timestamp parsing via insertGenerations ────
 
     @Test
     fun `insertGenerations parses ISO timestamp`() =
@@ -529,7 +529,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmIngestionWorker: tags formatting ---
+    // ──── LlmIngestionWorker: tags formatting ────
 
     @Test
     fun `insertGenerations formats empty tags as empty map`() =
@@ -565,7 +565,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmIngestionWorker: error status mapping ---
+    // ──── LlmIngestionWorker: error status mapping ────
 
     @Test
     fun `insertGenerations maps error status correctly`() =
@@ -582,7 +582,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmIngestionWorker: metadata serialization ---
+    // ──── LlmIngestionWorker: metadata serialization ────
 
     @Test
     fun `insertGenerations serializes json metadata`() =
@@ -602,7 +602,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmIngestionWorker: encode/decode with large project IDs ---
+    // ──── LlmIngestionWorker: encode/decode with large project IDs ────
 
     @Test
     fun `encode and decode roundtrip with large project ID`() {
@@ -624,7 +624,7 @@ class LlmServiceExtendedTest {
         assertTrue(payload.contentEquals(decodedPayload))
     }
 
-    // --- LlmIngestionWorker: total tokens computed ---
+    // ──── LlmIngestionWorker: total tokens computed ────
 
     @Test
     fun `insertGenerations computes total tokens from input and output`() =
@@ -648,7 +648,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- LlmDashboardService: getCosts with demoEpochMs ---
+    // ──── LlmDashboardService: getCosts with demoEpochMs ────
 
     @Test
     fun `getCosts uses demo epoch in time clause`() =
@@ -667,7 +667,7 @@ class LlmServiceExtendedTest {
             }
         }
 
-    // --- Helper ---
+    // ──── Helper ────
 
     private fun buildGenerationRow(
         genId: String,

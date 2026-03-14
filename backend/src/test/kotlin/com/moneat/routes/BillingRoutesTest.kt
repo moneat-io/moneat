@@ -196,7 +196,7 @@ class BillingRoutesTest {
         withinQuota = true,
     )
 
-    // ─── Auth ──────────────────────────────────────────────────
+    // ──── Auth ────
 
     @Test
     fun `GET usage returns 401 when unauthenticated`() =
@@ -262,7 +262,7 @@ class BillingRoutesTest {
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
-    // ─── Forbidden (no org) ────────────────────────────────────
+    // ──── Forbidden (no org) ────
 
     @Test
     fun `GET usage returns 403 when user has no org`() =
@@ -314,7 +314,7 @@ class BillingRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
 
-    // ─── GET /billing/usage ────────────────────────────────────
+    // ──── GET /billing/usage ────
 
     @Test
     fun `GET usage returns 200 with usage data`() =
@@ -339,7 +339,7 @@ class BillingRoutesTest {
             assertTrue(body.contains("\"withinQuota\""))
         }
 
-    // ─── POST /billing/checkout ────────────────────────────────
+    // ──── POST /billing/checkout ────
 
     @Test
     fun `POST checkout returns 200 on success`() =
@@ -424,7 +424,7 @@ class BillingRoutesTest {
             assertEquals(HttpStatusCode.InternalServerError, r.status)
         }
 
-    // ─── GET /billing/invoices ─────────────────────────────────
+    // ──── GET /billing/invoices ────
 
     @Test
     fun `GET invoices returns 200 with list`() =
@@ -463,7 +463,7 @@ class BillingRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
 
-    // ─── GET /billing/payment-method ───────────────────────────
+    // ──── GET /billing/payment-method ────
 
     @Test
     fun `GET payment-method returns 200`() =
@@ -496,7 +496,7 @@ class BillingRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
 
-    // ─── POST /billing/setup-intent ────────────────────────────
+    // ──── POST /billing/setup-intent ────
 
     @Test
     fun `POST setup-intent returns 200`() =
@@ -529,7 +529,7 @@ class BillingRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
 
-    // ─── POST /billing/setup-intent/confirm ────────────────────
+    // ──── POST /billing/setup-intent/confirm ────
 
     @Test
     fun `POST setup-intent confirm returns 200`() =
@@ -567,7 +567,7 @@ class BillingRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
 
-    // ─── POST /billing/cancel ──────────────────────────────────
+    // ──── POST /billing/cancel ────
 
     @Test
     fun `POST cancel returns 200 on success`() =
@@ -620,7 +620,7 @@ class BillingRoutesTest {
             assertEquals(HttpStatusCode.InternalServerError, r.status)
         }
 
-    // ─── PUT /billing/payg-budget ──────────────────────────────
+    // ──── PUT /billing/payg-budget ────
 
     @Test
     fun `PUT payg-budget returns 400 for negative budget`() =
@@ -720,7 +720,7 @@ class BillingRoutesTest {
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
 
-    // ─── PUT /billing/oncall-seats ─────────────────────────────
+    // ──── PUT /billing/oncall-seats ────
 
     @Test
     fun `PUT oncall-seats returns 400 for negative seats`() =

@@ -175,7 +175,7 @@ class CustomDashboardServiceTest {
         updatedAt = Clock.System.now(),
     )
 
-    // ---- listDashboards ----
+    // ──── listDashboards ────
 
     @Test
     fun `listDashboards returns mapped dashboards with widgets`() = runBlocking {
@@ -227,7 +227,7 @@ class CustomDashboardServiceTest {
         verify { dashboardRepository.list(ORG_ID, null, USER_ID_INT) }
     }
 
-    // ---- getDashboard ----
+    // ──── getDashboard ────
 
     @Test
     fun `getDashboard returns dashboard with widgets`() = runBlocking {
@@ -266,7 +266,7 @@ class CustomDashboardServiceTest {
         assertTrue(result.isFavorited)
     }
 
-    // ---- createDashboard ----
+    // ──── createDashboard ────
 
     @Test
     fun `createDashboard returns response with correct fields`() = runBlocking {
@@ -399,7 +399,7 @@ class CustomDashboardServiceTest {
         assertEquals("env", result.variables[0].name)
     }
 
-    // ---- updateDashboard ----
+    // ──── updateDashboard ────
 
     @Test
     fun `updateDashboard returns null when update fails`() = runBlocking {
@@ -468,7 +468,7 @@ class CustomDashboardServiceTest {
         verify(exactly = 0) { widgetRepository.deleteNotIn(any(), any()) }
     }
 
-    // ---- deleteDashboard ----
+    // ──── deleteDashboard ────
 
     @Test
     fun `deleteDashboard delegates to repository`() = runBlocking {
@@ -485,7 +485,7 @@ class CustomDashboardServiceTest {
         assertFalse(service.deleteDashboard(999L, ORG_ID))
     }
 
-    // ---- moveDashboardToFolder ----
+    // ──── moveDashboardToFolder ────
 
     @Test
     fun `moveDashboardToFolder delegates to repository`() = runBlocking {
@@ -505,7 +505,7 @@ class CustomDashboardServiceTest {
             assertTrue(service.moveDashboardToFolder(1L, ORG_ID, null))
         }
 
-    // ---- toggleFavorite ----
+    // ──── toggleFavorite ────
 
     @Test
     fun `toggleFavorite delegates to repository`() = runBlocking {
@@ -517,7 +517,7 @@ class CustomDashboardServiceTest {
         verify { dashboardRepository.toggleFavorite(USER_ID_INT, 1L, ORG_ID) }
     }
 
-    // ---- Folder CRUD ----
+    // ──── Folder CRUD ────
 
     @Test
     fun `listFolders returns mapped folder responses`() = runBlocking {
@@ -627,7 +627,7 @@ class CustomDashboardServiceTest {
         assertFalse(service.deleteFolder(99L, ORG_ID))
     }
 
-    // ---- search ----
+    // ──── search ────
 
     @Test
     fun `search returns empty response for blank query`() = runBlocking {
@@ -691,7 +691,7 @@ class CustomDashboardServiceTest {
         }
     }
 
-    // ---- Organization isolation ----
+    // ──── Organization isolation ────
 
     @Test
     fun `getDashboard enforces orgId in repository call`() = runBlocking {
@@ -719,7 +719,7 @@ class CustomDashboardServiceTest {
         assertFalse(service.deleteFolder(1L, OTHER_ORG_ID))
     }
 
-    // ---- Widget loading / parsing ----
+    // ──── Widget loading / parsing ────
 
     @Test
     fun `widgets with valid queryConfigs JSON are parsed`() = runBlocking {
@@ -807,7 +807,7 @@ class CustomDashboardServiceTest {
         assertTrue(result.widgets[0].displayConfig.isEmpty())
     }
 
-    // ---- Default dashboard templates ----
+    // ──── Default dashboard templates ────
 
     @Test
     fun `getDefaultDashboardTemplates returns four templates`() = runBlocking {

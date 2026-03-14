@@ -225,7 +225,7 @@ class DatadogRoutesExtendedTest {
         return Pair(userId, orgId)
     }
 
-    // ─── DatadogHostRoutes: Ingest ─────────────────────────────────────────
+    // ──── DatadogHostRoutes: Ingest ────
 
     @Test
     fun `POST dd api v1 metadata returns 202`() = testApplication {
@@ -330,7 +330,7 @@ class DatadogRoutesExtendedTest {
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
-    // ─── DatadogHostRoutes: Query (JWT) ────────────────────────────────────
+    // ──── DatadogHostRoutes: Query (JWT) ────
 
     @Test
     fun `GET v1 hosts returns 200 with host list`() = testApplication {
@@ -430,7 +430,7 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
-    // ─── DatadogMetricRoutes ───────────────────────────────────────────────
+    // ──── DatadogMetricRoutes ────
 
     @Test
     fun `POST dd api v1 series returns 202`() = testApplication {
@@ -542,7 +542,7 @@ class DatadogRoutesExtendedTest {
             assertEquals(HttpStatusCode.Accepted, response.status)
         }
 
-    // ─── DatadogEventRoutes ────────────────────────────────────────────────
+    // ──── DatadogEventRoutes ────
 
     @Test
     fun `POST dd api v1 check_run returns 202`() = testApplication {
@@ -620,7 +620,7 @@ class DatadogRoutesExtendedTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── DatadogLogRoutes ──────────────────────────────────────────────────
+    // ──── DatadogLogRoutes ────
 
     @Test
     fun `POST dd api v2 logs returns 200`() = testApplication {
@@ -669,7 +669,7 @@ class DatadogRoutesExtendedTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── DatadogDogStatsDRoutes ────────────────────────────────────────────
+    // ──── DatadogDogStatsDRoutes ────
 
     @Test
     fun `POST dd dogstatsd v2 proxy returns 200`() = testApplication {
@@ -699,7 +699,7 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.OK, response.status)
     }
 
-    // ─── DatadogValidateRoutes ─────────────────────────────────────────────
+    // ──── DatadogValidateRoutes ────
 
     @Test
     fun `GET dd api v1 validate returns 200 with orgId`() = testApplication {
@@ -736,7 +736,7 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
-    // ─── MiscIngestRoutes ──────────────────────────────────────────────────
+    // ──── MiscIngestRoutes ────
 
     @Test
     fun `POST dd symdb v1 input returns 202`() = testApplication {
@@ -864,7 +864,7 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.Accepted, response.status)
     }
 
-    // ─── DatadogInfraRoutes ────────────────────────────────────────────────
+    // ──── DatadogInfraRoutes ────
 
     @Test
     fun `POST api v1 discovery returns 200`() = testApplication {
@@ -894,7 +894,7 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.Accepted, response.status)
     }
 
-    // ─── DbmIngestRoutes ──────────────────────────────────────────────────
+    // ──── DbmIngestRoutes ────
 
     @Test
     fun `POST dd api v2 databasequery returns 202`() = testApplication {
@@ -996,7 +996,7 @@ class DatadogRoutesExtendedTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── OrchestratorIngestRoutes ──────────────────────────────────────────
+    // ──── OrchestratorIngestRoutes ────
 
     @Test
     fun `POST dd api v2 orch returns 202`() = testApplication {
@@ -1041,7 +1041,7 @@ class DatadogRoutesExtendedTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── DebuggerIngestRoutes ──────────────────────────────────────────────
+    // ──── DebuggerIngestRoutes ────
 
     @Test
     fun `POST dd debugger v1 input returns 202`() = testApplication {
@@ -1100,7 +1100,7 @@ class DatadogRoutesExtendedTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── TelemetryProxyRoutes ──────────────────────────────────────────────
+    // ──── TelemetryProxyRoutes ────
 
     @Test
     fun `POST dd telemetry proxy returns 202`() = testApplication {
@@ -1116,7 +1116,7 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.Accepted, response.status)
     }
 
-    // ─── DatadogRoutes (API Key Management) ────────────────────────────────
+    // ──── DatadogRoutes (API Key Management) ────
 
     @Test
     fun `GET v1 agent-api-keys returns 200`() = testApplication {
@@ -1194,7 +1194,7 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
-    // ─── TraceDashboardRoutes (JWT) ────────────────────────────────────────
+    // ──── TraceDashboardRoutes (JWT) ────
 
     @Test
     fun `GET v1 traces resources returns 200`() = testApplication {
@@ -1301,7 +1301,7 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
-    // ─── Helpers ───────────────────────────────────────────────────────────
+    // ──── Helpers ────
 
     private fun sampleHost(orgId: Int = TEST_ORG_ID) = DdHostInfo(
         id = 42,

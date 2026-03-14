@@ -70,7 +70,7 @@ class UserRepositoryTest {
         emailVerificationExpiresAt = emailVerificationExpiresAt
     )
 
-    // ============ create + findById ============
+    // ──── create + findById ────
 
     @Test
     fun `create inserts user and findById returns correct fields`() {
@@ -96,7 +96,7 @@ class UserRepositoryTest {
         assertNull(repository.findById(99999))
     }
 
-    // ============ findByEmail ============
+    // ──── findByEmail ────
 
     @Test
     fun `findByEmail returns user for existing email`() {
@@ -111,7 +111,7 @@ class UserRepositoryTest {
         assertNull(repository.findByEmail("nobody@test.com"))
     }
 
-    // ============ existsByEmail ============
+    // ──── existsByEmail ────
 
     @Test
     fun `existsByEmail returns true when email exists`() {
@@ -124,7 +124,7 @@ class UserRepositoryTest {
         assertFalse(repository.existsByEmail("absent@test.com"))
     }
 
-    // ============ findByEmailVerificationToken ============
+    // ──── findByEmailVerificationToken ────
 
     @Test
     fun `findByEmailVerificationToken returns user for matching token`() {
@@ -143,7 +143,7 @@ class UserRepositoryTest {
         assertNull(repository.findByEmailVerificationToken("bad-token"))
     }
 
-    // ============ updateEmailVerified + clearEmailVerificationToken ============
+    // ──── updateEmailVerified + clearEmailVerificationToken ────
 
     @Test
     fun `updateEmailVerified sets email_verified to true`() {
@@ -170,7 +170,7 @@ class UserRepositoryTest {
         assertNull(updated.emailVerificationExpiresAt)
     }
 
-    // ============ updateVerificationToken ============
+    // ──── updateVerificationToken ────
 
     @Test
     fun `updateVerificationToken replaces existing token`() {
@@ -185,7 +185,7 @@ class UserRepositoryTest {
         assertEquals(5000L, found.emailVerificationExpiresAt)
     }
 
-    // ============ password reset ============
+    // ──── password reset ────
 
     @Test
     fun `updatePasswordResetToken sets reset token and expiry`() {
@@ -206,7 +206,7 @@ class UserRepositoryTest {
         assertNull(updated.passwordResetExpiresAt)
     }
 
-    // ============ updatePassword ============
+    // ──── updatePassword ────
 
     @Test
     fun `updatePassword replaces password hash`() {
@@ -215,7 +215,7 @@ class UserRepositoryTest {
         assertEquals("new-hash", repository.findById(userId)!!.passwordHash)
     }
 
-    // ============ updateOnboardingCompleted ============
+    // ──── updateOnboardingCompleted ────
 
     @Test
     fun `updateOnboardingCompleted sets onboarding flag to true`() {
@@ -225,7 +225,7 @@ class UserRepositoryTest {
         assertTrue(repository.findById(userId)!!.onboardingCompleted)
     }
 
-    // ============ requiresSsoForEmail ============
+    // ──── requiresSsoForEmail ────
 
     @Test
     fun `requiresSsoForEmail returns false when user has no membership`() {

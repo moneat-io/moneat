@@ -75,7 +75,7 @@ class MiscIngestionServiceCoverageTest {
         }
     }
 
-    // ===================== insertBatch routing =====================
+    // ──── insertBatch routing ────
 
     @Test
     fun `insertBatch routes symbol_db batch`() = runBlocking {
@@ -371,7 +371,7 @@ class MiscIngestionServiceCoverageTest {
         assertTrue(capturedSql[0].contains("CVE-2021-44228"))
     }
 
-    // ===================== insertBatch empty batch skipping =====================
+    // ──── insertBatch empty batch skipping ────
 
     @Test
     fun `insertBatch skips symbol_db with empty entries`() = runBlocking {
@@ -447,7 +447,7 @@ class MiscIngestionServiceCoverageTest {
         // No exception
     }
 
-    // ===================== insertBatch ClickHouse failure =====================
+    // ──── insertBatch ClickHouse failure ────
 
     @Test
     fun `insertBatch throws when ClickHouse returns error`() = runBlocking {
@@ -477,7 +477,7 @@ class MiscIngestionServiceCoverageTest {
         }
     }
 
-    // ===================== insertBatch with multiple entries =====================
+    // ──── insertBatch with multiple entries ────
 
     @Test
     fun `insertBatch with multiple pipeline_stats entries`() = runBlocking {
@@ -559,7 +559,7 @@ class MiscIngestionServiceCoverageTest {
         assertTrue(capturedSql[0].contains("CVE-2023-0001"))
     }
 
-    // ===================== parseDdTagList edge cases =====================
+    // ──── parseDdTagList edge cases ────
 
     @Test
     fun `parseDdTagList handles multiple colons in value`() {
@@ -587,7 +587,7 @@ class MiscIngestionServiceCoverageTest {
         assertEquals("1.2.3", result["version"])
     }
 
-    // ===================== decodeBatch =====================
+    // ──── decodeBatch ────
 
     @Test
     fun `decodeBatch with all fields populated`() {
@@ -637,7 +637,7 @@ class MiscIngestionServiceCoverageTest {
         assertTrue(decoded.sbomPackages.isEmpty())
     }
 
-    // ===================== data_streams direction normalization =====================
+    // ──── data_streams direction normalization ────
 
     @Test
     fun `data_streams normalizes unknown direction to in`() = runBlocking {
@@ -670,7 +670,7 @@ class MiscIngestionServiceCoverageTest {
         assertTrue(capturedSql[0].contains("'in'"))
     }
 
-    // ===================== synthetics timing map rendering =====================
+    // ──── synthetics timing map rendering ────
 
     @Test
     fun `synthetics with empty timings uses map()`() = runBlocking {

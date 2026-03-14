@@ -181,7 +181,7 @@ class SyntheticsRoutesExtendedTest {
         updatedAt = 1700000000000L
     )
 
-    // ─── Auth ──────────────────────────────────────────────────
+    // ──── Auth ────
 
     @Test
     fun `GET tests returns 401 when unauthenticated`() =
@@ -210,7 +210,7 @@ class SyntheticsRoutesExtendedTest {
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
-    // ─── No Org (403) ──────────────────────────────────────────
+    // ──── No Org (403) ────
 
     @Test
     fun `GET tests returns 403 when user has no org`() =
@@ -341,7 +341,7 @@ class SyntheticsRoutesExtendedTest {
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
 
-    // ─── Invalid IDs (400) ──────────────────────────────────────
+    // ──── Invalid IDs (400) ────
 
     @Test
     fun `GET test by invalid UUID returns 400`() =
@@ -435,7 +435,7 @@ class SyntheticsRoutesExtendedTest {
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
 
-    // ─── Test CRUD (happy paths) ─────────────────────────────────
+    // ──── Test CRUD (happy paths) ────
 
     @Test
     fun `GET tests returns 200 with list`() =
@@ -590,7 +590,7 @@ class SyntheticsRoutesExtendedTest {
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
 
-    // ─── Run Test ────────────────────────────────────────────────
+    // ──── Run Test ────
 
     @Test
     fun `POST run test returns 202 on success`() =
@@ -622,7 +622,7 @@ class SyntheticsRoutesExtendedTest {
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
 
-    // ─── Test Summary ────────────────────────────────────────────
+    // ──── Test Summary ────
 
     @Test
     fun `GET test summary returns 200`() =
@@ -662,7 +662,7 @@ class SyntheticsRoutesExtendedTest {
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
 
-    // ─── Variable CRUD ──────────────────────────────────────────
+    // ──── Variable CRUD ────
 
     @Test
     fun `GET variables returns 200 with list`() =

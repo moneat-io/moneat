@@ -134,7 +134,7 @@ class IncidentServiceExtendedTest {
         moneatUrl = "https://moneat.test/issues/1"
     )
 
-    // ==================== fireAlert ====================
+    // ──── fireAlert ────
 
     @Test
     fun `fireAlert dispatches to registered provider and logs success`() = runBlocking {
@@ -249,7 +249,7 @@ class IncidentServiceExtendedTest {
         assertEquals("Provider not registered", logs[0][IncidentEventLog.errorMessage])
     }
 
-    // ==================== resolveAlert ====================
+    // ──── resolveAlert ────
 
     @Test
     fun `resolveAlert dispatches to registered provider and logs success`() = runBlocking {
@@ -321,7 +321,7 @@ class IncidentServiceExtendedTest {
         assertEquals(0L, IncidentTestHelper.getEventLogCount(emptyOrgId))
     }
 
-    // ==================== resolveIncidentSeverity edge cases ====================
+    // ──── resolveIncidentSeverity edge cases ────
 
     @Test
     fun `resolveIncidentSeverity returns null when no routing rule exists for source`() {
@@ -355,7 +355,7 @@ class IncidentServiceExtendedTest {
         assertEquals(IncidentSeverity.CRITICAL, severity)
     }
 
-    // ==================== fireAlert with native escalation ====================
+    // ──── fireAlert with native escalation ────
 
     @Test
     fun `fireAlert triggers native escalation when oncall is enabled`() = runBlocking {
@@ -487,7 +487,7 @@ class IncidentServiceExtendedTest {
         unmockkObject(FeatureRegistry)
     }
 
-    // ==================== disabled provider ====================
+    // ──── disabled provider ────
 
     @Test
     fun `fireAlert ignores disabled provider configs`() = runBlocking {
@@ -526,7 +526,7 @@ class IncidentServiceExtendedTest {
         assertEquals(0L, IncidentTestHelper.getEventLogCount(disabledOrgId))
     }
 
-    // ==================== event metadata in logs ====================
+    // ──── event metadata in logs ────
 
     @Test
     fun `fireAlert preserves event metadata in log entry`() = runBlocking {

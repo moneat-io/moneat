@@ -149,7 +149,7 @@ class AnalyticsRoutesTest {
         )
     )
 
-    // ─── Auth ──────────────────────────────────────────────────
+    // ──── Auth ────
 
     @Test
     fun `returns 401 when unauthenticated`() = testApplication {
@@ -192,7 +192,7 @@ class AnalyticsRoutesTest {
         assertEquals(HttpStatusCode.BadRequest, r.status)
     }
 
-    // ─── Overview ──────────────────────────────────────────────
+    // ──── Overview ────
 
     @Test
     fun `GET overview returns 200 with default period`() = testApplication {
@@ -254,7 +254,7 @@ class AnalyticsRoutesTest {
         assertEquals(HttpStatusCode.OK, r.status)
     }
 
-    // ─── Timeseries ────────────────────────────────────────────
+    // ──── Timeseries ────
 
     @Test
     fun `GET timeseries returns 200`() = testApplication {
@@ -283,7 +283,7 @@ class AnalyticsRoutesTest {
         assertEquals(HttpStatusCode.BadRequest, r.status)
     }
 
-    // ─── Pages ─────────────────────────────────────────────────
+    // ──── Pages ────
 
     @Test
     fun `GET pages returns 200`() = testApplication {
@@ -317,7 +317,7 @@ class AnalyticsRoutesTest {
         }
     }
 
-    // ─── Entry Pages ───────────────────────────────────────────
+    // ──── Entry Pages ────
 
     @Test
     fun `GET entry-pages returns 200`() = testApplication {
@@ -333,7 +333,7 @@ class AnalyticsRoutesTest {
         assertEquals(HttpStatusCode.OK, r.status)
     }
 
-    // ─── Exit Pages ────────────────────────────────────────────
+    // ──── Exit Pages ────
 
     @Test
     fun `GET exit-pages returns 200`() = testApplication {
@@ -349,7 +349,7 @@ class AnalyticsRoutesTest {
         assertEquals(HttpStatusCode.OK, r.status)
     }
 
-    // ─── Sources ───────────────────────────────────────────────
+    // ──── Sources ────
 
     @Test
     fun `GET sources returns 200`() = testApplication {
@@ -377,7 +377,7 @@ class AnalyticsRoutesTest {
         }
     }
 
-    // ─── UTM ───────────────────────────────────────────────────
+    // ──── UTM ────
 
     @Test
     fun `GET utm source returns 200`() = testApplication {
@@ -457,7 +457,7 @@ class AnalyticsRoutesTest {
         }
     }
 
-    // ─── Locations ─────────────────────────────────────────────
+    // ──── Locations ────
 
     @Test
     fun `GET locations returns 200`() = testApplication {
@@ -485,7 +485,7 @@ class AnalyticsRoutesTest {
         }
     }
 
-    // ─── Devices ───────────────────────────────────────────────
+    // ──── Devices ────
 
     @Test
     fun `GET devices returns 200 with default type`() = testApplication {
@@ -565,7 +565,7 @@ class AnalyticsRoutesTest {
         }
     }
 
-    // ─── Events ────────────────────────────────────────────────
+    // ──── Events ────
 
     @Test
     fun `GET events returns 200`() = testApplication {
@@ -581,7 +581,7 @@ class AnalyticsRoutesTest {
         assertEquals(HttpStatusCode.OK, r.status)
     }
 
-    // ─── Realtime ──────────────────────────────────────────────
+    // ──── Realtime ────
 
     @Test
     fun `GET realtime returns 200`() = testApplication {
@@ -596,7 +596,7 @@ class AnalyticsRoutesTest {
         assertTrue(r.bodyAsText().contains("\"visitors\""))
     }
 
-    // ─── Funnel ────────────────────────────────────────────────
+    // ──── Funnel ────
 
     @Test
     fun `GET funnel returns 200`() = testApplication {
@@ -636,7 +636,7 @@ class AnalyticsRoutesTest {
         assertEquals(HttpStatusCode.BadRequest, r.status)
     }
 
-    // ─── Date periods ──────────────────────────────────────────
+    // ──── Date periods ────
 
     @Test
     fun `GET overview with today period returns 200`() = testApplication {
@@ -708,7 +708,7 @@ class AnalyticsRoutesTest {
         assertEquals(HttpStatusCode.OK, r.status)
     }
 
-    // ─── Filters ───────────────────────────────────────────────
+    // ──── Filters ────
 
     @Test
     fun `GET pages with filters returns 200`() = testApplication {

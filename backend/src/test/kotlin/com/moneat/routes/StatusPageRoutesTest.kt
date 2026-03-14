@@ -162,7 +162,7 @@ class StatusPageRoutesTest {
         return pageId
     }
 
-    // ==================== LIST STATUS PAGES ====================
+    // ──── LIST STATUS PAGES ────
 
     @Test
     fun `list status pages returns 200 empty list when user has no org`() =
@@ -208,7 +208,7 @@ class StatusPageRoutesTest {
             assertTrue(response.bodyAsText().contains("Test Page"))
         }
 
-    // ==================== CREATE STATUS PAGE ====================
+    // ──── CREATE STATUS PAGE ────
 
     @Test
     fun `create status page returns 403 when user has no org`() =
@@ -261,7 +261,7 @@ class StatusPageRoutesTest {
             assertTrue(response.bodyAsText().contains("Slug"))
         }
 
-    // ==================== GET STATUS PAGE ====================
+    // ──── GET STATUS PAGE ────
 
     @Test
     fun `status page detail endpoint validates UUID format`() =
@@ -321,7 +321,7 @@ class StatusPageRoutesTest {
             assertTrue(response.bodyAsText().contains("Test Page"))
         }
 
-    // ==================== UPDATE STATUS PAGE ====================
+    // ──── UPDATE STATUS PAGE ────
 
     @Test
     fun `update status page returns 400 for invalid uuid`() =
@@ -389,7 +389,7 @@ class StatusPageRoutesTest {
             assertTrue(response.bodyAsText().contains("Updated Name"))
         }
 
-    // ==================== DELETE STATUS PAGE ====================
+    // ──── DELETE STATUS PAGE ────
 
     @Test
     fun `delete status page returns 400 for invalid uuid`() =
@@ -448,7 +448,7 @@ class StatusPageRoutesTest {
             assertEquals(HttpStatusCode.NoContent, response.status)
         }
 
-    // ==================== MANAGE MONITORS ====================
+    // ──── MANAGE MONITORS ────
 
     @Test
     fun `add monitor to page returns 400 for invalid page uuid`() =
@@ -510,7 +510,7 @@ class StatusPageRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
-    // ==================== INCIDENTS ====================
+    // ──── INCIDENTS ────
 
     @Test
     fun `get incidents returns 400 for invalid page uuid`() =
@@ -540,7 +540,7 @@ class StatusPageRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
-    // ==================== CREATE INCIDENT ====================
+    // ──── CREATE INCIDENT ────
 
     @Test
     fun `create incident returns 201 for valid request`() =
@@ -592,7 +592,7 @@ class StatusPageRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
-    // ==================== UPDATE INCIDENT ====================
+    // ──── UPDATE INCIDENT ────
 
     @Test
     fun `update incident returns 200 for valid request`() =
@@ -642,7 +642,7 @@ class StatusPageRoutesTest {
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
-    // ==================== INCIDENT UPDATES ====================
+    // ──── INCIDENT UPDATES ────
 
     @Test
     fun `post incident update returns 201`() =
@@ -689,7 +689,7 @@ class StatusPageRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ==================== CUSTOM DOMAINS ====================
+    // ──── CUSTOM DOMAINS ────
 
     @Test
     fun `add custom domain returns 201 for valid domain`() =
@@ -766,7 +766,7 @@ class StatusPageRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
-    // ==================== GET INCIDENTS HAPPY PATH ====================
+    // ──── GET INCIDENTS HAPPY PATH ────
 
     @Test
     fun `get incidents returns 200 with empty list`() =

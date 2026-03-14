@@ -94,7 +94,7 @@ class MonitorServiceExtendedTest {
         unmockkObject(RedisConfig)
     }
 
-    // ==================== getLatestMetrics ====================
+    // ──── getLatestMetrics ────
 
     @Test
     fun `getLatestMetrics returns null when host does not exist`() = runBlocking {
@@ -201,7 +201,7 @@ class MonitorServiceExtendedTest {
         assertNull(service.getLatestMetrics(1))
     }
 
-    // ==================== getLatestMetricsForHosts ====================
+    // ──── getLatestMetricsForHosts ────
 
     @Test
     fun `getLatestMetricsForHosts returns empty map for empty list`() = runBlocking {
@@ -252,7 +252,7 @@ class MonitorServiceExtendedTest {
         assertNull(result[1])
     }
 
-    // ==================== getLatestContainers ====================
+    // ──── getLatestContainers ────
 
     @Test
     fun `getLatestContainers returns empty for non-existent host`() = runBlocking {
@@ -330,7 +330,7 @@ class MonitorServiceExtendedTest {
         assertTrue(service.getLatestContainers(1).isEmpty())
     }
 
-    // ==================== getLatestContainersForOrganizations ====================
+    // ──── getLatestContainersForOrganizations ────
 
     @Test
     fun `getLatestContainersForOrganizations aggregates across hosts`() = runBlocking {
@@ -363,7 +363,7 @@ class MonitorServiceExtendedTest {
         assertEquals("web", result[0].name)
     }
 
-    // ==================== getHistoricalMetrics ====================
+    // ──── getHistoricalMetrics ────
 
     @Test
     fun `getHistoricalMetrics returns empty for non-existent host`() = runBlocking {
@@ -439,7 +439,7 @@ class MonitorServiceExtendedTest {
         assertEquals(60.0f, result.data_points[1].cpu_percent)
     }
 
-    // ==================== getContainerHistoricalMetrics ====================
+    // ──── getContainerHistoricalMetrics ────
 
     @Test
     fun `getContainerHistoricalMetrics returns empty for missing host`() = runBlocking {
@@ -488,7 +488,7 @@ class MonitorServiceExtendedTest {
         assertEquals(1073741824L, result.data_points[0].mem_limit)
     }
 
-    // ==================== getLatestInfraContainers ====================
+    // ──── getLatestInfraContainers ────
 
     @Test
     fun `getLatestInfraContainers returns empty for empty org list`() = runBlocking {
@@ -546,7 +546,7 @@ class MonitorServiceExtendedTest {
         assertTrue(result.isEmpty())
     }
 
-    // ==================== checkHostQuota with self-host ====================
+    // ──── checkHostQuota with self-host ────
 
     @Test
     fun `checkHostQuota returns true when self-host is enabled`() {
@@ -556,7 +556,7 @@ class MonitorServiceExtendedTest {
         unmockkObject(com.moneat.config.EnvConfig.SelfHost)
     }
 
-    // ==================== ensureOrganizationAlertTemplates ====================
+    // ──── ensureOrganizationAlertTemplates ────
 
     @Test
     fun `ensureOrganizationAlertTemplates does not create when templates exist`() {
@@ -584,7 +584,7 @@ class MonitorServiceExtendedTest {
         io.mockk.verify(exactly = 7) { alertRepo.createAlert(any()) }
     }
 
-    // ==================== ensureHostAlertsSeeded ====================
+    // ──── ensureHostAlertsSeeded ────
 
     @Test
     fun `ensureHostAlertsSeeded does not seed when alerts exist`() {
@@ -631,7 +631,7 @@ class MonitorServiceExtendedTest {
         io.mockk.verify(exactly = 7) { alertRepo.createAlert(any()) }
     }
 
-    // ==================== AgentApiKeyService ====================
+    // ──── AgentApiKeyService ────
 
     companion object {
         private var db: Database? = null
@@ -789,7 +789,7 @@ class MonitorServiceExtendedTest {
         assertEquals(org1, agentApiKeyService.validateKey(created.key))
     }
 
-    // ==================== Helpers ====================
+    // ──── Helpers ────
 
     private fun stubTierConfig(monitorIntervalSeconds: Int = 60) {
         val tierConfig = mockk<PricingTierConfigResponse>()

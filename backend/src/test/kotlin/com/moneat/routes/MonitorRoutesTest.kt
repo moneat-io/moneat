@@ -126,7 +126,7 @@ class MonitorRoutesTest {
         }
     }
 
-    // ─── GET /systems ─────────────────────────────────────────────────────────
+    // ──── GET /systems ────
 
     @Test
     fun `GET systems returns 403 when user has no org`() =
@@ -165,9 +165,9 @@ class MonitorRoutesTest {
             assertEquals("[]", response.bodyAsText())
         }
 
-    // ─── POST /systems ────────────────────────────────────────────────────────
+    // ──── POST /systems ────
 
-    // ─── GET /systems/{id} ────────────────────────────────────────────────────
+    // ──── GET /systems/{id} ────
 
     @Test
     fun `GET systems id returns 400 for invalid uuid`() =
@@ -224,7 +224,7 @@ class MonitorRoutesTest {
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
-    // ─── DELETE /systems/{id} ─────────────────────────────────────────────────
+    // ──── DELETE /systems/{id} ────
 
     @Test
     fun `DELETE systems id returns 400 for invalid uuid`() =
@@ -262,7 +262,7 @@ class MonitorRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
-    // ─── GET /systems/{id}/metrics ────────────────────────────────────────────
+    // ──── GET /systems/{id}/metrics ────
 
     @Test
     fun `GET systems id metrics returns 400 for invalid uuid`() =
@@ -300,7 +300,7 @@ class MonitorRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
-    // ─── GET /systems/{id}/containers ─────────────────────────────────────────
+    // ──── GET /systems/{id}/containers ────
 
     @Test
     fun `GET systems id containers returns 400 for invalid uuid`() =
@@ -321,7 +321,7 @@ class MonitorRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── GET /silence-periods ─────────────────────────────────────────────────
+    // ──── GET /silence-periods ────
 
     @Test
     fun `GET silence-periods returns 403 when user has no org`() =
@@ -340,7 +340,7 @@ class MonitorRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
-    // ─── POST /silence-periods ────────────────────────────────────────────────
+    // ──── POST /silence-periods ────
 
     @Test
     fun `POST silence-periods returns 403 when user has no org`() =

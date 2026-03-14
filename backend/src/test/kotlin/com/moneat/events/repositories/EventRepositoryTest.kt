@@ -75,7 +75,7 @@ class EventRepositoryTest {
         Pair(projectId, orgId)
     }
 
-    // ============ verifyProjectKey ============
+    // ──── verifyProjectKey ────
 
     @Test
     fun `verifyProjectKey returns valid for matching active key`() {
@@ -107,7 +107,7 @@ class EventRepositoryTest {
         assertEquals("android", result.platformTarget)
     }
 
-    // ============ getOrganizationIdForProject ============
+    // ──── getOrganizationIdForProject ────
 
     @Test
     fun `getOrganizationIdForProject returns correct org id`() {

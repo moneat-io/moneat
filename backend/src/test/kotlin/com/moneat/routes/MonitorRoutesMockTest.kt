@@ -156,7 +156,7 @@ class MonitorRoutesMockTest {
         )
     }
 
-    // ─── GET /systems ─────────────────────────────────────────────────────────
+    // ──── GET /systems ────
 
     @Test
     fun `GET systems returns 200 with system list`() =
@@ -187,7 +187,7 @@ class MonitorRoutesMockTest {
             assertTrue(response.bodyAsText().contains("test-system"))
         }
 
-    // ─── GET /systems/{id} ────────────────────────────────────────────────────
+    // ──── GET /systems/{id} ────
 
     @Test
     fun `GET systems by id returns 200 with system details`() =
@@ -245,7 +245,7 @@ class MonitorRoutesMockTest {
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
-    // ─── DELETE /systems/{id} ─────────────────────────────────────────────────
+    // ──── DELETE /systems/{id} ────
 
     @Test
     fun `DELETE systems by id returns 204 on success`() =
@@ -275,7 +275,7 @@ class MonitorRoutesMockTest {
             assertEquals(HttpStatusCode.NoContent, response.status)
         }
 
-    // ─── GET /systems/{id}/metrics ─────────────────────────────────────────────
+    // ──── GET /systems/{id}/metrics ────
 
     @Test
     fun `GET systems metrics returns 200`() =
@@ -312,7 +312,7 @@ class MonitorRoutesMockTest {
             assertEquals(HttpStatusCode.OK, response.status)
         }
 
-    // ─── GET /systems/{id}/containers ─────────────────────────────────────────
+    // ──── GET /systems/{id}/containers ────
 
     @Test
     fun `GET systems containers returns 200`() =
@@ -355,7 +355,7 @@ class MonitorRoutesMockTest {
             assertTrue(response.bodyAsText().contains("my-container"))
         }
 
-    // ─── GET /systems/{id}/logs ────────────────────────────────────────────────
+    // ──── GET /systems/{id}/logs ────
 
     @Test
     fun `GET systems logs returns 200`() =
@@ -386,7 +386,7 @@ class MonitorRoutesMockTest {
             assertEquals(HttpStatusCode.OK, response.status)
         }
 
-    // ─── GET /systems/{id}/alerts ─────────────────────────────────────────────
+    // ──── GET /systems/{id}/alerts ────
 
     @Test
     fun `GET systems alerts returns 200`() =
@@ -429,7 +429,7 @@ class MonitorRoutesMockTest {
             assertTrue(response.bodyAsText().contains("cpu_percent"))
         }
 
-    // ─── GET /systems/{id}/alerts/config ──────────────────────────────────────
+    // ──── GET /systems/{id}/alerts/config ────
 
     @Test
     fun `GET systems alert config returns 200`() =
@@ -466,7 +466,7 @@ class MonitorRoutesMockTest {
             assertTrue(response.bodyAsText().contains("global"))
         }
 
-    // ─── Error path: bad system UUID ──────────────────────────────────────────
+    // ──── Error path: bad system UUID ────
 
     @Test
     fun `GET systems by invalid UUID returns 400`() =
@@ -492,7 +492,7 @@ class MonitorRoutesMockTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── PUT /systems/{id}/alerts/scope ───────────────────────────────────────
+    // ──── PUT /systems/{id}/alerts/scope ────
 
     @Test
     fun `PUT systems alert scope returns 204`() =
@@ -553,7 +553,7 @@ class MonitorRoutesMockTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── POST /systems/{id}/alerts ────────────────────────────────────────────
+    // ──── POST /systems/{id}/alerts ────
 
     @Test
     fun `POST systems alerts returns 201 with alert`() =
@@ -598,7 +598,7 @@ class MonitorRoutesMockTest {
             assertTrue(response.bodyAsText().contains("mem_percent"))
         }
 
-    // ─── PUT /systems/{systemId}/alerts/{alertId} ─────────────────────────────
+    // ──── PUT /systems/{systemId}/alerts/{alertId} ────
 
     @Test
     fun `PUT alert returns 204 when updated`() =
@@ -660,7 +660,7 @@ class MonitorRoutesMockTest {
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
-    // ─── DELETE /systems/{systemId}/alerts/{alertId} ──────────────────────────
+    // ──── DELETE /systems/{systemId}/alerts/{alertId} ────
 
     @Test
     fun `DELETE alert returns 204 when deleted`() =
@@ -690,7 +690,7 @@ class MonitorRoutesMockTest {
             assertEquals(HttpStatusCode.NoContent, response.status)
         }
 
-    // ─── GET /systems/{id}/containers/{name}/metrics ───────────────────────────
+    // ──── GET /systems/{id}/containers/{name}/metrics ────
 
     @Test
     fun `GET container metrics returns 200`() =

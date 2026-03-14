@@ -135,7 +135,7 @@ class BillingServicesExtendedTest {
         }
     }
 
-    // ==================== StripeService: handleSubscriptionDeleted edge cases ====================
+    // ──── StripeService: handleSubscriptionDeleted edge cases ────
 
     @Test
     fun `handleSubscriptionDeleted with unresolvable org silently returns`() {
@@ -185,7 +185,7 @@ class BillingServicesExtendedTest {
         assertEquals(0L, free[Subscriptions.pending_meter_batch_units])
     }
 
-    // ==================== StripeService: handleInvoicePaid edge cases ====================
+    // ──── StripeService: handleInvoicePaid edge cases ────
 
     @Test
     fun `handleInvoicePaid with unresolvable org silently returns`() {
@@ -223,7 +223,7 @@ class BillingServicesExtendedTest {
         assertEquals("active", sub[Subscriptions.status])
     }
 
-    // ==================== StripeService: handleInvoicePaymentFailed edge cases ====================
+    // ──── StripeService: handleInvoicePaymentFailed edge cases ────
 
     @Test
     fun `handleInvoicePaymentFailed with unresolvable org silently returns`() {
@@ -262,7 +262,7 @@ class BillingServicesExtendedTest {
         )
     }
 
-    // ==================== StripeService: applyDunningDowngrade edge cases ====================
+    // ──── StripeService: applyDunningDowngrade edge cases ────
 
     @Test
     fun `applyDunningDowngrade returns zero when no past_due subscriptions exist`() {
@@ -327,7 +327,7 @@ class BillingServicesExtendedTest {
         )
     }
 
-    // ==================== StripeService: flushPendingMeteredUsage edge cases ====================
+    // ──── StripeService: flushPendingMeteredUsage edge cases ────
 
     @Test
     fun `flushPendingMeteredUsage drains pending_overage_bytes into meter units`() {
@@ -491,7 +491,7 @@ class BillingServicesExtendedTest {
         assertEquals(0, flushed, "Canceled subscriptions should not be flushed")
     }
 
-    // ==================== StripeService: syncSubscriptionFromStripe edge cases ====================
+    // ──── StripeService: syncSubscriptionFromStripe edge cases ────
 
     @Test
     fun `syncSubscriptionFromStripe resolves billing interval as yearly from price`() {
@@ -559,7 +559,7 @@ class BillingServicesExtendedTest {
         assertEquals(0L, count, "No subscription should be created for unresolvable org")
     }
 
-    // ==================== BillingQuotaService: refundUnits ====================
+    // ──── BillingQuotaService: refundUnits ────
 
     @Test
     fun `refundUnits decrements error usage counters correctly`() {
@@ -746,7 +746,7 @@ class BillingServicesExtendedTest {
         )
     }
 
-    // ==================== BillingQuotaService: getUsageForOrganization ====================
+    // ──── BillingQuotaService: getUsageForOrganization ────
 
     @Test
     fun `getUsageForOrganization without any subscription uses free tier defaults`() {
@@ -769,7 +769,7 @@ class BillingServicesExtendedTest {
         assertEquals(testOrgId, usage.organizationId)
     }
 
-    // ==================== BillingQuotaService: reserveUnits ingestion overage tracking ===========
+    // ──── BillingQuotaService: reserveUnits ingestion overage tracking ────
 
     @Test
     fun `reserveUnits accumulates pending_overage_bytes when exceeding GB limit`() {
@@ -926,7 +926,7 @@ class BillingServicesExtendedTest {
         assertEquals("apm_span", result.eventType)
     }
 
-    // ==================== BillingQuotaService: normalizeEventType edge cases =====================
+    // ──── BillingQuotaService: normalizeEventType edge cases ────
 
     @Test
     fun `reserveUnits normalizes logs to log event type`() {
@@ -1010,7 +1010,7 @@ class BillingServicesExtendedTest {
         assertEquals(1L, result.usage.usedErrors, "Unknown type should normalize to error")
     }
 
-    // ==================== BillingQuotaService: GB quota boundary ====================
+    // ──── BillingQuotaService: GB quota boundary ────
 
     @Test
     fun `reserveUnits rejects when GB eligible bytes exceed limit without PAYG`() {
@@ -1103,7 +1103,7 @@ class BillingServicesExtendedTest {
         assertTrue(result.allowed, "Bonus GB should extend effective limit")
     }
 
-    // ==================== BillingQuotaService: overage cost estimates ====================
+    // ──── BillingQuotaService: overage cost estimates ────
 
     @Test
     fun `getUsageForOrganization computes ingestion overage cost estimate`() {
@@ -1141,7 +1141,7 @@ class BillingServicesExtendedTest {
         assertEquals(0, usage.ingestionOverageCentsEstimate, "No overage within limit")
     }
 
-    // ==================== Helper methods ====================
+    // ──── Helper methods ────
 
     private fun insertTestOrganization(name: String, slug: String): Int {
         return Organizations.insert {

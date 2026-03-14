@@ -131,7 +131,7 @@ class LogRoutesMockTest {
         return Pair(userId, orgId)
     }
 
-    // ─── GET /logs (org-scoped) ───────────────────────────────────────────────
+    // ──── GET /logs (org-scoped) ────
 
     @Test
     fun `GET project logs returns 200 with empty result`() =
@@ -165,7 +165,7 @@ class LogRoutesMockTest {
             assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
-    // ─── GET /logs/tag-values ─────────────────────────────────────────────────
+    // ──── GET /logs/tag-values ────
 
     @Test
     fun `GET log tag values returns 200`() =
@@ -204,7 +204,7 @@ class LogRoutesMockTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── GET /logs/filters ────────────────────────────────────────────────────
+    // ──── GET /logs/filters ────
 
     @Test
     fun `GET log filters returns 200`() =
@@ -231,7 +231,7 @@ class LogRoutesMockTest {
             assertEquals(HttpStatusCode.OK, response.status)
         }
 
-    // ─── GET /logs/aggregate ───────────────────────────────────────────────────
+    // ──── GET /logs/aggregate ────
 
     @Test
     fun `GET log aggregate returns 200`() =
@@ -257,7 +257,7 @@ class LogRoutesMockTest {
             assertTrue(response.bodyAsText().contains("buckets"))
         }
 
-    // ─── GET /logs/top ────────────────────────────────────────────────────────
+    // ──── GET /logs/top ────
 
     @Test
     fun `GET log top values returns 200`() =

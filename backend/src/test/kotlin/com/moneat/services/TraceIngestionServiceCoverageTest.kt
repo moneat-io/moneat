@@ -67,7 +67,7 @@ class TraceIngestionServiceCoverageTest {
         unmockkObject(ClickHouseClient)
     }
 
-    // ===================== parseJsonTraces =====================
+    // ──── parseJsonTraces ────
 
     @Test
     fun `parseJsonTraces parses single trace with one span`() {
@@ -151,7 +151,7 @@ class TraceIngestionServiceCoverageTest {
         assertTrue(traces.isEmpty())
     }
 
-    // ===================== parseMsgpackTraces =====================
+    // ──── parseMsgpackTraces ────
 
     @Test
     fun `parseMsgpackTraces parses single trace round-trip`() {
@@ -237,7 +237,7 @@ class TraceIngestionServiceCoverageTest {
         assertTrue(traces[0][0].metrics.isEmpty())
     }
 
-    // ===================== parseTraceId =====================
+    // ──── parseTraceId ────
 
     @Test
     fun `parseTraceId with valid numeric string`() {
@@ -272,7 +272,7 @@ class TraceIngestionServiceCoverageTest {
         assertNull(TraceIngestionService.parseTraceId("0xDEAD"))
     }
 
-    // ===================== insertTraces via mock ClickHouse =====================
+    // ──── insertTraces via mock ClickHouse ────
 
     @Test
     fun `insertTraces sends correct SQL to ClickHouse`() = runBlocking {
@@ -323,7 +323,7 @@ class TraceIngestionServiceCoverageTest {
         // No exception means success
     }
 
-    // ===================== insertTraceStats via mock ClickHouse =====================
+    // ──── insertTraceStats via mock ClickHouse ────
 
     @Test
     fun `insertTraceStats sends correct SQL`() = runBlocking {
@@ -387,7 +387,7 @@ class TraceIngestionServiceCoverageTest {
         TraceIngestionService.insertTraceStats(organizationId = 1, payload = payload)
     }
 
-    // ===================== listTraces via mock ClickHouse =====================
+    // ──── listTraces via mock ClickHouse ────
 
     @Test
     fun `listTraces returns empty result for blank response`() = runBlocking {
@@ -435,7 +435,7 @@ class TraceIngestionServiceCoverageTest {
         assertFalse(result.traces[0].hasError)
     }
 
-    // ===================== getTraceDetail =====================
+    // ──── getTraceDetail ────
 
     @Test
     fun `getTraceDetail returns null for invalid trace id`() = runBlocking {
@@ -468,7 +468,7 @@ class TraceIngestionServiceCoverageTest {
         assertEquals("db.query", result.spans[1].name)
     }
 
-    // ===================== getServiceMap =====================
+    // ──── getServiceMap ────
 
     @Test
     fun `getServiceMap returns empty result for blank response`() = runBlocking {
@@ -502,7 +502,7 @@ class TraceIngestionServiceCoverageTest {
         assertTrue(result.services[1].callsTo.isEmpty())
     }
 
-    // ===================== getApmErrors =====================
+    // ──── getApmErrors ────
 
     @Test
     fun `getApmErrors returns empty for blank response`() = runBlocking {
@@ -547,7 +547,7 @@ class TraceIngestionServiceCoverageTest {
         assertEquals(15L, result.errors[0].count)
     }
 
-    // ===================== listResourceStats =====================
+    // ──── listResourceStats ────
 
     @Test
     fun `listResourceStats returns empty for blank response`() = runBlocking {
@@ -595,7 +595,7 @@ class TraceIngestionServiceCoverageTest {
         assertEquals(1000000000L, res.avgDurationNs)
     }
 
-    // ===================== Helper: MessagePack trace packing =====================
+    // ──── Helper: MessagePack trace packing ────
 
     private data class TestSpanData(
         val traceId: Long = 1L,

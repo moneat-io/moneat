@@ -144,7 +144,7 @@ class LogRoutesTest {
             assertTrue(response.bodyAsText().contains("Missing or invalid"))
         }
 
-    // ==================== Authenticated log query endpoints (org-scoped) ====================
+    // ──── Authenticated log query endpoints (org-scoped) ────
 
     @Test
     fun `tag values returns 400 for missing key parameter`() =

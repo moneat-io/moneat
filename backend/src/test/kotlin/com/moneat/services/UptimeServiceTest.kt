@@ -278,7 +278,7 @@ class UptimeServiceTest {
         assertNull(missing)
     }
 
-    // ─── UptimeService CRUD ──────────────────────────────────────────────
+    // ──── UptimeService CRUD ────
 
     @Test
     fun `createMonitor does not generate push token for http monitors`() =
@@ -434,7 +434,7 @@ class UptimeServiceTest {
         service.checkUptimeMonitorQuota(orgId)
     }
 
-    // ─── UptimeCheckExecutor ─────────────────────────────────────────────
+    // ──── UptimeCheckExecutor ────
 
     private fun executorMonitor(
         type: String,

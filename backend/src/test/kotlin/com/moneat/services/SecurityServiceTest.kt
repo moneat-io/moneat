@@ -65,7 +65,7 @@ class SecurityServiceTest {
         ClickHouseClient.close()
     }
 
-    // ==================== parseDdTagList ====================
+    // ──── parseDdTagList ────
 
     @Test
     fun `parseDdTagList parses colon-separated key-value tags`() {
@@ -119,7 +119,7 @@ class SecurityServiceTest {
         assertEquals(mapOf(":value" to ""), result)
     }
 
-    // ==================== decodeBatch ====================
+    // ──── decodeBatch ────
 
     @Test
     fun `decodeBatch decodes security events batch`() {
@@ -193,7 +193,7 @@ class SecurityServiceTest {
         assertTrue(batch.findings.isEmpty())
     }
 
-    // ==================== enqueueSecurityEvents ====================
+    // ──── enqueueSecurityEvents ────
 
     @Test
     fun `enqueueSecurityEvents pushes to Redis and returns count`() {
@@ -264,7 +264,7 @@ class SecurityServiceTest {
         assertEquals("us-east-1", tags["region"])
     }
 
-    // ==================== enqueueActivityDumps ====================
+    // ──── enqueueActivityDumps ────
 
     @Test
     fun `enqueueActivityDumps pushes to Redis and returns count`() {
@@ -301,7 +301,7 @@ class SecurityServiceTest {
         verify(exactly = 0) { mockRedisCommands.lpush(any(), any<String>()) }
     }
 
-    // ==================== enqueueCompliance ====================
+    // ──── enqueueCompliance ────
 
     @Test
     fun `enqueueCompliance pushes to Redis and returns count`() {
@@ -347,7 +347,7 @@ class SecurityServiceTest {
         verify(exactly = 0) { mockRedisCommands.lpush(any(), any<String>()) }
     }
 
-    // ==================== insertBatch ====================
+    // ──── insertBatch ────
 
     @Test
     fun `insertBatch dispatches security events to ClickHouse`() = runBlocking {

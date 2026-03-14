@@ -234,7 +234,7 @@ class DashboardAlertServiceTest {
         notificationChannels = overrides.notificationChannels,
     )
 
-    // ---- createAlert tests ----
+    // ──── createAlert tests ────
 
     @Test
     fun `createAlert returns response with correct fields`() {
@@ -332,7 +332,7 @@ class DashboardAlertServiceTest {
         }
     }
 
-    // ---- listAlerts tests ----
+    // ──── listAlerts tests ────
 
     @Test
     fun `listAlerts returns alerts for dashboard and org`() {
@@ -380,7 +380,7 @@ class DashboardAlertServiceTest {
         assertTrue(alerts.isEmpty())
     }
 
-    // ---- updateAlert tests ----
+    // ──── updateAlert tests ────
 
     @Test
     fun `updateAlert modifies specified fields only`() {
@@ -546,7 +546,7 @@ class DashboardAlertServiceTest {
         assertFalse(updated.notificationChannels.discord)
     }
 
-    // ---- deleteAlert tests ----
+    // ──── deleteAlert tests ────
 
     @Test
     fun `deleteAlert removes existing alert`() {
@@ -590,7 +590,7 @@ class DashboardAlertServiceTest {
         assertEquals(1, alerts.size)
     }
 
-    // ---- CRUD round-trip ----
+    // ──── CRUD round-trip ────
 
     @Test
     fun `full CRUD lifecycle create list update delete`() {
@@ -622,7 +622,7 @@ class DashboardAlertServiceTest {
         assertTrue(service.listAlerts(dashboardId, ORG_ID).isEmpty())
     }
 
-    // ---- Condition validation ----
+    // ──── Condition validation ────
 
     @Test
     fun `createAlert accepts all valid conditions`() {

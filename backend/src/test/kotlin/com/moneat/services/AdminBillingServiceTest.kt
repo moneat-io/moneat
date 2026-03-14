@@ -64,7 +64,7 @@ class AdminBillingServiceTest {
             } get Subscriptions.id
         }
 
-    // --- grantPromotionalCredit ---
+    // ──── grantPromotionalCredit ────
 
     @Test
     fun `grantPromotionalCredit adds bonus GB`() {
@@ -150,11 +150,11 @@ class AdminBillingServiceTest {
         }
     }
 
-    // --- getPromotionalCreditHistory ---
+    // ──── getPromotionalCreditHistory ────
     // Note: getPromotionalCreditHistory and getAllPromotionalCreditGrants use implicit joins
     // that don't work with H2 (multiple FK paths to Users table). Tested in production with PostgreSQL.
 
-    // --- resetPromotionalCredits ---
+    // ──── resetPromotionalCredits ────
 
     @Test
     fun `resetPromotionalCredits zeros out bonuses`() {

@@ -165,7 +165,7 @@ class SharedServicesTest {
             } get Subscriptions.id
         }
 
-    // ─── TaskLock ────────────────────────────────────────────────────────
+    // ──── TaskLock ────
 
     @Test
     fun `TaskLock executes block when lock is acquired`() = runBlocking {
@@ -233,7 +233,7 @@ class SharedServicesTest {
         assertNull(result)
     }
 
-    // ─── CacheService (Redis unavailable) ────────────────────────────────
+    // ──── CacheService (Redis unavailable) ────
 
     @Test
     fun `invalidate does not throw when Redis unavailable`() {
@@ -257,7 +257,7 @@ class SharedServicesTest {
         assertNull(result)
     }
 
-    // ─── ArtifactCleanupService ──────────────────────────────────────────
+    // ──── ArtifactCleanupService ────
 
     @Test
     fun `ArtifactCleanupService start and stop lifecycle`() = runBlocking {
@@ -305,7 +305,7 @@ class SharedServicesTest {
         // No exception propagated - service survives errors
     }
 
-    // ─── RetentionPolicyService (extended) ────────────────────────────────
+    // ──── RetentionPolicyService (extended) ────
 
     @Test
     fun `getRetentionDaysForHost returns org retention`() = runBlocking {
@@ -437,7 +437,7 @@ class SharedServicesTest {
         assertNull(days)
     }
 
-    // ─── UsageTrackingService (extended) ─────────────────────────────────
+    // ──── UsageTrackingService (extended) ────
 
     @Test
     fun `recordOrgUsage records org-level event`() {
@@ -528,7 +528,7 @@ class SharedServicesTest {
         assertEquals(300L, bytes)
     }
 
-    // ─── normalizeVersionTag (additional edge cases) ────────────────────
+    // ──── normalizeVersionTag (additional edge cases) ────
 
     @Test
     fun `normalizeVersionTag handles version with prerelease dash suffix`() {
@@ -561,7 +561,7 @@ class SharedServicesTest {
         assertNull(normalizeVersionTag("1.2"))
     }
 
-    // ─── PulsePayload serialization ──────────────────────────────────────
+    // ──── PulsePayload serialization ────
 
     @Test
     fun `PulsePayload serializes and deserializes correctly`() {
@@ -606,7 +606,7 @@ class SharedServicesTest {
         assertFalse(payload.sslEnabled)
     }
 
-    // ─── PulseService static methods ─────────────────────────────────────
+    // ──── PulseService static methods ────
 
     @Test
     fun `PulseService isEnabled returns false when not self hosted`() {
@@ -629,7 +629,7 @@ class SharedServicesTest {
         }
     }
 
-    // ─── PulseService start and stop lifecycle ───────────────────────────
+    // ──── PulseService start and stop lifecycle ────
 
     @Test
     fun `PulseService start and stop does not throw`() {
@@ -643,7 +643,7 @@ class SharedServicesTest {
         scope.cancel()
     }
 
-    // ─── RetentionPolicyService with PRO tier ────────────────────────────
+    // ──── RetentionPolicyService with PRO tier ────
 
     @Test
     fun `getReplayRetentionDaysForOrganization returns PRO tier value`() = runBlocking {
@@ -700,7 +700,7 @@ class SharedServicesTest {
         assertEquals(30, days)
     }
 
-    // ─── UsageTrackingService ORG_PROJECT_ID_SENTINEL ────────────────────
+    // ──── UsageTrackingService ORG_PROJECT_ID_SENTINEL ────
 
     @Test
     fun `ORG_PROJECT_ID_SENTINEL constant is zero`() {

@@ -51,7 +51,7 @@ class AnalyticsServiceTest {
         ClickHouseClient.close()
     }
 
-    // --- Overview ---
+    // ──── Overview ────
 
     @Test
     fun `getOverview returns metrics from ClickHouse`() = runBlocking {
@@ -129,7 +129,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- Timeseries ---
+    // ──── Timeseries ────
 
     @Test
     fun `getTimeseries returns list of data points`() = runBlocking {
@@ -196,7 +196,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- Breakdown ---
+    // ──── Breakdown ────
 
     @Test
     fun `getBreakdown returns breakdown rows for session dimension`() = runBlocking {
@@ -265,7 +265,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- Pages, Entry Pages, Exit Pages (delegates to getBreakdown) ---
+    // ──── Pages, Entry Pages, Exit Pages (delegates to getBreakdown) ────
 
     @Test
     fun `getPages queries pathname dimension`() = runBlocking {
@@ -309,7 +309,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- Realtime ---
+    // ──── Realtime ────
 
     @Test
     fun `getRealtime returns visitor count from Redis`() {
@@ -341,7 +341,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- Funnel ---
+    // ──── Funnel ────
 
     @Test
     fun `getFunnel returns empty steps when fewer than 2 steps`() = runBlocking {
@@ -401,7 +401,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- Events ---
+    // ──── Events ────
 
     @Test
     fun `getEvents returns custom event breakdown`() = runBlocking {
@@ -438,7 +438,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- Filters ---
+    // ──── Filters ────
 
     @Test
     fun `getTimeseries applies is filter`() = runBlocking {
@@ -538,7 +538,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- Dimension resolution ---
+    // ──── Dimension resolution ────
 
     @Test
     fun `getBreakdown resolves all session dimensions to sessions table`() = runBlocking {
@@ -594,7 +594,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- Query structure ---
+    // ──── Query structure ────
 
     @Test
     fun `getOverview query includes project_id and date range`() = runBlocking {
@@ -626,7 +626,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- Filter column resolution edge cases ---
+    // ──── Filter column resolution edge cases ────
 
     @Test
     fun `filters with unknown property are ignored`() = runBlocking {
@@ -675,7 +675,7 @@ class AnalyticsServiceTest {
         }
     }
 
-    // --- JSON parsing edge cases ---
+    // ──── JSON parsing edge cases ────
 
     @Test
     fun `getTimeseries handles malformed JSON rows gracefully`() = runBlocking {

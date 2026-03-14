@@ -129,7 +129,7 @@ class InfraRoutesTest {
         coEvery { ClickHouseClient.execute(any(), any()) } returns mockResponse
     }
 
-    // ─── Unauthenticated requests ──────────────────────────────────────────
+    // ──── Unauthenticated requests ────
 
     @Test
     fun `GET infra events without auth returns 401`() = testApplication {
@@ -141,7 +141,7 @@ class InfraRoutesTest {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
-    // ─── No membership (empty org list) ────────────────────────────────────
+    // ──── No membership (empty org list) ────
 
     @Test
     fun `GET infra events with no membership returns empty list`() =
@@ -160,7 +160,7 @@ class InfraRoutesTest {
             assertTrue(response.bodyAsText().contains("\"events\":[]"))
         }
 
-    // ─── GET /infra/events ─────────────────────────────────────────────────
+    // ──── GET /infra/events ────
 
     @Test
     fun `GET infra events returns 200 with data`() = testApplication {
@@ -197,7 +197,7 @@ class InfraRoutesTest {
             assertTrue(response.bodyAsText().contains("\"events\":[]"))
         }
 
-    // ─── GET /infra/service-checks ─────────────────────────────────────────
+    // ──── GET /infra/service-checks ────
 
     @Test
     fun `GET infra service-checks returns 200 with data`() =
@@ -238,7 +238,7 @@ class InfraRoutesTest {
             )
         }
 
-    // ─── GET /infra/processes ──────────────────────────────────────────────
+    // ──── GET /infra/processes ────
 
     @Test
     fun `GET infra processes returns 200 with data`() =
@@ -275,7 +275,7 @@ class InfraRoutesTest {
             assertTrue(response.bodyAsText().contains("\"processes\":[]"))
         }
 
-    // ─── GET /infra/containers ─────────────────────────────────────────────
+    // ──── GET /infra/containers ────
 
     @Test
     fun `GET infra containers returns 200 with data`() =
@@ -314,7 +314,7 @@ class InfraRoutesTest {
             assertTrue(response.bodyAsText().contains("\"containers\":[]"))
         }
 
-    // ─── GET /infra/connections ────────────────────────────────────────────
+    // ──── GET /infra/connections ────
 
     @Test
     fun `GET infra connections returns 200 with data`() =
@@ -355,7 +355,7 @@ class InfraRoutesTest {
             )
         }
 
-    // ─── GET /infra/k8s-resources ──────────────────────────────────────────
+    // ──── GET /infra/k8s-resources ────
 
     @Test
     fun `GET infra k8s-resources returns 200 with data`() =
@@ -396,7 +396,7 @@ class InfraRoutesTest {
             )
         }
 
-    // ─── GET /infra/dbm/queries ────────────────────────────────────────────
+    // ──── GET /infra/dbm/queries ────
 
     @Test
     fun `GET infra dbm queries returns 200 with data`() =
@@ -435,7 +435,7 @@ class InfraRoutesTest {
             assertTrue(response.bodyAsText().contains("\"queries\":[]"))
         }
 
-    // ─── GET /infra/debugger/logs ──────────────────────────────────────────
+    // ──── GET /infra/debugger/logs ────
 
     @Test
     fun `GET infra debugger logs returns 200 with data`() =
@@ -474,7 +474,7 @@ class InfraRoutesTest {
             assertTrue(response.bodyAsText().contains("\"logs\":[]"))
         }
 
-    // ─── GET /infra/debugger/diagnostics ───────────────────────────────────
+    // ──── GET /infra/debugger/diagnostics ────
 
     @Test
     fun `GET infra debugger diagnostics returns 200 with data`() =
@@ -523,7 +523,7 @@ class InfraRoutesTest {
             )
         }
 
-    // ─── GET /infra/sbom ───────────────────────────────────────────────────
+    // ──── GET /infra/sbom ────
 
     @Test
     fun `GET infra sbom returns 200 with data`() = testApplication {
@@ -563,7 +563,7 @@ class InfraRoutesTest {
             )
         }
 
-    // ─── GET /network-devices ──────────────────────────────────────────────
+    // ──── GET /network-devices ────
 
     @Test
     fun `GET network-devices returns 200 with data`() =
@@ -602,7 +602,7 @@ class InfraRoutesTest {
             assertTrue(response.bodyAsText().contains("\"devices\":[]"))
         }
 
-    // ─── GET /network-devices/flows ────────────────────────────────────────
+    // ──── GET /network-devices/flows ────
 
     @Test
     fun `GET network-devices flows returns 200 with data`() =
@@ -641,7 +641,7 @@ class InfraRoutesTest {
             assertTrue(response.bodyAsText().contains("\"flows\":[]"))
         }
 
-    // ─── GET /network-devices/traps ────────────────────────────────────────
+    // ──── GET /network-devices/traps ────
 
     @Test
     fun `GET network-devices traps returns 200 with data`() =
@@ -680,7 +680,7 @@ class InfraRoutesTest {
             assertTrue(response.bodyAsText().contains("\"traps\":[]"))
         }
 
-    // ─── GET /network-devices/paths ────────────────────────────────────────
+    // ──── GET /network-devices/paths ────
 
     @Test
     fun `GET network-devices paths returns 200 with data`() =

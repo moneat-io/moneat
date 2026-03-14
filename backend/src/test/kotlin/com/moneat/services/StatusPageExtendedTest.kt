@@ -204,7 +204,7 @@ class StatusPageExtendedTest {
         return monitorId
     }
 
-    // ==================== Service: addCustomDomain ====================
+    // ──── Service: addCustomDomain ────
 
     @Test
     fun `addCustomDomain creates domain with verification token`() {
@@ -276,7 +276,7 @@ class StatusPageExtendedTest {
         }
     }
 
-    // ==================== Service: removeCustomDomain ====================
+    // ──── Service: removeCustomDomain ────
 
     @Test
     fun `removeCustomDomain removes existing domain`() {
@@ -333,7 +333,7 @@ class StatusPageExtendedTest {
         assertFalse(service.removeCustomDomain(pageId, otherOrgId, domain.id))
     }
 
-    // ==================== Service: verifyCustomDomain ====================
+    // ──── Service: verifyCustomDomain ────
 
     @Test
     fun `verifyCustomDomain returns null for non-existent page`() {
@@ -379,7 +379,7 @@ class StatusPageExtendedTest {
         assertNull(service.verifyCustomDomain(pageId, orgId, 99999))
     }
 
-    // ==================== Service: updateStatusPage slug validation ====================
+    // ──── Service: updateStatusPage slug validation ────
 
     @Test
     fun `updateStatusPage rejects invalid slug format`() {
@@ -451,7 +451,7 @@ class StatusPageExtendedTest {
         assertEquals(30, updated.historyDays)
     }
 
-    // ==================== Service: createStatusPage full fields ====================
+    // ──── Service: createStatusPage full fields ────
 
     @Test
     fun `createStatusPage stores all branding fields`() {
@@ -484,7 +484,7 @@ class StatusPageExtendedTest {
         assertFalse(page.isPublic)
     }
 
-    // ==================== Service: updateIncident resolvedAt ====================
+    // ──── Service: updateIncident resolvedAt ────
 
     @Test
     fun `updateIncident sets resolvedAt when status is resolved`() {
@@ -572,7 +572,7 @@ class StatusPageExtendedTest {
         assertNull(updated.resolvedAt)
     }
 
-    // ==================== Service: createIncidentUpdate resolvedAt ====================
+    // ──── Service: createIncidentUpdate resolvedAt ────
 
     @Test
     fun `createIncidentUpdate sets resolvedAt when status is resolved`() {
@@ -601,7 +601,7 @@ class StatusPageExtendedTest {
         assertNotNull(updated.resolvedAt)
     }
 
-    // ==================== Service: createIncident with maintenance ====================
+    // ──── Service: createIncident with maintenance ────
 
     @Test
     fun `createIncident with maintenance type and impact`() {
@@ -659,7 +659,7 @@ class StatusPageExtendedTest {
         assertEquals("Network connectivity degraded", incident.updates.first().message)
     }
 
-    // ==================== Service: addMonitors replaces existing ====================
+    // ──── Service: addMonitors replaces existing ────
 
     @Test
     fun `addMonitors replaces existing monitors`() {
@@ -772,7 +772,7 @@ class StatusPageExtendedTest {
         assertEquals(2, monitors[1].sortOrder)
     }
 
-    // ==================== Service: getPublicStatusPageByDomain ====================
+    // ──── Service: getPublicStatusPageByDomain ────
 
     @Test
     fun `getPublicStatusPageByDomain returns null for unverified domain`() = runBlocking {
@@ -803,7 +803,7 @@ class StatusPageExtendedTest {
         assertNull(result)
     }
 
-    // ==================== Service: deleteStatusPage cascades ====================
+    // ──── Service: deleteStatusPage cascades ────
 
     @Test
     fun `deleteStatusPage returns false for wrong org`() {
@@ -831,7 +831,7 @@ class StatusPageExtendedTest {
         assertFalse(service.deleteStatusPage(UUID.randomUUID(), orgId))
     }
 
-    // ==================== Service: listIncidents ordering ====================
+    // ──── Service: listIncidents ordering ────
 
     @Test
     fun `listIncidents returns incidents in descending creation order`() {
@@ -859,7 +859,7 @@ class StatusPageExtendedTest {
         assertEquals("First", incidents[1].title)
     }
 
-    // ==================== Service: updateIncident impact ====================
+    // ──── Service: updateIncident impact ────
 
     @Test
     fun `updateIncident updates impact field`() {
@@ -892,7 +892,7 @@ class StatusPageExtendedTest {
         assertEquals("major", updated.impact)
     }
 
-    // ==================== Route: public status page by slug ====================
+    // ──── Route: public status page by slug ────
 
     @Test
     fun `public status page returns 200 for public page`() = testApplication {
@@ -944,7 +944,7 @@ class StatusPageExtendedTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ==================== Route: public status page by domain ====================
+    // ──── Route: public status page by domain ────
 
     @Test
     fun `public status page by domain returns 404 for unknown domain`() = testApplication {
@@ -957,7 +957,7 @@ class StatusPageExtendedTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ==================== Route: verify custom domain ====================
+    // ──── Route: verify custom domain ────
 
     @Test
     fun `verify domain returns 400 for invalid parameters`() = testApplication {
@@ -1003,7 +1003,7 @@ class StatusPageExtendedTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ==================== Route: remove monitor happy path ====================
+    // ──── Route: remove monitor happy path ────
 
     @Test
     fun `remove monitor returns 204 when successfully removed`() = testApplication {
@@ -1044,7 +1044,7 @@ class StatusPageExtendedTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ==================== Route: remove monitor invalid UUID ====================
+    // ──── Route: remove monitor invalid UUID ────
 
     @Test
     fun `remove monitor returns 400 for invalid monitor uuid`() = testApplication {
@@ -1060,7 +1060,7 @@ class StatusPageExtendedTest {
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
-    // ==================== Route: add domain invalid params ====================
+    // ──── Route: add domain invalid params ────
 
     @Test
     fun `add domain returns 400 for invalid page uuid`() = testApplication {
@@ -1078,7 +1078,7 @@ class StatusPageExtendedTest {
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
-    // ==================== Route: remove domain invalid params ====================
+    // ──── Route: remove domain invalid params ────
 
     @Test
     fun `remove domain returns 400 for invalid page uuid`() = testApplication {
@@ -1109,7 +1109,7 @@ class StatusPageExtendedTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ==================== Route: update incident invalid UUIDs ====================
+    // ──── Route: update incident invalid UUIDs ────
 
     @Test
     fun `update incident returns 400 for invalid page uuid`() = testApplication {
@@ -1159,7 +1159,7 @@ class StatusPageExtendedTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
-    // ==================== Route: incident updates invalid params ====================
+    // ──── Route: incident updates invalid params ────
 
     @Test
     fun `post incident update returns 403 when user has no org`() = testApplication {
@@ -1196,7 +1196,7 @@ class StatusPageExtendedTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ==================== Route: add monitors happy path ====================
+    // ──── Route: add monitors happy path ────
 
     @Test
     fun `add monitors returns 200 with monitor list`() = testApplication {
@@ -1217,7 +1217,7 @@ class StatusPageExtendedTest {
         assertTrue(response.bodyAsText().contains("API"))
     }
 
-    // ==================== Route: get incidents happy path with data ====================
+    // ──── Route: get incidents happy path with data ────
 
     @Test
     fun `get incidents returns 200 with incident data`() = testApplication {
@@ -1242,7 +1242,7 @@ class StatusPageExtendedTest {
         assertTrue(response.bodyAsText().contains("Test Outage"))
     }
 
-    // ==================== Route: update status page with invalid slug ====================
+    // ──── Route: update status page with invalid slug ────
 
     @Test
     fun `update status page returns 400 for invalid slug via route`() = testApplication {
@@ -1261,7 +1261,7 @@ class StatusPageExtendedTest {
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
-    // ==================== Route: add domain with invalid domain format ====================
+    // ──── Route: add domain with invalid domain format ────
 
     @Test
     fun `add domain returns 400 for invalid domain format via route`() = testApplication {

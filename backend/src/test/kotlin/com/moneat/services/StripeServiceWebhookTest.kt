@@ -114,7 +114,7 @@ class StripeServiceWebhookTest {
         }
     }
 
-    // ============ CRITICAL SECURITY TESTS: Signature Verification ============
+    // ──── CRITICAL SECURITY TESTS: Signature Verification ────
 
     @Test
     fun `verifyAndParseEvent with valid signature succeeds`() {
@@ -207,7 +207,7 @@ class StripeServiceWebhookTest {
         assertTrue(exception is SignatureVerificationException || exception is IllegalStateException)
     }
 
-    // ============ EVENT IDEMPOTENCY TESTS ============
+    // ──── EVENT IDEMPOTENCY TESTS ────
 
     @Test
     fun `wasEventProcessed returns false for new event`() {
@@ -337,7 +337,7 @@ class StripeServiceWebhookTest {
         assertTrue(stripeService.wasEventProcessed(eventId))
     }
 
-    // ============ EVENT TYPE ROUTING TESTS ============
+    // ──── EVENT TYPE ROUTING TESTS ────
 
     @Test
     fun `customer subscription created event type is recognized`() {
@@ -405,7 +405,7 @@ class StripeServiceWebhookTest {
         }
     }
 
-    // ============ SUBSCRIPTION LIFECYCLE TESTS ============
+    // ──── SUBSCRIPTION LIFECYCLE TESTS ────
 
     @Test
     fun `syncSubscriptionFromStripe creates new subscription when none exists`() {
@@ -944,7 +944,7 @@ class StripeServiceWebhookTest {
         assertTrue(stripeService.wasEventProcessed(subId) || true) // Syncing itself isn't tracked
     }
 
-    // ============ EDGE CASES & ERROR HANDLING ============
+    // ──── EDGE CASES & ERROR HANDLING ────
 
     @Test
     fun `markEventProcessed with status variations stores correctly`() {
@@ -1014,7 +1014,7 @@ class StripeServiceWebhookTest {
         }
     }
 
-    // ============ HELPER METHODS ============
+    // ──── HELPER METHODS ────
 
     private fun generateValidSignature(
         payload: String,

@@ -189,7 +189,7 @@ class EventRoutesExtendedTest {
         return Pair(userId, projectId)
     }
 
-    // ─── GET /v1/projects ────────────────────────────────────────────────────
+    // ──── GET /v1/projects ────
 
     @Test
     fun `GET projects returns 200 with project list`() = testApplication {
@@ -213,7 +213,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
-    // ─── POST /v1/projects ───────────────────────────────────────────────────
+    // ──── POST /v1/projects ────
 
     @Test
     fun `POST projects returns 201 on success`() = testApplication {
@@ -265,7 +265,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
-    // ─── GET /v1/projects/{projectId} ────────────────────────────────────────
+    // ──── GET /v1/projects/{projectId} ────
 
     @Test
     fun `GET project detail returns 200`() = testApplication {
@@ -316,7 +316,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
-    // ─── PUT /v1/projects/{projectId} ────────────────────────────────────────
+    // ──── PUT /v1/projects/{projectId} ────
 
     @Test
     fun `PUT project returns 200 on success`() = testApplication {
@@ -347,7 +347,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
-    // ─── DELETE /v1/projects/{projectId} ─────────────────────────────────────
+    // ──── DELETE /v1/projects/{projectId} ────
 
     @Test
     fun `DELETE project returns 204 on success`() = testApplication {
@@ -374,7 +374,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
-    // ─── POST /v1/projects/{projectId}/targets ──────────────────────────────
+    // ──── POST /v1/projects/{projectId}/targets ────
 
     @Test
     fun `POST project target returns 201 on success`() = testApplication {
@@ -411,7 +411,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.Conflict, response.status)
     }
 
-    // ─── GET /v1/projects/{projectId}/stats ──────────────────────────────────
+    // ──── GET /v1/projects/{projectId}/stats ────
 
     @Test
     fun `GET project stats returns 200`() = testApplication {
@@ -457,7 +457,7 @@ class EventRoutesExtendedTest {
         coVerify { mockDashboardService.getProjectStats(projectId, "24h", any(), any()) }
     }
 
-    // ─── Trace routes ────────────────────────────────────────────────────────
+    // ──── Trace routes ────
 
     @Test
     fun `GET trace detail returns 200`() = testApplication {
@@ -500,7 +500,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ─── Span routes ─────────────────────────────────────────────────────────
+    // ──── Span routes ────
 
     @Test
     fun `GET span detail returns 200`() = testApplication {
@@ -543,7 +543,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ─── Replay routes ───────────────────────────────────────────────────────
+    // ──── Replay routes ────
 
     @Test
     fun `GET replays returns 200`() = testApplication {
@@ -703,7 +703,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
-    // ─── Feedback routes ─────────────────────────────────────────────────────
+    // ──── Feedback routes ────
 
     @Test
     fun `GET feedback list returns 200`() = testApplication {
@@ -803,7 +803,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
-    // ─── Release routes ──────────────────────────────────────────────────────
+    // ──── Release routes ────
 
     @Test
     fun `GET releases returns 200`() = testApplication {
@@ -874,7 +874,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
-    // ─── GET /v1/user ────────────────────────────────────────────────────────
+    // ──── GET /v1/user ────
 
     @Test
     fun `GET user returns 200 with user data`() = testApplication {
@@ -895,7 +895,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
-    // ─── Notification preferences ────────────────────────────────────────────
+    // ──── Notification preferences ────
 
     @Test
     fun `GET notification-preferences returns 200 with defaults`() = testApplication {
@@ -967,7 +967,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
-    // ─── Alert notification preferences ──────────────────────────────────────
+    // ──── Alert notification preferences ────
 
     @Test
     fun `GET alert-notification-preferences returns 200`() = testApplication {
@@ -984,7 +984,7 @@ class EventRoutesExtendedTest {
         assertTrue(response.bodyAsText().contains("preferences"))
     }
 
-    // ─── Demo user access ────────────────────────────────────────────────────
+    // ──── Demo user access ────
 
     @Test
     fun `demo user can access replays`() = testApplication {
@@ -1038,7 +1038,7 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.OK, response.status)
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // ──── Helpers ────
 
     private fun sampleProject() = ProjectResponse(
         id = 1L,

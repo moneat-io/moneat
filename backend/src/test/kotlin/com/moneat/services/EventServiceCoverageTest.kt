@@ -144,7 +144,7 @@ class EventServiceCoverageTest {
         )
     }
 
-    // ===================== processEnvelope routing =====================
+    // ──── processEnvelope routing ────
 
     @Test
     fun `processEnvelope routes event item to storeEvent`() = runBlocking {
@@ -396,7 +396,7 @@ class EventServiceCoverageTest {
         coVerify(atLeast = 1) { eventRepository.insertTransaction(any()) }
     }
 
-    // ===================== storeTransaction with spans =====================
+    // ──── storeTransaction with spans ────
 
     @Test
     fun `storeTransaction inserts spans from transaction`() = runBlocking {
@@ -595,7 +595,7 @@ class EventServiceCoverageTest {
         }
     }
 
-    // ===================== storeEvent crash detection =====================
+    // ──── storeEvent crash detection ────
 
     @Test
     fun `storeEvent detects unhandled exception as crash with fatal level`() = runBlocking {
@@ -812,7 +812,7 @@ class EventServiceCoverageTest {
         assertEquals("1.5.0", data.sdkVersion)
     }
 
-    // ===================== storeFeedback =====================
+    // ──── storeFeedback ────
 
     @Test
     fun `storeFeedback with projectId 0 is rejected`() = runBlocking {
@@ -899,7 +899,7 @@ class EventServiceCoverageTest {
         assertTrue(fbSlot.captured.timestampMs <= after)
     }
 
-    // ===================== storeReplayEvent =====================
+    // ──── storeReplayEvent ────
 
     @Test
     fun `storeReplayEvent with projectId 0 is rejected`() = runBlocking {
@@ -982,7 +982,7 @@ class EventServiceCoverageTest {
         assertEquals(3, replaySlot.captured.segmentId)
     }
 
-    // ===================== processStoreEvent =====================
+    // ──── processStoreEvent ────
 
     @Test
     fun `processStoreEvent parses and stores event`() = runBlocking {
@@ -1006,7 +1006,7 @@ class EventServiceCoverageTest {
         assertEquals("IOError", errorSlot.captured.exceptionType)
     }
 
-    // ===================== verifyProjectKey caching =====================
+    // ──── verifyProjectKey caching ────
 
     @Test
     fun `verifyProjectKey returns cached result on second call`() {
@@ -1030,7 +1030,7 @@ class EventServiceCoverageTest {
         verify(exactly = 1) { eventRepository.getOrganizationIdForProject(testProjectId) }
     }
 
-    // ===================== storeTransaction when insert fails =====================
+    // ──── storeTransaction when insert fails ────
 
     @Test
     fun `storeTransaction returns false when insert fails`() = runBlocking {
@@ -1066,7 +1066,7 @@ class EventServiceCoverageTest {
         coVerify(exactly = 0) { eventRepository.insertSpans(any()) }
     }
 
-    // ===================== storeEvent when insert fails =====================
+    // ──── storeEvent when insert fails ────
 
     @Test
     fun `processEnvelope does not throw when insert fails`() = runBlocking {
@@ -1092,7 +1092,7 @@ class EventServiceCoverageTest {
         // Should not crash
     }
 
-    // ===================== AI span type classification =====================
+    // ──── AI span type classification ────
 
     @Test
     fun `AI span type classification covers all patterns`() = runBlocking {

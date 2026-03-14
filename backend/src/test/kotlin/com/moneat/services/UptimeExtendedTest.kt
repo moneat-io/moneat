@@ -128,7 +128,7 @@ class UptimeExtendedTest {
         every { UrlValidator.validateExternalUrl(any()) } returns Unit
     }
 
-    // ─── Push & unknown types ────────────────────────────────────────────
+    // ──── Push & unknown types ────
 
     @Test
     fun `push monitor returns pending status`() = runBlocking {
@@ -144,7 +144,7 @@ class UptimeExtendedTest {
         assertTrue(result.message.contains("Unknown monitor type"))
     }
 
-    // ─── HTTP checks ─────────────────────────────────────────────────────
+    // ──── HTTP checks ────
 
     @Test
     fun `http check succeeds with 200`() = runBlocking {
@@ -349,7 +349,7 @@ class UptimeExtendedTest {
         assertTrue(result.message.contains("No URL configured"))
     }
 
-    // ─── Keyword checks ─────────────────────────────────────────────────
+    // ──── Keyword checks ────
 
     @Test
     fun `keyword check succeeds when keyword found`() = runBlocking {
@@ -420,7 +420,7 @@ class UptimeExtendedTest {
         }
     }
 
-    // ─── JSON query checks ──────────────────────────────────────────────
+    // ──── JSON query checks ────
 
     @Test
     fun `json query check succeeds when value matches`() = runBlocking {
@@ -498,7 +498,7 @@ class UptimeExtendedTest {
         }
     }
 
-    // ─── TCP checks ─────────────────────────────────────────────────────
+    // ──── TCP checks ────
 
     @Test
     fun `tcp check succeeds connecting to local server`() = runBlocking {
@@ -533,7 +533,7 @@ class UptimeExtendedTest {
         assertTrue(result.message.contains("No hostname configured"))
     }
 
-    // ─── WebSocket checks ───────────────────────────────────────────────
+    // ──── WebSocket checks ────
 
     @Test
     fun `websocket check converts ws scheme to http`() = runBlocking {
@@ -564,7 +564,7 @@ class UptimeExtendedTest {
         assertEquals(0, result.status)
     }
 
-    // ─── Docker checks ──────────────────────────────────────────────────
+    // ──── Docker checks ────
 
     @Test
     fun `docker http check detects running container`() = runBlocking {
@@ -608,7 +608,7 @@ class UptimeExtendedTest {
         }
     }
 
-    // ─── Database checks ────────────────────────────────────────────────
+    // ──── Database checks ────
 
     @Test
     fun `database check succeeds with SELECT query`() = runBlocking {
@@ -642,7 +642,7 @@ class UptimeExtendedTest {
         assertTrue(result.message.contains("No connection string configured"))
     }
 
-    // ─── SSL check edge cases ───────────────────────────────────────────
+    // ──── SSL check edge cases ────
 
     @Test
     fun `ssl check with non-existent host fails`() = runBlocking {
@@ -653,7 +653,7 @@ class UptimeExtendedTest {
         assertTrue(result.message.contains("SSL check failed"))
     }
 
-    // ─── Ping check ─────────────────────────────────────────────────────
+    // ──── Ping check ────
 
     @Test
     fun `ping check reports result for localhost`() = runBlocking {
@@ -665,7 +665,7 @@ class UptimeExtendedTest {
         assertTrue(result.responseTimeMs >= 0)
     }
 
-    // ─── DNS check edge cases ───────────────────────────────────────────
+    // ──── DNS check edge cases ────
 
     @Test
     fun `dns check uses default A record type when not specified`() = runBlocking {
@@ -676,7 +676,7 @@ class UptimeExtendedTest {
         assertEquals(0, result.status)
     }
 
-    // ─── Timeout handling ───────────────────────────────────────────────
+    // ──── Timeout handling ────
 
     @Test
     fun `executor catches timeout for slow http check`() = runBlocking {
@@ -696,7 +696,7 @@ class UptimeExtendedTest {
         }
     }
 
-    // ─── Scheduler: retry behavior ──────────────────────────────────────
+    // ──── Scheduler: retry behavior ────
 
     @Test
     fun `scheduler retries on failure and succeeds on second attempt`() = runBlocking {

@@ -64,7 +64,7 @@ class EventServicesExtendedTest {
         private const val EMAIL_A_B = "a@b.com"
     }
 
-    // =========== shared mocks ===========
+    // ──── shared mocks ────
     private lateinit var issueRepository: IssueRepository
     private lateinit var queryHelper: DashboardQueryHelper
     private lateinit var issueService: IssueService

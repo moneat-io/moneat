@@ -165,7 +165,7 @@ class EventApiRoutesTest {
         return Pair(userId, projectId)
     }
 
-    // ─── Authentication ──────────────────────────────────────────────────────
+    // ──── Authentication ────
 
     @Test
     fun `GET issues returns 401 without auth token`() = testApplication {
@@ -188,7 +188,7 @@ class EventApiRoutesTest {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
-    // ─── Access control ──────────────────────────────────────────────────────
+    // ──── Access control ────
 
     @Test
     fun `GET issues returns 403 when user lacks project access`() = testApplication {
@@ -226,7 +226,7 @@ class EventApiRoutesTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
-    // ─── GET /v1/projects/{projectId}/issues ─────────────────────────────────
+    // ──── GET /v1/projects/{projectId}/issues ────
 
     @Test
     fun `GET issues returns 200 with issue list`() = testApplication {
@@ -271,7 +271,7 @@ class EventApiRoutesTest {
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
-    // ─── GET /v1/issues/{issueId} ────────────────────────────────────────────
+    // ──── GET /v1/issues/{issueId} ────
 
     @Test
     fun `GET issue detail returns 200 with issue data`() = testApplication {
@@ -302,7 +302,7 @@ class EventApiRoutesTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ─── GET /v1/issues/{issueId}/events ─────────────────────────────────────
+    // ──── GET /v1/issues/{issueId}/events ────
 
     @Test
     fun `GET issue events returns 200 with event list`() = testApplication {
@@ -336,7 +336,7 @@ class EventApiRoutesTest {
         coVerify { mockDashboardService.getIssueEvents(ISSUE_EV_2, 5, any()) }
     }
 
-    // ─── GET /v1/issues/{issueId}/transactions ───────────────────────────────
+    // ──── GET /v1/issues/{issueId}/transactions ────
 
     @Test
     fun `GET issue transactions returns 200`() = testApplication {
@@ -370,7 +370,7 @@ class EventApiRoutesTest {
         coVerify { mockDashboardService.getIssueTransactions(ISSUE_TXN_2, 5, any()) }
     }
 
-    // ─── GET /v1/projects/{projectId}/transactions ───────────────────────────
+    // ──── GET /v1/projects/{projectId}/transactions ────
 
     @Test
     fun `GET project transactions returns 200`() = testApplication {
@@ -407,7 +407,7 @@ class EventApiRoutesTest {
         }
     }
 
-    // ─── GET /v1/projects/{projectId}/transactions/stats ─────────────────────
+    // ──── GET /v1/projects/{projectId}/transactions/stats ────
 
     @Test
     fun `GET performance stats returns 200`() = testApplication {
@@ -444,7 +444,7 @@ class EventApiRoutesTest {
         }
     }
 
-    // ─── GET /v1/transactions/{eventId} ──────────────────────────────────────
+    // ──── GET /v1/transactions/{eventId} ────
 
     @Test
     fun `GET transaction detail returns 200`() = testApplication {
@@ -475,7 +475,7 @@ class EventApiRoutesTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ─── GET /v1/transactions/{eventId}/spans ────────────────────────────────
+    // ──── GET /v1/transactions/{eventId}/spans ────
 
     @Test
     fun `GET transaction spans returns 200`() = testApplication {
@@ -506,7 +506,7 @@ class EventApiRoutesTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ─── GET /v1/transactions/{eventId}/related-errors ───────────────────────
+    // ──── GET /v1/transactions/{eventId}/related-errors ────
 
     @Test
     fun `GET related errors returns 200`() = testApplication {
@@ -540,7 +540,7 @@ class EventApiRoutesTest {
         coVerify { mockDashboardService.getRelatedErrorsForTransaction(TXN_REL_2, 5) }
     }
 
-    // ─── GET /v1/events/{eventId}/issue ──────────────────────────────────────
+    // ──── GET /v1/events/{eventId}/issue ────
 
     @Test
     fun `GET event issue returns 200 with issueId`() = testApplication {
@@ -584,7 +584,7 @@ class EventApiRoutesTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
-    // ─── PATCH /v1/issues/{issueId} ──────────────────────────────────────────
+    // ──── PATCH /v1/issues/{issueId} ────
 
     @Test
     fun `PATCH issue returns 204 on success`() = testApplication {
@@ -614,7 +614,7 @@ class EventApiRoutesTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
-    // ─── Demo user access ────────────────────────────────────────────────────
+    // ──── Demo user access ────
 
     @Test
     fun `demo user can access issues without explicit project membership`() = testApplication {
@@ -629,7 +629,7 @@ class EventApiRoutesTest {
         assertEquals(HttpStatusCode.OK, response.status)
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // ──── Helpers ────
 
     private fun sampleIssue(projectId: Long = 1L) = IssueResponse(
         id = "issue-1",

@@ -130,7 +130,7 @@ class LogServicesExtendedTest {
         groupBy = groupBy
     )
 
-    // ==================== topValues ====================
+    // ──── topValues ────
 
     @Test
     fun `topValues returns field values with counts`() = runBlocking {
@@ -221,7 +221,7 @@ class LogServicesExtendedTest {
         }
     }
 
-    // ==================== exportCsv ====================
+    // ──── exportCsv ────
 
     @Test
     fun `exportCsv returns CSV with header and rows`() = runBlocking {
@@ -274,7 +274,7 @@ class LogServicesExtendedTest {
         }
     }
 
-    // ==================== getFilterOptions ====================
+    // ──── getFilterOptions ────
 
     @Test
     fun `getFilterOptions returns services environments and tagKeys`() = runBlocking {
@@ -319,7 +319,7 @@ class LogServicesExtendedTest {
         }
     }
 
-    // ==================== getFilterOptionsWithCounts ====================
+    // ──── getFilterOptionsWithCounts ────
 
     @Test
     fun `getFilterOptionsWithCounts returns services and environments with counts`() = runBlocking {
@@ -351,7 +351,7 @@ class LogServicesExtendedTest {
         }
     }
 
-    // ==================== getTagValues ====================
+    // ──── getTagValues ────
 
     @Test
     fun `getTagValues returns distinct tag values`() = runBlocking {
@@ -431,7 +431,7 @@ class LogServicesExtendedTest {
         }
     }
 
-    // ==================== buildTagCondition ====================
+    // ──── buildTagCondition ────
 
     @Test
     fun `buildTagCondition returns empty for blank key`() {
@@ -498,7 +498,7 @@ class LogServicesExtendedTest {
         assertTrue(result.isNotBlank())
     }
 
-    // ==================== queryLogs edge cases ====================
+    // ──── queryLogs edge cases ────
 
     private fun queryLogsEmptyHandler(captureQueries: MutableList<String>? = null) =
         queryBasedClickHouseHandler(
@@ -647,7 +647,7 @@ class LogServicesExtendedTest {
         }
     }
 
-    // ==================== aggregateLogs edge cases ====================
+    // ──── aggregateLogs edge cases ────
 
     @Test
     fun `aggregateLogs with no groupBy returns _total buckets`() = runBlocking {
@@ -768,7 +768,7 @@ class LogServicesExtendedTest {
         }
     }
 
-    // ==================== parseOtlpJson edge cases ====================
+    // ──── parseOtlpJson edge cases ────
 
     @Test
     fun `parseOtlpJson handles int and double anyValue types`() {
@@ -836,7 +836,7 @@ class LogServicesExtendedTest {
         assertTrue(result.isEmpty())
     }
 
-    // ==================== liveChannel ====================
+    // ──── liveChannel ────
 
     @Test
     fun `liveChannel returns correct channel name`() {
@@ -845,7 +845,7 @@ class LogServicesExtendedTest {
         assertEquals("log:live:0", service.liveChannel(0L))
     }
 
-    // ==================== estimateBillableBytes edge cases ====================
+    // ──── estimateBillableBytes edge cases ────
 
     @Test
     fun `estimateBillableBytes skips entries with blank message`() {
@@ -858,7 +858,7 @@ class LogServicesExtendedTest {
         assertEquals(9L, service.estimateBillableBytes(entries))
     }
 
-    // ==================== autoInterval edge cases ====================
+    // ──── autoInterval edge cases ────
 
     @Test
     fun `autoInterval exactly at boundary returns correct interval`() {
@@ -871,7 +871,7 @@ class LogServicesExtendedTest {
         assertEquals("1h", service.autoInterval(0L, 604_800_000L))
     }
 
-    // ==================== Helper classes ====================
+    // ──── Helper classes ────
 
     /**
      * Simple fake LogRepository that returns empty results.

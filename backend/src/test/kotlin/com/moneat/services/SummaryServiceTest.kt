@@ -256,7 +256,7 @@ class SummaryServiceTest {
         exchange.respond(200, body, TEXT_PLAIN)
     }
 
-    // ---- getInfrastructureSummary tests ----
+    // ──── getInfrastructureSummary tests ────
 
     @Test
     fun `getInfrastructureSummary returns host counts and monitors`() = runBlocking {
@@ -406,7 +406,7 @@ class SummaryServiceTest {
         assertEquals("host-1", result.topErrorRateHosts.first().systemName)
     }
 
-    // ---- getOvernightSummary tests ----
+    // ──── getOvernightSummary tests ────
 
     @Test
     fun `getOvernightSummary returns data with ClickHouse responses`() = runBlocking {
@@ -580,7 +580,7 @@ class SummaryServiceTest {
         }
     }
 
-    // ---- getWeeklyReport tests ----
+    // ──── getWeeklyReport tests ────
 
     @Test
     fun `getWeeklyReport returns complete report with ClickHouse data`() = runBlocking {
@@ -794,7 +794,7 @@ class SummaryServiceTest {
         }
     }
 
-    // ---- getIncidentContext tests ----
+    // ──── getIncidentContext tests ────
 
     @Test
     fun `getIncidentContext with incident log entry`() = runBlocking {
@@ -1124,7 +1124,7 @@ class SummaryServiceTest {
         }
     }
 
-    // ---- ClickHouse error handling tests ----
+    // ──── ClickHouse error handling tests ────
 
     @Test
     fun `ClickHouse error returns safe defaults`() = runBlocking {

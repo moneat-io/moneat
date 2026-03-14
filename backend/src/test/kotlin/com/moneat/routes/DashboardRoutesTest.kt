@@ -225,7 +225,7 @@ class DashboardRoutesTest {
         }
     }
 
-    // ─── Auth ──────────────────────────────────────────────────
+    // ──── Auth ────
 
     @Test
     fun `GET dashboards returns 401 when unauthenticated`() =
@@ -246,7 +246,7 @@ class DashboardRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }
 
-    // ─── Dashboard CRUD ────────────────────────────────────────
+    // ──── Dashboard CRUD ────
 
     @Test
     fun `GET dashboards returns 200 with list`() =
@@ -407,7 +407,7 @@ class DashboardRoutesTest {
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
 
-    // ─── Folder management ─────────────────────────────────────
+    // ──── Folder management ────
 
     @Test
     fun `GET folders returns 200 with list`() =
@@ -533,7 +533,7 @@ class DashboardRoutesTest {
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
 
-    // ─── Favorites and folder move ─────────────────────────────
+    // ──── Favorites and folder move ────
 
     @Test
     fun `POST favorite returns 200`() = testApplication {
@@ -590,7 +590,7 @@ class DashboardRoutesTest {
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
 
-    // ─── Query endpoints ───────────────────────────────────────
+    // ──── Query endpoints ────
 
     @Test
     fun `POST query returns 400 for invalid dashboard id`() =
@@ -637,7 +637,7 @@ class DashboardRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
 
-    // ─── Import / Export ───────────────────────────────────────
+    // ──── Import / Export ────
 
     @Test
     fun `POST import returns 400 for invalid JSON`() =
@@ -744,7 +744,7 @@ class DashboardRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
 
-    // ─── Dashboard alerts ──────────────────────────────────────
+    // ──── Dashboard alerts ────
 
     @Test
     fun `GET dashboard alerts returns 200`() =
@@ -878,7 +878,7 @@ class DashboardRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
 
-    // ─── Datasources + templates ───────────────────────────────
+    // ──── Datasources + templates ────
 
     @Test
     fun `GET dashboard datasources returns 200`() =
@@ -917,7 +917,7 @@ class DashboardRoutesTest {
             assertEquals(HttpStatusCode.OK, r.status)
         }
 
-    // ─── Search ────────────────────────────────────────────────
+    // ──── Search ────
 
     @Test
     fun `GET search returns 200 with results`() =
@@ -940,7 +940,7 @@ class DashboardRoutesTest {
             assertEquals(HttpStatusCode.OK, r.status)
         }
 
-    // ─── Custom data source management ─────────────────────────
+    // ──── Custom data source management ────
 
     @Test
     fun `GET custom datasources returns 200`() =

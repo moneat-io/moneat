@@ -101,7 +101,7 @@ class LogIndexServiceTest {
         )
     )
 
-    // --- create ---
+    // ──── create ────
 
     @Test
     fun `create inserts index with correct fields`() {
@@ -175,7 +175,7 @@ class LogIndexServiceTest {
         assertNull(result.dailyQuotaGb)
     }
 
-    // --- getById ---
+    // ──── getById ────
 
     @Test
     fun `getById returns index for correct org`() {
@@ -200,7 +200,7 @@ class LogIndexServiceTest {
         assertNull(result)
     }
 
-    // --- list ---
+    // ──── list ────
 
     @Test
     fun `list returns all indexes for organization`() {
@@ -221,7 +221,7 @@ class LogIndexServiceTest {
         assertTrue(results.isEmpty())
     }
 
-    // --- update ---
+    // ──── update ────
 
     @Test
     fun `update modifies name`() {
@@ -348,7 +348,7 @@ class LogIndexServiceTest {
         assertEquals(created.name, updated.name)
     }
 
-    // --- delete ---
+    // ──── delete ────
 
     @Test
     fun `delete removes an existing index`() {
@@ -370,7 +370,7 @@ class LogIndexServiceTest {
         assertNotNull(service.getById(ORG_ID, created.id))
     }
 
-    // --- matchIndex ---
+    // ──── matchIndex ────
 
     @Test
     fun `matchIndex returns name for blank filter query`() = runBlocking {
@@ -596,7 +596,7 @@ class LogIndexServiceTest {
         assertEquals("", noMatch)
     }
 
-    // --- testFilter (ClickHouse) ---
+    // ──── testFilter (ClickHouse) ────
 
     @Test
     fun `testFilter returns counts from ClickHouse`() = runBlocking {

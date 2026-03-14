@@ -323,3 +323,4 @@ Production deployment uses blue/green strategy on DigitalOcean droplet:
 - Backend tests use H2 in-memory database (not PostgreSQL)
 - Test fixtures in `backend/src/test/kotlin/`
 - E2E tests require running infrastructure (`docker-compose up -d`)
+- Use `// ──── Label ────` (4 × `─` U+2500 on each side) to separate logical sections within a test file

@@ -58,7 +58,7 @@ class DashboardQueryHelperTest {
         ClickHouseClient.close()
     }
 
-    // ============ normalizeUuid ============
+    // ──── normalizeUuid ────
 
     @Test
     fun `normalizeUuid returns standard UUID unchanged`() {
@@ -97,7 +97,7 @@ class DashboardQueryHelperTest {
         assertEquals(NORMALIZED_UUID, helper.normalizeUuid(uuid))
     }
 
-    // ============ getPeriodConfig ============
+    // ──── getPeriodConfig ────
 
     @Test
     fun `getPeriodConfig returns correct config for 24h`() {
@@ -139,7 +139,7 @@ class DashboardQueryHelperTest {
         assertEquals(7 * 24 * 60, config.periodMinutes)
     }
 
-    // ============ demoNowClause ============
+    // ──── demoNowClause ────
 
     @Test
     fun `demoNowClause returns now() when no epoch provided`() {
@@ -152,7 +152,7 @@ class DashboardQueryHelperTest {
         assertEquals("toDateTime64(${DEMO_EPOCH / 1000.0}, 3)", result)
     }
 
-    // ============ timestampRetentionClause ============
+    // ──── timestampRetentionClause ────
 
     @Test
     fun `timestampRetentionClause uses now() without demo epoch`() {
@@ -167,7 +167,7 @@ class DashboardQueryHelperTest {
         assertEquals(expected, clause)
     }
 
-    // ============ buildTransactionFilterClause ============
+    // ──── buildTransactionFilterClause ────
 
     @Test
     fun `buildTransactionFilterClause returns empty for null params`() {
@@ -200,7 +200,7 @@ class DashboardQueryHelperTest {
         assertTrue(clause.contains("transaction_op = 'db.query'"))
     }
 
-    // ============ parseStringMap ============
+    // ──── parseStringMap ────
 
     @Test
     fun `parseStringMap returns empty map for null`() {
@@ -220,7 +220,7 @@ class DashboardQueryHelperTest {
         assertEquals(2, result.size)
     }
 
-    // ============ parseTraceContext ============
+    // ──── parseTraceContext ────
 
     @Test
     fun `parseTraceContext extracts trace from contexts JSON`() {
@@ -240,7 +240,7 @@ class DashboardQueryHelperTest {
         assertNull(helper.parseTraceContext("""{"os":{"name":"Linux"}}"""))
     }
 
-    // ============ extractUserInfo ============
+    // ──── extractUserInfo ────
 
     @Test
     fun `extractUserInfo returns UserInfo when fields present`() {
@@ -271,7 +271,7 @@ class DashboardQueryHelperTest {
         assertEquals("only@email.com", user.email)
     }
 
-    // ============ mapEventRow ============
+    // ──── mapEventRow ────
 
     @Test
     fun `mapEventRow maps all fields correctly`() {
@@ -329,7 +329,7 @@ class DashboardQueryHelperTest {
         assertEquals("error", event.level)
     }
 
-    // ============ ClickHouse query execution (MockHttpServer) ============
+    // ──── ClickHouse query execution (MockHttpServer) ────
 
     @Test
     fun `executeProjectIdQuery returns project_id from response`() = runBlocking {

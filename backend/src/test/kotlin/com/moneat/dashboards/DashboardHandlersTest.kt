@@ -94,7 +94,7 @@ class DashboardHandlersTest {
     private val postgresHandler = PostgresHandler(ConcurrentHashMap())
     private val mysqlHandler = MySQLHandler(ConcurrentHashMap())
 
-    // ==================== UnsupportedHandler ====================
+    // ──── UnsupportedHandler ────
 
     @Test
     fun `UnsupportedHandler testConnection returns not implemented`() =
@@ -144,7 +144,7 @@ class DashboardHandlersTest {
         }
     }
 
-    // ==================== HttpApiHandler URL building ====================
+    // ──── HttpApiHandler URL building ────
 
     @Test
     fun `buildUrlString normalizes bare IPv6 literal`() {
@@ -179,7 +179,7 @@ class DashboardHandlersTest {
         assertEquals("http://[::1]:$DEFAULT_PORT", url)
     }
 
-    // ==================== PrometheusHandler: internal parsing ====================
+    // ──── PrometheusHandler: internal parsing ────
 
     @Test
     fun `parsePrometheusResponse handles NaN as null`() {
@@ -249,7 +249,7 @@ class DashboardHandlersTest {
         assertEquals(JsonPrimitive("api"), rows[0]["job"])
     }
 
-    // ==================== PrometheusHandler: time resolution ====================
+    // ──── PrometheusHandler: time resolution ────
 
     @Test
     fun `resolveRelativeTimeSec handles seconds`() {
@@ -302,7 +302,7 @@ class DashboardHandlersTest {
         )
     }
 
-    // ==================== PrometheusHandler: MockHttpServer ====================
+    // ──── PrometheusHandler: MockHttpServer ────
 
     @Test
     fun `Prometheus testConnection parses metric names`() =
@@ -490,7 +490,7 @@ class DashboardHandlersTest {
             assertTrue(vals.isEmpty())
         }
 
-    // ==================== ElasticsearchHandler ====================
+    // ──── ElasticsearchHandler ────
 
     @Test
     fun `Elasticsearch testConnection succeeds on 200`() =
@@ -656,7 +656,7 @@ class DashboardHandlersTest {
             }
         }
 
-    // ==================== LokiHandler ====================
+    // ──── LokiHandler ────
 
     @Test
     fun `Loki testConnection succeeds`() = withSelfHosted {
@@ -786,7 +786,7 @@ class DashboardHandlersTest {
             }
         }
 
-    // ==================== GraphiteHandler ====================
+    // ──── GraphiteHandler ────
 
     @Test
     fun `Graphite testConnection succeeds`() = withSelfHosted {
@@ -864,7 +864,7 @@ class DashboardHandlersTest {
             }
         }
 
-    // ==================== InfluxDBHandler ====================
+    // ──── InfluxDBHandler ────
 
     @Test
     fun `InfluxDB testConnection succeeds`() = withSelfHosted {
@@ -952,7 +952,7 @@ class DashboardHandlersTest {
             }
         }
 
-    // ==================== JdbcHandler: SQL validation ====================
+    // ──── JdbcHandler: SQL validation ────
 
     @Test
     fun `validateSqlQuery strips line comments`() {
@@ -995,7 +995,7 @@ class DashboardHandlersTest {
         }
     }
 
-    // ==================== PostgresHandler: forbidden patterns ====================
+    // ──── PostgresHandler: forbidden patterns ────
 
     @Test
     fun `PostgresHandler rejects VACUUM`() {
@@ -1051,7 +1051,7 @@ class DashboardHandlersTest {
         }
     }
 
-    // ==================== CloudWatchHandler ====================
+    // ──── CloudWatchHandler ────
 
     @Test
     fun `CloudWatch getSchema returns fixed fields`() = runBlocking {
@@ -1069,7 +1069,7 @@ class DashboardHandlersTest {
         assertEquals("double", fields[1].type)
     }
 
-    // ==================== JdbcHandlerCommon ====================
+    // ──── JdbcHandlerCommon ────
     // EXEC, EXECUTE, COPY are in JDBC_COMMON_FORBIDDEN; test via handler that uses it.
 
     @Test
@@ -1121,7 +1121,7 @@ class DashboardHandlersTest {
         assertFalse(insertPattern.containsMatchIn("reinsert"))
     }
 
-    // ==================== PostgresHandler: companion ====================
+    // ──── PostgresHandler: companion ────
 
     @Test
     fun `POSTGRESQL_FORBIDDEN includes extra keywords`() {

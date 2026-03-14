@@ -42,7 +42,7 @@ class QueryDslTest {
         encodeDefaults = true
     }
 
-    // --- DataSource ---
+    // ──── DataSource ────
 
     @Test
     fun `DataSource fromString resolves known sources`() {
@@ -62,7 +62,7 @@ class QueryDslTest {
         assertNull(DataSource.fromString("nonexistent"))
     }
 
-    // --- AggFunction ---
+    // ──── AggFunction ────
 
     @Test
     fun `AggFunction toClickHouse generates correct SQL for count`() {
@@ -100,7 +100,7 @@ class QueryDslTest {
         assertEquals("max(duration)", AggFunction.MAX.toClickHouse("duration"))
     }
 
-    // --- QueryDsl serialization ---
+    // ──── QueryDsl serialization ────
 
     @Test
     fun `QueryDsl serializes and deserializes correctly`() {
@@ -184,7 +184,7 @@ class QueryDslTest {
         assertEquals("IS NOT NULL", FilterOp.IS_NOT_NULL.value)
     }
 
-    // --- MetricDef ---
+    // ──── MetricDef ────
 
     @Test
     fun `MetricDef with null field works for count`() {
@@ -193,7 +193,7 @@ class QueryDslTest {
         assertEquals("count()", metric.function.toClickHouse(metric.field))
     }
 
-    // --- DataSourceInfo ---
+    // ──── DataSourceInfo ────
 
     @Test
     fun `DataSourceInfo serializes correctly`() {
@@ -210,7 +210,7 @@ class QueryDslTest {
         assertContains(serialized, "timestamp")
     }
 
-    // --- refId ---
+    // ──── refId ────
 
     @Test
     fun `QueryDsl refId serializes correctly`() {
@@ -235,7 +235,7 @@ class QueryDslTest {
         assertEquals("C", dsl.refId)
     }
 
-    // --- queryConfigs list ---
+    // ──── queryConfigs list ────
 
     @Test
     fun `queryConfigs list serializes and deserializes correctly`() {

@@ -92,7 +92,7 @@ class AccountDeletionServiceTest {
         }
     }
 
-    // --- validateUserDeletion ---
+    // ──── validateUserDeletion ────
 
     @Test
     fun `validateUserDeletion allows deletion when user has no orgs`() {
@@ -169,7 +169,7 @@ class AccountDeletionServiceTest {
         assertTrue(result.canDelete)
     }
 
-    // --- validateOrganizationDeletion ---
+    // ──── validateOrganizationDeletion ────
 
     @Test
     fun `validateOrganizationDeletion allows when owner and no subscription`() {
