@@ -21,7 +21,6 @@ import userEvent from '@testing-library/user-event'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {http, HttpResponse} from 'msw'
 import {server} from '@/test/mocks/server'
-import {api} from '@/lib/api'
 import {QueryBuilderForm} from '../QueryBuilderForm'
 import type {QueryDsl} from '@/lib/api'
 
@@ -194,7 +193,6 @@ describe('QueryBuilderForm – extended branch coverage', () => {
       // Each metric row has a trash button; find the one nearest alias 'a'
       const aliasA = screen.getByDisplayValue('a')
       const metricRow = aliasA.closest('.flex.items-center')
-      const trashBtn = metricRow?.querySelector('button')
       // The last button in the row is the remove button
       const buttons = metricRow?.querySelectorAll('button')
       await user.click(buttons![buttons!.length - 1])
@@ -317,7 +315,6 @@ describe('QueryBuilderForm – extended branch coverage', () => {
   // ──── Filters: update and remove ────
   describe('filters', () => {
     it('calls onChange when filter field is changed', async () => {
-      const user = userEvent.setup()
       const onChange = vi.fn()
       const dsl: QueryDsl = {
         ...defaultDsl,

@@ -16,7 +16,7 @@
 
 import React from 'react'
 import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {render, screen, within} from '@testing-library/react'
+import {render, screen} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {DashboardToolbar} from '../DashboardToolbar'
 import type {DashboardVariable} from '@/lib/api'
@@ -75,7 +75,6 @@ describe('DashboardToolbar – extended branch coverage', () => {
       const onTitleChange = vi.fn()
       render(<DashboardToolbar {...defaultProps} isEditing={true} onTitleChange={onTitleChange} />)
       await user.click(screen.getByText('Test Dashboard'))
-      const input = screen.getByDisplayValue('Test Dashboard')
       // Just blur without changing
       await user.tab()
       expect(onTitleChange).not.toHaveBeenCalled()
@@ -125,36 +124,12 @@ describe('DashboardToolbar – extended branch coverage', () => {
       current: 'production',
     }
 
-    const selectVarWithOptions: DashboardVariable = {
-      name: 'region',
-      label: 'Region',
-      type: 'custom',
-      options: ['us-east', 'us-west', 'eu-west'],
-      current: 'us-east',
-    }
-
     const selectVarNoOptions: DashboardVariable = {
       name: 'empty_var',
       label: null,
       type: 'custom',
       options: [],
       current: 'fallback',
-    }
-
-    const selectVarWithAll: DashboardVariable = {
-      name: 'service',
-      label: 'Service',
-      type: 'custom',
-      options: ['api', 'web', 'worker'],
-      current: '$__all',
-    }
-
-    const selectVarWithDefaultAll: DashboardVariable = {
-      name: 'host',
-      label: 'Host',
-      type: 'custom',
-      options: ['host1', 'host2'],
-      default_value: '$__all',
     }
 
     it('does not render variables section when variables is undefined', () => {
