@@ -566,7 +566,8 @@ class EventApiRoutesTest {
     @Test
     fun `GET event issue returns 403 when no project access`() = testApplication {
         val (userId, _) = seedUserWithProject()
-        coEvery { mockDashboardService.getProjectIdForEvent("evt-no-access") } returns null
+        coEvery { mockDashboardService.getProjectIdForEvent("evt-no-access") } returns SENTINEL_PROJECT_ID
+        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_PROJECT_ID) } returns false
 
         application { installTestApp() }
         val response = client.get("/v1/events/evt-no-access/issue") {

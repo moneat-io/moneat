@@ -75,7 +75,7 @@ class LlmServiceExtendedTest {
                     }
                     else -> exchange.respond(200, "", contentType = "text/plain")
                 }
-            }) { server ->
+            }) { _ ->
                 val result = LlmDashboardService().getGenerations(
                     projectId = 5,
                     range = "24h",
@@ -102,7 +102,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, """{"total":0}""", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 LlmDashboardService().getGenerations(
                     projectId = 5,
                     range = "7d",
@@ -135,7 +135,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }) { server ->
+            }) { _ ->
                 val result = LlmDashboardService().getGenerations(
                     projectId = 5,
                     range = "24h",
@@ -161,7 +161,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(200, detailJson, contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val detail = LlmDashboardService().getGenerationDetail(
                     projectId = 10,
                     generationId = "gen-99"
@@ -188,7 +188,7 @@ class LlmServiceExtendedTest {
                     "Code: 60. DB::Exception: Table not found",
                     contentType = "text/plain"
                 )
-            }) { server ->
+            }) { _ ->
                 val detail = LlmDashboardService().getGenerationDetail(
                     projectId = 10,
                     generationId = "nonexistent"
@@ -203,7 +203,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(500, "internal error", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val detail = LlmDashboardService().getGenerationDetail(
                     projectId = 10,
                     generationId = "gen-1"
@@ -239,7 +239,7 @@ class LlmServiceExtendedTest {
                     }
                     else -> exchange.respond(200, "", contentType = "text/plain")
                 }
-            }) { server ->
+            }) { _ ->
                 val costs = LlmDashboardService().getCosts(projectId = 10, range = "7d")
                 assertEquals(2.3, costs.totalCost)
                 assertEquals(2, costs.breakdown.size)
@@ -261,7 +261,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(200, modelsJson, contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val models = LlmDashboardService().getModels(projectId = 10, range = "24h")
                 assertEquals(2, models.size)
                 assertEquals("gpt-4o", models[0].model)
@@ -277,7 +277,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val models = LlmDashboardService().getModels(projectId = 10, range = "24h")
                 assertTrue(models.isEmpty())
             }
@@ -291,7 +291,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val trace = LlmDashboardService().getTrace(
                     projectId = 10,
                     traceId = "no-such-trace"
@@ -319,7 +319,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }) { server ->
+            }) { _ ->
                 val result = LlmDashboardService().getOverview(projectId = 10, range = "24h")
                 assertEquals(0L, result.totalGenerations)
                 assertEquals(0L, result.totalTokens)
@@ -346,7 +346,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }) { server ->
+            }) { _ ->
                 LlmDashboardService().getOverview(projectId = -1, range = "24h")
                 assertTrue(queries.any { it.contains("toInt64(project_id) = -1") })
             }
@@ -369,7 +369,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }) { server ->
+            }) { _ ->
                 LlmDashboardService().getOverview(
                     projectId = 10,
                     range = "24h",
@@ -396,7 +396,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }) { server ->
+            }) { _ ->
                 LlmDashboardService().getOverview(projectId = 10, range = "1h")
                 assertTrue(queries.any { it.contains("toStartOfFiveMinutes") })
                 assertTrue(queries.any { it.contains("1 HOUR") })
@@ -418,7 +418,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }) { server ->
+            }) { _ ->
                 LlmDashboardService().getOverview(projectId = 10, range = "30d")
                 assertTrue(queries.any { it.contains("toStartOfDay") })
                 assertTrue(queries.any { it.contains("30 DAY") })
@@ -440,7 +440,7 @@ class LlmServiceExtendedTest {
                         exchange.respond(200, "\n", contentType = "text/plain")
                     }
                 }
-            }) { server ->
+            }) { _ ->
                 LlmDashboardService().getOverview(projectId = 10, range = "unknown")
                 assertTrue(queries.any { it.contains("toStartOfHour") })
                 assertTrue(queries.any { it.contains("24 HOUR") })
@@ -457,7 +457,7 @@ class LlmServiceExtendedTest {
                 called = true
                 exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 LlmIngestionWorker("q", "dlq", 1).insertGenerations(1, emptyList())
                 assertTrue(!called, "ClickHouse should not be called for empty list")
             }
@@ -474,7 +474,7 @@ class LlmServiceExtendedTest {
                 withClickHouseMockServer({ exchange ->
                     queries += exchange.requestBodyText()
                     exchange.respond(200, "", contentType = "text/plain")
-                }) { server ->
+                }) { _ ->
                     val gen = LlmGenerationIngest(model = "test", type = typeStr)
                     LlmIngestionWorker("q", "dlq", 1).insertGenerations(1, listOf(gen))
                     assertTrue(
@@ -495,7 +495,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val gen = LlmGenerationIngest(
                     model = "test",
                     timestamp = "2026-03-01T12:00:00Z"
@@ -516,7 +516,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val gen = LlmGenerationIngest(
                     model = "test",
                     timestamp = "1700000000000"
@@ -537,7 +537,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val gen = LlmGenerationIngest(model = "test", timestamp = "")
                 LlmIngestionWorker("q", "dlq", 1).insertGenerations(1, listOf(gen))
                 val query = queries.single()
@@ -557,7 +557,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val gen = LlmGenerationIngest(model = "test", tags = emptyMap())
                 LlmIngestionWorker("q", "dlq", 1).insertGenerations(1, listOf(gen))
                 val query = queries.single()
@@ -572,7 +572,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val gen = LlmGenerationIngest(
                     model = "test",
                     tags = mapOf("env" to "prod", "team" to "ml")
@@ -593,7 +593,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val gen = LlmGenerationIngest(model = "test", status = "error")
                 LlmIngestionWorker("q", "dlq", 1).insertGenerations(1, listOf(gen))
                 val query = queries.single()
@@ -610,7 +610,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val gen = LlmGenerationIngest(
                     model = "test",
                     metadata = buildJsonObject { put("key", "value") }
@@ -652,7 +652,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 val gen = LlmGenerationIngest(
                     model = "test",
                     inputTokens = 100,
@@ -676,7 +676,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer({ exchange ->
                 queries += exchange.requestBodyText()
                 exchange.respond(200, "", contentType = "text/plain")
-            }) { server ->
+            }) { _ ->
                 LlmDashboardService().getCosts(
                     projectId = 10,
                     range = "7d",

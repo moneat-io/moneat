@@ -36,6 +36,10 @@ import kotlin.test.assertTrue
 
 class AnalyticsServiceTest {
 
+    companion object {
+        private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
+    }
+
     private val service = AnalyticsService()
 
     private val dateFrom: LocalDate = LocalDate.of(2026, 1, 1)
@@ -57,7 +61,7 @@ class AnalyticsServiceTest {
                 200,
                 """{"visitors":100,"pageviews":250,"bounce_rate":35.5,"avg_visit_duration":120.0,"views_per_visit":2.5}
                 """.trimIndent(),
-                contentType = "text/plain"
+                contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
 
@@ -84,14 +88,14 @@ class AnalyticsServiceTest {
                     200,
                     """{"visitors":100,"pageviews":250,"bounce_rate":35.5,"avg_visit_duration":120.0,"views_per_visit":2.5}
                     """.trimIndent(),
-                    contentType = "text/plain"
+                    contentType = CONTENT_TYPE_TEXT_PLAIN
                 )
             } else {
                 exchange.respond(
                     200,
                     """{"visitors":80,"pageviews":200,"bounce_rate":40.0,"avg_visit_duration":100.0,"views_per_visit":2.0}
                     """.trimIndent(),
-                    contentType = "text/plain"
+                    contentType = CONTENT_TYPE_TEXT_PLAIN
                 )
             }
         }) { _ ->
@@ -112,7 +116,7 @@ class AnalyticsServiceTest {
     fun `getOverview returns zeros when ClickHouse returns empty body`() = runBlocking {
         withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val result = service.getOverview(projectId, dateFrom, dateTo, emptyList(), null, null)
@@ -135,7 +139,7 @@ class AnalyticsServiceTest {
                 200,
                 """{"date":"2026-01-01","visitors":10,"pageviews":25}
 {"date":"2026-01-02","visitors":15,"pageviews":30}""",
-                contentType = "text/plain"
+                contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
 
@@ -154,7 +158,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val shortFrom = LocalDate.of(2026, 1, 1)
@@ -170,7 +174,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             service.getTimeseries(projectId, dateFrom, dateTo, emptyList())
@@ -183,7 +187,7 @@ class AnalyticsServiceTest {
     fun `getTimeseries returns empty list for blank response`() = runBlocking {
         withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val result = service.getTimeseries(projectId, dateFrom, dateTo, emptyList())
@@ -202,7 +206,7 @@ class AnalyticsServiceTest {
                 200,
                 """{"name":"Chrome","visitors":50,"pageviews":120}
 {"name":"Firefox","visitors":30,"pageviews":80}""",
-                contentType = "text/plain"
+                contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
 
@@ -224,7 +228,7 @@ class AnalyticsServiceTest {
             exchange.respond(
                 200,
                 """{"name":"/home","visitors":100,"pageviews":200}""",
-                contentType = "text/plain"
+                contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
 
@@ -239,7 +243,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "browser")
@@ -252,7 +256,7 @@ class AnalyticsServiceTest {
     fun `getBreakdown returns empty results for blank response`() = runBlocking {
         withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val result = service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "os")
@@ -268,7 +272,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             service.getPages(projectId, dateFrom, dateTo, emptyList())
@@ -282,7 +286,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             service.getEntryPages(projectId, dateFrom, dateTo, emptyList())
@@ -296,7 +300,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             service.getExitPages(projectId, dateFrom, dateTo, emptyList())
@@ -355,7 +359,7 @@ class AnalyticsServiceTest {
                 """{"level":1,"cnt":50}
 {"level":2,"cnt":30}
 {"level":3,"cnt":10}""",
-                contentType = "text/plain"
+                contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
 
@@ -385,7 +389,7 @@ class AnalyticsServiceTest {
     fun `getFunnel returns empty counts when ClickHouse returns blank`() = runBlocking {
         withClickHouseMockServer({ exchange ->
             exchange.requestBodyText()
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val steps = listOf("step_a", "step_b")
@@ -407,7 +411,7 @@ class AnalyticsServiceTest {
                 200,
                 """{"name":"button_click","visitors":25,"pageviews":40}
 {"name":"form_submit","visitors":10,"pageviews":15}""",
-                contentType = "text/plain"
+                contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
 
@@ -425,7 +429,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             service.getEvents(projectId, dateFrom, dateTo, emptyList())
@@ -441,7 +445,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val filters = listOf(AnalyticsFilter("browser", "is", "Chrome"))
@@ -456,7 +460,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val filters = listOf(AnalyticsFilter("browser", "is_not", "IE"))
@@ -471,7 +475,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val filters = listOf(AnalyticsFilter("browser", "contains", "Chrome"))
@@ -486,7 +490,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val filters = listOf(AnalyticsFilter("browser", "not_contains", "IE"))
@@ -504,7 +508,7 @@ class AnalyticsServiceTest {
             exchange.respond(
                 200,
                 """{"visitors":5,"pageviews":10,"bounce_rate":50.0,"avg_visit_duration":60.0,"views_per_visit":2.0}""",
-                contentType = "text/plain"
+                contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
 
@@ -523,7 +527,7 @@ class AnalyticsServiceTest {
             exchange.respond(
                 200,
                 """{"visitors":5,"pageviews":10,"bounce_rate":50.0,"avg_visit_duration":60.0,"views_per_visit":2.0}""",
-                contentType = "text/plain"
+                contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
 
@@ -547,7 +551,7 @@ class AnalyticsServiceTest {
             val queries = mutableListOf<String>()
             withClickHouseMockServer({ exchange ->
                 queries.add(exchange.requestBodyText())
-                exchange.respond(200, "", contentType = "text/plain")
+                exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
             }) { _ ->
                 service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), dimension)
                 assertTrue(
@@ -565,7 +569,7 @@ class AnalyticsServiceTest {
             val queries = mutableListOf<String>()
             withClickHouseMockServer({ exchange ->
                 queries.add(exchange.requestBodyText())
-                exchange.respond(200, "", contentType = "text/plain")
+                exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
             }) { _ ->
                 service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), dimension)
                 assertTrue(
@@ -581,7 +585,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             service.getBreakdown(projectId, dateFrom, dateTo, emptyList(), "browser", limit = 10)
@@ -597,7 +601,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             service.getOverview(projectId, dateFrom, dateTo, emptyList(), null, null)
@@ -613,7 +617,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             service.getFunnel(projectId, dateFrom, dateTo, listOf("step1", "step2"))
@@ -629,7 +633,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val filters = listOf(AnalyticsFilter("nonexistent_prop", "is", "value"))
@@ -645,7 +649,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             // getTimeseries uses alias "s" (sessions table), so "page" filter should be skipped
@@ -661,7 +665,7 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
             val filters = listOf(AnalyticsFilter("page", "is", "/home"))
@@ -682,7 +686,7 @@ class AnalyticsServiceTest {
                 """{"date":"2026-01-01","visitors":10,"pageviews":25}
 not valid json
 {"date":"2026-01-02","visitors":15,"pageviews":30}""",
-                contentType = "text/plain"
+                contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
 
@@ -700,7 +704,7 @@ not valid json
             exchange.respond(
                 200,
                 """{"visitors":5}""",
-                contentType = "text/plain"
+                contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
 

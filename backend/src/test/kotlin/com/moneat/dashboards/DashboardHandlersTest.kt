@@ -51,10 +51,23 @@ class DashboardHandlersTest {
         private const val DEFAULT_PORT = 9090
         private const val DEFAULT_LIMIT = 100
         private const val DEFAULT_ROW_ID = 1L
+        private const val PROMETHEUS_VECTOR_PREFIX =
+            """{"status":"success","data":{"resultType":"vector","""
+        private const val PROMETHEUS_RESULT_METRIC =
+            """"result":[{"metric":{"__name__":"m"},"""
+        private const val PROMETHEUS_SUCCESS_PREFIX = """{"status":"success","""
+        private const val METRIC_SERVER_CPU = "server.cpu"
 
         private val selfHostedLock = Any()
 
         fun <T> withSelfHosted(block: () -> T): T {
+            System.getenv("SELF_HOSTED")?.let { envVal ->
+                error(
+                    "SELF_HOSTED environment variable is already set to \"$envVal\"; " +
+                        "withSelfHosted uses System property and EnvConfig.get prefers env. " +
+                        "Unset SELF_HOSTED before running these tests."
+                )
+            }
             synchronized(selfHostedLock) {
                 val prev = System.getProperty("SELF_HOSTED")
                 try {
@@ -72,9 +85,7 @@ class DashboardHandlersTest {
 
         fun extractPort(baseUrl: String): Int {
             val port = URI.create(baseUrl).port
-            if (port == -1) {
-                throw IllegalArgumentException("URL has no explicit port: $baseUrl")
-            }
+            require(port != -1) { "URL has no explicit port: $baseUrl" }
             return port
         }
     }
@@ -172,8 +183,8 @@ class DashboardHandlersTest {
 
     @Test
     fun `parsePrometheusResponse handles NaN as null`() {
-        val body = """{"status":"success","data":{"resultType":"vector",""" +
-            """"result":[{"metric":{"__name__":"m"},""" +
+        val body = PROMETHEUS_VECTOR_PREFIX +
+            PROMETHEUS_RESULT_METRIC +
             """"value":[1,"NaN"]}]}}"""
         val rows = prometheusHandler.parsePrometheusResponse(body, DEFAULT_LIMIT)
         assertEquals(1, rows.size)
@@ -182,8 +193,8 @@ class DashboardHandlersTest {
 
     @Test
     fun `parsePrometheusResponse handles positive Inf as null`() {
-        val body = """{"status":"success","data":{"resultType":"vector",""" +
-            """"result":[{"metric":{"__name__":"m"},""" +
+        val body = PROMETHEUS_VECTOR_PREFIX +
+            PROMETHEUS_RESULT_METRIC +
             """"value":[1,"+Inf"]}]}}"""
         val rows = prometheusHandler.parsePrometheusResponse(body, DEFAULT_LIMIT)
         assertEquals(JsonNull, rows[0]["m"])
@@ -191,8 +202,8 @@ class DashboardHandlersTest {
 
     @Test
     fun `parsePrometheusResponse handles negative Inf as null`() {
-        val body = """{"status":"success","data":{"resultType":"vector",""" +
-            """"result":[{"metric":{"__name__":"m"},""" +
+        val body = PROMETHEUS_VECTOR_PREFIX +
+            PROMETHEUS_RESULT_METRIC +
             """"value":[1,"-Inf"]}]}}"""
         val rows = prometheusHandler.parsePrometheusResponse(body, DEFAULT_LIMIT)
         assertEquals(JsonNull, rows[0]["m"])
@@ -207,8 +218,8 @@ class DashboardHandlersTest {
 
     @Test
     fun `parsePrometheusResponse returns empty for zero limit`() {
-        val body = """{"status":"success","data":{"resultType":"vector",""" +
-            """"result":[{"metric":{"__name__":"m"},""" +
+        val body = PROMETHEUS_VECTOR_PREFIX +
+            PROMETHEUS_RESULT_METRIC +
             """"value":[1,"1"]}]}}"""
         assertTrue(
             prometheusHandler.parsePrometheusResponse(body, 0).isEmpty()
@@ -217,7 +228,7 @@ class DashboardHandlersTest {
 
     @Test
     fun `parsePrometheusResponse matrix with multiple series`() {
-        val body = """{"status":"success","data":{"resultType":"matrix",""" +
+        val body = PROMETHEUS_SUCCESS_PREFIX + """"data":{"resultType":"matrix",""" +
             """"result":[""" +
             """{"metric":{"__name__":"a"},"values":[[1,"10"]]},""" +
             """{"metric":{"__name__":"b"},"values":[[2,"20"]]}]}}"""
@@ -229,7 +240,7 @@ class DashboardHandlersTest {
 
     @Test
     fun `parsePrometheusResponse vector without name uses value`() {
-        val body = """{"status":"success","data":{"resultType":"vector",""" +
+        val body = PROMETHEUS_SUCCESS_PREFIX + """"data":{"resultType":"vector",""" +
             """"result":[{"metric":{"job":"api"},""" +
             """"value":[1700000000,"42"]}]}}"""
         val rows = prometheusHandler.parsePrometheusResponse(body, DEFAULT_LIMIT)
@@ -297,7 +308,7 @@ class DashboardHandlersTest {
     fun `Prometheus testConnection parses metric names`() =
         withSelfHosted {
             runBlocking {
-                val resp = """{"status":"success",""" +
+                val resp = PROMETHEUS_SUCCESS_PREFIX +
                     """"data":["up","process_cpu"]}"""
                 MockHttpServer { ex ->
                     ex.respond(200, resp)
@@ -324,7 +335,7 @@ class DashboardHandlersTest {
         withSelfHosted {
             runBlocking {
                 val resp =
-                    """{"status":"success","data":{""" +
+                    PROMETHEUS_SUCCESS_PREFIX + """"data":{""" +
                         """"resultType":"vector","result":[""" +
                         """{"metric":{"__name__":"up"},""" +
                         """"value":[1700000000,"1"]}]}}"""
@@ -353,7 +364,7 @@ class DashboardHandlersTest {
         withSelfHosted {
             runBlocking {
                 val resp =
-                    """{"status":"success","data":{""" +
+                    PROMETHEUS_SUCCESS_PREFIX + """"data":{""" +
                         """"resultType":"matrix","result":[""" +
                         """{"metric":{"__name__":"up"},""" +
                         """"values":[[1700000000,"1"],""" +
@@ -404,7 +415,7 @@ class DashboardHandlersTest {
     fun `Prometheus getSchema returns metric fields`() =
         withSelfHosted {
             runBlocking {
-                val resp = """{"status":"success",""" +
+                val resp = PROMETHEUS_SUCCESS_PREFIX +
                     """"data":["cpu","memory"]}"""
                 MockHttpServer { ex ->
                     ex.respond(200, resp)
@@ -427,7 +438,7 @@ class DashboardHandlersTest {
     fun `Prometheus executeLabelValuesQuery two-arg format`() =
         withSelfHosted {
             runBlocking {
-                val resp = """{"status":"success",""" +
+                val resp = PROMETHEUS_SUCCESS_PREFIX +
                     """"data":["host1","host2"]}"""
                 MockHttpServer { ex ->
                     ex.respond(200, resp)
@@ -449,7 +460,7 @@ class DashboardHandlersTest {
     fun `Prometheus executeLabelValuesQuery one-arg format`() =
         withSelfHosted {
             runBlocking {
-                val resp = """{"status":"success",""" +
+                val resp = PROMETHEUS_SUCCESS_PREFIX +
                     """"data":["api","worker"]}"""
                 MockHttpServer { ex ->
                     ex.respond(200, resp)
@@ -801,7 +812,7 @@ class DashboardHandlersTest {
         withSelfHosted {
             runBlocking {
                 val resp =
-                    """[{"target":"server.cpu",""" +
+                    """[{"target":"$METRIC_SERVER_CPU",""" +
                         """"datapoints":[[0.5,1700000000],""" +
                         """[0.6,1700000060]]}]"""
                 MockHttpServer { ex ->
@@ -814,7 +825,7 @@ class DashboardHandlersTest {
                         port,
                         null,
                         DataSourceCredentials(),
-                        "server.cpu",
+                        METRIC_SERVER_CPU,
                         DEFAULT_LIMIT,
                         null
                     )
@@ -825,7 +836,7 @@ class DashboardHandlersTest {
                     )
                     assertEquals(
                         JsonPrimitive(0.5),
-                        rows[0]["server.cpu"]
+                        rows[0][METRIC_SERVER_CPU]
                     )
                 }
             }
@@ -835,7 +846,7 @@ class DashboardHandlersTest {
     fun `Graphite getSchema returns metric names`() =
         withSelfHosted {
             runBlocking {
-                val resp = """["server.cpu","server.mem"]"""
+                val resp = """["$METRIC_SERVER_CPU","server.mem"]"""
                 MockHttpServer { ex ->
                     ex.respond(200, resp)
                 }.use { server ->
@@ -847,7 +858,7 @@ class DashboardHandlersTest {
                         DataSourceCredentials()
                     )
                     assertEquals(2, fields.size)
-                    assertEquals("server.cpu", fields[0].name)
+                    assertEquals(METRIC_SERVER_CPU, fields[0].name)
                     assertEquals("metric", fields[0].type)
                 }
             }
@@ -984,33 +995,6 @@ class DashboardHandlersTest {
         }
     }
 
-    @Test
-    fun `validateSqlQuery rejects EXEC keyword`() {
-        assertFailsWith<IllegalArgumentException> {
-            mysqlHandler.validateSqlQuery(
-                "SELECT EXEC FROM t"
-            )
-        }
-    }
-
-    @Test
-    fun `validateSqlQuery rejects EXECUTE keyword`() {
-        assertFailsWith<IllegalArgumentException> {
-            mysqlHandler.validateSqlQuery(
-                "SELECT EXECUTE FROM t"
-            )
-        }
-    }
-
-    @Test
-    fun `validateSqlQuery rejects COPY keyword`() {
-        assertFailsWith<IllegalArgumentException> {
-            mysqlHandler.validateSqlQuery(
-                "SELECT COPY FROM t"
-            )
-        }
-    }
-
     // ==================== PostgresHandler: forbidden patterns ====================
 
     @Test
@@ -1086,6 +1070,28 @@ class DashboardHandlersTest {
     }
 
     // ==================== JdbcHandlerCommon ====================
+    // EXEC, EXECUTE, COPY are in JDBC_COMMON_FORBIDDEN; test via handler that uses it.
+
+    @Test
+    fun `JdbcHandlerCommon rejects EXEC keyword`() {
+        assertFailsWith<IllegalArgumentException> {
+            mysqlHandler.validateSqlQuery("SELECT EXEC FROM t")
+        }
+    }
+
+    @Test
+    fun `JdbcHandlerCommon rejects EXECUTE keyword`() {
+        assertFailsWith<IllegalArgumentException> {
+            mysqlHandler.validateSqlQuery("SELECT EXECUTE FROM t")
+        }
+    }
+
+    @Test
+    fun `JdbcHandlerCommon rejects COPY keyword`() {
+        assertFailsWith<IllegalArgumentException> {
+            mysqlHandler.validateSqlQuery("SELECT COPY FROM t")
+        }
+    }
 
     @Test
     fun `JDBC_COMMON_FORBIDDEN catches all expected keywords`() {

@@ -28,6 +28,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class NotificationFormattingTest {
@@ -698,13 +699,16 @@ class NotificationFormattingTest {
 
     @Test
     fun `Slack dashboard alert severity determines emoji and color`() {
-        val criticalEmoji = if ("CRITICAL" == "CRITICAL" || "CRITICAL" == "HIGH") "🔴" else "⚠️"
+        val criticalSeverity = "CRITICAL"
+        val criticalEmoji = if (criticalSeverity == "CRITICAL" || criticalSeverity == "HIGH") "🔴" else "⚠️"
         assertEquals("🔴", criticalEmoji)
 
-        val highEmoji = if ("HIGH" == "CRITICAL" || "HIGH" == "HIGH") "🔴" else "⚠️"
+        val highSeverity = "HIGH"
+        val highEmoji = if (highSeverity == "CRITICAL" || highSeverity == "HIGH") "🔴" else "⚠️"
         assertEquals("🔴", highEmoji)
 
-        val mediumEmoji = if ("MEDIUM" == "CRITICAL" || "MEDIUM" == "HIGH") "🔴" else "⚠️"
+        val mediumSeverity = "MEDIUM"
+        val mediumEmoji = if (mediumSeverity == "CRITICAL" || mediumSeverity == "HIGH") "🔴" else "⚠️"
         assertEquals("⚠️", mediumEmoji)
 
         val critColor = when ("CRITICAL") {
@@ -750,15 +754,15 @@ class NotificationFormattingTest {
     @Test
     fun `Slack uptime alert direction determines emoji and header`() {
         val downStatus = "down"
-        val isDown = downStatus.equals("down", ignoreCase = true)
+        val isDown = downStatus.lowercase() == "down"
         assertTrue(isDown)
         assertEquals("🔴", if (isDown) "🔴" else "🟢")
         assertEquals("Monitor Down", if (isDown) "Monitor Down" else "Monitor Recovered")
         assertEquals("#E01E5A", if (isDown) "#E01E5A" else "#2EB67D")
 
         val upStatus = "UP"
-        val isUp = upStatus.equals("down", ignoreCase = true)
-        assertEquals(false, isUp)
+        val isUp = upStatus.lowercase() == "down"
+        assertFalse(isUp)
         assertEquals("🟢", if (isUp) "🔴" else "🟢")
         assertEquals("Monitor Recovered", if (isUp) "Monitor Down" else "Monitor Recovered")
     }

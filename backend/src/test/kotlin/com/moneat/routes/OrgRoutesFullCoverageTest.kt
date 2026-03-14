@@ -81,6 +81,7 @@ class OrgRoutesFullCoverageTest {
 
     companion object {
         private const val JWT_SECRET = "org-full-coverage-secret"
+        private const val DISCORD_CHANNEL_BODY = """{"channelId":"D456","channelName":"alerts"}"""
     }
 
     private val mockAdminService = mockk<AdminService>(relaxed = true)
@@ -1586,7 +1587,7 @@ class OrgRoutesFullCoverageTest {
             val response = client.put("/integrations/discord/channel") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
-                setBody("""{"channelId":"D456","channelName":"alerts"}""")
+                setBody(DISCORD_CHANNEL_BODY)
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("Channel updated"))
@@ -1609,7 +1610,7 @@ class OrgRoutesFullCoverageTest {
             val response = client.put("/integrations/discord/channel") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, 1)}")
                 contentType(ContentType.Application.Json)
-                setBody("""{"channelId":"D456","channelName":"alerts"}""")
+                setBody(DISCORD_CHANNEL_BODY)
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
@@ -1633,7 +1634,7 @@ class OrgRoutesFullCoverageTest {
             val response = client.put("/integrations/discord/channel") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
-                setBody("""{"channelId":"D456","channelName":"alerts"}""")
+                setBody(DISCORD_CHANNEL_BODY)
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }

@@ -52,58 +52,64 @@ class UptimeExtendedTest {
 
     @AfterTest
     fun tearDown() {
-        try { unmockkObject(UrlValidator) } catch (_: Exception) {}
+        try {
+            unmockkObject(UrlValidator)
+        } catch (_: Exception) {
+            Unit // best-effort cleanup; ignore if already unmocked
+        }
     }
 
-    private fun monitor(
-        type: String,
-        url: String? = null,
-        hostname: String? = null,
-        port: Int? = null,
-        method: String = "GET",
-        headers: String? = null,
-        body: String? = null,
-        authMethod: String? = null,
-        authUser: String? = null,
-        authPass: String? = null,
-        expectedStatusCodes: String? = null,
-        keyword: String? = null,
-        keywordInverse: Boolean = false,
-        jsonPath: String? = null,
-        jsonExpectedValue: String? = null,
-        dbConnectionString: String? = null,
-        dbQuery: String? = null,
-        dockerContainerName: String? = null,
-        dockerHost: String? = null,
-        timeoutSeconds: Int = 10
-    ): UptimeMonitorData {
+    private data class MonitorParams(
+        val type: String,
+        val url: String? = null,
+        val hostname: String? = null,
+        val port: Int? = null,
+        val method: String = "GET",
+        val headers: String? = null,
+        val body: String? = null,
+        val authMethod: String? = null,
+        val authUser: String? = null,
+        val authPass: String? = null,
+        val expectedStatusCodes: String? = null,
+        val keyword: String? = null,
+        val keywordInverse: Boolean = false,
+        val jsonPath: String? = null,
+        val jsonExpectedValue: String? = null,
+        val dbConnectionString: String? = null,
+        val dbQuery: String? = null,
+        val dockerContainerName: String? = null,
+        val dockerHost: String? = null,
+        val timeoutSeconds: Int = 10
+    )
+
+    private fun monitor(p: MonitorParams): UptimeMonitorData {
         val now = Instant.fromEpochMilliseconds(0)
         return UptimeMonitorData(
             id = UUID.randomUUID(),
             organizationId = 1,
-            name = "test-$type",
-            type = type,
+            name = "test-${p.type}",
+            type = p.type,
             active = true,
-            url = url,
-            hostname = hostname,
-            port = port,
-            method = method,
-            headers = headers,
-            body = body,
-            authMethod = authMethod,
-            authUser = authUser,
-            authPass = authPass,
-            expectedStatusCodes = expectedStatusCodes,
-            keyword = keyword,
-            keywordInverse = keywordInverse,
-            jsonPath = jsonPath,
-            jsonExpectedValue = jsonExpectedValue,
-            dbConnectionString = dbConnectionString,
-            dbQuery = dbQuery,
-            dockerContainerName = dockerContainerName,
-            dockerHost = dockerHost,
+            url = p.url,
+            hostname = p.hostname,
+            port = p.port,
+            method = p.method,
+            headers = p.headers,
+            body = p.body,
+            authMethod = p.authMethod,
+            authUser = p.authUser,
+            authPass = p.authPass,
+            expectedStatusCodes = p.expectedStatusCodes,
+            keyword = p.keyword,
+            keywordInverse = p.keywordInverse,
+            jsonPath = p.jsonPath,
+            jsonExpectedValue = p.jsonExpectedValue,
+            dbConnectionString = p.dbConnectionString,
+            dbQuery = p.dbQuery,
+            dockerContainerName = p.dockerContainerName,
+            dockerHost = p.dockerHost,
             intervalSeconds = 60,
-            timeoutSeconds = timeoutSeconds,
+            timeoutSeconds = p.timeoutSeconds,
             retries = 0,
             retryIntervalSeconds = 1,
             status = "pending",
@@ -121,14 +127,14 @@ class UptimeExtendedTest {
 
     @Test
     fun `push monitor returns pending status`() = runBlocking {
-        val result = executor.executeCheck(monitor(type = "push"))
+        val result = executor.executeCheck(monitor(MonitorParams(type = "push")))
         assertEquals(2, result.status)
         assertTrue(result.message.contains("Push monitors"))
     }
 
     @Test
     fun `unknown type returns failure`() = runBlocking {
-        val result = executor.executeCheck(monitor(type = "foobar"))
+        val result = executor.executeCheck(monitor(MonitorParams(type = "foobar")))
         assertEquals(0, result.status)
         assertTrue(result.message.contains("Unknown monitor type"))
     }
@@ -139,7 +145,7 @@ class UptimeExtendedTest {
     fun `http check succeeds with 200`() = runBlocking {
         bypassSsrf()
         MockHttpServer { exchange -> exchange.respond(200, "OK") }.use { server ->
-            val result = executor.executeCheck(monitor(type = "http", url = server.baseUrl))
+            val result = executor.executeCheck(monitor(MonitorParams(type = "http", url = server.baseUrl)))
             assertEquals(1, result.status)
             assertEquals(200, result.statusCode)
         }
@@ -149,7 +155,7 @@ class UptimeExtendedTest {
     fun `http check fails with unexpected status code`() = runBlocking {
         bypassSsrf()
         MockHttpServer { exchange -> exchange.respond(503, "Down") }.use { server ->
-            val result = executor.executeCheck(monitor(type = "http", url = server.baseUrl))
+            val result = executor.executeCheck(monitor(MonitorParams(type = "http", url = server.baseUrl)))
             assertEquals(0, result.status)
             assertEquals(503, result.statusCode)
             assertTrue(result.message.contains("Unexpected status code"))
@@ -161,7 +167,7 @@ class UptimeExtendedTest {
         bypassSsrf()
         MockHttpServer { exchange -> exchange.respond(201, "Created") }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "http", url = server.baseUrl, expectedStatusCodes = "200,201,202")
+                monitor(MonitorParams(type = "http", url = server.baseUrl, expectedStatusCodes = "200,201,202"))
             )
             assertEquals(1, result.status)
             assertEquals(201, result.statusCode)
@@ -176,7 +182,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "OK")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "http", url = server.baseUrl, method = "POST", body = """{"test":1}""")
+                monitor(MonitorParams(type = "http", url = server.baseUrl, method = "POST", body = """{"test":1}"""))
             )
             assertEquals(1, result.status)
         }
@@ -190,7 +196,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "OK")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "http", url = server.baseUrl, method = "PUT")
+                monitor(MonitorParams(type = "http", url = server.baseUrl, method = "PUT"))
             )
             assertEquals(1, result.status)
         }
@@ -204,7 +210,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "OK")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "http", url = server.baseUrl, method = "DELETE")
+                monitor(MonitorParams(type = "http", url = server.baseUrl, method = "DELETE"))
             )
             assertEquals(1, result.status)
         }
@@ -218,7 +224,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "http", url = server.baseUrl, method = "HEAD")
+                monitor(MonitorParams(type = "http", url = server.baseUrl, method = "HEAD"))
             )
             assertEquals(1, result.status)
         }
@@ -232,7 +238,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "OK")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "http", url = server.baseUrl, method = "PATCH")
+                monitor(MonitorParams(type = "http", url = server.baseUrl, method = "PATCH"))
             )
             assertEquals(1, result.status)
         }
@@ -246,7 +252,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "OK")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "http", url = server.baseUrl, method = "OPTIONS")
+                monitor(MonitorParams(type = "http", url = server.baseUrl, method = "OPTIONS"))
             )
             assertEquals(1, result.status)
         }
@@ -260,7 +266,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "OK")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "http", url = server.baseUrl, method = "FOOBAR")
+                monitor(MonitorParams(type = "http", url = server.baseUrl, method = "FOOBAR"))
             )
             assertEquals(1, result.status)
         }
@@ -276,11 +282,13 @@ class UptimeExtendedTest {
         }.use { server ->
             val result = executor.executeCheck(
                 monitor(
-                    type = "http",
-                    url = server.baseUrl,
-                    authMethod = "basic",
-                    authUser = "user",
-                    authPass = "pass"
+                    MonitorParams(
+                        type = "http",
+                        url = server.baseUrl,
+                        authMethod = "basic",
+                        authUser = "user",
+                        authPass = "pass"
+                    )
                 )
             )
             assertEquals(1, result.status)
@@ -297,10 +305,7 @@ class UptimeExtendedTest {
         }.use { server ->
             val result = executor.executeCheck(
                 monitor(
-                    type = "http",
-                    url = server.baseUrl,
-                    authMethod = "bearer",
-                    authPass = "my-token"
+                    MonitorParams(type = "http", url = server.baseUrl, authMethod = "bearer", authPass = "my-token")
                 )
             )
             assertEquals(1, result.status)
@@ -315,11 +320,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "OK")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(
-                    type = "http",
-                    url = server.baseUrl,
-                    headers = """{"X-Custom":"custom-value"}"""
-                )
+                monitor(MonitorParams(type = "http", url = server.baseUrl, headers = """{"X-Custom":"custom-value"}"""))
             )
             assertEquals(1, result.status)
         }
@@ -330,7 +331,7 @@ class UptimeExtendedTest {
         bypassSsrf()
         MockHttpServer { exchange -> exchange.respond(200, "OK") }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "http", url = server.baseUrl, headers = "not-json")
+                monitor(MonitorParams(type = "http", url = server.baseUrl, headers = "not-json"))
             )
             assertEquals(1, result.status)
         }
@@ -338,7 +339,7 @@ class UptimeExtendedTest {
 
     @Test
     fun `http check with no url returns failure`() = runBlocking {
-        val result = executor.executeCheck(monitor(type = "http", url = null))
+        val result = executor.executeCheck(monitor(MonitorParams(type = "http", url = null)))
         assertEquals(0, result.status)
         assertTrue(result.message.contains("No URL configured"))
     }
@@ -352,7 +353,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "Hello World! The server is healthy.")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "keyword", url = server.baseUrl, keyword = "healthy")
+                monitor(MonitorParams(type = "keyword", url = server.baseUrl, keyword = "healthy"))
             )
             assertEquals(1, result.status)
             assertTrue(result.message.contains("Keyword check passed"))
@@ -366,7 +367,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "Hello World!")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "keyword", url = server.baseUrl, keyword = "missing-keyword")
+                monitor(MonitorParams(type = "keyword", url = server.baseUrl, keyword = "missing-keyword"))
             )
             assertEquals(0, result.status)
             assertTrue(result.message.contains("not found"))
@@ -380,12 +381,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "Hello World!")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(
-                    type = "keyword",
-                    url = server.baseUrl,
-                    keyword = "error",
-                    keywordInverse = true
-                )
+                monitor(MonitorParams(type = "keyword", url = server.baseUrl, keyword = "error", keywordInverse = true))
             )
             assertEquals(1, result.status)
         }
@@ -398,12 +394,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "An error occurred")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(
-                    type = "keyword",
-                    url = server.baseUrl,
-                    keyword = "error",
-                    keywordInverse = true
-                )
+                monitor(MonitorParams(type = "keyword", url = server.baseUrl, keyword = "error", keywordInverse = true))
             )
             assertEquals(0, result.status)
             assertTrue(result.message.contains("inverted check"))
@@ -417,7 +408,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "OK")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "keyword", url = server.baseUrl, keyword = null)
+                monitor(MonitorParams(type = "keyword", url = server.baseUrl, keyword = null))
             )
             assertEquals(0, result.status)
             assertTrue(result.message.contains("No keyword configured"))
@@ -434,10 +425,12 @@ class UptimeExtendedTest {
         }.use { server ->
             val result = executor.executeCheck(
                 monitor(
-                    type = "json_query",
-                    url = server.baseUrl,
-                    jsonPath = "$.status",
-                    jsonExpectedValue = "ok"
+                    MonitorParams(
+                        type = "json_query",
+                        url = server.baseUrl,
+                        jsonPath = "$.status",
+                        jsonExpectedValue = "ok"
+                    )
                 )
             )
             assertEquals(1, result.status)
@@ -453,10 +446,12 @@ class UptimeExtendedTest {
         }.use { server ->
             val result = executor.executeCheck(
                 monitor(
-                    type = "json_query",
-                    url = server.baseUrl,
-                    jsonPath = "$.status",
-                    jsonExpectedValue = null
+                    MonitorParams(
+                        type = "json_query",
+                        url = server.baseUrl,
+                        jsonPath = "$.status",
+                        jsonExpectedValue = null
+                    )
                 )
             )
             assertEquals(1, result.status)
@@ -471,10 +466,12 @@ class UptimeExtendedTest {
         }.use { server ->
             val result = executor.executeCheck(
                 monitor(
-                    type = "json_query",
-                    url = server.baseUrl,
-                    jsonPath = "$.status",
-                    jsonExpectedValue = "ok"
+                    MonitorParams(
+                        type = "json_query",
+                        url = server.baseUrl,
+                        jsonPath = "$.status",
+                        jsonExpectedValue = "ok"
+                    )
                 )
             )
             assertEquals(0, result.status)
@@ -489,7 +486,7 @@ class UptimeExtendedTest {
             exchange.respond(200, """{"status":"ok"}""")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "json_query", url = server.baseUrl, jsonPath = null)
+                monitor(MonitorParams(type = "json_query", url = server.baseUrl, jsonPath = null))
             )
             assertEquals(0, result.status)
             assertTrue(result.message.contains("No JSON path configured"))
@@ -503,7 +500,7 @@ class UptimeExtendedTest {
         ServerSocket(0).use { serverSocket ->
             val port = serverSocket.localPort
             val result = executor.executeCheck(
-                monitor(type = "tcp", hostname = "127.0.0.1", port = port)
+                monitor(MonitorParams(type = "tcp", hostname = "127.0.0.1", port = port))
             )
             assertEquals(1, result.status)
             assertTrue(result.message.contains("TCP connection successful"))
@@ -516,7 +513,7 @@ class UptimeExtendedTest {
         // Use a port from a closed server socket
         val port = ServerSocket(0).use { it.localPort }
         val result = executor.executeCheck(
-            monitor(type = "tcp", hostname = "127.0.0.1", port = port, timeoutSeconds = 2)
+            monitor(MonitorParams(type = "tcp", hostname = "127.0.0.1", port = port, timeoutSeconds = 2))
         )
         assertEquals(0, result.status)
         assertTrue(result.message.contains("TCP connection failed"))
@@ -525,7 +522,7 @@ class UptimeExtendedTest {
     @Test
     fun `tcp check fails without hostname`() = runBlocking {
         val result = executor.executeCheck(
-            monitor(type = "tcp", hostname = null, port = 80)
+            monitor(MonitorParams(type = "tcp", hostname = null, port = 80))
         )
         assertEquals(0, result.status)
         assertTrue(result.message.contains("No hostname configured"))
@@ -538,7 +535,7 @@ class UptimeExtendedTest {
         bypassSsrf()
         MockHttpServer { exchange -> exchange.respond(200, "OK") }.use { server ->
             val wsUrl = server.baseUrl.replace("http://", "ws://")
-            val result = executor.executeCheck(monitor(type = "websocket", url = wsUrl))
+            val result = executor.executeCheck(monitor(MonitorParams(type = "websocket", url = wsUrl)))
             assertEquals(1, result.status)
             assertTrue(result.message.contains("reachable"))
         }
@@ -548,7 +545,7 @@ class UptimeExtendedTest {
     fun `websocket check converts wss scheme to https`() = runBlocking {
         // wss will convert to https - connection will fail but scheme conversion is tested
         val result = executor.executeCheck(
-            monitor(type = "websocket", url = "wss://192.0.2.1:1/test", timeoutSeconds = 2)
+            monitor(MonitorParams(type = "websocket", url = "wss://192.0.2.1:1/test", timeoutSeconds = 2))
         )
         // Will fail because https://192.0.2.1:1 is unreachable, but proves wss conversion
         assertEquals(0, result.status)
@@ -557,7 +554,7 @@ class UptimeExtendedTest {
     @Test
     fun `websocket check with invalid url returns failure`() = runBlocking {
         val result = executor.executeCheck(
-            monitor(type = "websocket", url = "not a valid url ::::")
+            monitor(MonitorParams(type = "websocket", url = "not a valid url ::::"))
         )
         assertEquals(0, result.status)
     }
@@ -571,11 +568,7 @@ class UptimeExtendedTest {
             exchange.respond(200, """{"State":{"Running":true},"Name":"myapp"}""")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(
-                    type = "docker",
-                    dockerContainerName = "myapp",
-                    dockerHost = server.baseUrl
-                )
+                monitor(MonitorParams(type = "docker", dockerContainerName = "myapp", dockerHost = server.baseUrl))
             )
             assertEquals(1, result.status)
             assertTrue(result.message.contains("running"))
@@ -589,11 +582,7 @@ class UptimeExtendedTest {
             exchange.respond(200, """{"State":{"Running":false},"Name":"myapp"}""")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(
-                    type = "docker",
-                    dockerContainerName = "myapp",
-                    dockerHost = server.baseUrl
-                )
+                monitor(MonitorParams(type = "docker", dockerContainerName = "myapp", dockerHost = server.baseUrl))
             )
             assertEquals(0, result.status)
             assertTrue(result.message.contains("not running"))
@@ -607,11 +596,7 @@ class UptimeExtendedTest {
             exchange.respond(404, """{"message":"No such container"}""")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(
-                    type = "docker",
-                    dockerContainerName = "ghost",
-                    dockerHost = server.baseUrl
-                )
+                monitor(MonitorParams(type = "docker", dockerContainerName = "ghost", dockerHost = server.baseUrl))
             )
             assertEquals(0, result.status)
             assertTrue(result.message.contains("not found") || result.message.contains("error"))
@@ -628,7 +613,7 @@ class UptimeExtendedTest {
             conn.createStatement().execute("INSERT INTO health VALUES (1)")
         }
         val result = executor.executeCheck(
-            monitor(type = "database", dbConnectionString = connStr, dbQuery = "SELECT * FROM health")
+            monitor(MonitorParams(type = "database", dbConnectionString = connStr, dbQuery = "SELECT * FROM health"))
         )
         assertEquals(1, result.status)
         assertTrue(result.message.contains("Database connection successful"))
@@ -637,7 +622,7 @@ class UptimeExtendedTest {
     @Test
     fun `database check fails with invalid connection string`() = runBlocking {
         val result = executor.executeCheck(
-            monitor(type = "database", dbConnectionString = "jdbc:invalid://nope")
+            monitor(MonitorParams(type = "database", dbConnectionString = "jdbc:invalid://nope"))
         )
         assertEquals(0, result.status)
         assertTrue(result.message.contains("Database check failed"))
@@ -646,7 +631,7 @@ class UptimeExtendedTest {
     @Test
     fun `database check fails when no connection string`() = runBlocking {
         val result = executor.executeCheck(
-            monitor(type = "database", dbConnectionString = null)
+            monitor(MonitorParams(type = "database", dbConnectionString = null))
         )
         assertEquals(0, result.status)
         assertTrue(result.message.contains("No connection string configured"))
@@ -657,7 +642,7 @@ class UptimeExtendedTest {
     @Test
     fun `ssl check with non-existent host fails`() = runBlocking {
         val result = executor.executeCheck(
-            monitor(type = "ssl", hostname = "192.0.2.1", port = 443, timeoutSeconds = 2)
+            monitor(MonitorParams(type = "ssl", hostname = "192.0.2.1", port = 443, timeoutSeconds = 2))
         )
         assertEquals(0, result.status)
         assertTrue(result.message.contains("SSL check failed"))
@@ -668,7 +653,7 @@ class UptimeExtendedTest {
     @Test
     fun `ping check reports result for localhost`() = runBlocking {
         val result = executor.executeCheck(
-            monitor(type = "ping", hostname = "127.0.0.1", timeoutSeconds = 5)
+            monitor(MonitorParams(type = "ping", hostname = "127.0.0.1", timeoutSeconds = 5))
         )
         // localhost may or may not be reachable depending on OS permissions
         assertTrue(result.status == 0 || result.status == 1)
@@ -681,7 +666,7 @@ class UptimeExtendedTest {
     fun `dns check uses default A record type when not specified`() = runBlocking {
         // Uses a non-existent DNS name to test the flow without network dependency
         val result = executor.executeCheck(
-            monitor(type = "dns", hostname = "this.does.not.exist.invalid", timeoutSeconds = 3)
+            monitor(MonitorParams(type = "dns", hostname = "this.does.not.exist.invalid", timeoutSeconds = 3))
         )
         assertEquals(0, result.status)
     }
@@ -696,7 +681,7 @@ class UptimeExtendedTest {
             exchange.respond(200, "OK")
         }.use { server ->
             val result = executor.executeCheck(
-                monitor(type = "http", url = server.baseUrl, timeoutSeconds = 1)
+                monitor(MonitorParams(type = "http", url = server.baseUrl, timeoutSeconds = 1))
             )
             assertEquals(0, result.status)
             assertTrue(

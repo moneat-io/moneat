@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.DiscordService
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.testsupport.MockHttpServer
@@ -35,6 +36,10 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlin.test.AfterTest
 
 class DiscordServiceBuildersTest {
     companion object {
@@ -45,6 +50,8 @@ class DiscordServiceBuildersTest {
 
     @BeforeTest
     fun setupDatabase() {
+        mockkObject(EnvConfig)
+        every { EnvConfig.get("DISCORD_BOT_TOKEN") } returns ""
         if (db == null) {
             db = Database.connect(
                 url =
@@ -58,6 +65,11 @@ class DiscordServiceBuildersTest {
         discordService = DiscordService()
     }
 
+    @AfterTest
+    fun teardown() {
+        unmockkObject(EnvConfig)
+    }
+
     private fun seedOrg(name: String = "Discord Org"): Int =
         transaction {
             Organizations.insert {
@@ -65,22 +77,6 @@ class DiscordServiceBuildersTest {
                 it[slug] = name.lowercase().replace(" ", "-")
             } get Organizations.id
         }
-
-    private fun seedDiscordIntegration(orgId: Int) {
-        transaction {
-            OrganizationIntegrations.insert {
-                it[organization_id] = orgId
-                it[integration_type] = "discord"
-                it[team_id] = "123456789012345678"
-                it[team_name] = "Test Guild"
-                it[channel_id] = "987654321012345678"
-                it[channel_name] = "alerts"
-                it[enabled] = true
-                it[created_at] = Clock.System.now()
-                it[updated_at] = Clock.System.now()
-            }
-        }
-    }
 
     // ── No-config path tests ────────────────────────────────────────────
 
@@ -203,14 +199,16 @@ class DiscordServiceBuildersTest {
     @Test
     fun `buildHostAlertEmbed returns embed with expected title fields color url`() {
         val embed = DiscordService.buildHostAlertEmbed(
-            hostName = "api-prod-1",
-            metric = "Memory Usage",
-            condition = ">",
-            threshold = "85%",
-            currentValue = "92%",
-            hostId = 42,
-            baseUrl = "https://app.moneat.io",
-            timestamp = "2024-01-15T10:00:00Z"
+            DiscordService.HostAlertParams(
+                hostName = "api-prod-1",
+                metric = "Memory Usage",
+                condition = ">",
+                threshold = "85%",
+                currentValue = "92%",
+                hostId = 42,
+                baseUrl = "https://app.moneat.io",
+                timestamp = "2024-01-15T10:00:00Z"
+            )
         )
         assertEquals("⚠️ Host Alert", embed.title)
         assertEquals("**api-prod-1** triggered an alert", embed.description)
@@ -272,13 +270,15 @@ class DiscordServiceBuildersTest {
     fun `buildUptimeAlertEmbed down with error message includes status and response time`() {
         val monitorId = UUID.fromString("11111111-1111-1111-1111-111111111111")
         val embed = DiscordService.buildUptimeAlertEmbed(
-            monitorUrl = "https://api.moneat.io/health",
-            isDown = true,
-            statusCode = null,
-            responseTime = 5000L,
-            errorMessage = "Connection refused",
-            monitorId = monitorId,
-            baseUrl = "https://app.moneat.io"
+            DiscordService.UptimeAlertParams(
+                monitorUrl = "https://api.moneat.io/health",
+                isDown = true,
+                statusCode = null,
+                responseTime = 5000L,
+                errorMessage = "Connection refused",
+                monitorId = monitorId,
+                baseUrl = "https://app.moneat.io"
+            )
         )
         assertEquals("🔴 Uptime Monitor Down", embed.title)
         assertEquals("Monitor detected a failure", embed.description)
@@ -298,13 +298,15 @@ class DiscordServiceBuildersTest {
     fun `buildUptimeAlertEmbed down with status code uses HTTP status`() {
         val monitorId = UUID.randomUUID()
         val embed = DiscordService.buildUptimeAlertEmbed(
-            monitorUrl = "https://api.moneat.io/health",
-            isDown = true,
-            statusCode = 503,
-            responseTime = 1200L,
-            errorMessage = null,
-            monitorId = monitorId,
-            baseUrl = "https://app.moneat.io"
+            DiscordService.UptimeAlertParams(
+                monitorUrl = "https://api.moneat.io/health",
+                isDown = true,
+                statusCode = 503,
+                responseTime = 1200L,
+                errorMessage = null,
+                monitorId = monitorId,
+                baseUrl = "https://app.moneat.io"
+            )
         )
         assertEquals("🔴 Uptime Monitor Down", embed.title)
         val fields = requireNotNull(embed.fields)
@@ -316,13 +318,15 @@ class DiscordServiceBuildersTest {
     fun `buildUptimeAlertEmbed down with unknown status uses Unknown`() {
         val monitorId = UUID.randomUUID()
         val embed = DiscordService.buildUptimeAlertEmbed(
-            monitorUrl = "https://api.moneat.io/health",
-            isDown = true,
-            statusCode = null,
-            responseTime = null,
-            errorMessage = null,
-            monitorId = monitorId,
-            baseUrl = "https://app.moneat.io"
+            DiscordService.UptimeAlertParams(
+                monitorUrl = "https://api.moneat.io/health",
+                isDown = true,
+                statusCode = null,
+                responseTime = null,
+                errorMessage = null,
+                monitorId = monitorId,
+                baseUrl = "https://app.moneat.io"
+            )
         )
         assertEquals("🔴 Uptime Monitor Down", embed.title)
         val fields = requireNotNull(embed.fields)
@@ -334,13 +338,15 @@ class DiscordServiceBuildersTest {
     fun `buildUptimeAlertEmbed recovered uses green color and recovery message`() {
         val monitorId = UUID.randomUUID()
         val embed = DiscordService.buildUptimeAlertEmbed(
-            monitorUrl = "https://api.moneat.io/health",
-            isDown = false,
-            statusCode = 200,
-            responseTime = 45L,
-            errorMessage = null,
-            monitorId = monitorId,
-            baseUrl = "https://app.moneat.io"
+            DiscordService.UptimeAlertParams(
+                monitorUrl = "https://api.moneat.io/health",
+                isDown = false,
+                statusCode = 200,
+                responseTime = 45L,
+                errorMessage = null,
+                monitorId = monitorId,
+                baseUrl = "https://app.moneat.io"
+            )
         )
         assertEquals("✅ Uptime Monitor Recovered", embed.title)
         assertEquals("Monitor has recovered", embed.description)
@@ -353,15 +359,17 @@ class DiscordServiceBuildersTest {
     @Test
     fun `buildDashboardAlertEmbed CRITICAL severity uses red color`() {
         val embed = DiscordService.buildDashboardAlertEmbed(
-            alertName = "Error Spike",
-            dashboardTitle = "Production Overview",
-            widgetTitle = "Error Rate",
-            condition = ">",
-            threshold = "5%",
-            currentValue = "12%",
-            severity = "CRITICAL",
-            dashboardId = 10L,
-            baseUrl = "https://app.moneat.io"
+            DiscordService.DashboardAlertParams(
+                alertName = "Error Spike",
+                dashboardTitle = "Production Overview",
+                widgetTitle = "Error Rate",
+                condition = ">",
+                threshold = "5%",
+                currentValue = "12%",
+                severity = "CRITICAL",
+                dashboardId = 10L,
+                baseUrl = "https://app.moneat.io"
+            )
         )
         assertEquals("📊 Dashboard Alert: Error Spike", embed.title)
         assertEquals("Alert triggered on **Error Rate** in *Production Overview*", embed.description)
@@ -377,15 +385,17 @@ class DiscordServiceBuildersTest {
     @Test
     fun `buildDashboardAlertEmbed MEDIUM severity uses yellow color`() {
         val embed = DiscordService.buildDashboardAlertEmbed(
-            alertName = "Throughput Low",
-            dashboardTitle = "Service Health",
-            widgetTitle = "RPS",
-            condition = "<",
-            threshold = "100",
-            currentValue = "45",
-            severity = "MEDIUM",
-            dashboardId = 12L,
-            baseUrl = "https://app.moneat.io"
+            DiscordService.DashboardAlertParams(
+                alertName = "Throughput Low",
+                dashboardTitle = "Service Health",
+                widgetTitle = "RPS",
+                condition = "<",
+                threshold = "100",
+                currentValue = "45",
+                severity = "MEDIUM",
+                dashboardId = 12L,
+                baseUrl = "https://app.moneat.io"
+            )
         )
         assertEquals(0xECB22E, embed.color)
         val fields = requireNotNull(embed.fields)
@@ -396,15 +406,17 @@ class DiscordServiceBuildersTest {
     @Test
     fun `buildDashboardAlertEmbed null severity defaults to yellow`() {
         val embed = DiscordService.buildDashboardAlertEmbed(
-            alertName = "Custom Alert",
-            dashboardTitle = "Custom Dashboard",
-            widgetTitle = "Widget",
-            condition = "=",
-            threshold = "0",
-            currentValue = "1",
-            severity = null,
-            dashboardId = 14L,
-            baseUrl = "https://app.moneat.io"
+            DiscordService.DashboardAlertParams(
+                alertName = "Custom Alert",
+                dashboardTitle = "Custom Dashboard",
+                widgetTitle = "Widget",
+                condition = "=",
+                threshold = "0",
+                currentValue = "1",
+                severity = null,
+                dashboardId = 14L,
+                baseUrl = "https://app.moneat.io"
+            )
         )
         assertEquals(0xECB22E, embed.color)
     }
@@ -412,13 +424,15 @@ class DiscordServiceBuildersTest {
     @Test
     fun `buildErrorAlertEmbed fatal level uses red color`() {
         val embed = DiscordService.buildErrorAlertEmbed(
-            projectName = "Backend API",
-            issueTitle = "OutOfMemoryError",
-            level = "fatal",
-            firstSeen = "2024-06-15T10:30:00Z",
-            eventCount = 3,
-            userCount = 2,
-            issueUrl = "https://app.moneat.io/issues/600"
+            DiscordService.ErrorAlertParams(
+                projectName = "Backend API",
+                issueTitle = "OutOfMemoryError",
+                level = "fatal",
+                firstSeen = "2024-06-15T10:30:00Z",
+                eventCount = 3,
+                userCount = 2,
+                issueUrl = "https://app.moneat.io/issues/600"
+            )
         )
         assertEquals("🐛 New Issue Detected", embed.title)
         assertEquals("**OutOfMemoryError**", embed.description)
@@ -434,13 +448,15 @@ class DiscordServiceBuildersTest {
     @Test
     fun `buildErrorAlertEmbed warning level uses yellow color`() {
         val embed = DiscordService.buildErrorAlertEmbed(
-            projectName = "Worker",
-            issueTitle = "Deprecated API usage",
-            level = "warning",
-            firstSeen = "2024-06-15T11:00:00Z",
-            eventCount = 100,
-            userCount = 50,
-            issueUrl = "https://app.moneat.io/issues/501"
+            DiscordService.ErrorAlertParams(
+                projectName = "Worker",
+                issueTitle = "Deprecated API usage",
+                level = "warning",
+                firstSeen = "2024-06-15T11:00:00Z",
+                eventCount = 100,
+                userCount = 50,
+                issueUrl = "https://app.moneat.io/issues/501"
+            )
         )
         assertEquals(0xECB22E, embed.color)
         val fields = requireNotNull(embed.fields)
@@ -450,13 +466,15 @@ class DiscordServiceBuildersTest {
     @Test
     fun `buildErrorAlertEmbed info level uses green color`() {
         val embed = DiscordService.buildErrorAlertEmbed(
-            projectName = "Frontend",
-            issueTitle = "Feature flag evaluated",
-            level = "info",
-            firstSeen = "2024-06-15T12:00:00Z",
-            eventCount = 1,
-            userCount = 1,
-            issueUrl = "https://app.moneat.io/issues/502"
+            DiscordService.ErrorAlertParams(
+                projectName = "Frontend",
+                issueTitle = "Feature flag evaluated",
+                level = "info",
+                firstSeen = "2024-06-15T12:00:00Z",
+                eventCount = 1,
+                userCount = 1,
+                issueUrl = "https://app.moneat.io/issues/502"
+            )
         )
         assertEquals(0x2EB67D, embed.color)
         val fields = requireNotNull(embed.fields)

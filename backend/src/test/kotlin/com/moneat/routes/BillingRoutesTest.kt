@@ -74,6 +74,14 @@ import kotlin.test.assertTrue
 class BillingRoutesTest {
     companion object {
         private const val JWT_SECRET = "billing-mock-secret"
+        private const val BILLING_USAGE = "/v1/billing/usage"
+        private const val BILLING_CHECKOUT = "/v1/billing/checkout"
+        private const val BILLING_INVOICES = "/v1/billing/invoices"
+        private const val BILLING_PAYMENT_METHOD = "/v1/billing/payment-method"
+        private const val BILLING_SETUP_INTENT = "/v1/billing/setup-intent"
+        private const val BILLING_CANCEL = "/v1/billing/cancel"
+        private const val BILLING_PAYG_BUDGET = "/v1/billing/payg-budget"
+        private const val BILLING_ONCALL_SEATS = "/v1/billing/oncall-seats"
         private var db: Database? = null
     }
 
@@ -210,7 +218,7 @@ class BillingRoutesTest {
     fun `GET usage returns 401 when unauthenticated`() =
         testApplication {
             application { installRoutes(this) }
-            val r = client.get("/v1/billing/usage")
+            val r = client.get(BILLING_USAGE)
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
@@ -218,7 +226,7 @@ class BillingRoutesTest {
     fun `POST checkout returns 401 when unauthenticated`() =
         testApplication {
             application { installRoutes(this) }
-            val r = client.post("/v1/billing/checkout")
+            val r = client.post(BILLING_CHECKOUT)
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
@@ -226,7 +234,7 @@ class BillingRoutesTest {
     fun `GET invoices returns 401 when unauthenticated`() =
         testApplication {
             application { installRoutes(this) }
-            val r = client.get("/v1/billing/invoices")
+            val r = client.get(BILLING_INVOICES)
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
@@ -234,7 +242,7 @@ class BillingRoutesTest {
     fun `GET payment-method returns 401 when unauthenticated`() =
         testApplication {
             application { installRoutes(this) }
-            val r = client.get("/v1/billing/payment-method")
+            val r = client.get(BILLING_PAYMENT_METHOD)
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
@@ -242,7 +250,7 @@ class BillingRoutesTest {
     fun `POST setup-intent returns 401 when unauthenticated`() =
         testApplication {
             application { installRoutes(this) }
-            val r = client.post("/v1/billing/setup-intent")
+            val r = client.post(BILLING_SETUP_INTENT)
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
@@ -250,7 +258,7 @@ class BillingRoutesTest {
     fun `POST cancel returns 401 when unauthenticated`() =
         testApplication {
             application { installRoutes(this) }
-            val r = client.post("/v1/billing/cancel")
+            val r = client.post(BILLING_CANCEL)
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
@@ -258,7 +266,7 @@ class BillingRoutesTest {
     fun `PUT payg-budget returns 401 when unauthenticated`() =
         testApplication {
             application { installRoutes(this) }
-            val r = client.put("/v1/billing/payg-budget")
+            val r = client.put(BILLING_PAYG_BUDGET)
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
@@ -266,7 +274,7 @@ class BillingRoutesTest {
     fun `PUT oncall-seats returns 401 when unauthenticated`() =
         testApplication {
             application { installRoutes(this) }
-            val r = client.put("/v1/billing/oncall-seats")
+            val r = client.put(BILLING_ONCALL_SEATS)
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
@@ -278,7 +286,7 @@ class BillingRoutesTest {
             val userId = seedUser()
             every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
-            val r = client.get("/v1/billing/usage") {
+            val r = client.get(BILLING_USAGE) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
@@ -290,7 +298,7 @@ class BillingRoutesTest {
             val userId = seedUser()
             every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
-            val r = client.post("/v1/billing/checkout") {
+            val r = client.post(BILLING_CHECKOUT) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"tierName":"PRO","successUrl":"http://x","cancelUrl":"http://y"}""")
@@ -304,7 +312,7 @@ class BillingRoutesTest {
             val userId = seedUser()
             every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
-            val r = client.get("/v1/billing/invoices") {
+            val r = client.get(BILLING_INVOICES) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
@@ -316,7 +324,7 @@ class BillingRoutesTest {
             val userId = seedUser()
             every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
-            val r = client.post("/v1/billing/cancel") {
+            val r = client.post(BILLING_CANCEL) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
@@ -338,7 +346,7 @@ class BillingRoutesTest {
             } returns 0L
             application { installRoutes(this) }
 
-            val r = client.get("/v1/billing/usage") {
+            val r = client.get(BILLING_USAGE) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.OK, r.status)
@@ -366,7 +374,7 @@ class BillingRoutesTest {
             } returns CheckoutSessionResponse(sessionId = "cs_123", url = "https://stripe.com/checkout")
             application { installRoutes(this) }
 
-            val r = client.post("/v1/billing/checkout") {
+            val r = client.post(BILLING_CHECKOUT) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody(
@@ -395,7 +403,7 @@ class BillingRoutesTest {
             } throws IllegalArgumentException("Invalid tier")
             application { installRoutes(this) }
 
-            val r = client.post("/v1/billing/checkout") {
+            val r = client.post(BILLING_CHECKOUT) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody(
@@ -422,7 +430,7 @@ class BillingRoutesTest {
             } throws RuntimeException("Stripe error")
             application { installRoutes(this) }
 
-            val r = client.post("/v1/billing/checkout") {
+            val r = client.post(BILLING_CHECKOUT) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody(
@@ -450,7 +458,7 @@ class BillingRoutesTest {
             )
             application { installRoutes(this) }
 
-            val r = client.get("/v1/billing/invoices") {
+            val r = client.get(BILLING_INVOICES) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.OK, r.status)
@@ -465,7 +473,7 @@ class BillingRoutesTest {
             every { mockStripeService.listInvoices(orgId) } throws RuntimeException("Stripe error")
             application { installRoutes(this) }
 
-            val r = client.get("/v1/billing/invoices") {
+            val r = client.get(BILLING_INVOICES) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
@@ -483,7 +491,7 @@ class BillingRoutesTest {
             )
             application { installRoutes(this) }
 
-            val r = client.get("/v1/billing/payment-method") {
+            val r = client.get(BILLING_PAYMENT_METHOD) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.OK, r.status)
@@ -498,7 +506,7 @@ class BillingRoutesTest {
             every { mockStripeService.getPaymentMethod(orgId) } throws RuntimeException("No customer")
             application { installRoutes(this) }
 
-            val r = client.get("/v1/billing/payment-method") {
+            val r = client.get(BILLING_PAYMENT_METHOD) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
@@ -516,7 +524,7 @@ class BillingRoutesTest {
             )
             application { installRoutes(this) }
 
-            val r = client.post("/v1/billing/setup-intent") {
+            val r = client.post(BILLING_SETUP_INTENT) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.OK, r.status)
@@ -531,7 +539,7 @@ class BillingRoutesTest {
             every { mockStripeService.createSetupIntent(orgId) } throws RuntimeException("Failed")
             application { installRoutes(this) }
 
-            val r = client.post("/v1/billing/setup-intent") {
+            val r = client.post(BILLING_SETUP_INTENT) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
@@ -589,7 +597,7 @@ class BillingRoutesTest {
             )
             application { installRoutes(this) }
 
-            val r = client.post("/v1/billing/cancel") {
+            val r = client.post(BILLING_CANCEL) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.OK, r.status)
@@ -606,7 +614,7 @@ class BillingRoutesTest {
             } throws IllegalStateException("No cancelable subscription")
             application { installRoutes(this) }
 
-            val r = client.post("/v1/billing/cancel") {
+            val r = client.post(BILLING_CANCEL) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
@@ -622,7 +630,7 @@ class BillingRoutesTest {
             } throws RuntimeException("Stripe outage")
             application { installRoutes(this) }
 
-            val r = client.post("/v1/billing/cancel") {
+            val r = client.post(BILLING_CANCEL) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.InternalServerError, r.status)
@@ -637,7 +645,7 @@ class BillingRoutesTest {
             every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             application { installRoutes(this) }
 
-            val r = client.put("/v1/billing/payg-budget") {
+            val r = client.put(BILLING_PAYG_BUDGET) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"paygBudgetCents":-500}""")
@@ -652,7 +660,7 @@ class BillingRoutesTest {
             every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             application { installRoutes(this) }
 
-            val r = client.put("/v1/billing/payg-budget") {
+            val r = client.put(BILLING_PAYG_BUDGET) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"paygBudgetCents":123}""")
@@ -671,7 +679,7 @@ class BillingRoutesTest {
             every { mockPricingTierService.getEffectiveTierForOrganization(orgId) } returns tierContext
             application { installRoutes(this) }
 
-            val r = client.put("/v1/billing/payg-budget") {
+            val r = client.put(BILLING_PAYG_BUDGET) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"paygBudgetCents":500}""")
@@ -700,7 +708,7 @@ class BillingRoutesTest {
             }
             application { installRoutes(this) }
 
-            val r = client.put("/v1/billing/payg-budget") {
+            val r = client.put(BILLING_PAYG_BUDGET) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"paygBudgetCents":1000}""")
@@ -720,7 +728,7 @@ class BillingRoutesTest {
             every { mockPricingTierService.getEffectiveTierForOrganization(orgId) } returns tierContext
             application { installRoutes(this) }
 
-            val r = client.put("/v1/billing/payg-budget") {
+            val r = client.put(BILLING_PAYG_BUDGET) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"paygBudgetCents":500}""")
@@ -737,7 +745,7 @@ class BillingRoutesTest {
             every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             application { installRoutes(this) }
 
-            val r = client.put("/v1/billing/oncall-seats") {
+            val r = client.put(BILLING_ONCALL_SEATS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"seats":-1}""")
@@ -753,7 +761,7 @@ class BillingRoutesTest {
             every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             application { installRoutes(this) }
 
-            val r = client.put("/v1/billing/oncall-seats") {
+            val r = client.put(BILLING_ONCALL_SEATS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"seats":201}""")
@@ -772,7 +780,7 @@ class BillingRoutesTest {
             } returns UpdateOnCallSeatsResponse(seats = 5, proratedAmountCents = 1450)
             application { installRoutes(this) }
 
-            val r = client.put("/v1/billing/oncall-seats") {
+            val r = client.put(BILLING_ONCALL_SEATS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"seats":5}""")
@@ -791,7 +799,7 @@ class BillingRoutesTest {
             } throws IllegalArgumentException("No subscription")
             application { installRoutes(this) }
 
-            val r = client.put("/v1/billing/oncall-seats") {
+            val r = client.put(BILLING_ONCALL_SEATS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"seats":3}""")
@@ -809,7 +817,7 @@ class BillingRoutesTest {
             } throws RuntimeException("Stripe outage")
             application { installRoutes(this) }
 
-            val r = client.put("/v1/billing/oncall-seats") {
+            val r = client.put(BILLING_ONCALL_SEATS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"seats":3}""")

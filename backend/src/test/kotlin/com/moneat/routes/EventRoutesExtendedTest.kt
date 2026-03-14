@@ -97,6 +97,9 @@ class EventRoutesExtendedTest {
         private var db: Database? = null
         private const val TEST_PROJECT_NAME = "Test Project"
         private const val SENTINEL_ID = 999L
+        private const val ISSUE_ALERTS_FALSE = """{"issueAlerts":false}"""
+        private const val DEFAULT_PAGE = 1
+        private const val DEFAULT_PAGE_SIZE = 25
     }
 
     private val mockDashboardService = mockk<DashboardService>(relaxed = true)
@@ -569,7 +572,7 @@ class EventRoutesExtendedTest {
         val (userId, projectId) = seedUserWithProject()
         every { mockDashboardService.hasProjectAccess(userId, projectId) } returns true
         coEvery {
-            mockDashboardService.getReplays(projectId, 1, 25, null, "7d", any())
+            mockDashboardService.getReplays(projectId, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, null, "7d", any())
         } returns listOf(sampleReplayListItem(projectId))
 
         application { installTestApp() }
@@ -933,7 +936,7 @@ class EventRoutesExtendedTest {
         application { installTestApp() }
         val response = client.put("/v1/notification-preferences") {
             contentType(ContentType.Application.Json)
-            setBody("""{"issueAlerts":false}""")
+            setBody(ISSUE_ALERTS_FALSE)
         }
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
@@ -943,7 +946,7 @@ class EventRoutesExtendedTest {
         application { installTestApp() }
         val response = client.put("/v1/notification-preferences/1") {
             contentType(ContentType.Application.Json)
-            setBody("""{"issueAlerts":false}""")
+            setBody(ISSUE_ALERTS_FALSE)
         }
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
@@ -957,7 +960,7 @@ class EventRoutesExtendedTest {
         val response = client.put("/v1/notification-preferences/$SENTINEL_ID") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             contentType(ContentType.Application.Json)
-            setBody("""{"issueAlerts":false}""")
+            setBody(ISSUE_ALERTS_FALSE)
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }

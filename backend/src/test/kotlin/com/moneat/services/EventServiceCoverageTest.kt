@@ -316,7 +316,13 @@ class EventServiceCoverageTest {
                 items = listOf(EnvelopeItem("session", """{"sid":"abc"}"""))
             )
         )
-        // No crash - session items are skipped
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
+        coVerify(exactly = 0) { eventRepository.insertTransaction(any()) }
+        coVerify(exactly = 0) { eventRepository.insertSpans(any()) }
+        coVerify(exactly = 0) { eventRepository.insertFeedback(any()) }
+        coVerify(exactly = 0) { eventRepository.insertReplayEvent(any()) }
+        coVerify(exactly = 0) { eventRepository.insertReplayRecording(any()) }
+        coVerify(exactly = 0) { eventRepository.insertProfile(any()) }
     }
 
     @Test
@@ -328,7 +334,13 @@ class EventServiceCoverageTest {
                 items = listOf(EnvelopeItem("custom_type", """{"data":"test"}"""))
             )
         )
-        // No crash - unknown items are logged and skipped
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
+        coVerify(exactly = 0) { eventRepository.insertTransaction(any()) }
+        coVerify(exactly = 0) { eventRepository.insertSpans(any()) }
+        coVerify(exactly = 0) { eventRepository.insertFeedback(any()) }
+        coVerify(exactly = 0) { eventRepository.insertReplayEvent(any()) }
+        coVerify(exactly = 0) { eventRepository.insertReplayRecording(any()) }
+        coVerify(exactly = 0) { eventRepository.insertProfile(any()) }
     }
 
     @Test

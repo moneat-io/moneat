@@ -64,6 +64,7 @@ class AnalyticsRoutesTest {
     companion object {
         private const val JWT_SECRET = "analytics-mock-secret"
         private const val PROJECT_ID = 1L
+        private const val OVERVIEW_PERIOD_30D = "/overview?period=30d"
         private var db: Database? = null
     }
 
@@ -136,13 +137,6 @@ class AnalyticsRoutesTest {
         }
     }
 
-    private fun seedUserAndOrg(): Pair<Int, Int> {
-        val orgId = seedOrg()
-        val userId = seedUser()
-        seedMembership(userId, orgId)
-        return Pair(userId, orgId)
-    }
-
     private fun installRoutes(app: Application) {
         app.installAuth()
         app.routing {
@@ -197,7 +191,7 @@ class AnalyticsRoutesTest {
     @Test
     fun `returns 401 when unauthenticated`() = testApplication {
         application { installRoutes(this) }
-        val r = client.get(authedGet("/overview?period=30d"))
+        val r = client.get(authedGet(OVERVIEW_PERIOD_30D))
         assertEquals(HttpStatusCode.Unauthorized, r.status)
     }
 
@@ -208,7 +202,7 @@ class AnalyticsRoutesTest {
             .withIssuer("wrong-issuer")
             .withClaim("userId", 1)
             .sign(Algorithm.HMAC256("wrong-secret"))
-        val r = client.get(authedGet("/overview?period=30d")) {
+        val r = client.get(authedGet(OVERVIEW_PERIOD_30D)) {
             header(HttpHeaders.Authorization, "Bearer $badToken")
         }
         assertEquals(HttpStatusCode.Unauthorized, r.status)
@@ -219,7 +213,7 @@ class AnalyticsRoutesTest {
         val userId = seedUser()
         stubNoAccess(userId)
         application { installRoutes(this) }
-        val r = client.get(authedGet("/overview?period=30d")) {
+        val r = client.get(authedGet(OVERVIEW_PERIOD_30D)) {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, r.status)
@@ -245,7 +239,7 @@ class AnalyticsRoutesTest {
             mockAnalyticsService.getOverview(PROJECT_ID, any(), any(), any(), any(), any())
         } returns overviewResponse
         application { installRoutes(this) }
-        val r = client.get(authedGet("/overview?period=30d")) {
+        val r = client.get(authedGet("/overview")) {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.OK, r.status)

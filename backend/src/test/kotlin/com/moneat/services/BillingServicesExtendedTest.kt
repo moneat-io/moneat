@@ -121,13 +121,15 @@ class BillingServicesExtendedTest {
                 monthlyGbLimit = 10L * BYTES_PER_GB
             )
             testSubId = insertTestSubscription(
-                organizationId = testOrgId,
-                plan = "PRO",
-                status = "active",
-                paygBudgetCents = 10000,
-                pricingTierConfigId = proTierId,
-                stripeCustomerId = mockCustomerId,
-                stripeSubscriptionId = mockSubscriptionId
+                SubscriptionParams(
+                    organizationId = testOrgId,
+                    plan = "PRO",
+                    status = "active",
+                    paygBudgetCents = 10000,
+                    pricingTierConfigId = proTierId,
+                    stripeCustomerId = mockCustomerId,
+                    stripeSubscriptionId = mockSubscriptionId
+                )
             )
         }
     }
@@ -289,13 +291,15 @@ class BillingServicesExtendedTest {
                 it[billing_grace_until] = expiredGrace
             }
             insertTestSubscription(
-                organizationId = secondOrgId,
-                plan = "PRO",
-                status = "past_due",
-                paygBudgetCents = 5000,
-                pricingTierConfigId = proTierId,
-                stripeCustomerId = "cus_second",
-                billingGraceUntil = expiredGrace
+                SubscriptionParams(
+                    organizationId = secondOrgId,
+                    plan = "PRO",
+                    status = "past_due",
+                    paygBudgetCents = 5000,
+                    pricingTierConfigId = proTierId,
+                    stripeCustomerId = "cus_second",
+                    billingGraceUntil = expiredGrace
+                )
             )
         }
 
@@ -1122,34 +1126,36 @@ class BillingServicesExtendedTest {
         }[Organizations.id]
     }
 
-    private fun insertTestSubscription(
-        organizationId: Int,
-        plan: String,
-        status: String,
-        paygBudgetCents: Int,
-        pricingTierConfigId: Int? = null,
-        stripeCustomerId: String? = null,
-        stripeSubscriptionId: String? = null,
-        billingGraceUntil: Instant? = null
-    ): Int {
+    private data class SubscriptionParams(
+        val organizationId: Int,
+        val plan: String,
+        val status: String,
+        val paygBudgetCents: Int,
+        val pricingTierConfigId: Int? = null,
+        val stripeCustomerId: String? = null,
+        val stripeSubscriptionId: String? = null,
+        val billingGraceUntil: Instant? = null
+    )
+
+    private fun insertTestSubscription(p: SubscriptionParams): Int {
         val now = Clock.System.now()
         return Subscriptions.insert {
-            it[Subscriptions.organization_id] = organizationId
-            it[Subscriptions.plan] = plan
-            it[Subscriptions.status] = status
+            it[Subscriptions.organization_id] = p.organizationId
+            it[Subscriptions.plan] = p.plan
+            it[Subscriptions.status] = p.status
             it[Subscriptions.billing_interval] = "monthly"
             it[Subscriptions.current_period_start] = now
             it[Subscriptions.current_period_end] = now + 30.days
-            it[Subscriptions.pricing_tier_config_id] = pricingTierConfigId
-            it[Subscriptions.payg_budget_cents] = paygBudgetCents
+            it[Subscriptions.pricing_tier_config_id] = p.pricingTierConfigId
+            it[Subscriptions.payg_budget_cents] = p.paygBudgetCents
             it[Subscriptions.payg_used_units] = 0
             it[Subscriptions.payg_used_micros] = 0
             it[Subscriptions.pending_meter_units] = 0
             it[Subscriptions.pending_meter_batch_id] = null
             it[Subscriptions.pending_meter_batch_units] = 0
-            it[Subscriptions.stripe_customer_id] = stripeCustomerId
-            it[Subscriptions.stripe_subscription_id] = stripeSubscriptionId
-            it[Subscriptions.billing_grace_until] = billingGraceUntil
+            it[Subscriptions.stripe_customer_id] = p.stripeCustomerId
+            it[Subscriptions.stripe_subscription_id] = p.stripeSubscriptionId
+            it[Subscriptions.billing_grace_until] = p.billingGraceUntil
         }[Subscriptions.id]
     }
 

@@ -36,6 +36,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DashboardQueryHelperTest {
+    companion object {
+        private const val NORMALIZED_UUID = "01234567-89ab-cdef-0123-456789abcdef"
+        private const val DEMO_EPOCH = 1705316445000L
+    }
+
     private val retentionPolicyService = mockk<RetentionPolicyService>()
     private val pricingTierService = mockk<PricingTierService>()
     private lateinit var helper: DashboardQueryHelper
@@ -54,27 +59,25 @@ class DashboardQueryHelperTest {
 
     @Test
     fun `normalizeUuid returns standard UUID unchanged`() {
-        val uuid = "01234567-89ab-cdef-0123-456789abcdef"
-        assertEquals(uuid, helper.normalizeUuid(uuid))
+        assertEquals(NORMALIZED_UUID, helper.normalizeUuid(NORMALIZED_UUID))
     }
 
     @Test
     fun `normalizeUuid converts 32-char hex to standard format`() {
         val hex = "0123456789abcdef0123456789abcdef"
-        val expected = "01234567-89ab-cdef-0123-456789abcdef"
-        assertEquals(expected, helper.normalizeUuid(hex))
+        assertEquals(NORMALIZED_UUID, helper.normalizeUuid(hex))
     }
 
     @Test
     fun `normalizeUuid handles uppercase input`() {
         val uuid = "01234567-89AB-CDEF-0123-456789ABCDEF"
-        assertEquals("01234567-89ab-cdef-0123-456789abcdef", helper.normalizeUuid(uuid))
+        assertEquals(NORMALIZED_UUID, helper.normalizeUuid(uuid))
     }
 
     @Test
     fun `normalizeUuid handles uppercase hex input`() {
         val hex = "0123456789ABCDEF0123456789ABCDEF"
-        assertEquals("01234567-89ab-cdef-0123-456789abcdef", helper.normalizeUuid(hex))
+        assertEquals(NORMALIZED_UUID, helper.normalizeUuid(hex))
     }
 
     @Test
@@ -87,8 +90,8 @@ class DashboardQueryHelperTest {
 
     @Test
     fun `normalizeUuid trims whitespace`() {
-        val uuid = "  01234567-89ab-cdef-0123-456789abcdef  "
-        assertEquals("01234567-89ab-cdef-0123-456789abcdef", helper.normalizeUuid(uuid))
+        val uuid = "  $NORMALIZED_UUID  "
+        assertEquals(NORMALIZED_UUID, helper.normalizeUuid(uuid))
     }
 
     // ============ getPeriodConfig ============
@@ -142,9 +145,8 @@ class DashboardQueryHelperTest {
 
     @Test
     fun `demoNowClause returns toDateTime64 when epoch provided`() {
-        val result = helper.demoNowClause(1705316445000L)
-        assertTrue(result.startsWith("toDateTime64("), "Expected toDateTime64, got: $result")
-        assertTrue(result.contains(", 3)"), "Expected precision 3 in: $result")
+        val result = helper.demoNowClause(DEMO_EPOCH)
+        assertEquals("toDateTime64(${DEMO_EPOCH / 1000.0}, 3)", result)
     }
 
     // ============ timestampRetentionClause ============
@@ -157,9 +159,9 @@ class DashboardQueryHelperTest {
 
     @Test
     fun `timestampRetentionClause uses demo epoch when provided`() {
-        val clause = helper.timestampRetentionClause("timestamp", 30, 1705316445000L)
-        assertTrue(clause.contains("toDateTime64"))
-        assertTrue(clause.contains("INTERVAL 30 DAY"))
+        val clause = helper.timestampRetentionClause("timestamp", 30, DEMO_EPOCH)
+        val expected = "timestamp >= toDateTime64(${DEMO_EPOCH / 1000.0}, 3) - INTERVAL 30 DAY"
+        assertEquals(expected, clause)
     }
 
     // ============ buildTransactionFilterClause ============
@@ -461,8 +463,13 @@ class DashboardQueryHelperTest {
 
     @Test
     fun `executeSlowestTransactionsQuery parses slowest transactions`() = runBlocking {
-        val body = """{"event_id":"evt-1","name":"GET /api","op":"http.server","duration":1500.0,"timestamp_iso":"2026-01-01T00:00:00.000Z"}
-        """.trimIndent()
+        val body = buildJsonObject {
+            put("event_id", "evt-1")
+            put("name", "GET /api")
+            put("op", "http.server")
+            put("duration", 1500.0)
+            put("timestamp_iso", "2026-01-01T00:00:00.000Z")
+        }.toString()
         MockHttpServer { exchange ->
             exchange.respond(200, body, "text/plain")
         }.use { server ->

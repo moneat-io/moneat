@@ -59,6 +59,7 @@ import kotlin.test.assertTrue
 class InfraRoutesTest {
     companion object {
         private const val JWT_SECRET = "infra-mock-secret"
+        private const val INFRA_EVENTS_PATH = "/v1/infra/events"
     }
 
     @BeforeTest
@@ -156,7 +157,7 @@ class InfraRoutesTest {
             installAuth()
             routing { infraRoutes() }
         }
-        val response = client.get("/v1/infra/events")
+        val response = client.get(INFRA_EVENTS_PATH)
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
@@ -172,7 +173,7 @@ class InfraRoutesTest {
                 routing { infraRoutes() }
             }
 
-            val response = client.get("/v1/infra/events") {
+            val response = client.get(INFRA_EVENTS_PATH) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -191,7 +192,7 @@ class InfraRoutesTest {
             routing { infraRoutes() }
         }
 
-        val response = client.get("/v1/infra/events") {
+        val response = client.get(INFRA_EVENTS_PATH) {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -209,7 +210,7 @@ class InfraRoutesTest {
                 routing { infraRoutes() }
             }
 
-            val response = client.get("/v1/infra/events") {
+            val response = client.get(INFRA_EVENTS_PATH) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)

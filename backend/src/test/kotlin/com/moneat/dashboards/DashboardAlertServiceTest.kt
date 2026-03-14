@@ -209,6 +209,7 @@ class DashboardAlertServiceTest {
             } get DashboardWidgets.id
         }
 
+    @Suppress("LongParameterList")
     private fun buildCreateRequest(
         widgetId: Long,
         name: String = "High Error Rate",

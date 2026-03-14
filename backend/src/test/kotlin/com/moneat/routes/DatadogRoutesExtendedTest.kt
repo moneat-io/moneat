@@ -96,9 +96,15 @@ import kotlin.test.assertTrue
 class DatadogRoutesExtendedTest {
 
     companion object {
-        private const val JWT_SECRET = "dd-routes-test-secret"
+        private const val JWT_SECRET = "JWT_SECRET_PLACEHOLDER"
         private const val TEST_ORG_ID = 1
-        private const val TEST_API_KEY = "test-dd-api-key-abc123"
+        private const val TEST_API_KEY = "TEST_API_KEY_PLACEHOLDER"
+        private const val DD_API_KEY_HEADER = "DD-API-KEY"
+        private const val DD_METADATA_PATH = "/dd/api/v1/metadata"
+        private const val TEST_HOST = "test-host"
+        private const val DD_LOGS_PATH = "/dd/api/v2/logs"
+        private const val EMPTY_ROWS_JSON = """{"rows":[]}"""
+        private const val AGENT_API_KEYS_PATH = "/v1/agent-api-keys"
         private var db: Database? = null
     }
 
@@ -247,10 +253,10 @@ class DatadogRoutesExtendedTest {
             install(ContentNegotiation) { json() }
             routing { datadogHostIngestRoutes() }
         }
-        val response = client.post("/dd/api/v1/metadata") {
-            header("DD-API-KEY", TEST_API_KEY)
+        val response = client.post(DD_METADATA_PATH) {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
-            setBody("""{"hostname":"test-host","agent_version":"7.0"}""")
+            setBody("""{"hostname":"$TEST_HOST","agent_version":"7.0"}""")
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
         assertTrue(response.bodyAsText().contains("ok"))
@@ -267,8 +273,8 @@ class DatadogRoutesExtendedTest {
                 install(ContentNegotiation) { json() }
                 routing { datadogHostIngestRoutes() }
             }
-            val response = client.post("/dd/api/v1/metadata") {
-                header("DD-API-KEY", TEST_API_KEY)
+            val response = client.post(DD_METADATA_PATH) {
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("not valid json!!!")
             }
@@ -282,7 +288,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogHostIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/host_metadata") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"hostname":"v2-host","os":"linux"}""")
         }
@@ -296,7 +302,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogHostIngestRoutes() }
         }
         val response = client.post("/dd/intake/") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"apiKey":"k","gohai":"{}"}""")
         }
@@ -311,7 +317,7 @@ class DatadogRoutesExtendedTest {
                 routing { datadogHostIngestRoutes() }
             }
             val response = client.post("/dd/intake/") {
-                header("DD-API-KEY", TEST_API_KEY)
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("bad json")
             }
@@ -337,7 +343,7 @@ class DatadogRoutesExtendedTest {
                 install(ContentNegotiation) { json() }
                 routing { datadogHostIngestRoutes() }
             }
-            val response = client.post("/dd/api/v1/metadata") {
+            val response = client.post(DD_METADATA_PATH) {
                 contentType(ContentType.Application.Json)
                 setBody("""{"hostname":"test"}""")
             }
@@ -360,7 +366,7 @@ class DatadogRoutesExtendedTest {
             header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("test-host"))
+        assertTrue(response.bodyAsText().contains(TEST_HOST))
         assertTrue(response.bodyAsText().contains("totalCount"))
     }
 
@@ -376,7 +382,7 @@ class DatadogRoutesExtendedTest {
             header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("test-host"))
+        assertTrue(response.bodyAsText().contains(TEST_HOST))
     }
 
     @Test
@@ -453,7 +459,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogMetricRoutes() }
         }
         val response = client.post("/dd/api/v1/series") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody(
                 """{"series":[{"metric":"system.cpu","type":"gauge",""" +
@@ -471,7 +477,7 @@ class DatadogRoutesExtendedTest {
                 routing { datadogMetricRoutes() }
             }
             val response = client.post("/dd/api/v1/series") {
-                header("DD-API-KEY", TEST_API_KEY)
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("bad json")
             }
@@ -485,7 +491,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogMetricRoutes() }
         }
         val response = client.post("/dd/api/v2/series") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody(
                 """{"series":[{"metric":"sys.mem","type":"gauge",""" +
@@ -502,7 +508,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogMetricRoutes() }
         }
         val response = client.post("/dd/api/v3/series") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody(
                 """{"series":[{"metric":"sys.load","type":"gauge",""" +
@@ -520,7 +526,7 @@ class DatadogRoutesExtendedTest {
                 routing { datadogMetricRoutes() }
             }
             val response = client.post("/dd/api/v1/sketches") {
-                header("DD-API-KEY", TEST_API_KEY)
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("")
             }
@@ -534,7 +540,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogMetricRoutes() }
         }
         val response = client.post("/dd/api/beta/sketches") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("")
         }
@@ -549,7 +555,7 @@ class DatadogRoutesExtendedTest {
                 routing { datadogMetricRoutes() }
             }
             val response = client.post("/dd/api/v1/sketches") {
-                header("DD-API-KEY", TEST_API_KEY)
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("""{"sketches":[]}""")
             }
@@ -565,7 +571,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogEventRoutes() }
         }
         val response = client.post("/dd/api/v1/check_run") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody(
                 """[{"check":"cpu","host_name":"h1","status":0}]"""
@@ -582,7 +588,7 @@ class DatadogRoutesExtendedTest {
                 routing { datadogEventRoutes() }
             }
             val response = client.post("/dd/api/v1/check_run") {
-                header("DD-API-KEY", TEST_API_KEY)
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("not json")
             }
@@ -596,7 +602,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogEventRoutes() }
         }
         val response = client.post("/dd/api/v2/events") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"events":[{"title":"test","text":"hello"}]}""")
         }
@@ -610,7 +616,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogEventRoutes() }
         }
         val response = client.post("/dd/api/v2/service_checks") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody(
                 """{"service_checks":[{"check":"disk","host_name":"h1","status":0}]}"""
@@ -627,7 +633,7 @@ class DatadogRoutesExtendedTest {
                 routing { datadogEventRoutes() }
             }
             val response = client.post("/dd/api/v2/service_checks") {
-                header("DD-API-KEY", TEST_API_KEY)
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("bad")
             }
@@ -642,8 +648,8 @@ class DatadogRoutesExtendedTest {
             install(ContentNegotiation) { json() }
             routing { datadogLogRoutes() }
         }
-        val response = client.post("/dd/api/v2/logs") {
-            header("DD-API-KEY", TEST_API_KEY)
+        val response = client.post(DD_LOGS_PATH) {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody(
                 """[{"message":"test log","hostname":"h1","service":"svc","status":"info"}]"""
@@ -658,8 +664,8 @@ class DatadogRoutesExtendedTest {
             install(ContentNegotiation) { json() }
             routing { datadogLogRoutes() }
         }
-        val response = client.post("/dd/api/v2/logs") {
-            header("DD-API-KEY", TEST_API_KEY)
+        val response = client.post(DD_LOGS_PATH) {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody(
                 """{"message":"single log","hostname":"h1"}"""
@@ -675,8 +681,8 @@ class DatadogRoutesExtendedTest {
                 install(ContentNegotiation) { json() }
                 routing { datadogLogRoutes() }
             }
-            val response = client.post("/dd/api/v2/logs") {
-                header("DD-API-KEY", TEST_API_KEY)
+            val response = client.post(DD_LOGS_PATH) {
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("not json at all")
             }
@@ -692,7 +698,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogDogStatsDRoutes() }
         }
         val response = client.post("/dd/dogstatsd/v2/proxy") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.OctetStream)
             setBody("cpu.usage:42.5|g|#env:prod,host:h1\nmem.used:1024|c")
         }
@@ -706,7 +712,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogDogStatsDRoutes() }
         }
         val response = client.post("/dd/dogstatsd/v2/proxy") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.OctetStream)
             setBody("")
         }
@@ -722,7 +728,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogValidateRoutes() }
         }
         val response = client.get("/dd/api/v1/validate") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("valid"))
@@ -759,7 +765,7 @@ class DatadogRoutesExtendedTest {
             routing { miscIngestRoutes() }
         }
         val response = client.post("/dd/symdb/v1/input") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"service":"web","symbols":""}""")
         }
@@ -773,7 +779,7 @@ class DatadogRoutesExtendedTest {
             routing { miscIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/data_streams") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"entries":[]}""")
         }
@@ -787,7 +793,7 @@ class DatadogRoutesExtendedTest {
             routing { miscIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/contimage") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"images":[]}""")
         }
@@ -801,7 +807,7 @@ class DatadogRoutesExtendedTest {
             routing { miscIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/sbom") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"packages":[]}""")
         }
@@ -815,7 +821,7 @@ class DatadogRoutesExtendedTest {
             routing { miscIngestRoutes() }
         }
         val response = client.post("/dd/v0.1/pipeline_stats") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"stats":[]}""")
         }
@@ -829,7 +835,7 @@ class DatadogRoutesExtendedTest {
             routing { miscIngestRoutes() }
         }
         val response = client.post("/dd/api/v1/lineage") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"nodes":[],"edges":[]}""")
         }
@@ -843,7 +849,7 @@ class DatadogRoutesExtendedTest {
             routing { miscIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/synthetics") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"results":[]}""")
         }
@@ -857,7 +863,7 @@ class DatadogRoutesExtendedTest {
             routing { miscIngestRoutes() }
         }
         val response = client.post("/api/v2/contlcycle") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("{}")
         }
@@ -871,7 +877,7 @@ class DatadogRoutesExtendedTest {
             routing { miscIngestRoutes() }
         }
         val response = client.post("/api/v2/events") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("{}")
         }
@@ -887,7 +893,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogInfraRoutes() }
         }
         val response = client.post("/api/v1/discovery") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.OctetStream)
             setBody(ByteArray(0))
         }
@@ -901,7 +907,7 @@ class DatadogRoutesExtendedTest {
             routing { datadogInfraRoutes() }
         }
         val response = client.post("/dd/api/v1/connections") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.OctetStream)
             setBody(ByteArray(0))
         }
@@ -917,9 +923,9 @@ class DatadogRoutesExtendedTest {
             routing { dbmIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/databasequery") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
-            setBody("""{"rows":[]}""")
+            setBody(EMPTY_ROWS_JSON)
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
     }
@@ -931,9 +937,9 @@ class DatadogRoutesExtendedTest {
             routing { dbmIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/dbmmetrics") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
-            setBody("""{"rows":[]}""")
+            setBody(EMPTY_ROWS_JSON)
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
     }
@@ -945,9 +951,9 @@ class DatadogRoutesExtendedTest {
             routing { dbmIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/dbmactivity") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
-            setBody("""{"rows":[]}""")
+            setBody(EMPTY_ROWS_JSON)
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
     }
@@ -959,7 +965,7 @@ class DatadogRoutesExtendedTest {
             routing { dbmIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/dbmmetadata") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"entries":[]}""")
         }
@@ -973,7 +979,7 @@ class DatadogRoutesExtendedTest {
             routing { dbmIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/dbmhealth") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"checks":[]}""")
         }
@@ -988,9 +994,9 @@ class DatadogRoutesExtendedTest {
                 routing { dbmIngestRoutes() }
             }
             val response = client.post("/api/v2/databasequery") {
-                header("DD-API-KEY", TEST_API_KEY)
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
-                setBody("""{"rows":[]}""")
+                setBody(EMPTY_ROWS_JSON)
             }
             assertEquals(HttpStatusCode.Accepted, response.status)
         }
@@ -1003,7 +1009,7 @@ class DatadogRoutesExtendedTest {
                 routing { dbmIngestRoutes() }
             }
             val response = client.post("/dd/api/v2/databasequery") {
-                header("DD-API-KEY", TEST_API_KEY)
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("invalid")
             }
@@ -1019,7 +1025,7 @@ class DatadogRoutesExtendedTest {
             routing { orchestratorIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/orch") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"resources":[]}""")
         }
@@ -1033,7 +1039,7 @@ class DatadogRoutesExtendedTest {
             routing { orchestratorIngestRoutes() }
         }
         val response = client.post("/dd/api/v2/orchmanif") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"manifests":[]}""")
         }
@@ -1048,7 +1054,7 @@ class DatadogRoutesExtendedTest {
                 routing { orchestratorIngestRoutes() }
             }
             val response = client.post("/dd/api/v2/orch") {
-                header("DD-API-KEY", TEST_API_KEY)
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("bad")
             }
@@ -1064,7 +1070,7 @@ class DatadogRoutesExtendedTest {
             routing { debuggerIngestRoutes() }
         }
         val response = client.post("/dd/debugger/v1/input") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""[{"probe_id":"p1","message":"snap"}]""")
         }
@@ -1078,7 +1084,7 @@ class DatadogRoutesExtendedTest {
             routing { debuggerIngestRoutes() }
         }
         val response = client.post("/dd/debugger/v2/input") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""[{"probe_id":"p2","message":"v2 snap"}]""")
         }
@@ -1092,7 +1098,7 @@ class DatadogRoutesExtendedTest {
             routing { debuggerIngestRoutes() }
         }
         val response = client.post("/dd/debugger/v1/diagnostics") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""[{"probe_id":"d1","status":"ok"}]""")
         }
@@ -1107,7 +1113,7 @@ class DatadogRoutesExtendedTest {
                 routing { debuggerIngestRoutes() }
             }
             val response = client.post("/dd/debugger/v1/input") {
-                header("DD-API-KEY", TEST_API_KEY)
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("invalid")
             }
@@ -1123,7 +1129,7 @@ class DatadogRoutesExtendedTest {
             routing { telemetryProxyRoutes() }
         }
         val response = client.post("/dd/telemetry/proxy/api/v2/apmtelemetry") {
-            header("DD-API-KEY", TEST_API_KEY)
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"payload":"test"}""")
         }
@@ -1140,7 +1146,7 @@ class DatadogRoutesExtendedTest {
             installAuth()
             datadogRoutes()
         }
-        val response = client.get("/v1/agent-api-keys") {
+        val response = client.get(AGENT_API_KEYS_PATH) {
             header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -1154,14 +1160,14 @@ class DatadogRoutesExtendedTest {
             com.moneat.datadog.models.CreateDdApiKeyResponse(
                 id = 1,
                 name = "test key",
-                key = "magt_testkey12345678901234567890",
-                keyPrefix = "magt_testke",
+                key = "TEST_API_KEY_RESPONSE_PLACEHOLDER",
+                keyPrefix = "TEST_API_KEY",
             )
         application {
             installAuth()
             datadogRoutes()
         }
-        val response = client.post("/v1/agent-api-keys") {
+        val response = client.post(AGENT_API_KEYS_PATH) {
             header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
             contentType(ContentType.Application.Json)
             setBody("""{"name":"test key"}""")
@@ -1177,7 +1183,7 @@ class DatadogRoutesExtendedTest {
             installAuth()
             datadogRoutes()
         }
-        val response = client.delete("/v1/agent-api-keys/42") {
+        val response = client.delete("$AGENT_API_KEYS_PATH/42") {
             header(HttpHeaders.Authorization, "Bearer ${jwtToken(userId, orgId)}")
         }
         assertEquals(HttpStatusCode.NoContent, response.status)
@@ -1192,7 +1198,7 @@ class DatadogRoutesExtendedTest {
                 installAuth()
                 datadogRoutes()
             }
-            val response = client.delete("/v1/agent-api-keys/999") {
+            val response = client.delete("$AGENT_API_KEYS_PATH/999") {
                 header(
                     HttpHeaders.Authorization,
                     "Bearer ${jwtToken(userId, orgId)}"
@@ -1207,7 +1213,7 @@ class DatadogRoutesExtendedTest {
             installAuth()
             datadogRoutes()
         }
-        val response = client.get("/v1/agent-api-keys")
+        val response = client.get(AGENT_API_KEYS_PATH)
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
@@ -1329,7 +1335,7 @@ class DatadogRoutesExtendedTest {
     private fun sampleHost(orgId: Int = TEST_ORG_ID) = DdHostInfo(
         id = 42,
         organizationId = orgId,
-        hostname = "test-host",
+        hostname = TEST_HOST,
         os = "linux",
         platform = "ubuntu",
         processor = "x86_64",
