@@ -45,6 +45,7 @@ Edit `.env` and set these required values:
 | `DATA_SOURCE_ENCRYPTION_KEY` | Encryption key for data source credentials. Must differ from JWT_SECRET. |
 | `DATABASE_PASSWORD` | PostgreSQL password. Must match `POSTGRES_PASSWORD` in the compose file. |
 | `CLICKHOUSE_PASSWORD` | ClickHouse password. Must match the compose file. |
+| `REDIS_PASSWORD` | Redis password. The compose file passes this to Redis via `--requirepass` and includes it in the backend connection string automatically. |
 | `FRONTEND_URL` | Public URL of the dashboard (e.g. `https://moneat.example.com`). |
 | `BACKEND_URL` | Public URL of the API (e.g. `https://api.moneat.example.com`). |
 | `SELF_HOSTED` | Set to `true`. |
