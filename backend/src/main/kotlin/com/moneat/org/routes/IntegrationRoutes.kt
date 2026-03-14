@@ -713,7 +713,7 @@ fun Route.integrationRoutes() {
                         ?.get(Memberships.organization_id)
                 } ?: return@post call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
 
-            val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
+            val frontendUrl = EnvConfig.get("FRONTEND_URL") ?: "https://moneat.io"
             val (success, message) = discordService.testConnection(organizationId, frontendUrl)
 
             call.respond(

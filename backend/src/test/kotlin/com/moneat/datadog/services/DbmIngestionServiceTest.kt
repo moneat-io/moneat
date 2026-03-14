@@ -29,7 +29,7 @@ import kotlin.test.assertTrue
 
 class DbmIngestionServiceTest {
 
-    // ============ MAP QUERIES TESTS ============
+    // ──── MAP QUERIES TESTS ────
 
     @Test
     fun `mapQueries maps payload fields correctly`() {
@@ -116,7 +116,7 @@ class DbmIngestionServiceTest {
         assertTrue(batch.queries[0].timestampMs in before..after)
     }
 
-    // ============ MAP METRICS TESTS ============
+    // ──── MAP METRICS TESTS ────
 
     @Test
     fun `mapMetrics maps payload fields correctly`() {
@@ -157,7 +157,7 @@ class DbmIngestionServiceTest {
         assertEquals("backend", m.tags["team"])
     }
 
-    // ============ MAP ACTIVITY TESTS ============
+    // ──── MAP ACTIVITY TESTS ────
 
     @Test
     fun `mapActivity maps payload fields correctly`() {
@@ -200,7 +200,7 @@ class DbmIngestionServiceTest {
         assertEquals(30000000000L, a.durationNs)
     }
 
-    // ============ ENCODE/DECODE ROUND-TRIP TESTS ============
+    // ──── ENCODE/DECODE ROUND-TRIP TESTS ────
 
     @Test
     fun `decodeBatch round-trips queries batch`() {
@@ -266,7 +266,7 @@ class DbmIngestionServiceTest {
         assertEquals(listOf(1L, 2L), decoded.activity[0].blockingPids)
     }
 
-    // ============ TAG PARSING TESTS ============
+    // ──── TAG PARSING TESTS ────
 
     @Test
     fun `parseDdTagList parses key-value pairs`() {

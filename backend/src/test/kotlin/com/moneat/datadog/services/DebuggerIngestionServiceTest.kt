@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
 
 class DebuggerIngestionServiceTest {
 
-    // ============ MAP DEBUGGER LOGS TESTS ============
+    // ──── MAP DEBUGGER LOGS TESTS ────
 
     @Test
     fun `mapDebuggerLogs maps entries correctly`() {
@@ -98,7 +98,7 @@ class DebuggerIngestionServiceTest {
         assertTrue(batch.logs[0].timestampMs in before..after)
     }
 
-    // ============ MAP DIAGNOSTICS TESTS ============
+    // ──── MAP DIAGNOSTICS TESTS ────
 
     @Test
     fun `mapDiagnostics maps entries correctly`() {
@@ -148,7 +148,7 @@ class DebuggerIngestionServiceTest {
         assertEquals("Cannot instrument class", batch.diagnostics[0].errorMessage)
     }
 
-    // ============ ENCODE/DECODE ROUND-TRIP TESTS ============
+    // ──── ENCODE/DECODE ROUND-TRIP TESTS ────
 
     @Test
     fun `decodeBatch round-trips debugger logs batch`() {
@@ -181,7 +181,7 @@ class DebuggerIngestionServiceTest {
         assertEquals("installed", decoded.diagnostics[0].status)
     }
 
-    // ============ NORMALIZATION TESTS ============
+    // ──── NORMALIZATION TESTS ────
 
     @Test
     fun `normalizeDebuggerType accepts valid types`() {
@@ -224,7 +224,7 @@ class DebuggerIngestionServiceTest {
         assertEquals("received", DebuggerIngestionService.normalizeDiagnosticStatus(""))
     }
 
-    // ============ TAG PARSING TESTS ============
+    // ──── TAG PARSING TESTS ────
 
     @Test
     fun `parseDdTagList parses key-value pairs`() {

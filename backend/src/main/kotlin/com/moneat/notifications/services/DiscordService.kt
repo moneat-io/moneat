@@ -21,6 +21,7 @@ import com.moneat.shared.models.OrganizationIntegrations
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.request.forms.submitForm
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -29,6 +30,7 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.Parameters
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import kotlinx.serialization.Serializable
@@ -41,10 +43,15 @@ import org.slf4j.LoggerFactory
 import java.util.*
 import kotlin.time.Clock
 
-class DiscordService {
+class DiscordService(
+    private val discordApiBaseUrl: String? = null
+) {
     private val logger = LoggerFactory.getLogger(DiscordService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
     private val botToken = EnvConfig.get("DISCORD_BOT_TOKEN") ?: ""
+
+    private val apiBase: String
+        get() = discordApiBaseUrl ?: "https://discord.com/api/v10"
 
     private val httpClient =
         HttpClient(CIO) {
@@ -106,6 +113,205 @@ class DiscordService {
         val type: Int
     )
 
+    data class HostAlertParams(
+        val hostName: String,
+        val metric: String,
+        val condition: String,
+        val threshold: String,
+        val currentValue: String,
+        val hostId: Int,
+        val baseUrl: String,
+        val timestamp: String = Clock.System.now().toString()
+    )
+
+    data class UptimeAlertParams(
+        val monitorUrl: String,
+        val isDown: Boolean,
+        val statusCode: Int?,
+        val responseTime: Long?,
+        val errorMessage: String?,
+        val monitorId: UUID,
+        val baseUrl: String,
+        val timestamp: String = Clock.System.now().toString()
+    )
+
+    data class DashboardAlertParams(
+        val alertName: String,
+        val dashboardTitle: String,
+        val widgetTitle: String,
+        val condition: String,
+        val threshold: String,
+        val currentValue: String,
+        val severity: String?,
+        val dashboardId: Long,
+        val baseUrl: String,
+        val timestamp: String = Clock.System.now().toString()
+    )
+
+    data class ErrorAlertParams(
+        val projectName: String,
+        val issueTitle: String,
+        val level: String,
+        val firstSeen: String,
+        val eventCount: Int,
+        val userCount: Int,
+        val issueUrl: String,
+        val timestamp: String = Clock.System.now().toString()
+    )
+
+    companion object {
+        /** Builds embed for host metric alerts. Exposed for unit testing. */
+        internal fun buildHostAlertEmbed(p: DiscordService.HostAlertParams): DiscordEmbed =
+            DiscordEmbed(
+                title = "⚠️ Host Alert",
+                description = "**${p.hostName}** triggered an alert",
+                url = "${p.baseUrl}/monitoring/hosts/${p.hostId}",
+                color = 0xECB22E,
+                fields = listOf(
+                    DiscordField("Host", p.hostName, true),
+                    DiscordField("Metric", p.metric, true),
+                    DiscordField("Condition", "${p.condition} ${p.threshold}", true),
+                    DiscordField("Current Value", p.currentValue, true)
+                ),
+                footer = DiscordFooter("Moneat Alert"),
+                timestamp = p.timestamp
+            )
+
+        /** Builds embed for host down alerts. Exposed for unit testing. */
+        internal fun buildHostDownEmbed(
+            hostName: String,
+            lastSeen: String,
+            hostId: Int,
+            baseUrl: String,
+            timestamp: String = Clock.System.now().toString()
+        ): DiscordEmbed =
+            DiscordEmbed(
+                title = "🔴 Host Down",
+                description = "**$hostName** is not responding",
+                url = "$baseUrl/monitoring/hosts/$hostId",
+                color = 0xE01E5A,
+                fields = listOf(
+                    DiscordField("Host", hostName, true),
+                    DiscordField("Last Seen", lastSeen, true)
+                ),
+                footer = DiscordFooter("Moneat Alert"),
+                timestamp = timestamp
+            )
+
+        /** Builds embed for host recovered alerts. Exposed for unit testing. */
+        internal fun buildHostUpEmbed(
+            hostName: String,
+            hostId: Int,
+            baseUrl: String,
+            timestamp: String = Clock.System.now().toString()
+        ): DiscordEmbed =
+            DiscordEmbed(
+                title = "✅ Host Recovered",
+                description = "**$hostName** is back online",
+                url = "$baseUrl/monitoring/hosts/$hostId",
+                color = 0x2EB67D,
+                fields = listOf(
+                    DiscordField("Host", hostName, true),
+                    DiscordField("Status", "Online", true)
+                ),
+                footer = DiscordFooter("Moneat Alert"),
+                timestamp = timestamp
+            )
+
+        /** Builds embed for uptime monitor alerts. Exposed for unit testing. */
+        internal fun buildUptimeAlertEmbed(p: DiscordService.UptimeAlertParams): DiscordEmbed {
+            val title = if (p.isDown) "🔴 Uptime Monitor Down" else "✅ Uptime Monitor Recovered"
+            val color = if (p.isDown) 0xE01E5A else 0x2EB67D
+            val statusText = when {
+                p.errorMessage != null -> p.errorMessage
+                p.statusCode != null -> "HTTP ${p.statusCode}"
+                else -> "Unknown"
+            }
+            val fields = mutableListOf(
+                DiscordField("URL", p.monitorUrl, false),
+                DiscordField("Status", statusText, true)
+            )
+            if (p.responseTime != null) {
+                fields.add(DiscordField("Response Time", "${p.responseTime}ms", true))
+            }
+            return DiscordEmbed(
+                title = title,
+                description = if (p.isDown) "Monitor detected a failure" else "Monitor has recovered",
+                url = "${p.baseUrl}/monitoring?monitor=${p.monitorId}",
+                color = color,
+                fields = fields,
+                footer = DiscordFooter("Moneat Uptime Monitor"),
+                timestamp = p.timestamp
+            )
+        }
+
+        /** Builds embed for dashboard alerts. Exposed for unit testing. */
+        internal fun buildDashboardAlertEmbed(p: DiscordService.DashboardAlertParams): DiscordEmbed {
+            val color = when (p.severity) {
+                "CRITICAL", "HIGH" -> 0xE01E5A
+                "MEDIUM" -> 0xECB22E
+                else -> 0xECB22E
+            }
+            return DiscordEmbed(
+                title = "📊 Dashboard Alert: ${p.alertName}",
+                description = "Alert triggered on **${p.widgetTitle}** in *${p.dashboardTitle}*",
+                url = "${p.baseUrl}/dashboards/${p.dashboardId}",
+                color = color,
+                fields = listOf(
+                    DiscordField("Dashboard", p.dashboardTitle, true),
+                    DiscordField("Widget", p.widgetTitle, true),
+                    DiscordField("Condition", "${p.condition} ${p.threshold}", true),
+                    DiscordField("Current Value", p.currentValue, true)
+                ),
+                footer = DiscordFooter("Moneat Dashboard Alert"),
+                timestamp = p.timestamp
+            )
+        }
+
+        /** Builds embed for error/issue alerts. Exposed for unit testing. */
+        internal fun buildErrorAlertEmbed(p: DiscordService.ErrorAlertParams): DiscordEmbed {
+            val color = when (p.level.lowercase()) {
+                "fatal", "error" -> 0xE01E5A
+                "warning" -> 0xECB22E
+                else -> 0x2EB67D
+            }
+            return DiscordEmbed(
+                title = "🐛 New Issue Detected",
+                description = "**${p.issueTitle}**",
+                url = p.issueUrl,
+                color = color,
+                fields = listOf(
+                    DiscordField("Project", p.projectName, true),
+                    DiscordField("Level", p.level.uppercase(), true),
+                    DiscordField("First Seen", p.firstSeen, true),
+                    DiscordField("Events", "${p.eventCount}", true),
+                    DiscordField("Users", "${p.userCount}", true)
+                ),
+                footer = DiscordFooter("Moneat Error Tracking"),
+                timestamp = p.timestamp
+            )
+        }
+
+        /** Builds embed for Discord integration test. Exposed for unit testing. */
+        internal fun buildTestConnectionEmbed(
+            guildId: String,
+            baseUrl: String,
+            timestamp: String = Clock.System.now().toString()
+        ): DiscordEmbed =
+            DiscordEmbed(
+                title = "✅ Discord Integration Test",
+                description = "Your Discord integration is working correctly!",
+                url = baseUrl,
+                color = 0x2EB67D,
+                fields = listOf(
+                    DiscordField("Status", "Connected", true),
+                    DiscordField("Guild ID", guildId, true)
+                ),
+                footer = DiscordFooter("Moneat"),
+                timestamp = timestamp
+            )
+    }
+
     private data class DiscordConfig(
         val guildId: String,
         val channelId: String
@@ -153,7 +359,7 @@ class DiscordService {
             logger.debug("Sending Discord message: $messageJson")
 
             val response: HttpResponse =
-                httpClient.post("https://discord.com/api/v10/channels/$channelId/messages") {
+                httpClient.post("$apiBase/channels/$channelId/messages") {
                     contentType(ContentType.Application.Json)
                     header("Authorization", "Bot $botToken")
                     setBody(messageJson)
@@ -185,22 +391,9 @@ class DiscordService {
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val embed =
-            DiscordEmbed(
-                title = "⚠️ Host Alert",
-                description = "**$hostName** triggered an alert",
-                url = "$baseUrl/monitoring/hosts/$hostId",
-                color = 0xECB22E, // Warning yellow
-                fields =
-                listOf(
-                    DiscordField("Host", hostName, true),
-                    DiscordField("Metric", metric, true),
-                    DiscordField("Condition", "$condition $threshold", true),
-                    DiscordField("Current Value", currentValue, true)
-                ),
-                footer = DiscordFooter("Moneat Alert"),
-                timestamp = Clock.System.now().toString()
-            )
+        val embed = buildHostAlertEmbed(
+            HostAlertParams(hostName, metric, condition, threshold, currentValue, hostId, baseUrl)
+        )
 
         val (success, _) =
             sendMessage(
@@ -220,20 +413,7 @@ class DiscordService {
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val embed =
-            DiscordEmbed(
-                title = "🔴 Host Down",
-                description = "**$hostName** is not responding",
-                url = "$baseUrl/monitoring/hosts/$hostId",
-                color = 0xE01E5A, // Error red
-                fields =
-                listOf(
-                    DiscordField("Host", hostName, true),
-                    DiscordField("Last Seen", lastSeen, true)
-                ),
-                footer = DiscordFooter("Moneat Alert"),
-                timestamp = Clock.System.now().toString()
-            )
+        val embed = buildHostDownEmbed(hostName, lastSeen, hostId, baseUrl)
 
         val (success, _) =
             sendMessage(
@@ -252,20 +432,7 @@ class DiscordService {
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val embed =
-            DiscordEmbed(
-                title = "✅ Host Recovered",
-                description = "**$hostName** is back online",
-                url = "$baseUrl/monitoring/hosts/$hostId",
-                color = 0x2EB67D, // Success green
-                fields =
-                listOf(
-                    DiscordField("Host", hostName, true),
-                    DiscordField("Status", "Online", true)
-                ),
-                footer = DiscordFooter("Moneat Alert"),
-                timestamp = Clock.System.now().toString()
-            )
+        val embed = buildHostUpEmbed(hostName, hostId, baseUrl)
 
         val (success, _) =
             sendMessage(
@@ -288,41 +455,15 @@ class DiscordService {
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val title = if (isDown) "🔴 Uptime Monitor Down" else "✅ Uptime Monitor Recovered"
-        val color = if (isDown) 0xE01E5A else 0x2EB67D
-        val statusText =
-            when {
-                errorMessage != null -> errorMessage
-                statusCode != null -> "HTTP $statusCode"
-                else -> "Unknown"
-            }
-
-        val fields =
-            mutableListOf(
-                DiscordField("URL", monitorUrl, false),
-                DiscordField("Status", statusText, true)
-            )
-
-        if (responseTime != null) {
-            fields.add(DiscordField("Response Time", "${responseTime}ms", true))
-        }
-
-        val embed =
-            DiscordEmbed(
-                title = title,
-                description = if (isDown) "Monitor detected a failure" else "Monitor has recovered",
-                url = "$baseUrl/monitoring?monitor=$monitorId",
-                color = color,
-                fields = fields,
-                footer = DiscordFooter("Moneat Uptime Monitor"),
-                timestamp = Clock.System.now().toString()
-            )
+        val embed = buildUptimeAlertEmbed(
+            UptimeAlertParams(monitorUrl, isDown, statusCode, responseTime, errorMessage, monitorId, baseUrl)
+        )
 
         val (success, _) =
             sendMessage(
                 channelId = config.channelId,
                 embed = embed,
-                fallbackText = "$title: $monitorUrl"
+                fallbackText = "${embed.title}: $monitorUrl"
             )
         return success
     }
@@ -341,26 +482,8 @@ class DiscordService {
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val color = when (severity) {
-            "CRITICAL" -> 0xE01E5A
-            "HIGH" -> 0xE01E5A
-            "MEDIUM" -> 0xECB22E
-            else -> 0xECB22E
-        }
-
-        val embed = DiscordEmbed(
-            title = "📊 Dashboard Alert: $alertName",
-            description = "Alert triggered on **$widgetTitle** in *$dashboardTitle*",
-            url = "$baseUrl/dashboards/$dashboardId",
-            color = color,
-            fields = listOf(
-                DiscordField("Dashboard", dashboardTitle, true),
-                DiscordField("Widget", widgetTitle, true),
-                DiscordField("Condition", "$condition $threshold", true),
-                DiscordField("Current Value", currentValue, true)
-            ),
-            footer = DiscordFooter("Moneat Dashboard Alert"),
-            timestamp = Clock.System.now().toString()
+        val embed = buildDashboardAlertEmbed(
+            DashboardAlertParams(alertName, dashboardTitle, widgetTitle, condition, threshold, currentValue, severity, dashboardId, baseUrl)
         )
 
         val (success, _) = sendMessage(
@@ -383,30 +506,9 @@ class DiscordService {
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val color =
-            when (level.lowercase()) {
-                "fatal", "error" -> 0xE01E5A
-                "warning" -> 0xECB22E
-                else -> 0x2EB67D
-            }
-
-        val embed =
-            DiscordEmbed(
-                title = "🐛 New Issue Detected",
-                description = "**$issueTitle**",
-                url = issueUrl,
-                color = color,
-                fields =
-                listOf(
-                    DiscordField("Project", projectName, true),
-                    DiscordField("Level", level.uppercase(), true),
-                    DiscordField("First Seen", firstSeen, true),
-                    DiscordField("Events", "$eventCount", true),
-                    DiscordField("Users", "$userCount", true)
-                ),
-                footer = DiscordFooter("Moneat Error Tracking"),
-                timestamp = Clock.System.now().toString()
-            )
+        val embed = buildErrorAlertEmbed(
+            ErrorAlertParams(projectName, issueTitle, level, firstSeen, eventCount, userCount, issueUrl)
+        )
 
         val (success, _) =
             sendMessage(
@@ -423,20 +525,7 @@ class DiscordService {
     ): Pair<Boolean, String?> {
         val config = getDiscordConfig(organizationId) ?: return false to "Discord not configured"
 
-        val embed =
-            DiscordEmbed(
-                title = "✅ Discord Integration Test",
-                description = "Your Discord integration is working correctly!",
-                url = baseUrl,
-                color = 0x2EB67D,
-                fields =
-                listOf(
-                    DiscordField("Status", "Connected", true),
-                    DiscordField("Guild ID", config.guildId, true)
-                ),
-                footer = DiscordFooter("Moneat"),
-                timestamp = Clock.System.now().toString()
-            )
+        val embed = buildTestConnectionEmbed(config.guildId, baseUrl)
 
         return sendMessage(
             channelId = config.channelId,
@@ -453,12 +542,16 @@ class DiscordService {
     ): DiscordOAuthResponse {
         return try {
             val response: HttpResponse =
-                httpClient.post("https://discord.com/api/v10/oauth2/token") {
-                    contentType(ContentType.Application.FormUrlEncoded)
-                    setBody(
-                        "grant_type=authorization_code&code=$code&client_id=$clientId&client_secret=$clientSecret&redirect_uri=$redirectUri"
-                    )
-                }
+                httpClient.submitForm(
+                    url = "$apiBase/oauth2/token",
+                    formParameters = Parameters.build {
+                        append("grant_type", "authorization_code")
+                        append("code", code)
+                        append("client_id", clientId)
+                        append("client_secret", clientSecret)
+                        append("redirect_uri", redirectUri)
+                    }
+                )
 
             json.decodeFromString<DiscordOAuthResponse>(response.bodyAsText())
         } catch (e: Exception) {
@@ -475,7 +568,7 @@ class DiscordService {
 
         return try {
             val response: HttpResponse =
-                httpClient.get("https://discord.com/api/v10/guilds/$guildId/channels") {
+                httpClient.get("$apiBase/guilds/$guildId/channels") {
                     header(HttpHeaders.Authorization, "Bot $botToken")
                 }
 

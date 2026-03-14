@@ -69,7 +69,7 @@ class ProfileIngestionServiceTest {
         keys
     ) as String
 
-    // ============ DD TAG PARSING TESTS ============
+    // ──── DD TAG PARSING TESTS ────
 
     @Test
     fun `parseDdTags parses comma-separated key-value pairs`() {
@@ -159,7 +159,7 @@ class ProfileIngestionServiceTest {
         assertEquals("billing-api", service)
     }
 
-    // ============ PROFILE EVENT MODEL TESTS ============
+    // ──── PROFILE EVENT MODEL TESTS ────
 
     @Test
     fun `DdProfileEvent has correct defaults`() {
@@ -192,7 +192,7 @@ class ProfileIngestionServiceTest {
         assertEquals(67890L, event.endpoint?.traceId)
     }
 
-    // ============ SQL ESCAPING TESTS ============
+    // ──── SQL ESCAPING TESTS ────
 
     @Test
     fun `escapeSql escapes single quotes`() {
@@ -230,7 +230,7 @@ class ProfileIngestionServiceTest {
         )
     }
 
-    // ============ MAP TO SQL TESTS ============
+    // ──── MAP TO SQL TESTS ────
 
     private val mapToSqlMapMethod: Method =
         ProfileIngestionService::class.java

@@ -172,7 +172,7 @@ class AdminServiceTest {
         }
     }
 
-    // ==================== getAllOrganizations ====================
+    // ──── getAllOrganizations ────
 
     @Test
     fun `getAllOrganizations returns all orgs with pagination`() {
@@ -241,7 +241,7 @@ class AdminServiceTest {
         assertEquals(2048L, org.bytesIngestedThisMonth)
     }
 
-    // ==================== getOrgDetail ====================
+    // ──── getOrgDetail ────
 
     @Test
     fun `getOrgDetail returns null for non-existent org`() {
@@ -304,7 +304,7 @@ class AdminServiceTest {
         assertEquals(4096L, detail.bytesIngestedThisMonth)
     }
 
-    // ==================== getAllUsers ====================
+    // ──── getAllUsers ────
 
     @Test
     fun `getAllUsers returns all users with pagination`() {
@@ -368,7 +368,7 @@ class AdminServiceTest {
         assertTrue(results.isEmpty())
     }
 
-    // ==================== getTotalUserCount ====================
+    // ──── getTotalUserCount ────
 
     @Test
     fun `getTotalUserCount returns zero when no users`() {
@@ -391,7 +391,7 @@ class AdminServiceTest {
         assertEquals(1, service.getTotalUserCount(search = "alpha"))
     }
 
-    // ==================== updateUser ====================
+    // ──── updateUser ────
 
     @Test
     fun `updateUser returns false for non-existent user`() {
@@ -429,7 +429,7 @@ class AdminServiceTest {
         assertTrue(service.updateUser(userId, UpdateUserRequest(emailVerified = true)))
     }
 
-    // ==================== deleteUsers ====================
+    // ──── deleteUsers ────
 
     @Test
     fun `deleteUsers returns error for empty list`() {
@@ -490,7 +490,7 @@ class AdminServiceTest {
         assertEquals(1, service.getTotalUserCount())
     }
 
-    // ==================== getUsageBreakdown ====================
+    // ──── getUsageBreakdown ────
 
     @Test
     fun `getUsageBreakdown returns empty daily list when no records`() {
@@ -534,7 +534,7 @@ class AdminServiceTest {
         assertFalse(result.daily.isEmpty())
     }
 
-    // ==================== getRevenueMetrics ====================
+    // ──── getRevenueMetrics ────
 
     @Test
     fun `getRevenueMetrics returns zero MRR with no subscriptions`() {
@@ -585,7 +585,7 @@ class AdminServiceTest {
         assertTrue(result.estimatedCostPerOrg.containsKey("team"))
     }
 
-    // ==================== getTopConsumers ====================
+    // ──── getTopConsumers ────
 
     @Test
     fun `getTopConsumers returns empty list when no usage`() {
@@ -619,7 +619,7 @@ class AdminServiceTest {
         assertEquals(2, result.size)
     }
 
-    // ==================== getOrgUsage ====================
+    // ──── getOrgUsage ────
 
     @Test
     fun `getOrgUsage returns usage for org within period`() {
@@ -638,7 +638,7 @@ class AdminServiceTest {
         assertTrue(result.isEmpty())
     }
 
-    // ==================== getEmailStats ====================
+    // ──── getEmailStats ────
 
     @Test
     fun `getEmailStats returns zero when no emails sent`() {

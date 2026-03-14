@@ -52,6 +52,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
@@ -59,7 +60,6 @@ import kotlin.test.AfterTest
 
 class LogRoutesMockTest {
     companion object {
-        private const val JWT_SECRET = "log-mock-secret"
         private var dbInitialized = false
     }
 
@@ -85,7 +85,7 @@ class LogRoutesMockTest {
         install(Authentication) {
             jwt("auth-jwt") {
                 verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
+                    JWT.require(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
                         .withIssuer("moneat").withAudience("moneat-users").build()
                 )
                 validate { JWTPrincipal(it.payload) }
@@ -97,7 +97,7 @@ class LogRoutesMockTest {
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", userId)
             .withClaim("orgId", orgId)
-            .sign(Algorithm.HMAC256(JWT_SECRET))
+            .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     /** Seed user + org + membership + project, returning (userId, orgId) */
     private fun seedUserAndOrg(): Pair<Int, Int> {
@@ -131,7 +131,7 @@ class LogRoutesMockTest {
         return Pair(userId, orgId)
     }
 
-    // ─── GET /logs (org-scoped) ───────────────────────────────────────────────
+    // ──── GET /logs (org-scoped) ────
 
     @Test
     fun `GET project logs returns 200 with empty result`() =
@@ -165,7 +165,7 @@ class LogRoutesMockTest {
             assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
-    // ─── GET /logs/tag-values ─────────────────────────────────────────────────
+    // ──── GET /logs/tag-values ────
 
     @Test
     fun `GET log tag values returns 200`() =
@@ -204,7 +204,7 @@ class LogRoutesMockTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── GET /logs/filters ────────────────────────────────────────────────────
+    // ──── GET /logs/filters ────
 
     @Test
     fun `GET log filters returns 200`() =
@@ -231,7 +231,7 @@ class LogRoutesMockTest {
             assertEquals(HttpStatusCode.OK, response.status)
         }
 
-    // ─── GET /logs/aggregate ───────────────────────────────────────────────────
+    // ──── GET /logs/aggregate ────
 
     @Test
     fun `GET log aggregate returns 200`() =
@@ -257,7 +257,7 @@ class LogRoutesMockTest {
             assertTrue(response.bodyAsText().contains("buckets"))
         }
 
-    // ─── GET /logs/top ────────────────────────────────────────────────────────
+    // ──── GET /logs/top ────
 
     @Test
     fun `GET log top values returns 200`() =

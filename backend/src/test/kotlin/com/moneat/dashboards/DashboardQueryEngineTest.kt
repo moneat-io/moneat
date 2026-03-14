@@ -37,7 +37,7 @@ class DashboardQueryEngineTest {
 
     private val engine = DashboardQueryEngine()
 
-    // --- buildSelectClauses ---
+    // ──── buildSelectClauses ────
 
     @Test
     fun `buildSelectClauses with count metric`() {
@@ -140,7 +140,7 @@ class DashboardQueryEngineTest {
         assertEquals(3, clauses.size)
     }
 
-    // --- buildFilterClause ---
+    // ──── buildFilterClause ────
 
     @Test
     fun `buildFilterClause with eq operator`() {
@@ -206,7 +206,7 @@ class DashboardQueryEngineTest {
         }
     }
 
-    // --- buildGroupByClauses ---
+    // ──── buildGroupByClauses ────
 
     @Test
     fun `buildGroupByClauses with time group`() {
@@ -243,7 +243,7 @@ class DashboardQueryEngineTest {
         assertEquals("environment", clauses[1])
     }
 
-    // --- buildOrderByClause ---
+    // ──── buildOrderByClause ────
 
     @Test
     fun `buildOrderByClause with explicit order`() {
@@ -282,7 +282,7 @@ class DashboardQueryEngineTest {
         assertEquals("", clause)
     }
 
-    // --- parseTimeExpression ---
+    // ──── parseTimeExpression ────
 
     @Test
     fun `parseTimeExpression handles now`() {
@@ -322,7 +322,7 @@ class DashboardQueryEngineTest {
         assertEquals("$demoNow - INTERVAL 1 HOUR", result)
     }
 
-    // --- resolveTimeInterval ---
+    // ──── resolveTimeInterval ────
 
     @Test
     fun `resolveTimeInterval for 1 hour range returns 1 MINUTE`() {
@@ -354,7 +354,7 @@ class DashboardQueryEngineTest {
         assertEquals("1 DAY", interval)
     }
 
-    // --- buildWhereClauses ---
+    // ──── buildWhereClauses ────
 
     @Test
     fun `buildWhereClauses includes project_id clause`() {
@@ -388,7 +388,7 @@ class DashboardQueryEngineTest {
         assertTrue(clauses.any { it.contains("level = 'error'") })
     }
 
-    // --- buildQuery (integration / full SQL) ---
+    // ──── buildQuery (integration / full SQL) ────
 
     @Test
     fun `buildQuery rejects unknown data source`() {
@@ -419,7 +419,7 @@ class DashboardQueryEngineTest {
         assertContains(sql, "FORMAT JSONEachRow")
     }
 
-    // --- getDataSources ---
+    // ──── getDataSources ────
 
     @Test
     fun `getDataSources returns all 8 data sources`() {
@@ -444,7 +444,7 @@ class DashboardQueryEngineTest {
         }
     }
 
-    // --- applyVariables ---
+    // ──── applyVariables ────
 
     @Test
     fun `applyVariables substitutes dollar-name in filter value`() {

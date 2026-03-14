@@ -26,7 +26,7 @@ import kotlin.test.assertTrue
 
 class OrchestratorIngestionServiceTest {
 
-    // ============ MAP RESOURCES TESTS ============
+    // ──── MAP RESOURCES TESTS ────
 
     @Test
     fun `mapResources maps payload fields correctly`() {
@@ -122,7 +122,7 @@ class OrchestratorIngestionServiceTest {
         assertEquals(null, batch.resources[0].creationTimestampMs)
     }
 
-    // ============ MAP MANIFESTS TESTS ============
+    // ──── MAP MANIFESTS TESTS ────
 
     @Test
     fun `mapManifests maps payload fields correctly`() {
@@ -168,7 +168,7 @@ class OrchestratorIngestionServiceTest {
         assertTrue(batch.manifests.isEmpty())
     }
 
-    // ============ ENCODE/DECODE ROUND-TRIP TESTS ============
+    // ──── ENCODE/DECODE ROUND-TRIP TESTS ────
 
     @Test
     fun `decodeBatch round-trips resources batch`() {
@@ -209,7 +209,7 @@ class OrchestratorIngestionServiceTest {
         assertEquals("d-1", decoded.manifests[0].uid)
     }
 
-    // ============ SQL ESCAPING TESTS ============
+    // ──── SQL ESCAPING TESTS ────
 
     @Test
     fun `escapeSql escapes single quotes and backslashes`() {

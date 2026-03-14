@@ -105,7 +105,7 @@ class BillingQuotaServiceTest {
         }
     }
 
-    // ============ Quota Reservation Boundaries Tests ============
+    // ──── Quota Reservation Boundaries Tests ────
 
     @Test
     fun `reserveUnits succeeds within error type limit`() {
@@ -229,7 +229,7 @@ class BillingQuotaServiceTest {
         assertEquals(80, result.usage.usedFeedback, "50 initial + 30 requested = 80")
     }
 
-    // ============ PAYG Budget Limits Tests ============
+    // ──── PAYG Budget Limits Tests ────
 
     @Test
     fun `PAYG budget adds to base quota correctly`() {
@@ -274,7 +274,7 @@ class BillingQuotaServiceTest {
         assertEquals(250, usage.paygLimitUnits)
     }
 
-    // ============ Batch Reservation Tests ============
+    // ──── Batch Reservation Tests ────
 
     @Test
     fun `reserveUnitsBatch succeeds with multiple event types`() {
@@ -397,7 +397,7 @@ class BillingQuotaServiceTest {
         assertTrue(result.allowed, "Batch with all zeros should succeed")
     }
 
-    // ============ Usage Reporting Tests ============
+    // ──── Usage Reporting Tests ────
 
     @Test
     fun `getUsageForOrganization returns correct usage stats`() {
@@ -571,7 +571,7 @@ class BillingQuotaServiceTest {
         assertEquals(0, usage.replayOverageCentsEstimate, "Unlimited replay limit should not show replay overage")
     }
 
-    // ============ APM Span and Custom Metric Overage Estimate Tests ============
+    // ──── APM Span and Custom Metric Overage Estimate Tests ────
 
     @Test
     fun `apm span overage estimate is computed correctly`() {
@@ -723,7 +723,7 @@ class BillingQuotaServiceTest {
         assertEquals(0, usage.apmSpanOverageCentsEstimate, "Zero overage rate should produce zero estimate")
     }
 
-    // ============ Subscription Status Tests ============
+    // ──── Subscription Status Tests ────
 
     @Test
     fun `reserveUnits with active subscription status allows reservation`() {
@@ -805,7 +805,7 @@ class BillingQuotaServiceTest {
         assertTrue(result.allowed, "Should allow reservation for past_due subscription")
     }
 
-    // ============ Edge Cases Tests ============
+    // ──── Edge Cases Tests ────
 
     @Test
     fun `reserveUnits with zero units succeeds without changes`() {
@@ -962,7 +962,7 @@ class BillingQuotaServiceTest {
         assertEquals(100, usage.feedbackLimit, "Feedback limit should match tier")
     }
 
-    // ============ Unified Ingestion Model Tests ============
+    // ──── Unified Ingestion Model Tests ────
 
     @Test
     fun `unified GB quota gates all data types`() {
@@ -1175,7 +1175,7 @@ class BillingQuotaServiceTest {
         )
     }
 
-    // ============ Analytics Pageview Quota Tests ============
+    // ──── Analytics Pageview Quota Tests ────
 
     @Test
     fun `analytics pageview limit is reported in usage response`() {
@@ -1224,7 +1224,7 @@ class BillingQuotaServiceTest {
         assertEquals(1000, usage.analyticsPageviewOverageRateCentsPer100k)
     }
 
-    // ============ Feature Flag Tests ============
+    // ──── Feature Flag Tests ────
 
     @Test
     fun `all feature flags default to true on tier configs`() {
@@ -1235,7 +1235,7 @@ class BillingQuotaServiceTest {
         assertTrue(usage.withinQuota, "Should be within quota with default setup")
     }
 
-    // ============ Helper Methods ============
+    // ──── Helper Methods ────
 
     private fun insertTestOrganization(
         name: String,

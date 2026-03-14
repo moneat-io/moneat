@@ -137,7 +137,7 @@ class StatusPageServiceTest {
             assertEquals(0, result.scheduledMaintenance.size)
         }
 
-    // ==================== listStatusPages ====================
+    // ──── listStatusPages ────
 
     @Test
     fun `listStatusPages returns all pages for org`() {
@@ -175,7 +175,7 @@ class StatusPageServiceTest {
         assertEquals("My Page", pages.first().name)
     }
 
-    // ==================== getStatusPage ====================
+    // ──── getStatusPage ────
 
     @Test
     fun `getStatusPage returns null when page does not exist`() {
@@ -216,7 +216,7 @@ class StatusPageServiceTest {
         assertNull(service.getStatusPage(pageId, otherOrgId))
     }
 
-    // ==================== updateStatusPage ====================
+    // ──── updateStatusPage ────
 
     @Test
     fun `updateStatusPage updates name and description`() {
@@ -254,7 +254,7 @@ class StatusPageServiceTest {
         assertFalse(updated.isPublic)
     }
 
-    // ==================== deleteStatusPage ====================
+    // ──── deleteStatusPage ────
 
     @Test
     fun `deleteStatusPage removes the page`() {
@@ -279,7 +279,7 @@ class StatusPageServiceTest {
         assertEquals("Keep", remaining.first().name)
     }
 
-    // ==================== listIncidents ====================
+    // ──── listIncidents ────
 
     @Test
     fun `listIncidents returns empty when no incidents`() {
@@ -302,7 +302,7 @@ class StatusPageServiceTest {
         }
     }
 
-    // ==================== createIncident ====================
+    // ──── createIncident ────
 
     @Test
     fun `createIncident creates incident with initial update`() {
@@ -341,7 +341,7 @@ class StatusPageServiceTest {
         }
     }
 
-    // ==================== updateIncident ====================
+    // ──── updateIncident ────
 
     @Test
     fun `updateIncident updates incident title and status`() {
@@ -384,7 +384,7 @@ class StatusPageServiceTest {
         )
     }
 
-    // ==================== createIncidentUpdate ====================
+    // ──── createIncidentUpdate ────
 
     @Test
     fun `createIncidentUpdate adds update and changes incident status`() {
@@ -431,7 +431,7 @@ class StatusPageServiceTest {
         )
     }
 
-    // ==================== addMonitors / removeMonitor ====================
+    // ──── addMonitors / removeMonitor ────
 
     @Test
     fun `addMonitors adds monitors to status page`() {

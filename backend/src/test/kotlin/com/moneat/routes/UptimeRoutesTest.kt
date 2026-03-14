@@ -211,7 +211,7 @@ class UptimeRoutesTest {
             assertEquals("down", status)
         }
 
-    // ─── Authenticated endpoints: no org membership → 403 ────────────────────
+    // ──── Authenticated endpoints: no org membership → 403 ────
 
     @Test
     fun `list monitors returns 403 when user has no organization`() =
@@ -356,7 +356,7 @@ class UptimeRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
-    // ─── Authenticated endpoints: invalid UUID → 400 ─────────────────────────
+    // ──── Authenticated endpoints: invalid UUID → 400 ────
 
     @Test
     fun `get monitor returns 400 for invalid monitor id`() =
@@ -468,7 +468,7 @@ class UptimeRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    // ─── Monitor request validation ───────────────────────────────────────────
+    // ──── Monitor request validation ────
 
     @Test
     fun `create monitor returns 400 for blank name`() =
@@ -583,7 +583,7 @@ class UptimeRoutesTest {
             assertTrue(response.bodyAsText().contains("Unknown monitor type"))
         }
 
-    // ─── Authenticated endpoints: not found ───────────────────────────────────
+    // ──── Authenticated endpoints: not found ────
 
     @Test
     fun `get monitor returns 404 for non-existent monitor`() =

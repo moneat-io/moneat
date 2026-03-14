@@ -39,7 +39,7 @@ class DataDogTranslatorTest {
 
     private val translator = DataDogTranslator()
 
-    // --- Import ---
+    // ──── Import ────
 
     @Test
     fun `import extracts dashboard title`() {
@@ -264,7 +264,7 @@ class DataDogTranslatorTest {
         assertEquals(0, result.dashboard.widgets[0].gridX)
     }
 
-    // --- parseDataDogQueryString ---
+    // ──── parseDataDogQueryString ────
 
     @Test
     fun `parseDataDogQueryString with avg system metric`() {
@@ -300,7 +300,7 @@ class DataDogTranslatorTest {
         assertEquals(2, dsl.filters.size)
     }
 
-    // --- Export ---
+    // ──── Export ────
 
     @Test
     fun `export generates valid DataDog JSON structure`() {
@@ -364,7 +364,7 @@ class DataDogTranslatorTest {
         assertEquals("pie", type1)
     }
 
-    // --- buildDdQueryString ---
+    // ──── buildDdQueryString ────
 
     @Test
     fun `buildDdQueryString generates metric query format`() {
@@ -428,7 +428,7 @@ class DataDogTranslatorTest {
         assertEquals("Roundtrip Test", exported["title"]?.jsonPrimitive?.content)
     }
 
-    // --- Variable import ---
+    // ──── Variable import ────
 
     @Test
     fun `import parses DataDog template variables`() {

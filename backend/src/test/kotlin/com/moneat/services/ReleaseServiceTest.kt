@@ -84,7 +84,7 @@ class ReleaseServiceTest {
             userId
         }
 
-    // --- createRelease ---
+    // ──── createRelease ────
 
     @Test
     fun `createRelease creates a new release`() {
@@ -114,7 +114,7 @@ class ReleaseServiceTest {
         }
     }
 
-    // --- upsertReleaseFromEvent ---
+    // ──── upsertReleaseFromEvent ────
 
     @Test
     fun `upsertReleaseFromEvent creates new auto-detected release`() {
@@ -161,7 +161,7 @@ class ReleaseServiceTest {
         assertEquals(0L, count)
     }
 
-    // --- getRelease ---
+    // ──── getRelease ────
 
     @Test
     fun `getRelease returns release when it exists`() {
@@ -179,7 +179,7 @@ class ReleaseServiceTest {
         assertNull(service.getRelease(projectId, "nonexistent"))
     }
 
-    // --- listReleases ---
+    // ──── listReleases ────
 
     @Test
     fun `listReleases returns all releases for project`() {
@@ -202,7 +202,7 @@ class ReleaseServiceTest {
         assertTrue(service.listReleases(99999L).isEmpty())
     }
 
-    // --- hasProjectAccess ---
+    // ──── hasProjectAccess ────
 
     @Test
     fun `hasProjectAccess returns true for member`() {
@@ -227,7 +227,7 @@ class ReleaseServiceTest {
         assertFalse(service.hasProjectAccess(nonMemberId, projectId))
     }
 
-    // --- getProjectBySlug ---
+    // ──── getProjectBySlug ────
 
     @Test
     fun `getProjectBySlug returns project id`() {
@@ -241,7 +241,7 @@ class ReleaseServiceTest {
         assertNull(service.getProjectBySlug("wrong-org", "my-project"))
     }
 
-    // --- getOrganizationIdBySlug ---
+    // ──── getOrganizationIdBySlug ────
 
     @Test
     fun `getOrganizationIdBySlug returns org id`() {
@@ -254,7 +254,7 @@ class ReleaseServiceTest {
         assertNull(service.getOrganizationIdBySlug("nonexistent"))
     }
 
-    // --- hasOrgAccess ---
+    // ──── hasOrgAccess ────
 
     @Test
     fun `hasOrgAccess returns true for member`() {
@@ -279,7 +279,7 @@ class ReleaseServiceTest {
         assertFalse(service.hasOrgAccess(outsider, "access-org"))
     }
 
-    // --- findMissingChunks ---
+    // ──── findMissingChunks ────
 
     @Test
     fun `findMissingChunks returns all when none exist`() {
@@ -307,7 +307,7 @@ class ReleaseServiceTest {
         assertTrue(service.findMissingChunks(emptySet()).isEmpty())
     }
 
-    // --- getAssembleStatus ---
+    // ──── getAssembleStatus ────
 
     @Test
     fun `getAssembleStatus returns null when not started`() {

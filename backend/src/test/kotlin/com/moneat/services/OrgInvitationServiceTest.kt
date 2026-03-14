@@ -51,7 +51,7 @@ class OrgInvitationServiceTest {
         every { invitationRepository.findInviterAndOrg(adminId, orgId) } returns null
     }
 
-    // --- inviteMember ---
+    // ──── inviteMember ────
 
     @Test
     fun `inviteMember creates pending invitation`() {
@@ -117,7 +117,7 @@ class OrgInvitationServiceTest {
         assertEquals("owner", result.role)
     }
 
-    // --- acceptInvitation ---
+    // ──── acceptInvitation ────
 
     private fun makeInvite(
         status: String = "pending",
@@ -175,7 +175,7 @@ class OrgInvitationServiceTest {
         assertFailsWith<BadRequestException> { service.acceptInvitation("tok", 20) }
     }
 
-    // --- revokeInvitation ---
+    // ──── revokeInvitation ────
 
     @Test
     fun `revokeInvitation marks as revoked`() {
@@ -198,7 +198,7 @@ class OrgInvitationServiceTest {
         assertFailsWith<IllegalStateException> { service.revokeInvitation(1, memberId) }
     }
 
-    // --- cleanupExpiredInvitations ---
+    // ──── cleanupExpiredInvitations ────
 
     @Test
     fun `cleanupExpiredInvitations marks expired invitations`() {
@@ -213,7 +213,7 @@ class OrgInvitationServiceTest {
         verify { invitationRepository.cleanupExpiredInvitations(any()) }
     }
 
-    // --- getPendingInvitations ---
+    // ──── getPendingInvitations ────
 
     @Test
     fun `getPendingInvitations returns valid pending invitations`() {

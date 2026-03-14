@@ -75,27 +75,27 @@ class UrlValidatorTest {
 
     @Test
     fun `RFC1918 10-x is blocked when not self-hosted`() {
-        val addr = InetAddress.getByName("10.0.0.1")
+        val addr = InetAddress.getByName("10.0.0.1") // NOSONAR - must use real RFC1918 IP to test blocking
         assertTrue(UrlValidator.isBlockedAddress(addr, false))
     }
 
     @Test
     fun `RFC1918 172_16 is blocked when not self-hosted`() {
-        val addr = InetAddress.getByName("172.16.0.1")
+        val addr = InetAddress.getByName("172.16.0.1") // NOSONAR - must use real RFC1918 IP to test blocking
         assertTrue(UrlValidator.isBlockedAddress(addr, false))
     }
 
     @Test
     fun `RFC1918 192_168 is blocked when not self-hosted`() {
-        val addr = InetAddress.getByName("192.168.1.1")
+        val addr = InetAddress.getByName("192.168.1.1") // NOSONAR - must use real RFC1918 IP to test blocking
         assertTrue(UrlValidator.isBlockedAddress(addr, false))
     }
 
     @Test
     fun `RFC1918 ranges allowed when self-hosted`() {
-        val addr10 = InetAddress.getByName("10.0.0.1")
-        val addr172 = InetAddress.getByName("172.16.0.1")
-        val addr192 = InetAddress.getByName("192.168.1.1")
+        val addr10 = InetAddress.getByName("10.0.0.1") // NOSONAR - must use real RFC1918 IP to test allow
+        val addr172 = InetAddress.getByName("172.16.0.1") // NOSONAR - must use real RFC1918 IP to test allow
+        val addr192 = InetAddress.getByName("192.168.1.1") // NOSONAR - must use real RFC1918 IP to test allow
         assertFalse(UrlValidator.isBlockedAddress(addr10, true))
         assertFalse(UrlValidator.isBlockedAddress(addr172, true))
         assertFalse(UrlValidator.isBlockedAddress(addr192, true))
@@ -125,7 +125,7 @@ class UrlValidatorTest {
         val mapped = Inet6Address.getByAddress(null, bytes, 0)
         val unwrapped = UrlValidator.unwrapMappedIPv4(mapped)
         assertTrue(unwrapped is Inet4Address)
-        assertEquals("192.168.1.1", unwrapped.hostAddress)
+        assertEquals("192.168.1.1", unwrapped.hostAddress) // NOSONAR - expected result of unwrapping ::ffff:192.168.1.1
     }
 
     @Test

@@ -56,7 +56,7 @@ class SidebarPreferenceServiceTest {
             Triple(memId, userId, orgId)
         }
 
-    // --- normalizeHiddenItems ---
+    // ──── normalizeHiddenItems ────
 
     @Test
     fun `normalizeHiddenItems filters unknown keys`() {
@@ -93,7 +93,7 @@ class SidebarPreferenceServiceTest {
         assertEquals(all.sorted(), result)
     }
 
-    // --- getPreferences ---
+    // ──── getPreferences ────
 
     @Test
     fun `getPreferences returns empty by default`() {
@@ -102,7 +102,7 @@ class SidebarPreferenceServiceTest {
         assertTrue(prefs.isEmpty())
     }
 
-    // --- updatePreferences ---
+    // ──── updatePreferences ────
 
     @Test
     fun `updatePreferences stores normalized items`() {

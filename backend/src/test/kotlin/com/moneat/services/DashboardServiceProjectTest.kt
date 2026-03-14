@@ -127,7 +127,7 @@ class DashboardServiceProjectTest {
 
     private fun makeDashboardService() = DashboardService(mockProjectRepo, mockIssueRepo)
 
-    // ===================== hasProjectAccess =====================
+    // ──── hasProjectAccess ────
     // AccessService.hasProjectAccess queries Projects + Memberships directly (bypasses repo).
     // H2 seed data is required for these tests.
 
@@ -166,7 +166,7 @@ class DashboardServiceProjectTest {
         assertFalse(makeDashboardService().hasProjectAccess(userId, projectInB))
     }
 
-    // ===================== createProject =====================
+    // ──── createProject ────
     // PricingTierService.getPrimaryOrganizationIdForUser queries Memberships directly.
     // H2 seed data is required for org/membership setup; all repo calls are mocked.
 
@@ -297,7 +297,7 @@ class DashboardServiceProjectTest {
         assertEquals(SPECIAL_CHARS_SLUG, result.slug)
     }
 
-    // ===================== addProjectTarget =====================
+    // ──── addProjectTarget ────
     // Pure mock tests — no H2 or ClickHouse required.
 
     @Test
@@ -329,7 +329,7 @@ class DashboardServiceProjectTest {
         assertEquals("android", result.platformTarget)
     }
 
-    // ===================== updateProject =====================
+    // ──── updateProject ────
     // Pure mock tests — no H2 required. Delegation to repo is verified via mock verification.
 
     @Test
@@ -346,7 +346,7 @@ class DashboardServiceProjectTest {
         verify { mockProjectRepo.updateProject(1L, request) }
     }
 
-    // ===================== deleteProject =====================
+    // ──── deleteProject ────
     // Pure mock tests — no H2 required. Delegation to repo is verified via mock verification.
 
     @Test
@@ -361,7 +361,7 @@ class DashboardServiceProjectTest {
         verify { mockProjectRepo.deleteProject(99L) }
     }
 
-    // ===================== getProjects =====================
+    // ──── getProjects ────
     // Pure mock tests — no H2 or ClickHouse required.
 
     @Test
@@ -398,7 +398,7 @@ class DashboardServiceProjectTest {
         assertEquals("Org1 Project", projects.first().name)
     }
 
-    // ===================== getProject =====================
+    // ──── getProject ────
     // Pure mock tests — no H2 or ClickHouse required.
 
     @Test
