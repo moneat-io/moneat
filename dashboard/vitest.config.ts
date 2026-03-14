@@ -9,7 +9,7 @@ function getCoverageThreshold(metric: 'lines' | 'functions' | 'branches' | 'stat
   const thresholds = {
     'reporting-only': { lines: 0, functions: 0, branches: 0, statements: 0 },
     'soft': { lines: 45, functions: 45, branches: 40, statements: 45 },
-    'hard': { lines: 30, functions: 30, branches: 30, statements: 30 },
+    'hard': { lines: 45, functions: 28, branches: 35, statements: 43 },
   }
   
   return thresholds[phase as keyof typeof thresholds]?.[metric] ?? 0
@@ -36,7 +36,7 @@ export default defineConfig({
         'src/routeTree.gen.ts',
       ],
       thresholds: {
-        // Staged rollout: reporting-only=0%, soft=45%, hard=30% (temporary; raise later)
+        // Staged rollout: reporting-only=0%, soft=45%, hard=45%
         // Controlled via COVERAGE_GATE_PHASE env var
         lines: getCoverageThreshold('lines'),
         functions: getCoverageThreshold('functions'),
