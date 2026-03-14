@@ -46,6 +46,11 @@ import kotlin.test.assertTrue
 
 class SecurityServiceTest {
 
+    companion object {
+        private const val TEXT_PLAIN = "text/plain"
+        private const val WEB_01 = "web-01"
+    }
+
     private val mockRedisCommands = mockk<RedisCommands<String, String>>(relaxed = true)
 
     @BeforeTest
@@ -133,7 +138,7 @@ class SecurityServiceTest {
         assertEquals(1, batch.events.size)
         assertEquals("r1", batch.events[0].ruleId)
         assertEquals("high", batch.events[0].severity)
-        assertEquals("web-01", batch.events[0].host)
+        assertEquals(WEB_01, batch.events[0].host)
     }
 
     @Test
@@ -349,7 +354,7 @@ class SecurityServiceTest {
         val capturedSql = mutableListOf<String>()
         MockHttpServer { exchange ->
             capturedSql.add(exchange.requestBodyText())
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -367,7 +372,7 @@ class SecurityServiceTest {
                         eventType = "signal",
                         processName = "java",
                         filePath = "/tmp/test",
-                        host = "web-01",
+                        host = WEB_01,
                         env = "prod",
                         tags = mapOf("env" to "prod"),
                         timestampMs = 1700000000000L
@@ -392,7 +397,7 @@ class SecurityServiceTest {
         val capturedSql = mutableListOf<String>()
         MockHttpServer { exchange ->
             capturedSql.add(exchange.requestBodyText())
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -427,7 +432,7 @@ class SecurityServiceTest {
         val capturedSql = mutableListOf<String>()
         MockHttpServer { exchange ->
             capturedSql.add(exchange.requestBodyText())
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -465,7 +470,7 @@ class SecurityServiceTest {
         MockHttpServer { exchange ->
             callCount++
             exchange.requestBodyText()
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -486,7 +491,7 @@ class SecurityServiceTest {
         MockHttpServer { exchange ->
             callCount++
             exchange.requestBodyText()
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -507,7 +512,7 @@ class SecurityServiceTest {
         MockHttpServer { exchange ->
             callCount++
             exchange.requestBodyText()
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -552,7 +557,7 @@ class SecurityServiceTest {
         val capturedSql = mutableListOf<String>()
         MockHttpServer { exchange ->
             capturedSql.add(exchange.requestBodyText())
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -578,7 +583,7 @@ class SecurityServiceTest {
         val capturedSql = mutableListOf<String>()
         MockHttpServer { exchange ->
             capturedSql.add(exchange.requestBodyText())
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -604,7 +609,7 @@ class SecurityServiceTest {
         val capturedSql = mutableListOf<String>()
         MockHttpServer { exchange ->
             capturedSql.add(exchange.requestBodyText())
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -634,7 +639,7 @@ class SecurityServiceTest {
         val capturedSql = mutableListOf<String>()
         MockHttpServer { exchange ->
             capturedSql.add(exchange.requestBodyText())
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -661,7 +666,7 @@ class SecurityServiceTest {
         MockHttpServer { exchange ->
             callCount++
             exchange.requestBodyText()
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -680,7 +685,7 @@ class SecurityServiceTest {
         val capturedSql = mutableListOf<String>()
         MockHttpServer { exchange ->
             capturedSql.add(exchange.requestBodyText())
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
@@ -707,7 +712,7 @@ class SecurityServiceTest {
         val capturedSql = mutableListOf<String>()
         MockHttpServer { exchange ->
             capturedSql.add(exchange.requestBodyText())
-            exchange.respond(200, "Ok", contentType = "text/plain")
+            exchange.respond(200, "Ok", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test_db", "default", "")

@@ -45,6 +45,11 @@ class DiscordServiceBuildersTest {
     companion object {
         private var db: Database? = null
         private const val TEST_HOST_DB_PRIMARY = "db-primary"
+        private const val BASE_URL_APP = "https://app.moneat.io"
+        private const val API_HEALTH_URL = "https://api.moneat.io/health"
+        private const val WIDGET_ERROR_RATE = "Error Rate"
+        private const val TIMESTAMP_2024_06_15 = "2024-06-15T10:30:00Z"
+        private const val UPTIME_MONITOR_DOWN = "🔴 Uptime Monitor Down"
     }
 
     private lateinit var discordService: DiscordService
@@ -94,7 +99,7 @@ class DiscordServiceBuildersTest {
                     threshold = "90%",
                     currentValue = "95%",
                     hostId = 1,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL_APP
                 )
             )
         }
@@ -109,7 +114,7 @@ class DiscordServiceBuildersTest {
                     hostName = TEST_HOST_DB_PRIMARY,
                     lastSeen = "2024-01-01T00:00:00Z",
                     hostId = 2,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL_APP
                 )
             )
         }
@@ -123,7 +128,7 @@ class DiscordServiceBuildersTest {
                     organizationId = orgId,
                     hostName = "api-1",
                     hostId = 1,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL_APP
                 )
             )
         }
@@ -135,13 +140,13 @@ class DiscordServiceBuildersTest {
             assertFalse(
                 discordService.sendUptimeAlert(
                     organizationId = orgId,
-                    monitorUrl = "https://api.moneat.io/health",
+                    monitorUrl = API_HEALTH_URL,
                     isDown = true,
                     statusCode = 500,
                     responseTime = 1200L,
                     errorMessage = null,
                     monitorId = UUID.randomUUID(),
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL_APP
                 )
             )
         }
@@ -155,13 +160,13 @@ class DiscordServiceBuildersTest {
                     organizationId = orgId,
                     alertName = "Error Rate High",
                     dashboardTitle = "Production",
-                    widgetTitle = "Error Rate",
+                    widgetTitle = WIDGET_ERROR_RATE,
                     condition = ">",
                     threshold = "5%",
                     currentValue = "8%",
                     severity = "CRITICAL",
                     dashboardId = 1L,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL_APP
                 )
             )
         }
@@ -176,7 +181,7 @@ class DiscordServiceBuildersTest {
                     projectName = "Backend",
                     issueTitle = "NullPointerException",
                     level = "error",
-                    firstSeen = "2024-06-15T10:30:00Z",
+                    firstSeen = TIMESTAMP_2024_06_15,
                     eventCount = 5,
                     userCount = 3,
                     issueUrl = "https://app.moneat.io/issues/100"
@@ -188,7 +193,7 @@ class DiscordServiceBuildersTest {
     fun `testConnection returns not configured when no integration`() =
         runBlocking {
             val orgId = seedOrg()
-            val (success, error) = discordService.testConnection(orgId, "https://app.moneat.io")
+            val (success, error) = discordService.testConnection(orgId, BASE_URL_APP)
             assertFalse(success)
             assertNotNull(error)
             assertTrue(error.contains("not configured"))
@@ -207,7 +212,7 @@ class DiscordServiceBuildersTest {
                 threshold = "85%",
                 currentValue = "92%",
                 hostId = 42,
-                baseUrl = "https://app.moneat.io",
+                baseUrl = BASE_URL_APP,
                 timestamp = "2024-01-15T10:00:00Z"
             )
         )
@@ -232,9 +237,9 @@ class DiscordServiceBuildersTest {
     fun `buildHostDownEmbed returns embed with expected title fields color url`() {
         val embed = DiscordService.buildHostDownEmbed(
             hostName = TEST_HOST_DB_PRIMARY,
-            lastSeen = "2024-06-15T10:30:00Z",
+            lastSeen = TIMESTAMP_2024_06_15,
             hostId = 7,
-            baseUrl = "https://app.moneat.io"
+            baseUrl = BASE_URL_APP
         )
         assertEquals("🔴 Host Down", embed.title)
         assertEquals("**$TEST_HOST_DB_PRIMARY** is not responding", embed.description)
@@ -245,7 +250,7 @@ class DiscordServiceBuildersTest {
         assertEquals("Host", fields[0].name)
         assertEquals(TEST_HOST_DB_PRIMARY, fields[0].value)
         assertEquals("Last Seen", fields[1].name)
-        assertEquals("2024-06-15T10:30:00Z", fields[1].value)
+        assertEquals(TIMESTAMP_2024_06_15, fields[1].value)
     }
 
     @Test
@@ -253,7 +258,7 @@ class DiscordServiceBuildersTest {
         val embed = DiscordService.buildHostUpEmbed(
             hostName = "cache-node-3",
             hostId = 15,
-            baseUrl = "https://app.moneat.io"
+            baseUrl = BASE_URL_APP
         )
         assertEquals("✅ Host Recovered", embed.title)
         assertEquals("**cache-node-3** is back online", embed.description)
@@ -272,23 +277,23 @@ class DiscordServiceBuildersTest {
         val monitorId = UUID.fromString("11111111-1111-1111-1111-111111111111")
         val embed = DiscordService.buildUptimeAlertEmbed(
             DiscordService.UptimeAlertParams(
-                monitorUrl = "https://api.moneat.io/health",
+                monitorUrl = API_HEALTH_URL,
                 isDown = true,
                 statusCode = null,
                 responseTime = 5000L,
                 errorMessage = "Connection refused",
                 monitorId = monitorId,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL_APP
             )
         )
-        assertEquals("🔴 Uptime Monitor Down", embed.title)
+        assertEquals(UPTIME_MONITOR_DOWN, embed.title)
         assertEquals("Monitor detected a failure", embed.description)
         assertEquals("https://app.moneat.io/monitoring?monitor=$monitorId", embed.url)
         assertEquals(0xE01E5A, embed.color)
         val fields = requireNotNull(embed.fields)
         assertEquals(3, fields.size)
         assertEquals("URL", fields[0].name)
-        assertEquals("https://api.moneat.io/health", fields[0].value)
+        assertEquals(API_HEALTH_URL, fields[0].value)
         assertEquals("Status", fields[1].name)
         assertEquals("Connection refused", fields[1].value)
         assertEquals("Response Time", fields[2].name)
@@ -300,16 +305,16 @@ class DiscordServiceBuildersTest {
         val monitorId = UUID.randomUUID()
         val embed = DiscordService.buildUptimeAlertEmbed(
             DiscordService.UptimeAlertParams(
-                monitorUrl = "https://api.moneat.io/health",
+                monitorUrl = API_HEALTH_URL,
                 isDown = true,
                 statusCode = 503,
                 responseTime = 1200L,
                 errorMessage = null,
                 monitorId = monitorId,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL_APP
             )
         )
-        assertEquals("🔴 Uptime Monitor Down", embed.title)
+        assertEquals(UPTIME_MONITOR_DOWN, embed.title)
         val fields = requireNotNull(embed.fields)
         assertEquals("HTTP 503", fields[1].value)
         assertEquals("1200ms", fields[2].value)
@@ -320,16 +325,16 @@ class DiscordServiceBuildersTest {
         val monitorId = UUID.randomUUID()
         val embed = DiscordService.buildUptimeAlertEmbed(
             DiscordService.UptimeAlertParams(
-                monitorUrl = "https://api.moneat.io/health",
+                monitorUrl = API_HEALTH_URL,
                 isDown = true,
                 statusCode = null,
                 responseTime = null,
                 errorMessage = null,
                 monitorId = monitorId,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL_APP
             )
         )
-        assertEquals("🔴 Uptime Monitor Down", embed.title)
+        assertEquals(UPTIME_MONITOR_DOWN, embed.title)
         val fields = requireNotNull(embed.fields)
         assertEquals("Unknown", fields[1].value)
         assertEquals(2, fields.size)
@@ -340,13 +345,13 @@ class DiscordServiceBuildersTest {
         val monitorId = UUID.randomUUID()
         val embed = DiscordService.buildUptimeAlertEmbed(
             DiscordService.UptimeAlertParams(
-                monitorUrl = "https://api.moneat.io/health",
+                monitorUrl = API_HEALTH_URL,
                 isDown = false,
                 statusCode = 200,
                 responseTime = 45L,
                 errorMessage = null,
                 monitorId = monitorId,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL_APP
             )
         )
         assertEquals("✅ Uptime Monitor Recovered", embed.title)
@@ -363,13 +368,13 @@ class DiscordServiceBuildersTest {
             DiscordService.DashboardAlertParams(
                 alertName = "Error Spike",
                 dashboardTitle = "Production Overview",
-                widgetTitle = "Error Rate",
+                widgetTitle = WIDGET_ERROR_RATE,
                 condition = ">",
                 threshold = "5%",
                 currentValue = "12%",
                 severity = "CRITICAL",
                 dashboardId = 10L,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL_APP
             )
         )
         assertEquals("📊 Dashboard Alert: Error Spike", embed.title)
@@ -395,7 +400,7 @@ class DiscordServiceBuildersTest {
                 currentValue = "45",
                 severity = "MEDIUM",
                 dashboardId = 12L,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL_APP
             )
         )
         assertEquals(0xECB22E, embed.color)
@@ -416,7 +421,7 @@ class DiscordServiceBuildersTest {
                 currentValue = "1",
                 severity = null,
                 dashboardId = 14L,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL_APP
             )
         )
         assertEquals(0xECB22E, embed.color)
@@ -429,7 +434,7 @@ class DiscordServiceBuildersTest {
                 projectName = "Backend API",
                 issueTitle = "OutOfMemoryError",
                 level = "fatal",
-                firstSeen = "2024-06-15T10:30:00Z",
+                firstSeen = TIMESTAMP_2024_06_15,
                 eventCount = 3,
                 userCount = 2,
                 issueUrl = "https://app.moneat.io/issues/600"
@@ -486,11 +491,11 @@ class DiscordServiceBuildersTest {
     fun `buildTestConnectionEmbed returns embed with guild id and status`() {
         val embed = DiscordService.buildTestConnectionEmbed(
             guildId = "123456789012345678",
-            baseUrl = "https://app.moneat.io"
+            baseUrl = BASE_URL_APP
         )
         assertEquals("✅ Discord Integration Test", embed.title)
         assertEquals("Your Discord integration is working correctly!", embed.description)
-        assertEquals("https://app.moneat.io", embed.url)
+        assertEquals(BASE_URL_APP, embed.url)
         assertEquals(0x2EB67D, embed.color)
         val fields = requireNotNull(embed.fields)
         assertEquals("Connected", fields[0].value)
@@ -523,7 +528,7 @@ class DiscordServiceBuildersTest {
                     threshold = "90%",
                     currentValue = "95%",
                     hostId = 1,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL_APP
                 )
             )
         }
@@ -581,7 +586,7 @@ class DiscordServiceBuildersTest {
                     responseTime = null,
                     errorMessage = null,
                     monitorId = UUID.randomUUID(),
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL_APP
                 )
             )
         }

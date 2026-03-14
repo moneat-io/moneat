@@ -75,6 +75,7 @@ class BillingServicesExtendedTest {
     companion object {
         private var db: Database? = null
         private const val BYTES_PER_GB = 1_073_741_824L
+        private const val MSG_SHOULD_EMIT_ONE_METER = "Should emit one meter event"
     }
 
     @BeforeTest
@@ -351,7 +352,7 @@ class BillingServicesExtendedTest {
         val flushed = meteringService.flushPendingMeteredUsage(limit = 10)
         assertEquals(1, flushed, "Should flush one subscription")
 
-        assertEquals(1, captured.size, "Should emit one meter event")
+        assertEquals(1, captured.size, MSG_SHOULD_EMIT_ONE_METER)
         val event = captured.first()
         assertEquals("moneat_overage_units", event.eventName)
         assertEquals(mockCustomerId, event.payload["stripe_customer_id"])
@@ -414,7 +415,7 @@ class BillingServicesExtendedTest {
         val flushed = meteringService.flushPendingMeteredUsage(limit = 10)
         assertEquals(1, flushed, "Should flush custom metric overage")
 
-        assertEquals(1, captured.size, "Should emit one meter event")
+        assertEquals(1, captured.size, MSG_SHOULD_EMIT_ONE_METER)
         val event = captured.first()
         assertEquals("moneat_custom_metric_overage_units", event.eventName)
         assertEquals(mockCustomerId, event.payload["stripe_customer_id"])
@@ -453,7 +454,7 @@ class BillingServicesExtendedTest {
         val flushed = meteringService.flushPendingMeteredUsage(limit = 10)
         assertEquals(1, flushed, "Should flush APM span overage")
 
-        assertEquals(1, captured.size, "Should emit one meter event")
+        assertEquals(1, captured.size, MSG_SHOULD_EMIT_ONE_METER)
         val event = captured.first()
         assertEquals("moneat_apm_span_overage_units", event.eventName)
         assertEquals(mockCustomerId, event.payload["stripe_customer_id"])

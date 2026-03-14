@@ -45,6 +45,7 @@ import kotlin.test.assertTrue
 class ProjectStatsServiceTest {
     companion object {
         private var db: Database? = null
+        private const val TEXT_PLAIN = "text/plain"
     }
 
     private val retentionPolicyService = mockk<RetentionPolicyService>()
@@ -100,7 +101,7 @@ class ProjectStatsServiceTest {
         val query = exchange.requestBodyText()
         val customResponse = handler?.invoke(query)
         if (customResponse != null) {
-            exchange.respond(200, customResponse, "text/plain")
+            exchange.respond(200, customResponse, TEXT_PLAIN)
         } else {
             val body = when {
                 query.contains("count() as total") && query.contains("event_type = 'error'") &&
@@ -136,7 +137,7 @@ class ProjectStatsServiceTest {
                     ""
                 else -> ""
             }
-            exchange.respond(200, body, "text/plain")
+            exchange.respond(200, body, TEXT_PLAIN)
         }
     }
 
@@ -177,7 +178,7 @@ class ProjectStatsServiceTest {
     @Test
     fun `getProjectStats returns zeros on ClickHouse error`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(500, "Internal Server Error", "text/plain")
+            exchange.respond(500, "Internal Server Error", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -264,7 +265,7 @@ class ProjectStatsServiceTest {
                     """{"status":"unresolved","count":1}"""
                 else -> ""
             }
-            exchange.respond(200, body, "text/plain")
+            exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")

@@ -40,6 +40,21 @@ import kotlin.test.assertTrue
  */
 class LogServicesExtendedTest {
 
+    companion object {
+        private const val AS_FIELD_VALUE = "AS field_value"
+        private const val CODE_62_DB_EXCEPTION = "Code: 62. DB::Exception"
+        private const val SELECT_COUNT = "SELECT count()"
+        private const val FROM_2026_01_01 = "2026-01-01T00:00:00Z"
+        private const val TO_2026_01_02 = "2026-01-02T00:00:00Z"
+        private const val US_EAST = "us-east"
+        private const val SERVICE_EQ_API = "service = 'api'"
+        private const val SERVICE_NE_WORKER = "service != 'worker'"
+        private const val ENV_NE_STAGING = "environment != 'staging'"
+        private const val HAS_TAGS_REGION = "has(tags, 'region')"
+        private const val FROM_2026_02_01_10 = "2026-02-01T10:00:00Z"
+        private const val TO_2026_02_01_12 = "2026-02-01T12:00:00Z"
+    }
+
     @BeforeTest
     fun setup() {
         ClickHouseClient.close()
@@ -120,12 +135,12 @@ class LogServicesExtendedTest {
     @Test
     fun `topValues returns field values with counts`() = runBlocking {
         val handler = queryBasedClickHouseHandler(
-            "AS field_value" to
+            AS_FIELD_VALUE to
                 """
                 {"field_value":"api","cnt":100}
                 {"field_value":"worker","cnt":50}
                 """.trimIndent(),
-            "SELECT count() AS cnt" to """{"cnt":200}"""
+            "$SELECT_COUNT AS cnt" to """{"cnt":200}"""
         )
         withClickHouseMockServer(handler) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
@@ -141,7 +156,7 @@ class LogServicesExtendedTest {
     @Test
     fun `topValues returns empty on ClickHouse error`() = runBlocking {
         withClickHouseMockServer(
-            queryBasedClickHouseHandler(defaultBody = "Code: 62. DB::Exception")
+            queryBasedClickHouseHandler(defaultBody = CODE_62_DB_EXCEPTION)
         ) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
@@ -156,8 +171,8 @@ class LogServicesExtendedTest {
     fun `topValues uses tag key expression for non-standard fields`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
         val handler = queryBasedClickHouseHandler(
-            "AS field_value" to """{"field_value":"us-east","cnt":10}""",
-            "SELECT count()" to """{"cnt":10}""",
+            AS_FIELD_VALUE to """{"field_value":"$US_EAST","cnt":10}""",
+            "$SELECT_COUNT" to """{"cnt":10}""",
             captureQueries = capturedQueries
         )
         withClickHouseMockServer(handler) { server ->
@@ -174,8 +189,8 @@ class LogServicesExtendedTest {
     fun `topValues with filters applies conditions`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
         val handler = queryBasedClickHouseHandler(
-            "AS field_value" to """{"field_value":"error","cnt":5}""",
-            "SELECT count()" to """{"cnt":5}""",
+            AS_FIELD_VALUE to """{"field_value":"error","cnt":5}""",
+            "$SELECT_COUNT" to """{"cnt":5}""",
             captureQueries = capturedQueries
         )
         withClickHouseMockServer(handler) { server ->
@@ -185,8 +200,8 @@ class LogServicesExtendedTest {
                 organizationId = 1L,
                 field = "level",
                 limit = 10,
-                from = "2026-01-01T00:00:00Z",
-                to = "2026-01-02T00:00:00Z",
+                from = FROM_2026_01_01,
+                to = TO_2026_01_02,
                 query = "database",
                 levels = listOf("error"),
                 service = "api",
@@ -199,10 +214,10 @@ class LogServicesExtendedTest {
             )
 
             val allQueries = capturedQueries.joinToString("\n")
-            assertTrue(allQueries.contains("service = 'api'"))
+            assertTrue(allQueries.contains(SERVICE_EQ_API))
             assertTrue(allQueries.contains("environment = 'prod'"))
-            assertTrue(allQueries.contains("service != 'worker'"))
-            assertTrue(allQueries.contains("environment != 'staging'"))
+            assertTrue(allQueries.contains(SERVICE_NE_WORKER))
+            assertTrue(allQueries.contains(ENV_NE_STAGING))
         }
     }
 
@@ -288,7 +303,7 @@ class LogServicesExtendedTest {
     @Test
     fun `getFilterOptions handles ClickHouse error gracefully`() = runBlocking {
         withClickHouseMockServer(
-            queryBasedClickHouseHandler(defaultBody = "Code: 62. DB::Exception")
+            queryBasedClickHouseHandler(defaultBody = CODE_62_DB_EXCEPTION)
         ) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
@@ -428,7 +443,7 @@ class LogServicesExtendedTest {
     fun `buildTagCondition handles top-level field`() {
         val service = newService()
         val result = service.buildTagCondition("service", "api")
-        assertEquals("service = 'api'", result)
+        assertEquals(SERVICE_EQ_API, result)
     }
 
     @Test
@@ -449,7 +464,7 @@ class LogServicesExtendedTest {
     fun `buildTagCondition handles actual tag key`() {
         val service = newService()
         val result = service.buildTagCondition("region", "us-east")
-        assertTrue(result.contains("has(tags, 'region')"))
+        assertTrue(result.contains(HAS_TAGS_REGION))
         assertTrue(result.contains("tags['region'] = 'us-east'"))
     }
 
@@ -458,7 +473,7 @@ class LogServicesExtendedTest {
         val service = newService()
         val result = service.buildTagCondition("region", "us-east", exclude = true)
         assertTrue(result.startsWith("NOT"))
-        assertTrue(result.contains("has(tags, 'region')"))
+        assertTrue(result.contains(HAS_TAGS_REGION))
     }
 
     @Test
@@ -488,7 +503,7 @@ class LogServicesExtendedTest {
     private fun queryLogsEmptyHandler(captureQueries: MutableList<String>? = null) =
         queryBasedClickHouseHandler(
             "toString(log_id) AS log_id" to "",
-            "SELECT count()" to """{"count":0}""",
+            "$SELECT_COUNT" to """{"count":0}""",
             captureQueries = captureQueries
         )
 
@@ -514,7 +529,7 @@ class LogServicesExtendedTest {
             assertFalse(result.hasMore)
             assertEquals(0L, result.totalCount)
             val allQueries = capturedQueries.joinToString("\n")
-            assertTrue(allQueries.contains("service = 'api'"))
+            assertTrue(allQueries.contains(SERVICE_EQ_API))
             assertTrue(allQueries.contains("environment = 'prod'"))
             assertTrue(allQueries.contains("container_name = 'my-container'"))
             assertTrue(allQueries.contains("level IN"))
@@ -538,8 +553,8 @@ class LogServicesExtendedTest {
             )
 
             val allQueries = capturedQueries.joinToString("\n")
-            assertTrue(allQueries.contains("service != 'worker'"))
-            assertTrue(allQueries.contains("environment != 'staging'"))
+            assertTrue(allQueries.contains(SERVICE_NE_WORKER))
+            assertTrue(allQueries.contains(ENV_NE_STAGING))
             assertTrue(allQueries.contains("container_name != 'debug-container'"))
         }
     }
@@ -556,7 +571,7 @@ class LogServicesExtendedTest {
             )
 
             val allQueries = capturedQueries.joinToString("\n")
-            assertTrue(allQueries.contains("service = 'api'"))
+            assertTrue(allQueries.contains(SERVICE_EQ_API))
         }
     }
 
@@ -574,7 +589,7 @@ class LogServicesExtendedTest {
             )
 
             val allQueries = capturedQueries.joinToString("\n")
-            assertTrue(allQueries.contains("has(tags, 'region')"))
+            assertTrue(allQueries.contains(HAS_TAGS_REGION))
             assertTrue(allQueries.contains("tags['region'] = 'us-east'"))
         }
     }
@@ -648,8 +663,8 @@ class LogServicesExtendedTest {
 
             val result = service.aggregateLogsWithEmptyFilters(
                 1L,
-                from = "2026-02-01T10:00:00Z",
-                to = "2026-02-01T12:00:00Z"
+                from = FROM_2026_02_01_10,
+                to = TO_2026_02_01_12
             )
             assertEquals(2, result.buckets.size)
             assertEquals(30L, result.totalCount)
@@ -661,7 +676,7 @@ class LogServicesExtendedTest {
     @Test
     fun `aggregateLogs returns empty on ClickHouse error`() = runBlocking {
         withClickHouseMockServer(
-            queryBasedClickHouseHandler(defaultBody = "Code: 62. DB::Exception")
+            queryBasedClickHouseHandler(defaultBody = CODE_62_DB_EXCEPTION)
         ) { server ->
             val service = newService(ClickHouseLogRepository(server.baseUrl))
 
@@ -697,8 +712,8 @@ class LogServicesExtendedTest {
             )
 
             val allQueries = capturedQueries.joinToString("\n")
-            assertTrue(allQueries.contains("service != 'worker'"))
-            assertTrue(allQueries.contains("environment != 'staging'"))
+            assertTrue(allQueries.contains(SERVICE_NE_WORKER))
+            assertTrue(allQueries.contains(ENV_NE_STAGING))
             assertTrue(allQueries.contains("container_name != 'test-ctr'"))
         }
     }
@@ -708,7 +723,7 @@ class LogServicesExtendedTest {
         val capturedQueries = mutableListOf<String>()
         withClickHouseMockServer(
             queryBasedClickHouseHandler(
-                defaultBody = """{"bucket":"2026-02-01T10:00:00Z","cnt":5}""",
+                defaultBody = """{"bucket":"$FROM_2026_02_01_10","cnt":5}""",
                 captureQueries = capturedQueries
             )
         ) { server ->
@@ -716,8 +731,8 @@ class LogServicesExtendedTest {
 
             val result = service.aggregateLogsWithEmptyFilters(
                 1L,
-                from = "2026-02-01T10:00:00Z",
-                to = "2026-02-01T12:00:00Z",
+                from = FROM_2026_02_01_10,
+                to = TO_2026_02_01_12,
                 groupBy = "invalidField"
             )
             // Invalid groupBy is ignored — treated as null
@@ -742,8 +757,8 @@ class LogServicesExtendedTest {
 
             val result = service.aggregateLogsWithEmptyFilters(
                 1L,
-                from = "2026-02-01T10:00:00Z",
-                to = "2026-02-01T12:00:00Z",
+                from = FROM_2026_02_01_10,
+                to = TO_2026_02_01_12,
                 groupBy = "service"
             )
             assertEquals(1, result.buckets.size)

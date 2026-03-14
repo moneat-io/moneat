@@ -73,6 +73,10 @@ class AuthServiceExtendedTest {
         private var db: Database? = null
         private const val TERMS_VERSION = "2026-02-08"
         private const val PRIVACY_VERSION = "2026-02-08"
+        private const val TEST_EMAIL = "test@example.com"
+        private const val MY_COMPANY = "My Company"
+        private const val LOGOUT_EMAIL = "logout@test.com"
+        private const val STRONG_PASS = "StrongPass123!"
     }
 
     @BeforeTest
@@ -102,7 +106,7 @@ class AuthServiceExtendedTest {
     // ── helpers ──────────────────────────────────────────────────────
 
     private fun insertUser(
-        email: String = "test@example.com",
+        email: String = TEST_EMAIL,
         password: String = "password123",
         emailVerified: Boolean = true,
         onboardingCompleted: Boolean = false,
@@ -141,7 +145,7 @@ class AuthServiceExtendedTest {
     }
 
     private fun insertUserWithOrg(
-        email: String = "test@example.com",
+        email: String = TEST_EMAIL,
         password: String = "password123",
         emailVerified: Boolean = true,
         role: String = "owner"
@@ -162,7 +166,7 @@ class AuthServiceExtendedTest {
         val (userId, orgId) = insertUserWithOrg()
         val service = RefreshTokenService()
 
-        val result = service.generateRefreshToken(userId, "test@example.com", orgId, "owner")
+        val result = service.generateRefreshToken(userId, TEST_EMAIL, orgId, "owner")
 
         assertNotNull(result.accessToken)
         assertNotNull(result.refreshToken)
@@ -184,7 +188,7 @@ class AuthServiceExtendedTest {
         val (userId, orgId) = insertUserWithOrg()
         val service = RefreshTokenService()
 
-        val original = service.generateRefreshToken(userId, "test@example.com", orgId, "owner")
+        val original = service.generateRefreshToken(userId, TEST_EMAIL, orgId, "owner")
         val rotated = service.validateAndRotate(original.refreshToken)
 
         assertNotNull(rotated)
@@ -208,7 +212,7 @@ class AuthServiceExtendedTest {
 
         val response = service.generateRefreshToken(
             userId,
-            "test@example.com",
+            TEST_EMAIL,
             orgId,
             "owner"
         )
@@ -233,8 +237,8 @@ class AuthServiceExtendedTest {
         val (userId, orgId) = insertUserWithOrg()
         val service = RefreshTokenService()
 
-        service.generateRefreshToken(userId, "test@example.com", orgId, "owner")
-        service.generateRefreshToken(userId, "test@example.com", orgId, "owner")
+        service.generateRefreshToken(userId, TEST_EMAIL, orgId, "owner")
+        service.generateRefreshToken(userId, TEST_EMAIL, orgId, "owner")
 
         val revokedCount = service.revokeAllUserTokens(userId)
         assertEquals(2, revokedCount)
@@ -260,7 +264,7 @@ class AuthServiceExtendedTest {
         val service = RefreshTokenService()
 
         // Generate a token then revoke it
-        service.generateRefreshToken(userId, "test@example.com", orgId, "owner")
+        service.generateRefreshToken(userId, TEST_EMAIL, orgId, "owner")
         service.revokeAllUserTokens(userId)
 
         // Also insert an expired token
@@ -489,7 +493,7 @@ class AuthServiceExtendedTest {
 
         val result = authService.completeOnboarding(
             userId = userId,
-            organizationName = "My Company",
+            organizationName = MY_COMPANY,
             companySize = "10-50",
             referralSource = "google"
         )
@@ -504,7 +508,7 @@ class AuthServiceExtendedTest {
                 .where { Organizations.id eq orgId }
                 .single()
         }
-        assertEquals("My Company", org[Organizations.name])
+        assertEquals(MY_COMPANY, org[Organizations.name])
 
         // Verify user onboarding_completed flag
         val user = transaction {
@@ -542,7 +546,7 @@ class AuthServiceExtendedTest {
 
         val result = authService.completeOnboarding(
             userId = userId,
-            organizationName = "My Company",
+            organizationName = MY_COMPANY,
             companySize = "1-10",
             customSlug = "my-custom-slug",
             referralSource = "twitter"
@@ -560,10 +564,10 @@ class AuthServiceExtendedTest {
 
     @Test
     fun `logout revokes all refresh tokens for user`() {
-        val (userId, orgId) = insertUserWithOrg(email = "logout@test.com")
+        val (userId, orgId) = insertUserWithOrg(email = LOGOUT_EMAIL)
         val refreshTokenService = RefreshTokenService()
-        refreshTokenService.generateRefreshToken(userId, "logout@test.com", orgId, "owner")
-        refreshTokenService.generateRefreshToken(userId, "logout@test.com", orgId, "owner")
+        refreshTokenService.generateRefreshToken(userId, LOGOUT_EMAIL, orgId, "owner")
+        refreshTokenService.generateRefreshToken(userId, LOGOUT_EMAIL, orgId, "owner")
 
         val authService = AuthService(
             UserRepositoryImpl(),
@@ -598,7 +602,7 @@ class AuthServiceExtendedTest {
         val signup = authService.signup(
             SignupRequest(
                 email = "refresh-new@test.com",
-                password = "StrongPass123!",
+                password = STRONG_PASS,
                 name = "Refresh User",
                 acceptTerms = true,
                 acceptPrivacy = true,
@@ -723,7 +727,7 @@ class AuthServiceExtendedTest {
         val result = authService.signup(
             SignupRequest(
                 email = "invitee@test.com",
-                password = "StrongPass123!",
+                password = STRONG_PASS,
                 name = "Invited User",
                 acceptTerms = true,
                 acceptPrivacy = true,
@@ -780,7 +784,7 @@ class AuthServiceExtendedTest {
             authService.signup(
                 SignupRequest(
                     email = "late-invitee@test.com",
-                    password = "StrongPass123!",
+                    password = STRONG_PASS,
                     name = "Late User",
                     acceptTerms = true,
                     acceptPrivacy = true,
@@ -819,7 +823,7 @@ class AuthServiceExtendedTest {
             authService.signup(
                 SignupRequest(
                     email = "different@test.com",
-                    password = "StrongPass123!",
+                    password = STRONG_PASS,
                     name = "Wrong User",
                     acceptTerms = true,
                     acceptPrivacy = true,
@@ -949,7 +953,7 @@ class AuthServiceExtendedTest {
         val result = authService.signup(
             SignupRequest(
                 email = "firstuser@test.com",
-                password = "StrongPass123!",
+                password = STRONG_PASS,
                 name = "First User",
                 acceptTerms = true,
                 acceptPrivacy = true,

@@ -35,6 +35,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TransactionServiceTest {
+
+    companion object {
+        private const val TXN_UUID = "01234567-89ab-cdef-0123-456789abcdef"
+        private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
+    }
+
     private val retentionPolicyService = mockk<RetentionPolicyService>()
     private val pricingTierService = mockk<PricingTierService>()
     private lateinit var queryHelper: DashboardQueryHelper
@@ -49,9 +55,9 @@ class TransactionServiceTest {
 
     @Test
     fun `getProjectIdForTransaction returns project id`() = runBlocking {
-        val eventId = "01234567-89ab-cdef-0123-456789abcdef"
+        val eventId = TXN_UUID
         MockHttpServer { exchange ->
-            exchange.respond(200, """{"project_id":42}""", "text/plain")
+            exchange.respond(200, """{"project_id":42}""", CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -71,13 +77,13 @@ class TransactionServiceTest {
         val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         MockHttpServer { exchange ->
             queries += exchange.requestBodyText()
-            exchange.respond(200, """{"project_id":10}""", "text/plain")
+            exchange.respond(200, """{"project_id":10}""", CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
             val result = service.getProjectIdForTransaction("0123456789abcdef0123456789abcdef")
             assertEquals(10L, result)
-            assertTrue(queries.any { it.contains("01234567-89ab-cdef-0123-456789abcdef") })
+            assertTrue(queries.any { it.contains(TXN_UUID) })
         }
     }
 
@@ -87,7 +93,7 @@ class TransactionServiceTest {
 {"name":"GET /api/users","op":"http.server","latest_event_id":"evt-1","count":100,"p50":150.5,"p75":250.0,"p95":500.0,"failure_rate":0.05,"tpm":12.5}
         """.trimIndent()
         MockHttpServer { exchange ->
-            exchange.respond(200, row, "text/plain")
+            exchange.respond(200, row, CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -105,7 +111,7 @@ class TransactionServiceTest {
     @Test
     fun `getTransactions returns empty list on error`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(500, "Internal Server Error", "text/plain")
+            exchange.respond(500, "Internal Server Error", CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -125,14 +131,14 @@ class TransactionServiceTest {
                     exchange.respond(
                         200,
                         """{"total":1000,"avg_duration":250.0,"satisfied":800,"tolerated":150}""",
-                        "text/plain"
+                        CONTENT_TYPE_TEXT_PLAIN
                     )
                 }
                 query.contains("toStartOfInterval") -> {
                     exchange.respond(
                         200,
                         """{"time":"2026-01-01T00:00:00.000Z","count":50}""",
-                        "text/plain"
+                        CONTENT_TYPE_TEXT_PLAIN
                     )
                 }
                 query.contains("ORDER BY duration_ms DESC") -> {
@@ -140,10 +146,10 @@ class TransactionServiceTest {
                         200,
                         """{"event_id":"evt-1","name":"GET /slow","op":"http","duration":5000.0,"timestamp_iso":"2026-01-01T00:00:00.000Z"}
                         """.trimIndent(),
-                        "text/plain"
+                        CONTENT_TYPE_TEXT_PLAIN
                     )
                 }
-                else -> exchange.respond(200, "", "text/plain")
+                else -> exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
             }
         }.use { server ->
             ClickHouseClient.close()
@@ -161,7 +167,7 @@ class TransactionServiceTest {
     @Test
     fun `getPerformanceStats returns zeros on error`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(500, "error", "text/plain")
+            exchange.respond(500, "error", CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -183,10 +189,10 @@ class TransactionServiceTest {
                     exchange.respond(
                         200,
                         """{"total":0,"avg_duration":0.0,"satisfied":0,"tolerated":0}""",
-                        "text/plain"
+                        CONTENT_TYPE_TEXT_PLAIN
                     )
                 }
-                else -> exchange.respond(200, "", "text/plain")
+                else -> exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
             }
         }.use { server ->
             ClickHouseClient.close()
@@ -199,12 +205,12 @@ class TransactionServiceTest {
 
     @Test
     fun `getTransaction returns detail for valid event`() = runBlocking {
-        val eventId = "01234567-89ab-cdef-0123-456789abcdef"
+        val eventId = TXN_UUID
         val row = """
 {"event_id":"$eventId","name":"GET /api","op":"http.server","start_ts_ms":"1000","duration":"250.0","trace_id":"trace-1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{"env":"prod"},"contexts":"{}","breadcrumbs":"[]","request":"{}"}
         """.trimIndent()
         MockHttpServer { exchange ->
-            exchange.respond(200, row, "text/plain")
+            exchange.respond(200, row, CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -227,11 +233,11 @@ class TransactionServiceTest {
     @Test
     fun `getTransaction returns null when not found`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(200, "", "text/plain")
+            exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
-            assertNull(service.getTransaction("01234567-89ab-cdef-0123-456789abcdef"))
+            assertNull(service.getTransaction(TXN_UUID))
         }
     }
 
@@ -240,7 +246,7 @@ class TransactionServiceTest {
         val body = """{"span_id":"s1","parent_span_id":"","trace_id":"trace-1","transaction_id":"tx-1","op":"http.server","description":"GET /","start_ts_ms":"1000","end_ts_ms":"2500","duration_ms":"1500","status":"ok","tags":{},"data":"{}"}
 {"span_id":"s2","parent_span_id":"s1","trace_id":"trace-1","transaction_id":"tx-1","op":"db","description":"SELECT","start_ts_ms":"1200","end_ts_ms":"1800","duration_ms":"600","status":"ok","tags":{},"data":"{}"}"""
         MockHttpServer { exchange ->
-            exchange.respond(200, body, "text/plain")
+            exchange.respond(200, body, CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -257,7 +263,7 @@ class TransactionServiceTest {
     @Test
     fun `getTraceDetails returns null when no spans`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(200, "", "text/plain")
+            exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -277,7 +283,7 @@ class TransactionServiceTest {
                         200,
                         """{"span_id":"s1","parent_span_id":"","trace_id":"t1","transaction_id":"01234567-89ab-cdef-0123-456789abcdef","op":"db","description":"SELECT","start_ts_ms":"1000","end_ts_ms":"1500","duration_ms":"500","status":"ok","tags":{},"data":"{}"}
                         """.trimIndent(),
-                        "text/plain"
+                        CONTENT_TYPE_TEXT_PLAIN
                     )
                 }
                 query.contains("events") && query.contains("transaction") -> {
@@ -285,10 +291,10 @@ class TransactionServiceTest {
                         200,
                         """{"event_id":"01234567-89ab-cdef-0123-456789abcdef","name":"GET /","op":"http","start_ts_ms":"500","duration":"2000.0","trace_id":"t1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{},"contexts":"{}","breadcrumbs":"[]","request":"{}"}
                         """.trimIndent(),
-                        "text/plain"
+                        CONTENT_TYPE_TEXT_PLAIN
                     )
                 }
-                else -> exchange.respond(200, "", "text/plain")
+                else -> exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
             }
         }.use { server ->
             ClickHouseClient.close()
@@ -315,12 +321,12 @@ class TransactionServiceTest {
                         200,
                         """{"event_id":"01234567-89ab-cdef-0123-456789abcdef","name":"GET /","op":"http","start_ts_ms":"1000","duration":"500.0","trace_id":"trace-abc","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{},"contexts":"{}","breadcrumbs":"[]","request":"{}"}
                         """.trimIndent(),
-                        "text/plain"
+                        CONTENT_TYPE_TEXT_PLAIN
                     )
                 }
                 // getProjectIdForTransaction
                 query.contains("toInt64(project_id)") -> {
-                    exchange.respond(200, """{"project_id":1}""", "text/plain")
+                    exchange.respond(200, """{"project_id":1}""", CONTENT_TYPE_TEXT_PLAIN)
                 }
                 // related errors
                 query.contains("event_type = 'error'") && query.contains("trace_id") -> {
@@ -328,15 +334,15 @@ class TransactionServiceTest {
                         200,
                         """{"event_id":"err-1","timestamp":"2026-01-01T00:01:00.000Z","message":"NPE","platform":"jvm","level":"error","environment":"prod","release":"1.0","user_id":"","user_email":"","user_username":"","tags":{},"contexts":"{}","exception":"NullPointerException","breadcrumbs":"[]"}
                         """.trimIndent(),
-                        "text/plain"
+                        CONTENT_TYPE_TEXT_PLAIN
                     )
                 }
-                else -> exchange.respond(200, "", "text/plain")
+                else -> exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
             }
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
-            val errors = service.getRelatedErrorsForTransaction("01234567-89ab-cdef-0123-456789abcdef")
+            val errors = service.getRelatedErrorsForTransaction(TXN_UUID)
             assertEquals(1, errors.size)
             assertEquals("err-1", errors[0].eventId)
             assertEquals("NPE", errors[0].message)

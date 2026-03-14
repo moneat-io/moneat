@@ -39,6 +39,9 @@ class DashboardQueryHelperTest {
     companion object {
         private const val NORMALIZED_UUID = "01234567-89ab-cdef-0123-456789abcdef"
         private const val DEMO_EPOCH = 1705316445000L
+        private const val TEXT_PLAIN = "text/plain"
+        private const val SELECT_PROJECT_QUERY = "SELECT project_id FROM test FORMAT JSONEachRow"
+        private const val TEST_ID = "test-id"
     }
 
     private val retentionPolicyService = mockk<RetentionPolicyService>()
@@ -331,14 +334,14 @@ class DashboardQueryHelperTest {
     @Test
     fun `executeProjectIdQuery returns project_id from response`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(200, """{"project_id":42}""", "text/plain")
+            exchange.respond(200, """{"project_id":42}""", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
             val result = helper.executeProjectIdQuery(
-                "SELECT project_id FROM test FORMAT JSONEachRow",
+                SELECT_PROJECT_QUERY,
                 "Test",
-                "test-id"
+                TEST_ID
             )
             assertEquals(42L, result)
         }
@@ -347,14 +350,14 @@ class DashboardQueryHelperTest {
     @Test
     fun `executeProjectIdQuery returns null on empty response`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(200, "", "text/plain")
+            exchange.respond(200, "", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
             val result = helper.executeProjectIdQuery(
-                "SELECT project_id FROM test FORMAT JSONEachRow",
+                SELECT_PROJECT_QUERY,
                 "Test",
-                "test-id"
+                TEST_ID
             )
             assertNull(result)
         }
@@ -363,14 +366,14 @@ class DashboardQueryHelperTest {
     @Test
     fun `executeProjectIdQuery returns null on ClickHouse error`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(200, "Code: 62. DB::Exception: ...", "text/plain")
+            exchange.respond(200, "Code: 62. DB::Exception: ...", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
             val result = helper.executeProjectIdQuery(
-                "SELECT project_id FROM test FORMAT JSONEachRow",
+                SELECT_PROJECT_QUERY,
                 "Test",
-                "test-id"
+                TEST_ID
             )
             assertNull(result)
         }
@@ -381,7 +384,7 @@ class DashboardQueryHelperTest {
         val responseBody = """{"id":1,"name":"first"}
 {"id":2,"name":"second"}"""
         MockHttpServer { exchange ->
-            exchange.respond(200, responseBody, "text/plain")
+            exchange.respond(200, responseBody, TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -396,7 +399,7 @@ class DashboardQueryHelperTest {
     @Test
     fun `executeJsonEachRowQuery returns null on HTTP error`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(500, "Internal Server Error", "text/plain")
+            exchange.respond(500, "Internal Server Error", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -408,7 +411,7 @@ class DashboardQueryHelperTest {
     @Test
     fun `executeScalarQuery returns total from response`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(200, """{"total":99}""", "text/plain")
+            exchange.respond(200, """{"total":99}""", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -420,7 +423,7 @@ class DashboardQueryHelperTest {
     @Test
     fun `executeScalarQuery returns 0 on error`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(500, "error", "text/plain")
+            exchange.respond(500, "error", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -434,7 +437,7 @@ class DashboardQueryHelperTest {
         val body = """{"time":"2026-01-01T00:00:00Z","count":5}
 {"time":"2026-01-01T01:00:00Z","count":10}"""
         MockHttpServer { exchange ->
-            exchange.respond(200, body, "text/plain")
+            exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -451,7 +454,7 @@ class DashboardQueryHelperTest {
         val body = """{"level":"error","count":15}
 {"level":"warning","count":3}"""
         MockHttpServer { exchange ->
-            exchange.respond(200, body, "text/plain")
+            exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -471,7 +474,7 @@ class DashboardQueryHelperTest {
             put("timestamp_iso", "2026-01-01T00:00:00.000Z")
         }.toString()
         MockHttpServer { exchange ->
-            exchange.respond(200, body, "text/plain")
+            exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -488,7 +491,7 @@ class DashboardQueryHelperTest {
         val body = """{"issue_id":"iss-1","title":"NullPointerException","count":42}
 {"issue_id":"iss-2","title":"IndexOutOfBounds","count":7}"""
         MockHttpServer { exchange ->
-            exchange.respond(200, body, "text/plain")
+            exchange.respond(200, body, TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -502,7 +505,7 @@ class DashboardQueryHelperTest {
     @Test
     fun `executeMutation succeeds on 200 response`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(200, "", "text/plain")
+            exchange.respond(200, "", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -513,7 +516,7 @@ class DashboardQueryHelperTest {
     @Test
     fun `executeMutation throws on ClickHouse error`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(200, "Code: 62. DB::Exception: Syntax error", "text/plain")
+            exchange.respond(200, "Code: 62. DB::Exception: Syntax error", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")

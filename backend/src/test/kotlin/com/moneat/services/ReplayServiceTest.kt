@@ -35,6 +35,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ReplayServiceTest {
+
+    companion object {
+        private const val TEXT_PLAIN = "text/plain"
+        private const val REPLAY_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    }
+
     private val retentionPolicyService = mockk<RetentionPolicyService>()
     private val pricingTierService = mockk<PricingTierService>()
     private lateinit var queryHelper: DashboardQueryHelper
@@ -51,7 +57,7 @@ class ReplayServiceTest {
     fun `getProjectIdForReplay returns project id for valid replay`() = runBlocking {
         val replayId = "01234567-89ab-cdef-0123-456789abcdef"
         MockHttpServer { exchange ->
-            exchange.respond(200, """{"project_id":42}""", "text/plain")
+            exchange.respond(200, """{"project_id":42}""", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -71,7 +77,7 @@ class ReplayServiceTest {
         val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         MockHttpServer { exchange ->
             queries += exchange.requestBodyText()
-            exchange.respond(200, """{"project_id":10}""", "text/plain")
+            exchange.respond(200, """{"project_id":10}""", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -84,16 +90,16 @@ class ReplayServiceTest {
     @Test
     fun `getReplays returns paginated replay list`() = runBlocking {
         val replayRow = """
-{"replay_id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_count":2,"user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8}
+{"replay_id":"$REPLAY_UUID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_count":2,"user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8}
         """.trimIndent()
         MockHttpServer { exchange ->
-            exchange.respond(200, replayRow, "text/plain")
+            exchange.respond(200, replayRow, TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
             val result = service.getReplays(projectId = 1, page = 1, limit = 25, period = "7d")
             assertEquals(1, result.size)
-            assertEquals("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", result[0].replayId)
+            assertEquals(REPLAY_UUID, result[0].replayId)
             assertEquals(1L, result[0].projectId)
             assertEquals(300000.0, result[0].durationMs)
             assertEquals(2, result[0].errorCount)
@@ -106,7 +112,7 @@ class ReplayServiceTest {
     @Test
     fun `getReplays returns empty list on error`() = runBlocking {
         MockHttpServer { exchange ->
-            exchange.respond(500, "Internal Server Error", "text/plain")
+            exchange.respond(500, "Internal Server Error", TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -117,7 +123,7 @@ class ReplayServiceTest {
 
     @Test
     fun `getReplay returns replay detail`() = runBlocking {
-        val replayId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        val replayId = REPLAY_UUID
         val detailRow = """
 {"replay_id":"$replayId","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_ids":["err-1"],"trace_ids":["trace-1"],"segment_count":5,"environment":"prod","release":"1.0.0","platform":"javascript","user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8,"tags":"{}"}
         """.trimIndent()
@@ -125,9 +131,9 @@ class ReplayServiceTest {
             val query = exchange.requestBodyText()
             when {
                 query.contains("replay_events") && query.contains("project_id") && !query.contains("GROUP BY") ->
-                    exchange.respond(200, """{"project_id":1}""", "text/plain")
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
                 else ->
-                    exchange.respond(200, detailRow, "text/plain")
+                    exchange.respond(200, detailRow, TEXT_PLAIN)
             }
         }.use { server ->
             ClickHouseClient.close()
@@ -152,7 +158,7 @@ class ReplayServiceTest {
 
     @Test
     fun `getReplayTimeline returns timeline with events`() = runBlocking {
-        val replayId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        val replayId = REPLAY_UUID
         val detailRow = """
 {"replay_id":"$replayId","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_ids":["11111111-2222-3333-4444-555555555555"],"trace_ids":["trace-aaa"],"segment_count":5,"environment":"prod","release":"1.0.0","platform":"javascript","user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8,"tags":"{}"}
         """.trimIndent()
@@ -171,23 +177,23 @@ class ReplayServiceTest {
             val query = exchange.requestBodyText()
             when {
                 query.contains("replay_events") && !query.contains("GROUP BY") ->
-                    exchange.respond(200, """{"project_id":1}""", "text/plain")
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
                 query.contains("GROUP BY replay_id") ->
-                    exchange.respond(200, detailRow, "text/plain")
+                    exchange.respond(200, detailRow, TEXT_PLAIN)
                 query.contains("event_type = 'error'") && query.contains("IN (") ->
-                    exchange.respond(200, errorRow, "text/plain")
+                    exchange.respond(200, errorRow, TEXT_PLAIN)
                 query.contains("event_type = 'transaction'") && query.contains("trace_id") ->
-                    exchange.respond(200, txRow, "text/plain")
+                    exchange.respond(200, txRow, TEXT_PLAIN)
                 query.contains("spans") && query.contains("trace_id IN") ->
-                    exchange.respond(200, spanRow, "text/plain")
+                    exchange.respond(200, spanRow, TEXT_PLAIN)
                 query.contains("event_type = 'error'") ->
-                    exchange.respond(200, "", "text/plain")
+                    exchange.respond(200, "", TEXT_PLAIN)
                 query.contains("event_type = 'transaction'") ->
-                    exchange.respond(200, "", "text/plain")
+                    exchange.respond(200, "", TEXT_PLAIN)
                 query.contains("spans") ->
-                    exchange.respond(200, "", "text/plain")
+                    exchange.respond(200, "", TEXT_PLAIN)
                 else ->
-                    exchange.respond(200, "", "text/plain")
+                    exchange.respond(200, "", TEXT_PLAIN)
             }
         }.use { server ->
             ClickHouseClient.close()

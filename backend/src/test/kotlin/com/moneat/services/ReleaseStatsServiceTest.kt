@@ -35,6 +35,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ReleaseStatsServiceTest {
+
+    companion object {
+        private const val TEXT_PLAIN = "text/plain"
+        private const val COUNT_IF_ERRORS_0 = "countIf(errors = 0)"
+    }
+
     private val retentionPolicyService = mockk<RetentionPolicyService>()
     private val pricingTierService = mockk<PricingTierService>()
     private lateinit var queryHelper: DashboardQueryHelper
@@ -56,14 +62,14 @@ class ReleaseStatsServiceTest {
                     exchange.respond(
                         200,
                         """{"version":"1.0.0","total":2}""",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
-                query.contains("countIf(errors = 0)") && query.contains("sessions") -> {
+                query.contains(COUNT_IF_ERRORS_0) && query.contains("sessions") -> {
                     exchange.respond(
                         200,
                         """{"version":"1.0.0","rate":98.5}""",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
                 else -> {
@@ -71,7 +77,7 @@ class ReleaseStatsServiceTest {
                         200,
                         """{"version":"1.0.0","first_seen":"2026-01-01T00:00:00.000Z","last_seen":"2026-01-02T00:00:00.000Z","event_count":10,"user_count":5}
                         """.trimIndent(),
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
             }
@@ -95,7 +101,7 @@ class ReleaseStatsServiceTest {
     fun `getReleases returns empty list on error`() = runBlocking {
         MockHttpServer { exchange ->
             exchange.requestBodyText()
-            exchange.respond(500, "Internal Server Error", contentType = "text/plain")
+            exchange.respond(500, "Internal Server Error", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -113,21 +119,21 @@ class ReleaseStatsServiceTest {
                     exchange.respond(
                         200,
                         """{"total":3}""",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
-                query.contains("countIf(errors = 0)") && query.contains("sessions") -> {
+                query.contains(COUNT_IF_ERRORS_0) && query.contains("sessions") -> {
                     exchange.respond(
                         200,
                         """{"rate":95.0}""",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
                 query.contains("toStartOfInterval") -> {
                     exchange.respond(
                         200,
                         """{"time":"2026-01-01T00:00:00.000Z","count":5}""",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
                 query.contains("GROUP BY level") -> {
@@ -135,14 +141,14 @@ class ReleaseStatsServiceTest {
                         200,
                         """{"level":"error","count":3}
 {"level":"warning","count":7}""",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
                 query.contains("GROUP BY issue_id") -> {
                     exchange.respond(
                         200,
                         """{"issue_id":"iss-1","title":"NullPointerException","count":4}""",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
                 else -> {
@@ -150,7 +156,7 @@ class ReleaseStatsServiceTest {
                         200,
                         """{"first_seen":"2026-01-01T00:00:00.000Z","last_seen":"2026-01-02T00:00:00.000Z","total_events":20,"user_count":8}
                         """.trimIndent(),
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
             }
@@ -177,7 +183,7 @@ class ReleaseStatsServiceTest {
     fun `getReleaseStats returns null on empty response`() = runBlocking {
         MockHttpServer { exchange ->
             exchange.requestBodyText()
-            exchange.respond(200, "", contentType = "text/plain")
+            exchange.respond(200, "", contentType = TEXT_PLAIN)
         }.use { server ->
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
@@ -191,35 +197,35 @@ class ReleaseStatsServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             when {
-                query.contains("countIf(errors = 0)") && query.contains("sessions") -> {
+                query.contains(COUNT_IF_ERRORS_0) && query.contains("sessions") -> {
                     exchange.respond(
                         200,
                         """{"rate":"nan"}""",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
                 query.contains("count() as total") && query.contains("first_release") -> {
                     exchange.respond(
                         200,
                         """{"total":0}""",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
                 query.contains("toStartOfInterval") -> {
-                    exchange.respond(200, "", contentType = "text/plain")
+                    exchange.respond(200, "", contentType = TEXT_PLAIN)
                 }
                 query.contains("GROUP BY level") -> {
-                    exchange.respond(200, "", contentType = "text/plain")
+                    exchange.respond(200, "", contentType = TEXT_PLAIN)
                 }
                 query.contains("GROUP BY issue_id") -> {
-                    exchange.respond(200, "", contentType = "text/plain")
+                    exchange.respond(200, "", contentType = TEXT_PLAIN)
                 }
                 else -> {
                     exchange.respond(
                         200,
                         """{"first_seen":"2026-01-01T00:00:00.000Z","last_seen":"2026-01-02T00:00:00.000Z","total_events":5,"user_count":2}
                         """.trimIndent(),
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
             }

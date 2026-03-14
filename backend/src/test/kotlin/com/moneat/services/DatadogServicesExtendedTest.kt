@@ -54,6 +54,11 @@ import kotlin.test.assertTrue
 
 class DatadogServicesExtendedTest {
 
+    companion object {
+        private const val CPU_PPROF = "cpu.pprof"
+        private const val API_V2_APMTELEMETRY = "/api/v2/apmtelemetry"
+    }
+
     // ================================================================
     //  MiscIngestionService – pure-function tests (no Redis/ClickHouse)
     // ================================================================
@@ -853,7 +858,7 @@ class DatadogServicesExtendedTest {
         @Test
         fun `storeMultiple stores several files under a prefix`() {
             val files = listOf(
-                "cpu.pprof" to "cpu data".toByteArray(),
+                CPU_PPROF to "cpu data".toByteArray(),
                 "heap.pprof" to "heap data".toByteArray(),
             )
 
@@ -866,7 +871,7 @@ class DatadogServicesExtendedTest {
         fun `read from directory selects best file`() {
             val files = listOf(
                 "delta.pprof" to "delta data".toByteArray(),
-                "cpu.pprof" to "cpu data".toByteArray(),
+                CPU_PPROF to "cpu data".toByteArray(),
             )
 
             val prefix = ProfileStorageService.storeMultiple(1, "profile-456", files)
@@ -880,7 +885,7 @@ class DatadogServicesExtendedTest {
             val prefix = ProfileStorageService.storeMultiple(
                 1,
                 "profile-789",
-                listOf("cpu.pprof" to "cpu".toByteArray())
+                listOf(CPU_PPROF to "cpu".toByteArray())
             )
 
             ProfileStorageService.storeAdditional(
@@ -919,7 +924,7 @@ class DatadogServicesExtendedTest {
         fun `acknowledge does not throw`() {
             TelemetryProxyService.acknowledge(
                 organizationId = 1,
-                path = "/api/v2/apmtelemetry",
+                path = API_V2_APMTELEMETRY,
                 bodySize = 1024,
             )
         }
@@ -928,7 +933,7 @@ class DatadogServicesExtendedTest {
         fun `acknowledge handles zero body size`() {
             TelemetryProxyService.acknowledge(
                 organizationId = 1,
-                path = "/api/v2/apmtelemetry",
+                path = API_V2_APMTELEMETRY,
                 bodySize = 0,
             )
         }
@@ -937,7 +942,7 @@ class DatadogServicesExtendedTest {
         fun `acknowledge handles large body size`() {
             TelemetryProxyService.acknowledge(
                 organizationId = 42,
-                path = "/api/v2/apmtelemetry",
+                path = API_V2_APMTELEMETRY,
                 bodySize = 10_000_000,
             )
         }

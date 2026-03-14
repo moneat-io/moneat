@@ -83,6 +83,8 @@ class StatusPageExtendedTest {
 
     companion object {
         private var db: Database? = null
+        private const val SAME_SLUG = "same-slug"
+        private const val TITLE_X_JSON = """{"title":"x"}"""
 
         @JvmStatic
         @BeforeAll
@@ -413,13 +415,13 @@ class StatusPageExtendedTest {
         val service = StatusPageService()
         val page = service.createStatusPage(
             orgId,
-            CreateStatusPageRequest(name = "Same Slug", slug = "same-slug")
+            CreateStatusPageRequest(name = "Same Slug", slug = SAME_SLUG)
         )
         val pageId = UUID.fromString(page.id)
 
-        val updated = service.updateStatusPage(pageId, orgId, UpdateStatusPageRequest(slug = "same-slug"))
+        val updated = service.updateStatusPage(pageId, orgId, UpdateStatusPageRequest(slug = SAME_SLUG))
         assertNotNull(updated)
-        assertEquals("same-slug", updated.slug)
+        assertEquals(SAME_SLUG, updated.slug)
     }
 
     @Test
@@ -1120,7 +1122,7 @@ class StatusPageExtendedTest {
         val response = client.put("/v1/status-pages/not-uuid/incidents/${UUID.randomUUID()}") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             contentType(ContentType.Application.Json)
-            setBody("""{"title":"x"}""")
+            setBody(TITLE_X_JSON)
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
@@ -1136,7 +1138,7 @@ class StatusPageExtendedTest {
         val response = client.put("/v1/status-pages/${UUID.randomUUID()}/incidents/not-uuid") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             contentType(ContentType.Application.Json)
-            setBody("""{"title":"x"}""")
+            setBody(TITLE_X_JSON)
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
@@ -1152,7 +1154,7 @@ class StatusPageExtendedTest {
         val response = client.put("/v1/status-pages/${UUID.randomUUID()}/incidents/${UUID.randomUUID()}") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             contentType(ContentType.Application.Json)
-            setBody("""{"title":"x"}""")
+            setBody(TITLE_X_JSON)
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }

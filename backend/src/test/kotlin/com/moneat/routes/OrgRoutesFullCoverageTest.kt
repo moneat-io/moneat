@@ -82,6 +82,23 @@ class OrgRoutesFullCoverageTest {
 
     companion object {
         private const val DISCORD_CHANNEL_BODY = """{"channelId":"D456","channelName":"alerts"}"""
+        private const val AUTH_JWT = "auth-jwt"
+        private const val ADMIN_EMAIL = "admin@test.com"
+        private const val V1_ADMIN_OVERVIEW = "/v1/admin/overview"
+        private const val V1_ADMIN_USERS = "/v1/admin/users"
+        private const val USER_EMAIL = "user@test.com"
+        private const val ORPHAN_EMAIL = "orphan@test.com"
+        private const val XOXB_TOKEN = "xoxb-token"
+        private const val SLACK_CHANNELS = "/integrations/slack/channels"
+        private const val SLACK_USERGROUPS = "/integrations/slack/usergroups"
+        private const val SLACK_INTEGRATIONS = "/integrations/slack"
+        private const val SLACK_TEST = "/integrations/slack/test"
+        private const val DISCORD_CHANNELS = "/integrations/discord/channels"
+        private const val DISCORD_CHANNEL = "/integrations/discord/channel"
+        private const val DISCORD_TOGGLE = "/integrations/discord/toggle"
+        private const val DISCORD_INTEGRATIONS = "/integrations/discord"
+        private const val DISCORD_TEST = "/integrations/discord/test"
+        private const val SLACK_LINK_USER = "/integrations/slack/link-user"
     }
 
     private lateinit var mockAdminService: AdminService
@@ -141,7 +158,7 @@ class OrgRoutesFullCoverageTest {
     private fun Application.installTestApp() {
         install(ContentNegotiation) { json() }
         install(Authentication) {
-            jwt("auth-jwt") {
+            jwt(AUTH_JWT) {
                 verifier(
                     JWT.require(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
                         .withIssuer("moneat").withAudience("moneat-users").build()
@@ -216,7 +233,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin overview returns stats for admin user`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         coEvery { mockAdminService.getOverviewStats() } returns
             com.moneat.org.services.AdminOverviewStats(
                 totalOrganizations = 5, totalUsers = 20,
@@ -230,7 +247,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.get("/v1/admin/overview") {
+            val response = client.get(V1_ADMIN_OVERVIEW) {
                 header(HttpHeaders.Authorization, "Bearer ${token(adminId, 1)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -249,7 +266,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.get("/v1/admin/overview") {
+            val response = client.get(V1_ADMIN_OVERVIEW) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -263,7 +280,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.get("/v1/admin/overview")
+            val response = client.get(V1_ADMIN_OVERVIEW)
             assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
     }
@@ -274,7 +291,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin organizations returns list`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getAllOrganizations(1, 25) } returns emptyList()
 
         testApplication {
@@ -291,7 +308,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin organizations respects pagination params`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getAllOrganizations(2, 10) } returns emptyList()
 
         testApplication {
@@ -312,7 +329,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin org detail returns org data`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getOrgDetail(42) } returns
             com.moneat.org.services.AdminOrgDetail(
                 id = 42, name = "Acme", slug = "acme",
@@ -338,7 +355,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin org detail returns 404 for nonexistent org`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getOrgDetail(999) } returns null
 
         testApplication {
@@ -355,7 +372,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin org detail returns 400 for invalid org id`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
 
         testApplication {
             application {
@@ -375,7 +392,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin org usage returns usage data`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getOrgUsage(42, "7d") } returns listOf(
             com.moneat.shared.services.OrgUsageSummary(
                 date = kotlinx.datetime.LocalDate(2026, 1, 1),
@@ -398,7 +415,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin org usage returns 400 for invalid org id`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
 
         testApplication {
             application {
@@ -414,7 +431,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin org usage accepts period param`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getOrgUsage(42, "30d") } returns emptyList()
 
         testApplication {
@@ -435,7 +452,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin usage breakdown returns data`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getUsageBreakdown("7d") } returns
             com.moneat.org.services.AdminUsageBreakdown(
                 daily = emptyList(), totalBytes = 50000L
@@ -459,7 +476,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin revenue returns metrics`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getRevenueMetrics() } returns
             com.moneat.org.services.AdminRevenueMetrics(
                 mrr = 100.0, subscriptionsByPlan = emptyMap(),
@@ -484,7 +501,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin infrastructure returns health data`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         coEvery { mockAdminService.getInfrastructureHealth() } returns
             com.moneat.org.services.AdminInfrastructureHealth(
                 clickhouseTables = emptyList(), totalDiskBytes = 0L,
@@ -510,7 +527,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin top consumers returns list`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getTopConsumers(10) } returns emptyList()
 
         testApplication {
@@ -527,7 +544,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin top consumers accepts limit param`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getTopConsumers(5) } returns emptyList()
 
         testApplication {
@@ -548,7 +565,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin emails returns stats`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getEmailStats("30d") } returns
             com.moneat.org.services.AdminEmailStats(
                 totalSent = 100L, byType = emptyMap(),
@@ -570,7 +587,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin emails accepts period param`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getEmailStats("7d") } returns
             com.moneat.org.services.AdminEmailStats(
                 totalSent = 50L, byType = emptyMap(),
@@ -596,7 +613,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin impersonate returns token`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         val targetId = seedUser("target@test.com")
         every { mockAuthService.generateImpersonationToken(targetId, "target@test.com") } returns "imp-token-123"
 
@@ -615,7 +632,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin impersonate returns 404 for nonexistent user`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
 
         testApplication {
             application {
@@ -631,7 +648,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin impersonate returns 400 for invalid user id`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
 
         testApplication {
             application {
@@ -651,7 +668,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin users returns paginated list`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getAllUsers(1, 25, null) } returns emptyList()
         every { mockAdminService.getTotalUserCount(null) } returns 0
 
@@ -660,7 +677,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.get("/v1/admin/users") {
+            val response = client.get(V1_ADMIN_USERS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(adminId, 1)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -670,7 +687,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin users accepts search and pagination params`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.getAllUsers(2, 10, "test") } returns emptyList()
         every { mockAdminService.getTotalUserCount("test") } returns 0
 
@@ -679,7 +696,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val response = client.get("/v1/admin/users?page=2&limit=10&search=test") {
+            val response = client.get("$V1_ADMIN_USERS?page=2&limit=10&search=test") {
                 header(HttpHeaders.Authorization, "Bearer ${token(adminId, 1)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -692,7 +709,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin update user returns success`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.updateUser(any(), any()) } returns true
 
         testApplication {
@@ -712,7 +729,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin update user returns 404 for nonexistent user`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.updateUser(any(), any()) } returns false
 
         testApplication {
@@ -731,7 +748,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin update user returns 400 for invalid user id`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
 
         testApplication {
             application {
@@ -749,7 +766,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin update user returns 400 for service exception`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.updateUser(any(), any()) } throws
             IllegalArgumentException("Invalid field")
 
@@ -773,7 +790,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin delete users returns result`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.deleteUsers(listOf(10, 20)) } returns
             com.moneat.org.services.DeleteUsersResponse(
                 success = true, deletedCount = 2, errors = emptyList()
@@ -796,7 +813,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin delete users returns 400 on exception`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminService.deleteUsers(any()) } throws
             IllegalArgumentException("Cannot delete admin")
 
@@ -820,7 +837,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin billing tiers returns current plans`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockPricingTierService.getCurrentPlans() } returns emptyList()
 
         testApplication {
@@ -837,7 +854,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin billing tiers with tier param returns versions`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockPricingTierService.getTierVersions("PRO") } returns emptyList()
 
         testApplication {
@@ -854,7 +871,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin create tier version returns 400 for missing tier name`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
 
         testApplication {
             application {
@@ -872,7 +889,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin billing subscriptions returns list`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockPricingTierService.listAdminSubscriptions(500) } returns emptyList()
 
         testApplication {
@@ -889,7 +906,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin billing subscriptions accepts limit param`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockPricingTierService.listAdminSubscriptions(10) } returns emptyList()
 
         testApplication {
@@ -910,7 +927,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin get promotional credits for org`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminBillingService.getPromotionalCreditHistory(42) } returns emptyList()
 
         testApplication {
@@ -927,7 +944,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin get promotional credits returns 400 for invalid org id`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
 
         testApplication {
             application {
@@ -943,7 +960,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin get all promotional credit grants`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminBillingService.getAllPromotionalCreditGrants(100) } returns emptyList()
 
         testApplication {
@@ -960,7 +977,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin delete promotional credits returns success`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminBillingService.resetPromotionalCredits(42, adminId) } returns true
 
         testApplication {
@@ -977,7 +994,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin delete promotional credits returns 404 for nonexistent org`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAdminBillingService.resetPromotionalCredits(999, adminId) } returns false
 
         testApplication {
@@ -994,7 +1011,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin delete promotional credits returns 400 for invalid org id`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
 
         testApplication {
             application {
@@ -1014,7 +1031,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin attribution returns metrics`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAttributionService.getAttributionMetrics("campaign") } returns
             AttributionAnalyticsResponse(
                 metrics = emptyList(),
@@ -1038,7 +1055,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `admin attribution accepts groupBy param`() {
-        val adminId = seedUser("admin@test.com", admin = true)
+        val adminId = seedUser(ADMIN_EMAIL, admin = true)
         every { mockAttributionService.getAttributionMetrics("source") } returns
             AttributionAnalyticsResponse(
                 metrics = emptyList(),
@@ -1067,7 +1084,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `list integrations returns integrations for org`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
         seedIntegration(orgId, "slack")
 
@@ -1075,7 +1092,7 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
@@ -1090,13 +1107,13 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `list integrations returns 404 when user has no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
@@ -1115,11 +1132,11 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `get slack channels returns channel list`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
-        seedIntegration(orgId, "slack", accessToken = "xoxb-token")
+        seedIntegration(orgId, "slack", accessToken = XOXB_TOKEN)
 
-        coEvery { mockSlackService.listChannels("xoxb-token") } returns listOf(
+        coEvery { mockSlackService.listChannels(XOXB_TOKEN) } returns listOf(
             SlackService.SlackChannel(id = "C123", name = "general")
         )
 
@@ -1127,12 +1144,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.get("/integrations/slack/channels") {
+            val response = client.get(SLACK_CHANNELS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -1142,18 +1159,18 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `get slack channels returns 404 when no org found`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.get("/integrations/slack/channels") {
+            val response = client.get(SLACK_CHANNELS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, 1)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1163,19 +1180,19 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `get slack channels returns 404 when no slack integration`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.get("/integrations/slack/channels") {
+            val response = client.get(SLACK_CHANNELS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1189,7 +1206,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `update slack channel returns success`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
         seedIntegration(orgId, "slack")
 
@@ -1197,7 +1214,7 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
@@ -1214,13 +1231,13 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `update slack channel returns 404 when no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
@@ -1241,11 +1258,11 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `get slack usergroups returns list`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
-        seedIntegration(orgId, "slack", accessToken = "xoxb-token")
+        seedIntegration(orgId, "slack", accessToken = XOXB_TOKEN)
 
-        coEvery { mockSlackService.listUsergroups("xoxb-token") } returns listOf(
+        coEvery { mockSlackService.listUsergroups(XOXB_TOKEN) } returns listOf(
             SlackService.SlackUsergroup(id = "S1", handle = "oncall", name = "On-Call Team")
         )
 
@@ -1253,12 +1270,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.get("/integrations/slack/usergroups") {
+            val response = client.get(SLACK_USERGROUPS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -1268,18 +1285,18 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `get slack usergroups returns 404 when no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.get("/integrations/slack/usergroups") {
+            val response = client.get(SLACK_USERGROUPS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, 1)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1289,19 +1306,19 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `get slack usergroups returns 404 when no slack integration`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.get("/integrations/slack/usergroups") {
+            val response = client.get(SLACK_USERGROUPS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1315,7 +1332,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `toggle slack integration returns success`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
         seedIntegration(orgId, "slack")
 
@@ -1323,7 +1340,7 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
@@ -1338,13 +1355,13 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `toggle slack integration returns 404 when no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
@@ -1363,7 +1380,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `delete slack integration returns success`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
         seedIntegration(orgId, "slack")
 
@@ -1371,12 +1388,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.delete("/integrations/slack") {
+            val response = client.delete(SLACK_INTEGRATIONS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -1387,19 +1404,19 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `delete slack integration returns 404 when no integration`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.delete("/integrations/slack") {
+            val response = client.delete(SLACK_INTEGRATIONS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1408,18 +1425,18 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `delete slack integration returns 404 when no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.delete("/integrations/slack") {
+            val response = client.delete(SLACK_INTEGRATIONS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, 1)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1433,7 +1450,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `test slack integration returns success`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         coEvery { mockSlackService.testConnection(orgId) } returns Pair(true, "OK")
@@ -1442,12 +1459,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.post("/integrations/slack/test") {
+            val response = client.post(SLACK_TEST) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -1458,7 +1475,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `test slack integration returns 400 on failure`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         coEvery { mockSlackService.testConnection(orgId) } returns Pair(false, "Not configured")
@@ -1467,12 +1484,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.post("/integrations/slack/test") {
+            val response = client.post(SLACK_TEST) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -1481,18 +1498,18 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `test slack integration returns 404 when no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.post("/integrations/slack/test") {
+            val response = client.post(SLACK_TEST) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, 1)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1506,7 +1523,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `get discord channels returns channel list`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
         seedIntegration(orgId, "discord", teamId = "G123")
 
@@ -1518,12 +1535,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.get("/integrations/discord/channels") {
+            val response = client.get(DISCORD_CHANNELS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -1533,18 +1550,18 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `get discord channels returns 404 when no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.get("/integrations/discord/channels") {
+            val response = client.get(DISCORD_CHANNELS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, 1)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1554,19 +1571,19 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `get discord channels returns 404 when no discord integration`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.get("/integrations/discord/channels") {
+            val response = client.get(DISCORD_CHANNELS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1580,7 +1597,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `update discord channel returns success`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
         seedIntegration(orgId, "discord")
 
@@ -1588,12 +1605,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.put("/integrations/discord/channel") {
+            val response = client.put(DISCORD_CHANNEL) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody(DISCORD_CHANNEL_BODY)
@@ -1605,18 +1622,18 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `update discord channel returns 404 when no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.put("/integrations/discord/channel") {
+            val response = client.put(DISCORD_CHANNEL) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, 1)}")
                 contentType(ContentType.Application.Json)
                 setBody(DISCORD_CHANNEL_BODY)
@@ -1628,19 +1645,19 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `update discord channel returns 404 when no integration`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.put("/integrations/discord/channel") {
+            val response = client.put(DISCORD_CHANNEL) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody(DISCORD_CHANNEL_BODY)
@@ -1656,7 +1673,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `toggle discord integration returns success`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
         seedIntegration(orgId, "discord")
 
@@ -1664,12 +1681,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.put("/integrations/discord/toggle") {
+            val response = client.put(DISCORD_TOGGLE) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -1679,18 +1696,18 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `toggle discord integration returns 404 when no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.put("/integrations/discord/toggle") {
+            val response = client.put(DISCORD_TOGGLE) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, 1)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1700,19 +1717,19 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `toggle discord integration returns 404 when no integration`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.put("/integrations/discord/toggle") {
+            val response = client.put(DISCORD_TOGGLE) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1726,7 +1743,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `delete discord integration returns success`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
         seedIntegration(orgId, "discord")
 
@@ -1734,12 +1751,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.delete("/integrations/discord") {
+            val response = client.delete(DISCORD_INTEGRATIONS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -1750,19 +1767,19 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `delete discord integration returns 404 when no integration`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.delete("/integrations/discord") {
+            val response = client.delete(DISCORD_INTEGRATIONS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1771,18 +1788,18 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `delete discord integration returns 404 when no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.delete("/integrations/discord") {
+            val response = client.delete(DISCORD_INTEGRATIONS) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, 1)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1796,7 +1813,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `test discord integration returns success`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         coEvery {
@@ -1807,12 +1824,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.post("/integrations/discord/test") {
+            val response = client.post(DISCORD_TEST) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -1823,7 +1840,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `test discord integration returns 400 on failure`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         coEvery {
@@ -1834,12 +1851,12 @@ class OrgRoutesFullCoverageTest {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.post("/integrations/discord/test") {
+            val response = client.post(DISCORD_TEST) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -1848,18 +1865,18 @@ class OrgRoutesFullCoverageTest {
 
     @Test
     fun `test discord integration returns 404 when no org`() {
-        val userId = seedUser("orphan@test.com")
+        val userId = seedUser(ORPHAN_EMAIL)
 
         testApplication {
             application {
                 installTestApp()
                 routing {
-                    authenticate("auth-jwt") {
+                    authenticate(AUTH_JWT) {
                         integrationRoutes()
                     }
                 }
             }
-            val response = client.post("/integrations/discord/test") {
+            val response = client.post(DISCORD_TEST) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, 1)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1959,7 +1976,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `slack link user creates new mapping`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         testApplication {
@@ -1967,7 +1984,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { integrationCallbackRoutes() }
             }
-            val response = client.post("/integrations/slack/link-user") {
+            val response = client.post(SLACK_LINK_USER) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"slackUserId":"U123","slackTeamId":"T456"}""")
@@ -1980,7 +1997,7 @@ class OrgRoutesFullCoverageTest {
     @Test
     fun `slack link user updates existing mapping`() {
         val orgId = seedOrg("Acme")
-        val userId = seedUser("user@test.com")
+        val userId = seedUser(USER_EMAIL)
         seedMembership(orgId, userId, "owner")
 
         // Seed existing mapping
@@ -1999,7 +2016,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { integrationCallbackRoutes() }
             }
-            val response = client.post("/integrations/slack/link-user") {
+            val response = client.post(SLACK_LINK_USER) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"slackUserId":"U-NEW","slackTeamId":"T-NEW"}""")
@@ -2016,7 +2033,7 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { integrationCallbackRoutes() }
             }
-            val response = client.post("/integrations/slack/link-user") {
+            val response = client.post(SLACK_LINK_USER) {
                 contentType(ContentType.Application.Json)
                 setBody("""{"slackUserId":"U123","slackTeamId":"T456"}""")
             }

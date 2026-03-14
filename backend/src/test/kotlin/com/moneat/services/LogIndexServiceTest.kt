@@ -51,6 +51,9 @@ class LogIndexServiceTest {
     companion object {
         private var db: Database? = null
         private const val ORG_ID = 1
+        private const val SERVICE_API = "service:api"
+        private const val API_INDEX = "api-index"
+        private const val TEXT_PLAIN = "text/plain"
     }
 
     @BeforeTest
@@ -104,7 +107,7 @@ class LogIndexServiceTest {
     fun `create inserts index with correct fields`() {
         val result = createIndex(
             name = "prod-logs",
-            filterQuery = "service:api",
+            filterQuery = SERVICE_API,
             retentionDays = 90,
             samplingRate = 0.5f,
             priority = 1,
@@ -112,7 +115,7 @@ class LogIndexServiceTest {
         )
 
         assertEquals("prod-logs", result.name)
-        assertEquals("service:api", result.filterQuery)
+        assertEquals(SERVICE_API, result.filterQuery)
         assertEquals(90, result.retentionDays)
         assertEquals(0.5f, result.samplingRate)
         assertEquals(1, result.priority)
@@ -392,22 +395,22 @@ class LogIndexServiceTest {
     @Test
     fun `matchIndex matches field filter`() = runBlocking {
         createIndex(
-            name = "api-index",
-            filterQuery = "service:api",
+            name = API_INDEX,
+            filterQuery = SERVICE_API,
             priority = 0
         )
         val result = service.matchIndex(
             ORG_ID,
             mapOf("service" to "api")
         )
-        assertEquals("api-index", result)
+        assertEquals(API_INDEX, result)
     }
 
     @Test
     fun `matchIndex skips non-matching filter`() = runBlocking {
         createIndex(
             name = "api-only",
-            filterQuery = "service:api",
+            filterQuery = SERVICE_API,
             priority = 0
         )
         createIndex(
@@ -524,7 +527,7 @@ class LogIndexServiceTest {
     fun `matchIndex handles exact field match case insensitive`() =
         runBlocking {
             createIndex(
-                name = "api-index",
+                name = API_INDEX,
                 filterQuery = "service:API",
                 priority = 0
             )
@@ -603,17 +606,17 @@ class LogIndexServiceTest {
                 body.contains("AND (") -> exchange.respond(
                     200,
                     """{"cnt":3}""",
-                    contentType = "text/plain"
+                    contentType = TEXT_PLAIN
                 )
                 body.contains("count()") -> exchange.respond(
                     200,
                     """{"cnt":10}""",
-                    contentType = "text/plain"
+                    contentType = TEXT_PLAIN
                 )
                 else -> exchange.respond(
                     500,
                     "unexpected",
-                    contentType = "text/plain"
+                    contentType = TEXT_PLAIN
                 )
             }
         }.use { server ->
@@ -624,7 +627,7 @@ class LogIndexServiceTest {
                 ""
             )
 
-            val result = service.testFilter(ORG_ID, "service:api")
+            val result = service.testFilter(ORG_ID, SERVICE_API)
             assertEquals(10L, result.totalCount)
             assertEquals(3L, result.matchCount)
         }
@@ -637,7 +640,7 @@ class LogIndexServiceTest {
                 exchange.respond(
                     200,
                     """{"cnt":42}""",
-                    contentType = "text/plain"
+                    contentType = TEXT_PLAIN
                 )
             }.use { server ->
                 ClickHouseClient.init(
@@ -664,14 +667,14 @@ class LogIndexServiceTest {
                     exchange.respond(
                         200,
                         """{"cnt":10}""",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 } else {
                     // filter query fails
                     exchange.respond(
                         500,
                         "DB error",
-                        contentType = "text/plain"
+                        contentType = TEXT_PLAIN
                     )
                 }
             }.use { server ->
@@ -684,7 +687,7 @@ class LogIndexServiceTest {
 
                 val result = service.testFilter(
                     ORG_ID,
-                    "service:api"
+                    SERVICE_API
                 )
                 assertEquals(10L, result.totalCount)
                 assertEquals(0L, result.matchCount)

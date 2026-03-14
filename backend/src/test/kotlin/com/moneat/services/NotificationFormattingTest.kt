@@ -32,6 +32,19 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class NotificationFormattingTest {
+
+    companion object {
+        private const val ISSUES_1_URL = "https://app.moneat.io/issues/1"
+        private const val COLOR_E01E5A = "#E01E5A"
+        private const val TIMESTAMP_2025_01_01 = "2025-01-01T00:00:00Z"
+        private const val MONET_UPTIME_MONITOR = "Moneat Uptime Monitor"
+        private const val COLOR_ECB22E = "#ECB22E"
+        private const val COLOR_2EB67D = "#2EB67D"
+        private const val MONITOR_DOWN = "Monitor Down"
+        private const val MONITOR_RECOVERED = "Monitor Recovered"
+        private const val SETTINGS_NOTIFICATIONS_URL = "https://app.moneat.io/settings/notifications"
+    }
+
     private val json = Json { ignoreUnknownKeys = true }
 
     // ── Slack data class serialization ──────────────────────────────────
@@ -77,7 +90,7 @@ class NotificationFormattingTest {
                 SlackService.SlackElement(
                     type = "button",
                     text = SlackService.SlackText(type = "plain_text", text = "View"),
-                    url = "https://app.moneat.io/issues/1"
+                    url = ISSUES_1_URL
                 )
             )
         )
@@ -141,7 +154,7 @@ class NotificationFormattingTest {
     @Test
     fun `SlackAttachment serializes with color and blocks`() {
         val attachment = SlackService.SlackAttachment(
-            color = "#E01E5A",
+            color = COLOR_E01E5A,
             blocks = listOf(
                 SlackService.SlackBlock(
                     type = "section",
@@ -297,7 +310,7 @@ class NotificationFormattingTest {
         assertEquals(0xE01E5A, obj["color"]?.jsonPrimitive?.int)
         assertEquals(2, obj["fields"]?.jsonArray?.size)
         assertEquals("Moneat Alert", obj["footer"]?.jsonObject?.get("text")?.jsonPrimitive?.content)
-        assertEquals("2025-01-01T00:00:00Z", obj["timestamp"]?.jsonPrimitive?.content)
+        assertEquals(TIMESTAMP_2025_01_01, obj["timestamp"]?.jsonPrimitive?.content)
     }
 
     @Test
@@ -333,11 +346,11 @@ class NotificationFormattingTest {
 
     @Test
     fun `DiscordFooter serializes text`() {
-        val footer = DiscordService.DiscordFooter(text = "Moneat Uptime Monitor")
+        val footer = DiscordService.DiscordFooter(text = MONET_UPTIME_MONITOR)
         val encoded = json.encodeToString(footer)
         val obj = Json.parseToJsonElement(encoded).jsonObject
 
-        assertEquals("Moneat Uptime Monitor", obj["text"]?.jsonPrimitive?.content)
+        assertEquals(MONET_UPTIME_MONITOR, obj["text"]?.jsonPrimitive?.content)
     }
 
     @Test
@@ -469,7 +482,7 @@ class NotificationFormattingTest {
         )
         val attachments = listOf(
             SlackService.SlackAttachment(
-                color = "#ECB22E",
+                color = COLOR_ECB22E,
                 blocks = attachmentBlocks,
                 fallback = "⚠️ Host Alert: api-prod"
             )
@@ -486,7 +499,7 @@ class NotificationFormattingTest {
         assertEquals(1, obj["blocks"]?.jsonArray?.size)
         assertEquals(1, obj["attachments"]?.jsonArray?.size)
         val att = obj["attachments"]?.jsonArray?.get(0)?.jsonObject
-        assertEquals("#ECB22E", att?.get("color")?.jsonPrimitive?.content)
+        assertEquals(COLOR_ECB22E, att?.get("color")?.jsonPrimitive?.content)
         assertEquals(2, att?.get("blocks")?.jsonArray?.size)
     }
 
@@ -513,7 +526,7 @@ class NotificationFormattingTest {
             )
         )
         val attachment = SlackService.SlackAttachment(
-            color = "#E01E5A",
+            color = COLOR_E01E5A,
             blocks = blocks,
             fallback = "Error: NullPointerException"
         )
@@ -673,9 +686,9 @@ class NotificationFormattingTest {
 
         val testCases = listOf(
             LevelMapping("error", "🔴", "#E01E5A"),
-            LevelMapping("warning", "⚠️", "#ECB22E"),
-            LevelMapping("info", "ℹ️", "#2EB67D"),
-            LevelMapping("debug", "⚠️", "#ECB22E")
+            LevelMapping("warning", "⚠️", COLOR_ECB22E),
+            LevelMapping("info", "ℹ️", COLOR_2EB67D),
+            LevelMapping("debug", "⚠️", COLOR_ECB22E)
         )
 
         for ((level, expectedEmoji, expectedColor) in testCases) {
@@ -688,9 +701,9 @@ class NotificationFormattingTest {
             }
             val color = when (levelLower) {
                 "error" -> "#E01E5A"
-                "warning" -> "#ECB22E"
-                "info" -> "#2EB67D"
-                else -> "#ECB22E"
+                "warning" -> COLOR_ECB22E
+                "info" -> COLOR_2EB67D
+                else -> COLOR_ECB22E
             }
             assertEquals(expectedEmoji, emoji, "Emoji mismatch for level=$level")
             assertEquals(expectedColor, color, "Color mismatch for level=$level")
@@ -714,18 +727,18 @@ class NotificationFormattingTest {
         val critColor = when ("CRITICAL") {
             "CRITICAL" -> "#E01E5A"
             "HIGH" -> "#E01E5A"
-            "MEDIUM" -> "#ECB22E"
-            else -> "#ECB22E"
+            "MEDIUM" -> COLOR_ECB22E
+            else -> COLOR_ECB22E
         }
         assertEquals("#E01E5A", critColor)
 
         val medColor = when ("MEDIUM") {
             "CRITICAL" -> "#E01E5A"
             "HIGH" -> "#E01E5A"
-            "MEDIUM" -> "#ECB22E"
-            else -> "#ECB22E"
+            "MEDIUM" -> COLOR_ECB22E
+            else -> COLOR_ECB22E
         }
-        assertEquals("#ECB22E", medColor)
+        assertEquals(COLOR_ECB22E, medColor)
     }
 
     // ── Discord severity color mapping for dashboard alerts ─────────────
@@ -757,14 +770,14 @@ class NotificationFormattingTest {
         val isDown = downStatus.lowercase() == "down"
         assertTrue(isDown)
         assertEquals("🔴", if (isDown) "🔴" else "🟢")
-        assertEquals("Monitor Down", if (isDown) "Monitor Down" else "Monitor Recovered")
+        assertEquals(MONITOR_DOWN, if (isDown) MONITOR_DOWN else MONITOR_RECOVERED)
         assertEquals("#E01E5A", if (isDown) "#E01E5A" else "#2EB67D")
 
         val upStatus = "UP"
         val isUp = upStatus.lowercase() == "down"
         assertFalse(isUp)
         assertEquals("🟢", if (isUp) "🔴" else "🟢")
-        assertEquals("Monitor Recovered", if (isUp) "Monitor Down" else "Monitor Recovered")
+        assertEquals(MONITOR_RECOVERED, if (isUp) MONITOR_DOWN else MONITOR_RECOVERED)
     }
 
     // ── EmailService data class construction ────────────────────────────
@@ -777,13 +790,13 @@ class NotificationFormattingTest {
             issueCulprit = "Main.kt:run",
             issueMessage = "null reference",
             issueCount = "5",
-            issueUrl = "https://app.moneat.io/issues/1",
+            issueUrl = ISSUES_1_URL,
             projectName = "Backend",
             environment = "production",
             timestamp = "2025-01-01T00:00:00Z",
             stackTrace = "  at Main.run (Main.kt:10)",
-            settingsUrl = "https://app.moneat.io/settings/notifications",
-            unsubscribeUrl = "https://app.moneat.io/settings/notifications?project=1"
+            settingsUrl = SETTINGS_NOTIFICATIONS_URL,
+            unsubscribeUrl = "$SETTINGS_NOTIFICATIONS_URL?project=1"
         )
 
         assertEquals("NullPointerException", data.issueTitle)
@@ -821,8 +834,8 @@ class NotificationFormattingTest {
                 )
             ),
             dashboardUrl = "https://app.moneat.io",
-            settingsUrl = "https://app.moneat.io/settings/notifications",
-            unsubscribeUrl = "https://app.moneat.io/settings/notifications"
+            settingsUrl = SETTINGS_NOTIFICATIONS_URL,
+            unsubscribeUrl = SETTINGS_NOTIFICATIONS_URL
         )
 
         assertEquals("Jan 01, 2025", data.startDate)

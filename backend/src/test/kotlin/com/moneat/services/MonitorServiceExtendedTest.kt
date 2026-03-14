@@ -154,7 +154,7 @@ class MonitorServiceExtendedTest {
     fun `getLatestMetrics returns null when data array is empty`() = runBlocking {
         every { hostRepo.getById(1) } returns testHost
         coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns 3
-        coEvery { hostRepo.executeClickHouseQuery(any()) } returns """{"data":[]}"""
+        coEvery { hostRepo.executeClickHouseQuery(any()) } returns DATA_EMPTY_JSON
 
         assertNull(service.getLatestMetrics(1))
     }
@@ -393,7 +393,7 @@ class MonitorServiceExtendedTest {
 
         val nowEpoch = Clock.System.now().epochSeconds
         // 30-minute range => interval should be 10
-        coEvery { hostRepo.executeClickHouseQuery(any()) } returns """{"data":[]}"""
+        coEvery { hostRepo.executeClickHouseQuery(any()) } returns DATA_EMPTY_JSON
 
         val result = service.getHistoricalMetrics(
             1,
@@ -410,7 +410,7 @@ class MonitorServiceExtendedTest {
         every { hostRepo.getById(1) } returns testHost
         coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns 7
         val nowEpoch = Clock.System.now().epochSeconds
-        coEvery { hostRepo.executeClickHouseQuery(any()) } returns """{"data":[]}"""
+        coEvery { hostRepo.executeClickHouseQuery(any()) } returns DATA_EMPTY_JSON
 
         val result = service.getHistoricalMetrics(1, nowEpoch - 3600, nowEpoch, 120)
         assertEquals(120, result.interval_seconds)
@@ -635,6 +635,8 @@ class MonitorServiceExtendedTest {
 
     companion object {
         private var db: Database? = null
+        private const val DATA_EMPTY_JSON = """{"data":[]}"""
+        private const val ORG1_KEY = "org1-key"
     }
 
     private val agentApiKeyService = AgentApiKeyService()
@@ -750,11 +752,11 @@ class MonitorServiceExtendedTest {
         val org2 = seedOrg("Org B")
         val userId = seedUser()
 
-        agentApiKeyService.createKey(org1, "org1-key", userId)
+        agentApiKeyService.createKey(org1, ORG1_KEY, userId)
         agentApiKeyService.createKey(org2, "org2-key", userId)
 
         assertEquals(1, agentApiKeyService.listKeys(org1).size)
-        assertEquals("org1-key", agentApiKeyService.listKeys(org1)[0].name)
+        assertEquals(ORG1_KEY, agentApiKeyService.listKeys(org1)[0].name)
     }
 
     @Test
@@ -780,7 +782,7 @@ class MonitorServiceExtendedTest {
         val org1 = seedOrg("Org 1")
         val org2 = seedOrg("Org 2")
         val userId = seedUser()
-        val created = agentApiKeyService.createKey(org1, "org1-key", userId)
+        val created = agentApiKeyService.createKey(org1, ORG1_KEY, userId)
 
         assertFalse(agentApiKeyService.deleteKey(org2, created.id))
         // Key should still be valid

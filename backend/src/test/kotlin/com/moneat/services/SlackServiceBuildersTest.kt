@@ -34,6 +34,8 @@ import kotlin.time.Clock
 class SlackServiceBuildersTest {
     companion object {
         private var db: Database? = null
+        private const val BASE_URL = "https://app.moneat.io"
+        private const val XOXB_FAKE_TOKEN = "xoxb-fake-token"
     }
 
     private lateinit var slackService: SlackService
@@ -93,7 +95,7 @@ class SlackServiceBuildersTest {
                     threshold = "90%",
                     currentValue = "95%",
                     hostId = 1,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL
                 )
             )
         }
@@ -108,7 +110,7 @@ class SlackServiceBuildersTest {
                     hostName = "db-primary",
                     lastSeen = "2024-01-01T00:00:00Z",
                     hostId = 2,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL
                 )
             )
         }
@@ -122,7 +124,7 @@ class SlackServiceBuildersTest {
                     organizationId = orgId,
                     hostName = "api-1",
                     hostId = 1,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL
                 )
             )
         }
@@ -139,7 +141,7 @@ class SlackServiceBuildersTest {
                     newStatus = "down",
                     message = "HTTP 500",
                     monitorId = UUID.randomUUID(),
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL
                 )
             )
         }
@@ -159,7 +161,7 @@ class SlackServiceBuildersTest {
                     currentValue = "8%",
                     severity = "CRITICAL",
                     dashboardId = 1L,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL
                 )
             )
         }
@@ -176,7 +178,7 @@ class SlackServiceBuildersTest {
                     level = "error",
                     culprit = "com.moneat.Main",
                     issueId = 100L,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL
                 )
             )
         }
@@ -206,7 +208,7 @@ class SlackServiceBuildersTest {
                 threshold = "85%",
                 currentValue = "92%",
                 hostId = 42,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -221,7 +223,7 @@ class SlackServiceBuildersTest {
                 hostName = "db-primary",
                 lastSeen = "2024-06-15T10:30:00Z",
                 hostId = 7,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -235,7 +237,7 @@ class SlackServiceBuildersTest {
                 organizationId = orgId,
                 hostName = "cache-node-3",
                 hostId = 15,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -252,7 +254,7 @@ class SlackServiceBuildersTest {
                 newStatus = "down",
                 message = "Connection timeout",
                 monitorId = UUID.randomUUID(),
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -269,7 +271,7 @@ class SlackServiceBuildersTest {
                 newStatus = "up",
                 message = "HTTP 200",
                 monitorId = UUID.randomUUID(),
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -289,7 +291,7 @@ class SlackServiceBuildersTest {
                 currentValue = "12%",
                 severity = "CRITICAL",
                 dashboardId = 10L,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -309,7 +311,7 @@ class SlackServiceBuildersTest {
                 currentValue = "750ms",
                 severity = "HIGH",
                 dashboardId = 11L,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -329,7 +331,7 @@ class SlackServiceBuildersTest {
                 currentValue = "45",
                 severity = "MEDIUM",
                 dashboardId = 12L,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -349,7 +351,7 @@ class SlackServiceBuildersTest {
                 currentValue = "85%",
                 severity = "LOW",
                 dashboardId = 13L,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -366,7 +368,7 @@ class SlackServiceBuildersTest {
                 level = "error",
                 culprit = "com.moneat.services.UserService.getUser",
                 issueId = 500L,
-                baseUrl = "https://app.moneat.io",
+                baseUrl = BASE_URL,
                 occurrenceCount = 15,
                 environment = "production",
                 timestamp = "2024-06-15T10:30:00Z",
@@ -387,7 +389,7 @@ class SlackServiceBuildersTest {
                 level = "warning",
                 culprit = null,
                 issueId = 501L,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -404,7 +406,7 @@ class SlackServiceBuildersTest {
                 level = "info",
                 culprit = "flags.ts:evaluate",
                 issueId = 502L,
-                baseUrl = "https://app.moneat.io",
+                baseUrl = BASE_URL,
                 environment = "staging"
             )
             assertFalse(result)
@@ -422,7 +424,7 @@ class SlackServiceBuildersTest {
                 level = "debug",
                 culprit = null,
                 issueId = 503L,
-                baseUrl = "https://app.moneat.io",
+                baseUrl = BASE_URL,
                 occurrenceCount = 1,
                 timestamp = "2024-06-15T12:00:00Z"
             )
@@ -441,7 +443,7 @@ class SlackServiceBuildersTest {
                 level = "error",
                 culprit = null,
                 issueId = 504L,
-                baseUrl = "https://app.moneat.io"
+                baseUrl = BASE_URL
             )
             assertFalse(result)
         }
@@ -472,7 +474,7 @@ class SlackServiceBuildersTest {
     @Test
     fun `listChannels handles connection failure`() =
         runBlocking {
-            val channels = slackService.listChannels("xoxb-fake-token")
+            val channels = slackService.listChannels(XOXB_FAKE_TOKEN)
             assertTrue(channels.isEmpty())
         }
 
@@ -502,7 +504,7 @@ class SlackServiceBuildersTest {
                     threshold = "90%",
                     currentValue = "95%",
                     hostId = 1,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL
                 )
             )
         }
@@ -530,7 +532,7 @@ class SlackServiceBuildersTest {
                     level = "error",
                     culprit = null,
                     issueId = 1L,
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL
                 )
             )
         }
@@ -558,7 +560,7 @@ class SlackServiceBuildersTest {
                     newStatus = "down",
                     message = "Failed",
                     monitorId = UUID.randomUUID(),
-                    baseUrl = "https://app.moneat.io"
+                    baseUrl = BASE_URL
                 )
             )
         }
@@ -568,7 +570,7 @@ class SlackServiceBuildersTest {
     @Test
     fun `listUsergroups handles connection failure`() =
         runBlocking {
-            val groups = slackService.listUsergroups("xoxb-fake-token")
+            val groups = slackService.listUsergroups(XOXB_FAKE_TOKEN)
             assertTrue(groups.isEmpty())
         }
 
@@ -576,7 +578,7 @@ class SlackServiceBuildersTest {
     fun `updateUsergroupMembers handles connection failure`() =
         runBlocking {
             val result = slackService.updateUsergroupMembers(
-                accessToken = "xoxb-fake-token",
+                accessToken = XOXB_FAKE_TOKEN,
                 usergroupId = "S0123456789",
                 userIds = listOf("U001", "U002")
             )

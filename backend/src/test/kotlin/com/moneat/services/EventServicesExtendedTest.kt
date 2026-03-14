@@ -57,6 +57,13 @@ import kotlin.test.assertTrue
  */
 class EventServicesExtendedTest {
 
+    companion object {
+        private const val ISSUE_1 = "issue-1"
+        private const val TIMESTAMP_2024_01_01 = "2024-01-01T00:00:00.000Z"
+        private const val UUID_550E8400 = "550e8400-e29b-41d4-a716-446655440000"
+        private const val EMAIL_A_B = "a@b.com"
+    }
+
     // =========== shared mocks ===========
     private lateinit var issueRepository: IssueRepository
     private lateinit var queryHelper: DashboardQueryHelper
@@ -120,9 +127,9 @@ class EventServicesExtendedTest {
 
     @Test
     fun `getIssues applies status override from postgres`() = runBlocking {
-        val row = makeIssueRow(issueId = "issue-1", status = "unresolved")
+        val row = makeIssueRow(issueId = ISSUE_1, status = "unresolved")
         every { issueRepository.getIssueStatusOverrides(testProjectId) } returns
-            mapOf("issue-1" to "resolved")
+            mapOf(ISSUE_1 to "resolved")
         coEvery {
             issueRepository.getIssuesRaw(
                 projectId = testProjectId,
@@ -279,7 +286,7 @@ class EventServicesExtendedTest {
     fun `getIssueEvents delegates to repository`() = runBlocking {
         val event = EventResponse(
             eventId = "e1",
-            timestamp = "2024-01-01T00:00:00.000Z",
+            timestamp = TIMESTAMP_2024_01_01,
             message = "err",
             platform = "jvm",
             level = "error",
@@ -323,7 +330,7 @@ class EventServicesExtendedTest {
             name = "/api/test",
             op = "http.server",
             duration = 150.0,
-            timestamp = "2024-01-01T00:00:00.000Z",
+            timestamp = TIMESTAMP_2024_01_01,
             status = "ok"
         )
         coEvery { issueRepository.getProjectIdForIssue(testIssueId) } returns testProjectId
@@ -393,7 +400,7 @@ class EventServicesExtendedTest {
     @Test
     fun `normalizeUuid accepts standard UUID`() {
         val helper = DashboardQueryHelper(mockk(relaxed = true), mockk(relaxed = true))
-        val uuid = "550e8400-e29b-41d4-a716-446655440000"
+        val uuid = UUID_550E8400
         assertEquals(uuid, helper.normalizeUuid(uuid))
     }
 
@@ -401,14 +408,14 @@ class EventServicesExtendedTest {
     fun `normalizeUuid converts 32 hex chars to UUID format`() {
         val helper = DashboardQueryHelper(mockk(relaxed = true), mockk(relaxed = true))
         val hex = "550e8400e29b41d4a716446655440000"
-        assertEquals("550e8400-e29b-41d4-a716-446655440000", helper.normalizeUuid(hex))
+        assertEquals(UUID_550E8400, helper.normalizeUuid(hex))
     }
 
     @Test
     fun `normalizeUuid handles uppercase input`() {
         val helper = DashboardQueryHelper(mockk(relaxed = true), mockk(relaxed = true))
         val hex = "550E8400E29B41D4A716446655440000"
-        assertEquals("550e8400-e29b-41d4-a716-446655440000", helper.normalizeUuid(hex))
+        assertEquals(UUID_550E8400, helper.normalizeUuid(hex))
     }
 
     @Test
@@ -422,8 +429,8 @@ class EventServicesExtendedTest {
     @Test
     fun `normalizeUuid trims whitespace`() {
         val helper = DashboardQueryHelper(mockk(relaxed = true), mockk(relaxed = true))
-        val uuid = "  550e8400-e29b-41d4-a716-446655440000  "
-        assertEquals("550e8400-e29b-41d4-a716-446655440000", helper.normalizeUuid(uuid))
+        val uuid = "  $UUID_550E8400  "
+        assertEquals(UUID_550E8400, helper.normalizeUuid(uuid))
     }
 
     // ================================================================
@@ -435,13 +442,13 @@ class EventServicesExtendedTest {
         val helper = DashboardQueryHelper(mockk(relaxed = true), mockk(relaxed = true))
         val obj = buildJsonObject {
             put("user_id", "u1")
-            put("user_email", "a@b.com")
+            put("user_email", EMAIL_A_B)
             put("user_username", "alice")
         }
         val user = helper.extractUserInfo(obj)
         assertNotNull(user)
         assertEquals("u1", user.id)
-        assertEquals("a@b.com", user.email)
+        assertEquals(EMAIL_A_B, user.email)
         assertEquals("alice", user.username)
     }
 
@@ -642,7 +649,7 @@ class EventServicesExtendedTest {
             put("environment", "staging")
             put("release", "2.0")
             put("user_id", "u1")
-            put("user_email", "a@b.com")
+            put("user_email", EMAIL_A_B)
             put("contexts", "{}")
         }
         val event = helper.mapEventRow(obj)
@@ -682,12 +689,12 @@ class EventServicesExtendedTest {
     @Test
     fun `updateFeedback throws BadRequest for invalid status`() {
         val feedbackService = FeedbackService(queryHelper)
-        every { queryHelper.normalizeUuid(any()) } returns "550e8400-e29b-41d4-a716-446655440000"
+        every { queryHelper.normalizeUuid(any()) } returns UUID_550E8400
 
         assertFailsWith<BadRequestException> {
             runBlocking {
                 feedbackService.updateFeedback(
-                    "550e8400-e29b-41d4-a716-446655440000",
+                    UUID_550E8400,
                     FeedbackUpdateRequest(status = "deleted")
                 )
             }
@@ -704,12 +711,12 @@ class EventServicesExtendedTest {
     @Test
     fun `updateFeedback accepts valid statuses`() = runBlocking {
         val feedbackService = FeedbackService(queryHelper)
-        every { queryHelper.normalizeUuid(any()) } returns "550e8400-e29b-41d4-a716-446655440000"
+        every { queryHelper.normalizeUuid(any()) } returns UUID_550E8400
         coEvery { queryHelper.executeMutation(any(), any()) } returns Unit
 
         for (status in listOf("unresolved", "resolved", "archived")) {
             feedbackService.updateFeedback(
-                "550e8400-e29b-41d4-a716-446655440000",
+                UUID_550E8400,
                 FeedbackUpdateRequest(status = status)
             )
         }
@@ -807,7 +814,7 @@ class EventServicesExtendedTest {
     // ================================================================
 
     private fun makeIssueRow(
-        issueId: String = "issue-1",
+        issueId: String = ISSUE_1,
         status: String = "unresolved"
     ): IssueRow = IssueRow(
         issueId = issueId,
@@ -816,7 +823,7 @@ class EventServicesExtendedTest {
         culprit = "com.example.Main",
         level = "error",
         platform = "jvm",
-        firstSeen = "2024-01-01T00:00:00.000Z",
+        firstSeen = TIMESTAMP_2024_01_01,
         lastSeen = "2024-01-15T00:00:00.000Z",
         eventCount = 10,
         userCount = 3,
@@ -825,7 +832,7 @@ class EventServicesExtendedTest {
     )
 
     private fun makeIssueDetailRow(
-        issueId: String = "issue-1",
+        issueId: String = ISSUE_1,
         status: String = "unresolved"
     ): IssueDetailRow = IssueDetailRow(
         issueId = issueId,
@@ -834,7 +841,7 @@ class EventServicesExtendedTest {
         culprit = "com.example.Main",
         level = "error",
         platform = "jvm",
-        firstSeen = "2024-01-01T00:00:00.000Z",
+        firstSeen = TIMESTAMP_2024_01_01,
         lastSeen = "2024-01-15T00:00:00.000Z",
         eventCount = 10,
         userCount = 3,

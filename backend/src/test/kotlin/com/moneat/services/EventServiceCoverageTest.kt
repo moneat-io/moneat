@@ -82,6 +82,13 @@ class EventServiceCoverageTest {
 
     companion object {
         private var db: Database? = null
+        private const val VALID_KEY = "valid-key"
+        private const val HTTP_SERVER = "http.server"
+        private const val TIMESTAMP_2024_01_15 = "2024-01-15T10:30:45Z"
+        private const val TRACE_ABC = "trace-abc"
+        private const val SENTRY_PYTHON = "sentry-python"
+        private const val TRACE_AI = "trace-ai"
+        private const val AI_PIPELINE = "ai.pipeline"
     }
 
     private lateinit var eventRepository: EventRepository
@@ -115,7 +122,7 @@ class EventServiceCoverageTest {
 
         every { eventRepository.verifyProjectKey(any(), any()) } returns
             ProjectKeyVerification(false, null)
-        every { eventRepository.verifyProjectKey(testProjectId, "valid-key") } returns
+        every { eventRepository.verifyProjectKey(testProjectId, VALID_KEY) } returns
             ProjectKeyVerification(true, "jvm")
         every { eventRepository.getOrganizationIdForProject(any()) } returns null
         every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
@@ -176,7 +183,7 @@ class EventServiceCoverageTest {
                         "trace",
                         buildJsonObject {
                             put("trace_id", "abc123")
-                            put("op", "http.server")
+                            put("op", HTTP_SERVER)
                             put("status", "ok")
                         }
                     )
@@ -197,7 +204,7 @@ class EventServiceCoverageTest {
         val fbJson = Json.encodeToString(
             SentryFeedback(
                 event_id = "fb-1",
-                timestamp = "2024-01-15T10:30:45Z",
+                timestamp = TIMESTAMP_2024_01_15,
                 contexts = buildJsonObject {
                     put(
                         "feedback",
@@ -409,8 +416,8 @@ class EventServiceCoverageTest {
                     put(
                         "trace",
                         buildJsonObject {
-                            put("trace_id", "trace-abc")
-                            put("op", "http.server")
+                            put("trace_id", TRACE_ABC)
+                            put("op", HTTP_SERVER)
                         }
                     )
                 },
@@ -418,7 +425,7 @@ class EventServiceCoverageTest {
                     SentrySpan(
                         span_id = "span1",
                         parent_span_id = "root",
-                        trace_id = "trace-abc",
+                        trace_id = TRACE_ABC,
                         op = "db.query",
                         description = "SELECT * FROM items",
                         start_timestamp = 1700000000.5,
@@ -428,7 +435,7 @@ class EventServiceCoverageTest {
                     ),
                     SentrySpan(
                         span_id = "span2",
-                        trace_id = "trace-abc",
+                        trace_id = TRACE_ABC,
                         op = "http.client",
                         description = "GET /external",
                         start_timestamp = 1700000001.0,
@@ -437,7 +444,7 @@ class EventServiceCoverageTest {
                     )
                 ),
                 user = UserInfo(id = "user-1", email = "u@test.com"),
-                sdk = SdkInfo(name = "sentry-python", version = "1.0.0")
+                sdk = SdkInfo(name = SENTRY_PYTHON, version = "1.0.0")
             )
         )
 
@@ -468,15 +475,15 @@ class EventServiceCoverageTest {
                     put(
                         "trace",
                         buildJsonObject {
-                            put("trace_id", "trace-ai")
-                            put("op", "ai.pipeline")
+                            put("trace_id", TRACE_AI)
+                            put("op", AI_PIPELINE)
                         }
                     )
                 },
                 spans = listOf(
                     SentrySpan(
                         span_id = "ai-span-1",
-                        trace_id = "trace-ai",
+                        trace_id = TRACE_AI,
                         op = "ai.chat_completion",
                         description = "OpenAI Chat",
                         start_timestamp = 1700000001.0,
@@ -492,7 +499,7 @@ class EventServiceCoverageTest {
                     ),
                     SentrySpan(
                         span_id = "ai-span-2",
-                        trace_id = "trace-ai",
+                        trace_id = TRACE_AI,
                         op = "ai.embedding",
                         description = "Embed query",
                         start_timestamp = 1700000003.0,
@@ -540,7 +547,7 @@ class EventServiceCoverageTest {
                         "trace",
                         buildJsonObject {
                             put("trace_id", "trace-err")
-                            put("op", "http.server")
+                            put("op", HTTP_SERVER)
                             put("status", "internal_error")
                         }
                     )
@@ -770,7 +777,7 @@ class EventServiceCoverageTest {
                     ip_address = TestIpConstants.IP_1
                 ),
                 tags = mapOf("service" to "api", "region" to "us-east"),
-                sdk = SdkInfo(name = "sentry-python", version = "1.5.0"),
+                sdk = SdkInfo(name = SENTRY_PYTHON, version = "1.5.0"),
                 contexts = buildJsonObject {
                     put("os", buildJsonObject { put("name", "Linux") })
                 },
@@ -801,7 +808,7 @@ class EventServiceCoverageTest {
         assertEquals("user@test.com", data.userEmail)
         assertEquals("testuser", data.userUsername)
         assertEquals(TestIpConstants.IP_1, data.userIpAddress)
-        assertEquals("sentry-python", data.sdkName)
+        assertEquals(SENTRY_PYTHON, data.sdkName)
         assertEquals("1.5.0", data.sdkVersion)
     }
 
@@ -832,7 +839,7 @@ class EventServiceCoverageTest {
         val fbJson = Json.encodeToString(
             SentryFeedback(
                 event_id = "fb-ts",
-                timestamp = "2024-01-15T10:30:45Z",
+                timestamp = TIMESTAMP_2024_01_15,
                 contexts = buildJsonObject {
                     put(
                         "feedback",
@@ -853,7 +860,7 @@ class EventServiceCoverageTest {
         )
 
         assertTrue(fbSlot.isCaptured)
-        val expectedEpochMs = java.time.Instant.parse("2024-01-15T10:30:45Z").toEpochMilli()
+        val expectedEpochMs = java.time.Instant.parse(TIMESTAMP_2024_01_15).toEpochMilli()
         assertEquals(expectedEpochMs, fbSlot.captured.timestampMs)
     }
 
@@ -1003,12 +1010,12 @@ class EventServiceCoverageTest {
 
     @Test
     fun `verifyProjectKey returns cached result on second call`() {
-        val result1 = eventService.verifyProjectKey(testProjectId, "valid-key")
-        val result2 = eventService.verifyProjectKey(testProjectId, "valid-key")
+        val result1 = eventService.verifyProjectKey(testProjectId, VALID_KEY)
+        val result2 = eventService.verifyProjectKey(testProjectId, VALID_KEY)
 
         assertTrue(result1.isValid)
         assertTrue(result2.isValid)
-        verify(exactly = 1) { eventRepository.verifyProjectKey(testProjectId, "valid-key") }
+        verify(exactly = 1) { eventRepository.verifyProjectKey(testProjectId, VALID_KEY) }
     }
 
     @Test
@@ -1130,7 +1137,7 @@ class EventServiceCoverageTest {
             ),
             SentrySpan(
                 span_id = "s5b",
-                op = "ai.pipeline",
+                op = AI_PIPELINE,
                 description = "Pipeline",
                 start_timestamp = 1700000005.5,
                 timestamp = 1700000006.0
@@ -1162,7 +1169,7 @@ class EventServiceCoverageTest {
                         "trace",
                         buildJsonObject {
                             put("trace_id", "ai-trace")
-                            put("op", "ai.pipeline")
+                            put("op", AI_PIPELINE)
                         }
                     )
                 },

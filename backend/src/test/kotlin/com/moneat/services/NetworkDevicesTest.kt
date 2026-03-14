@@ -54,6 +54,13 @@ import kotlin.test.assertTrue
 
 class NetworkDevicesTest {
 
+    companion object {
+        private const val ENV_PROD = "env:prod"
+        private const val MONET_NDM_QUEUE = "moneat:dd:ndm:queue"
+        private const val HOSTNAME_ROUTER1 = "hostname router1"
+        private const val ROUNDTRIP_DEV = "roundtrip-dev"
+    }
+
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -138,7 +145,7 @@ class NetworkDevicesTest {
                     status = "up",
                     reachability = "reachable",
                     snmpVersion = "v2c",
-                    tags = listOf("env:prod", "site:dc1"),
+                    tags = listOf(ENV_PROD, "site:dc1"),
                 )
             ),
         )
@@ -147,7 +154,7 @@ class NetworkDevicesTest {
 
         assertEquals(1, count)
         val pushed = slot<String>()
-        verify { mockRedis.lpush("moneat:dd:ndm:queue", capture(pushed)) }
+        verify { mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed)) }
         val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
         assertEquals("devices", batch.batchType)
         assertEquals(orgId, batch.organizationId)
@@ -188,7 +195,7 @@ class NetworkDevicesTest {
 
         assertEquals(1, count)
         val pushed = slot<String>()
-        verify { mockRedis.lpush("moneat:dd:ndm:queue", capture(pushed)) }
+        verify { mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed)) }
         val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
         assertEquals("traps", batch.batchType)
         assertEquals(1, batch.traps.size)
@@ -224,7 +231,7 @@ class NetworkDevicesTest {
 
         assertEquals(1, count)
         val pushed = slot<String>()
-        verify { mockRedis.lpush("moneat:dd:ndm:queue", capture(pushed)) }
+        verify { mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed)) }
         val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
         assertEquals("flows", batch.batchType)
         assertEquals(1, batch.flows.size)
@@ -257,7 +264,7 @@ class NetworkDevicesTest {
 
         assertEquals(1, count)
         val pushed = slot<String>()
-        verify { mockRedis.lpush("moneat:dd:ndm:queue", capture(pushed)) }
+        verify { mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed)) }
         val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
         assertEquals("paths", batch.batchType)
         assertEquals(1, batch.paths.size)
@@ -278,8 +285,8 @@ class NetworkDevicesTest {
                 DdNdmConfig(
                     deviceId = "dev1",
                     configType = "running",
-                    content = "hostname router1",
-                    tags = listOf("env:prod"),
+                    content = HOSTNAME_ROUTER1,
+                    tags = listOf(ENV_PROD),
                 )
             ),
         )
@@ -288,7 +295,7 @@ class NetworkDevicesTest {
 
         assertEquals(1, count)
         val pushed = slot<String>()
-        verify { mockRedis.lpush("moneat:dd:ndm:queue", capture(pushed)) }
+        verify { mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed)) }
         val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
         assertEquals("configs", batch.batchType)
         assertEquals(1, batch.configs.size)
@@ -773,7 +780,7 @@ class NetworkDevicesTest {
                     QueuedNdmConfigEntry(
                         deviceId = "dev1",
                         configType = "running",
-                        content = "hostname router1",
+                        content = HOSTNAME_ROUTER1,
                         tags = mapOf("env" to "prod"),
                         timestampMs = 1700000000000L,
                     )
@@ -787,7 +794,7 @@ class NetworkDevicesTest {
             assertTrue(sql.contains("ndm_configs"))
             assertTrue(sql.contains("dev1"))
             assertTrue(sql.contains("running"))
-            assertTrue(sql.contains("hostname router1"))
+            assertTrue(sql.contains(HOSTNAME_ROUTER1))
         }
     }
 
@@ -983,14 +990,14 @@ class NetworkDevicesTest {
     fun `full round-trip enqueue then decode and insert`() = runBlocking {
         val pushed = slot<String>()
         every {
-            mockRedis.lpush("moneat:dd:ndm:queue", capture(pushed))
+            mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed))
         } returns 1L
 
         val payload = DdNdmPayload(
             type = "ndm",
             devices = listOf(
                 DdNdmDevice(
-                    deviceId = "roundtrip-dev",
+                    deviceId = ROUNDTRIP_DEV,
                     ipAddress = TestIpConstants.IP_OTHER,
                     vendor = "Juniper",
                     tags = listOf("env:test"),
@@ -1003,7 +1010,7 @@ class NetworkDevicesTest {
         val batch = NdmIngestionService.decodeBatch(pushed.captured)
         assertEquals("devices", batch.batchType)
         assertEquals(orgId, batch.organizationId)
-        assertEquals("roundtrip-dev", batch.devices[0].deviceId)
+        assertEquals(ROUNDTRIP_DEV, batch.devices[0].deviceId)
 
         val captured = mutableListOf<String>()
         MockHttpServer { exchange ->
@@ -1015,7 +1022,7 @@ class NetworkDevicesTest {
 
             NdmIngestionService.insertBatch(batch)
 
-            assertTrue(captured[0].contains("roundtrip-dev"))
+            assertTrue(captured[0].contains(ROUNDTRIP_DEV))
             assertTrue(captured[0].contains(TestIpConstants.IP_OTHER))
         }
     }

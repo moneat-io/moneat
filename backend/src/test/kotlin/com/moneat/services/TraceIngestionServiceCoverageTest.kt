@@ -50,6 +50,12 @@ import kotlin.test.assertTrue
  */
 class TraceIngestionServiceCoverageTest {
 
+    companion object {
+        private const val WEB_REQUEST = "web.request"
+        private const val GET_USERS = "GET /users"
+        private const val DD_MEASURED = "_dd.measured"
+    }
+
     @BeforeTest
     fun setup() {
         mockkObject(ClickHouseClient)
@@ -69,9 +75,9 @@ class TraceIngestionServiceCoverageTest {
             "trace_id": "12345",
             "span_id": "67890",
             "parent_id": "0",
-            "name": "web.request",
+            "name": "$WEB_REQUEST",
             "service": "api",
-            "resource": "GET /users",
+            "resource": "$GET_USERS",
             "type": "web",
             "start": 1700000000000000000,
             "duration": 500000000,
@@ -85,9 +91,9 @@ class TraceIngestionServiceCoverageTest {
         assertEquals(1, traces[0].size)
 
         val span = traces[0][0]
-        assertEquals("web.request", span.name)
+        assertEquals(WEB_REQUEST, span.name)
         assertEquals("api", span.service)
-        assertEquals("GET /users", span.resource)
+        assertEquals(GET_USERS, span.resource)
         assertEquals("web", span.type)
         assertEquals(0, span.error)
         assertEquals("GET", span.meta["http.method"])
@@ -164,7 +170,7 @@ class TraceIngestionServiceCoverageTest {
                         duration = 500000000L,
                         error = 0,
                         meta = mapOf("http.status_code" to "200"),
-                        metrics = mapOf("_dd.measured" to 1.0)
+                        metrics = mapOf(DD_MEASURED to 1.0)
                     )
                 )
             )
@@ -179,7 +185,7 @@ class TraceIngestionServiceCoverageTest {
         assertEquals("frontend", span.service)
         assertEquals("GET /", span.resource)
         assertEquals("200", span.meta["http.status_code"])
-        assertEquals(1.0, span.metrics["_dd.measured"])
+        assertEquals(1.0, span.metrics[DD_MEASURED])
     }
 
     @Test
@@ -284,11 +290,11 @@ class TraceIngestionServiceCoverageTest {
             listOf(
                 DdSpan(
                     traceId = 1u, spanId = 10u, parentId = 0u,
-                    name = "web.request", service = "api", resource = "GET /test",
+                    name = WEB_REQUEST, service = "api", resource = "GET /test",
                     type = "web", start = 1700000000000000000L,
                     duration = 500000000L, error = 0,
                     meta = mapOf("env" to "prod", "http.method" to "GET"),
-                    metrics = mapOf("_dd.measured" to 1.0)
+                    metrics = mapOf(DD_MEASURED to 1.0)
                 )
             )
         )
