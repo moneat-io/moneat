@@ -84,18 +84,27 @@ class OrgRoutesFullCoverageTest {
         private const val DISCORD_CHANNEL_BODY = """{"channelId":"D456","channelName":"alerts"}"""
     }
 
-    private val mockAdminService = mockk<AdminService>(relaxed = true)
-    private val mockAuthService = mockk<AuthService>(relaxed = true)
-    private val mockPricingTierService = mockk<PricingTierService>(relaxed = true)
-    private val mockAttributionService = mockk<AttributionAnalyticsService>(relaxed = true)
-    private val mockEmailService = mockk<EmailService>(relaxed = true)
-    private val mockSlackService = mockk<SlackService>(relaxed = true)
-    private val mockDiscordService = mockk<DiscordService>(relaxed = true)
-    private val mockIncidentService = mockk<IncidentService>(relaxed = true)
-    private val mockAdminBillingService = mockk<AdminBillingService>(relaxed = true)
+    private lateinit var mockAdminService: AdminService
+    private lateinit var mockAuthService: AuthService
+    private lateinit var mockPricingTierService: PricingTierService
+    private lateinit var mockAttributionService: AttributionAnalyticsService
+    private lateinit var mockEmailService: EmailService
+    private lateinit var mockSlackService: SlackService
+    private lateinit var mockDiscordService: DiscordService
+    private lateinit var mockIncidentService: IncidentService
+    private lateinit var mockAdminBillingService: AdminBillingService
 
     @BeforeTest
     fun setup() {
+        mockAdminService = mockk<AdminService>(relaxed = true)
+        mockAuthService = mockk<AuthService>(relaxed = true)
+        mockPricingTierService = mockk<PricingTierService>(relaxed = true)
+        mockAttributionService = mockk<AttributionAnalyticsService>(relaxed = true)
+        mockEmailService = mockk<EmailService>(relaxed = true)
+        mockSlackService = mockk<SlackService>(relaxed = true)
+        mockDiscordService = mockk<DiscordService>(relaxed = true)
+        mockIncidentService = mockk<IncidentService>(relaxed = true)
+        mockAdminBillingService = mockk<AdminBillingService>(relaxed = true)
         startTestKoin()
         loadKoinModules(
             module {

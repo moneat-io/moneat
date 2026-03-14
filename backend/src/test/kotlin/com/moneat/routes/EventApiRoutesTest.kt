@@ -79,10 +79,11 @@ class EventApiRoutesTest {
         private const val SENTINEL_PROJECT_ID = 999L
     }
 
-    private val mockDashboardService = mockk<DashboardService>(relaxed = true)
+    private lateinit var mockDashboardService: DashboardService
 
     @BeforeTest
     fun setup() {
+        mockDashboardService = mockk<DashboardService>(relaxed = true)
         startTestKoin()
         loadKoinModules(
             module { single<DashboardService> { mockDashboardService } }

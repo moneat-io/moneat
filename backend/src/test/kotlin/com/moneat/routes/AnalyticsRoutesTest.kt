@@ -322,7 +322,7 @@ class AnalyticsRoutesTest {
         val userId = seedUser()
         stubAccess(userId)
         coEvery {
-            mockAnalyticsService.getPages(PROJECT_ID, any(), any(), any(), eq(10))
+            mockAnalyticsService.getPages(PROJECT_ID, any(), any(), any(), 10)
         } returns breakdownResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/pages?period=30d&limit=10")) {
@@ -374,7 +374,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         coEvery {
             mockAnalyticsService.getBreakdown(
-                PROJECT_ID, any(), any(), any(), eq("referrer_source"), any()
+                PROJECT_ID, any(), any(), any(), "referrer_source", any()
             )
         } returns breakdownResponse
         application { installRoutes(this) }
@@ -382,6 +382,16 @@ class AnalyticsRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getBreakdown(
+                PROJECT_ID,
+                any(),
+                any(),
+                any(),
+                "referrer_source",
+                any()
+            )
+        }
     }
 
     // ─── UTM ───────────────────────────────────────────────────
@@ -392,7 +402,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         coEvery {
             mockAnalyticsService.getBreakdown(
-                PROJECT_ID, any(), any(), any(), eq("utm_source"), any()
+                PROJECT_ID, any(), any(), any(), "utm_source", any()
             )
         } returns breakdownResponse
         application { installRoutes(this) }
@@ -400,6 +410,16 @@ class AnalyticsRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getBreakdown(
+                PROJECT_ID,
+                any(),
+                any(),
+                any(),
+                "utm_source",
+                any()
+            )
+        }
     }
 
     @Test
@@ -408,7 +428,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         coEvery {
             mockAnalyticsService.getBreakdown(
-                PROJECT_ID, any(), any(), any(), eq("utm_medium"), any()
+                PROJECT_ID, any(), any(), any(), "utm_medium", any()
             )
         } returns breakdownResponse
         application { installRoutes(this) }
@@ -416,6 +436,16 @@ class AnalyticsRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getBreakdown(
+                PROJECT_ID,
+                any(),
+                any(),
+                any(),
+                "utm_medium",
+                any()
+            )
+        }
     }
 
     @Test
@@ -424,7 +454,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         coEvery {
             mockAnalyticsService.getBreakdown(
-                PROJECT_ID, any(), any(), any(), eq("utm_campaign"), any()
+                PROJECT_ID, any(), any(), any(), "utm_campaign", any()
             )
         } returns breakdownResponse
         application { installRoutes(this) }
@@ -432,6 +462,16 @@ class AnalyticsRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getBreakdown(
+                PROJECT_ID,
+                any(),
+                any(),
+                any(),
+                "utm_campaign",
+                any()
+            )
+        }
     }
 
     // ─── Locations ─────────────────────────────────────────────
@@ -442,7 +482,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         coEvery {
             mockAnalyticsService.getBreakdown(
-                PROJECT_ID, any(), any(), any(), eq("country_code"), any()
+                PROJECT_ID, any(), any(), any(), "country_code", any()
             )
         } returns breakdownResponse
         application { installRoutes(this) }
@@ -450,6 +490,16 @@ class AnalyticsRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getBreakdown(
+                PROJECT_ID,
+                any(),
+                any(),
+                any(),
+                "country_code",
+                any()
+            )
+        }
     }
 
     // ─── Devices ───────────────────────────────────────────────
@@ -460,7 +510,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         coEvery {
             mockAnalyticsService.getBreakdown(
-                PROJECT_ID, any(), any(), any(), eq("device_type"), any()
+                PROJECT_ID, any(), any(), any(), "device_type", any()
             )
         } returns breakdownResponse
         application { installRoutes(this) }
@@ -468,6 +518,16 @@ class AnalyticsRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getBreakdown(
+                PROJECT_ID,
+                any(),
+                any(),
+                any(),
+                "device_type",
+                any()
+            )
+        }
     }
 
     @Test
@@ -476,7 +536,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         coEvery {
             mockAnalyticsService.getBreakdown(
-                PROJECT_ID, any(), any(), any(), eq("browser"), any()
+                PROJECT_ID, any(), any(), any(), "browser", any()
             )
         } returns breakdownResponse
         application { installRoutes(this) }
@@ -484,6 +544,16 @@ class AnalyticsRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getBreakdown(
+                PROJECT_ID,
+                any(),
+                any(),
+                any(),
+                "browser",
+                any()
+            )
+        }
     }
 
     @Test
@@ -492,7 +562,7 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         coEvery {
             mockAnalyticsService.getBreakdown(
-                PROJECT_ID, any(), any(), any(), eq("os"), any()
+                PROJECT_ID, any(), any(), any(), "os", any()
             )
         } returns breakdownResponse
         application { installRoutes(this) }
@@ -500,6 +570,16 @@ class AnalyticsRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getBreakdown(
+                PROJECT_ID,
+                any(),
+                any(),
+                any(),
+                "os",
+                any()
+            )
+        }
     }
 
     // ─── Events ────────────────────────────────────────────────

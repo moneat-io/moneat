@@ -50,6 +50,7 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -77,13 +78,17 @@ class BillingRoutesTest {
         private var db: Database? = null
     }
 
-    private val mockPricingTierService = mockk<PricingTierService>(relaxed = true)
-    private val mockQuotaService = mockk<BillingQuotaService>(relaxed = true)
-    private val mockStripeService = mockk<StripeService>(relaxed = true)
-    private val mockUsageTrackingService = mockk<UsageTrackingService>(relaxed = true)
+    private lateinit var mockPricingTierService: PricingTierService
+    private lateinit var mockQuotaService: BillingQuotaService
+    private lateinit var mockStripeService: StripeService
+    private lateinit var mockUsageTrackingService: UsageTrackingService
 
     @BeforeTest
     fun setupDatabase() {
+        mockPricingTierService = mockk<PricingTierService>(relaxed = true)
+        mockQuotaService = mockk<BillingQuotaService>(relaxed = true)
+        mockStripeService = mockk<StripeService>(relaxed = true)
+        mockUsageTrackingService = mockk<UsageTrackingService>(relaxed = true)
         if (db == null) {
             db = Database.connect(
                 url = "jdbc:h2:mem:moneat_billing_routes;" +
@@ -105,6 +110,9 @@ class BillingRoutesTest {
 
     @AfterTest
     fun tearDown() {
+        if (::mockPricingTierService.isInitialized) {
+            clearMocks(mockPricingTierService, mockQuotaService, mockStripeService, mockUsageTrackingService)
+        }
         unmockkObject(UsageTrackingService)
     }
 

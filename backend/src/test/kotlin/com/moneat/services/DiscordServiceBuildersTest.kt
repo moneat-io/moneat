@@ -44,6 +44,7 @@ import kotlin.test.AfterTest
 class DiscordServiceBuildersTest {
     companion object {
         private var db: Database? = null
+        private const val TEST_HOST_DB_PRIMARY = "db-primary"
     }
 
     private lateinit var discordService: DiscordService
@@ -105,7 +106,7 @@ class DiscordServiceBuildersTest {
             assertFalse(
                 discordService.sendHostDown(
                     organizationId = orgId,
-                    hostName = "db-primary",
+                    hostName = TEST_HOST_DB_PRIMARY,
                     lastSeen = "2024-01-01T00:00:00Z",
                     hostId = 2,
                     baseUrl = "https://app.moneat.io"
@@ -230,19 +231,19 @@ class DiscordServiceBuildersTest {
     @Test
     fun `buildHostDownEmbed returns embed with expected title fields color url`() {
         val embed = DiscordService.buildHostDownEmbed(
-            hostName = "db-primary",
+            hostName = TEST_HOST_DB_PRIMARY,
             lastSeen = "2024-06-15T10:30:00Z",
             hostId = 7,
             baseUrl = "https://app.moneat.io"
         )
         assertEquals("🔴 Host Down", embed.title)
-        assertEquals("**db-primary** is not responding", embed.description)
+        assertEquals("**$TEST_HOST_DB_PRIMARY** is not responding", embed.description)
         assertEquals("https://app.moneat.io/monitoring/hosts/7", embed.url)
         assertEquals(0xE01E5A, embed.color)
         val fields = requireNotNull(embed.fields)
         assertEquals(2, fields.size)
         assertEquals("Host", fields[0].name)
-        assertEquals("db-primary", fields[0].value)
+        assertEquals(TEST_HOST_DB_PRIMARY, fields[0].value)
         assertEquals("Last Seen", fields[1].name)
         assertEquals("2024-06-15T10:30:00Z", fields[1].value)
     }

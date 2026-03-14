@@ -200,6 +200,11 @@ class BillingServicesExtendedTest {
 
     @Test
     fun `handleInvoicePaid resolves org via customer ID when metadata absent`() {
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[status] = "past_due"
+            }
+        }
         val invoice = mockInvoice(
             customerId = mockCustomerId,
             organizationId = 0,
@@ -346,6 +351,12 @@ class BillingServicesExtendedTest {
         val flushed = meteringService.flushPendingMeteredUsage(limit = 10)
         assertEquals(1, flushed, "Should flush one subscription")
 
+        assertEquals(1, captured.size, "Should emit one meter event")
+        val event = captured.first()
+        assertEquals("moneat_overage_units", event.eventName)
+        assertEquals(mockCustomerId, event.payload["stripe_customer_id"])
+        assertEquals("5", event.payload["value"])
+
         val sub = transaction {
             Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()
         }
@@ -403,6 +414,12 @@ class BillingServicesExtendedTest {
         val flushed = meteringService.flushPendingMeteredUsage(limit = 10)
         assertEquals(1, flushed, "Should flush custom metric overage")
 
+        assertEquals(1, captured.size, "Should emit one meter event")
+        val event = captured.first()
+        assertEquals("moneat_custom_metric_overage_units", event.eventName)
+        assertEquals(mockCustomerId, event.payload["stripe_customer_id"])
+        assertEquals("500", event.payload["value"])
+
         val sub = transaction {
             Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()
         }
@@ -435,6 +452,12 @@ class BillingServicesExtendedTest {
 
         val flushed = meteringService.flushPendingMeteredUsage(limit = 10)
         assertEquals(1, flushed, "Should flush APM span overage")
+
+        assertEquals(1, captured.size, "Should emit one meter event")
+        val event = captured.first()
+        assertEquals("moneat_apm_span_overage_units", event.eventName)
+        assertEquals(mockCustomerId, event.payload["stripe_customer_id"])
+        assertEquals("1000", event.payload["value"])
 
         val sub = transaction {
             Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()

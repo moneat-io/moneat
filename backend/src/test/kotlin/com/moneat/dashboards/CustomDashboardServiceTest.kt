@@ -682,6 +682,13 @@ class CustomDashboardServiceTest {
         service.search(ORG_ID, null, "  Hello World  ")
 
         verify { dashboardRepository.search(ORG_ID, null, SEARCH_PATTERN_HELLO_WORLD) }
+        verify {
+            projectRepository.searchProjectsByName(
+                ORG_ID.toInt(),
+                SEARCH_PATTERN_HELLO_WORLD,
+                limit = 10,
+            )
+        }
     }
 
     // ---- Organization isolation ----

@@ -20,12 +20,12 @@ package com.moneat.testsupport
  * SNMP OID (Object Identifier) constants for test fixtures. These are MIB tree
  * identifiers used in SNMP traps, not IP addresses.
  *
- * - OID_TRAP_TEST: 1.3.6.1 — internet subtree root (iso.org.dod.internet)
+ * - OID_TRAP_TEST: Cisco enterprise OID (6+ components, not IPv4 format)
  * - OID_CISCO: 1.3.6.1.4.1.9.9.43 — Cisco enterprise MIB
  */
 object TestOidConstants {
-    /** Short OID for trap tests (internet subtree). Not an IP address. */
-    const val OID_TRAP_TEST = "1.3.6.1"
+    /** OID for trap tests (Cisco enterprise subtree). Not an IP address. */
+    const val OID_TRAP_TEST = "1.3.6.1.4.1.9.9.43.1.0"
 
     /** Cisco enterprise OID for vendor-specific trap tests. */
     const val OID_CISCO = "1.3.6.1.4.1.9.9.43"
