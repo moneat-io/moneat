@@ -63,7 +63,7 @@ class SummaryServiceTest {
         private const val DEDUP_KEY = "moneat-host-alert-42-id_7"
         private const val DATA_EMPTY_JSON = """{"data":[]}"""
         private const val COUNT_AS_TOTAL = "count() as total"
-        private const val ISSUE_ID_ANY_TITLE = "issue_id any(message) as title"
+        private const val ISSUE_ID_ANY_TITLE = "issue_id, any(message) as title"
         private const val TOTAL_ZERO_JSON = """{"total":0}"""
         private const val TEXT_PLAIN = "text/plain"
     }
