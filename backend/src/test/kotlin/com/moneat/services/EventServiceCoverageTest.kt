@@ -35,10 +35,8 @@ import com.moneat.events.repositories.EventRepository
 import com.moneat.events.repositories.models.ErrorEventInsertData
 import com.moneat.events.repositories.models.FeedbackInsertData
 import com.moneat.events.repositories.models.LlmGenerationInsertData
-import com.moneat.events.repositories.models.ProfileInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
-import com.moneat.events.repositories.models.ReplayRecordingInsertData
 import com.moneat.events.repositories.models.SpanInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.events.services.EventService
@@ -57,20 +55,14 @@ import io.mockk.slot
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
-import java.util.UUID
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -109,7 +101,10 @@ class EventServiceCoverageTest {
         }
         TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(
-            Organizations, Projects, Subscriptions, UsageRecords
+            Organizations,
+            Projects,
+            Subscriptions,
+            UsageRecords
         )
 
         eventRepository = mockk(relaxed = true)
@@ -175,11 +170,14 @@ class EventServiceCoverageTest {
                 timestamp = 1700000001.0,
                 platform = "jvm",
                 contexts = buildJsonObject {
-                    put("trace", buildJsonObject {
-                        put("trace_id", "abc123")
-                        put("op", "http.server")
-                        put("status", "ok")
-                    })
+                    put(
+                        "trace",
+                        buildJsonObject {
+                            put("trace_id", "abc123")
+                            put("op", "http.server")
+                            put("status", "ok")
+                        }
+                    )
                 }
             )
         )
@@ -199,14 +197,17 @@ class EventServiceCoverageTest {
                 event_id = "fb-1",
                 timestamp = "2024-01-15T10:30:45Z",
                 contexts = buildJsonObject {
-                    put("feedback", buildJsonObject {
-                        put("message", "Great product!")
-                        put("contact_email", "user@example.com")
-                        put("name", "John Doe")
-                        put("url", "https://app.example.com/dashboard")
-                        put("associated_event_id", "evt-99")
-                        put("replay_id", "replay-42")
-                    })
+                    put(
+                        "feedback",
+                        buildJsonObject {
+                            put("message", "Great product!")
+                            put("contact_email", "user@example.com")
+                            put("name", "John Doe")
+                            put("url", "https://app.example.com/dashboard")
+                            put("associated_event_id", "evt-99")
+                            put("replay_id", "replay-42")
+                        }
+                    )
                 },
                 user = UserInfo(id = "u1", email = "user@example.com"),
                 environment = "production",
@@ -240,21 +241,33 @@ class EventServiceCoverageTest {
                 environment = "production",
                 user = UserInfo(id = "u1"),
                 contexts = buildJsonObject {
-                    put("browser", buildJsonObject {
-                        put("name", "Chrome")
-                        put("version", "120.0")
-                    })
-                    put("os", buildJsonObject {
-                        put("name", "Windows")
-                        put("version", "11")
-                    })
-                    put("device", buildJsonObject {
-                        put("name", "Desktop")
-                        put("family", "PC")
-                    })
-                    put("replay", buildJsonObject {
-                        put("activity", 5)
-                    })
+                    put(
+                        "browser",
+                        buildJsonObject {
+                            put("name", "Chrome")
+                            put("version", "120.0")
+                        }
+                    )
+                    put(
+                        "os",
+                        buildJsonObject {
+                            put("name", "Windows")
+                            put("version", "11")
+                        }
+                    )
+                    put(
+                        "device",
+                        buildJsonObject {
+                            put("name", "Desktop")
+                            put("family", "PC")
+                        }
+                    )
+                    put(
+                        "replay",
+                        buildJsonObject {
+                            put("activity", 5)
+                        }
+                    )
                 },
                 sdk = SdkInfo(name = "sentry-js", version = "7.0.0"),
                 tags = mapOf("env" to "prod")
@@ -336,10 +349,13 @@ class EventServiceCoverageTest {
                 start_timestamp = 1700000000.0,
                 timestamp = 1700000001.0,
                 contexts = buildJsonObject {
-                    put("trace", buildJsonObject {
-                        put("trace_id", "abc")
-                        put("op", "test")
-                    })
+                    put(
+                        "trace",
+                        buildJsonObject {
+                            put("trace_id", "abc")
+                            put("op", "test")
+                        }
+                    )
                 }
             )
         )
@@ -376,10 +392,13 @@ class EventServiceCoverageTest {
                 environment = "staging",
                 release = "2.0.0",
                 contexts = buildJsonObject {
-                    put("trace", buildJsonObject {
-                        put("trace_id", "trace-abc")
-                        put("op", "http.server")
-                    })
+                    put(
+                        "trace",
+                        buildJsonObject {
+                            put("trace_id", "trace-abc")
+                            put("op", "http.server")
+                        }
+                    )
                 },
                 spans = listOf(
                     SentrySpan(
@@ -432,10 +451,13 @@ class EventServiceCoverageTest {
                 start_timestamp = 1700000000.0,
                 timestamp = 1700000005.0,
                 contexts = buildJsonObject {
-                    put("trace", buildJsonObject {
-                        put("trace_id", "trace-ai")
-                        put("op", "ai.pipeline")
-                    })
+                    put(
+                        "trace",
+                        buildJsonObject {
+                            put("trace_id", "trace-ai")
+                            put("op", "ai.pipeline")
+                        }
+                    )
                 },
                 spans = listOf(
                     SentrySpan(
@@ -500,11 +522,14 @@ class EventServiceCoverageTest {
                 start_timestamp = 1700000000.0,
                 timestamp = 1700000001.0,
                 contexts = buildJsonObject {
-                    put("trace", buildJsonObject {
-                        put("trace_id", "trace-err")
-                        put("op", "http.server")
-                        put("status", "internal_error")
-                    })
+                    put(
+                        "trace",
+                        buildJsonObject {
+                            put("trace_id", "trace-err")
+                            put("op", "http.server")
+                            put("status", "internal_error")
+                        }
+                    )
                 }
             )
         )
@@ -528,10 +553,13 @@ class EventServiceCoverageTest {
                 timestamp = 1700000001.0,
                 release = "v3.0.0",
                 contexts = buildJsonObject {
-                    put("trace", buildJsonObject {
-                        put("trace_id", "t1")
-                        put("op", "test")
-                    })
+                    put(
+                        "trace",
+                        buildJsonObject {
+                            put("trace_id", "t1")
+                            put("op", "test")
+                        }
+                    )
                 }
             )
         )
@@ -792,9 +820,12 @@ class EventServiceCoverageTest {
                 event_id = "fb-ts",
                 timestamp = "2024-01-15T10:30:45Z",
                 contexts = buildJsonObject {
-                    put("feedback", buildJsonObject {
-                        put("message", "Nice")
-                    })
+                    put(
+                        "feedback",
+                        buildJsonObject {
+                            put("message", "Nice")
+                        }
+                    )
                 }
             )
         )
@@ -822,9 +853,12 @@ class EventServiceCoverageTest {
                 event_id = "fb-bad-ts",
                 timestamp = "not-a-date",
                 contexts = buildJsonObject {
-                    put("feedback", buildJsonObject {
-                        put("message", "Hello")
-                    })
+                    put(
+                        "feedback",
+                        buildJsonObject {
+                            put("message", "Hello")
+                        }
+                    )
                 }
             )
         )
@@ -873,21 +907,33 @@ class EventServiceCoverageTest {
                 replay_start_timestamp = 1699999990.0,
                 urls = listOf("https://a.com", "https://b.com"),
                 contexts = buildJsonObject {
-                    put("browser", buildJsonObject {
-                        put("name", "Firefox")
-                        put("version", "121.0")
-                    })
-                    put("os", buildJsonObject {
-                        put("name", "macOS")
-                        put("version", "14.2")
-                    })
-                    put("device", buildJsonObject {
-                        put("name", "MacBook Pro")
-                        put("family", "Mac")
-                    })
-                    put("replay", buildJsonObject {
-                        put("activity", 8)
-                    })
+                    put(
+                        "browser",
+                        buildJsonObject {
+                            put("name", "Firefox")
+                            put("version", "121.0")
+                        }
+                    )
+                    put(
+                        "os",
+                        buildJsonObject {
+                            put("name", "macOS")
+                            put("version", "14.2")
+                        }
+                    )
+                    put(
+                        "device",
+                        buildJsonObject {
+                            put("name", "MacBook Pro")
+                            put("family", "Mac")
+                        }
+                    )
+                    put(
+                        "replay",
+                        buildJsonObject {
+                            put("activity", 8)
+                        }
+                    )
                 },
                 tags = mapOf("browser" to "firefox")
             )
@@ -972,10 +1018,13 @@ class EventServiceCoverageTest {
                 start_timestamp = 1700000000.0,
                 timestamp = 1700000001.0,
                 contexts = buildJsonObject {
-                    put("trace", buildJsonObject {
-                        put("trace_id", "t")
-                        put("op", "test")
-                    })
+                    put(
+                        "trace",
+                        buildJsonObject {
+                            put("trace_id", "t")
+                            put("op", "test")
+                        }
+                    )
                 }
             )
         )
@@ -1027,32 +1076,53 @@ class EventServiceCoverageTest {
 
         val aiSpans = listOf(
             SentrySpan(
-                span_id = "s1", op = "ai.chat_completion", description = "Chat",
-                start_timestamp = 1700000001.0, timestamp = 1700000002.0
+                span_id = "s1",
+                op = "ai.chat_completion",
+                description = "Chat",
+                start_timestamp = 1700000001.0,
+                timestamp = 1700000002.0
             ),
             SentrySpan(
-                span_id = "s2", op = "ai.embedding", description = "Embed",
-                start_timestamp = 1700000002.0, timestamp = 1700000003.0
+                span_id = "s2",
+                op = "ai.embedding",
+                description = "Embed",
+                start_timestamp = 1700000002.0,
+                timestamp = 1700000003.0
             ),
             SentrySpan(
-                span_id = "s3", op = "ai.tool_call", description = "Tool",
-                start_timestamp = 1700000003.0, timestamp = 1700000004.0
+                span_id = "s3",
+                op = "ai.tool_call",
+                description = "Tool",
+                start_timestamp = 1700000003.0,
+                timestamp = 1700000004.0
             ),
             SentrySpan(
-                span_id = "s4", op = "ai.agent", description = "Agent",
-                start_timestamp = 1700000004.0, timestamp = 1700000005.0
+                span_id = "s4",
+                op = "ai.agent",
+                description = "Agent",
+                start_timestamp = 1700000004.0,
+                timestamp = 1700000005.0
             ),
             SentrySpan(
-                span_id = "s5", op = "ai.chain", description = "Chain",
-                start_timestamp = 1700000005.0, timestamp = 1700000006.0
+                span_id = "s5",
+                op = "ai.chain",
+                description = "Chain",
+                start_timestamp = 1700000005.0,
+                timestamp = 1700000006.0
             ),
             SentrySpan(
-                span_id = "s6", op = "ai.retriever", description = "Retriever",
-                start_timestamp = 1700000006.0, timestamp = 1700000007.0
+                span_id = "s6",
+                op = "ai.retriever",
+                description = "Retriever",
+                start_timestamp = 1700000006.0,
+                timestamp = 1700000007.0
             ),
             SentrySpan(
-                span_id = "s7", op = "ai.run", description = "Generic",
-                start_timestamp = 1700000007.0, timestamp = 1700000008.0
+                span_id = "s7",
+                op = "ai.run",
+                description = "Generic",
+                start_timestamp = 1700000007.0,
+                timestamp = 1700000008.0
             ),
         )
 
@@ -1063,10 +1133,13 @@ class EventServiceCoverageTest {
                 start_timestamp = 1700000000.0,
                 timestamp = 1700000010.0,
                 contexts = buildJsonObject {
-                    put("trace", buildJsonObject {
-                        put("trace_id", "ai-trace")
-                        put("op", "ai.pipeline")
-                    })
+                    put(
+                        "trace",
+                        buildJsonObject {
+                            put("trace_id", "ai-trace")
+                            put("op", "ai.pipeline")
+                        }
+                    )
                 },
                 spans = aiSpans
             )

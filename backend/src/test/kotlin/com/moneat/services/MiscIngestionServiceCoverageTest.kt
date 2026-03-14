@@ -77,9 +77,15 @@ class MiscIngestionServiceCoverageTest {
     }
 
     private fun mockClickHouseSuccessCapture(captured: MutableList<String>) {
-        coEvery { ClickHouseClient.execute(capture(slot<String>().also {
-            // Use a different capture mechanism
-        })) } coAnswers {
+        coEvery {
+            ClickHouseClient.execute(
+                capture(
+                    slot<String>().also {
+                        // Use a different capture mechanism
+                    }
+                )
+            )
+        } coAnswers {
             captured.add(firstArg())
             val response = io.mockk.mockk<io.ktor.client.statement.HttpResponse>()
             every { response.status } returns io.ktor.http.HttpStatusCode.OK
@@ -476,8 +482,12 @@ class MiscIngestionServiceCoverageTest {
                     batchType = "symbol_db",
                     symbolDb = listOf(
                         QueuedSymbolDbEntry(
-                            service = "test", env = "test", language = "java",
-                            version = "1", symbols = "sym", timestampMs = 0L
+                            service = "test",
+                            env = "test",
+                            language = "java",
+                            version = "1",
+                            symbols = "sym",
+                            timestampMs = 0L
                         )
                     )
                 )
@@ -502,14 +512,24 @@ class MiscIngestionServiceCoverageTest {
             batchType = "pipeline_stats",
             pipelineStats = listOf(
                 QueuedPipelineStatEntry(
-                    pipelineId = "p1", stageName = "s1",
-                    inCount = 10, outCount = 9, dropCount = 1, errorCount = 0,
-                    host = "h1", timestampMs = 1700000000000L
+                    pipelineId = "p1",
+                    stageName = "s1",
+                    inCount = 10,
+                    outCount = 9,
+                    dropCount = 1,
+                    errorCount = 0,
+                    host = "h1",
+                    timestampMs = 1700000000000L
                 ),
                 QueuedPipelineStatEntry(
-                    pipelineId = "p1", stageName = "s2",
-                    inCount = 9, outCount = 8, dropCount = 1, errorCount = 0,
-                    host = "h1", timestampMs = 1700000000000L
+                    pipelineId = "p1",
+                    stageName = "s2",
+                    inCount = 9,
+                    outCount = 8,
+                    dropCount = 1,
+                    errorCount = 0,
+                    host = "h1",
+                    timestampMs = 1700000000000L
                 ),
             ),
         )
@@ -652,8 +672,10 @@ class MiscIngestionServiceCoverageTest {
             batchType = "data_streams",
             dataStreams = listOf(
                 QueuedDataStreamEntry(
-                    pipelineId = "s1", stageName = "stage",
-                    latencyNs = 100, payloadSize = 50,
+                    pipelineId = "s1",
+                    stageName = "stage",
+                    latencyNs = 100,
+                    payloadSize = 50,
                     direction = "unknown_direction",
                     tags = emptyMap(),
                     timestampMs = 1700000000000L

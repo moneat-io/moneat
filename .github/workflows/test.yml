@@ -15,7 +15,7 @@ on:
       coverage_gate_phase:
         description: 'Coverage gate phase (reporting-only, soft, hard)'
         required: false
-        default: 'reporting-only'
+        default: 'hard'
         type: choice
         options:
           - reporting-only
@@ -25,8 +25,8 @@ on:
 env:
   JAVA_VERSION: '21'
   NODE_VERSION: '24'
-  # Staged rollout: Week 3=reporting-only, Week 4=soft, Week 6=hard
-  COVERAGE_GATE_PHASE: ${{ github.event.inputs.coverage_gate_phase || 'reporting-only' }}
+  # Enforce 60% line coverage on all PRs and pushes; manual runs can override
+  COVERAGE_GATE_PHASE: ${{ github.event.inputs.coverage_gate_phase || 'hard' }}
 
 jobs:
   # PR-Required: Backend unit and route tests

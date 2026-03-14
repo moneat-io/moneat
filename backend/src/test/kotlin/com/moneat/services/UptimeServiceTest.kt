@@ -22,8 +22,11 @@ import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
+import com.moneat.uptime.models.UpdateUptimeMonitorRequest
+import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.models.UptimeMonitors
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
+import com.moneat.uptime.services.UptimeCheckExecutor
 import com.moneat.uptime.services.UptimeService
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -37,12 +40,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 class UptimeServiceTest {
     private val service = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
+    private val executor = UptimeCheckExecutor()
 
     companion object {
         private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
@@ -270,4 +275,280 @@ class UptimeServiceTest {
         assertEquals("push", found.type)
         assertNull(missing)
     }
+
+    // ─── UptimeService CRUD ──────────────────────────────────────────────
+
+    @Test
+    fun `createMonitor does not generate push token for http monitors`() =
+        runBlocking {
+            val orgId = seedOrg()
+
+            val monitor =
+                service.createMonitor(
+                    organizationId = orgId,
+                    request =
+                    CreateUptimeMonitorRequest(
+                        name = "HTTP Health",
+                        type = "http",
+                        url = "https://example.com",
+                        intervalSeconds = 60,
+                        timeoutSeconds = 10
+                    )
+                )
+
+            assertEquals("http", monitor.type)
+            assertNull(monitor.pushToken)
+        }
+
+    @Test
+    fun `updateMonitor returns updated monitor with new name`() =
+        runBlocking {
+            val orgId = seedOrg()
+            val created =
+                service.createMonitor(
+                    organizationId = orgId,
+                    request =
+                    CreateUptimeMonitorRequest(
+                        name = "Original",
+                        type = "http",
+                        url = "https://example.com",
+                        intervalSeconds = 60,
+                        timeoutSeconds = 10
+                    )
+                )
+
+            val updated =
+                service.updateMonitor(
+                    monitorId = UUID.fromString(created.id),
+                    organizationId = orgId,
+                    request = UpdateUptimeMonitorRequest(name = "Renamed")
+                )
+
+            assertNotNull(updated)
+            assertEquals("Renamed", updated.name)
+        }
+
+    @Test
+    fun `updateMonitor returns null for non-existent monitor`() {
+        val orgId = seedOrg()
+
+        val result =
+            service.updateMonitor(
+                monitorId = UUID.randomUUID(),
+                organizationId = orgId,
+                request = UpdateUptimeMonitorRequest(name = "Ghost")
+            )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `deleteMonitor removes existing monitor`() =
+        runBlocking {
+            val orgId = seedOrg()
+            val created =
+                service.createMonitor(
+                    organizationId = orgId,
+                    request =
+                    CreateUptimeMonitorRequest(
+                        name = "Deletable",
+                        type = "http",
+                        url = "https://example.com",
+                        intervalSeconds = 60,
+                        timeoutSeconds = 10
+                    )
+                )
+
+            val deleted = service.deleteMonitor(UUID.fromString(created.id), orgId)
+            assertTrue(deleted)
+            assertNull(service.getMonitor(UUID.fromString(created.id), orgId))
+        }
+
+    @Test
+    fun `deleteMonitor returns false for non-existent monitor`() {
+        val orgId = seedOrg()
+        assertFalse(service.deleteMonitor(UUID.randomUUID(), orgId))
+    }
+
+    @Test
+    fun `listMonitors returns all monitors for organization`() {
+        val orgId = seedOrg()
+        seedMonitor(orgId)
+        seedMonitor(orgId)
+
+        val list = service.listMonitors(orgId)
+        assertEquals(2, list.size)
+    }
+
+    @Test
+    fun `listMonitors returns empty for organization with no monitors`() {
+        val orgId = seedOrg("Empty Org")
+
+        val list = service.listMonitors(orgId)
+        assertTrue(list.isEmpty())
+    }
+
+    @Test
+    fun `getMonitor returns null for unknown id`() =
+        runBlocking {
+            val orgId = seedOrg()
+            assertNull(service.getMonitor(UUID.randomUUID(), orgId))
+        }
+
+    @Test
+    fun `pauseMonitor sets active to false`() {
+        val orgId = seedOrg()
+        val id = seedMonitor(orgId, active = true)
+
+        assertTrue(service.pauseMonitor(id, orgId))
+
+        val row =
+            transaction {
+                UptimeMonitors.selectAll().first { it[UptimeMonitors.id] == id }
+            }
+        assertFalse(row[UptimeMonitors.active])
+    }
+
+    @Test
+    fun `resumeMonitor sets active to true`() {
+        val orgId = seedOrg()
+        val id = seedMonitor(orgId, active = false)
+
+        assertTrue(service.resumeMonitor(id, orgId))
+
+        val row =
+            transaction {
+                UptimeMonitors.selectAll().first { it[UptimeMonitors.id] == id }
+            }
+        assertTrue(row[UptimeMonitors.active])
+    }
+
+    @Test
+    fun `checkUptimeMonitorQuota allows when under limit`() {
+        val orgId = seedOrg()
+        seedMonitor(orgId)
+
+        // Should not throw — free tier limit is 3 and we only have 1
+        service.checkUptimeMonitorQuota(orgId)
+    }
+
+    // ─── UptimeCheckExecutor ─────────────────────────────────────────────
+
+    private fun executorMonitor(
+        type: String,
+        url: String? = null,
+        hostname: String? = null,
+        port: Int? = null,
+        dbConnectionString: String? = null,
+        dbQuery: String? = null,
+        dockerContainerName: String? = null
+    ): UptimeMonitorData {
+        val now = Clock.System.now()
+        return UptimeMonitorData(
+            id = UUID.randomUUID(),
+            organizationId = 1,
+            name = "test-$type",
+            type = type,
+            active = true,
+            url = url,
+            hostname = hostname,
+            port = port,
+            dbConnectionString = dbConnectionString,
+            dbQuery = dbQuery,
+            dockerContainerName = dockerContainerName,
+            intervalSeconds = 60,
+            timeoutSeconds = 5,
+            retries = 0,
+            retryIntervalSeconds = 1,
+            status = "pending",
+            createdAt = now,
+            updatedAt = now
+        )
+    }
+
+    @Test
+    fun `executor fails tcp monitor without port`() =
+        runBlocking {
+            val result = executor.executeCheck(
+                executorMonitor(type = "tcp", hostname = "localhost", port = null)
+            )
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("No port configured"))
+        }
+
+    @Test
+    fun `executor fails ping monitor without hostname`() =
+        runBlocking {
+            val result = executor.executeCheck(executorMonitor(type = "ping"))
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("No hostname configured"))
+        }
+
+    @Test
+    fun `executor fails dns monitor without hostname`() =
+        runBlocking {
+            val result = executor.executeCheck(executorMonitor(type = "dns"))
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("No hostname configured"))
+        }
+
+    @Test
+    fun `executor fails ssl monitor without hostname`() =
+        runBlocking {
+            val result = executor.executeCheck(executorMonitor(type = "ssl"))
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("No hostname configured"))
+        }
+
+    @Test
+    fun `executor fails docker monitor without container name`() =
+        runBlocking {
+            val result = executor.executeCheck(executorMonitor(type = "docker"))
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("No container name configured"))
+        }
+
+    @Test
+    fun `executor fails websocket monitor without url`() =
+        runBlocking {
+            val result = executor.executeCheck(executorMonitor(type = "websocket"))
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("No URL configured"))
+        }
+
+    @Test
+    fun `executor database check succeeds with valid h2 connection`() =
+        runBlocking {
+            val connStr = "jdbc:h2:mem:uptime_exec_db;DB_CLOSE_DELAY=-1"
+            val result = executor.executeCheck(
+                executorMonitor(type = "database", dbConnectionString = connStr)
+            )
+            assertEquals(1, result.status)
+            assertTrue(result.message.contains("Database connection successful"))
+        }
+
+    @Test
+    fun `executor database check rejects non-SELECT queries`() =
+        runBlocking {
+            val connStr = "jdbc:h2:mem:uptime_exec_db2;DB_CLOSE_DELAY=-1"
+            val result = executor.executeCheck(
+                executorMonitor(
+                    type = "database",
+                    dbConnectionString = connStr,
+                    dbQuery = "DROP TABLE foo"
+                )
+            )
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("Only SELECT queries"))
+        }
+
+    @Test
+    fun `executor docker check rejects unix socket`() =
+        runBlocking {
+            val result = executor.executeCheck(
+                executorMonitor(type = "docker", dockerContainerName = "myapp")
+            )
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("Unix socket not supported"))
+        }
 }

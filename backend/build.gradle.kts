@@ -306,21 +306,16 @@ tasks.jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                // Staged rollout: Week 3=45%, Week 4=55%, Week 6=65%
+                counter = "LINE"
+                value = "COVEREDRATIO"
                 // Set via COVERAGE_GATE_PHASE env var (reporting-only, soft, hard)
                 val phase = System.getenv("COVERAGE_GATE_PHASE") ?: "reporting-only"
                 val threshold =
                     when(phase) {
                         "reporting-only" -> "0.00"
-
-                        // Week 3: no enforcement
                         "soft" -> "0.55"
-
-                        // Week 4: warn threshold
-                        "hard" -> "0.65"
-
-                        // Week 6: enforce threshold
-                        else -> "0.45"              // Default baseline
+                        "hard" -> "0.60"
+                        else -> "0.60"
                     }
                 minimum = threshold.toBigDecimal()
             }
