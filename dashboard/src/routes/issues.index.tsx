@@ -894,12 +894,12 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
               Showing {offset + 1}–{offset + errors.length} of {totalCount}
             </div>
           )}
-          <div className="hidden md:flex items-center gap-3 py-2 px-4 bg-muted/40 border-b border-border/40 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
-            <div className="w-16 shrink-0">Service</div>
-            <div className="flex-1 min-w-0">Error</div>
-            <div className="w-16 shrink-0 text-right">Count</div>
-            <div className="w-24 shrink-0 text-right">Last Seen</div>
-            <div className="w-16 shrink-0 text-right">Trace</div>
+          <div className="hidden md:grid md:grid-cols-[8rem_1fr_4rem_6rem_4rem] items-center gap-3 py-2 px-4 bg-muted/40 border-b border-border/40 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
+            <div>Service</div>
+            <div>Error</div>
+            <div className="text-right">Count</div>
+            <div className="text-right">Last Seen</div>
+            <div className="text-right">Trace</div>
           </div>
           <div className="divide-y divide-border/40">
             {errors.map((error: ApmErrorGroup) => {
@@ -910,15 +910,15 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
                   key={stableKey}
                   className="hover:bg-accent/40 transition border-l-[3px] border-l-red-500"
                 >
-                  <div className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
+                  <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[8rem_1fr_4rem_6rem_4rem] items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
                     <Badge
                       variant="outline"
-                      className="shrink-0 text-[11px] px-1.5 py-0 gap-1"
+                      className="shrink-0 text-[11px] px-1.5 py-0 gap-1 w-fit"
                     >
                       <Server className="h-3 w-3" />
                       {error.service}
                     </Badge>
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0">
                       <div className="font-semibold truncate text-sm">
                         {error.errorMessage || error.resource}
                       </div>
@@ -931,16 +931,16 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
                         {error.resource}
                       </div>
                     </div>
-                    <div className="w-16 shrink-0 text-right">
+                    <div className="text-right">
                       <div className="font-semibold text-foreground">
                         {formatCount(error.count)}
                       </div>
                       <div className="text-xs text-muted-foreground">errors</div>
                     </div>
-                    <div className="hidden md:block w-24 shrink-0 text-right text-xs text-muted-foreground">
+                    <div className="hidden md:block text-right text-xs text-muted-foreground">
                       {error.lastSeen ? formatRelativeTime(error.lastSeen) : '—'}
                     </div>
-                    <div className="w-16 shrink-0 text-right">
+                    <div className="hidden md:block text-right">
                       {traceId && (
                         <Link
                           to="/performance/traces/$traceId"
