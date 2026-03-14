@@ -385,9 +385,7 @@ describe('pricing-display – branch coverage', () => {
         makeTier({ monthlyGbLimit: 5 * BYTES_PER_GB }),
         'monthly'
       )
-      expect(
-        model.includedLimits.some((l) => l === '5 GB ingestion')
-      ).toBe(true)
+      expect(model.includedLimits.includes('5 GB ingestion')).toBe(true)
     })
 
     it('formats fractional GB values with one decimal', () => {
@@ -421,9 +419,7 @@ describe('pricing-display – branch coverage', () => {
         makeTier({ monthlyGbLimit: 0 }),
         'monthly'
       )
-      expect(
-        model.includedLimits.some((l) => l === '0 GB ingestion')
-      ).toBe(true)
+      expect(model.includedLimits.includes('0 GB ingestion')).toBe(true)
     })
   })
 
@@ -457,9 +453,7 @@ describe('pricing-display – branch coverage', () => {
         }),
         'monthly'
       )
-      expect(
-        model.includedLimits.some((l) => l === '30-day retention')
-      ).toBe(true)
+      expect(model.includedLimits.includes('30-day retention')).toBe(true)
     })
 
     it('defaults sub-retentions to retentionDays when not provided', () => {
@@ -467,9 +461,7 @@ describe('pricing-display – branch coverage', () => {
         makeTier({ retentionDays: 60 }),
         'monthly'
       )
-      expect(
-        model.includedLimits.some((l) => l === '60-day retention')
-      ).toBe(true)
+      expect(model.includedLimits.includes('60-day retention')).toBe(true)
     })
   })
 })

@@ -1,8 +1,7 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, fireEvent } from '@testing-library/react'
-import { ProjectProvider } from '@/contexts/ProjectContext'
+import { screen, fireEvent } from '@testing-library/react'
+import { renderRouteWithProviders, clearAuthStorage } from '@/test/utils'
 
 const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -46,22 +45,6 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 import { Route as IssuesIndexRoute } from '../issues.index'
-
-function renderRoute(Component: React.ComponentType) {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  })
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <ProjectProvider>
-        <Component />
-      </ProjectProvider>
-    </QueryClientProvider>
-  )
-}
 
 const mockProject = {
   id: 'proj-1',
@@ -136,8 +119,7 @@ const mockIssues = [
 describe('Issues Index - data coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.clear()
-
+    clearAuthStorage()
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.checkAuth.mockResolvedValue(true)
     mockApi.getProjects.mockResolvedValue([mockProject])
@@ -149,7 +131,7 @@ describe('Issues Index - data coverage', () => {
 
   it('renders issues list with projects and issues data', async () => {
     const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     // Should show the dashboard header
     expect(await screen.findByText('Dashboard')).toBeInTheDocument()
@@ -176,7 +158,7 @@ describe('Issues Index - data coverage', () => {
 
   it('renders search and filter controls', async () => {
     const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     // Wait for issues to load so the select-all appears
     await screen.findByText(/app.main: TypeError: null ref/)
@@ -186,7 +168,7 @@ describe('Issues Index - data coverage', () => {
 
   it('filters issues by search query', async () => {
     const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     await screen.findByText('Dashboard')
     const searchInput = screen.getByPlaceholderText('Search issues...')
@@ -197,7 +179,7 @@ describe('Issues Index - data coverage', () => {
 
   it('shows no issues match filters when search has no results', async () => {
     const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     await screen.findByText('Dashboard')
     const searchInput = screen.getByPlaceholderText('Search issues...')
@@ -210,14 +192,14 @@ describe('Issues Index - data coverage', () => {
     mockApi.getIssues.mockResolvedValue([])
 
     const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     expect(await screen.findByText('No issues yet')).toBeInTheDocument()
   })
 
   it('switches to APM Errors tab', async () => {
     const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     await screen.findByText('Dashboard')
     const apmTab = screen.getByText('APM Errors')
@@ -252,7 +234,7 @@ describe('Issues Index - data coverage', () => {
     })
 
     const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     await screen.findByText('Dashboard')
     fireEvent.click(screen.getByText('APM Errors'))
@@ -264,7 +246,7 @@ describe('Issues Index - data coverage', () => {
 
   it('renders project settings and new project buttons', async () => {
     const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     await screen.findByText('Dashboard')
     expect(screen.getByText('New Project')).toBeInTheDocument()

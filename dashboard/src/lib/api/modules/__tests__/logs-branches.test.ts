@@ -158,7 +158,9 @@ describe('Logs API – branch coverage', () => {
       globalThis.EventSource = class MockEventSource {
         url: string
         withCredentials: boolean
-        close() {}
+        close() {
+          /* mock no-op */
+        }
         constructor(url: string, opts?: { withCredentials?: boolean }) {
           this.url = url
           this.withCredentials = opts?.withCredentials ?? false

@@ -16,8 +16,15 @@
 
 import {render, screen} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type {UserEvent} from '@testing-library/user-event'
 import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {ThemeSwitcher} from '../ThemeSwitcher'
+import {clearAuthStorage} from '@/test/utils'
+
+async function selectTheme(user: UserEvent, themeName: string) {
+  await user.click(screen.getByRole('button', {name: /select theme/i}))
+  await user.click(await screen.findByText(themeName))
+}
 
 // Mock the lucide-react icons
 vi.mock('lucide-react', () => ({
@@ -47,15 +54,10 @@ globalThis.HTMLElement.prototype.releasePointerCapture = vi.fn()
 globalThis.HTMLElement.prototype.hasPointerCapture = vi.fn()
 
 beforeEach(() => {
-  localStorage.clear()
-  sessionStorage.clear()
-  sessionStorage.setItem('authenticated', 'true')
+  clearAuthStorage()
   document.documentElement.className = ''
-  // Remove any dynamically added font link elements
-  const vt323 = document.getElementById('vt323-font')
-  if (vt323) vt323.remove()
-  const ibm = document.getElementById('ibm-plex-mono-font')
-  if (ibm) ibm.remove()
+  document.getElementById('vt323-font')?.remove()
+  document.getElementById('ibm-plex-mono-font')?.remove()
   vi.clearAllMocks()
 })
 
@@ -65,9 +67,7 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     it('applies dark and theme-forest classes', async () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Forest'))
-
+      await selectTheme(user, 'Forest')
       expect(localStorage.getItem('theme')).toBe('forest')
       expect(document.documentElement.classList.contains('dark')).toBe(true)
       expect(document.documentElement.classList.contains('theme-forest')).toBe(true)
@@ -79,9 +79,7 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     it('applies dark and theme-sunset classes', async () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Sunset'))
-
+      await selectTheme(user, 'Sunset')
       expect(localStorage.getItem('theme')).toBe('sunset')
       expect(document.documentElement.classList.contains('dark')).toBe(true)
       expect(document.documentElement.classList.contains('theme-sunset')).toBe(true)
@@ -93,13 +91,10 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     it('applies dark and theme-gamer classes and loads VT323 font', async () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Gamer'))
-
+      await selectTheme(user, 'Gamer')
       expect(localStorage.getItem('theme')).toBe('gamer')
       expect(document.documentElement.classList.contains('dark')).toBe(true)
       expect(document.documentElement.classList.contains('theme-gamer')).toBe(true)
-      // VT323 font link should be added
       const fontLink = document.getElementById('vt323-font')
       expect(fontLink).toBeTruthy()
       expect(fontLink?.getAttribute('href')).toContain('VT323')
@@ -108,16 +103,10 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     it('does not add duplicate font link on second gamer theme selection', async () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Gamer'))
-      // Select another theme then come back to gamer
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Dark'))
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Gamer'))
-
-      const fontLinks = document.querySelectorAll('#vt323-font')
-      expect(fontLinks.length).toBe(1)
+      await selectTheme(user, 'Gamer')
+      await selectTheme(user, 'Dark')
+      await selectTheme(user, 'Gamer')
+      expect(document.querySelectorAll('#vt323-font').length).toBe(1)
     })
   })
 
@@ -126,9 +115,7 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     it('applies theme-retro class without dark', async () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Retro'))
-
+      await selectTheme(user, 'Retro')
       expect(localStorage.getItem('theme')).toBe('retro')
       expect(document.documentElement.classList.contains('theme-retro')).toBe(true)
       expect(document.documentElement.classList.contains('dark')).toBe(false)
@@ -140,9 +127,7 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     it('applies dark and theme-retro-dark classes', async () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Retro Dark'))
-
+      await selectTheme(user, 'Retro Dark')
       expect(localStorage.getItem('theme')).toBe('retro-dark')
       expect(document.documentElement.classList.contains('dark')).toBe(true)
       expect(document.documentElement.classList.contains('theme-retro-dark')).toBe(true)
@@ -154,13 +139,10 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     it('applies dark and theme-terminal classes and loads IBM Plex Mono font', async () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Terminal'))
-
+      await selectTheme(user, 'Terminal')
       expect(localStorage.getItem('theme')).toBe('terminal')
       expect(document.documentElement.classList.contains('dark')).toBe(true)
       expect(document.documentElement.classList.contains('theme-terminal')).toBe(true)
-      // IBM Plex Mono font link should be added
       const fontLink = document.getElementById('ibm-plex-mono-font')
       expect(fontLink).toBeTruthy()
       expect(fontLink?.getAttribute('href')).toContain('IBM+Plex+Mono')
@@ -169,28 +151,20 @@ describe('ThemeSwitcher – extended branch coverage', () => {
     it('does not add duplicate IBM Plex Mono font link', async () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Terminal'))
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Light'))
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Terminal'))
-
-      const fontLinks = document.querySelectorAll('#ibm-plex-mono-font')
-      expect(fontLinks.length).toBe(1)
+      await selectTheme(user, 'Terminal')
+      await selectTheme(user, 'Light')
+      await selectTheme(user, 'Terminal')
+      expect(document.querySelectorAll('#ibm-plex-mono-font').length).toBe(1)
     })
   })
 
   // ──── Theme: dark (default) ────
   describe('dark theme', () => {
     it('applies dark class and removes other theme classes', async () => {
-      // First set to midnight, then switch to dark
       localStorage.setItem('theme', 'midnight')
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Dark'))
-
+      await selectTheme(user, 'Dark')
       expect(localStorage.getItem('theme')).toBe('dark')
       expect(document.documentElement.classList.contains('dark')).toBe(true)
       expect(document.documentElement.classList.contains('theme-midnight')).toBe(false)
@@ -203,9 +177,7 @@ describe('ThemeSwitcher – extended branch coverage', () => {
       localStorage.setItem('theme', 'gamer')
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Light'))
-
+      await selectTheme(user, 'Light')
       expect(localStorage.getItem('theme')).toBe('light')
       expect(document.documentElement.classList.contains('dark')).toBe(false)
       expect(document.documentElement.classList.contains('theme-gamer')).toBe(false)
@@ -257,10 +229,7 @@ describe('ThemeSwitcher – extended branch coverage', () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
       expect(document.documentElement.classList.contains('theme-forest')).toBe(true)
-
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Sunset'))
-
+      await selectTheme(user, 'Sunset')
       expect(document.documentElement.classList.contains('theme-forest')).toBe(false)
       expect(document.documentElement.classList.contains('theme-sunset')).toBe(true)
     })
@@ -269,10 +238,7 @@ describe('ThemeSwitcher – extended branch coverage', () => {
       localStorage.setItem('theme', 'terminal')
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
-
-      await user.click(screen.getByRole('button', {name: /select theme/i}))
-      await user.click(await screen.findByText('Light'))
-
+      await selectTheme(user, 'Light')
       expect(document.documentElement.classList.contains('dark')).toBe(false)
       expect(document.documentElement.classList.contains('theme-terminal')).toBe(false)
       expect(document.documentElement.classList.contains('theme-forest')).toBe(false)
@@ -286,12 +252,8 @@ describe('ThemeSwitcher – extended branch coverage', () => {
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
       await user.click(screen.getByRole('button', {name: /select theme/i}))
-
-      // Dark is the default theme, so it should have a check icon
       const darkItem = screen.getByText('Dark').closest('[role="menuitem"]')
       expect(darkItem?.querySelector('[data-testid="check-icon"]')).toBeTruthy()
-
-      // Light should NOT have a check icon
       const lightItem = screen.getByText('Light').closest('[role="menuitem"]')
       expect(lightItem?.querySelector('[data-testid="check-icon"]')).toBeFalsy()
     })

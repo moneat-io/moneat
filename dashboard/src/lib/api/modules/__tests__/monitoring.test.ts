@@ -397,7 +397,7 @@ describe('Monitoring API module', () => {
                 id: 'def456',
                 image: 'redis:7',
                 status: 'running',
-                cpuPercent: 5.0,
+                cpuPercent: 5,
                 memUsed: 512,
                 memLimit: 2048,
                 netRecvBytes: 100,
@@ -408,7 +408,7 @@ describe('Monitoring API module', () => {
         )
       )
       const result = await api.getMonitorHostContainers(2)
-      expect(result[0].cpuPercent).toBe(5.0)
+      expect(result[0].cpuPercent).toBe(5)
       expect(result[0].memUsed).toBe(512)
     })
   })

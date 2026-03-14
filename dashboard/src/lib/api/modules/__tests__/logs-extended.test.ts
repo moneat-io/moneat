@@ -18,14 +18,13 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
+import { clearAuthStorage } from '@/test/utils'
 
 const API_BASE = 'http://localhost:8080'
 
 describe('Logs API – extended coverage', () => {
   beforeEach(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-    sessionStorage.setItem('authenticated', 'true')
+    clearAuthStorage()
   })
 
   // ──── getLogs – exclude filters ────

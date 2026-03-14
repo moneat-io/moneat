@@ -1,8 +1,7 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
-import { ProjectProvider } from '@/contexts/ProjectContext'
+import { screen } from '@testing-library/react'
+import { renderRouteWithProviders, clearAuthStorage } from '@/test/utils'
 
 const { mockNavigate, mockApi } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -55,22 +54,6 @@ vi.mock('@tanstack/react-router', () => ({
 
 import { Route as PerformanceRoute } from '../performance.index'
 
-function renderRoute(Component: React.ComponentType) {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  })
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <ProjectProvider>
-        <Component />
-      </ProjectProvider>
-    </QueryClientProvider>
-  )
-}
-
 const mockProject = {
   id: 'proj-1',
   name: 'Test Project',
@@ -100,7 +83,7 @@ const mockTransactions = [
   {
     name: 'DB query',
     op: 'db.query',
-    tpm: 500.0,
+    tpm: 500,
     p50: 5,
     p75: 15,
     p95: 50,
@@ -125,7 +108,7 @@ const mockStats = {
 describe('Performance Index - data coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.clear()
+    clearAuthStorage()
 
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.checkAuth.mockResolvedValue(true)
@@ -137,7 +120,7 @@ describe('Performance Index - data coverage', () => {
 
   it('renders performance page with stats, charts, and transaction table', async () => {
     const Component = (PerformanceRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     // Header
     expect(await screen.findByText('Performance')).toBeInTheDocument()
@@ -167,7 +150,7 @@ describe('Performance Index - data coverage', () => {
     mockApi.getPerformanceStats.mockResolvedValue(null)
 
     const Component = (PerformanceRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     expect(await screen.findByText('No transaction data for this period')).toBeInTheDocument()
   })
@@ -178,7 +161,7 @@ describe('Performance Index - data coverage', () => {
     mockApi.getPerformanceStats.mockReturnValue(new Promise(() => {}))
 
     const Component = (PerformanceRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+    renderRouteWithProviders(Component)
 
     // Initially shows no-projects or loading depending on timing
     // The projects query needs to resolve first

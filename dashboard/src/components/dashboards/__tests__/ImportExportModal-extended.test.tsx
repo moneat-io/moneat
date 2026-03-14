@@ -16,11 +16,11 @@
 
 import React from 'react'
 import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {render, screen, fireEvent, waitFor} from '@testing-library/react'
+import {screen, fireEvent, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {ImportExportModal} from '../ImportExportModal'
+import {renderWithQueryClient, clearAuthStorage} from '@/test/utils'
 
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
@@ -37,17 +37,15 @@ vi.mock('@/lib/api', () => ({
 
 const mockedApi = vi.mocked(api)
 
-function renderWithQuery(ui: React.ReactElement) {
-  const queryClient = new QueryClient({defaultOptions: {queries: {retry: false}}})
-  return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-  )
+const IMPORT_PLACEHOLDER = '{"title": "My Dashboard", "widgets": [...]}'
+
+function setImportJson(json: string) {
+  const textarea = screen.getByPlaceholderText(IMPORT_PLACEHOLDER)
+  fireEvent.change(textarea, {target: {value: json}})
 }
 
 beforeEach(() => {
-  localStorage.clear()
-  sessionStorage.clear()
-  sessionStorage.setItem('authenticated', 'true')
+  clearAuthStorage()
   vi.clearAllMocks()
   mockedApi.importDashboard.mockResolvedValue({
     dashboard: {id: 42},
@@ -62,14 +60,11 @@ describe('ImportExportModal – extended branch coverage', () => {
   describe('import – auto-navigate on zero warnings', () => {
     it('navigates to new dashboard when import succeeds with no warnings', async () => {
       const onOpenChange = vi.fn()
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={onOpenChange} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: '{"title":"test"}'}})
-
+      setImportJson('{"title":"test"}')
       await userEvent.setup().click(screen.getByText('Import'))
-
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith({
           to: '/dashboards/$dashboardId',
@@ -88,14 +83,11 @@ describe('ImportExportModal – extended branch coverage', () => {
         warnings: ['Unsupported panel type: heatmap', 'Unknown variable: $region'],
       })
       const onOpenChange = vi.fn()
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={onOpenChange} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: '{"title":"test"}'}})
-
+      setImportJson('{"title":"test"}')
       await userEvent.setup().click(screen.getByText('Import'))
-
       await waitFor(() => {
         expect(screen.getByText('Import Warnings')).toBeInTheDocument()
       })
@@ -113,12 +105,10 @@ describe('ImportExportModal – extended branch coverage', () => {
         warnings: ['Some warning'],
       })
       const onOpenChange = vi.fn()
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={onOpenChange} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: '{"title":"test"}'}})
-
+      setImportJson('{"title":"test"}')
       const user = userEvent.setup()
       await user.click(screen.getByText('Import'))
 
@@ -141,14 +131,11 @@ describe('ImportExportModal – extended branch coverage', () => {
         dashboard: {id: 10},
         warnings: ['warn'],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: '{"title":"test"}'}})
-
+      setImportJson('{"title":"test"}')
       await userEvent.setup().click(screen.getByText('Import'))
-
       await waitFor(() => {
         expect(screen.getByText('Close')).toBeInTheDocument()
       })
@@ -159,11 +146,10 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Import: invalid JSON – falls through to mutation ────
   describe('import – invalid JSON input', () => {
     it('falls through to importMutation when JSON is unparseable', async () => {
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: 'not-json-at-all'}})
+      setImportJson('not-json-at-all')
 
       await userEvent.setup().click(screen.getByText('Import'))
 
@@ -185,11 +171,10 @@ describe('ImportExportModal – extended branch coverage', () => {
           },
         ],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: json}})
+      setImportJson(json)
 
       await userEvent.setup().click(screen.getByText('Import'))
 
@@ -211,11 +196,10 @@ describe('ImportExportModal – extended branch coverage', () => {
           },
         ],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: json}})
+      setImportJson(json)
 
       await userEvent.setup().click(screen.getByText('Import'))
 
@@ -233,11 +217,10 @@ describe('ImportExportModal – extended branch coverage', () => {
           },
         ],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: json}})
+      setImportJson(json)
 
       await userEvent.setup().click(screen.getByText('Import'))
 
@@ -261,11 +244,10 @@ describe('ImportExportModal – extended branch coverage', () => {
           },
         ],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: json}})
+      setImportJson(json)
 
       await userEvent.setup().click(screen.getByText('Import'))
 
@@ -284,11 +266,10 @@ describe('ImportExportModal – extended branch coverage', () => {
           {type: 'stat', datasource: {type: 'logs'}, targets: []},
         ],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: json}})
+      setImportJson(json)
 
       await userEvent.setup().click(screen.getByText('Import'))
 
@@ -308,7 +289,7 @@ describe('ImportExportModal – extended branch coverage', () => {
         __inputs: [{name: 'DS_REDIS', type: 'datasource', pluginId: 'redis-datasource'}],
         panels: [{type: 'stat', datasource: '${DS_REDIS}', targets: []}],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
 
@@ -316,8 +297,7 @@ describe('ImportExportModal – extended branch coverage', () => {
         // Wait for custom data sources query to resolve
       })
 
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: json}})
+      setImportJson(json)
 
       await userEvent.setup().click(screen.getByText('Import'))
 
@@ -331,7 +311,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Import: no file selected in file upload ────
   describe('import – file upload empty', () => {
     it('does nothing when file input fires without a file', () => {
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
@@ -346,7 +326,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Import: file upload reads content ────
   describe('import – file upload reads file', () => {
     it('reads uploaded file and populates the editor', async () => {
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
@@ -373,7 +353,7 @@ describe('ImportExportModal – extended branch coverage', () => {
       globalThis.URL.createObjectURL = mockCreateObjectURL
       globalThis.URL.revokeObjectURL = mockRevokeObjectURL
 
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={5} />
       )
 
@@ -393,7 +373,7 @@ describe('ImportExportModal – extended branch coverage', () => {
       globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:mock')
       globalThis.URL.revokeObjectURL = vi.fn()
 
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={3} />
       )
 
@@ -408,7 +388,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Export: no dashboardId returns early ────
   describe('export – no dashboardId', () => {
     it('does not call exportDashboard when dashboardId is undefined', async () => {
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" />
       )
 
@@ -425,7 +405,7 @@ describe('ImportExportModal – extended branch coverage', () => {
       mockedApi.exportDashboard.mockRejectedValue(new Error('Network error'))
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
       )
 
@@ -441,28 +421,28 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Import: Experimental badge shown only in import mode ────
   describe('UI mode differences', () => {
     it('shows Experimental badge in import mode', () => {
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
       expect(screen.getByText('Experimental')).toBeInTheDocument()
     })
 
     it('does not show Experimental badge in export mode', () => {
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
       )
       expect(screen.queryByText('Experimental')).not.toBeInTheDocument()
     })
 
     it('shows correct description text for import mode', () => {
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
       expect(screen.getByText('Import a dashboard from Grafana JSON format')).toBeInTheDocument()
     })
 
     it('shows correct description text for export mode', () => {
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
       )
       expect(screen.getByText('Export this dashboard in various formats')).toBeInTheDocument()
@@ -479,11 +459,10 @@ describe('ImportExportModal – extended branch coverage', () => {
         ],
         panels: [{type: 'graph', targets: []}],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: json}})
+      setImportJson(json)
 
       await userEvent.setup().click(screen.getByText('Import'))
 
@@ -502,11 +481,10 @@ describe('ImportExportModal – extended branch coverage', () => {
           {type: 'graph', datasource: 'graphite', targets: []},
         ],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: json}})
+      setImportJson(json)
 
       await userEvent.setup().click(screen.getByText('Import'))
 
@@ -524,11 +502,10 @@ describe('ImportExportModal – extended branch coverage', () => {
           {type: 'text', datasource: 'events'},
         ],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: json}})
+      setImportJson(json)
 
       await userEvent.setup().click(screen.getByText('Import'))
 
@@ -546,11 +523,10 @@ describe('ImportExportModal – extended branch coverage', () => {
           {type: 'graph', datasource: 'events', targets: [{datasource: null, refId: 'A'}]},
         ],
       })
-      renderWithQuery(
+      renderWithQueryClient(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      const textarea = screen.getByPlaceholderText('{"title": "My Dashboard", "widgets": [...]}')
-      fireEvent.change(textarea, {target: {value: json}})
+      setImportJson(json)
 
       await userEvent.setup().click(screen.getByText('Import'))
 

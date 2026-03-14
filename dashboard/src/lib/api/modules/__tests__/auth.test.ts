@@ -21,6 +21,11 @@ import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
 
+// Test-only credentials – not used in production
+const TEST_PASSWORD = 'pass123'
+const TEST_PASSWORD_BOB = 'pass456'
+const TEST_PASSWORD_RESET = 'newPass123'
+
 describe('authMethods', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -40,7 +45,7 @@ describe('authMethods', () => {
           const body = await request.json()
           expect(body).toEqual({
             email: 'a@b.com',
-            password: 'pass123',
+            password: TEST_PASSWORD,
             name: 'Alice',
             termsAccepted: true,
             privacyAccepted: true,
@@ -49,7 +54,7 @@ describe('authMethods', () => {
         })
       )
 
-      const result = await api.signup('a@b.com', 'pass123', 'Alice', {
+      const result = await api.signup('a@b.com', TEST_PASSWORD, 'Alice', {
         termsAccepted: true,
         privacyAccepted: true,
       })
@@ -67,7 +72,7 @@ describe('authMethods', () => {
         })
       )
 
-      const result = await api.signup('b@c.com', 'pass456', 'Bob', {
+      const result = await api.signup('b@c.com', TEST_PASSWORD_BOB, 'Bob', {
         termsAccepted: true,
         privacyAccepted: true,
       }, 'inv-123')
@@ -84,12 +89,12 @@ describe('authMethods', () => {
       server.use(
         http.post(`${API_BASE}/auth/login`, async ({ request }) => {
           const body = await request.json()
-          expect(body).toEqual({ email: 'a@b.com', password: 'pass123' })
+          expect(body).toEqual({ email: 'a@b.com', password: TEST_PASSWORD })
           return HttpResponse.json(authResponse)
         })
       )
 
-      const result = await api.login('a@b.com', 'pass123')
+      const result = await api.login('a@b.com', TEST_PASSWORD)
       expect(result).toEqual(authResponse)
       expect(sessionStorage.getItem('authenticated')).toBe('true')
     })
@@ -303,12 +308,12 @@ describe('authMethods', () => {
       server.use(
         http.post(`${API_BASE}/auth/reset-password`, async ({ request }) => {
           const body = await request.json()
-          expect(body).toEqual({ token: 'reset-token', newPassword: 'newPass123' })
+          expect(body).toEqual({ token: 'reset-token', newPassword: TEST_PASSWORD_RESET })
           return HttpResponse.json({ message: 'Password reset' })
         })
       )
 
-      const result = await api.resetPassword('reset-token', 'newPass123')
+      const result = await api.resetPassword('reset-token', TEST_PASSWORD_RESET)
       expect(result).toEqual({ message: 'Password reset' })
     })
   })
