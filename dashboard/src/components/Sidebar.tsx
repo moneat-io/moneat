@@ -45,9 +45,11 @@ import {
     Play,
     Rocket,
     ScrollText,
+    Search,
     Server,
     Shield,
     ShieldAlert,
+    Sparkles,
     Timer,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
@@ -56,6 +58,7 @@ import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
 import {isSidebarItemVisible} from '@/lib/sidebar-config'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
+import {useCommandPalette} from '@/hooks/useCommandPalette'
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
@@ -84,6 +87,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
   const { data: features } = useEnterpriseFeatures()
+  const { openPalette } = useCommandPalette() ?? {}
 
   // Create project dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -277,6 +281,40 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
   const renderSidebarContent = () => (
     <>
+      {/* Search bar at top */}
+      <div className={cn('shrink-0 border-b p-2', !isExpanded && 'px-2')}>
+        {isExpanded ? (
+          <button
+            type="button"
+            onClick={() => openPalette?.()}
+            className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-2.5 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <Search className="h-4 w-4 shrink-0" />
+            <span className="flex-1 truncate">Search...</span>
+            <span className="flex items-center gap-1 rounded border border-border/60 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <Sparkles className="h-2.5 w-2.5" />
+              <kbd className="font-mono">/</kbd>
+            </span>
+            <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">⌘K</kbd>
+          </button>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => openPalette?.()}
+                className="flex w-full items-center justify-center rounded-lg border bg-muted/50 p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Search</p>
+              <p className="text-xs text-muted-foreground">⌘K</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
       {/* Navigation Items */}
       <nav
         className={cn(
