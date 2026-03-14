@@ -159,7 +159,7 @@ class DashboardAlertServiceTest {
                     incident_severity VARCHAR(20),
                     enabled BOOLEAN DEFAULT TRUE NOT NULL,
                     notification_channels TEXT NOT NULL, -- H2: JSONB unsupported; production uses JSONB
-                    last_triggered_at TIMESTAMP DEFAULT NOW(),
+                    last_triggered_at TIMESTAMP,
                     last_value DOUBLE PRECISION,
                     created_by BIGINT NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -167,8 +167,7 @@ class DashboardAlertServiceTest {
                     CONSTRAINT fk_alerts_widget_id FOREIGN KEY (widget_id)
                         REFERENCES dashboard_widgets(id) ON DELETE CASCADE,
                     CONSTRAINT fk_alerts_dashboard_id FOREIGN KEY (dashboard_id)
-                        REFERENCES dashboards(id) ON DELETE CASCADE,
-                    CONSTRAINT chk_dwa_condition CHECK (condition IN ('>', '<', '>=', '<=', '=='))
+                        REFERENCES dashboards(id) ON DELETE CASCADE
                 )
                 """.trimIndent()
             )

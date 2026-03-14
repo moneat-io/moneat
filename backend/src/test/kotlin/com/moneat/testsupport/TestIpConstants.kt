@@ -38,9 +38,11 @@ object TestIpConstants {
 
     /** Another subnet (TEST-NET-3) for multi-IP fixtures */
     const val IP_OTHER_2 = "203.0.113.23"
+
     /** Flow src/dst pairs (TEST-NET-1) */
     const val IP_SRC = "192.0.2.1"
     const val IP_DST = "192.0.2.2"
+
     /** Path destination (TEST-NET-2) */
     const val IP_PATH_DEST = "198.51.100.1"
 }
