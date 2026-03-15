@@ -42,18 +42,26 @@ export function issuesMethods(core: ApiClientCore) {
       )
     },
 
-    getIssue: (issueId: string) =>
-      core.request<IssueDetail>(`${base}/issues/${encodeURIComponent(issueId)}`),
+    getIssue: (issueId: string, projectId?: number | null) => {
+      const params = projectId != null ? `?projectId=${projectId}` : ''
+      return core.request<IssueDetail>(`${base}/issues/${encodeURIComponent(issueId)}${params}`)
+    },
 
-    getIssueEvents: (issueId: string, limit = 50) =>
-      core.request<Event[]>(
-        `${base}/issues/${encodeURIComponent(issueId)}/events?limit=${limit}`
-      ),
+    getIssueEvents: (issueId: string, limit = 50, projectId?: number | null) => {
+      const params = new URLSearchParams({ limit: String(limit) })
+      if (projectId != null) params.set('projectId', String(projectId))
+      return core.request<Event[]>(
+        `${base}/issues/${encodeURIComponent(issueId)}/events?${params.toString()}`
+      )
+    },
 
-    getIssueTransactions: (issueId: string, limit = 20) =>
-      core.request<IssueTransaction[]>(
-        `${base}/issues/${encodeURIComponent(issueId)}/transactions?limit=${limit}`
-      ),
+    getIssueTransactions: (issueId: string, limit = 20, projectId?: number | null) => {
+      const params = new URLSearchParams({ limit: String(limit) })
+      if (projectId != null) params.set('projectId', String(projectId))
+      return core.request<IssueTransaction[]>(
+        `${base}/issues/${encodeURIComponent(issueId)}/transactions?${params.toString()}`
+      )
+    },
 
     updateIssue: (
       issueId: string,
@@ -61,12 +69,15 @@ export function issuesMethods(core: ApiClientCore) {
         status?: string
         substatus?: string
         statusDetail?: Record<string, string>
-      }
-    ) =>
-      core.request(`${base}/issues/${encodeURIComponent(issueId)}`, {
+      },
+      projectId?: number | null
+    ) => {
+      const params = projectId != null ? `?projectId=${projectId}` : ''
+      return core.request(`${base}/issues/${encodeURIComponent(issueId)}${params}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
-      }),
+      })
+    },
 
     getIssueIdForEvent: (eventId: string) =>
       core.request<{ issueId: string } | null>(

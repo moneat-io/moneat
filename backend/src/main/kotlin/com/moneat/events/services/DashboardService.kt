@@ -138,23 +138,26 @@ class DashboardService(
 
     suspend fun getIssue(
         issueId: String,
-        demoEpochMs: Long? = null
+        demoEpochMs: Long? = null,
+        projectId: Long? = null
     ): IssueDetailResponse? =
-        issueService.getIssue(issueId, demoEpochMs)
+        issueService.getIssue(issueId, demoEpochMs, projectId)
 
     suspend fun getIssueEvents(
         issueId: String,
         limit: Int,
-        demoEpochMs: Long? = null
+        demoEpochMs: Long? = null,
+        projectId: Long? = null
     ): List<EventResponse> =
-        issueService.getIssueEvents(issueId, limit, demoEpochMs)
+        issueService.getIssueEvents(issueId, limit, demoEpochMs, projectId)
 
     suspend fun getIssueTransactions(
         issueId: String,
         limit: Int,
-        demoEpochMs: Long? = null
+        demoEpochMs: Long? = null,
+        projectId: Long? = null
     ): List<IssueTransactionResponse> =
-        issueService.getIssueTransactions(issueId, limit, demoEpochMs)
+        issueService.getIssueTransactions(issueId, limit, demoEpochMs, projectId)
 
     suspend fun getTransactions(
         projectId: Long,
