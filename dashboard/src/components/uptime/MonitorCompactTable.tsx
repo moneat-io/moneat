@@ -32,10 +32,10 @@ interface MonitorCompactTableProps {
 }
 
 function getMonitorIconClass(status: string, isOnline: boolean): string {
-  if (isOnline) return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-  if (status === 'down') return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10 text-red-600 dark:text-red-400'
-  if (status === 'pending') return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400'
-  return 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+  if (isOnline) return 'flex h-6 w-6 shrink-0 items-center justify-center rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+  if (status === 'down') return 'flex h-6 w-6 shrink-0 items-center justify-center rounded bg-red-500/10 text-red-600 dark:text-red-400'
+  if (status === 'pending') return 'flex h-6 w-6 shrink-0 items-center justify-center rounded bg-blue-500/10 text-blue-600 dark:text-blue-400'
+  return 'flex h-6 w-6 shrink-0 items-center justify-center rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
 }
 
 function getUptimeClass(uptime: number): string {
@@ -86,19 +86,19 @@ function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {
   const iconClass = getMonitorIconClass(monitor.status, isOnline)
   let statusIcon: React.ReactNode
   if (isOnline) {
-    statusIcon = <CheckCircle2 className="h-4 w-4" />
+    statusIcon = <CheckCircle2 className="h-3 w-3" />
   } else if (monitor.status === 'down') {
-    statusIcon = <XCircle className="h-4 w-4" />
+    statusIcon = <XCircle className="h-3 w-3" />
   } else if (monitor.status === 'pending') {
-    statusIcon = <Activity className="h-4 w-4" />
+    statusIcon = <Activity className="h-3 w-3" />
   } else {
-    statusIcon = <Pause className="h-4 w-4" />
+    statusIcon = <Pause className="h-3 w-3" />
   }
 
   return (
     <TableRow className="group">
-      <TableCell className="pl-4">
-        <div className="flex items-center gap-3 min-w-0">
+      <TableCell className="pl-3 py-2">
+        <div className="flex items-center gap-2 min-w-0">
           <div className={cn(iconClass)}>
             {statusIcon}
           </div>
@@ -111,7 +111,7 @@ function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {
               <span className="truncate max-w-[230px]">{monitor.name}</span>
               <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
             </Link>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
               <span className="uppercase">{monitor.type}</span>
               <span>•</span>
               <a 
@@ -128,18 +128,18 @@ function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {
         </div>
       </TableCell>
 
-      <TableCell>
+      <TableCell className="py-2">
         {getStatusBadge(monitor.status)}
       </TableCell>
 
-      <TableCell className="hidden md:table-cell min-w-[150px]">
-        <div className="h-8 w-full flex items-center">
-             <HeartbeatBar heartbeats={heartbeats} maxBars={30} className="h-6 w-full" />
+      <TableCell className="hidden md:table-cell min-w-[150px] py-2">
+        <div className="h-6 w-full flex items-center">
+             <HeartbeatBar heartbeats={heartbeats} maxBars={30} className="h-5 w-full" />
         </div>
       </TableCell>
 
-      <TableCell className="hidden sm:table-cell text-right">
-        <div className="font-mono text-sm font-medium">
+      <TableCell className="hidden sm:table-cell text-right py-2">
+        <div className="font-mono text-xs font-medium">
           {monitor.uptime24h !== undefined && monitor.uptime24h !== null ? (
             <span className={cn(getUptimeClass(monitor.uptime24h))}>
               {monitor.uptime24h.toFixed(2)}%
@@ -149,22 +149,22 @@ function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {
         <div className="text-xs text-muted-foreground">24h</div>
       </TableCell>
 
-      <TableCell className="hidden lg:table-cell text-right">
-        <div className="flex items-center justify-end gap-1 font-mono text-sm">
+      <TableCell className="hidden lg:table-cell text-right py-2">
+        <div className="flex items-center justify-end gap-0.5 font-mono text-xs">
           {monitor.avgResponseTime !== undefined && monitor.avgResponseTime !== null ? (
             <>
-              <Activity className="h-3 w-3 text-muted-foreground" />
+              <Activity className="h-2.5 w-2.5 text-muted-foreground" />
               {monitor.avgResponseTime}ms
             </>
           ) : '--'}
         </div>
       </TableCell>
 
-      <TableCell className="text-right text-xs text-muted-foreground hidden xl:table-cell">
+      <TableCell className="text-right text-[11px] text-muted-foreground hidden xl:table-cell py-2">
         {monitor.lastCheckAt ? formatRelativeTime(monitor.lastCheckAt) : 'Never'}
       </TableCell>
 
-      <TableCell className="pr-4 text-right">
+      <TableCell className="pr-3 py-2 text-right">
         <div className="flex items-center justify-end gap-1">
           {monitor.status === 'paused' ? (
             <Button
@@ -216,13 +216,13 @@ export default function MonitorCompactTable({monitors}: MonitorCompactTableProps
         <Table className="min-w-[800px]">
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-muted/30">
-              <TableHead className="pl-4 w-[300px]">Monitor</TableHead>
-              <TableHead className="w-[100px]">Status</TableHead>
-              <TableHead className="hidden md:table-cell">History (24h)</TableHead>
-              <TableHead className="hidden sm:table-cell text-right">Uptime</TableHead>
-              <TableHead className="hidden lg:table-cell text-right">Response</TableHead>
-              <TableHead className="hidden xl:table-cell text-right">Last Check</TableHead>
-              <TableHead className="pr-4 text-right w-[100px]">Actions</TableHead>
+              <TableHead className="pl-3 py-2 text-xs w-[300px]">Monitor</TableHead>
+              <TableHead className="w-[100px] py-2 text-xs">Status</TableHead>
+              <TableHead className="hidden md:table-cell py-2 text-xs">History (24h)</TableHead>
+              <TableHead className="hidden sm:table-cell text-right py-2 text-xs">Uptime</TableHead>
+              <TableHead className="hidden lg:table-cell text-right py-2 text-xs">Response</TableHead>
+              <TableHead className="hidden xl:table-cell text-right py-2 text-xs">Last Check</TableHead>
+              <TableHead className="pr-3 text-right w-[100px] py-2 text-xs">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -34,7 +34,7 @@ import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Switch} from '@/components/ui/switch'
 import {Badge} from '@/components/ui/badge'
-import {Bell, BellRing, Clock, Edit, Globe2, Mail, Plus, Server, Shield, Trash2, Zap} from 'lucide-react'
+import {Bell, BellRing, Clock, Edit, Globe2, Plus, Server, Trash2, Zap} from 'lucide-react'
 import {formatRelativeTime} from '@/lib/utils'
 
 type HostAlertScope = 'global' | 'host'
@@ -75,15 +75,6 @@ export function AlertsTab({hostId}: AlertsTabProps) {
     queryFn: () => api.getHostAlertConfig(hostId),
     enabled: api.isAuthenticated(),
   })
-
-  const {data: integrations = []} = useQuery({
-    queryKey: ['integrations'],
-    queryFn: () => api.getIntegrations(),
-    enabled: api.isAuthenticated(),
-  })
-
-  const slackEnabled = integrations.some(i => i.integrationType === 'slack' && i.enabled)
-  const discordEnabled = integrations.some(i => i.integrationType === 'discord' && i.enabled)
 
   const activeScope: HostAlertScope = (alertConfig?.scope as HostAlertScope) ?? 'global'
 
@@ -204,17 +195,17 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const totalAlerts = alerts.length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-amber-500/10">
-                <BellRing className="h-5 w-5 text-amber-500" />
+        <CardHeader className="py-3 px-4 pb-2">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/10 shrink-0">
+                <BellRing className="h-4 w-4 text-amber-500" />
               </div>
-              <div>
-                <CardTitle>Alert Rules</CardTitle>
-                <CardDescription>
+              <div className="min-w-0">
+                <CardTitle className="text-base">Alert Rules</CardTitle>
+                <CardDescription className="text-xs">
                   {totalAlerts > 0
                     ? `${enabledAlerts} of ${totalAlerts} rules active (${activeScope === 'global' ? 'shared globally' : 'host-only'})`
                     : 'No rules available'}
@@ -222,35 +213,35 @@ export function AlertsTab({hostId}: AlertsTabProps) {
               </div>
             </div>
 
-            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-              <div className="flex items-center rounded-lg border p-1 bg-muted/30">
+            <div className="flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-center">
+              <div className="flex items-center rounded-lg border p-0.5 bg-muted/30">
                 <Button
                   type="button"
                   size="sm"
                   variant={activeScope === 'global' ? 'default' : 'ghost'}
-                  className="h-8 gap-1.5"
+                  className="h-7 gap-1 text-xs"
                   onClick={() => scopeMutation.mutate('global')}
                   disabled={scopeMutation.isPending || activeScope === 'global'}
                 >
-                  <Globe2 className="h-3.5 w-3.5" />
+                  <Globe2 className="h-3 w-3" />
                   Global
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   variant={activeScope === 'host' ? 'default' : 'ghost'}
-                  className="h-8 gap-1.5"
+                  className="h-7 gap-1 text-xs"
                   onClick={() => scopeMutation.mutate('host')}
                   disabled={scopeMutation.isPending || activeScope === 'host'}
                 >
-                  <Server className="h-3.5 w-3.5" />
+                  <Server className="h-3 w-3" />
                   This Host
                 </Button>
               </div>
 
               <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="gap-2">
+                  <Button size="sm" className="gap-1.5">
                     <Plus className="h-4 w-4" />
                     Add Rule
                   </Button>
@@ -367,17 +358,17 @@ export function AlertsTab({hostId}: AlertsTabProps) {
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground mt-1">
             {activeScope === 'global'
               ? 'Global profile applies to all hosts currently set to Global.'
               : 'Host profile applies only to this host. Global changes will not affect it.'}
           </p>
         </CardHeader>
 
-        <CardContent>
-          <div className="mb-6 rounded-md bg-blue-500/10 p-4 text-sm text-blue-500 flex items-start gap-3 border border-blue-500/20">
-            <BellRing className="h-5 w-5 shrink-0 mt-0.5" />
-            <div className="space-y-1">
+        <CardContent className="pt-0 px-4 pb-4">
+          <div className="mb-4 rounded-md bg-blue-500/10 p-3 text-xs text-blue-500 flex items-start gap-2 border border-blue-500/20">
+            <BellRing className="h-4 w-4 shrink-0 mt-0.5" />
+            <div className="space-y-0.5 min-w-0">
               <p className="font-medium">Notification Channels</p>
               <p className="text-blue-500/80">
                 Configure which channels (Email, Slack, Discord) receive these alerts in{' '}
@@ -388,18 +379,18 @@ export function AlertsTab({hostId}: AlertsTabProps) {
             </div>
           </div>
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <p className="text-muted-foreground text-sm">Loading alerts...</p>
+            <div className="flex items-center justify-center py-8">
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <p className="text-muted-foreground text-xs">Loading alerts...</p>
               </div>
             </div>
           ) : alerts.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {alerts.map((alert) => (
                 <div
                   key={`${alert.scope}-${alert.id}`}
-                  className={`group relative flex items-center gap-4 rounded-lg border p-4 transition-colors ${
+                  className={`group relative flex items-center gap-3 rounded-lg border p-3 transition-colors ${
                     alert.enabled
                       ? 'bg-card hover:bg-muted/30'
                       : 'bg-muted/20 opacity-60 hover:opacity-80'
@@ -412,44 +403,44 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                     className="shrink-0"
                   />
 
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-sm font-medium ${getMetricColor(alert.metric)}`}>
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-xs font-medium ${getMetricColor(alert.metric)}`}>
                         {getMetricLabel(alert.metric)}
                       </span>
-                      <Badge variant="outline" className="text-xs font-mono">
+                      <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
                         {alert.condition} {formatThreshold(alert.metric, alert.threshold)}
                       </Badge>
                       {alert.durationSeconds > 0 && (
-                        <Badge variant="secondary" className="text-xs gap-1">
-                          <Clock className="h-3 w-3" />
+                        <Badge variant="secondary" className="text-[10px] gap-0.5 px-1.5 py-0">
+                          <Clock className="h-2.5 w-2.5" />
                           {Math.floor(alert.durationSeconds / 60)}m
                         </Badge>
                       )}
-                      <Badge variant="secondary" className="text-[10px] uppercase">
+                      <Badge variant="secondary" className="text-[9px] uppercase px-1.5 py-0">
                         {alert.scope}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       {alert.lastTriggeredAt ? (
-                        <span className="flex items-center gap-1 text-orange-500">
-                          <BellRing className="h-3 w-3" />
+                        <span className="flex items-center gap-0.5 text-orange-500">
+                          <BellRing className="h-2.5 w-2.5" />
                           Triggered {formatRelativeTime(alert.lastTriggeredAt)}
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1">
-                          <Bell className="h-3 w-3" />
+                        <span className="flex items-center gap-0.5">
+                          <Bell className="h-2.5 w-2.5" />
                           Never triggered
                         </span>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-8 w-8 p-0"
+                      className="h-7 w-7 p-0"
                       onClick={() => {
                         setEditingAlert(alert)
                         setIsEditDialogOpen(true)
@@ -460,7 +451,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-8 w-8 p-0"
+                      className="h-7 w-7 p-0"
                       onClick={() => {
                         if (confirm('Are you sure you want to delete this alert?')) {
                           deleteMutation.mutate(alert)
@@ -475,15 +466,15 @@ export function AlertsTab({hostId}: AlertsTabProps) {
               ))}
             </div>
           ) : (
-            <div className="text-center py-16">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10">
-                <Bell className="h-8 w-8 text-amber-500" />
+            <div className="text-center py-10">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10">
+                <Bell className="h-6 w-6 text-amber-500" />
               </div>
-              <h3 className="text-lg font-medium mb-1">No rules in this scope</h3>
-              <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">
+              <h3 className="text-base font-medium mb-0.5">No rules in this scope</h3>
+              <p className="text-muted-foreground text-xs mb-4 max-w-sm mx-auto">
                 Default recommendations are seeded automatically. Add custom rules if you need stricter thresholds.
               </p>
-              <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2">
+              <Button size="sm" onClick={() => setIsCreateDialogOpen(true)} className="gap-1.5">
                 <Plus className="h-4 w-4" />
                 Add Rule
               </Button>
@@ -596,52 +587,6 @@ export function AlertsTab({hostId}: AlertsTabProps) {
           )}
         </DialogContent>
       </Dialog>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="bg-gradient-to-br from-blue-500/5 to-indigo-500/5 border-blue-500/10">
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-start gap-3">
-              <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-blue-500/15 shrink-0">
-                <Mail className="h-4 w-4 text-blue-500" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-sm font-medium">
-                  {slackEnabled && discordEnabled ? 'Email, Slack & Discord Notifications' : 
-                   slackEnabled ? 'Email & Slack Notifications' :
-                   discordEnabled ? 'Email & Discord Notifications' : 
-                   'Email Notifications'}
-                </h4>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Alert notifications are sent to all members of your organization via email
-                  {slackEnabled && discordEnabled && ', to your configured Slack channel, and to your configured Discord channel'}
-                  {slackEnabled && !discordEnabled && ' and to your configured Slack channel'}
-                  {!slackEnabled && discordEnabled && ' and to your configured Discord channel'}. 
-                  Alerts are throttled to prevent spam (minimum 15 minutes between notifications
-                  for the same alert).
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-emerald-500/5 to-teal-500/5 border-emerald-500/10">
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-start gap-3">
-              <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-emerald-500/15 shrink-0">
-                <Shield className="h-4 w-4 text-emerald-500" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-sm font-medium">Host Status Notifications</h4>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  You'll also receive notifications when hosts go down (no metrics for 5+
-                  minutes) or come back online after being offline
-                  {slackEnabled && ', both via email and Slack'}.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
 }
