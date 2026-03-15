@@ -123,7 +123,7 @@ function StatusPagesListPage() {
 
   if (isLoading) {
     return (
-      <div className="px-6 py-6">
+      <div className="px-4 py-4">
         <div className="flex items-center justify-center h-48">
           <div className="flex flex-col items-center gap-3">
             <Globe className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -138,20 +138,20 @@ function StatusPagesListPage() {
     <div>
       {/* Page Header */}
       <div className="border-b bg-card/50">
-        <div className="px-6 lg:px-8 py-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10 text-primary shrink-0">
-                <Globe className="h-5 w-5" />
+        <div className="px-4 lg:px-6 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary/10 text-primary shrink-0">
+                <Globe className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl font-bold tracking-tight">Status Pages</h1>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <h1 className="text-lg font-bold tracking-tight">Status Pages</h1>
+                <p className="text-xs text-muted-foreground">
                   Public status pages for your services and monitors
                 </p>
               </div>
             </div>
-            <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5">
+            <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5 h-8">
               <Plus className="h-3.5 w-3.5" />
               Create Status Page
             </Button>
@@ -160,51 +160,39 @@ function StatusPagesListPage() {
       </div>
 
       {/* Content */}
-      <div className="px-6 lg:px-8 py-4">
+      <div className="px-4 lg:px-6 py-3">
         {statusPages.length === 0 ? (
           <Card className="border-dashed border-2">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <div className="bg-primary/10 p-4 rounded-full mb-4">
-                <Globe className="h-8 w-8 text-primary" />
+            <CardContent className="flex flex-col items-center justify-center py-8">
+              <div className="bg-primary/10 p-3 rounded-full mb-3">
+                <Globe className="h-6 w-6 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Create your first status page</h3>
-              <p className="text-muted-foreground text-center text-sm mb-6 max-w-lg leading-snug">
-                Share uptime information with your users through a branded public status page. 
-                Add monitors, post incidents, customize branding, and use your own domain.
+              <h3 className="text-lg font-semibold mb-1">Create your first status page</h3>
+              <p className="text-muted-foreground text-center text-sm mb-4 max-w-lg leading-snug">
+                Share uptime information with your users through a branded public status page.
               </p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" />
-                  Create Status Page
-                </Button>
-              </div>
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl w-full">
-                <div className="flex flex-col items-center text-center gap-1.5 p-3">
-                  <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                    <Activity className="h-4 w-4 text-blue-500" />
-                  </div>
-                  <span className="text-xs font-medium">Real-time Status</span>
-                  <span className="text-[11px] text-muted-foreground">Live monitor updates</span>
+              <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5 mb-4">
+                <Plus className="h-3.5 w-3.5" />
+                Create Status Page
+              </Button>
+              <div className="grid grid-cols-3 gap-2 max-w-md w-full">
+                <div className="flex flex-col items-center text-center gap-1 p-2 rounded-lg bg-muted/30">
+                  <Activity className="h-4 w-4 text-blue-500" />
+                  <span className="text-[11px] font-medium">Real-time Status</span>
                 </div>
-                <div className="flex flex-col items-center text-center gap-1.5 p-3">
-                  <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                    <AlertTriangle className="h-4 w-4 text-orange-500" />
-                  </div>
-                  <span className="text-xs font-medium">Incident Updates</span>
-                  <span className="text-[11px] text-muted-foreground">Keep users informed</span>
+                <div className="flex flex-col items-center text-center gap-1 p-2 rounded-lg bg-muted/30">
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  <span className="text-[11px] font-medium">Incident Updates</span>
                 </div>
-                <div className="flex flex-col items-center text-center gap-1.5 p-3">
-                  <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                    <Sparkles className="h-4 w-4 text-purple-500" />
-                  </div>
-                  <span className="text-xs font-medium">Custom Branding</span>
-                  <span className="text-[11px] text-muted-foreground">Logo, colors & domain</span>
+                <div className="flex flex-col items-center text-center gap-1 p-2 rounded-lg bg-muted/30">
+                  <Sparkles className="h-4 w-4 text-purple-500" />
+                  <span className="text-[11px] font-medium">Custom Branding</span>
                 </div>
               </div>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {statusPages.map((page) => (
               <Card
                 key={page.id}
@@ -214,10 +202,10 @@ function StatusPagesListPage() {
                 {/* Color Bar */}
                 <div className="h-1 w-full" style={{backgroundColor: page.primaryColor || '#3B82F6'}} />
 
-                <CardHeader className="pb-2 pt-3 px-4">
+                <CardHeader className="pb-1.5 pt-2.5 px-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-0.5 min-w-0 flex-1">
-                      <CardTitle className="text-base font-bold flex items-center gap-1.5 truncate">
+                      <CardTitle className="text-sm font-bold flex items-center gap-1.5 truncate">
                         {page.logoUrl && (
                           <img
                             src={page.logoUrl}
@@ -228,7 +216,7 @@ function StatusPagesListPage() {
                         )}
                         <span className="truncate">{page.name}</span>
                       </CardTitle>
-                      <CardDescription className="line-clamp-2 text-xs min-h-[2rem]">
+                      <CardDescription className="line-clamp-2 text-[11px] min-h-[1.5rem]">
                         {page.description || 'No description provided'}
                       </CardDescription>
                     </div>
@@ -245,9 +233,9 @@ function StatusPagesListPage() {
                   </div>
                 </CardHeader>
 
-                <CardContent className="pb-2 px-4 space-y-2">
+                <CardContent className="pb-1.5 px-3 space-y-1.5">
                   {/* URL Row */}
-                  <div className="flex items-center gap-1.5 text-xs bg-muted/50 p-2 rounded-lg border group-hover:bg-muted transition-colors">
+                  <div className="flex items-center gap-1.5 text-[11px] bg-muted/50 p-1.5 rounded-md border group-hover:bg-muted transition-colors">
                     <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
                     <code className="flex-1 truncate text-xs">
                       moneat.io/s/{page.slug}
@@ -275,11 +263,11 @@ function StatusPagesListPage() {
                   </div>
                 </CardContent>
 
-                <CardFooter className="pt-2 px-4 pb-3 border-t bg-muted/20 flex gap-1.5">
+                <CardFooter className="pt-1.5 px-3 pb-2 border-t bg-muted/20 flex gap-1.5">
                   <Button
                     variant="default"
                     size="sm"
-                    className="flex-1 h-7 text-xs"
+                    className="flex-1 h-6 text-[11px]"
                     onClick={(e) => {
                       e.stopPropagation()
                       navigate({to: '/status-pages/$pageId', params: {pageId: page.id}})
@@ -291,7 +279,7 @@ function StatusPagesListPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 h-7 text-xs"
+                    className="flex-1 h-6 text-[11px]"
                     onClick={(e) => {
                       e.stopPropagation()
                       window.open(`/s/${page.slug}`, '_blank')
@@ -306,15 +294,15 @@ function StatusPagesListPage() {
 
             {/* Create New Card */}
             <Card
-              className="border-dashed border-2 hover:border-primary/50 hover:bg-accent/50 transition-all duration-200 cursor-pointer group flex flex-col items-center justify-center min-h-[180px]"
+              className="border-dashed border-2 hover:border-primary/50 hover:bg-accent/50 transition-all duration-200 cursor-pointer group flex flex-col items-center justify-center min-h-[120px]"
               onClick={() => setCreateDialogOpen(true)}
             >
-              <CardContent className="flex flex-col items-center justify-center py-6 text-center">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center mb-2 group-hover:bg-primary/20 transition-colors">
-                  <Plus className="h-5 w-5 text-primary" />
+              <CardContent className="flex flex-col items-center justify-center py-4 text-center">
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center mb-1.5 group-hover:bg-primary/20 transition-colors">
+                  <Plus className="h-4 w-4 text-primary" />
                 </div>
                 <p className="font-medium text-xs">Create Status Page</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Add a new public status page</p>
+                <p className="text-[11px] text-muted-foreground">Add a new public status page</p>
               </CardContent>
             </Card>
           </div>

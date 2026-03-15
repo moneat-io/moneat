@@ -140,7 +140,7 @@ function StatusPageDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="px-6 lg:px-8 py-8">
+      <div className="px-4 lg:px-6 py-4">
         <div className="flex items-center justify-center h-64">
           <div className="flex flex-col items-center gap-3">
             <Globe className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -153,7 +153,7 @@ function StatusPageDetailPage() {
 
   if (!statusPage) {
     return (
-      <div className="px-6 lg:px-8 py-8">
+      <div className="px-4 lg:px-6 py-4">
         <Card>
           <CardContent className="py-16 text-center">
             <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -173,48 +173,48 @@ function StatusPageDetailPage() {
     <div>
       {/* Header */}
       <div className="border-b bg-card/50">
-        <div className="px-6 lg:px-8 py-6">
+        <div className="px-4 lg:px-6 py-4">
           {/* Breadcrumb */}
-          <div className="flex items-center gap-2 mb-4 text-sm">
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2" onClick={() => navigate({to: '/status-pages'})}>
-              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+          <div className="flex items-center gap-1.5 mb-3 text-xs">
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2 h-7 px-2" onClick={() => navigate({to: '/status-pages'})}>
+              <ArrowLeft className="mr-1 h-3 w-3" />
               Status Pages
             </Button>
             <span className="text-muted-foreground">/</span>
             <span className="text-foreground font-medium truncate">{statusPage.name}</span>
           </div>
 
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex items-start gap-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-3">
               {/* Page icon with color */}
               <div
-                className="flex items-center justify-center h-14 w-14 rounded-xl shrink-0"
+                className="flex items-center justify-center h-10 w-10 rounded-lg shrink-0"
                 style={{backgroundColor: `${statusPage.primaryColor}20`}}
               >
-                <Globe className="h-7 w-7" style={{color: statusPage.primaryColor}} />
+                <Globe className="h-5 w-5" style={{color: statusPage.primaryColor}} />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-2xl font-bold tracking-tight">{statusPage.name}</h1>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-xl font-bold tracking-tight">{statusPage.name}</h1>
                   <Badge
                     variant={statusPage.isPublic ? 'default' : 'secondary'}
-                    className={`gap-1 ${statusPage.isPublic ? 'bg-emerald-500/90 hover:bg-emerald-600 text-white' : ''}`}
+                    className={`gap-0.5 text-[11px] px-1.5 py-0 ${statusPage.isPublic ? 'bg-emerald-500/90 hover:bg-emerald-600 text-white' : ''}`}
                   >
                     {statusPage.isPublic ? (
-                      <><Unlock className="h-3 w-3" /> Public</>
+                      <><Unlock className="h-2.5 w-2.5" /> Public</>
                     ) : (
-                      <><Lock className="h-3 w-3" /> Private</>
+                      <><Lock className="h-2.5 w-2.5" /> Private</>
                     )}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="flex items-center gap-2 text-sm bg-muted/60 px-3 py-1.5 rounded-lg border">
-                    <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                    <code className="text-xs">moneat.io/s/{statusPage.slug}</code>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <div className="flex items-center gap-1.5 text-xs bg-muted/60 px-2 py-1 rounded-md border">
+                    <Globe className="h-3 w-3 text-muted-foreground" />
+                    <code className="text-[11px]">moneat.io/s/{statusPage.slug}</code>
                   </div>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={copyPublicUrl}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={copyPublicUrl}>
                         {copiedUrl ? (
                           <Check className="h-3.5 w-3.5 text-green-600" />
                         ) : (
@@ -226,7 +226,7 @@ function StatusPageDetailPage() {
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(`/s/${statusPage.slug}`, '_blank')}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.open(`/s/${statusPage.slug}`, '_blank')}>
                         <ExternalLink className="h-3.5 w-3.5" />
                       </Button>
                     </TooltipTrigger>
@@ -235,52 +235,52 @@ function StatusPageDetailPage() {
                 </div>
               </div>
             </div>
-            <Button variant="outline" className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" onClick={() => setDeleteDialogOpen(true)}>
-              <Trash2 className="mr-2 h-4 w-4" />
+            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30 h-8" onClick={() => setDeleteDialogOpen(true)}>
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               Delete Page
             </Button>
           </div>
 
           {/* Quick Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
-            <div className="bg-background rounded-lg border p-3 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                <Activity className="h-4 w-4 text-blue-500" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+            <div className="bg-background rounded-lg border p-2 flex items-center gap-2">
+              <div className="h-7 w-7 rounded-md bg-blue-500/10 flex items-center justify-center shrink-0">
+                <Activity className="h-3.5 w-3.5 text-blue-500" />
               </div>
               <div>
-                <p className="text-xl font-bold">{statusPage.monitors.length}</p>
-                <p className="text-xs text-muted-foreground">Monitors</p>
+                <p className="text-base font-bold">{statusPage.monitors.length}</p>
+                <p className="text-[11px] text-muted-foreground">Monitors</p>
               </div>
             </div>
-            <div className="bg-background rounded-lg border p-3 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-4 w-4 text-orange-500" />
+            <div className="bg-background rounded-lg border p-2 flex items-center gap-2">
+              <div className="h-7 w-7 rounded-md bg-orange-500/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-3.5 w-3.5 text-orange-500" />
               </div>
               <div>
-                <p className="text-xl font-bold">0</p>
-                <p className="text-xs text-muted-foreground">Active Incidents</p>
+                <p className="text-base font-bold">0</p>
+                <p className="text-[11px] text-muted-foreground">Active Incidents</p>
               </div>
             </div>
-            <div className="bg-background rounded-lg border p-3 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                <Link2 className="h-4 w-4 text-purple-500" />
+            <div className="bg-background rounded-lg border p-2 flex items-center gap-2">
+              <div className="h-7 w-7 rounded-md bg-purple-500/10 flex items-center justify-center shrink-0">
+                <Link2 className="h-3.5 w-3.5 text-purple-500" />
               </div>
               <div>
-                <p className="text-xl font-bold">{statusPage.customDomains.length}</p>
-                <p className="text-xs text-muted-foreground">Custom Domains</p>
+                <p className="text-base font-bold">{statusPage.customDomains.length}</p>
+                <p className="text-[11px] text-muted-foreground">Custom Domains</p>
               </div>
             </div>
-            <div className="bg-background rounded-lg border p-3 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+            <div className="bg-background rounded-lg border p-2 flex items-center gap-2">
+              <div className="h-7 w-7 rounded-md bg-emerald-500/10 flex items-center justify-center shrink-0">
                 {statusPage.showUptimeHistory ? (
-                  <Eye className="h-4 w-4 text-emerald-500" />
+                  <Eye className="h-3.5 w-3.5 text-emerald-500" />
                 ) : (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
                 )}
               </div>
               <div>
-                <p className="text-xl font-bold">{statusPage.historyDays}d</p>
-                <p className="text-xs text-muted-foreground">History Window</p>
+                <p className="text-base font-bold">{statusPage.historyDays}d</p>
+                <p className="text-[11px] text-muted-foreground">History Window</p>
               </div>
             </div>
           </div>
@@ -288,16 +288,16 @@ function StatusPageDetailPage() {
       </div>
 
       {/* Tabs Content */}
-      <div className="px-6 lg:px-8 py-6">
+      <div className="px-4 lg:px-6 py-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <div className="flex items-center justify-between mb-6">
-            <TabsList className="h-11">
-              <TabsTrigger value="overview" className="gap-2 px-4">
-                <Layout className="h-4 w-4" />
+          <div className="flex items-center justify-between mb-4">
+            <TabsList className="h-9">
+              <TabsTrigger value="overview" className="gap-1.5 px-3 text-sm">
+                <Layout className="h-3.5 w-3.5" />
                 Overview
               </TabsTrigger>
-              <TabsTrigger value="monitors" className="gap-2 px-4">
-                <Activity className="h-4 w-4" />
+              <TabsTrigger value="monitors" className="gap-1.5 px-3 text-sm">
+                <Activity className="h-3.5 w-3.5" />
                 Monitors
                 {statusPage.monitors.length > 0 && (
                   <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
@@ -305,12 +305,12 @@ function StatusPageDetailPage() {
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="incidents" className="gap-2 px-4">
-                <AlertCircle className="h-4 w-4" />
+              <TabsTrigger value="incidents" className="gap-1.5 px-3 text-sm">
+                <AlertCircle className="h-3.5 w-3.5" />
                 Incidents
               </TabsTrigger>
-              <TabsTrigger value="domains" className="gap-2 px-4">
-                <Link2 className="h-4 w-4" />
+              <TabsTrigger value="domains" className="gap-1.5 px-3 text-sm">
+                <Link2 className="h-3.5 w-3.5" />
                 Domains
                 {statusPage.customDomains.length > 0 && (
                   <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
@@ -430,23 +430,23 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Split View Container */}
-      <div className={`grid gap-6 ${showPreview ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
+      <div className={`grid gap-4 ${showPreview ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
         {/* Left Column: Form Fields */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Basic Information */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <Layout className="h-4 w-4 text-blue-500" />
+            <CardHeader className="pb-2 pt-3 px-4">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <div className="h-6 w-6 rounded-md bg-blue-500/10 flex items-center justify-center">
+                  <Layout className="h-3.5 w-3.5 text-blue-500" />
                 </div>
                 Basic Information
               </CardTitle>
-              <CardDescription>Configure your status page name and description</CardDescription>
+              <CardDescription className="text-xs">Configure your status page name and description</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3 px-4 pb-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Page Name</Label>
                 <Input
@@ -462,7 +462,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
                   placeholder="Optional description for your status page"
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  rows={4}
+                  rows={3}
                 />
               </div>
             </CardContent>
@@ -470,19 +470,19 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
 
           {/* Settings */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <div className="h-8 w-8 rounded-lg bg-slate-500/10 flex items-center justify-center">
-                  <Settings className="h-4 w-4 text-slate-500" />
+            <CardHeader className="pb-2 pt-3 px-4">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <div className="h-6 w-6 rounded-md bg-slate-500/10 flex items-center justify-center">
+                  <Settings className="h-3.5 w-3.5 text-slate-500" />
                 </div>
                 Settings
               </CardTitle>
-              <CardDescription>Configure display options and visibility</CardDescription>
+              <CardDescription className="text-xs">Configure display options and visibility</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4 px-4 pb-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label htmlFor="isPublic" className="text-base flex items-center gap-2">
+                  <Label htmlFor="isPublic" className="text-sm flex items-center gap-2">
                     {formData.isPublic ? <Unlock className="h-4 w-4 text-emerald-500" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
                     Public Access
                   </Label>
@@ -497,7 +497,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
               <Separator />
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label htmlFor="showHistory" className="text-base flex items-center gap-2">
+                  <Label htmlFor="showHistory" className="text-sm flex items-center gap-2">
                     <Clock className="h-4 w-4 text-blue-500" />
                     Show Uptime History
                   </Label>
@@ -531,16 +531,16 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
 
           {/* Branding */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                  <Palette className="h-4 w-4 text-purple-500" />
+            <CardHeader className="pb-2 pt-3 px-4">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <div className="h-6 w-6 rounded-md bg-purple-500/10 flex items-center justify-center">
+                  <Palette className="h-3.5 w-3.5 text-purple-500" />
                 </div>
                 Branding
               </CardTitle>
-              <CardDescription>Customize the look and feel of your status page</CardDescription>
+              <CardDescription className="text-xs">Customize the look and feel of your status page</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4 px-4 pb-4">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="logoUrl">Logo URL</Label>
@@ -603,7 +603,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
 
                 <div className="flex items-center justify-between pt-2">
                   <div className="space-y-0.5">
-                    <Label htmlFor="darkMode" className="text-base">Dark Mode</Label>
+                    <Label htmlFor="darkMode" className="text-sm">Dark Mode</Label>
                     <p className="text-sm text-muted-foreground">Use dark theme by default</p>
                   </div>
                   <Switch
@@ -617,7 +617,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
           </Card>
 
           {/* Save Button */}
-          <div className={`flex items-center justify-between sticky bottom-6 p-4 border rounded-lg shadow-sm transition-colors ${hasChanges ? 'bg-primary/5 border-primary/20' : 'bg-background/80 backdrop-blur-sm'}`}>
+          <div className={`flex items-center justify-between sticky bottom-4 p-3 border rounded-lg shadow-sm transition-colors ${hasChanges ? 'bg-primary/5 border-primary/20' : 'bg-background/80 backdrop-blur-sm'}`}>
             {hasChanges && (
               <p className="text-sm text-muted-foreground flex items-center gap-2">
                 <CircleDot className="h-3.5 w-3.5 text-primary" />
@@ -630,7 +630,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
                 All changes saved
               </p>
             )}
-            <Button onClick={handleSave} size="lg" disabled={!hasChanges || isSaving}>
+            <Button onClick={handleSave} size="sm" disabled={!hasChanges || isSaving}>
               {isSaving ? (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -648,20 +648,20 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
 
         {/* Right Column: Live Preview */}
         {showPreview && (
-          <div className="lg:sticky lg:top-6 lg:self-start">
+          <div className="lg:sticky lg:top-4 lg:self-start">
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <Eye className="h-4 w-4 text-emerald-500" />
+              <CardHeader className="pb-2 pt-3 px-4">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <div className="h-6 w-6 rounded-md bg-emerald-500/10 flex items-center justify-center">
+                    <Eye className="h-3.5 w-3.5 text-emerald-500" />
                   </div>
                   Live Preview
                 </CardTitle>
-                <CardDescription>See your changes in real-time</CardDescription>
+                <CardDescription className="text-xs">See your changes in real-time</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="border rounded-lg overflow-hidden bg-white mx-4 mb-4">
-                  <div className="h-[600px] overflow-y-auto">
+                <div className="border rounded-lg overflow-hidden bg-white mx-3 mb-3">
+                  <div className="h-[400px] overflow-y-auto">
                     <StatusPagePreview
                       name={formData.name}
                       description={formData.description}
@@ -751,46 +751,46 @@ function MonitorsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPa
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <Activity className="h-5 w-5 text-blue-500" />
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <Activity className="h-4 w-4 text-blue-500" />
               </div>
               <div>
-                <CardTitle>Monitors</CardTitle>
-                <CardDescription>Select which uptime monitors appear on your status page</CardDescription>
+                <CardTitle className="text-base">Monitors</CardTitle>
+                <CardDescription className="text-xs">Select which uptime monitors appear on your status page</CardDescription>
               </div>
             </div>
-            <Button onClick={() => setAddDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button onClick={() => setAddDialogOpen(true)} size="sm">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
               Add Monitors
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {statusPage.monitors.length === 0 ? (
-            <div className="text-center py-16 border-2 border-dashed rounded-lg">
-              <div className="bg-blue-500/10 h-14 w-14 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Activity className="h-7 w-7 text-blue-500" />
+            <div className="text-center py-10 border-2 border-dashed rounded-lg">
+              <div className="bg-blue-500/10 h-10 w-10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Activity className="h-5 w-5 text-blue-500" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">No monitors added</h3>
-              <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+              <h3 className="text-base font-semibold mb-1">No monitors added</h3>
+              <p className="text-muted-foreground text-sm mb-4 max-w-sm mx-auto">
                 Add uptime monitors to display their status on your public page. Visitors will see real-time availability.
               </p>
-              <Button onClick={() => setAddDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
+              <Button onClick={() => setAddDialogOpen(true)} size="sm">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Add Monitors
               </Button>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {statusPage.monitors.map((monitor, index) => (
-                <div key={monitor.id} className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/5 transition-colors group">
+                <div key={monitor.id} className="flex items-center justify-between p-3 border rounded-lg bg-card hover:bg-accent/5 transition-colors group">
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-muted text-muted-foreground font-mono text-xs font-bold shrink-0">
+                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-muted text-muted-foreground font-mono text-[11px] font-bold shrink-0">
                       {index + 1}
                     </div>
                     <div className="min-w-0">
@@ -946,21 +946,21 @@ function IncidentsTab({pageId}: {pageId: string}) {
   const resolvedIncidents = incidents.filter((i) => i.status === 'resolved' || i.status === 'completed')
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Incident Header Card */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                <AlertCircle className="h-5 w-5 text-orange-500" />
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                <AlertCircle className="h-4 w-4 text-orange-500" />
               </div>
               <div>
-                <CardTitle>Incidents & Maintenance</CardTitle>
-                <CardDescription>Manage incidents and scheduled maintenance windows</CardDescription>
+                <CardTitle className="text-base">Incidents & Maintenance</CardTitle>
+                <CardDescription className="text-xs">Manage incidents and scheduled maintenance windows</CardDescription>
               </div>
             </div>
-            <Button onClick={() => setCreateDialogOpen(true)}>
+            <Button onClick={() => setCreateDialogOpen(true)} size="sm">
               <Plus className="mr-2 h-4 w-4" />
               Create Incident
             </Button>
@@ -968,27 +968,27 @@ function IncidentsTab({pageId}: {pageId: string}) {
         </CardHeader>
         <CardContent>
           {incidents.length === 0 ? (
-            <div className="text-center py-16 border-2 border-dashed rounded-lg">
-              <div className="bg-emerald-500/10 h-14 w-14 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+            <div className="text-center py-10 border-2 border-dashed rounded-lg">
+              <div className="bg-emerald-500/10 h-10 w-10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">All systems operational</h3>
-              <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+              <h3 className="text-base font-semibold mb-1">All systems operational</h3>
+              <p className="text-muted-foreground text-sm mb-4 max-w-sm mx-auto">
                 No incidents have been reported. Create an incident when there's a service disruption or scheduled maintenance.
               </p>
-              <div className="flex gap-3 justify-center">
-                <Button onClick={() => { setNewIncident(i => ({...i, type: 'incident'})); setCreateDialogOpen(true) }}>
-                  <AlertTriangle className="mr-2 h-4 w-4" />
+              <div className="flex gap-2 justify-center">
+                <Button size="sm" onClick={() => { setNewIncident(i => ({...i, type: 'incident'})); setCreateDialogOpen(true) }}>
+                  <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
                   Report Incident
                 </Button>
-                <Button variant="outline" onClick={() => { setNewIncident(i => ({...i, type: 'maintenance', status: 'scheduled'})); setCreateDialogOpen(true) }}>
-                  <Wrench className="mr-2 h-4 w-4" />
+                <Button variant="outline" size="sm" onClick={() => { setNewIncident(i => ({...i, type: 'maintenance', status: 'scheduled'})); setCreateDialogOpen(true) }}>
+                  <Wrench className="mr-1.5 h-3.5 w-3.5" />
                   Schedule Maintenance
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="space-y-8">
+            <div className="space-y-4">
               {/* Active Incidents */}
               {activeIncidents.length > 0 && (
                 <div>
@@ -1144,10 +1144,10 @@ function IncidentCard({incident}: {incident: StatusPageIncident}) {
 
   return (
     <Card className="border-l-4 overflow-hidden" style={{borderLeftColor: statusConfig.borderColor}}>
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
+      <div className="p-3">
+        <div className="flex items-start justify-between mb-2">
           <div className="flex items-start gap-3">
-            <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${statusConfig.iconBg}`}>
+            <div className={`h-7 w-7 rounded-md flex items-center justify-center shrink-0 ${statusConfig.iconBg}`}>
               {incident.type === 'maintenance' ? (
                 <Wrench className={`h-4 w-4 ${statusConfig.iconColor}`} />
               ) : (
@@ -1155,7 +1155,7 @@ function IncidentCard({incident}: {incident: StatusPageIncident}) {
               )}
             </div>
             <div>
-              <h4 className="font-semibold text-base">{incident.title}</h4>
+              <h4 className="font-semibold text-sm">{incident.title}</h4>
               <div className="flex flex-wrap items-center gap-2 mt-1.5">
                 <Badge variant="outline" className={`${statusConfig.badgeClass} border-transparent text-[11px]`}>
                   {incident.status.replace('_', ' ')}
@@ -1175,7 +1175,7 @@ function IncidentCard({incident}: {incident: StatusPageIncident}) {
 
         {/* Updates Timeline */}
         {incident.updates && incident.updates.length > 0 && (
-          <div className="space-y-3 mt-4 pl-4 border-l-2 border-muted/50 ml-4">
+          <div className="space-y-2 mt-3 pl-3 border-l-2 border-muted/50 ml-3">
             {incident.updates.map((update: IncidentUpdate) => (
               <div key={update.id} className="relative">
                 <div className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-muted border-2 border-background"></div>
@@ -1241,20 +1241,20 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                <Link2 className="h-5 w-5 text-purple-500" />
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                <Link2 className="h-4 w-4 text-purple-500" />
               </div>
               <div>
-                <CardTitle>Custom Domains</CardTitle>
-                <CardDescription>Use your own domain for your status page</CardDescription>
+                <CardTitle className="text-base">Custom Domains</CardTitle>
+                <CardDescription className="text-xs">Use your own domain for your status page</CardDescription>
               </div>
             </div>
-            <Button onClick={() => setAddDialogOpen(true)}>
+            <Button onClick={() => setAddDialogOpen(true)} size="sm">
               <Plus className="mr-2 h-4 w-4" />
               Add Domain
             </Button>
@@ -1262,27 +1262,27 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
         </CardHeader>
         <CardContent>
           {statusPage.customDomains.length === 0 ? (
-            <div className="text-center py-16 border-2 border-dashed rounded-lg">
-              <div className="bg-purple-500/10 h-14 w-14 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Link2 className="h-7 w-7 text-purple-500" />
+            <div className="text-center py-10 border-2 border-dashed rounded-lg">
+              <div className="bg-purple-500/10 h-10 w-10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Link2 className="h-5 w-5 text-purple-500" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">No custom domains</h3>
-              <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+              <h3 className="text-base font-semibold mb-1">No custom domains</h3>
+              <p className="text-muted-foreground text-sm mb-4 max-w-sm mx-auto">
                 Add a custom domain like <code className="text-xs bg-muted px-1.5 py-0.5 rounded">status.yourcompany.com</code> to give your status page a professional look.
               </p>
-              <Button onClick={() => setAddDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
+              <Button onClick={() => setAddDialogOpen(true)} size="sm">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Add Domain
               </Button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {statusPage.customDomains.map((domain) => (
                 <Card key={domain.id} className={`border-l-4 ${domain.verified ? 'border-l-emerald-500' : 'border-l-yellow-500'}`}>
-                  <div className="p-4">
-                    <div className="flex items-start justify-between mb-3">
+                  <div className="p-3">
+                    <div className="flex items-start justify-between mb-2">
                       <div className="flex items-start gap-3">
-                        <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        <div className={`h-7 w-7 rounded-md flex items-center justify-center shrink-0 ${
                           domain.verified ? 'bg-emerald-500/10' : 'bg-yellow-500/10'
                         }`}>
                           {domain.verified ? (
@@ -1292,7 +1292,7 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
                           )}
                         </div>
                         <div>
-                          <p className="font-semibold text-base">{domain.domain}</p>
+                          <p className="font-semibold text-sm">{domain.domain}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <Badge
                               variant="outline"
@@ -1341,7 +1341,7 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
 
                     {/* DNS Instructions */}
                     {!domain.verified && (
-                      <div className="bg-muted/50 p-4 rounded-lg border space-y-3 mt-3">
+                      <div className="bg-muted/50 p-3 rounded-lg border space-y-2 mt-2">
                         <div className="flex items-center gap-2 mb-2">
                           <Info className="h-4 w-4 text-blue-500" />
                           <p className="font-medium text-sm">DNS Configuration Required</p>
