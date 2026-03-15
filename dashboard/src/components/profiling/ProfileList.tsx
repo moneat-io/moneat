@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import {useMemo} from 'react'
 import {Link} from '@tanstack/react-router'
+import {formatRelativeTime} from '@/lib/utils'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -52,24 +53,9 @@ function formatDuration(ns: number): string {
   return `${(ns / 1_000_000_000).toFixed(1)}s`
 }
 
-function timeAgo(iso: string): string {
-  const now = Date.now()
-  const then = new Date(iso).getTime()
-  const diffMs = now - then
-  if (diffMs < 0) return 'just now'
-
-  const seconds = Math.floor(diffMs / 1000)
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  })
+function parseUtcDate(value: string): Date {
+  if (value.includes('T')) return new Date(value)
+  return new Date(value + ' UTC')
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -273,9 +259,9 @@ export function ProfileList({
                   {formatBytes(profile.sizeBytes)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  <span title={new Date(profile.startTime).toLocaleString()}>
+                  <span title={parseUtcDate(profile.startTime).toLocaleString()}>
                     <Clock className="h-3 w-3 inline mr-1 -mt-px" />
-                    {timeAgo(profile.startTime)}
+                    {formatRelativeTime(profile.startTime)}
                   </span>
                 </TableCell>
                 <TableCell>
