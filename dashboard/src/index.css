@@ -380,8 +380,18 @@
   * {
     @apply border-border;
   }
+  html {
+    /* Reserve scrollbar space to prevent layout shift when Radix dropdowns add overflow:hidden to body */
+    scrollbar-gutter: stable;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Prevent Radix scroll lock from hiding the scrollbar (causes layout shift). Radix has no prop to disable this. */
+  body[data-scroll-locked] {
+    overflow: visible !important;
+    margin-right: 0 !important;
+    padding-right: 0 !important;
   }
   
   /* Theme-aware scrollbars */

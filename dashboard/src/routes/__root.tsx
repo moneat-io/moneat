@@ -322,7 +322,7 @@ function RootComponent() {
       {showSidebar && (
         <CommandPaletteProvider>
           {/* Fixed header: optional demo banner */}
-          <div ref={headerRef} className="fixed top-0 left-0 right-0 z-50">
+          <div ref={headerRef} className="fixed top-0 left-0 right-0 z-50 w-full">
             <DemoBanner />
           </div>
           <Sidebar
