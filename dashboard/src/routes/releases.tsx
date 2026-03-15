@@ -147,7 +147,7 @@ function ReleasesPage() {
   return (
     <div>
       <div className="container mx-auto px-4 py-4">
-        <div className="mb-4">
+        <div className="mb-3">
           <h2 className="text-xl font-bold">Releases</h2>
           <p className="text-muted-foreground text-xs mt-0.5">
             Track release health, new issues, and crash-free rates
@@ -155,7 +155,7 @@ function ReleasesPage() {
         </div>
 
         {!projects || projects.length === 0 ? (
-          <Card className="p-12 text-center">
+          <Card className="p-8 text-center">
             <div className="max-w-md mx-auto space-y-4">
               <p className="text-muted-foreground">
                 No projects yet. Create a project to view releases.
@@ -163,21 +163,21 @@ function ReleasesPage() {
             </div>
           </Card>
         ) : isLoading ? (
-          <div className="p-8 text-center">Loading releases...</div>
+          <div className="p-6 text-center text-sm">Loading releases...</div>
         ) : !releases || releases.length === 0 ? (
-          <Card className="p-12 text-center">
-            <div className="max-w-md mx-auto space-y-4">
-              <Package className="h-12 w-12 mx-auto text-muted-foreground" />
-              <h3 className="text-lg font-semibold">No releases detected</h3>
-              <p className="text-muted-foreground">
+          <Card className="p-8 text-center">
+            <div className="max-w-md mx-auto space-y-3">
+              <Package className="h-10 w-10 mx-auto text-muted-foreground" />
+              <h3 className="text-base font-semibold">No releases detected</h3>
+              <p className="text-sm text-muted-foreground">
                 Releases are auto-detected when events include a release version.
                 Configure your SDK with a release version to start tracking.
               </p>
             </div>
           </Card>
         ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
               <StatsCard
                 compact
                 title="Tracked Releases"
@@ -213,21 +213,21 @@ function ReleasesPage() {
             </div>
 
             <Card>
-              <CardContent className="p-3">
+              <CardContent className="p-2">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
                   <div className="relative w-full lg:max-w-sm">
-                    <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Search className="h-3 w-3 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <Input
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search by release version"
-                      className="pl-9"
+                      className="pl-8 h-8 text-xs"
                     />
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortBy)}>
-                      <SelectTrigger className="w-[200px]">
+                      <SelectTrigger className="w-[180px] h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -237,10 +237,10 @@ function ReleasesPage() {
                         <SelectItem value="stability">Sort: Most stable</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Badge variant="outline">
+                    <Badge variant="outline" className="text-xs py-0">
                       {filteredAndSortedReleases.length} of {releaseList.length} releases
                     </Badge>
-                    <Badge variant="outline">Most active: {summary.mostActiveVersion}</Badge>
+                    <Badge variant="outline" className="text-xs py-0">Most active: {summary.mostActiveVersion}</Badge>
                   </div>
                 </div>
               </CardContent>
@@ -254,30 +254,30 @@ function ReleasesPage() {
                 className="block"
               >
                 <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
-                  <CardContent className="p-3">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 shrink-0">
-                          <Package className="h-4 w-4 text-primary" />
+                  <CardContent className="p-2">
+                    <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between">
+                      <div className="flex min-w-0 items-start gap-2 sm:gap-3">
+                        <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 shrink-0">
+                          <Package className="h-3 w-3 text-primary" />
                         </div>
                         <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold break-all">{release.version}</span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-semibold text-sm break-all">{release.version}</span>
                             {release.version === summary.latestVersion && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">
+                              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-primary/20 text-primary font-medium">
                                 Latest
                               </span>
                             )}
                             {release.newIssueCount > 0 && (
                               <Badge
                                 variant="outline"
-                                className="max-w-full whitespace-normal break-words text-amber-700 border-amber-400/50"
+                                className="max-w-full whitespace-normal break-words text-amber-700 border-amber-400/50 text-[11px] py-0"
                               >
                                 Regression risk
                               </Badge>
                             )}
                           </div>
-                          <div className="text-sm text-muted-foreground break-words">
+                          <div className="text-xs text-muted-foreground break-words">
                             {formatDate(release.firstSeen)}
                             {release.firstSeen !== release.lastSeen && (
                               <> – {formatDate(release.lastSeen)}</>
@@ -285,17 +285,17 @@ function ReleasesPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 md:justify-end md:gap-6">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Activity className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 md:justify-end md:gap-4">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Activity className="h-3 w-3 text-muted-foreground" />
                           <span>{release.eventCount.toLocaleString()} events</span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <AlertCircle className="h-3 w-3 text-muted-foreground" />
                           <span>{release.newIssueCount} new issues</span>
                         </div>
                         {release.crashFreeRate != null && (
-                          <div className="flex items-center gap-2 text-sm">
+                          <div className="flex items-center gap-1.5 text-xs">
                             <span
                               className={
                                 release.crashFreeRate >= 99
@@ -309,8 +309,8 @@ function ReleasesPage() {
                             </span>
                           </div>
                         )}
-                        <div className="flex items-center gap-2 text-sm">
-                          <Users className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Users className="h-3 w-3 text-muted-foreground" />
                           <span>{release.userCount.toLocaleString()} users</span>
                         </div>
                       </div>

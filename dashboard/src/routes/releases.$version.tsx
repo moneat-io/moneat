@@ -56,21 +56,21 @@ function ReleaseDetailPage() {
 
   return (
     <div>
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="mb-6">
+      <div className="p-4 max-w-7xl mx-auto">
+        <div className="mb-4">
           <Link
             to="/releases"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-3"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-3 w-3" />
             Back to releases
           </Link>
-          <h2 className="text-2xl font-bold">{releaseVersion}</h2>
-          <p className="text-muted-foreground mt-1">Release statistics</p>
+          <h2 className="text-xl font-bold">{releaseVersion}</h2>
+          <p className="text-muted-foreground text-xs mt-0.5">Release statistics</p>
         </div>
 
         {!projectId ? (
-          <Card className="p-12 text-center">
+          <Card className="p-8 text-center">
             <p className="text-muted-foreground">
               Select a project to view release details.
             </p>
@@ -84,77 +84,82 @@ function ReleaseDetailPage() {
             </p>
           </Card>
         ) : (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               <StatsCard
+                compact
                 title="Total Events"
                 value={stats.totalEvents.toLocaleString()}
                 icon={Activity}
               />
               <StatsCard
+                compact
                 title="New Issues"
                 value={stats.newIssues.toLocaleString()}
                 icon={AlertCircle}
               />
               {stats.crashFreeSessionRate != null && (
                 <StatsCard
+                  compact
                   title="Crash-Free Rate"
                   value={`${stats.crashFreeSessionRate.toFixed(1)}%`}
                   icon={Activity}
                 />
               )}
               <StatsCard
+                compact
                 title="Affected Users"
                 value={stats.userCount.toLocaleString()}
                 icon={Users}
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <EventsChart
                 data={stats.eventsTimeline}
                 title="Events Over Time"
-                height={300}
+                height={240}
               />
               {Object.keys(stats.eventsByLevel).length > 0 && (
                 <BarChart
                   data={stats.eventsByLevel}
                   title="Events by Level"
                   color="hsl(0, 84%, 60%)"
+                  height={240}
                 />
               )}
             </div>
 
             {stats.topIssues.length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle>Top Issues in this Release</CardTitle>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-base">Top Issues in this Release</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
+                <CardContent className="pt-0">
+                  <div className="space-y-2">
                     {stats.topIssues.map((issue, index) => (
                       <Link
                         key={issue.issueId}
                         to="/issues/$issueId"
                         params={{ issueId: issue.issueId }}
-                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors"
+                        className="flex items-center justify-between p-2 rounded-lg border hover:bg-accent transition-colors"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-sm font-semibold">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-xs font-semibold">
                             {index + 1}
                           </div>
-                          <div>
-                            <div className="font-medium">{issue.title}</div>
-                            <div className="text-xs text-muted-foreground">
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm truncate">{issue.title}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">
                               {issue.issueId}
                             </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="font-semibold">
+                        <div className="text-right shrink-0">
+                          <div className="font-semibold text-sm">
                             {issue.count.toLocaleString()}
                           </div>
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-[11px] text-muted-foreground">
                             events
                           </div>
                         </div>
