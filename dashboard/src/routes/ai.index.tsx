@@ -83,29 +83,32 @@ function AiOverviewPage() {
   })
 
   return (
-    <div className="space-y-4 p-4">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold flex items-center gap-1.5 whitespace-nowrap">
-            <Brain className="h-5 w-5" />
+    <div className="space-y-2 p-3">
+      {/* Header: title, links, time selector in one compact row */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+          <h1 className="text-lg font-bold flex items-center gap-1.5 whitespace-nowrap">
+            <Brain className="h-4 w-4" />
             AI Observability
           </h1>
-          <p className="text-muted-foreground text-xs mt-0.5">
+          <p className="text-muted-foreground text-xs hidden sm:inline">
             Monitor your LLM applications, trace agent executions, and track costs.
           </p>
+          <Link to="/ai/generations" className="text-xs text-primary hover:underline">
+            View All Generations →
+          </Link>
+        </div>
+        <div className="flex items-center gap-2">
           <a
             href="/docs/ai-observability"
-            className="inline-flex items-center gap-1.5 mt-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-1 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-medium hover:bg-primary/90 transition-colors"
           >
             <BookOpen className="h-3 w-3" />
             Get Started
             <ArrowRight className="h-3 w-3" />
           </a>
-        </div>
-        <div className="w-full sm:w-auto">
           <Select value={range} onValueChange={setRange}>
-            <SelectTrigger className="w-full sm:w-32">
+            <SelectTrigger className="w-full sm:w-28 h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -121,7 +124,7 @@ function AiOverviewPage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
         <StatsCard
           compact
           title="Total Generations"
@@ -160,24 +163,24 @@ function AiOverviewPage() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <EventsChart data={timelineData} title="LLM Calls Over Time" height={200} />
-        <BarChart data={modelBreakdown} title="Calls by Model" height={200} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <EventsChart data={timelineData} title="LLM Calls Over Time" height={160} />
+        <BarChart data={modelBreakdown} title="Calls by Model" height={160} />
       </div>
 
       {/* Token Breakdown & Cost */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <BarChart data={tokenBreakdown} title="Tokens by Model" height={200} />
-        <BarChart data={costBreakdown} title="Cost by Model" height={200} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <BarChart data={tokenBreakdown} title="Tokens by Model" height={160} />
+        <BarChart data={costBreakdown} title="Cost by Model" height={160} />
       </div>
 
       {/* Top Models Table */}
       <Card>
-        <CardHeader className="px-3 py-2 flex flex-row items-center gap-1.5">
+        <CardHeader className="px-3 py-1.5 flex flex-row items-center gap-1.5">
           <TrendingUp className="h-3 w-3 text-muted-foreground" />
           <CardTitle className="text-xs">Top Models</CardTitle>
         </CardHeader>
-        <CardContent className="px-3 pb-2 pt-0 overflow-x-auto">
+        <CardContent className="px-3 pb-1.5 pt-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -214,7 +217,7 @@ function AiOverviewPage() {
               ))}
               {(!overview?.topModels || overview.topModels.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
                     No LLM data yet.{' '}
                     <a href="/docs/ai-observability" className="text-primary hover:underline">
                       Read the docs
@@ -227,16 +230,6 @@ function AiOverviewPage() {
           </Table>
         </CardContent>
       </Card>
-
-      {/* Quick Links */}
-      <div className="flex gap-3">
-        <Link to="/ai/generations" className="text-sm text-primary hover:underline">
-          View All Generations →
-        </Link>
-        <a href="/docs/ai-observability" className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors">
-          Documentation →
-        </a>
-      </div>
     </div>
   )
 }
