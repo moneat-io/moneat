@@ -569,13 +569,21 @@ fun Route.apiRoutes() {
                         return@get
                     }
 
-                    // Skip permission check for demo users (they have access to all demo issues)
-                    if (!isDemo && !dashboardService.hasIssueAccess(userId, issueId)) {
-                        call.respond(HttpStatusCode.Forbidden)
-                        return@get
+                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+
+                    if (!isDemo) {
+                        if (projectId != null) {
+                            if (!dashboardService.hasProjectAccess(userId, projectId)) {
+                                call.respond(HttpStatusCode.Forbidden)
+                                return@get
+                            }
+                        } else if (!dashboardService.hasIssueAccess(userId, issueId)) {
+                            call.respond(HttpStatusCode.Forbidden)
+                            return@get
+                        }
                     }
 
-                    val issue = dashboardService.getIssue(issueId, demoEpochMs)
+                    val issue = dashboardService.getIssue(issueId, demoEpochMs, projectId)
                     if (issue == null) {
                         call.respond(HttpStatusCode.NotFound)
                     } else {
@@ -591,18 +599,26 @@ fun Route.apiRoutes() {
 
                     val issueId = call.parameters["issueId"]
                     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
 
                     if (issueId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
                     }
 
-                    if (!isDemo && !dashboardService.hasIssueAccess(userId, issueId)) {
-                        call.respond(HttpStatusCode.Forbidden)
-                        return@get
+                    if (!isDemo) {
+                        val hasAccess = if (projectId != null) {
+                            dashboardService.hasProjectAccess(userId, projectId)
+                        } else {
+                            dashboardService.hasIssueAccess(userId, issueId)
+                        }
+                        if (!hasAccess) {
+                            call.respond(HttpStatusCode.Forbidden)
+                            return@get
+                        }
                     }
 
-                    val events = dashboardService.getIssueEvents(issueId, limit, demoEpochMs)
+                    val events = dashboardService.getIssueEvents(issueId, limit, demoEpochMs, projectId)
                     call.respond(events)
                 }
 
@@ -614,18 +630,26 @@ fun Route.apiRoutes() {
 
                     val issueId = call.parameters["issueId"]
                     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 20
+                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
 
                     if (issueId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
                     }
 
-                    if (!isDemo && !dashboardService.hasIssueAccess(userId, issueId)) {
-                        call.respond(HttpStatusCode.Forbidden)
-                        return@get
+                    if (!isDemo) {
+                        val hasAccess = if (projectId != null) {
+                            dashboardService.hasProjectAccess(userId, projectId)
+                        } else {
+                            dashboardService.hasIssueAccess(userId, issueId)
+                        }
+                        if (!hasAccess) {
+                            call.respond(HttpStatusCode.Forbidden)
+                            return@get
+                        }
                     }
 
-                    val transactions = dashboardService.getIssueTransactions(issueId, limit, demoEpochMs)
+                    val transactions = dashboardService.getIssueTransactions(issueId, limit, demoEpochMs, projectId)
                     call.respond(transactions)
                 }
 
@@ -639,7 +663,13 @@ fun Route.apiRoutes() {
                         return@patch
                     }
 
-                    if (!dashboardService.hasIssueAccess(userId, issueId)) {
+                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val hasAccess = if (projectId != null) {
+                        dashboardService.hasProjectAccess(userId, projectId)
+                    } else {
+                        dashboardService.hasIssueAccess(userId, issueId)
+                    }
+                    if (!hasAccess) {
                         call.respond(HttpStatusCode.Forbidden)
                         return@patch
                     }
@@ -1058,7 +1088,13 @@ fun Route.apiRoutes() {
                         return@get
                     }
 
-                    if (!dashboardService.hasIssueAccess(userId, issueId)) {
+                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val hasAccess = if (projectId != null) {
+                        dashboardService.hasProjectAccess(userId, projectId)
+                    } else {
+                        dashboardService.hasIssueAccess(userId, issueId)
+                    }
+                    if (!hasAccess) {
                         call.respond(HttpStatusCode.Forbidden)
                         return@get
                     }
