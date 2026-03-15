@@ -213,10 +213,19 @@ export function LogExplorer({
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<RefreshInterval>(null)
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isHydratingRef = useRef(false)
+  const didMountRef = useRef(false)
   
-  // Hydrate from URL on back/forward navigation
+  // Hydrate from URL on back/forward navigation (skip initial mount — state is
+  // already initialised from urlSearch via getInitialState)
   useEffect(() => {
-    if (!enableUrlSync || !urlSearch || isHydratingRef.current) return
+    if (!enableUrlSync || !urlSearch) return
+    
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
+    
+    if (isHydratingRef.current) return
     
     isHydratingRef.current = true
     
@@ -233,7 +242,6 @@ export function LogExplorer({
       setCursor(urlSearch.cursor || null)
     })
     
-    // Defer clearing hydration flag to avoid race conditions
     setTimeout(() => {
       isHydratingRef.current = false
     }, 100)
@@ -337,6 +345,7 @@ export function LogExplorer({
 
   const hasCustomLevelFilter = levels.length > 0 && levels.length < LEVEL_OPTIONS.length
   const levelsKey = hasCustomLevelFilter ? levels.join(',') : '__all__'
+  const facetFiltersKey = JSON.stringify(facetFilters)
 
 
   // Reset pagination when filters change
@@ -347,7 +356,7 @@ export function LogExplorer({
       setCursorHistory([])
       setAccumulatedLogs([])
     })
-  }, [systemId, query, levelsKey, timeRange.from, timeRange.to, facetFilters])
+  }, [systemId, query, levelsKey, timeRange.from, timeRange.to, facetFiltersKey])
 
   // Fetch filter options (with counts) - org-scoped when no systemId; monitor systems don't have filters
   const {data: filterOptions} = useQuery({
@@ -618,8 +627,12 @@ export function LogExplorer({
     }
   }, [logs.length, logPage?.hasMore, isFetching])
 
-  // Show loading state only on initial load with no accumulated logs
-  const isInitialLoadingState = isInitialLoading && accumulatedLogs.length === 0
+  // Show loading when no accumulated logs yet — covers both the first fetch
+  // (isInitialLoading) and revisiting the page with stale cache data that
+  // hasn't been accumulated yet.
+  const isInitialLoadingState =
+    accumulatedLogs.length === 0 &&
+    (isInitialLoading || (logPage?.logs?.length ?? 0) > 0)
   const showEmptyState = !isInitialLoadingState && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && (totalCount === 0 || totalCount === null)
 
   return (
