@@ -160,43 +160,86 @@ function DashboardListPage() {
     <div>
       {/* Page header */}
       <div className="border-b bg-card/50">
-        <div className="px-6 lg:px-8 py-4">
+        <div className="px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10 text-primary shrink-0">
-                <LayoutDashboard className="h-5 w-5" />
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="flex items-center justify-center h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 text-primary shrink-0">
+                <LayoutDashboard className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl font-bold tracking-tight">Dashboards</h1>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <h1 className="text-lg sm:text-xl font-bold tracking-tight">Dashboards</h1>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
                   Build custom dashboards with drag-and-drop widgets
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Link to="/dashboards/datasources">
-                <Button variant="outline" size="sm" className="gap-1 text-xs">
-                  <Database className="h-3 w-3" />
-                  Data Sources
+            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+              <Link to="/dashboards/datasources" title="Data Sources">
+                <Button variant="outline" size="sm" className="gap-1 text-xs h-8">
+                  <Database className="h-3 w-3 shrink-0" />
+                  <span className="hidden sm:inline">Data Sources</span>
                 </Button>
               </Link>
-              <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="gap-1 text-xs">
-                <Import className="h-3 w-3" />
+              <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="gap-1 text-xs h-8">
+                <Import className="h-3 w-3 shrink-0" />
                 Import
               </Button>
-              <Button size="sm" onClick={handleCreateBlank} className="gap-1 text-xs">
-                <Plus className="h-3 w-3" />
-                New Dashboard
+              <Button size="sm" onClick={handleCreateBlank} className="gap-1 text-xs h-8">
+                <Plus className="h-3 w-3 shrink-0" />
+                <span className="hidden sm:inline">New Dashboard</span>
+                <span className="sm:hidden">New</span>
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="px-6 lg:px-8 py-4">
-        <div className="flex gap-4">
-          {/* Folder sidebar */}
-          <aside className="w-52 shrink-0 space-y-0.5">
+      <div className="px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Mobile: horizontal folder pills */}
+          <div className="flex md:hidden overflow-x-auto gap-1.5 pb-1 -mx-1">
+            <button
+              onClick={() => setSelectedFolder('all')}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                selectedFolder === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              All ({dashboards?.length ?? 0})
+            </button>
+            <button
+              onClick={() => setSelectedFolder('favorites')}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 ${
+                selectedFolder === 'favorites' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              <Star className="h-3 w-3" /> {favoritesCount}
+            </button>
+            {folders?.map((folder) => {
+              const count = dashboards?.filter((d) => d.folder_id === folder.id).length ?? 0
+              return (
+                <button
+                  key={folder.id}
+                  onClick={() => setSelectedFolder(folder.id)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors truncate max-w-32 ${
+                    selectedFolder === folder.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {folder.name} ({count})
+                </button>
+              )
+            })}
+            <button
+              onClick={() => setSelectedFolder('uncategorized')}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                selectedFolder === 'uncategorized' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              Uncategorized ({uncategorizedCount})
+            </button>
+          </div>
+
+          {/* Desktop: folder sidebar */}
+          <aside className="hidden md:block w-52 shrink-0 space-y-0.5">
             <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-2.5 pb-2">
               Folders
             </div>
