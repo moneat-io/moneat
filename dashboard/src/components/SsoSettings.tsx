@@ -28,7 +28,7 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/useToast'
 import { AlertCircle, Check, Loader2, Shield } from 'lucide-react'
 
-export function SsoTab({ hasSamlModule = false }: { hasSamlModule?: boolean }) {
+export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boolean }>) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [providerType, setProviderType] = useState<'saml' | 'oidc'>('oidc')

@@ -109,8 +109,8 @@ open class SsoService {
         email: String?,
         orgSlug: String?,
     ): SsoInitResponse {
-        if (email == null && orgSlug == null) {
-            throw IllegalArgumentException("Either email or orgSlug must be provided")
+        require(!(email == null && orgSlug == null)) {
+            "Either email or orgSlug must be provided"
         }
 
         return transaction {
@@ -141,31 +141,27 @@ open class SsoService {
                         }.firstOrNull()
                 }
 
-            if (ssoConfig == null) {
-                throw IllegalArgumentException(
-                    "SSO is not configured for this email domain or organization"
-                )
+            val config = requireNotNull(ssoConfig) {
+                "SSO is not configured for this email domain or organization"
             }
 
             val providerType = SsoProviderType.fromString(
-                ssoConfig[SsoConfigurations.providerType]
+                config[SsoConfigurations.providerType]
             )
-            val orgId = ssoConfig[SsoConfigurations.organizationId]
+            val orgId = config[SsoConfigurations.organizationId]
             val state = generateSecureState(orgId)
 
             when (providerType) {
                 SsoProviderType.SAML -> {
-                    if (!FeatureRegistry.hasModule("SAML")) {
-                        throw IllegalArgumentException(
-                            "SAML SSO requires an enterprise license"
-                        )
+                    require(FeatureRegistry.hasModule("SAML")) {
+                        "SAML SSO requires an enterprise license"
                     }
                     // SAML init is handled by SamlModule; delegate via SsoInitResponse
                     SsoInitResponse("", "saml", state)
                 }
 
                 SsoProviderType.OIDC -> {
-                    val redirectUrl = generateOidcRequest(ssoConfig, state)
+                    val redirectUrl = generateOidcRequest(config, state)
                     SsoInitResponse(redirectUrl, "oidc", state)
                 }
             }
@@ -269,131 +265,104 @@ open class SsoService {
         request: SsoConfigRequest,
     ): SsoConfigResponse {
         val providerType = SsoProviderType.fromString(request.providerType)
-
-        // Gate based on deployment mode and provider type
         validateSsoAccess(organizationId, providerType)
-
-        // Gate "Require SSO" behind enterprise license
-        if (request.requireSso && !FeatureRegistry.hasModule("SAML")) {
-            throw IllegalArgumentException(
-                "SSO enforcement (Require SSO) requires an enterprise license"
-            )
+        require(!(request.requireSso && !FeatureRegistry.hasModule("SAML"))) {
+            "SSO enforcement (Require SSO) requires an enterprise license"
         }
-
-        // Verify user is owner of the organization
-        val isOwner =
-            transaction {
-                Memberships
-                    .selectAll()
-                    .where {
-                        (Memberships.organization_id eq organizationId) and
-                            (Memberships.user_id eq userId) and
-                            (Memberships.role eq "owner")
-                    }.firstOrNull() != null
-            }
-
-        if (!isOwner) {
-            throw IllegalArgumentException(
-                "Only organization owners can configure SSO"
-            )
+        require(isOrganizationOwner(organizationId, userId)) {
+            "Only organization owners can configure SSO"
         }
+        validateSsoConfigRequest(providerType, request)
 
         return transaction {
-            // Validate required fields
-            when (providerType) {
-                SsoProviderType.SAML -> {
-                    if (request.idpEntityId.isNullOrBlank() ||
-                        request.idpSsoUrl.isNullOrBlank() ||
-                        request.idpCertificate.isNullOrBlank()
-                    ) {
-                        throw IllegalArgumentException(
-                            "SAML requires idpEntityId, idpSsoUrl, " +
-                                "and idpCertificate"
-                        )
-                    }
-                    UrlValidator.validateExternalUrl(request.idpSsoUrl)
-                }
-
-                SsoProviderType.OIDC -> {
-                    if (request.oidcIssuerUrl.isNullOrBlank() ||
-                        request.oidcClientId.isNullOrBlank() ||
-                        request.oidcClientSecret.isNullOrBlank()
-                    ) {
-                        throw IllegalArgumentException(
-                            "OIDC requires oidcIssuerUrl, oidcClientId, " +
-                                "and oidcClientSecret"
-                        )
-                    }
-                    UrlValidator.validateExternalUrl(request.oidcIssuerUrl)
-                }
-            }
-
             val spEntityId = "$baseUrl/auth/sso/saml/metadata"
-            val encryptedSecret =
-                if (request.oidcClientSecret != null) {
-                    encryptSecret(request.oidcClientSecret)
-                } else {
-                    null
-                }
-
-            // Persist requireSso only when enterprise license is active
-            val effectiveRequireSso = request.requireSso &&
-                FeatureRegistry.hasModule("SAML")
-
-            val existing =
-                SsoConfigurations
-                    .selectAll()
-                    .where {
-                        SsoConfigurations.organizationId eq organizationId
-                    }.firstOrNull()
-
-            if (existing != null) {
-                SsoConfigurations.update({
-                    SsoConfigurations.organizationId eq organizationId
-                }) {
-                    it[SsoConfigurations.providerType] =
-                        request.providerType.lowercase()
-                    it[SsoConfigurations.isEnabled] = request.isEnabled
-                    it[SsoConfigurations.idpEntityId] = request.idpEntityId
-                    it[SsoConfigurations.idpSsoUrl] = request.idpSsoUrl
-                    it[SsoConfigurations.idpCertificate] =
-                        request.idpCertificate
-                    it[SsoConfigurations.spEntityId] = spEntityId
-                    it[SsoConfigurations.oidcIssuerUrl] =
-                        request.oidcIssuerUrl
-                    it[SsoConfigurations.oidcClientId] = request.oidcClientId
-                    if (encryptedSecret != null) {
-                        it[SsoConfigurations.oidcClientSecret] =
-                            encryptedSecret
-                    }
-                    it[SsoConfigurations.emailDomain] = request.emailDomain
-                    it[SsoConfigurations.requireSso] = effectiveRequireSso
-                    it[SsoConfigurations.updatedAt] = Clock.System.now()
-                }
-            } else {
-                SsoConfigurations.insert {
-                    it[SsoConfigurations.organizationId] = organizationId
-                    it[SsoConfigurations.providerType] =
-                        request.providerType.lowercase()
-                    it[SsoConfigurations.isEnabled] = request.isEnabled
-                    it[SsoConfigurations.idpEntityId] = request.idpEntityId
-                    it[SsoConfigurations.idpSsoUrl] = request.idpSsoUrl
-                    it[SsoConfigurations.idpCertificate] =
-                        request.idpCertificate
-                    it[SsoConfigurations.spEntityId] = spEntityId
-                    it[SsoConfigurations.oidcIssuerUrl] =
-                        request.oidcIssuerUrl
-                    it[SsoConfigurations.oidcClientId] = request.oidcClientId
-                    it[SsoConfigurations.oidcClientSecret] = encryptedSecret
-                    it[SsoConfigurations.emailDomain] = request.emailDomain
-                    it[SsoConfigurations.requireSso] = effectiveRequireSso
-                }
-            }
-
+            val encryptedSecret = request.oidcClientSecret?.let { encryptSecret(it) }
+            val effectiveRequireSso = request.requireSso && FeatureRegistry.hasModule("SAML")
+            persistSsoConfig(organizationId, request, spEntityId, encryptedSecret, effectiveRequireSso)
             getSsoConfig(organizationId)
-                ?: throw IllegalStateException(
-                    "Failed to retrieve SSO config after save"
-                )
+                ?: throw IllegalStateException("Failed to retrieve SSO config after save")
+        }
+    }
+
+    private fun isOrganizationOwner(organizationId: Int, userId: Int): Boolean =
+        transaction {
+            Memberships.selectAll()
+                .where {
+                    (Memberships.organization_id eq organizationId) and
+                        (Memberships.user_id eq userId) and
+                        (Memberships.role eq "owner")
+                }.firstOrNull() != null
+        }
+
+    private fun validateSsoConfigRequest(
+        providerType: SsoProviderType,
+        request: SsoConfigRequest,
+    ) {
+        when (providerType) {
+            SsoProviderType.SAML -> {
+                require(
+                    !request.idpEntityId.isNullOrBlank() &&
+                        !request.idpSsoUrl.isNullOrBlank() &&
+                        !request.idpCertificate.isNullOrBlank()
+                ) {
+                    "SAML requires idpEntityId, idpSsoUrl, and idpCertificate"
+                }
+                UrlValidator.validateExternalUrl(request.idpSsoUrl)
+            }
+            SsoProviderType.OIDC -> {
+                require(
+                    !request.oidcIssuerUrl.isNullOrBlank() &&
+                        !request.oidcClientId.isNullOrBlank() &&
+                        !request.oidcClientSecret.isNullOrBlank()
+                ) {
+                    "OIDC requires oidcIssuerUrl, oidcClientId, and oidcClientSecret"
+                }
+                UrlValidator.validateExternalUrl(request.oidcIssuerUrl)
+            }
+        }
+    }
+
+    private fun persistSsoConfig(
+        organizationId: Int,
+        request: SsoConfigRequest,
+        spEntityId: String,
+        encryptedSecret: String?,
+        effectiveRequireSso: Boolean,
+    ) {
+        val existing = SsoConfigurations.selectAll()
+            .where { SsoConfigurations.organizationId eq organizationId }
+            .firstOrNull()
+
+        if (existing != null) {
+            SsoConfigurations.update({ SsoConfigurations.organizationId eq organizationId }) {
+                it[SsoConfigurations.providerType] = request.providerType.lowercase()
+                it[SsoConfigurations.isEnabled] = request.isEnabled
+                it[SsoConfigurations.idpEntityId] = request.idpEntityId
+                it[SsoConfigurations.idpSsoUrl] = request.idpSsoUrl
+                it[SsoConfigurations.idpCertificate] = request.idpCertificate
+                it[SsoConfigurations.spEntityId] = spEntityId
+                it[SsoConfigurations.oidcIssuerUrl] = request.oidcIssuerUrl
+                it[SsoConfigurations.oidcClientId] = request.oidcClientId
+                encryptedSecret?.let { secret -> it[SsoConfigurations.oidcClientSecret] = secret }
+                it[SsoConfigurations.emailDomain] = request.emailDomain
+                it[SsoConfigurations.requireSso] = effectiveRequireSso
+                it[SsoConfigurations.updatedAt] = Clock.System.now()
+            }
+        } else {
+            SsoConfigurations.insert {
+                it[SsoConfigurations.organizationId] = organizationId
+                it[SsoConfigurations.providerType] = request.providerType.lowercase()
+                it[SsoConfigurations.isEnabled] = request.isEnabled
+                it[SsoConfigurations.idpEntityId] = request.idpEntityId
+                it[SsoConfigurations.idpSsoUrl] = request.idpSsoUrl
+                it[SsoConfigurations.idpCertificate] = request.idpCertificate
+                it[SsoConfigurations.spEntityId] = spEntityId
+                it[SsoConfigurations.oidcIssuerUrl] = request.oidcIssuerUrl
+                it[SsoConfigurations.oidcClientId] = request.oidcClientId
+                it[SsoConfigurations.oidcClientSecret] = encryptedSecret
+                it[SsoConfigurations.emailDomain] = request.emailDomain
+                it[SsoConfigurations.requireSso] = effectiveRequireSso
+            }
         }
     }
 
@@ -428,22 +397,8 @@ open class SsoService {
         organizationId: Int,
         userId: Int,
     ): Boolean {
-        // Verify user is owner
-        val isOwner =
-            transaction {
-                Memberships
-                    .selectAll()
-                    .where {
-                        (Memberships.organization_id eq organizationId) and
-                            (Memberships.user_id eq userId) and
-                            (Memberships.role eq "owner")
-                    }.firstOrNull() != null
-            }
-
-        if (!isOwner) {
-            throw IllegalArgumentException(
-                "Only organization owners can delete SSO configuration"
-            )
+        require(isOrganizationOwner(organizationId, userId)) {
+            "Only organization owners can delete SSO configuration"
         }
 
         return transaction {
@@ -548,9 +503,7 @@ open class SsoService {
         try {
             val decoded = String(Base64.getUrlDecoder().decode(state))
             val parts = decoded.split(":")
-            if (parts.size != STATE_PARTS_COUNT) {
-                throw IllegalArgumentException("Invalid state format")
-            }
+            require(parts.size == STATE_PARTS_COUNT) { "Invalid state format" }
 
             val orgId = parts[0].toInt()
             val nonceB64 = parts[1]
@@ -662,23 +615,18 @@ open class SsoService {
         val isSelfHosted = EnvConfig.SelfHost.enabled
 
         if (isSelfHosted) {
-            // Self-hosted: OIDC always allowed, SAML requires enterprise
-            if (providerType == SsoProviderType.SAML &&
-                !FeatureRegistry.hasModule("SAML")
+            require(
+                providerType != SsoProviderType.SAML ||
+                    FeatureRegistry.hasModule("SAML")
             ) {
-                throw IllegalArgumentException(
-                    "SAML SSO requires an enterprise license"
-                )
+                "SAML SSO requires an enterprise license"
             }
         } else {
-            // SaaS: both OIDC and SAML require Team/Business tier
             val tierContext = pricingTierService
                 .getEffectiveTierForOrganization(organizationId)
             val tierName = tierContext.tier.tierName
-            if (tierName != "TEAM" && tierName != "BUSINESS") {
-                throw IllegalArgumentException(
-                    "SSO is only available on Team and Business plans"
-                )
+            require(!(tierName != "TEAM" && tierName != "BUSINESS")) {
+                "SSO is only available on Team and Business plans"
             }
         }
     }
@@ -769,21 +717,19 @@ open class SsoService {
         val expected = Base64.getUrlEncoder().withoutPadding()
             .encodeToString(mac.doFinal(payload.toByteArray()))
 
-        if (!java.security.MessageDigest.isEqual(
+        require(
+            java.security.MessageDigest.isEqual(
                 expected.toByteArray(),
                 signature.toByteArray()
             )
-        ) {
-            throw IllegalArgumentException("State signature invalid")
-        }
+        ) { "State signature invalid" }
     }
 
     private fun verifyStateExpiry(timestamp: Long) {
-        if (System.currentTimeMillis() - timestamp >
-            SSO_NONCE_TTL_SECONDS * MILLIS_PER_SECOND
-        ) {
-            throw IllegalArgumentException("State expired")
-        }
+        require(
+            System.currentTimeMillis() - timestamp <=
+                SSO_NONCE_TTL_SECONDS * MILLIS_PER_SECOND
+        ) { "State expired" }
     }
 
     private fun consumeNonce(nonceB64: String) {
@@ -791,11 +737,7 @@ open class SsoService {
             if (RedisConfig.isInitialized()) {
                 val redisKey = "$SSO_NONCE_PREFIX$nonceB64"
                 val stored = RedisConfig.sync().get(redisKey)
-                if (stored == null) {
-                    throw IllegalArgumentException(
-                        "State already used or expired"
-                    )
-                }
+                requireNotNull(stored) { "State already used or expired" }
                 RedisConfig.sync().del(redisKey)
             }
         } catch (e: IllegalArgumentException) {

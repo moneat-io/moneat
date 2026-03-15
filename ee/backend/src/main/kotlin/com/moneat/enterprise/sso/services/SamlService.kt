@@ -35,10 +35,8 @@ class SamlService {
         email: String?,
         orgSlug: String?,
     ): SsoInitResponse {
-        if (email == null && orgSlug == null) {
-            throw IllegalArgumentException(
-                "Either email or orgSlug must be provided"
-            )
+        require(!(email == null && orgSlug == null)) {
+            "Either email or orgSlug must be provided"
         }
 
         return transaction {
@@ -71,15 +69,13 @@ class SamlService {
                         }.firstOrNull()
                 }
 
-            if (ssoConfig == null) {
-                throw IllegalArgumentException(
-                    "SAML SSO is not configured for this organization"
-                )
+            val config = requireNotNull(ssoConfig) {
+                "SAML SSO is not configured for this organization"
             }
 
-            val orgId = ssoConfig[SsoConfigurations.organizationId]
+            val orgId = config[SsoConfigurations.organizationId]
             val state = ssoService.generateSecureState(orgId)
-            val redirectUrl = generateSamlRequest(ssoConfig, state)
+            val redirectUrl = generateSamlRequest(config, state)
             SsoInitResponse(redirectUrl, "saml", state)
         }
     }
@@ -156,37 +152,24 @@ class SamlService {
 
     fun getSamlMetadata(orgSlug: String?): String =
         transaction {
-            val ssoConfig =
-                if (orgSlug != null) {
-                    val org =
-                        Organizations
-                            .selectAll()
-                            .where { Organizations.slug eq orgSlug }
-                            .firstOrNull()
-                            ?: throw IllegalArgumentException(
-                                "Organization not found"
-                            )
+            requireNotNull(orgSlug) { "Organization slug is required" }
+            val org = Organizations.selectAll()
+                .where { Organizations.slug eq orgSlug }
+                .firstOrNull()
+                ?: throw IllegalArgumentException("Organization not found")
 
-                    SsoConfigurations
-                        .selectAll()
-                        .where {
-                            (SsoConfigurations.organizationId eq org[Organizations.id]) and
-                                (SsoConfigurations.providerType eq "saml") and
-                                (SsoConfigurations.isEnabled eq true)
-                        }.firstOrNull()
-                } else {
-                    throw IllegalArgumentException(
-                        "Organization slug is required"
-                    )
-                }
+            val ssoConfig = SsoConfigurations.selectAll()
+                .where {
+                    (SsoConfigurations.organizationId eq org[Organizations.id]) and
+                        (SsoConfigurations.providerType eq "saml") and
+                        (SsoConfigurations.isEnabled eq true)
+                }.firstOrNull()
 
-            if (ssoConfig == null) {
-                throw IllegalArgumentException(
-                    "SAML SSO is not configured for this organization"
-                )
+            val config = requireNotNull(ssoConfig) {
+                "SAML SSO is not configured for this organization"
             }
 
-            val settings = buildSamlSettings(ssoConfig)
+            val settings = buildSamlSettings(config)
             val metadata = settings.spMetadata
             val errors = Saml2Settings.validateMetadata(metadata)
 

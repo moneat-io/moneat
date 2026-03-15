@@ -27,6 +27,7 @@ import com.moneat.utils.AuthCookieUtils
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -46,6 +47,36 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
+
+private const val SSO_CONFIG_PATH = "/config"
+private const val ERROR_INVALID_TOKEN = "Invalid token"
+private const val ERROR_MISSING_ORG_ID = "Missing organizationId"
+
+private data class SsoAuthContext(val userId: Int, val orgId: Int)
+
+private suspend fun ApplicationCall.requireSsoAuth(): SsoAuthContext? {
+    val userId = principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()
+        ?: run {
+            respond(HttpStatusCode.Unauthorized, ErrorResponse(ERROR_INVALID_TOKEN))
+            return null
+        }
+    val orgId = parameters["organizationId"]?.toIntOrNull()
+        ?: run {
+            respond(HttpStatusCode.BadRequest, ErrorResponse(ERROR_MISSING_ORG_ID))
+            return null
+        }
+    val isMember = transaction {
+        Memberships.selectAll()
+            .where {
+                (Memberships.organization_id eq orgId) and (Memberships.user_id eq userId)
+            }.firstOrNull() != null
+    }
+    if (!isMember) {
+        respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
+        return null
+    }
+    return SsoAuthContext(userId, orgId)
+}
 
 fun Route.ssoRoutes() {
     val ssoService = SsoService()
@@ -104,107 +135,45 @@ fun Route.ssoRoutes() {
     // Protected SSO configuration endpoints
     route("/v1/sso") {
         authenticate("auth-jwt") {
-            get("/config") {
+            get(SSO_CONFIG_PATH) {
+                val ctx = call.requireSsoAuth() ?: return@get
                 try {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId =
-                        principal?.payload?.getClaim("userId")?.asInt()
-                            ?: return@get call.respond(
-                                HttpStatusCode.Unauthorized,
-                                ErrorResponse("Invalid token")
-                            )
-
-                    val orgId =
-                        call.parameters["organizationId"]?.toIntOrNull()
-                            ?: return@get call.respond(
-                                HttpStatusCode.BadRequest,
-                                ErrorResponse("Missing organizationId")
-                            )
-
-                    val isMember =
-                        transaction {
-                            Memberships
-                                .selectAll()
-                                .where {
-                                    (Memberships.organization_id eq orgId) and
-                                        (Memberships.user_id eq userId)
-                                }.firstOrNull() != null
-                        }
-
-                    if (!isMember) {
-                        return@get call.respond(
-                            HttpStatusCode.Forbidden,
-                            ErrorResponse("Access denied")
-                        )
-                    }
-
-                    val config = ssoService.getSsoConfig(orgId)
-                    if (config != null) {
-                        call.respond(config)
-                    } else {
-                        call.respond(
+                    val config = ssoService.getSsoConfig(ctx.orgId)
+                    when (config) {
+                        null -> call.respond(
                             HttpStatusCode.NotFound,
                             ErrorResponse("SSO not configured")
                         )
+                        else -> call.respond(config)
                     }
                 } catch (e: Exception) {
                     logger.error(e) { "Get SSO config error" }
                     call.respond(
                         HttpStatusCode.InternalServerError,
-                        ErrorResponse(
-                            "Failed to retrieve SSO configuration"
-                        )
+                        ErrorResponse("Failed to retrieve SSO configuration")
                     )
                 }
             }
 
-            put("/config") {
+            put(SSO_CONFIG_PATH) {
+                val ctx = call.requireSsoAuth() ?: return@put
                 try {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId =
-                        principal?.payload?.getClaim("userId")?.asInt()
-                            ?: return@put call.respond(
-                                HttpStatusCode.Unauthorized,
-                                ErrorResponse("Invalid token")
-                            )
-
                     val request = call.receive<SsoConfigRequest>()
-                    val orgId =
-                        call.parameters["organizationId"]?.toIntOrNull()
-                            ?: return@put call.respond(
-                                HttpStatusCode.BadRequest,
-                                ErrorResponse("Missing organizationId")
-                            )
-
-                    // Reject SAML config when SAML module is not loaded
-                    val providerType = SsoProviderType.fromString(
-                        request.providerType
-                    )
+                    val providerType = SsoProviderType.fromString(request.providerType)
                     if (providerType == SsoProviderType.SAML &&
                         !FeatureRegistry.hasModule("SAML")
                     ) {
-                        return@put call.respond(
+                        call.respond(
                             HttpStatusCode.Forbidden,
-                            ErrorResponse(
-                                "SAML SSO requires an enterprise license"
-                            )
+                            ErrorResponse("SAML SSO requires an enterprise license")
                         )
+                        return@put
                     }
-
-                    val config = ssoService.configureSso(
-                        orgId,
-                        userId,
-                        request,
-                    )
+                    val config = ssoService.configureSso(ctx.orgId, ctx.userId, request)
                     call.respond(config)
                 } catch (e: IllegalArgumentException) {
-                    logger.error(e) {
-                        "Configure SSO failed: ${e.message}"
-                    }
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        ErrorResponse(e.message)
-                    )
+                    logger.error(e) { "Configure SSO failed: ${e.message}" }
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 } catch (e: Exception) {
                     logger.error(e) { "Configure SSO error" }
                     call.respond(
@@ -214,50 +183,28 @@ fun Route.ssoRoutes() {
                 }
             }
 
-            delete("/config") {
+            delete(SSO_CONFIG_PATH) {
+                val ctx = call.requireSsoAuth() ?: return@delete
                 try {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId =
-                        principal?.payload?.getClaim("userId")?.asInt()
-                            ?: return@delete call.respond(
-                                HttpStatusCode.Unauthorized,
-                                ErrorResponse("Invalid token")
-                            )
-
-                    val orgId =
-                        call.parameters["organizationId"]?.toIntOrNull()
-                            ?: return@delete call.respond(
-                                HttpStatusCode.BadRequest,
-                                ErrorResponse("Missing organizationId")
-                            )
-
-                    val deleted = ssoService.deleteSsoConfig(orgId, userId)
-                    if (deleted) {
-                        call.respond(
+                    val deleted = ssoService.deleteSsoConfig(ctx.orgId, ctx.userId)
+                    when (deleted) {
+                        true -> call.respond(
                             HttpStatusCode.OK,
                             MessageResponse("SSO configuration deleted")
                         )
-                    } else {
-                        call.respond(
+                        false -> call.respond(
                             HttpStatusCode.NotFound,
                             ErrorResponse("SSO configuration not found")
                         )
                     }
                 } catch (e: IllegalArgumentException) {
-                    logger.error(e) {
-                        "Delete SSO config failed: ${e.message}"
-                    }
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        ErrorResponse(e.message)
-                    )
+                    logger.error(e) { "Delete SSO config failed: ${e.message}" }
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 } catch (e: Exception) {
                     logger.error(e) { "Delete SSO config error" }
                     call.respond(
                         HttpStatusCode.InternalServerError,
-                        ErrorResponse(
-                            "Failed to delete SSO configuration"
-                        )
+                        ErrorResponse("Failed to delete SSO configuration")
                     )
                 }
             }
