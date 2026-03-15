@@ -21,6 +21,7 @@ import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
 import {useProject} from '@/contexts/ProjectContext'
 import {ThemeSwitcher} from '@/components/ThemeSwitcher'
+import {Avatar, AvatarFallback} from '@/components/ui/avatar'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Badge} from '@/components/ui/badge'
@@ -32,7 +33,9 @@ import {
     Bell,
     BookOpen,
     Brain,
+    HelpCircle,
     Check,
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Flame,
@@ -40,22 +43,33 @@ import {
     Globe,
     Home,
     LayoutDashboard,
+    LogOut,
     MessageSquare,
     Package,
     Play,
+    Plus,
     Rocket,
     ScrollText,
     Search,
     Server,
+    Settings,
     Shield,
     ShieldAlert,
     Sparkles,
     Timer,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
-import {platforms, type PlatformType} from '@/routes/projects'
+import {platforms, getPlatformInfo, type PlatformType} from '@/routes/projects'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
+import {Logo} from '@/components/Logo'
 import {isSidebarItemVisible} from '@/lib/sidebar-config'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
@@ -69,6 +83,11 @@ interface SidebarProps {
   readonly isExpanded: boolean
   readonly onExpandedChange: (expanded: boolean) => void
   readonly headerHeight: number
+}
+
+function getInitials(name?: string) {
+  if (!name) return 'U'
+  return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
 const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
@@ -265,9 +284,6 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     items: navItems.filter(item => item.group === groupId),
   })).filter(g => g.items.length > 0)
 
-  const projectNavItems = activeProjectId ? [
-    { icon: Rocket, label: 'Setup Guide', href: `/projects/${activeProjectId}` },
-  ] : []
 
   const FadingDivider = () => (
     <div
@@ -281,7 +297,13 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
   const renderSidebarContent = () => (
     <>
-      {/* Search bar at top */}
+      {/* Logo at top */}
+      <div className={cn('shrink-0 border-b flex items-center justify-center py-3', isExpanded ? 'px-3' : 'px-2')}>
+        <Link to="/" className="flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring rounded">
+          {isExpanded ? <Logo className="h-8" /> : <Logo markOnly className="h-8 w-10" />}
+        </Link>
+      </div>
+      {/* Search bar */}
       <div className={cn('shrink-0 border-b p-2', !isExpanded && 'px-2')}>
         {isExpanded ? (
           <button
@@ -315,10 +337,131 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
           </Tooltip>
         )}
       </div>
+      {/* Project chooser */}
+      <div className={cn('shrink-0 border-b p-2', !isExpanded && 'px-2')}>
+        {projects && projects.length > 0 ? (
+          (() => {
+            const platformId = activeProject ? (activeProject.keys?.[0]?.platformTarget || activeProject.framework || 'other') : 'other'
+            const platformInfo = getPlatformInfo(platformId) || getPlatformInfo('other')
+            const PlatformIcon = platformInfo?.icon || Package
+            return isExpanded ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg border bg-muted/50 px-2.5 py-1.5 text-left text-sm cursor-default transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {activeProject && (
+                    <div
+                      className="h-5 w-5 rounded flex items-center justify-center flex-shrink-0"
+                      style={{backgroundColor: platformInfo?.color || '#4b5563'}}
+                    >
+                      <PlatformIcon className="h-3 w-3 text-white" />
+                    </div>
+                  )}
+                  <span className="flex-1 truncate text-foreground">{activeProject?.name}</span>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="right" className="w-[--radix-dropdown-menu-trigger-width] min-w-[10rem]">
+                {projects.map((project) => {
+                  const pId = project.keys?.[0]?.platformTarget || project.framework || 'other'
+                  const pInfo = getPlatformInfo(pId) || getPlatformInfo('other')
+                  const PIco = pInfo?.icon || Package
+                  return (
+                    <DropdownMenuItem
+                      key={project.id}
+                      onClick={() => setSelectedProjectId(project.id)}
+                      className={cn(
+                        'flex items-center gap-2',
+                        project.id === activeProject?.id && 'bg-accent'
+                      )}
+                    >
+                      <div
+                        className="h-5 w-5 rounded flex items-center justify-center flex-shrink-0"
+                        style={{backgroundColor: pInfo?.color || '#4b5563'}}
+                      >
+                        <PIco className="h-3 w-3 text-white" />
+                      </div>
+                      <span className="truncate">{project.name}</span>
+                    </DropdownMenuItem>
+                  )
+                })}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}>
+                  <Plus className="h-4 w-4" />
+                  New Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center rounded-lg border bg-muted/50 p-2 cursor-default transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {activeProject && (
+                    <div
+                      className="h-5 w-5 rounded flex items-center justify-center"
+                      style={{backgroundColor: platformInfo?.color || '#4b5563'}}
+                    >
+                      <PlatformIcon className="h-3 w-3 text-white" />
+                    </div>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="right" className="min-w-[10rem]">
+                {projects.map((project) => {
+                  const pId = project.keys?.[0]?.platformTarget || project.framework || 'other'
+                  const pInfo = getPlatformInfo(pId) || getPlatformInfo('other')
+                  const PIco = pInfo?.icon || Package
+                  return (
+                    <DropdownMenuItem
+                      key={project.id}
+                      onClick={() => setSelectedProjectId(project.id)}
+                      className={cn(
+                        'flex items-center gap-2',
+                        project.id === activeProject?.id && 'bg-accent'
+                      )}
+                    >
+                      <div
+                        className="h-5 w-5 rounded flex items-center justify-center flex-shrink-0"
+                        style={{backgroundColor: pInfo?.color || '#4b5563'}}
+                      >
+                        <PIco className="h-3 w-3 text-white" />
+                      </div>
+                      <span className="truncate">{project.name}</span>
+                    </DropdownMenuItem>
+                  )
+                })}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}>
+                  <Plus className="h-4 w-4" />
+                  New Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )
+            })()
+        ) : (
+          isExpanded && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}
+              className="w-full justify-center gap-1.5 h-8"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Project
+            </Button>
+          )
+        )}
+      </div>
       {/* Navigation Items */}
       <nav
         className={cn(
-          'flex-1 overflow-y-auto',
+          'flex-1 overflow-y-auto overscroll-contain',
           isExpanded
             ? 'p-2'
             : 'py-2 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]'
@@ -397,114 +540,156 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
         </div>
       </nav>
 
-      {/* Setup Guide - at bottom, above divider */}
-      {projectNavItems.length > 0 && (
-        <div className="p-2 pt-0">
-          <FadingDivider />
-          {projectNavItems.map((item) => {
-            const isActive = currentPath === item.href
-            const Icon = item.icon
-
-            const linkContent = (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={cn(
-                  'flex items-center gap-3 py-2 rounded-md transition-colors',
-                  isExpanded ? 'px-3' : 'px-2',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-                  !isExpanded && 'justify-center'
-                )}
-              >
-                <Icon className="h-5 w-5 flex-shrink-0" />
-                {isExpanded && <span className="text-sm font-medium">{item.label}</span>}
-              </Link>
-            )
-
-            if (!isExpanded) {
-              return (
-                <Tooltip key={item.href}>
-                  <TooltipTrigger asChild>
-                    {linkContent}
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                </Tooltip>
-              )
-            }
-
-            return linkContent
-          })}
-        </div>
-      )}
-
-      {/* Bottom Section */}
-      <div className="p-2 border-t space-y-1">
-        {/* Theme Toggle */}
-        <div className={cn('w-full', !isExpanded && 'flex justify-center')}>
-          {isExpanded ? (
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm text-muted-foreground">Theme</span>
-              <ThemeSwitcher />
-            </div>
-          ) : (
+      {/* Bottom Section - compact single row when expanded */}
+      <div className={cn('border-t p-2', isExpanded ? 'py-1.5' : 'space-y-1')}>
+        {isExpanded ? (
+          <div className="flex items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
-                <div>
+                <div className="shrink-0">
                   <ThemeSwitcher />
                 </div>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>Toggle theme</p>
+                <p>Theme</p>
               </TooltipContent>
             </Tooltip>
-          )}
-        </div>
-
-        {/* Documentation Link */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <a
-              href="/docs/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                'flex items-center gap-3 py-2 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-accent',
-                isExpanded ? 'px-3' : 'px-2 justify-center'
-              )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  title="Sentry SDK Setup and Docs"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="right" className="w-48">
+                <DropdownMenuItem onClick={() => navigate({ to: activeProjectId ? `/projects/${activeProjectId}` : '/' })}>
+                  <Rocket className="h-4 w-4 mr-2" />
+                  Sentry SDK Setup
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/docs/" target="_blank" rel="noopener noreferrer">
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Docs
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => onExpandedChange(false)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Collapse</p>
+              </TooltipContent>
+            </Tooltip>
+            <div className="ml-auto shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <Avatar className="h-6 w-6">
+                      <AvatarFallback className="bg-primary text-primary-foreground text-[9px]">
+                        {getInitials(user?.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="right" className="w-48">
+            <DropdownMenuItem onClick={() => navigate({to: '/settings', search: {tab: 'api-keys'}})}>
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={async () => { await api.logout(); window.location.href = '/login' }}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+            </div>
+          </div>
+        ) : (
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex justify-center py-1">
+                  <ThemeSwitcher />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Theme</p>
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center rounded-md py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  title="Sentry SDK Setup and Docs"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="right" className="w-48">
+                <DropdownMenuItem onClick={() => navigate({ to: activeProjectId ? `/projects/${activeProjectId}` : '/' })}>
+                  <Rocket className="h-4 w-4 mr-2" />
+                  Sentry SDK Setup
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/docs/" target="_blank" rel="noopener noreferrer">
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Docs
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-full py-1 text-muted-foreground hover:text-foreground"
+              onClick={() => onExpandedChange(true)}
             >
-              <BookOpen className="h-5 w-5 flex-shrink-0" />
-              {isExpanded && <span className="text-sm font-medium">Documentation</span>}
-            </a>
-          </TooltipTrigger>
-          {!isExpanded && (
-            <TooltipContent side="right">
-              <p>Documentation</p>
-            </TooltipContent>
-          )}
-        </Tooltip>
-
-        {/* Expand/Collapse Button */}
-        <Button
-          variant="ghost"
-          className={cn(
-            'w-full justify-start gap-3 text-muted-foreground hover:text-foreground',
-            !isExpanded && 'justify-center px-0'
-          )}
-          onClick={() => onExpandedChange(!isExpanded)}
-        >
-          {isExpanded ? (
-            <>
-              <ChevronLeft className="h-5 w-5 flex-shrink-0" />
-              <span className="text-sm">Collapse</span>
-            </>
-          ) : (
-            <ChevronRight className="h-5 w-5 flex-shrink-0" />
-          )}
-        </Button>
+              <ChevronRight className="h-4 w-4 mx-auto" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full justify-center rounded-md py-1 transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <Avatar className="h-6 w-6">
+                    <AvatarFallback className="bg-primary text-primary-foreground text-[9px]">
+                      {getInitials(user?.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="right" className="w-48">
+                <DropdownMenuItem onClick={() => navigate({to: '/settings', search: {tab: 'api-keys'}})}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={async () => { await api.logout(); window.location.href = '/login' }}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
       </div>
     </>
   )

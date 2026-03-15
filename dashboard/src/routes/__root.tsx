@@ -19,7 +19,6 @@ import {useCallback, useEffect, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/Sidebar'
 import {CommandPalette} from '../components/CommandPalette'
-import {AppTopBar, TOPBAR_HEIGHT} from '../components/AppTopBar'
 import {CommandPaletteProvider} from '../contexts/CommandPaletteProvider'
 import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
@@ -217,7 +216,7 @@ function RootComponent() {
   }, [])
   const [onboardingChecked, setOnboardingChecked] = useState(false)
   const [authCheckComplete, setAuthCheckComplete] = useState(false)
-  const [headerHeight, setHeaderHeight] = useState(TOPBAR_HEIGHT)
+  const [headerHeight, setHeaderHeight] = useState(0)
   const headerRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
     const update = () => setHeaderHeight(node.offsetHeight)
@@ -322,10 +321,9 @@ function RootComponent() {
     <div className="min-h-screen bg-background">
       {showSidebar && (
         <CommandPaletteProvider>
-          {/* Fixed header: optional demo banner + top bar */}
+          {/* Fixed header: optional demo banner */}
           <div ref={headerRef} className="fixed top-0 left-0 right-0 z-50">
             <DemoBanner />
-            <AppTopBar sidebarWidth={sidebarWidth} isSidebarExpanded={isSidebarExpanded} />
           </div>
           <Sidebar
             isExpanded={isSidebarExpanded}

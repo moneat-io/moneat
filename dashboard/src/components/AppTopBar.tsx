@@ -14,40 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useQuery} from '@tanstack/react-query'
-import {ChevronDown, Plus, Settings, LogOut} from 'lucide-react'
-import {api} from '@/lib/api'
-import {useProject} from '@/contexts/ProjectContext'
-import {cn} from '@/lib/utils'
-import {Avatar, AvatarFallback} from '@/components/ui/avatar'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu'
-import {Button} from '@/components/ui/button'
-import {getPlatformInfo} from '@/routes/projects'
-import {Package} from 'lucide-react'
-import {useNavigate} from '@tanstack/react-router'
 import {Logo} from '@/components/Logo'
 
 export const TOPBAR_HEIGHT = 49
-
-function getInitials(name?: string) {
-  if (!name) return 'U'
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
-
-function getProjectPlatform(project: { keys?: { platformTarget?: string | null }[]; framework?: string }) {
-  return project.keys?.[0]?.platformTarget || project.framework || 'other'
-}
 
 interface AppTopBarProps {
   sidebarWidth: number
@@ -55,32 +24,6 @@ interface AppTopBarProps {
 }
 
 export function AppTopBar({sidebarWidth, isSidebarExpanded}: AppTopBarProps) {
-  const {selectedProjectId, setSelectedProjectId} = useProject()
-  const navigate = useNavigate()
-
-  const {data: user} = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => api.getCurrentUser(),
-    enabled: api.isAuthenticated(),
-  })
-
-  const {data: projects} = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api.getProjects(),
-    enabled: api.isAuthenticated(),
-  })
-
-  const activeProject = projects?.find((p) => p.id === selectedProjectId) ?? projects?.[0]
-
-  const platformId = activeProject ? getProjectPlatform(activeProject) : 'other'
-  const platformInfo = getPlatformInfo(platformId) || getPlatformInfo('other')
-  const PlatformIcon = platformInfo?.icon || Package
-
-  const handleLogout = async () => {
-    await api.logout()
-    window.location.href = '/login'
-  }
-
   return (
     <div
       className="flex items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
@@ -97,94 +40,6 @@ export function AppTopBar({sidebarWidth, isSidebarExpanded}: AppTopBarProps) {
         )}
       </div>
 
-      <div className="flex flex-1 items-center gap-4 px-4 py-[9px]">
-        <div className="flex items-center gap-3 shrink-0">
-        {projects && projects.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-2 rounded-md border px-2.5 py-1 text-sm transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {activeProject && (
-                  <div
-                    className="h-5 w-5 rounded flex items-center justify-center flex-shrink-0"
-                    style={{backgroundColor: platformInfo?.color || '#4b5563'}}
-                  >
-                    <PlatformIcon className="h-3 w-3 text-white" />
-                  </div>
-                )}
-                <span className="hidden sm:inline truncate max-w-[140px] text-foreground">
-                  {activeProject?.name}
-                </span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {projects?.map((project) => {
-                const pId = getProjectPlatform(project)
-                const pInfo = getPlatformInfo(pId) || getPlatformInfo('other')
-                const PIco = pInfo?.icon || Package
-                return (
-                  <DropdownMenuItem
-                    key={project.id}
-                    onClick={() => setSelectedProjectId(project.id)}
-                    className={cn(
-                      'flex items-center gap-2',
-                      project.id === activeProject?.id && 'bg-accent'
-                    )}
-                  >
-                    <div
-                      className="h-5 w-5 rounded flex items-center justify-center flex-shrink-0"
-                      style={{backgroundColor: pInfo?.color || '#4b5563'}}
-                    >
-                      <PIco className="h-3 w-3 text-white" />
-                    </div>
-                    <span className="truncate">{project.name}</span>
-                  </DropdownMenuItem>
-                )
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}
-          className="gap-1.5"
-        >
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">New Project</span>
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="focus:outline-none focus:ring-2 focus:ring-ring rounded-full"
-            >
-              <Avatar className="h-7 w-7 cursor-pointer">
-                <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">
-                  {getInitials(user?.name)}
-                </AvatarFallback>
-              </Avatar>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate({to: '/settings', search: {tab: 'api-keys'}})}>
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        </div>
-      </div>
     </div>
   )
 }
