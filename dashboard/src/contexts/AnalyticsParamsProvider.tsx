@@ -14,18 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createContext, useContext, useState, useCallback, type ReactNode} from 'react'
+import {useState, useCallback, type ReactNode} from 'react'
 import type {AnalyticsPeriod} from '@/lib/api'
-
-interface AnalyticsParamsContextValue {
-  period: AnalyticsPeriod
-  setPeriod: (p: AnalyticsPeriod) => void
-  customFrom: string
-  customTo: string
-  onCustomRangeChange: (from: string, to: string) => void
-}
-
-const AnalyticsParamsContext = createContext<AnalyticsParamsContextValue | null>(null)
+import {AnalyticsParamsContext} from './AnalyticsParamsContext'
 
 export function AnalyticsParamsProvider({children}: {children: ReactNode}) {
   const [period, setPeriod] = useState<AnalyticsPeriod>('30d')
@@ -42,10 +33,4 @@ export function AnalyticsParamsProvider({children}: {children: ReactNode}) {
       {children}
     </AnalyticsParamsContext.Provider>
   )
-}
-
-export function useAnalyticsParams() {
-  const ctx = useContext(AnalyticsParamsContext)
-  if (!ctx) throw new Error('useAnalyticsParams must be used within AnalyticsParamsProvider')
-  return ctx
 }
