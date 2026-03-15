@@ -75,23 +75,38 @@ const VIEWPORT = { width: 1920, height: 1080 };
 // Names match page/tab labels for consistency
 const SCREENSHOTS = [
   // ─── Navbar pages ─────────────────────────────────────────────────────
-  { name: 'overview', description: 'Overview / Dashboard', path: '/', waitFor: 'text=Recent Issues', viewport: VIEWPORT },
+  { name: 'dashboard', description: 'Dashboard overview', path: '/', waitFor: 'text=Recent Issues', viewport: VIEWPORT },
   { name: 'issues', description: 'Issues', path: '/issues', waitFor: 'text=Issues', viewport: VIEWPORT },
   { name: 'performance', description: 'Performance', path: '/performance', waitFor: 'text=Performance', viewport: VIEWPORT },
   { name: 'logs', description: 'Logs', path: '/logs', waitFor: 'text=Logs', viewport: VIEWPORT },
-  { name: 'profiles', description: 'Profiles', path: '/profiles', waitFor: 'text=Profiles', viewport: VIEWPORT },
-  { name: 'monitoring', description: 'Monitoring (Hosts)', path: '/monitoring', waitFor: 'text=Monitoring', viewport: VIEWPORT },
+  {
+    name: 'profiles',
+    description: 'Continuous profiling flamegraph',
+    navigate: async (page) => {
+      await page.goto(`${BASE_URL}/profiles`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      const link = page.locator('a[href^="/profiles/"]').first();
+      if ((await link.count()) > 0) {
+        await link.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(2000);
+      }
+    },
+    waitFor: 'text=Flamegraph',
+    viewport: VIEWPORT,
+  },
   { name: 'uptime', description: 'Uptime', path: '/uptime', waitFor: 'text=Uptime', viewport: VIEWPORT },
-  { name: 'status-pages', description: 'Status Pages list', path: '/status-pages', waitFor: 'text=Status', viewport: VIEWPORT },
+  { name: 'status-pages', description: 'Status Pages', path: '/status-pages', waitFor: 'text=Status', viewport: VIEWPORT },
+  { name: 'status-page-public', description: 'Public status page', path: '/s/acme-status', waitFor: 'text=Status', viewport: VIEWPORT },
   { name: 'dashboards', description: 'Dashboards', path: '/dashboards', waitFor: 'text=Dashboards', viewport: VIEWPORT },
   { name: 'replays', description: 'Replays', path: '/replays', waitFor: 'text=Replays', viewport: VIEWPORT },
+  { name: 'session-replay', description: 'Session replay (alias for replays)', path: '/replays', waitFor: 'text=Replays', viewport: VIEWPORT },
   { name: 'feedback', description: 'Feedback', path: '/feedback', waitFor: 'text=Feedback', viewport: VIEWPORT },
   { name: 'releases', description: 'Releases', path: '/releases', waitFor: 'text=Releases', viewport: VIEWPORT },
   { name: 'ai', description: 'AI', path: '/ai', waitFor: 'text=AI', viewport: VIEWPORT },
   { name: 'security', description: 'Security', path: '/security', waitFor: 'text=Security', viewport: VIEWPORT },
   { name: 'synthetics', description: 'Synthetics', path: '/synthetics', waitFor: 'text=Synthetics', viewport: VIEWPORT },
   { name: 'analytics', description: 'Analytics', path: '/analytics', waitFor: 'text=Analytics', viewport: VIEWPORT },
-  { name: 'projects', description: 'Projects', path: '/projects', waitFor: 'text=Projects', viewport: VIEWPORT },
 
   // ─── On-Call tabs ─────────────────────────────────────────────────────
   { name: 'on-call-overview', description: 'On-Call Overview', path: '/on-call', waitFor: 'text=On-Call', viewport: VIEWPORT },
@@ -100,174 +115,12 @@ const SCREENSHOTS = [
   { name: 'on-call-alerts', description: 'On-Call Alerts', path: '/on-call/incidents', waitFor: 'text=Alerts', viewport: VIEWPORT },
   { name: 'on-call-incidents', description: 'On-Call Incidents', path: '/on-call/declared-incidents', waitFor: 'text=Incidents', viewport: VIEWPORT },
 
-  // ─── Monitoring tabs ──────────────────────────────────────────────────
+  // ─── Monitoring ───────────────────────────────────────────────────────
   { name: 'monitoring-hosts', description: 'Monitoring Hosts', path: '/monitoring', waitFor: 'text=Hosts', viewport: VIEWPORT },
-  { name: 'monitoring-containers', description: 'Monitoring Containers', path: '/monitoring/containers', waitFor: 'text=Containers', viewport: VIEWPORT },
-  { name: 'monitoring-processes', description: 'Monitoring Processes', path: '/monitoring/processes', waitFor: 'text=Processes', viewport: VIEWPORT },
-  { name: 'monitoring-network', description: 'Monitoring Network', path: '/monitoring/network', waitFor: 'text=Network', viewport: VIEWPORT },
-  { name: 'monitoring-events', description: 'Monitoring Events', path: '/monitoring/events', waitFor: 'text=Events', viewport: VIEWPORT },
-  { name: 'monitoring-kubernetes', description: 'Monitoring Kubernetes', path: '/monitoring/kubernetes', waitFor: 'text=Kubernetes', viewport: VIEWPORT },
-  { name: 'monitoring-databases', description: 'Monitoring Databases', path: '/monitoring/databases', waitFor: 'text=Databases', viewport: VIEWPORT },
-  { name: 'monitoring-debugger', description: 'Monitoring Debugger', path: '/monitoring/debugger', waitFor: 'text=Debugger', viewport: VIEWPORT },
-  { name: 'monitoring-network-devices', description: 'Monitoring Network Devices', path: '/monitoring/network-devices', waitFor: 'text=Network Devices', viewport: VIEWPORT },
-  { name: 'monitoring-sbom', description: 'Monitoring SBOM', path: '/monitoring/sbom', waitFor: 'text=SBOM', viewport: VIEWPORT },
-
-  // ─── Status page detail tabs ─────────────────────────────────────────
-  {
-    name: 'status-page-overview',
-    description: 'Status Page Overview tab',
-    navigate: async (page) => {
-      await page.goto(`${BASE_URL}/status-pages`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      const link = page.locator('a[href^="/status-pages/"]').first();
-      if ((await link.count()) > 0) {
-        await link.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1500);
-        const tab = page.locator('button[value="overview"]').first();
-        if ((await tab.count()) > 0) await tab.click();
-      }
-    },
-    waitFor: 'text=Overview',
-    viewport: VIEWPORT,
-  },
-  {
-    name: 'status-page-monitors',
-    description: 'Status Page Monitors tab',
-    navigate: async (page) => {
-      await page.goto(`${BASE_URL}/status-pages`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      const link = page.locator('a[href^="/status-pages/"]').first();
-      if ((await link.count()) > 0) {
-        await link.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1500);
-        const tab = page.locator('button[value="monitors"]').first();
-        if ((await tab.count()) > 0) await tab.click();
-      }
-    },
-    waitFor: 'text=Monitors',
-    viewport: VIEWPORT,
-  },
-  {
-    name: 'status-page-incidents',
-    description: 'Status Page Incidents tab',
-    navigate: async (page) => {
-      await page.goto(`${BASE_URL}/status-pages`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      const link = page.locator('a[href^="/status-pages/"]').first();
-      if ((await link.count()) > 0) {
-        await link.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1500);
-        const tab = page.locator('button[value="incidents"]').first();
-        if ((await tab.count()) > 0) await tab.click();
-      }
-    },
-    waitFor: 'text=Incidents',
-    viewport: VIEWPORT,
-  },
-  {
-    name: 'status-page-domains',
-    description: 'Status Page Domains tab',
-    navigate: async (page) => {
-      await page.goto(`${BASE_URL}/status-pages`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      const link = page.locator('a[href^="/status-pages/"]').first();
-      if ((await link.count()) > 0) {
-        await link.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1500);
-        const tab = page.locator('button[value="domains"]').first();
-        if ((await tab.count()) > 0) await tab.click();
-      }
-    },
-    waitFor: 'text=Domains',
-    viewport: VIEWPORT,
-  },
-
-  // ─── Monitoring host detail tabs ─────────────────────────────────────
-  {
-    name: 'monitoring-host-overview',
-    description: 'Monitoring Host Overview tab',
-    navigate: async (page) => {
-      await page.goto(`${BASE_URL}/monitoring`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      const hostLink = page.locator('a[href^="/monitoring/hosts/"]').first();
-      if ((await hostLink.count()) > 0) {
-        await hostLink.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1500);
-        const tab = page.locator('button[value="overview"]').first();
-        if ((await tab.count()) > 0) await tab.click();
-      }
-    },
-    waitFor: 'text=Overview',
-    viewport: VIEWPORT,
-  },
-  {
-    name: 'monitoring-host-containers',
-    description: 'Monitoring Host Containers tab',
-    navigate: async (page) => {
-      await page.goto(`${BASE_URL}/monitoring`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      const hostLink = page.locator('a[href^="/monitoring/hosts/"]').first();
-      if ((await hostLink.count()) > 0) {
-        await hostLink.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1500);
-        const tab = page.locator('button[value="containers"]').first();
-        if ((await tab.count()) > 0) await tab.click();
-      }
-    },
-    waitFor: 'text=Containers',
-    viewport: VIEWPORT,
-  },
-  {
-    name: 'monitoring-host-network',
-    description: 'Monitoring Host Network tab',
-    navigate: async (page) => {
-      await page.goto(`${BASE_URL}/monitoring`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      const hostLink = page.locator('a[href^="/monitoring/hosts/"]').first();
-      if ((await hostLink.count()) > 0) {
-        await hostLink.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1500);
-        const tab = page.locator('button[value="network"]').first();
-        if ((await tab.count()) > 0) await tab.click();
-      }
-    },
-    waitFor: 'text=Network',
-    viewport: VIEWPORT,
-  },
-  {
-    name: 'monitoring-host-alerts',
-    description: 'Monitoring Host Alerts tab',
-    navigate: async (page) => {
-      await page.goto(`${BASE_URL}/monitoring`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      const hostLink = page.locator('a[href^="/monitoring/hosts/"]').first();
-      if ((await hostLink.count()) > 0) {
-        await hostLink.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1500);
-        const tab = page.locator('button[value="alerts"]').first();
-        if ((await tab.count()) > 0) await tab.click();
-      }
-    },
-    waitFor: 'text=Alerts',
-    viewport: VIEWPORT,
-  },
-
-  // ─── Public status page (for landing/marketing) ─────────────────────────
-  { name: 'status-page-public', description: 'Public status page', path: '/s/acme-status', waitFor: 'text=Status', viewport: VIEWPORT },
 
   // ─── Legacy names for landing page compatibility ──────────────────────
-  { name: 'dashboard', description: 'Dashboard (alias for overview)', path: '/', waitFor: 'text=Recent Issues', viewport: VIEWPORT },
   { name: 'error-tracking', description: 'Error tracking (alias for issues)', path: '/issues', waitFor: 'text=Issues', viewport: VIEWPORT },
   { name: 'log-management', description: 'Log management (alias for logs)', path: '/logs', waitFor: 'text=Logs', viewport: VIEWPORT },
-  { name: 'session-replay', description: 'Session replay (alias for replays)', path: '/replays', waitFor: 'text=Replays', viewport: VIEWPORT },
   { name: 'containers', description: 'Containers (alias)', path: '/monitoring/containers', waitFor: 'text=Containers', viewport: VIEWPORT },
   { name: 'escalation-policies', description: 'Escalation policies (alias)', path: '/on-call/escalation-policies', waitFor: 'text=Escalation Policies', viewport: VIEWPORT },
   {

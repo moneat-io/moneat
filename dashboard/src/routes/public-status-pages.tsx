@@ -29,7 +29,7 @@ const config: FeaturePageConfig = {
   iconBg: 'bg-cyan-500/10',
   gradient: 'from-cyan-500 to-teal-400',
   accentColor: 'text-cyan-400',
-  screenshot: '/screenshots/status-pages.png',
+  screenshot: '/screenshots/status-page-public.png',
   screenshotAlt: 'Public status page showing service health and uptime history',
   subFeatures: [
     {icon: Globe, title: 'Custom Domains', description: 'Host your status page on your own domain like status.yourapp.com with automatic SSL.', iconColor: 'text-cyan-400'},

@@ -209,7 +209,7 @@ const secondaryFeatures: Feature[] = [
     gradient: 'from-cyan-500 to-teal-400',
     iconBg: 'bg-cyan-500/10',
     iconColor: 'text-cyan-400',
-    mock: <img src="/screenshots/status-pages.png" alt="Public status page showing service health and incidents" className="w-full h-full object-cover" />,
+    mock: <img src="/screenshots/status-page-public.png" alt="Public status page showing service health and incidents" className="w-full h-full object-cover" />,
   },
   {
     icon: Phone,

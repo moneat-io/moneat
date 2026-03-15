@@ -114,16 +114,17 @@ Works with `@sentry/browser`, `@sentry/node`, `@sentry/react`, `@sentry/nextjs`,
 
 ## Screenshots
 
+<details>
+<summary><b>View screenshots</b></summary>
+
+### Core Observability
+
 <p align="center">
-  <img src="dashboard/public/screenshots/dashboard.png" alt="Moneat Dashboard" width="800">
+  <img src="dashboard/public/screenshots/dashboard.png" alt="Dashboard Overview" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/error-tracking.png" alt="Error Monitoring" width="800">
-</p>
-
-<p align="center">
-  <img src="dashboard/public/screenshots/session-replay.png" alt="Session Replay" width="800">
+  <img src="dashboard/public/screenshots/issues.png" alt="Error Tracking / Issues" width="800">
 </p>
 
 <p align="center">
@@ -131,17 +132,102 @@ Works with `@sentry/browser`, `@sentry/node`, `@sentry/react`, `@sentry/nextjs`,
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/log-management.png" alt="Log Management" width="800">
+  <img src="dashboard/public/screenshots/logs.png" alt="Log Management" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/uptime.png" alt="Uptime Monitoring" width="400">
-  <img src="dashboard/public/screenshots/status-pages.png" alt="Status Pages" width="400">
+  <img src="dashboard/public/screenshots/replays.png" alt="Session Replay" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/escalation-policies.png" alt="Escalation Policies" width="800">
+  <img src="dashboard/public/screenshots/profiles.png" alt="Continuous Profiling" width="800">
 </p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/dashboards.png" alt="Custom Dashboards" width="800">
+</p>
+
+### Infrastructure & Monitoring
+
+<p align="center">
+  <img src="dashboard/public/screenshots/monitoring-hosts.png" alt="Monitoring Hosts" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/uptime.png" alt="Uptime Monitoring" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/status-pages.png" alt="Status Pages" width="800">
+</p>
+
+### Enterprise: On-Call
+
+<p align="center">
+  <img src="dashboard/public/screenshots/on-call-overview.png" alt="On-Call Overview" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/on-call-schedules.png" alt="On-Call Schedules" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/on-call-escalation-policies.png" alt="Escalation Policies" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/on-call-alerts.png" alt="On-Call Alerts" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/on-call-incidents.png" alt="On-Call Incidents" width="800">
+</p>
+
+### Status Pages
+
+<p align="center">
+  <img src="dashboard/public/screenshots/status-pages.png" alt="Custom Status Page" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/status-page-public.png" alt="Public Status Page" width="800">
+</p>
+
+### Insights & Analytics
+
+<p align="center">
+  <img src="dashboard/public/screenshots/analytics.png" alt="Product Analytics" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/ai.png" alt="AI Observability" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/feedback.png" alt="User Feedback" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/releases.png" alt="Releases" width="800">
+</p>
+
+### APM & Tracing
+
+<p align="center">
+  <img src="dashboard/public/screenshots/apm-traces.png" alt="APM Traces" width="800">
+</p>
+
+### Security & Synthetics
+
+<p align="center">
+  <img src="dashboard/public/screenshots/security.png" alt="Security & SBOM" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/synthetics.png" alt="Synthetics" width="800">
+</p>
+
+</details>
 
 
 ## Telemetry
