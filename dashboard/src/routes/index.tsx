@@ -480,25 +480,25 @@ function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="px-6 py-4">
+      <div className="px-6 py-3">
         {/* Header */}
-        <div className="mb-5">
-          <h2 className="text-2xl font-bold tracking-tight">Overview</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
+        <div className="mb-3">
+          <h2 className="text-xl font-bold tracking-tight">Overview</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Overview of your systems, applications, and incidents
           </p>
         </div>
 
         {/* ── Top-level stats ──────────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
           {isLoadingStats || isLoadingIssues ? (
             <>
-              <StatsCardSkeleton accent="amber" />
-              <StatsCardSkeleton accent="blue" />
-              <StatsCardSkeleton accent="rose" />
-              <StatsCardSkeleton accent="emerald" />
-              <StatsCardSkeleton accent="cyan" />
-              <StatsCardSkeleton accent="violet" />
+              <StatsCardSkeleton accent="amber" compact />
+              <StatsCardSkeleton accent="blue" compact />
+              <StatsCardSkeleton accent="rose" compact />
+              <StatsCardSkeleton accent="emerald" compact />
+              <StatsCardSkeleton accent="cyan" compact />
+              <StatsCardSkeleton accent="violet" compact />
             </>
           ) : (
             <>
@@ -507,18 +507,21 @@ function DashboardPage() {
                 value={formatCount(stats?.unresolvedIssues ?? unresolvedIssues.length)}
                 icon={AlertCircle}
                 accent="amber"
+                compact
               />
               <StatsCard
                 title="Errors (24h)"
                 value={formatCount(stats?.totalEvents ?? 0)}
                 icon={Activity}
                 accent="blue"
+                compact
               />
               <StatsCard
                 title="Active Incidents"
                 value={activeIncidents.length}
                 icon={Bell}
                 accent="rose"
+                compact
               />
               <StatsCard
                 title="Uptime Monitors"
@@ -526,6 +529,7 @@ function DashboardPage() {
                 icon={HeartPulse}
                 accent="emerald"
                 subtitle={uptimeDown > 0 ? `${uptimeDown} down` : 'All healthy'}
+                compact
               />
               <StatsCard
                 title="Infrastructure"
@@ -533,12 +537,14 @@ function DashboardPage() {
                 icon={Server}
                 accent="cyan"
                 subtitle={hostsDown > 0 ? `${hostsDown} down` : 'All online'}
+                compact
               />
               <StatsCard
                 title="Users (24h)"
                 value={formatCount(stats?.affectedUsers ?? 0)}
                 icon={Users}
                 accent="violet"
+                compact
               />
             </>
           )}
