@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * Automated screenshot generator for Moneat landing page features
- * 
- * This script captures screenshots of only the features shown on the landing page:
- * - Error tracking
- * - Log management
- * - Session replay
- * - Performance monitoring
- * 
+ * Automated screenshot generator for Moneat
+ *
+ * Captures screenshots of every navbar page and every tab within tabbed pages.
+ * Screenshot filenames match the page/tab names (e.g., overview, issues, on-call-schedules).
+ *
  * Prerequisites:
  * - Run `npm install --save-dev playwright` in the scripts directory
  * - Run `npx playwright install chromium`
  * - Ensure dashboard is running: `cd dashboard && npm run dev`
  * - Ensure backend is running with demo data available
+ *
+ * Runs screenshots in parallel (default: 8 concurrent pages). Override with
+ * SCREENSHOT_CONCURRENCY=4 npm run screenshots
  */
 
 const { chromium } = require('playwright');
@@ -24,6 +24,7 @@ const { PNG } = require('pngjs');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const SCREENSHOTS_DIR = path.join(__dirname, '../dashboard/public/screenshots');
+const CONCURRENCY = parseInt(process.env.SCREENSHOT_CONCURRENCY || '8', 10);
 
 // Diff threshold: 0.1 = 10% of pixels can differ
 const DIFF_THRESHOLD = 0.001; // 0.1% threshold for considering images identical
@@ -68,201 +69,222 @@ function areImagesIdentical(existingPath, newBuffer) {
   }
 }
 
-// Screenshot configurations - all features shown on landing page
+const VIEWPORT = { width: 1920, height: 1080 };
+
+// Screenshot configurations: every navbar page + every tab
+// Names match page/tab labels for consistency
 const SCREENSHOTS = [
-  // Hero section
+  // ─── Navbar pages ─────────────────────────────────────────────────────
+  { name: 'overview', description: 'Overview / Dashboard', path: '/', waitFor: 'text=Recent Issues', viewport: VIEWPORT },
+  { name: 'issues', description: 'Issues', path: '/issues', waitFor: 'text=Issues', viewport: VIEWPORT },
+  { name: 'performance', description: 'Performance', path: '/performance', waitFor: 'text=Performance', viewport: VIEWPORT },
+  { name: 'logs', description: 'Logs', path: '/logs', waitFor: 'text=Logs', viewport: VIEWPORT },
+  { name: 'profiles', description: 'Profiles', path: '/profiles', waitFor: 'text=Profiles', viewport: VIEWPORT },
+  { name: 'monitoring', description: 'Monitoring (Hosts)', path: '/monitoring', waitFor: 'text=Monitoring', viewport: VIEWPORT },
+  { name: 'uptime', description: 'Uptime', path: '/uptime', waitFor: 'text=Uptime', viewport: VIEWPORT },
+  { name: 'status-pages', description: 'Status Pages list', path: '/status-pages', waitFor: 'text=Status', viewport: VIEWPORT },
+  { name: 'dashboards', description: 'Dashboards', path: '/dashboards', waitFor: 'text=Dashboards', viewport: VIEWPORT },
+  { name: 'replays', description: 'Replays', path: '/replays', waitFor: 'text=Replays', viewport: VIEWPORT },
+  { name: 'feedback', description: 'Feedback', path: '/feedback', waitFor: 'text=Feedback', viewport: VIEWPORT },
+  { name: 'releases', description: 'Releases', path: '/releases', waitFor: 'text=Releases', viewport: VIEWPORT },
+  { name: 'ai', description: 'AI', path: '/ai', waitFor: 'text=AI', viewport: VIEWPORT },
+  { name: 'security', description: 'Security', path: '/security', waitFor: 'text=Security', viewport: VIEWPORT },
+  { name: 'synthetics', description: 'Synthetics', path: '/synthetics', waitFor: 'text=Synthetics', viewport: VIEWPORT },
+  { name: 'analytics', description: 'Analytics', path: '/analytics', waitFor: 'text=Analytics', viewport: VIEWPORT },
+  { name: 'projects', description: 'Projects', path: '/projects', waitFor: 'text=Projects', viewport: VIEWPORT },
+
+  // ─── On-Call tabs ─────────────────────────────────────────────────────
+  { name: 'on-call-overview', description: 'On-Call Overview', path: '/on-call', waitFor: 'text=On-Call', viewport: VIEWPORT },
+  { name: 'on-call-schedules', description: 'On-Call Schedules', path: '/on-call/schedules', waitFor: 'text=Schedules', viewport: VIEWPORT },
+  { name: 'on-call-escalation-policies', description: 'On-Call Escalation Policies', path: '/on-call/escalation-policies', waitFor: 'text=Escalation Policies', viewport: VIEWPORT },
+  { name: 'on-call-alerts', description: 'On-Call Alerts', path: '/on-call/incidents', waitFor: 'text=Alerts', viewport: VIEWPORT },
+  { name: 'on-call-incidents', description: 'On-Call Incidents', path: '/on-call/declared-incidents', waitFor: 'text=Incidents', viewport: VIEWPORT },
+
+  // ─── Monitoring tabs ──────────────────────────────────────────────────
+  { name: 'monitoring-hosts', description: 'Monitoring Hosts', path: '/monitoring', waitFor: 'text=Hosts', viewport: VIEWPORT },
+  { name: 'monitoring-containers', description: 'Monitoring Containers', path: '/monitoring/containers', waitFor: 'text=Containers', viewport: VIEWPORT },
+  { name: 'monitoring-processes', description: 'Monitoring Processes', path: '/monitoring/processes', waitFor: 'text=Processes', viewport: VIEWPORT },
+  { name: 'monitoring-network', description: 'Monitoring Network', path: '/monitoring/network', waitFor: 'text=Network', viewport: VIEWPORT },
+  { name: 'monitoring-events', description: 'Monitoring Events', path: '/monitoring/events', waitFor: 'text=Events', viewport: VIEWPORT },
+  { name: 'monitoring-kubernetes', description: 'Monitoring Kubernetes', path: '/monitoring/kubernetes', waitFor: 'text=Kubernetes', viewport: VIEWPORT },
+  { name: 'monitoring-databases', description: 'Monitoring Databases', path: '/monitoring/databases', waitFor: 'text=Databases', viewport: VIEWPORT },
+  { name: 'monitoring-debugger', description: 'Monitoring Debugger', path: '/monitoring/debugger', waitFor: 'text=Debugger', viewport: VIEWPORT },
+  { name: 'monitoring-network-devices', description: 'Monitoring Network Devices', path: '/monitoring/network-devices', waitFor: 'text=Network Devices', viewport: VIEWPORT },
+  { name: 'monitoring-sbom', description: 'Monitoring SBOM', path: '/monitoring/sbom', waitFor: 'text=SBOM', viewport: VIEWPORT },
+
+  // ─── Status page detail tabs ─────────────────────────────────────────
   {
-    name: 'dashboard',
-    description: 'Main dashboard overview',
-    path: '/',
-    waitFor: 'text=Recent Issues',
-    viewport: { width: 1920, height: 1080 },
-  },
-  // Primary features
-  {
-    name: 'error-tracking',
-    description: 'Error tracking / Issues list',
-    path: '/issues',
-    waitFor: 'text=Issues',
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
-    name: 'log-management',
-    description: 'Log management page',
+    name: 'status-page-overview',
+    description: 'Status Page Overview tab',
     navigate: async (page) => {
-      // Go to projects page
-      await page.goto(`${BASE_URL}/projects`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1000);
-      
-      // Click on the first project card/link to go to setup page
-      const projectLink = await page.locator('a[href^="/projects/"]:not([href*="/settings"])').first();
-      const projectExists = await projectLink.count() > 0;
-      if (projectExists) {
-        await projectLink.click();
+      await page.goto(`${BASE_URL}/status-pages`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      const link = page.locator('a[href^="/status-pages/"]').first();
+      if ((await link.count()) > 0) {
+        await link.click();
         await page.waitForLoadState('networkidle');
         await page.waitForTimeout(1500);
-        
-        // Try to find and click logs link/tab
-        try {
-          const logsLink = await page.locator('a[href*="/logs"]').first();
-          const logsExists = await logsLink.count() > 0;
-          if (logsExists) {
-            await logsLink.click();
-            await page.waitForLoadState('networkidle');
-            await page.waitForTimeout(1500);
-          } else {
-            console.log('   ⚠️  Logs tab not found in project navigation');
-          }
-        } catch (e) {
-          console.log('   ⚠️  Could not navigate to logs');
-        }
+        const tab = page.locator('button[value="overview"]').first();
+        if ((await tab.count()) > 0) await tab.click();
       }
     },
-    viewport: { width: 1920, height: 1080 },
+    waitFor: 'text=Overview',
+    viewport: VIEWPORT,
   },
   {
-    name: 'session-replay',
-    description: 'Session replay list',
-    path: '/replays',
-    waitFor: 'text=Replays',
-    viewport: { width: 1920, height: 1080 },
-  },
-  // Secondary features
-  {
-    name: 'performance',
-    description: 'Performance monitoring',
-    path: '/performance',
-    waitFor: 'text=Performance',
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
-    name: 'uptime',
-    description: 'Uptime monitoring',
-    path: '/uptime',
-    waitFor: 'text=Uptime',
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
-    name: 'status-pages',
-    description: 'Public status pages',
-    path: '/s/acme-status',
-    waitFor: 'text=Status',
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
-    name: 'containers',
-    description: 'Container monitoring with metrics',
+    name: 'status-page-monitors',
+    description: 'Status Page Monitors tab',
     navigate: async (page) => {
-      // Go to monitoring page
+      await page.goto(`${BASE_URL}/status-pages`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      const link = page.locator('a[href^="/status-pages/"]').first();
+      if ((await link.count()) > 0) {
+        await link.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1500);
+        const tab = page.locator('button[value="monitors"]').first();
+        if ((await tab.count()) > 0) await tab.click();
+      }
+    },
+    waitFor: 'text=Monitors',
+    viewport: VIEWPORT,
+  },
+  {
+    name: 'status-page-incidents',
+    description: 'Status Page Incidents tab',
+    navigate: async (page) => {
+      await page.goto(`${BASE_URL}/status-pages`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      const link = page.locator('a[href^="/status-pages/"]').first();
+      if ((await link.count()) > 0) {
+        await link.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1500);
+        const tab = page.locator('button[value="incidents"]').first();
+        if ((await tab.count()) > 0) await tab.click();
+      }
+    },
+    waitFor: 'text=Incidents',
+    viewport: VIEWPORT,
+  },
+  {
+    name: 'status-page-domains',
+    description: 'Status Page Domains tab',
+    navigate: async (page) => {
+      await page.goto(`${BASE_URL}/status-pages`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      const link = page.locator('a[href^="/status-pages/"]').first();
+      if ((await link.count()) > 0) {
+        await link.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1500);
+        const tab = page.locator('button[value="domains"]').first();
+        if ((await tab.count()) > 0) await tab.click();
+      }
+    },
+    waitFor: 'text=Domains',
+    viewport: VIEWPORT,
+  },
+
+  // ─── Monitoring host detail tabs ─────────────────────────────────────
+  {
+    name: 'monitoring-host-overview',
+    description: 'Monitoring Host Overview tab',
+    navigate: async (page) => {
       await page.goto(`${BASE_URL}/monitoring`, { waitUntil: 'networkidle' });
       await page.waitForTimeout(1500);
-      
-      // Click on first system card/link
-      try {
-        const firstSystem = page.locator('a[href^="/monitoring/"]:not([href*="/settings"])').first();
-        const systemExists = await firstSystem.count() > 0;
-        if (systemExists) {
-          await firstSystem.click();
-          await page.waitForLoadState('networkidle');
-          await page.waitForTimeout(1500);
-          
-          // Click on containers tab (try multiple selectors)
-          let containersTab = page.locator('button[value="containers"]').first();
-          let tabExists = await containersTab.count() > 0;
-          
-          if (!tabExists) {
-            // Try alternative selector for tab button
-            containersTab = page.locator('[role="tab"]:has-text("Containers"), button:has-text("Containers")').first();
-            tabExists = await containersTab.count() > 0;
-          }
-          
-          if (tabExists) {
-            await containersTab.click();
-            await page.waitForTimeout(1500);
-            console.log('   ✅ Navigated to containers tab');
-          } else {
-            console.log('   ⚠️  Containers tab not found');
-          }
-        } else {
-          console.log('   ⚠️  No monitoring systems found');
-        }
-      } catch (e) {
-        console.log('   ⚠️  Could not navigate to containers:', e.message);
+      const hostLink = page.locator('a[href^="/monitoring/hosts/"]').first();
+      if ((await hostLink.count()) > 0) {
+        await hostLink.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1500);
+        const tab = page.locator('button[value="overview"]').first();
+        if ((await tab.count()) > 0) await tab.click();
       }
     },
-    viewport: { width: 1920, height: 1080 },
+    waitFor: 'text=Overview',
+    viewport: VIEWPORT,
   },
   {
-    name: 'escalation-policies',
-    description: 'On-call escalation policies',
-    path: '/on-call/escalation-policies',
-    waitFor: 'text=Escalation Policies',
-    viewport: { width: 1920, height: 1080 },
+    name: 'monitoring-host-containers',
+    description: 'Monitoring Host Containers tab',
+    navigate: async (page) => {
+      await page.goto(`${BASE_URL}/monitoring`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      const hostLink = page.locator('a[href^="/monitoring/hosts/"]').first();
+      if ((await hostLink.count()) > 0) {
+        await hostLink.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1500);
+        const tab = page.locator('button[value="containers"]').first();
+        if ((await tab.count()) > 0) await tab.click();
+      }
+    },
+    waitFor: 'text=Containers',
+    viewport: VIEWPORT,
   },
-  // New features
   {
-    name: 'ai',
-    description: 'AI observability overview',
-    path: '/ai',
-    waitFor: 'text=AI',
-    viewport: { width: 1920, height: 1080 },
+    name: 'monitoring-host-network',
+    description: 'Monitoring Host Network tab',
+    navigate: async (page) => {
+      await page.goto(`${BASE_URL}/monitoring`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      const hostLink = page.locator('a[href^="/monitoring/hosts/"]').first();
+      if ((await hostLink.count()) > 0) {
+        await hostLink.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1500);
+        const tab = page.locator('button[value="network"]').first();
+        if ((await tab.count()) > 0) await tab.click();
+      }
+    },
+    waitFor: 'text=Network',
+    viewport: VIEWPORT,
   },
+  {
+    name: 'monitoring-host-alerts',
+    description: 'Monitoring Host Alerts tab',
+    navigate: async (page) => {
+      await page.goto(`${BASE_URL}/monitoring`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      const hostLink = page.locator('a[href^="/monitoring/hosts/"]').first();
+      if ((await hostLink.count()) > 0) {
+        await hostLink.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1500);
+        const tab = page.locator('button[value="alerts"]').first();
+        if ((await tab.count()) > 0) await tab.click();
+      }
+    },
+    waitFor: 'text=Alerts',
+    viewport: VIEWPORT,
+  },
+
+  // ─── Public status page (for landing/marketing) ─────────────────────────
+  { name: 'status-page-public', description: 'Public status page', path: '/s/acme-status', waitFor: 'text=Status', viewport: VIEWPORT },
+
+  // ─── Legacy names for landing page compatibility ──────────────────────
+  { name: 'dashboard', description: 'Dashboard (alias for overview)', path: '/', waitFor: 'text=Recent Issues', viewport: VIEWPORT },
+  { name: 'error-tracking', description: 'Error tracking (alias for issues)', path: '/issues', waitFor: 'text=Issues', viewport: VIEWPORT },
+  { name: 'log-management', description: 'Log management (alias for logs)', path: '/logs', waitFor: 'text=Logs', viewport: VIEWPORT },
+  { name: 'session-replay', description: 'Session replay (alias for replays)', path: '/replays', waitFor: 'text=Replays', viewport: VIEWPORT },
+  { name: 'containers', description: 'Containers (alias)', path: '/monitoring/containers', waitFor: 'text=Containers', viewport: VIEWPORT },
+  { name: 'escalation-policies', description: 'Escalation policies (alias)', path: '/on-call/escalation-policies', waitFor: 'text=Escalation Policies', viewport: VIEWPORT },
   {
     name: 'apm-traces',
-    description: 'APM trace flamegraph (first trace detail)',
+    description: 'APM trace detail',
     navigate: async (page) => {
       await page.goto(`${BASE_URL}/apm-traces`, { waitUntil: 'networkidle' });
       await page.waitForTimeout(1500);
-      
-      // Click the first trace row/link
-      try {
-        const firstTrace = page.locator('a[href^="/apm-traces/"]').first();
-        const traceExists = await firstTrace.count() > 0;
-        if (traceExists) {
-          await firstTrace.click();
-          await page.waitForLoadState('networkidle');
-          await page.waitForTimeout(2000);
-          console.log('   ✅ Navigated to first APM trace');
-        } else {
-          console.log('   ⚠️  No APM traces found');
-        }
-      } catch (e) {
-        console.log('   ⚠️  Could not navigate to APM trace:', e.message);
+      const link = page.locator('a[href^="/apm-traces/"]').first();
+      if ((await link.count()) > 0) {
+        await link.click();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(2000);
       }
     },
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
-    name: 'profiles',
-    description: 'Continuous profiling flamegraph (first profile detail)',
-    navigate: async (page) => {
-      await page.goto(`${BASE_URL}/profiles`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      
-      // Click the first profile row/link
-      try {
-        const firstProfile = page.locator('a[href^="/profiles/"]').first();
-        const profileExists = await firstProfile.count() > 0;
-        if (profileExists) {
-          await firstProfile.click();
-          await page.waitForLoadState('networkidle');
-          await page.waitForTimeout(2000);
-          console.log('   ✅ Navigated to first profile');
-        } else {
-          console.log('   ⚠️  No profiles found');
-        }
-      } catch (e) {
-        console.log('   ⚠️  Could not navigate to profile:', e.message);
-      }
-    },
-    viewport: { width: 1920, height: 1080 },
-  },
-  {
-    name: 'security',
-    description: 'Security and compliance page',
-    path: '/security',
-    waitFor: 'text=Security',
-    viewport: { width: 1920, height: 1080 },
+    waitFor: 'text=Trace',
+    viewport: VIEWPORT,
   },
 ];
 
@@ -301,13 +323,50 @@ async function login(page) {
   }
 }
 
-async function takeScreenshot(page, config) {
-  console.log(`📸 Taking screenshot: ${config.name} - ${config.description}`);
-  
+function createPagePool(pages) {
+  const available = [...pages];
+  const waitQueue = [];
+
+  const acquire = () =>
+    new Promise((resolve) => {
+      if (available.length > 0) {
+        resolve(available.pop());
+      } else {
+        waitQueue.push(resolve);
+      }
+    });
+
+  const release = (page) => {
+    if (waitQueue.length > 0) {
+      waitQueue.shift()(page);
+    } else {
+      available.push(page);
+    }
+  };
+
+  return { acquire, release };
+}
+
+async function suppressBanners(page) {
+  try {
+    await page.evaluate(() => {
+      localStorage.setItem('screenshot-mode', 'true');
+      localStorage.setItem('beta-banner-dismissed-apm-traces', 'true');
+      localStorage.setItem('beta-banner-dismissed-profiles', 'true');
+      localStorage.setItem('beta-banner-dismissed-security', 'true');
+    });
+  } catch {
+    // Ignore if not on app origin yet
+  }
+}
+
+async function takeScreenshot(page, config, pool) {
+  const release = pool ? () => pool.release(page) : () => {};
+
   try {
     // Set viewport
     await page.setViewportSize(config.viewport);
-    
+
     // Custom navigation function if provided
     if (config.navigate) {
       await config.navigate(page);
@@ -317,7 +376,9 @@ async function takeScreenshot(page, config) {
       await page.goto(`${BASE_URL}${config.path}`, { waitUntil: 'networkidle' });
       await page.waitForTimeout(1000);
     }
-    
+
+    await suppressBanners(page);
+
     // Wait for specific element/text if specified
     if (config.waitFor) {
       try {
@@ -330,21 +391,25 @@ async function takeScreenshot(page, config) {
     // Additional wait for any animations to complete
     await page.waitForTimeout(1000);
     
-    // Measure sidebar and topbar to crop them out
-    const clip = await page.evaluate(() => {
-      // Sidebar: fixed left column
-      const sidebar = document.querySelector('.fixed.left-0.top-0');
-      // Topbar: the border-b header bar with backdrop-blur
-      const topbar = document.querySelector('.border-b.backdrop-blur');
-      const sidebarWidth = sidebar ? sidebar.getBoundingClientRect().width : 0;
-      const topbarHeight = topbar ? topbar.getBoundingClientRect().height : 0;
+    // Measure sidebar and header to crop to content area only
+    let clip = await page.evaluate(() => {
+      const sidebar = document.querySelector('.sidebar');
+      if (!sidebar) {
+        return { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+      }
+      const rect = sidebar.getBoundingClientRect();
+      const sidebarWidth = rect.width;
+      const headerHeight = rect.top;
       return {
         x: sidebarWidth,
-        y: topbarHeight,
+        y: headerHeight,
         width: window.innerWidth - sidebarWidth,
-        height: window.innerHeight - topbarHeight,
+        height: window.innerHeight - headerHeight,
       };
     });
+    if (clip.width < 100 || clip.height < 100) {
+      clip = { x: 0, y: 0, width: config.viewport.width, height: config.viewport.height };
+    }
     console.log(`   ✂️  Cropping sidebar=${clip.x}px topbar=${clip.y}px`);
     
     // Prepare screenshot path
@@ -393,23 +458,25 @@ async function takeScreenshot(page, config) {
     } else {
       // Save the new screenshot
       fs.writeFileSync(screenshotPath, screenshotBuffer);
-      console.log(`   ✅ Saved (changed): ${screenshotPath}`);
+      console.log(`   ✅ Saved (changed): ${config.name}`);
     }
-    
+
     return true;
   } catch (error) {
     console.error(`❌ Failed to capture ${config.name}:`, error.message);
-    
+
     // Take a debug screenshot anyway
     try {
       const debugPath = path.join(SCREENSHOTS_DIR, `debug-${config.name}.png`);
       await page.screenshot({ path: debugPath });
       console.log(`📸 Debug screenshot: ${debugPath}`);
-    } catch (e) {
+    } catch {
       // Ignore debug screenshot errors
     }
-    
+
     return false;
+  } finally {
+    release();
   }
 }
 
@@ -433,33 +500,56 @@ async function main() {
     deviceScaleFactor: 2, // retina 2× for sharp, readable screenshots
   });
   
-  const page = await context.newPage();
-  
+  const loginPage = await context.newPage();
+
   try {
-    // Login
-    await login(page);
-    
-    // Verify we're logged in by checking for common authenticated elements
+    // Login (single page - cookies are shared across context)
+    await login(loginPage);
+
+    // Verify we're logged in
     console.log('🔍 Verifying authentication...');
-    const currentUrl = page.url();
+    const currentUrl = loginPage.url();
     if (currentUrl.includes('/login')) {
       throw new Error('Still on login page - authentication may have failed');
     }
     console.log('✅ Authentication verified\n');
-    
-    console.log('📸 Starting screenshot capture...\n');
-    
-    // Take screenshots
-    let successCount = 0;
-    for (const config of SCREENSHOTS) {
-      const success = await takeScreenshot(page, config);
-      if (success) successCount++;
-      
-      // Small delay between screenshots
-      await page.waitForTimeout(500);
-    }
-    
-    console.log(`\n✅ Screenshot capture complete! ${successCount}/${SCREENSHOTS.length} successful`);
+
+    // Create page pool for parallel capture
+    const poolSize = Math.min(CONCURRENCY, SCREENSHOTS.length);
+    console.log(`📸 Starting parallel screenshot capture (${poolSize} concurrent pages)...\n`);
+
+    const poolPages = await Promise.all(
+      Array.from({ length: poolSize }, () => context.newPage())
+    );
+    const pool = createPagePool(poolPages);
+    await loginPage.close();
+
+    // sessionStorage is per-tab; cookies are shared. Initialize each page with
+    // sessionStorage so api.isAuthenticated() returns true (avoids login redirect).
+    await Promise.all(
+      poolPages.map(async (page) => {
+        await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+        await page.evaluate(() => {
+          sessionStorage.setItem('authenticated', 'true');
+          localStorage.setItem('screenshot-mode', 'true');
+          localStorage.setItem('beta-banner-dismissed-apm-traces', 'true');
+          localStorage.setItem('beta-banner-dismissed-profiles', 'true');
+          localStorage.setItem('beta-banner-dismissed-security', 'true');
+        });
+      })
+    );
+
+    // Run all screenshots in parallel (pool limits concurrency)
+    const startTime = Date.now();
+    const results = await Promise.all(
+      SCREENSHOTS.map((config) =>
+        pool.acquire().then((page) => takeScreenshot(page, config, pool))
+      )
+    );
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const successCount = results.filter(Boolean).length;
+
+    console.log(`\n✅ Screenshot capture complete! ${successCount}/${SCREENSHOTS.length} successful (${elapsed}s)`);
     console.log(`\n📁 Screenshots saved to: ${SCREENSHOTS_DIR}`);
     console.log('\n💡 Next steps:');
     console.log('   1. Review the screenshots in dashboard/public/screenshots/');
