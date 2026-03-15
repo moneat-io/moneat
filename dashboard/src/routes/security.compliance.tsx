@@ -62,19 +62,19 @@ function ComplianceFindings() {
   const summary: ComplianceSummary[] = summaryData?.summary ?? []
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Summary */}
       {summary.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-2 md:grid-cols-4">
           {['passed', 'failed', 'skipped', 'error'].map(status => {
             const count = summary
               .filter((s) => s.status === status)
               .reduce((a: number, s) => a + (s.count || 0), 0)
             return (
               <Card key={status}>
-                <CardContent className="pt-4">
+                <CardContent className="pt-3 pb-2 px-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium capitalize">{status}</span>
+                    <span className="text-xs font-medium capitalize">{status}</span>
                     <Badge variant="outline" className={cn('text-xs', statusColors[status] || '')}>{count}</Badge>
                   </div>
                 </CardContent>
@@ -86,41 +86,41 @@ function ComplianceFindings() {
 
       {/* Findings table */}
       {isLoading ? (
-        <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" /></div>
+        <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-2 border-muted border-t-primary" /></div>
       ) : (
         <Card>
-          <CardHeader>
-            <CardTitle>Compliance Findings ({data?.totalCount || 0})</CardTitle>
-            <CardDescription>CIS, PCI, SOC2, HIPAA rule evaluations</CardDescription>
+          <CardHeader className="py-2 px-3">
+            <CardTitle className="text-sm">Compliance Findings ({data?.totalCount || 0})</CardTitle>
+            <CardDescription className="text-xs">CIS, PCI, SOC2, HIPAA rule evaluations</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 pt-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Framework</th>
-                    <th className="pb-2 pr-4 font-medium">Rule</th>
-                    <th className="pb-2 pr-4 font-medium">Status</th>
-                    <th className="pb-2 pr-4 font-medium">Resource</th>
-                    <th className="pb-2 font-medium">Evaluated</th>
+                    <th className="pb-1.5 pr-2 font-medium">Framework</th>
+                    <th className="pb-1.5 pr-2 font-medium">Rule</th>
+                    <th className="pb-1.5 pr-2 font-medium">Status</th>
+                    <th className="pb-1.5 pr-2 font-medium">Resource</th>
+                    <th className="pb-1.5 font-medium">Evaluated</th>
                   </tr>
                 </thead>
                 <tbody>
                   {findings.map((f) => (
                     <tr key={f.findingId} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="py-2 pr-4"><Badge variant="outline" className="text-xs">{f.framework}</Badge></td>
-                      <td className="py-2 pr-4">{f.ruleName}</td>
-                      <td className="py-2 pr-4">
-                        <Badge variant="outline" className={cn('text-xs', statusColors[f.status ?? ''] || '')}>
+                      <td className="py-1.5 pr-2"><Badge variant="outline" className="text-[10px]">{f.framework}</Badge></td>
+                      <td className="py-1.5 pr-2">{f.ruleName}</td>
+                      <td className="py-1.5 pr-2">
+                        <Badge variant="outline" className={cn('text-[10px]', statusColors[f.status ?? ''] || '')}>
                           {f.status}
                         </Badge>
                       </td>
-                      <td className="py-2 pr-4 text-xs">{f.resourceType}: {f.resourceName}</td>
-                      <td className="py-2 text-muted-foreground text-xs">{f.evaluatedAt}</td>
+                      <td className="py-1.5 pr-2">{f.resourceType}: {f.resourceName}</td>
+                      <td className="py-1.5 text-muted-foreground">{f.evaluatedAt}</td>
                     </tr>
                   ))}
                   {findings.length === 0 && (
-                    <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">No compliance findings</td></tr>
+                    <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No compliance findings</td></tr>
                   )}
                 </tbody>
               </table>

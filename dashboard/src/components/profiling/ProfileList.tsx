@@ -142,8 +142,8 @@ export function ProfileList({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -153,16 +153,16 @@ export function ProfileList({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-2">
       {/* Filters */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="Filter by service..."
             value={serviceFilter}
             onChange={(e) => onServiceFilterChange(e.target.value)}
-            className="pl-9 h-9"
+            className="pl-8 h-7 text-xs"
           />
         </div>
         {availableTypes.length > 1 && (
@@ -170,7 +170,7 @@ export function ProfileList({
             value={typeFilter || '__all'}
             onValueChange={(v) => onTypeFilterChange(v === '__all' ? '' : v)}
           >
-            <SelectTrigger className="h-9 w-[160px]">
+            <SelectTrigger className="h-7 w-[140px] text-xs">
               <SelectValue placeholder="All types" />
             </SelectTrigger>
             <SelectContent>
@@ -187,38 +187,38 @@ export function ProfileList({
 
       {/* Summary stats */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
           <StatCard
             label="Total Profiles"
             value={stats.totalProfiles.toLocaleString()}
-            icon={<Layers className="h-4 w-4" />}
+            icon={<Layers className="h-3.5 w-3.5" />}
           />
           <StatCard
             label="Services"
             value={String(stats.serviceCount)}
-            icon={<Server className="h-4 w-4" />}
+            icon={<Server className="h-3.5 w-3.5" />}
           />
           <StatCard
             label="Profile Types"
             value={String(stats.typeCount)}
-            icon={<Code2 className="h-4 w-4" />}
+            icon={<Code2 className="h-3.5 w-3.5" />}
           />
           <StatCard
             label="Avg Duration"
             value={formatDuration(stats.avgDuration)}
-            icon={<Activity className="h-4 w-4" />}
+            icon={<Activity className="h-3.5 w-3.5" />}
           />
           <StatCard
             label="Total Size"
             value={formatBytes(stats.totalSize)}
-            icon={<HardDrive className="h-4 w-4" />}
+            icon={<HardDrive className="h-3.5 w-3.5" />}
           />
         </div>
       )}
 
       {/* Table */}
       <div className="rounded-lg border">
-        <Table>
+        <Table className="[&_th]:h-8 [&_th]:px-2 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-2 [&_td]:text-xs">
           <TableHeader>
             <TableRow>
               <TableHead>Service</TableHead>
@@ -260,19 +260,19 @@ export function ProfileList({
                     {profile.profileType}
                   </Badge>
                 </TableCell>
-                <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                <TableCell className="hidden md:table-cell text-muted-foreground">
                   {profile.env || '—'}
                 </TableCell>
-                <TableCell className="hidden lg:table-cell text-sm text-muted-foreground font-mono truncate max-w-[160px]">
+                <TableCell className="hidden lg:table-cell text-muted-foreground font-mono truncate max-w-[140px]">
                   {profile.host || '—'}
                 </TableCell>
-                <TableCell className="text-sm font-mono tabular-nums">
+                <TableCell className="font-mono tabular-nums">
                   {formatDuration(profile.durationNs)}
                 </TableCell>
-                <TableCell className="hidden sm:table-cell text-sm font-mono tabular-nums text-muted-foreground">
+                <TableCell className="hidden sm:table-cell font-mono tabular-nums text-muted-foreground">
                   {formatBytes(profile.sizeBytes)}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
+                <TableCell className="text-muted-foreground">
                   <span title={new Date(profile.startTime).toLocaleString()}>
                     <Clock className="h-3 w-3 inline mr-1 -mt-px" />
                     {timeAgo(profile.startTime)}
@@ -282,7 +282,7 @@ export function ProfileList({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => {
                       e.stopPropagation()
                       api.downloadProfile(
@@ -306,13 +306,13 @@ export function ProfileList({
 
 function ProfilingEmptyState() {
   return (
-    <div className="rounded-xl border border-dashed py-16 px-6 max-w-lg mx-auto bg-card">
+    <div className="rounded-xl border border-dashed py-10 px-4 max-w-lg mx-auto bg-card">
       <div className="flex flex-col items-center text-center">
-        <div className="h-14 w-14 rounded-full bg-gradient-to-br from-violet-500/20 to-orange-500/20 border border-violet-500/20 flex items-center justify-center mb-4">
-          <Layers className="h-6 w-6 text-violet-500 dark:text-violet-400" />
+        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-violet-500/20 to-orange-500/20 border border-violet-500/20 flex items-center justify-center mb-3">
+          <Layers className="h-5 w-5 text-violet-500 dark:text-violet-400" />
         </div>
-        <p className="font-semibold text-foreground">No profiles yet</p>
-        <p className="text-sm text-muted-foreground mt-1.5 max-w-sm">
+        <p className="font-semibold text-sm text-foreground">No profiles yet</p>
+        <p className="text-xs text-muted-foreground mt-1 max-w-sm">
           Set up continuous profiling with the Sentry SDK or Datadog Agent to
           start collecting flamegraph data from your applications.
         </p>
@@ -320,7 +320,7 @@ function ProfilingEmptyState() {
           href="https://moneat.io/docs/sdk-setup"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 mt-5 text-sm font-medium text-primary hover:underline"
+          className="inline-flex items-center gap-1 mt-3 text-xs font-medium text-primary hover:underline"
         >
           Read the setup guide
           <ExternalLink className="h-3.5 w-3.5" />
@@ -341,12 +341,12 @@ function StatCard({
   icon: React.ReactNode
 }) {
   return (
-    <div className="rounded-lg border bg-card px-4 py-3 flex flex-col gap-1">
-      <div className="flex items-center gap-1.5 text-muted-foreground">
+    <div className="rounded-lg border bg-card px-2.5 py-2 flex flex-col gap-0.5">
+      <div className="flex items-center gap-1 text-muted-foreground">
         {icon}
-        <span className="text-xs font-medium">{label}</span>
+        <span className="text-[11px] font-medium">{label}</span>
       </div>
-      <span className="text-xl font-bold tabular-nums tracking-tight">
+      <span className="text-lg font-bold tabular-nums tracking-tight">
         {value}
       </span>
     </div>

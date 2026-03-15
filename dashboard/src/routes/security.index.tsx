@@ -51,41 +51,41 @@ function SecurityEvents() {
 
   const events: SecurityEvent[] = data?.events ?? []
 
-  if (isLoading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" /></div>
+  if (isLoading) return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-2 border-muted border-t-primary" /></div>
 
   return (
     <Card>
-      <CardHeader className="py-2 px-3"><CardTitle className="text-sm">Security Events ({data?.totalCount || 0})</CardTitle></CardHeader>
-      <CardContent className="p-3 pt-0">
+      <CardHeader className="py-1.5 px-2.5"><CardTitle className="text-xs">Security Events ({data?.totalCount || 0})</CardTitle></CardHeader>
+      <CardContent className="p-2.5 pt-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
               <tr className="border-b text-left text-muted-foreground">
-                <th className="pb-2 pr-4 font-medium">Severity</th>
-                <th className="pb-2 pr-4 font-medium">Rule</th>
-                <th className="pb-2 pr-4 font-medium">Type</th>
-                <th className="pb-2 pr-4 font-medium">Process</th>
-                <th className="pb-2 pr-4 font-medium">Host</th>
-                <th className="pb-2 font-medium">Time</th>
+                <th className="pb-1.5 pr-2 font-medium">Severity</th>
+                <th className="pb-1.5 pr-2 font-medium">Rule</th>
+                <th className="pb-1.5 pr-2 font-medium">Type</th>
+                <th className="pb-1.5 pr-2 font-medium">Process</th>
+                <th className="pb-1.5 pr-2 font-medium">Host</th>
+                <th className="pb-1.5 font-medium">Time</th>
               </tr>
             </thead>
             <tbody>
               {events.map((e) => (
                 <tr key={e.eventId} className="border-b last:border-0 hover:bg-muted/30">
-                  <td className="py-2 pr-4">
-                    <Badge variant="outline" className={cn('text-xs', severityColors[e.severity ?? ''] || '')}>
+                  <td className="py-1.5 pr-2">
+                    <Badge variant="outline" className={cn('text-[10px]', severityColors[e.severity ?? ''] || '')}>
                       {e.severity}
                     </Badge>
                   </td>
-                  <td className="py-2 pr-4">{e.ruleName}</td>
-                  <td className="py-2 pr-4">{e.eventType}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{e.processName}</td>
-                  <td className="py-2 pr-4">{e.host}</td>
-                  <td className="py-2 text-muted-foreground text-xs">{e.timestamp}</td>
+                  <td className="py-1.5 pr-2">{e.ruleName}</td>
+                  <td className="py-1.5 pr-2">{e.eventType}</td>
+                  <td className="py-1.5 pr-2 font-mono">{e.processName}</td>
+                  <td className="py-1.5 pr-2">{e.host}</td>
+                  <td className="py-1.5 text-muted-foreground">{e.timestamp}</td>
                 </tr>
               ))}
               {events.length === 0 && (
-                <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No security events</td></tr>
+                <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">No security events</td></tr>
               )}
             </tbody>
           </table>

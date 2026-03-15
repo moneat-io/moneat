@@ -19,14 +19,14 @@ export function AnalyticsBreakdownTable({
   if (isLoading) {
     return (
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Icon className={`h-4 w-4 ${iconColor}`} />
+        <CardHeader className="pb-1">
+          <CardTitle className="text-xs font-medium flex items-center gap-1.5">
+            <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
             {title}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {Array.from({length: 5}).map((_, i) => <div key={i} className="h-8 w-full animate-pulse rounded bg-muted" />)}
+        <CardContent className="space-y-1">
+          {Array.from({length: 5}).map((_, i) => <div key={i} className="h-6 w-full animate-pulse rounded bg-muted" />)}
         </CardContent>
       </Card>
     )
@@ -35,14 +35,14 @@ export function AnalyticsBreakdownTable({
   if (!data || data.length === 0) {
     return (
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Icon className={`h-4 w-4 ${iconColor}`} />
+        <CardHeader className="pb-1">
+          <CardTitle className="text-xs font-medium flex items-center gap-1.5">
+            <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
             {title}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground text-center py-4">No data</p>
+          <p className="text-xs text-muted-foreground text-center py-3">No data</p>
         </CardContent>
       </Card>
     )
@@ -52,17 +52,17 @@ export function AnalyticsBreakdownTable({
 
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Icon className={`h-4 w-4 ${iconColor}`} />
+      <CardHeader className="pb-1">
+        <CardTitle className="text-xs font-medium flex items-center gap-1.5">
+          <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-1">
+      <CardContent className="space-y-0.5">
         {data.map((item) => (
           <div
             key={item.name}
-            className={`relative flex items-center justify-between px-2 py-1.5 rounded text-xs ${onRowClick ? 'cursor-pointer hover:bg-muted/50' : ''}`}
+            className={`relative flex items-center justify-between px-1.5 py-1 rounded text-[11px] ${onRowClick ? 'cursor-pointer hover:bg-muted/50' : ''}`}
             onClick={() => onRowClick?.(item)}
           >
             <div

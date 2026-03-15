@@ -97,17 +97,17 @@ function ProfileDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 flex flex-col items-center justify-center py-24 gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Loading profile...</p>
+      <div className="p-3 flex flex-col items-center justify-center py-16 gap-2">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <p className="text-xs text-muted-foreground">Loading profile...</p>
       </div>
     )
   }
 
   if (!profile) {
     return (
-      <div className="p-6 flex flex-col items-center justify-center py-24 gap-3">
-        <p className="text-sm text-muted-foreground">Profile not found</p>
+      <div className="p-3 flex flex-col items-center justify-center py-16 gap-2">
+        <p className="text-xs text-muted-foreground">Profile not found</p>
       </div>
     )
   }
@@ -116,25 +116,25 @@ function ProfileDetailPage() {
 
   return (
     <div
-      className="flex flex-col overflow-hidden p-6 gap-y-5"
+      className="flex flex-col overflow-hidden p-3 gap-y-2"
       style={{height: 'calc(100vh - var(--header-height, 0px))'}}
     >
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3 min-w-0">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2 min-w-0">
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 mt-0.5 shrink-0"
+            className="h-7 w-7 mt-0.5 shrink-0"
             asChild
           >
             <Link to="/profiles" search={{tab: 'sentry'}}>
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-3.5 w-3.5" />
             </Link>
           </Button>
-          <div className="space-y-1 min-w-0">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl font-bold tracking-tight leading-tight">
+          <div className="space-y-0.5 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-bold tracking-tight leading-tight">
                 {profile?.service || 'Profile'}
               </h1>
               {profile && (
@@ -160,10 +160,10 @@ function ProfileDetailPage() {
         <Button
           variant="outline"
           size="sm"
-          className="shrink-0"
+          className="shrink-0 h-7 text-xs"
           onClick={() => api.downloadProfile(profileId, undefined, profile.profileType)}
         >
-          <Download className="h-3.5 w-3.5 mr-1.5" />
+          <Download className="h-3 w-3 mr-1" />
           {profile.profileType.toLowerCase() === 'jfr'
             ? 'Download JFR'
             : 'Download pprof'}
@@ -173,8 +173,8 @@ function ProfileDetailPage() {
       {/* Metadata grid */}
       {profile && (
         <Card>
-          <CardContent className="py-3 px-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-2.5">
+          <CardContent className="py-2 px-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-2">
               <MetaItem
                 icon={Server}
                 label="Service"
@@ -214,7 +214,7 @@ function ProfileDetailPage() {
               />
             </div>
             {(profile.startTime || profile.version) && (
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-2.5 pt-2.5 border-t text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 pt-2 border-t text-[11px] text-muted-foreground">
                 {profile.startTime && (
                   <span className="flex items-center gap-1.5">
                     <Clock className="h-3 w-3" />
@@ -238,15 +238,15 @@ function ProfileDetailPage() {
 
       {/* Tags */}
       {tagEntries.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground mr-1">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[11px] font-medium text-muted-foreground mr-0.5">
             Tags
           </span>
           {tagEntries.map(([k, v]) => (
             <Badge
               key={k}
               variant="outline"
-              className="text-[11px] font-mono py-0 h-5"
+              className="text-[10px] font-mono py-0 h-4"
             >
               {k}
               <span className="text-muted-foreground mx-0.5">=</span>
@@ -258,12 +258,12 @@ function ProfileDetailPage() {
 
       {/* Flamegraph */}
       <div className="flex flex-col flex-1 min-h-0">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Flamegraph
           </h2>
           {isFlamegraphLoading && (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
           )}
         </div>
         <Flamegraph
@@ -291,14 +291,14 @@ function MetaItem({
   mono?: boolean
 }) {
   return (
-    <div className="flex items-center gap-2 min-w-0">
-      <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+    <div className="flex items-center gap-1.5 min-w-0">
+      <Icon className="h-3 w-3 text-muted-foreground shrink-0" />
       <div className="min-w-0">
         <p className="text-[10px] text-muted-foreground leading-none mb-0.5">
           {label}
         </p>
         <p
-          className={`text-sm font-medium leading-tight truncate ${mono ? 'font-mono' : ''}`}
+          className={`text-xs font-medium leading-tight truncate ${mono ? 'font-mono' : ''}`}
         >
           {value}
         </p>

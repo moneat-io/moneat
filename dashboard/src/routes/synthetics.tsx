@@ -36,16 +36,16 @@ function SyntheticsLayout() {
   const [createOpen, setCreateOpen] = useState(false)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <BetaBanner pageKey="synthetics" />
-      <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shrink-0">
-            <FlaskConical className="h-4 w-4 text-white" />
+      <div className="p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shrink-0">
+            <FlaskConical className="h-3.5 w-3.5 text-white" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-xl font-bold">Synthetics</h2>
+            <h2 className="text-lg font-bold">Synthetics</h2>
             <p className="text-muted-foreground text-xs">Synthetic test results and monitoring</p>
           </div>
         </div>
