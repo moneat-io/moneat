@@ -122,7 +122,7 @@ class IssueService(
         val projectName = issueRepository.getProjectName(projectId)
         val effectiveStatus = pgStatus ?: obj.status
 
-        val latestEvent = getIssueEvents(issueId, 1, demoEpochMs).firstOrNull()
+        val latestEvent = getIssueEvents(issueId, 1, demoEpochMs, projectId).firstOrNull()
 
         return IssueDetailResponse(
             id = obj.issueId,
