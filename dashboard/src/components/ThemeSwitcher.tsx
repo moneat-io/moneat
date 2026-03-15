@@ -82,47 +82,47 @@ export function ThemeSwitcher() {
         <DropdownMenuItem onClick={() => handleThemeChange('light')}>
           <Sun className="mr-2 h-4 w-4" />
           <span>Light</span>
-          {theme === 'light' && <Check className="ml-auto h-4 w-4" />}
+          {theme === 'light' && <Check className="ml-auto h-4 w-4" data-testid="check-icon" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('dark')}>
           <Moon className="mr-2 h-4 w-4" />
           <span>Dark</span>
-          {theme === 'dark' && <Check className="ml-auto h-4 w-4" />}
+          {theme === 'dark' && <Check className="ml-auto h-4 w-4" data-testid="check-icon" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('midnight')}>
           <CloudMoon className="mr-2 h-4 w-4" />
           <span>Midnight</span>
-          {theme === 'midnight' && <Check className="ml-auto h-4 w-4" />}
+          {theme === 'midnight' && <Check className="ml-auto h-4 w-4" data-testid="check-icon" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('forest')}>
           <Leaf className="mr-2 h-4 w-4" />
           <span>Forest</span>
-          {theme === 'forest' && <Check className="ml-auto h-4 w-4" />}
+          {theme === 'forest' && <Check className="ml-auto h-4 w-4" data-testid="check-icon" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('sunset')}>
           <Sunset className="mr-2 h-4 w-4" />
           <span>Sunset</span>
-          {theme === 'sunset' && <Check className="ml-auto h-4 w-4" />}
+          {theme === 'sunset' && <Check className="ml-auto h-4 w-4" data-testid="check-icon" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('gamer')}>
           <Gamepad2 className="mr-2 h-4 w-4" />
           <span>Gamer</span>
-          {theme === 'gamer' && <Check className="ml-auto h-4 w-4" />}
+          {theme === 'gamer' && <Check className="ml-auto h-4 w-4" data-testid="check-icon" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('retro')}>
           <Newspaper className="mr-2 h-4 w-4" />
           <span>Retro</span>
-          {theme === 'retro' && <Check className="ml-auto h-4 w-4" />}
+          {theme === 'retro' && <Check className="ml-auto h-4 w-4" data-testid="check-icon" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('retro-dark')}>
           <Monitor className="mr-2 h-4 w-4" />
           <span>Retro Dark</span>
-          {theme === 'retro-dark' && <Check className="ml-auto h-4 w-4" />}
+          {theme === 'retro-dark' && <Check className="ml-auto h-4 w-4" data-testid="check-icon" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('terminal')}>
           <Terminal className="mr-2 h-4 w-4" />
           <span>Terminal</span>
-          {theme === 'terminal' && <Check className="ml-auto h-4 w-4" />}
+          {theme === 'terminal' && <Check className="ml-auto h-4 w-4" data-testid="check-icon" />}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
