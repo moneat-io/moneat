@@ -14,7 +14,7 @@ import {Card, CardContent} from '@/components/ui/card'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
-import {BookOpen, Loader2, Package, Search, ShieldAlert} from 'lucide-react'
+import {Loader2, Package, Search, ShieldAlert} from 'lucide-react'
 import {useMemo, useState} from 'react'
 
 export const Route = createFileRoute('/monitoring/sbom')({
@@ -58,23 +58,6 @@ function SbomDashboard() {
 
   return (
     <div className="container mx-auto px-4 py-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600">
-            <Package className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Software Bill of Materials</h1>
-            <p className="text-muted-foreground mt-1">Package inventory across hosts and containers</p>
-          </div>
-        </div>
-        <a href="/docs/datadog-agent/sbom" target="_blank" rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <BookOpen className="h-4 w-4" />
-          View docs
-        </a>
-      </div>
-
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
           <div className="flex flex-col items-center gap-3">

@@ -39,7 +39,6 @@ import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/compon
 import {
   Activity,
   ArrowUpRight,
-  BookOpen,
   Check,
   CheckCircle2,
   CircleCheck,
@@ -47,6 +46,7 @@ import {
   Copy,
   Cpu,
   HardDrive,
+  HelpCircle,
   LayoutGrid,
   List,
   Loader2,
@@ -653,6 +653,66 @@ function AddHostButton({onClick}: {onClick: () => void}) {
   )
 }
 
+export function HostsHeaderActions() {
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const {data: ddHostsData} = useQuery({
+    queryKey: ['hosts'],
+    queryFn: () => api.getHosts(),
+    enabled: api.isAuthenticated(),
+  })
+  const hosts = ddHostsData?.hosts ?? []
+  const {data: billingUsage} = useQuery({
+    queryKey: ['billingUsage'],
+    queryFn: () => api.getBillingUsage(),
+    enabled: api.isAuthenticated(),
+  })
+  const currentPlan = billingUsage?.plan || 'FREE'
+  const isSelfHosted = useIsSelfHosted()
+  const hostLimit = isSelfHosted ? Infinity : (TIER_HOST_LIMITS[currentPlan.toUpperCase()] ?? Infinity)
+  const isAtLimit = !isSelfHosted && hosts.length >= hostLimit
+
+  return (
+    <>
+      <AddHostDialog isOpen={addDialogOpen} setIsOpen={setAddDialogOpen} />
+      <div className="flex items-center gap-2">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a href="/docs/datadog-agent/agent-setup" target="_blank" rel="noreferrer"
+                className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                aria-label="View docs">
+                <HelpCircle className="h-4 w-4" />
+              </a>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>View docs</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        {isAtLimit ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link to="/settings" search={{tab: 'billing'}}>
+                  <Button variant="default" size="sm" className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Upgrade to Add More
+                  </Button>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>You&apos;ve reached the limit for your {currentPlan} plan</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <AddHostButton onClick={() => setAddDialogOpen(true)} />
+        )}
+      </div>
+    </>
+  )
+}
+
 function SortIndicator({field, sortField, sortDir}: {field: SortField; sortField: SortField; sortDir: 'asc' | 'desc'}) {
   if (sortField !== field) return null
   return <span className="ml-1 text-[10px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
@@ -857,17 +917,6 @@ function MonitoringHostsPage() {
     return ddHostsData?.hosts ?? []
   }, [ddHostsData?.hosts])
 
-  const {data: billingUsage} = useQuery({
-    queryKey: ['billingUsage'],
-    queryFn: () => api.getBillingUsage(),
-    enabled: api.isAuthenticated(),
-  })
-
-  const currentPlan = billingUsage?.plan || 'FREE'
-  const isSelfHosted = useIsSelfHosted()
-  const hostLimit = isSelfHosted ? Infinity : (TIER_HOST_LIMITS[currentPlan.toUpperCase()] ?? Infinity)
-  const isAtLimit = !isSelfHosted && hosts.length >= hostLimit
-
   const maxMemory = useMemo(
     () => Math.max(...hosts.map((h) => h.memoryTotalKb), 1),
     [hosts]
@@ -952,50 +1001,6 @@ function MonitoringHostsPage() {
         isOpen={addDialogOpen}
         setIsOpen={setAddDialogOpen}
       />
-
-      <div className="border-b bg-card/50">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
-                <HardDrive className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Hosts</h1>
-                <p className="text-muted-foreground mt-1">
-                  Monitor your infrastructure with the Datadog-compatible agent
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <a href="/docs/datadog-agent/agent-setup" target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                <BookOpen className="h-4 w-4" />
-                View docs
-              </a>
-              {isAtLimit ? (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Link to="/settings" search={{tab: 'billing'}}>
-                        <Button variant="default" className="gap-2">
-                          <Plus className="h-4 w-4" />
-                          Upgrade to Add More
-                        </Button>
-                      </Link>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>You&apos;ve reached the limit for your {currentPlan} plan</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ) : (
-                <AddHostButton onClick={() => setAddDialogOpen(true)} />
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
 
       <div className="container mx-auto px-4 py-4 space-y-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">

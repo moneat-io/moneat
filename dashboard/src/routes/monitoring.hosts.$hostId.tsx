@@ -26,6 +26,7 @@ import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {
     Activity,
+    ArrowLeft,
     Box,
     Clock,
     Cpu,
@@ -183,26 +184,26 @@ function MetricCard({
 }) {
   return (
     <Card className={`relative overflow-hidden bg-gradient-to-br ${gradientFrom} ${gradientTo} ${borderColor}`}>
-      <CardContent className="pt-5 pb-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+      <CardContent className="pt-2.5 pb-2 px-3">
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="space-y-0.5 min-w-0">
+            <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">
               {title}
             </p>
             {loading ? (
               <>
-                <Skeleton className="h-8 w-20" />
-                <Skeleton className="h-3 w-28 mt-1" />
+                <Skeleton className="h-5 w-14" />
+                <Skeleton className="h-2 w-20 mt-0.5" />
               </>
             ) : (
               <>
-                <p className="text-2xl font-bold tracking-tight">{value}</p>
-                <p className="text-xs text-muted-foreground">{subtitle}</p>
+                <p className="text-lg font-bold tracking-tight">{value}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{subtitle}</p>
               </>
             )}
           </div>
-          <div className={`flex items-center justify-center h-12 w-12 rounded-xl ${iconColor} bg-opacity-15`}>
-            <Icon className="h-6 w-6" />
+          <div className={`flex items-center justify-center h-7 w-7 rounded-md shrink-0 ${iconColor} bg-opacity-15`}>
+            <Icon className="h-3.5 w-3.5" />
           </div>
         </div>
       </CardContent>
@@ -356,21 +357,26 @@ function HostDetailPage() {
     <div>
       {/* Header */}
       <div className="border-b bg-card/50">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <Button variant="ghost" size="sm" asChild className="shrink-0 text-muted-foreground hover:text-foreground -ml-1">
+                <Link to="/monitoring">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
               <div
-                className={`flex items-center justify-center h-12 w-12 rounded-xl ${
+                className={`flex items-center justify-center h-10 w-10 rounded-lg shrink-0 ${
                   online
                     ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                     : 'bg-red-500/10 text-red-600 dark:text-red-400'
                 }`}
               >
-                <Server className="h-6 w-6" />
+                <Server className="h-5 w-5" />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">{host.hostname}</h1>
-                <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl font-bold tracking-tight truncate">{host.hostname}</h1>
+                <div className="flex items-center gap-2.5 text-xs text-muted-foreground mt-0.5 flex-wrap">
                   <Badge
                     variant="secondary"
                     className={`text-xs ${
@@ -388,13 +394,13 @@ function HostDetailPage() {
                   </Badge>
                   {host.os && (
                     <span className="flex items-center gap-1">
-                      <Monitor className="h-3.5 w-3.5" />
+                      <Monitor className="h-3 w-3" />
                       {host.os}{host.platform && host.platform !== host.os ? ` (${host.platform})` : ''}
                     </span>
                   )}
                   {host.processor && (
                     <span className="flex items-center gap-1">
-                      <Cpu className="h-3.5 w-3.5" />
+                      <Cpu className="h-3 w-3" />
                       {host.cpuCores} cores
                     </span>
                   )}
@@ -408,7 +414,7 @@ function HostDetailPage() {
                   )}
                   {host.lastSeenAt && (
                     <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
+                      <Clock className="h-3 w-3" />
                       {formatRelativeTime(host.lastSeenAt)}
                     </span>
                   )}
@@ -416,8 +422,9 @@ function HostDetailPage() {
               </div>
             </div>
 
+            <div className="shrink-0">
             <Select value={effectiveTimeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-40 h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -428,33 +435,34 @@ function HostDetailPage() {
                 ))}
               </SelectContent>
             </Select>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <div className="container mx-auto px-4 py-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <div className="flex items-center justify-between">
-            <TabsList className="bg-muted/50">
-              <TabsTrigger value="overview" className="gap-1.5">
-                <Activity className="h-3.5 w-3.5" />
+            <TabsList className="h-8 bg-muted/50 p-1">
+              <TabsTrigger value="overview" className="gap-1 px-2.5 py-1 text-xs">
+                <Activity className="h-3 w-3" />
                 Overview
               </TabsTrigger>
-              <TabsTrigger value="containers" className="gap-1.5">
-                <Box className="h-3.5 w-3.5" />
+              <TabsTrigger value="containers" className="gap-1 px-2.5 py-1 text-xs">
+                <Box className="h-3 w-3" />
                 Containers
                 {containers.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                  <Badge variant="secondary" className="ml-1 h-4 px-1 text-[9px]">
                     {containers.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="network" className="gap-1.5">
-                <Network className="h-3.5 w-3.5" />
+              <TabsTrigger value="network" className="gap-1 px-2.5 py-1 text-xs">
+                <Network className="h-3 w-3" />
                 Network
               </TabsTrigger>
-              <TabsTrigger value="alerts" className="gap-1.5">
-                <AlertTriangleIcon className="h-3.5 w-3.5" />
+              <TabsTrigger value="alerts" className="gap-1 px-2.5 py-1 text-xs">
+                <AlertTriangleIcon className="h-3 w-3" />
                 Alerts
               </TabsTrigger>
             </TabsList>
@@ -481,9 +489,9 @@ function HostDetailPage() {
             )}
           </div>
 
-          <TabsContent value="overview" className="space-y-6">
+          <TabsContent value="overview" className="space-y-4">
             {/* Metric Summary Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
               <MetricCard
                 title="CPU Usage"
                 value={formatPercent(latestPoint?.cpu_percent)}
@@ -531,25 +539,25 @@ function HostDetailPage() {
             </div>
 
             {/* Charts */}
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-3 lg:grid-cols-2">
               {/* CPU Chart */}
               <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-blue-500/10">
-                      <Cpu className="h-4 w-4 text-blue-500" />
+                <CardHeader className="py-2 px-3 pb-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center justify-center h-5 w-5 rounded bg-blue-500/10 shrink-0">
+                      <Cpu className="h-2.5 w-2.5 text-blue-500" />
                     </div>
-                    <div>
-                      <CardTitle className="text-sm">CPU Usage</CardTitle>
-                      <CardDescription className="text-xs">Percentage over time</CardDescription>
+                    <div className="min-w-0">
+                      <CardTitle className="text-xs">CPU Usage</CardTitle>
+                      <CardDescription className="text-[10px]">Percentage over time</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-3 pb-3 pt-0">
                   {metricsLoading ? (
                     <ChartSkeleton />
                   ) : cpuData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={250}>
+                    <ResponsiveContainer width="100%" height={144}>
                       <AreaChart data={cpuData}>
                         <defs>
                           <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
@@ -585,22 +593,22 @@ function HostDetailPage() {
 
               {/* Memory Chart */}
               <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-violet-500/10">
-                      <MemoryStick className="h-4 w-4 text-violet-500" />
+                <CardHeader className="py-2 px-3 pb-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center justify-center h-5 w-5 rounded bg-violet-500/10 shrink-0">
+                      <MemoryStick className="h-2.5 w-2.5 text-violet-500" />
                     </div>
-                    <div>
-                      <CardTitle className="text-sm">Memory Usage</CardTitle>
-                      <CardDescription className="text-xs">Percentage over time</CardDescription>
+                    <div className="min-w-0">
+                      <CardTitle className="text-xs">Memory Usage</CardTitle>
+                      <CardDescription className="text-[10px]">Percentage over time</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-3 pb-3 pt-0">
                   {metricsLoading ? (
                     <ChartSkeleton />
                   ) : memoryData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={250}>
+                    <ResponsiveContainer width="100%" height={144}>
                       <AreaChart data={memoryData}>
                         <defs>
                           <linearGradient id="memGradient" x1="0" y1="0" x2="0" y2="1">
@@ -636,22 +644,22 @@ function HostDetailPage() {
 
               {/* Disk Usage Chart */}
               <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/10">
-                      <HardDrive className="h-4 w-4 text-amber-500" />
+                <CardHeader className="py-2 px-3 pb-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center justify-center h-5 w-5 rounded bg-amber-500/10 shrink-0">
+                      <HardDrive className="h-2.5 w-2.5 text-amber-500" />
                     </div>
-                    <div>
-                      <CardTitle className="text-sm">Disk Usage</CardTitle>
-                      <CardDescription className="text-xs">Percentage over time</CardDescription>
+                    <div className="min-w-0">
+                      <CardTitle className="text-xs">Disk Usage</CardTitle>
+                      <CardDescription className="text-[10px]">Percentage over time</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-3 pb-3 pt-0">
                   {metricsLoading ? (
                     <ChartSkeleton />
                   ) : diskData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={250}>
+                    <ResponsiveContainer width="100%" height={144}>
                       <AreaChart data={diskData}>
                         <defs>
                           <linearGradient id="diskGradient" x1="0" y1="0" x2="0" y2="1">
@@ -687,22 +695,22 @@ function HostDetailPage() {
 
               {/* Load Average Chart */}
               <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-500/10">
-                      <Activity className="h-4 w-4 text-emerald-500" />
+                <CardHeader className="py-2 px-3 pb-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center justify-center h-5 w-5 rounded bg-emerald-500/10 shrink-0">
+                      <Activity className="h-2.5 w-2.5 text-emerald-500" />
                     </div>
-                    <div>
-                      <CardTitle className="text-sm">Load Average</CardTitle>
-                      <CardDescription className="text-xs">1m, 5m, 15m averages</CardDescription>
+                    <div className="min-w-0">
+                      <CardTitle className="text-xs">Load Average</CardTitle>
+                      <CardDescription className="text-[10px]">1m, 5m, 15m averages</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-3 pb-3 pt-0">
                   {metricsLoading ? (
                     <ChartSkeleton />
                   ) : loadData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={250}>
+                    <ResponsiveContainer width="100%" height={144}>
                       <LineChart data={loadData}>
                         <CartesianGrid {...commonGrid} />
                         <XAxis {...commonXAxis} />
@@ -753,7 +761,7 @@ function HostDetailPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="containers" className="space-y-6">
+          <TabsContent value="containers" className="space-y-4">
             {containers.length > 0 ? (
               <>
                 {containerViewMode === 'cards' ? (
@@ -945,24 +953,24 @@ function HostDetailPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="network" className="space-y-6">
+          <TabsContent value="network" className="space-y-4">
             <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-indigo-500/10">
-                    <Network className="h-4 w-4 text-indigo-500" />
+              <CardHeader className="py-2 px-3 pb-0.5">
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-center h-5 w-5 rounded bg-indigo-500/10 shrink-0">
+                    <Network className="h-2.5 w-2.5 text-indigo-500" />
                   </div>
-                  <div>
-                    <CardTitle className="text-sm">Network Throughput</CardTitle>
-                    <CardDescription className="text-xs">Bytes sent and received over time</CardDescription>
+                  <div className="min-w-0">
+                    <CardTitle className="text-xs">Network Throughput</CardTitle>
+                    <CardDescription className="text-[10px]">Bytes sent and received over time</CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-3 pb-3 pt-0">
                 {metricsLoading ? (
-                  <ChartSkeleton height={400} />
+                  <ChartSkeleton height={224} />
                 ) : networkData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={400}>
+                  <ResponsiveContainer width="100%" height={224}>
                     <AreaChart data={networkData}>
                       <defs>
                         <linearGradient id="netRecvGradient" x1="0" y1="0" x2="0" y2="1">
@@ -1012,13 +1020,13 @@ function HostDetailPage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <EmptyChart height={400} />
+                  <EmptyChart height={224} />
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="alerts" className="space-y-6">
+          <TabsContent value="alerts" className="space-y-4">
             <AlertsTab hostId={hostIdNum} />
           </TabsContent>
         </Tabs>
@@ -1100,19 +1108,19 @@ function HostDetailPage() {
   )
 }
 
-function EmptyChart({height = 250}: {height?: number}) {
+function EmptyChart({height = 144}: {height?: number}) {
   return (
     <div
-      className="flex flex-col items-center justify-center text-muted-foreground gap-2"
+      className="flex flex-col items-center justify-center text-muted-foreground gap-1"
       style={{height}}
     >
-      <Activity className="h-8 w-8 opacity-30" />
-      <p className="text-sm">No data available</p>
+      <Activity className="h-5 w-5 opacity-30" />
+      <p className="text-[11px]">No data available</p>
     </div>
   )
 }
 
-function ChartSkeleton({height = 250}: {height?: number}) {
+function ChartSkeleton({height = 144}: {height?: number}) {
   return (
     <div className="space-y-2 py-1" style={{height}}>
       <div className="flex items-end gap-1 h-full px-1">

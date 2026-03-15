@@ -7,15 +7,16 @@
 // (at your option) any later version.
 
 import {createFileRoute} from '@tanstack/react-router'
+import {useContext} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
+import {KubernetesResourceSearchContext} from './monitoring.kubernetes.context'
 import {Badge} from '@/components/ui/badge'
 import {Card, CardContent} from '@/components/ui/card'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
-import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
-import {Layers, Loader2, Search} from 'lucide-react'
-import {useMemo, useState} from 'react'
+import {Layers, Loader2} from 'lucide-react'
+import {useMemo} from 'react'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/monitoring/kubernetes/$resourceType')({
@@ -58,11 +59,10 @@ function statusColor(status: string) {
 
 function KubernetesResourceList() {
   const {resourceType} = Route.useParams()
+  const {searchQuery} = useContext(KubernetesResourceSearchContext)
   const rt = resourceType ?? ''
   const k8sType = RESOURCE_TYPE_MAP[rt] || rt
   const title = rt.charAt(0).toUpperCase() + rt.slice(1)
-
-  const [searchQuery, setSearchQuery] = useState('')
 
   const {data, isLoading} = useQuery({
     queryKey: ['k8s-resources', k8sType],
@@ -112,24 +112,6 @@ function KubernetesResourceList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5 text-sm">
-          <Layers className="h-3.5 w-3.5 text-blue-500" />
-          <span className="font-semibold tabular-nums">{resources.length}</span>
-          <span className="text-muted-foreground text-xs">{title.toLowerCase()}</span>
-        </div>
-        <div className="h-4 w-px bg-border" />
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={`Search ${title.toLowerCase()}...`}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-      </div>
-
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <p className="font-medium">No {title.toLowerCase()} match your search</p>
