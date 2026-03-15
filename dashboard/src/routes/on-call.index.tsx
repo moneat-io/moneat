@@ -129,9 +129,9 @@ function OnCallOverview() {
   })()
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         <Card className={cn(
           'relative overflow-hidden transition-all',
           hasActiveIncidents && 'border-red-500/40 shadow-lg shadow-red-500/5'
@@ -139,20 +139,20 @@ function OnCallOverview() {
           {hasActiveIncidents && (
             <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />
           )}
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Incidents</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium">Active Incidents</CardTitle>
             <div className={cn(
-              'flex items-center justify-center h-8 w-8 rounded-lg',
+              'flex items-center justify-center h-6 w-6 rounded-lg',
               hasActiveIncidents ? 'bg-red-500/15' : 'bg-muted'
             )}>
-              <AlertTriangle className={cn('h-4 w-4', hasActiveIncidents ? 'text-red-500' : 'text-muted-foreground')} />
+              <AlertTriangle className={cn('h-3 w-3', hasActiveIncidents ? 'text-red-500' : 'text-muted-foreground')} />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className={cn('text-3xl font-bold', hasActiveIncidents && 'text-red-500')}>
+          <CardContent className="pt-0 px-4 pb-3">
+            <div className={cn('text-xl font-bold', hasActiveIncidents && 'text-red-500')}>
               {incidentsLoading ? '...' : activeIncidents.length}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-[11px] text-muted-foreground mt-0.5">
               {hasActiveIncidents ? 'Requires immediate attention' : 'All clear — no active incidents'}
             </p>
           </CardContent>
@@ -160,44 +160,44 @@ function OnCallOverview() {
 
         <Card className="relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">On-Call Schedules</CardTitle>
-            <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-violet-500/15">
-              <Calendar className="h-4 w-4 text-violet-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium">On-Call Schedules</CardTitle>
+            <div className="flex items-center justify-center h-6 w-6 rounded-lg bg-violet-500/15">
+              <Calendar className="h-3 w-3 text-violet-500" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{schedulesLoading ? '...' : schedules?.length || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Active rotation schedules</p>
+          <CardContent className="pt-0 px-4 pb-3">
+            <div className="text-xl font-bold">{schedulesLoading ? '...' : schedules?.length || 0}</div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Active rotation schedules</p>
           </CardContent>
         </Card>
 
         <Card className="relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Escalation Policies</CardTitle>
-            <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/15">
-              <Clock className="h-4 w-4 text-amber-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium">Escalation Policies</CardTitle>
+            <div className="flex items-center justify-center h-6 w-6 rounded-lg bg-amber-500/15">
+              <Clock className="h-3 w-3 text-amber-500" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{policiesLoading ? '...' : policies?.length || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Configured policies</p>
+          <CardContent className="pt-0 px-4 pb-3">
+            <div className="text-xl font-bold">{policiesLoading ? '...' : policies?.length || 0}</div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Configured policies</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         {/* Your Alert Summary */}
         <Card className="h-full">
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2 pt-4 px-4">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-blue-500" />
+                <CardTitle className="flex items-center gap-1.5 text-base">
+                  <Shield className="h-4 w-4 text-blue-500" />
                   Your Alert Summary
                 </CardTitle>
-                <CardDescription className="mt-1">
+                <CardDescription className="mt-0.5 text-xs">
                   {isCurrentlyOnCall
                     ? `You're on call for ${userOnCallSchedules.length} schedule${userOnCallSchedules.length > 1 ? 's' : ''}`
                     : "You're not currently on call"}
@@ -216,8 +216,8 @@ function OnCallOverview() {
               )}
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          <CardContent className="px-4 pb-4 pt-0">
+            <div className="space-y-3">
               {/* On-call schedules for current user */}
               {isCurrentlyOnCall && (
                 <div className="space-y-2">
@@ -288,11 +288,11 @@ function OnCallOverview() {
                           key={incident.id}
                           to="/on-call/incidents/$incidentId"
                           params={{incidentId: String(incident.id)}}
-                          className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-all group"
+                          className="flex items-center justify-between px-2.5 py-1.5 rounded-md border hover:bg-accent/50 transition-all group"
                         >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className={cn('flex-shrink-0 h-2 w-2 rounded-full', priorityCfg.dot)} />
-                            <span className="text-sm truncate">{incident.title}</span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <div className={cn('flex-shrink-0 h-1.5 w-1.5 rounded-full', priorityCfg.dot)} />
+                            <span className="text-xs truncate">{incident.title}</span>
                           </div>
                           <Badge variant="outline" className={cn('text-xs flex-shrink-0 ml-2', priorityCfg.color)}>
                             {incident.priorityLevel}
@@ -314,44 +314,44 @@ function OnCallOverview() {
 
         {/* Who's On Call Now */}
         <Card className="h-full">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-4 px-4">
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-blue-500" />
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-1.5 text-base">
+                  <Users className="h-4 w-4 text-blue-500" />
                   Who's On Call
                 </CardTitle>
-                <CardDescription className="mt-1">Current on-call engineers for each schedule</CardDescription>
+                <CardDescription className="mt-0.5 text-xs">Current on-call engineers for each schedule</CardDescription>
               </div>
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="outline" size="sm" className="gap-1 text-xs shrink-0">
                 <Link to="/on-call/schedules">
-                  <Plus className="h-3 w-3 mr-1" />
+                  <Plus className="h-3 w-3" />
                   New Schedule
                 </Link>
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-4 pt-0">
             {schedulesLoading ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-6">
                 <div className="animate-spin rounded-full h-6 w-6 border-2 border-muted border-t-primary" />
               </div>
             ) : schedules && schedules.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {schedules.map((schedule, idx) => (
                   <div
                     key={schedule.id}
-                    className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/30 transition-colors"
+                    className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/30 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5">
                       <div className={cn(
-                        'flex items-center justify-center h-10 w-10 rounded-lg text-white text-sm font-bold',
+                        'flex items-center justify-center h-8 w-8 rounded-lg text-white text-xs font-bold',
                         avatarColors[idx % avatarColors.length]
                       )}>
                         {schedule.name.slice(0, 2).toUpperCase()}
                       </div>
-                      <div>
-                        <p className="font-medium">{schedule.name}</p>
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm">{schedule.name}</p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <Badge variant="outline" className="text-xs bg-violet-500/10 text-violet-400 border-violet-500/30">
                             {schedule.rotationType}
@@ -361,8 +361,8 @@ function OnCallOverview() {
                       </div>
                     </div>
                     {schedule.currentOnCall ? (
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-8 w-8">
+                      <div className="flex items-center gap-1.5">
+                        <Avatar className="h-7 w-7">
                           <AvatarFallback className={cn(
                             'text-xs text-white',
                             avatarColors[(schedule.currentOnCall.userId || 0) % avatarColors.length]
@@ -371,7 +371,7 @@ function OnCallOverview() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="text-right">
-                          <p className="text-sm font-medium">{schedule.currentOnCall.userName}</p>
+                          <p className="text-xs font-medium">{schedule.currentOnCall.userName}</p>
                           <p className="text-xs text-green-500 flex items-center gap-1">
                             <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
                             On call now
@@ -387,17 +387,17 @@ function OnCallOverview() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-10 border-2 border-dashed rounded-lg">
-                <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-violet-500/10 mb-3">
-                  <Calendar className="h-6 w-6 text-violet-500" />
+              <div className="text-center py-8 border-2 border-dashed rounded-lg">
+                <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-violet-500/10 mb-2">
+                  <Calendar className="h-5 w-5 text-violet-500" />
                 </div>
-                <h3 className="text-sm font-medium mb-1">No schedules configured</h3>
-                <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
+                <h3 className="text-sm font-medium mb-0.5">No schedules configured</h3>
+                <p className="text-xs text-muted-foreground mb-3 max-w-sm mx-auto">
                   Create your first on-call schedule to start managing rotations
                 </p>
-                <Button asChild>
+                <Button asChild size="sm" className="gap-1.5">
                   <Link to="/on-call/schedules">
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="h-3 w-3" />
                     Create Schedule
                   </Link>
                 </Button>
@@ -410,9 +410,9 @@ function OnCallOverview() {
       {/* Active Incidents - prominent when present */}
       {hasActiveIncidents && (
         <Card className="border-red-500/30">
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2 pt-4 px-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-1.5 text-base">
                 <div className="relative flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
@@ -426,8 +426,8 @@ function OnCallOverview() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
+          <CardContent className="px-4 pb-4 pt-0">
+            <div className="space-y-1.5">
               {activeIncidents.slice(0, 5).map((incident) => {
                 const priorityCfg = getPriorityConfig(incident.priorityLevel)
                 const statusCfg = getStatusConfig(incident.status)
@@ -437,9 +437,9 @@ function OnCallOverview() {
                     key={incident.id}
                     to="/on-call/incidents/$incidentId"
                     params={{incidentId: String(incident.id)}}
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-all group"
+                    className="flex items-center justify-between p-2.5 rounded-lg border hover:bg-accent/50 transition-all group"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
                       <div className={cn('flex-shrink-0 h-2 w-2 rounded-full', priorityCfg.dot)} />
                       <div className="min-w-0">
                         <p className="font-medium text-sm truncate group-hover:text-foreground">{incident.title}</p>

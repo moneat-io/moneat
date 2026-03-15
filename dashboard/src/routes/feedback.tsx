@@ -222,15 +222,15 @@ function FeedbackPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-4 py-4">
         {/* Header */}
-        <div className="mb-6 flex items-center gap-3">
-          <div className="rounded-xl bg-violet-500/15 p-2.5 ring-1 ring-violet-500/20">
-            <MessageSquare className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+        <div className="mb-4 flex items-center gap-2.5">
+          <div className="rounded-lg bg-violet-500/15 p-2 ring-1 ring-violet-500/20 shrink-0">
+            <MessageSquare className="h-5 w-5 text-violet-600 dark:text-violet-400" />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold">User Feedback</h2>
-            <p className="text-sm text-muted-foreground">Review and manage feedback from your users</p>
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold">User Feedback</h2>
+            <p className="text-xs text-muted-foreground">Review and manage feedback from your users</p>
           </div>
         </div>
 
@@ -254,62 +254,62 @@ function FeedbackPage() {
           <>
             {/* Stats Cards */}
             {allFeedback.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                 <button
                   onClick={() => setStatusFilter('all')}
-                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2.5 text-left transition-all hover:shadow-md ${
                     statusFilter === 'all'
                       ? 'border-violet-500/40 bg-violet-500/10 shadow-sm ring-1 ring-violet-500/20'
                       : 'border-border/60 bg-card hover:border-violet-500/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Inbox className="h-4 w-4 text-violet-500" />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total</span>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Inbox className="h-3 w-3 text-violet-500" />
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Total</span>
                   </div>
-                  <div className="text-2xl font-bold text-violet-600 dark:text-violet-400">{stats.total}</div>
+                  <div className="text-xl font-bold text-violet-600 dark:text-violet-400">{stats.total}</div>
                 </button>
                 <button
                   onClick={() => setStatusFilter('unresolved')}
-                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2.5 text-left transition-all hover:shadow-md ${
                     statusFilter === 'unresolved'
                       ? 'border-amber-500/40 bg-amber-500/10 shadow-sm ring-1 ring-amber-500/20'
                       : 'border-border/60 bg-card hover:border-amber-500/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <CircleDot className="h-4 w-4 text-amber-500" />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unresolved</span>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <CircleDot className="h-3 w-3 text-amber-500" />
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Unresolved</span>
                   </div>
-                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.unresolved}</div>
+                  <div className="text-xl font-bold text-amber-600 dark:text-amber-400">{stats.unresolved}</div>
                 </button>
                 <button
                   onClick={() => setStatusFilter('resolved')}
-                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2.5 text-left transition-all hover:shadow-md ${
                     statusFilter === 'resolved'
                       ? 'border-emerald-500/40 bg-emerald-500/10 shadow-sm ring-1 ring-emerald-500/20'
                       : 'border-border/60 bg-card hover:border-emerald-500/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Resolved</span>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Resolved</span>
                   </div>
-                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.resolved}</div>
+                  <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{stats.resolved}</div>
                 </button>
                 <button
                   onClick={() => setStatusFilter('archived')}
-                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2.5 text-left transition-all hover:shadow-md ${
                     statusFilter === 'archived'
                       ? 'border-slate-500/40 bg-slate-500/10 shadow-sm ring-1 ring-slate-500/20'
                       : 'border-border/60 bg-card hover:border-slate-500/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Archive className="h-4 w-4 text-slate-500" />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Archived</span>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Archive className="h-3 w-3 text-slate-500" />
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Archived</span>
                   </div>
-                  <div className="text-2xl font-bold text-slate-600 dark:text-slate-400">{stats.archived}</div>
+                  <div className="text-xl font-bold text-slate-600 dark:text-slate-400">{stats.archived}</div>
                 </button>
               </div>
             )}
@@ -392,7 +392,7 @@ function FeedbackPage() {
                         onClick={() => navigate({ to: '/feedback/$feedbackId', params: { feedbackId: f.feedbackId } })}
                         className={`cursor-pointer rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/20 transition-all hover:shadow-md border-l-[3px] ${config.border}`}
                       >
-                        <div className="flex items-start gap-4 p-4">
+                        <div className="flex items-start gap-3 p-3">
                           {/* Checkbox */}
                           <div className="flex items-center pt-1">
                             <Checkbox
@@ -404,7 +404,7 @@ function FeedbackPage() {
                           </div>
 
                           {/* Avatar */}
-                          <Avatar className="h-9 w-9 shrink-0 mt-0.5">
+                          <Avatar className="h-8 w-8 shrink-0 mt-0.5">
                             <AvatarFallback className={`text-xs font-semibold ${avatarColor}`}>
                               {initials}
                             </AvatarFallback>

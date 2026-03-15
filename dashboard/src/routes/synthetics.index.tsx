@@ -263,11 +263,11 @@ function SyntheticResults() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card>
-        <CardHeader>
+        <CardHeader className="py-3 px-4">
           <div className="flex items-center justify-between">
-            <CardTitle>Tests</CardTitle>
+            <CardTitle className="text-base">Tests</CardTitle>
             {selectedTests.size > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">{selectedTests.size} selected</span>
@@ -284,20 +284,20 @@ function SyntheticResults() {
             )}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-4 pt-0">
           {/* Filter bar */}
-          <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search tests..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9"
+                className="pl-9 h-8 text-sm"
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-32 h-9">
+              <SelectTrigger className="w-32 h-8 text-sm">
                 <Filter className="h-3.5 w-3.5 mr-1.5" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -309,7 +309,7 @@ function SyntheticResults() {
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-32 h-9">
+              <SelectTrigger className="w-32 h-8 text-sm">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
@@ -324,7 +324,7 @@ function SyntheticResults() {
             </Select>
             {allTags.length > 0 && (
               <Select value={tagFilter} onValueChange={setTagFilter}>
-                <SelectTrigger className="w-32 h-9">
+                <SelectTrigger className="w-32 h-8 text-sm">
                   <SelectValue placeholder="Tag" />
                 </SelectTrigger>
                 <SelectContent>
@@ -451,8 +451,8 @@ function SyntheticResults() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Recent Results</CardTitle></CardHeader>
-        <CardContent>
+        <CardHeader className="py-3 px-4"><CardTitle className="text-base">Recent Results</CardTitle></CardHeader>
+        <CardContent className="px-4 pb-4 pt-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

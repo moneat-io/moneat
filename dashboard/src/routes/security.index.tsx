@@ -55,8 +55,8 @@ function SecurityEvents() {
 
   return (
     <Card>
-      <CardHeader><CardTitle>Security Events ({data?.totalCount || 0})</CardTitle></CardHeader>
-      <CardContent>
+      <CardHeader className="py-2 px-3"><CardTitle className="text-sm">Security Events ({data?.totalCount || 0})</CardTitle></CardHeader>
+      <CardContent className="p-3 pt-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

@@ -99,65 +99,65 @@ function Incidents() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Alerts</h2>
-          <p className="text-muted-foreground text-sm mt-0.5">View and manage on-call alerts</p>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold tracking-tight">Alerts</h2>
+          <p className="text-muted-foreground text-xs mt-0.5">View and manage on-call alerts</p>
         </div>
       </div>
 
       {/* Stats Row */}
       {!isLoading && incidents && incidents.length > 0 && (
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           <button
             onClick={() => setStatusFilter(statusFilter === 'TRIGGERED' ? 'all' : 'TRIGGERED')}
             className={cn(
-              'flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-all',
+              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
               statusFilter === 'TRIGGERED'
                 ? 'bg-red-500/15 border-red-500/40 text-red-400 shadow-sm shadow-red-500/10'
                 : 'hover:bg-muted/60'
             )}
           >
-            <Zap className="h-3.5 w-3.5" />
+            <Zap className="h-3 w-3" />
             <span>{triggeredCount} Triggered</span>
           </button>
           <button
             onClick={() => setStatusFilter(statusFilter === 'ACKNOWLEDGED' ? 'all' : 'ACKNOWLEDGED')}
             className={cn(
-              'flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-all',
+              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
               statusFilter === 'ACKNOWLEDGED'
                 ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 shadow-sm shadow-amber-500/10'
                 : 'hover:bg-muted/60'
             )}
           >
-            <Clock className="h-3.5 w-3.5" />
+            <Clock className="h-3 w-3" />
             <span>{acknowledgedCount} Acknowledged</span>
           </button>
           <button
             onClick={() => setStatusFilter(statusFilter === 'RESOLVED' ? 'all' : 'RESOLVED')}
             className={cn(
-              'flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-all',
+              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
               statusFilter === 'RESOLVED'
                 ? 'bg-green-500/15 border-green-500/40 text-green-400 shadow-sm shadow-green-500/10'
                 : 'hover:bg-muted/60'
             )}
           >
-            <CheckCircle2 className="h-3.5 w-3.5" />
+            <CheckCircle2 className="h-3 w-3" />
             <span>{resolvedCount} Resolved</span>
           </button>
         </div>
       )}
 
       {/* Filters */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Filter className="h-4 w-4" />
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Filter className="h-3 w-3" />
           <span>Filter:</span>
         </div>
         <div className="w-44">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger className="h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -170,7 +170,7 @@ function Incidents() {
         </div>
         <div className="w-44">
           <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger className="h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -196,7 +196,7 @@ function Incidents() {
 
       {/* Incidents List */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
+        <div className="flex items-center justify-center py-10">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-red-500" />
         </div>
       ) : incidents && incidents.length > 0 ? (
@@ -219,7 +219,7 @@ function Incidents() {
                   incident.status === 'ACKNOWLEDGED' && 'border-l-amber-500 hover:border-amber-500/40',
                   incident.status === 'RESOLVED' && 'border-l-transparent hover:border-muted-foreground/20',
                 )}>
-                  <CardContent className="p-4">
+                  <CardContent className="p-3">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 min-w-0">
                         <div className={cn('flex-shrink-0 h-2.5 w-2.5 rounded-full mt-2', priorityCfg.dot)} />
@@ -237,7 +237,7 @@ function Incidents() {
                           {incident.description && (
                             <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{incident.description}</p>
                           )}
-                          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
                             <span>{timeAgo(incident.triggeredAt)}</span>
                             {incident.alertSource && (
                               <>
@@ -274,7 +274,7 @@ function Incidents() {
                           <StatusIcon className="h-3 w-3" />
                           {statusCfg.label}
                         </Badge>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
                   </CardContent>
@@ -284,12 +284,12 @@ function Incidents() {
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 border border-dashed rounded-xl">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-muted/60 mb-4">
-            <Inbox className="h-7 w-7 text-muted-foreground" />
+        <div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-xl">
+          <div className="inline-flex items-center justify-center h-11 w-11 rounded-full bg-muted/60 mb-3">
+            <Inbox className="h-5 w-5 text-muted-foreground" />
           </div>
-          <h3 className="text-base font-semibold mb-1">No alerts found</h3>
-          <p className="text-sm text-muted-foreground text-center max-w-sm">
+          <h3 className="text-sm font-semibold mb-0.5">No alerts found</h3>
+          <p className="text-xs text-muted-foreground text-center max-w-sm">
             {statusFilter !== 'all' || priorityFilter !== 'all'
               ? 'No alerts match your current filters. Try adjusting or clearing filters.'
               : 'Alerts will appear here when triggered by your alerting rules.'}

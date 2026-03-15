@@ -146,10 +146,10 @@ function ReleasesPage() {
 
   return (
     <div>
-      <div className="container mx-auto px-4 py-6">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold">Releases</h2>
-          <p className="text-muted-foreground mt-1">
+      <div className="container mx-auto px-4 py-4">
+        <div className="mb-4">
+          <h2 className="text-xl font-bold">Releases</h2>
+          <p className="text-muted-foreground text-xs mt-0.5">
             Track release health, new issues, and crash-free rates
           </p>
         </div>
@@ -177,26 +177,30 @@ function ReleasesPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               <StatsCard
+                compact
                 title="Tracked Releases"
                 value={releaseList.length.toLocaleString()}
                 icon={Package}
                 accent="blue"
               />
               <StatsCard
+                compact
                 title="Healthy Releases"
                 value={summary.healthyCount.toLocaleString()}
                 icon={ShieldCheck}
                 accent="emerald"
               />
               <StatsCard
+                compact
                 title="Regressing Releases"
                 value={summary.regressingCount.toLocaleString()}
                 icon={Flame}
                 accent="amber"
               />
               <StatsCard
+                compact
                 title="Avg Crash-Free Rate"
                 value={
                   summary.avgCrashFreeRate == null
@@ -209,8 +213,8 @@ function ReleasesPage() {
             </div>
 
             <Card>
-              <CardContent className="p-4">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+              <CardContent className="p-3">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
                   <div className="relative w-full lg:max-w-sm">
                     <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                     <Input
@@ -250,11 +254,11 @@ function ReleasesPage() {
                 className="block"
               >
                 <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
-                  <CardContent className="p-4">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <CardContent className="p-3">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 shrink-0">
-                          <Package className="h-5 w-5 text-primary" />
+                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 shrink-0">
+                          <Package className="h-4 w-4 text-primary" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">

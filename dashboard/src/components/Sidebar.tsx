@@ -500,7 +500,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                         'flex items-center gap-3 py-2 rounded-md transition-colors',
                         isExpanded ? 'px-3' : 'px-2',
                         isActive
-                          ? 'bg-primary text-primary-foreground'
+                          ? 'bg-[hsl(var(--sidebar-active))] text-[hsl(var(--sidebar-active-foreground))]'
                           : 'hover:bg-accent text-muted-foreground hover:text-foreground',
                         !isExpanded && 'justify-center'
                       )}

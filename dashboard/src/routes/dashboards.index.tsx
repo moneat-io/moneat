@@ -160,32 +160,32 @@ function DashboardListPage() {
     <div>
       {/* Page header */}
       <div className="border-b bg-card/50">
-        <div className="px-6 lg:px-8 py-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-primary/10 text-primary">
-                <LayoutDashboard className="h-6 w-6" />
+        <div className="px-6 lg:px-8 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10 text-primary shrink-0">
+                <LayoutDashboard className="h-5 w-5" />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Dashboards</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold tracking-tight">Dashboards</h1>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Build custom dashboards with drag-and-drop widgets
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <Link to="/dashboards/datasources">
-                <Button variant="outline" size="sm">
-                  <Database className="h-4 w-4 mr-1.5" />
+                <Button variant="outline" size="sm" className="gap-1 text-xs">
+                  <Database className="h-3 w-3" />
                   Data Sources
                 </Button>
               </Link>
-              <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
-                <Import className="h-4 w-4 mr-1.5" />
+              <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="gap-1 text-xs">
+                <Import className="h-3 w-3" />
                 Import
               </Button>
-              <Button size="sm" onClick={handleCreateBlank}>
-                <Plus className="h-4 w-4 mr-1.5" />
+              <Button size="sm" onClick={handleCreateBlank} className="gap-1 text-xs">
+                <Plus className="h-3 w-3" />
                 New Dashboard
               </Button>
             </div>
@@ -193,8 +193,8 @@ function DashboardListPage() {
         </div>
       </div>
 
-      <div className="px-6 lg:px-8 py-6">
-        <div className="flex gap-6">
+      <div className="px-6 lg:px-8 py-4">
+        <div className="flex gap-4">
           {/* Folder sidebar */}
           <aside className="w-52 shrink-0 space-y-0.5">
             <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-2.5 pb-2">
@@ -295,7 +295,7 @@ function DashboardListPage() {
                 ))}
               </div>
             ) : filteredDashboards.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {filteredDashboards.map((dashboard) => (
                   <DashboardCard
                     key={dashboard.id}

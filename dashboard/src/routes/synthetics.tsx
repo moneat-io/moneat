@@ -36,27 +36,27 @@ function SyntheticsLayout() {
   const [createOpen, setCreateOpen] = useState(false)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <BetaBanner pageKey="synthetics" />
-      <div className="p-6 space-y-6">
+      <div className="p-4 space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600">
-            <FlaskConical className="h-5 w-5 text-white" />
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shrink-0">
+            <FlaskConical className="h-4 w-4 text-white" />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold">Synthetics</h2>
-            <p className="text-muted-foreground text-sm">Synthetic test results and monitoring</p>
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold">Synthetics</h2>
+            <p className="text-muted-foreground text-xs">Synthetic test results and monitoring</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           <a href="/docs/datadog-agent/synthetics" target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <BookOpen className="h-4 w-4" />
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <BookOpen className="h-3 w-3" />
             View docs
           </a>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" />New Test
+          <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1 text-xs">
+            <Plus className="h-3 w-3" />New Test
           </Button>
         </div>
       </div>

@@ -83,24 +83,24 @@ function AiOverviewPage() {
   })
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2 whitespace-nowrap">
-            <Brain className="h-6 w-6" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold flex items-center gap-1.5 whitespace-nowrap">
+            <Brain className="h-5 w-5" />
             AI Observability
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <p className="text-muted-foreground text-xs mt-0.5">
             Monitor your LLM applications, trace agent executions, and track costs.
           </p>
           <a
             href="/docs/ai-observability"
-            className="inline-flex items-center gap-2 mt-3 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-1.5 mt-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-primary/90 transition-colors"
           >
-            <BookOpen className="h-4 w-4" />
+            <BookOpen className="h-3 w-3" />
             Get Started
-            <ArrowRight className="h-4 w-4" />
+            <ArrowRight className="h-3 w-3" />
           </a>
         </div>
         <div className="w-full sm:w-auto">
@@ -121,32 +121,37 @@ function AiOverviewPage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <StatsCard
+          compact
           title="Total Generations"
           value={isLoading ? '...' : formatTokens(overview?.totalGenerations ?? 0)}
           icon={Zap}
           accent="blue"
         />
         <StatsCard
+          compact
           title="Total Tokens"
           value={isLoading ? '...' : formatTokens(overview?.totalTokens ?? 0)}
           icon={Hash}
           accent="violet"
         />
         <StatsCard
+          compact
           title="Total Cost"
           value={isLoading ? '...' : formatCost(overview?.totalCost ?? 0)}
           icon={Coins}
           accent="emerald"
         />
         <StatsCard
+          compact
           title="Avg Latency"
           value={isLoading ? '...' : formatDuration(overview?.avgDurationMs ?? 0)}
           icon={Clock}
           accent="amber"
         />
         <StatsCard
+          compact
           title="Error Rate"
           value={isLoading ? '...' : `${(overview?.errorRate ?? 0).toFixed(1)}%`}
           icon={AlertTriangle}
@@ -155,24 +160,24 @@ function AiOverviewPage() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <EventsChart data={timelineData} title="LLM Calls Over Time" height={250} />
-        <BarChart data={modelBreakdown} title="Calls by Model" height={250} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <EventsChart data={timelineData} title="LLM Calls Over Time" height={200} />
+        <BarChart data={modelBreakdown} title="Calls by Model" height={200} />
       </div>
 
       {/* Token Breakdown & Cost */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <BarChart data={tokenBreakdown} title="Tokens by Model" height={250} />
-        <BarChart data={costBreakdown} title="Cost by Model" height={250} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <BarChart data={tokenBreakdown} title="Tokens by Model" height={200} />
+        <BarChart data={costBreakdown} title="Cost by Model" height={200} />
       </div>
 
       {/* Top Models Table */}
       <Card>
-        <CardHeader className="px-4 py-3 flex flex-row items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="text-sm">Top Models</CardTitle>
+        <CardHeader className="px-3 py-2 flex flex-row items-center gap-1.5">
+          <TrendingUp className="h-3 w-3 text-muted-foreground" />
+          <CardTitle className="text-xs">Top Models</CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-3 pt-0 overflow-x-auto">
+        <CardContent className="px-3 pb-2 pt-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
