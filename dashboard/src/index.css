@@ -438,6 +438,22 @@
   }
 }
 
+/* Dot grid background patterns */
+.dot-grid-pattern {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.dot-grid-pattern-subtle {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.dot-grid-pattern-wide {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
 /* Landing page animations */
 @keyframes fade-in-up {
   from {

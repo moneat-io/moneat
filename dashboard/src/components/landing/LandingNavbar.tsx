@@ -76,37 +76,37 @@ const PLATFORM_CATEGORIES: PlatformCategory[] = [
   {
     label: 'Observe',
     items: [
-      {icon: Activity, title: 'Error Tracking', description: 'Catch and triage errors with smart fingerprinting', href: '/error-tracking', iconColor: 'text-sky-400'},
-      {icon: FileText, title: 'Log Management', description: 'Structured JSON logs with full-text search', href: '/log-management', iconColor: 'text-blue-400'},
-      {icon: Play, title: 'Session Replay', description: 'Watch what users did before an error', href: '/session-replay', iconColor: 'text-violet-400'},
-      {icon: Zap, title: 'APM & Traces', description: 'Track transactions and find slow endpoints', href: '/performance-monitoring', iconColor: 'text-amber-400'},
+      {icon: Activity, title: 'Error Tracking', description: 'Catch and triage errors with smart fingerprinting', href: '/error-tracking', iconColor: 'text-slate-400'},
+      {icon: FileText, title: 'Log Management', description: 'Structured JSON logs with full-text search', href: '/log-management', iconColor: 'text-slate-400'},
+      {icon: Play, title: 'Session Replay', description: 'Watch what users did before an error', href: '/session-replay', iconColor: 'text-slate-400'},
+      {icon: Zap, title: 'APM & Traces', description: 'Track transactions and find slow endpoints', href: '/performance-monitoring', iconColor: 'text-slate-400'},
     ],
   },
   {
     label: 'Infrastructure',
     items: [
-      {icon: Server, title: 'Host Monitoring', description: 'CPU, memory, disk, and network metrics', href: '/infrastructure-monitoring', iconColor: 'text-orange-400'},
-      {icon: Box, title: 'Container Monitoring', description: 'Real-time Docker container metrics', href: '/infrastructure-monitoring', iconColor: 'text-blue-400'},
-      {icon: LayoutDashboard, title: 'Kubernetes', description: 'Cluster, node, and pod observability', href: '/infrastructure-monitoring', iconColor: 'text-cyan-400'},
-      {icon: Flame, title: 'Profiling', description: 'CPU and heap profiles from production', href: '/profiling', iconColor: 'text-red-400'},
+      {icon: Server, title: 'Host Monitoring', description: 'CPU, memory, disk, and network metrics', href: '/infrastructure-monitoring', iconColor: 'text-slate-400'},
+      {icon: Box, title: 'Container Monitoring', description: 'Real-time Docker container metrics', href: '/infrastructure-monitoring', iconColor: 'text-slate-400'},
+      {icon: LayoutDashboard, title: 'Kubernetes', description: 'Cluster, node, and pod observability', href: '/infrastructure-monitoring', iconColor: 'text-slate-400'},
+      {icon: Flame, title: 'Profiling', description: 'CPU and heap profiles from production', href: '/profiling', iconColor: 'text-slate-400'},
     ],
   },
   {
     label: 'Respond',
     items: [
-      {icon: Globe, title: 'Uptime Monitoring', description: 'Monitor services 24/7 with instant alerts', href: '/uptime-monitoring', iconColor: 'text-green-400'},
-      {icon: Phone, title: 'On-Call & Incidents', description: 'Rotations, escalation, phone & SMS alerts', href: '/on-call-management', iconColor: 'text-orange-400'},
-      {icon: GitBranch, title: 'Status Pages', description: 'Public status pages with custom domains', href: '/public-status-pages', iconColor: 'text-cyan-400'},
-      {icon: Bell, title: 'Alerting', description: 'Multi-channel alerts to Slack and Discord', href: '/alerting', iconColor: 'text-rose-400'},
+      {icon: Globe, title: 'Uptime Monitoring', description: 'Monitor services 24/7 with instant alerts', href: '/uptime-monitoring', iconColor: 'text-slate-400'},
+      {icon: Phone, title: 'On-Call & Incidents', description: 'Rotations, escalation, phone & SMS alerts', href: '/on-call-management', iconColor: 'text-slate-400'},
+      {icon: GitBranch, title: 'Status Pages', description: 'Public status pages with custom domains', href: '/public-status-pages', iconColor: 'text-slate-400'},
+      {icon: Bell, title: 'Alerting', description: 'Multi-channel alerts to Slack and Discord', href: '/alerting', iconColor: 'text-slate-400'},
     ],
   },
   {
     label: 'Intelligence',
     items: [
-      {icon: Brain, title: 'AI & LLM Observability', description: 'Monitor LLM calls, tokens, and costs', href: '/ai-observability', iconColor: 'text-fuchsia-400'},
-      {icon: Bot, title: 'MCP Server', description: 'Query Moneat from Cursor, Copilot, or agents', href: '/mcp-server', iconColor: 'text-violet-400'},
-      {icon: LayoutDashboard, title: 'Dashboards', description: 'Custom dashboards with any data source', href: '/custom-dashboards', iconColor: 'text-sky-400'},
-      {icon: ShieldCheck, title: 'Security & SBOM', description: 'Package inventory with CVE tracking', href: '/security-sbom', iconColor: 'text-emerald-400'},
+      {icon: Brain, title: 'AI & LLM Observability', description: 'Monitor LLM calls, tokens, and costs', href: '/ai-observability', iconColor: 'text-slate-400'},
+      {icon: Bot, title: 'MCP Server', description: 'Query Moneat from Cursor, Copilot, or agents', href: '/mcp-server', iconColor: 'text-slate-400'},
+      {icon: LayoutDashboard, title: 'Dashboards', description: 'Custom dashboards with any data source', href: '/custom-dashboards', iconColor: 'text-slate-400'},
+      {icon: ShieldCheck, title: 'Security & SBOM', description: 'Package inventory with CVE tracking', href: '/security-sbom', iconColor: 'text-slate-400'},
     ],
   },
 ]
@@ -145,7 +145,7 @@ function PlatformMegaMenu() {
 
       {open && (
         <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 z-50">
-          <div className="w-[720px] rounded-xl border border-white/[0.08] bg-[#0c0e14]/95 backdrop-blur-xl shadow-2xl shadow-black/50 p-5">
+          <div className="w-[720px] rounded-xl border border-white/[0.08] bg-[#0c0e14] backdrop-blur-xl shadow-2xl shadow-black/50 p-5">
             <div className="grid grid-cols-2 gap-x-6 gap-y-5">
               {PLATFORM_CATEGORIES.map(cat => (
                 <div key={cat.label}>
