@@ -213,6 +213,7 @@ describe('ThemeSwitcher – extended branch coverage', () => {
   // ──── Check icon: shown next to active theme ────
   describe('check icon', () => {
     it('shows check icon next to the active dark theme', async () => {
+      localStorage.setItem('theme', 'dark')
       const user = userEvent.setup()
       render(<ThemeSwitcher />)
       await user.click(screen.getByRole('button', {name: /select theme/i}))
