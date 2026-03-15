@@ -147,7 +147,7 @@ describe('priority route coverage', () => {
     renderRoute(Component)
 
     expect(await screen.findByText('Issue not found')).toBeInTheDocument()
-    expect(mockApi.getIssue).toHaveBeenCalledWith('issue-123')
+    expect(mockApi.getIssue).toHaveBeenCalledWith('issue-123', null)
   })
 
   it('performance route renders no projects message when there are no projects', async () => {

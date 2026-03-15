@@ -43,7 +43,7 @@ export function issuesMethods(core: ApiClientCore) {
     },
 
     getIssue: (issueId: string, projectId?: number | null) => {
-      const params = projectId != null ? `?projectId=${projectId}` : ''
+      const params = projectId == null ? '' : `?projectId=${projectId}`
       return core.request<IssueDetail>(`${base}/issues/${encodeURIComponent(issueId)}${params}`)
     },
 
@@ -72,7 +72,7 @@ export function issuesMethods(core: ApiClientCore) {
       },
       projectId?: number | null
     ) => {
-      const params = projectId != null ? `?projectId=${projectId}` : ''
+      const params = projectId == null ? '' : `?projectId=${projectId}`
       return core.request(`${base}/issues/${encodeURIComponent(issueId)}${params}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
