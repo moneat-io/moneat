@@ -104,8 +104,7 @@ class IssueService(
         demoEpochMs: Long? = null,
         explicitProjectId: Long? = null
     ): IssueDetailResponse? {
-        val projectId = explicitProjectId ?: issueRepository.getProjectIdForIssue(issueId)
-        if (projectId == null) return null
+        val projectId = explicitProjectId ?: issueRepository.getProjectIdForIssue(issueId) ?: return null
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val retentionClause =
@@ -151,8 +150,7 @@ class IssueService(
         demoEpochMs: Long? = null,
         explicitProjectId: Long? = null
     ): List<EventResponse> {
-        val projectId = explicitProjectId ?: issueRepository.getProjectIdForIssue(issueId)
-        if (projectId == null) return emptyList()
+        val projectId = explicitProjectId ?: issueRepository.getProjectIdForIssue(issueId) ?: return emptyList()
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val retentionClause =
@@ -173,8 +171,7 @@ class IssueService(
         demoEpochMs: Long? = null,
         explicitProjectId: Long? = null
     ): List<IssueTransactionResponse> {
-        val projectId = explicitProjectId ?: issueRepository.getProjectIdForIssue(issueId)
-        if (projectId == null) return emptyList()
+        val projectId = explicitProjectId ?: issueRepository.getProjectIdForIssue(issueId) ?: return emptyList()
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val retentionClause =
