@@ -17,8 +17,10 @@
 package com.moneat.events.routes
 
 import com.moneat.auth.routes.accountDeletionRoutes
+import com.moneat.auth.services.Quadruple
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.routes.publicBillingRoutes
+import com.moneat.billing.services.PricingTierService
 import com.moneat.events.models.AddTargetRequest
 import com.moneat.events.models.AlertNotificationPreferencesResponse
 import com.moneat.events.models.CreateProjectRequest
@@ -101,6 +103,24 @@ fun Route.apiRoutes() {
                 // Protected billing routes
                 billingRoutes()
 
+                // Subscription tier (for SSO visibility, etc.)
+                get("/subscription") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val pricingTierService = koin.get<PricingTierService>()
+                    val orgId =
+                        pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
+                            call.respond(HttpStatusCode.NotFound, ErrorResponse("No organization access"))
+                            return@get
+                        }
+                    val context = pricingTierService.getEffectiveTierForOrganization(orgId)
+                    call.respond(
+                        mapOf(
+                            "tier" to mapOf("tierName" to context.tier.tierName)
+                        )
+                    )
+                }
+
                 // Integrations
                 integrationRoutes()
 
@@ -110,11 +130,11 @@ fun Route.apiRoutes() {
                     val userId = principal!!.payload.getClaim("userId").asInt()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val (user, orgSlug, sidebarHiddenItems) =
+                    val (user, orgSlug, orgRole, sidebarHiddenItems) =
                         transaction {
                             val userRow =
                                 Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                                    ?: return@transaction Triple(null, null, emptyList())
+                                    ?: return@transaction Quadruple(null, null, null, emptyList())
 
                             val membership =
                                 Memberships
@@ -131,9 +151,10 @@ fun Route.apiRoutes() {
                                         ?.get(Organizations.slug)
                                 }
 
+                            val role = membership?.get(Memberships.role)
                             val hiddenItems = membership?.get(Memberships.sidebar_hidden_items) ?: emptyList()
 
-                            Triple(userRow, slug, hiddenItems)
+                            Quadruple(userRow, slug, role, hiddenItems)
                         }
 
                     if (user == null) {
@@ -148,6 +169,7 @@ fun Route.apiRoutes() {
                                 user[Users.onboarding_completed],
                                 user[Users.is_admin],
                                 orgSlug,
+                                orgRole,
                                 demoEpochMs,
                                 sidebarHiddenItems,
                                 user[Users.phone_number],

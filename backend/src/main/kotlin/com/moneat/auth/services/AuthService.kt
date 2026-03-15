@@ -548,6 +548,7 @@ class AuthService(
             true,
             user.isAdmin,
             finalSlug,
+            membership.role,
             null,
             hiddenItems
         )

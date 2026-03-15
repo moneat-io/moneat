@@ -43,10 +43,24 @@ Apple Sign In is available on both the web dashboard and mobile app. It provides
 
 ### How SSO Works
 
-Enterprise SSO allows your organization to use your existing identity provider (IdP) to authenticate users into Moneat. Users sign in through your company's SSO portal and are automatically provisioned in Moneat.
+SSO allows your organization to use your existing identity provider (IdP) to authenticate users into Moneat. Users sign in through your company's SSO portal and are automatically provisioned in Moneat.
 
-:::info[Available on Team and Business plans]
-SSO is available on the Team and Business plan tiers. Contact support if you need help configuring SSO for your organization.
+### OIDC SSO
+
+OIDC (OpenID Connect) SSO is available to all self-hosted deployments with no license required. It works with any standard OIDC provider including Authentik, Authelia, Keycloak, Okta, Azure AD, Auth0, and others.
+
+For SaaS customers, OIDC SSO is available on the Team and Business plan tiers.
+
+### SAML SSO
+
+SAML 2.0 SSO requires an enterprise license for self-hosted deployments, or a Team/Business plan for SaaS customers.
+
+### SSO Enforcement (Require SSO)
+
+The "Require SSO" option blocks password login for all users in your organization, requiring authentication through your identity provider. This feature requires an enterprise license for self-hosted deployments, or a Team/Business plan for SaaS customers.
+
+:::info[SSO Availability]
+OIDC SSO is available on all self-hosted deployments. SAML SSO and SSO enforcement require an enterprise license or Team/Business plan. Contact support if you need help configuring SSO for your organization.
 :::
 
 ### SSO Login Flow

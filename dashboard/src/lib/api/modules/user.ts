@@ -34,6 +34,7 @@ export function userMethods(core: ApiClientCore) {
         onboardingCompleted: boolean
         isAdmin?: boolean
         organizationSlug?: string
+        orgRole?: string
         demoEpochMs?: number
         sidebarHiddenItems?: string[]
         timezone?: string | null

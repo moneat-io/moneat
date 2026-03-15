@@ -175,11 +175,11 @@ function SettingsPage() {
   const tier = subscription?.tier?.tierName || 'FREE'
   const isSelfHosted = useIsSelfHosted()
   
-  // SSO available if: (self-hosted with enterprise SSO/OnCall module) OR (SaaS with Team/Business tier)
+  // SSO: OIDC is always available for self-hosted; SAML and enforcement require enterprise
   const { data: features } = useEnterpriseFeatures()
-  const hasSsoModule = hasEnterpriseModule(features, 'oncall') || hasEnterpriseModule(features, 'sso')
-  const canUseSso = (isSelfHosted && hasSsoModule) || (!isSelfHosted && (tier === 'TEAM' || tier === 'BUSINESS'))
+  const hasSamlModule = hasEnterpriseModule(features, 'saml')
   const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
+  const canUseSso = canManageTeam && (isSelfHosted || hasSamlModule || (!isSelfHosted && (tier === 'TEAM' || tier === 'BUSINESS')))
   
   return (
     <div>
@@ -282,9 +282,6 @@ function SettingsPage() {
                 >
                   <Shield className="h-4 w-4 mr-2" />
                   SSO
-                  {isSelfHosted && hasSsoModule && (
-                    <Badge variant="secondary" className="ml-2 h-4 px-1.5 text-[10px]">Enterprise</Badge>
-                  )}
                 </TabsTrigger>
               )}
 
@@ -335,7 +332,7 @@ function SettingsPage() {
             </TabsContent>
             {canUseSso && (
               <TabsContent value="sso" className="space-y-4 mt-0">
-                <SsoTab />
+                <SsoTab hasSamlModule={hasSamlModule} />
               </TabsContent>
             )}
             <TabsContent value="account" className="space-y-4 mt-0">

@@ -1,0 +1,97 @@
+// Moneat Enterprise - proprietary module
+// Copyright (c) 2026 Moneat. All rights reserved.
+// See ee/LICENSE for license terms.
+
+package com.moneat.enterprise.sso.routes
+
+import com.moneat.config.EnvConfig
+import com.moneat.enterprise.sso.services.SamlService
+import com.moneat.sso.models.SsoInitRequest
+import com.moneat.utils.AuthCookieUtils
+import com.moneat.utils.ErrorResponse
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.request.receive
+import io.ktor.server.request.receiveParameters
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondRedirect
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import io.ktor.server.routing.route
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
+
+fun Route.samlRoutes() {
+    val samlService = SamlService()
+    val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
+
+    route("/auth/sso") {
+        // Override the SAML init path (core handles OIDC init)
+        post("/init/saml") {
+            try {
+                val request = call.receive<SsoInitRequest>()
+                val response = samlService.initSaml(
+                    request.email, request.orgSlug
+                )
+                call.respond(response)
+            } catch (e: IllegalArgumentException) {
+                logger.error(e) { "SAML init failed: ${e.message}" }
+                call.respond(
+                    HttpStatusCode.BadRequest, ErrorResponse(e.message)
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "SAML init error" }
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse("SAML initialization failed")
+                )
+            }
+        }
+
+        get("/saml/metadata") {
+            try {
+                val orgSlug = call.parameters["org"]
+                val metadata = samlService.getSamlMetadata(orgSlug)
+                call.respondText(metadata, ContentType.Text.Xml)
+            } catch (e: IllegalArgumentException) {
+                logger.error(e) {
+                    "SAML metadata request failed: ${e.message}"
+                }
+                call.respond(
+                    HttpStatusCode.BadRequest, ErrorResponse(e.message)
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "SAML metadata error" }
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse("Failed to generate SAML metadata")
+                )
+            }
+        }
+
+        post("/saml/acs") {
+            try {
+                val params = call.receiveParameters()
+                val samlResponse = params["SAMLResponse"]
+                    ?: throw IllegalArgumentException("Missing SAMLResponse")
+                val relayState = params["RelayState"]
+
+                val callbackData = samlService.handleSamlResponse(
+                    samlResponse, relayState
+                )
+
+                AuthCookieUtils.setAuthCookie(call, callbackData.token)
+                call.respondRedirect("$frontendUrl/auth/sso/callback")
+            } catch (e: IllegalArgumentException) {
+                logger.error(e) { "SAML ACS failed: ${e.message}" }
+                call.respondRedirect("$frontendUrl/login?error=sso_failed")
+            } catch (e: Exception) {
+                logger.error(e) { "SAML ACS error" }
+                call.respondRedirect("$frontendUrl/login?error=sso_failed")
+            }
+        }
+    }
+}

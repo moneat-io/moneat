@@ -101,6 +101,8 @@ Moneat is Sentry SDK, Datadog Agent, and OpenTelemetry (OTLP) compatible. Point 
 | User Feedback | Sentry-compatible feedback ingestion with status workflows | [Docs](https://moneat.io/docs) |
 | Datadog Compatibility | Ingest from existing Datadog agents with no code changes | [Docs](https://moneat.io/docs) |
 | On-Call & Incidents | PagerDuty-style escalations *(Enterprise)* | [Pricing](https://moneat.io/pricing) |
+| SSO (OIDC) | Sign in with any OpenID Connect provider | [Docs](https://moneat.io/docs) |
+| SSO (SAML) & Enforcement | SAML 2.0 and mandatory SSO *(Enterprise)* | [Pricing](https://moneat.io/pricing) |
 | Terraform Provider | Manage Moneat resources as code | [Registry](https://registry.terraform.io/providers/moneat-io/moneat/latest) |
 
 ### Sentry SDK Compatibility
@@ -268,7 +270,7 @@ Copyright &copy; 2026 Moneat
 | `ee/` | [Moneat Enterprise License](ee/LICENSE) |
 | Everything else | [GNU AGPLv3](LICENSE) |
 
-Enterprise modules are gated by a signed license key (`MONEAT_LICENSE_KEY`). Without a valid key, only the open-source core is active. The AGPL does not apply to files in `ee/`.
+Enterprise modules are gated by a signed license key (`MONEAT_LICENSE_KEY`). Without a valid key, only the open-source core is active. OIDC SSO is part of the open core and always available. SAML SSO and SSO enforcement require an enterprise license. The AGPL does not apply to files in `ee/`.
 
 For licensing questions: [licensing@moneat.io](mailto:licensing@moneat.io)
 
