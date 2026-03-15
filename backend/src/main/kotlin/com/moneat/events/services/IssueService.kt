@@ -101,9 +101,10 @@ class IssueService(
 
     suspend fun getIssue(
         issueId: String,
-        demoEpochMs: Long? = null
+        demoEpochMs: Long? = null,
+        explicitProjectId: Long? = null
     ): IssueDetailResponse? {
-        val projectId = issueRepository.getProjectIdForIssue(issueId) ?: return null
+        val projectId = explicitProjectId ?: issueRepository.getProjectIdForIssue(issueId) ?: return null
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val retentionClause =
@@ -121,7 +122,7 @@ class IssueService(
         val projectName = issueRepository.getProjectName(projectId)
         val effectiveStatus = pgStatus ?: obj.status
 
-        val latestEvent = getIssueEvents(issueId, 1, demoEpochMs).firstOrNull()
+        val latestEvent = getIssueEvents(issueId, 1, demoEpochMs, projectId).firstOrNull()
 
         return IssueDetailResponse(
             id = obj.issueId,
@@ -146,9 +147,10 @@ class IssueService(
     suspend fun getIssueEvents(
         issueId: String,
         limit: Int,
-        demoEpochMs: Long? = null
+        demoEpochMs: Long? = null,
+        explicitProjectId: Long? = null
     ): List<EventResponse> {
-        val projectId = issueRepository.getProjectIdForIssue(issueId) ?: return emptyList()
+        val projectId = explicitProjectId ?: issueRepository.getProjectIdForIssue(issueId) ?: return emptyList()
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val retentionClause =
@@ -166,9 +168,10 @@ class IssueService(
     suspend fun getIssueTransactions(
         issueId: String,
         limit: Int,
-        demoEpochMs: Long? = null
+        demoEpochMs: Long? = null,
+        explicitProjectId: Long? = null
     ): List<IssueTransactionResponse> {
-        val projectId = issueRepository.getProjectIdForIssue(issueId) ?: return emptyList()
+        val projectId = explicitProjectId ?: issueRepository.getProjectIdForIssue(issueId) ?: return emptyList()
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val retentionClause =

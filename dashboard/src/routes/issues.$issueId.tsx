@@ -58,6 +58,7 @@ import {
     Zap,
 } from 'lucide-react'
 import {useTimezone} from '@/hooks/useTimezone'
+import {useProject} from '@/contexts/ProjectContext'
 import {formatDateTime, formatTime} from '@/lib/date-format'
 
 interface StackFrameData {
@@ -142,26 +143,27 @@ function IssueDetailPage() {
   const queryClient = useQueryClient()
   const { timezone } = useTimezone()
   const { toast } = useToast()
+  const { selectedProjectId } = useProject()
   const [expandContextsByDefault, setExpandContextsByDefault] = useState(true)
 
   const { data: issue, isLoading } = useQuery({
-    queryKey: ['issue', issueId],
-    queryFn: () => api.getIssue(issueId),
+    queryKey: ['issue', issueId, selectedProjectId],
+    queryFn: () => api.getIssue(issueId, selectedProjectId),
   })
 
   const { data: events = [] } = useQuery({
-    queryKey: ['issue-events', issueId],
-    queryFn: () => api.getIssueEvents(issueId),
+    queryKey: ['issue-events', issueId, selectedProjectId],
+    queryFn: () => api.getIssueEvents(issueId, 50, selectedProjectId),
   })
 
   const { data: relatedTransactions = [] } = useQuery({
-    queryKey: ['issue-transactions', issueId],
-    queryFn: () => api.getIssueTransactions(issueId),
+    queryKey: ['issue-transactions', issueId, selectedProjectId],
+    queryFn: () => api.getIssueTransactions(issueId, 20, selectedProjectId),
   })
 
   const { data: linkedReplays = [] } = useQuery({
-    queryKey: ['issue-replays', issueId],
-    queryFn: () => api.getReplaysForIssue(issueId, 10),
+    queryKey: ['issue-replays', issueId, selectedProjectId],
+    queryFn: () => api.getReplaysForIssue(issueId, 10, selectedProjectId),
   })
 
   const primaryTransactionId = relatedTransactions[0]?.eventId
@@ -173,10 +175,10 @@ function IssueDetailPage() {
   })
 
   const statusMutation = useMutation({
-    mutationFn: (status: string) => api.updateIssue(issueId, { status }),
+    mutationFn: (status: string) => api.updateIssue(issueId, { status }, selectedProjectId),
     onSuccess: (_, status) => {
       trackEvent('Issue StatusChange', { source: 'detail', status })
-      queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
+      queryClient.invalidateQueries({ queryKey: ['issue', issueId, selectedProjectId] })
       const messages: Record<string, { title: string; description: string }> = {
         resolved: { title: 'Issue resolved', description: 'The issue has been marked as resolved.' },
         unresolved: { title: 'Issue unresolved', description: 'The issue has been marked as unresolved.' },

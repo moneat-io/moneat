@@ -67,9 +67,12 @@ export function replaysMethods(core: ApiClientCore) {
       }
     },
 
-    getReplaysForIssue: (issueId: string, limit = 10) =>
-      core.request<Replay[]>(
-        `${base}/issues/${encodeURIComponent(issueId)}/replays?limit=${limit}`
-      ),
+    getReplaysForIssue: (issueId: string, limit = 10, projectId?: number | null) => {
+      const params = new URLSearchParams({ limit: String(limit) })
+      if (projectId != null) params.set('projectId', String(projectId))
+      return core.request<Replay[]>(
+        `${base}/issues/${encodeURIComponent(issueId)}/replays?${params.toString()}`
+      )
+    },
   }
 }

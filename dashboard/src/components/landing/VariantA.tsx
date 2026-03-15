@@ -356,12 +356,11 @@ export function VariantA() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-cyan-500/10 blur-[100px] animate-pulse-glow animation-delay-400" />
         </div>
 
-        {/* Grid pattern overlay */}
+        <div className="absolute inset-0 dot-grid-pattern opacity-80" />
         <div
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px',
+            background: 'radial-gradient(ellipse 80% 60% at 50% 0%, transparent 0%, #0a0b14 100%)',
           }}
         />
 
@@ -374,21 +373,21 @@ export function VariantA() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-400" />
                 </span>{' '}
-                Open source &middot; Works with Sentry SDKs &amp; Datadog Agent
+                Open source &middot; Compatible with Sentry SDKs &amp; Datadog Agent
               </div>
             </div>
 
             <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl mb-6 animate-fade-in-up animation-delay-100">
-              One platform for
+              Replace Sentry <span className="text-slate-500">&amp;</span> Datadog
               <br />
               <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-sky-400 bg-clip-text text-transparent">
-                everything observability.
+                with one platform.
               </span>
             </h1>
 
             <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-8 leading-relaxed animate-fade-in-up animation-delay-150">
-              Errors, logs, uptime, replays, on-call, infrastructure, and AI — stop stitching
-              together five different tools. Open source, self-hostable, Sentry and Datadog compatible.
+              The only open-source platform that works as a drop-in replacement for both
+              Sentry and Datadog. Keep your existing SDKs and agents — just change the endpoint.
             </p>
 
             <div className="flex flex-wrap justify-center gap-2.5 mb-10 animate-fade-in-up animation-delay-200">
@@ -434,7 +433,7 @@ export function VariantA() {
           <div style={{perspective: '2000px'}}>
             <div style={{transform: 'rotateX(8deg)', transformOrigin: 'center top'}}>
               <ScreenshotFrame gradient="from-sky-500 to-cyan-400" fade="all-edges">
-                <img src="/screenshots/dashboard.png" alt="Main dashboard overview with statistics and error trends" className="w-full h-full object-cover" />
+                <img src="/screenshots/dashboard.png" alt="Moneat observability dashboard — open-source alternative to Sentry and Datadog with error tracking, logs, and infrastructure metrics" className="w-full h-full object-cover" />
               </ScreenshotFrame>
             </div>
           </div>
@@ -474,8 +473,9 @@ export function VariantA() {
                   Open source. Self-hostable. Yours to own.
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-6">
-                  Run Moneat on your own infrastructure with an easy installer.
-                  Full source code, no vendor lock-in, no data leaving your network.
+                  Unlike Sentry and Datadog, Moneat is fully open source. Run it on your own
+                  infrastructure with an easy installer. Full source code, no vendor lock-in,
+                  no data leaving your network.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
                   <Button asChild variant="outline" className="gap-2">
@@ -555,8 +555,9 @@ export function VariantA() {
       </section>
 
       {/* ── Secondary features — grid with screenshots ── */}
-      <section className="py-28 px-4 sm:px-6 lg:px-8 bg-[#0a0b14]">
-        <div className="max-w-6xl mx-auto">
+      <section className="relative py-28 px-4 sm:px-6 lg:px-8 bg-[#0a0b14]">
+        <div className="absolute inset-0 dot-grid-pattern-subtle" />
+        <div className="max-w-6xl mx-auto relative z-10">
           <div className="text-center mb-16">
             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl text-white mb-3">
               Built for the full picture
@@ -604,10 +605,11 @@ export function VariantA() {
               <div className="inline-flex rounded-lg bg-indigo-500/10 p-3 mb-5 ring-1 ring-inset ring-white/5">
                 <Shield className="h-6 w-6 text-indigo-400" />
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold mb-4">Already using Sentry? Bring your SDKs.</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-4">Drop-in Sentry compatible. Zero code changes.</h2>
               <p className="text-muted-foreground text-base leading-relaxed mb-6">
-                Moneat works with existing Sentry SDKs — just update your DSN and redeploy.
-                No code changes, no migration headaches. Your team can switch in minutes, not days.
+                Moneat natively accepts Sentry SDK traffic — update your DSN, redeploy, done.
+                Error tracking, session replay, performance monitoring, and profiling all work
+                out of the box. Your team migrates in minutes, not days.
               </p>
               <Button
                   asChild
@@ -674,17 +676,19 @@ export function VariantA() {
       </section>
 
       {/* ── Datadog Agent callout ─────────────────────────── */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-[#0a0b14]">
-        <div className="max-w-6xl mx-auto">
+      <section className="relative py-24 px-4 sm:px-6 lg:px-8 bg-[#0a0b14]">
+        <div className="absolute inset-0 dot-grid-pattern-subtle" />
+        <div className="max-w-6xl mx-auto relative z-10">
           <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
             <div className="lg:w-[42%] text-center lg:text-left">
               <div className="inline-flex rounded-lg bg-orange-500/10 p-3 mb-5 ring-1 ring-inset ring-white/5">
                 <Server className="h-6 w-6 text-orange-400" />
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">Already running the Datadog Agent? Keep it.</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">The only drop-in Datadog alternative.</h2>
               <p className="text-slate-400 text-base leading-relaxed mb-4">
-                Point your existing Datadog Agent at Moneat and get infrastructure metrics, APM traces,
-                continuous profiling, and logs — without sending data to Datadog.
+                Keep your existing Datadog Agent — just point it at Moneat. Infrastructure metrics, APM traces,
+                continuous profiling, and logs all flow in with zero code changes.
+                No other platform accepts Datadog Agent traffic natively.
               </p>
               <div className="flex flex-wrap gap-2 mb-6">
                 {['Host metrics', 'APM traces', 'Profiling', 'Logs', 'Kubernetes', 'Database monitoring', 'Containers', 'Processes'].map(cap => (
@@ -841,17 +845,18 @@ export function VariantA() {
 
       {/* ── CTA Banner ───────────────────────────────────── */}
       <section className="relative overflow-hidden bg-[#0a0b14] py-24 px-4 sm:px-6 lg:px-8">
+        <div className="absolute inset-0 dot-grid-pattern-wide opacity-70" />
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-0 left-1/4 w-[400px] h-[400px] rounded-full bg-sky-500/10 blur-[100px]" />
           <div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] rounded-full bg-violet-500/10 blur-[80px]" />
         </div>
         <div className="max-w-3xl mx-auto text-center relative z-10">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-            Your app deserves better monitoring.
+            Stop paying for Sentry and Datadog separately.
           </h2>
           <p className="text-lg text-slate-400 mb-8 max-w-xl mx-auto">
-            Start with 1 GB free — no credit card, no commitments.
-            See everything that&apos;s happening in your app in minutes.
+            Replace both with one platform. Start with 1 GB free — no credit card,
+            no commitments, no code changes. Migrate in minutes.
           </p>
           <Button
             asChild
