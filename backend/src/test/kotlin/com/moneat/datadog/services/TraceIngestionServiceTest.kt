@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
 
 class TraceIngestionServiceTest {
 
-    // ============ MSGPACK PARSING TESTS ============
+    // ──── MSGPACK PARSING TESTS ────
 
     @Test
     fun `parseMsgpackTraces parses single trace with one span`() {
@@ -196,7 +196,7 @@ class TraceIngestionServiceTest {
         assertEquals("test.op", result[0][0].name)
     }
 
-    // ============ JSON PARSING TESTS ============
+    // ──── JSON PARSING TESTS ────
 
     @Test
     fun `parseJsonTraces parses single trace with one span`() {
@@ -300,7 +300,7 @@ class TraceIngestionServiceTest {
         assertEquals(null, TraceIngestionService.parseTraceId("abc"))
     }
 
-    // ============ HELPERS ============
+    // ──── HELPERS ────
 
     private fun buildMsgpackPayload(
         traces: List<List<Map<String, Any>>>

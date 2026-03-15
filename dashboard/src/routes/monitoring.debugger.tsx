@@ -7,17 +7,16 @@
 // (at your option) any later version.
 
 import {createFileRoute} from '@tanstack/react-router'
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, type DebuggerProbe} from '@/lib/api'
+import {useQuery} from '@tanstack/react-query'
+import {api} from '@/lib/api'
 import CreateProbeDialog from '@/components/debugger/CreateProbeDialog'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
-import {Switch} from '@/components/ui/switch'
-import {useToast} from '@/hooks/useToast'
-import {Activity, BookOpen, Bug, Loader2, Pencil, Plus, Trash2} from 'lucide-react'
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
+import {Activity, Bug, HelpCircle, Loader2, Plus} from 'lucide-react'
 import {cn} from '@/lib/utils'
-import {useMemo, useState} from 'react'
+import {useState} from 'react'
 
 export const Route = createFileRoute('/monitoring/debugger')({
   component: DebuggerDashboard,
@@ -47,21 +46,6 @@ const statusColors: Record<string, string> = {
   unknown: 'bg-muted text-muted-foreground border-border',
 }
 
-function formatProbeType(probeType: string): string {
-  switch (probeType) {
-    case 'log_probe':
-      return 'Log Probe'
-    case 'snapshot':
-      return 'Snapshot'
-    case 'span_decoration':
-      return 'Span Decoration'
-    case 'metric_probe':
-      return 'Metric Probe'
-    default:
-      return probeType
-  }
-}
-
 function formatStatusLabel(status: string): string {
   switch (status) {
     case 'received':
@@ -79,23 +63,40 @@ function formatStatusLabel(status: string): string {
   }
 }
 
-function formatProbeLocation(probe: DebuggerProbe): string {
-  if (probe.whereType === 'line') {
-    return `${probe.sourceFile || 'Unknown file'}:${probe.sourceLines || '?'}`
-  }
-
-  const typeName = probe.typeName || 'Unknown type'
-  const methodName = probe.methodName || 'unknownMethod'
-  return `${typeName}.${methodName}()`
+export function DebuggerHeaderActions() {
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  return (
+    <>
+      <CreateProbeDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+      />
+      <div className="flex items-center gap-2">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a href="/docs/datadog-agent/debugger" target="_blank" rel="noreferrer"
+                className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                aria-label="View docs">
+                <HelpCircle className="h-4 w-4" />
+              </a>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>View docs</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Create Probe
+        </Button>
+      </div>
+    </>
+  )
 }
 
 function DebuggerDashboard() {
-  const {toast} = useToast()
-  const queryClient = useQueryClient()
-  const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const [editingProbe, setEditingProbe] = useState<DebuggerProbe | null>(null)
-
-  const {data: probesData, isLoading: probesLoading} = useQuery({
+  const {data: probesData} = useQuery({
     queryKey: ['debugger-probes'],
     queryFn: () => api.getDebuggerProbes(),
   })
@@ -110,93 +111,13 @@ function DebuggerDashboard() {
     queryFn: () => api.get<{diagnostics: DebuggerDiagnostic[]}>('/v1/infra/debugger/diagnostics?limit=50'),
   })
 
-  const toggleMutation = useMutation({
-    mutationFn: ({probeId, active}: {probeId: string; active: boolean}) =>
-      api.updateDebuggerProbe(probeId, {active}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['debugger-probes']})
-      toast({title: 'Probe updated'})
-    },
-    onError: (error: Error) => {
-      toast({
-        title: 'Failed to update probe',
-        description: error.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (probeId: string) => api.deleteDebuggerProbe(probeId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['debugger-probes']})
-      toast({title: 'Probe deleted'})
-    },
-    onError: (error: Error) => {
-      toast({
-        title: 'Failed to delete probe',
-        description: error.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
   const probes = probesData?.probes ?? []
   const logs = logsData?.logs ?? []
   const diagnostics = diagData?.diagnostics ?? []
 
-  const latestDiagnosticByProbeId = useMemo(() => {
-    const result = new Map<string, DebuggerDiagnostic>()
-
-    diagnostics.forEach((diagnostic) => {
-      const probeId = diagnostic.probeId?.trim()
-      if (!probeId) {
-        return
-      }
-      result.set(probeId, diagnostic)
-    })
-
-    return result
-  }, [diagnostics])
-
-  const dialogOpen = createDialogOpen || editingProbe !== null
-
   return (
     <>
       <div className="container mx-auto px-4 py-4 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600">
-              <Bug className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Dynamic Instrumentation</h1>
-              <p className="text-muted-foreground mt-1">Probe definitions, diagnostics, and execution logs</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => {
-                setEditingProbe(null)
-                setCreateDialogOpen(true)
-              }}
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Create Probe
-            </Button>
-            <a
-              href="/docs/datadog-agent/debugger"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <BookOpen className="h-4 w-4" />
-              View docs
-            </a>
-          </div>
-        </div>
-
         <div className="flex items-center gap-3 text-sm">
           <div className="flex items-center gap-1.5">
             <Activity className="h-3.5 w-3.5 text-purple-500" />
@@ -216,115 +137,6 @@ function DebuggerDashboard() {
             <span className="text-muted-foreground text-xs">log entries</span>
           </div>
         </div>
-
-        <Card className="overflow-hidden border-border/60 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Activity className="h-4 w-4 text-purple-500" />
-              Probe Definitions
-            </CardTitle>
-            <CardDescription>Create and manage dynamic instrumentation probes.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {probesLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  <p className="text-muted-foreground text-sm">Loading probe definitions...</p>
-                </div>
-              </div>
-            ) : probes.length > 0 ? (
-              <div className="space-y-2">
-                {probes.map((probe) => {
-                  const diagnostic = latestDiagnosticByProbeId.get(probe.id)
-                  const status = diagnostic?.status || 'unknown'
-
-                  return (
-                    <div
-                      key={probe.id}
-                      className="rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
-                    >
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className="text-xs">
-                              {formatProbeType(probe.probeType)}
-                            </Badge>
-                            <Badge
-                              variant="secondary"
-                              className={cn('text-xs', statusColors[status] || statusColors.unknown)}
-                            >
-                              {status}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {probe.active ? 'Active' : 'Paused'}
-                            </span>
-                          </div>
-
-                          <p className="text-sm font-medium">
-                            {probe.service} · {probe.environment} · {probe.language}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{formatProbeLocation(probe)}</p>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Switch
-                            checked={probe.active}
-                            onCheckedChange={(checked) =>
-                              toggleMutation.mutate({probeId: probe.id, active: checked})
-                            }
-                            disabled={toggleMutation.isPending}
-                            aria-label={`Toggle ${probe.id}`}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setEditingProbe(probe)}
-                            aria-label={`Edit ${probe.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              const confirmed = window.confirm('Delete this probe definition?')
-                              if (!confirmed) return
-                              deleteMutation.mutate(probe.id)
-                            }}
-                            aria-label={`Delete ${probe.id}`}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="py-12 text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/10 to-pink-500/10">
-                  <Activity className="h-6 w-6 text-purple-500" />
-                </div>
-                <p className="text-sm font-medium mb-1">No probe definitions yet</p>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Create a probe to start collecting debugger diagnostics and logs.
-                </p>
-                <Button
-                  onClick={() => {
-                    setEditingProbe(null)
-                    setCreateDialogOpen(true)
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  Create Probe
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="overflow-hidden border-border/60 shadow-sm">
@@ -428,22 +240,6 @@ function DebuggerDashboard() {
           </Card>
         </div>
       </div>
-
-      <CreateProbeDialog
-        key={`${editingProbe?.id ?? 'create'}-${dialogOpen ? 'open' : 'closed'}`}
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setCreateDialogOpen(false)
-            setEditingProbe(null)
-            return
-          }
-          if (editingProbe == null) {
-            setCreateDialogOpen(true)
-          }
-        }}
-        probe={editingProbe}
-      />
     </>
   )
 }

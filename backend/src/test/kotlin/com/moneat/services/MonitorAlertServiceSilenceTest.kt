@@ -69,7 +69,7 @@ class MonitorAlertServiceSilenceTest {
         TestDatabaseHelper.resetSchema(Users, Organizations, AlertSilencePeriods)
     }
 
-    // ===================== isThresholdTriggered (pure logic) =====================
+    // ──── isThresholdTriggered (pure logic) ────
 
     @Test
     fun `isThresholdTriggered handles greater-than condition`() {
@@ -120,7 +120,7 @@ class MonitorAlertServiceSilenceTest {
         assertFalse(service.isThresholdTriggered(">", 0.0, 0.0))
     }
 
-    // ===================== isThrottledByInterval (pure logic) =====================
+    // ──── isThrottledByInterval (pure logic) ────
 
     @Test
     fun `isThrottledByInterval returns false when lastTriggeredAt is null`() {
@@ -155,7 +155,7 @@ class MonitorAlertServiceSilenceTest {
         assertFalse(service.isThrottledByInterval(oldTrigger, now))
     }
 
-    // ===================== isAnySilenceActive (DB) =====================
+    // ──── isAnySilenceActive (DB) ────
 
     @Test
     fun `isAnySilenceActive returns false when no silence periods exist`() {
@@ -241,7 +241,7 @@ class MonitorAlertServiceSilenceTest {
         assertTrue(service.isAnySilenceActive(orgA))
     }
 
-    // ===================== listSilencePeriods (DB) =====================
+    // ──── listSilencePeriods (DB) ────
 
     @Test
     fun `listSilencePeriods returns empty list when none exist`() {
@@ -304,7 +304,7 @@ class MonitorAlertServiceSilenceTest {
         assertEquals(1, service.listSilencePeriods(orgB).size)
     }
 
-    // ===================== createSilencePeriod (DB) =====================
+    // ──── createSilencePeriod (DB) ────
 
     @Test
     fun `createSilencePeriod creates period with all fields`() {
@@ -366,7 +366,7 @@ class MonitorAlertServiceSilenceTest {
         assertEquals("Test retrieval", periods.first().reason)
     }
 
-    // ===================== deleteSilencePeriod (DB) =====================
+    // ──── deleteSilencePeriod (DB) ────
 
     @Test
     fun `deleteSilencePeriod removes the period`() {

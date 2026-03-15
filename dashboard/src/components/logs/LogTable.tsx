@@ -108,11 +108,11 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
           <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
             <tr className="border-b text-left">
               <th className="w-[3px] p-0" />
-              <th className={cn("w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Date</th>
-              <th className={cn("hidden sm:table-cell w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Level</th>
-              <th className={cn("hidden lg:table-cell w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Host</th>
-              <th className={cn("hidden md:table-cell w-[1%] whitespace-nowrap px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Service</th>
-              <th className={cn("w-full px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1.5" : "py-2")}>Content</th>
+              <th className={cn("w-[1%] whitespace-nowrap px-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1" : "py-2")}>Date</th>
+              <th className={cn("hidden sm:table-cell w-[1%] whitespace-nowrap px-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1" : "py-2")}>Level</th>
+              <th className={cn("hidden lg:table-cell w-[1%] whitespace-nowrap px-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1" : "py-2")}>Host</th>
+              <th className={cn("hidden md:table-cell w-[1%] whitespace-nowrap px-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1" : "py-2")}>Service</th>
+              <th className={cn("w-full px-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", compact ? "py-1" : "py-2")}>Content</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -135,11 +135,11 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
                   onClick={() => onSelectLog(log)}
                 >
                   <td className={cn('w-[3px] p-0 border-l-[3px]', levelBorderColors[normalizedLevel] || 'border-l-transparent')} />
-                  <td className={cn("whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
+                  <td className={cn("whitespace-nowrap px-1.5", compact ? "py-0.5" : "py-1.5")}>
                     {compact ? (
                       <>
-                        <span className="hidden sm:inline font-mono text-[11px] text-foreground/80">{formatTimestamp(log.timestamp, timezone)}</span>
-                        <span className="sm:hidden font-mono text-[11px] text-foreground/80">{formatMobileTimestamp(log.timestamp, timezone)}</span>
+                        <span className="hidden sm:inline font-mono text-[10px] text-foreground/80">{formatTimestamp(log.timestamp, timezone)}</span>
+                        <span className="sm:hidden font-mono text-[10px] text-foreground/80">{formatMobileTimestamp(log.timestamp, timezone)}</span>
                       </>
                     ) : (
                       <div className="flex flex-col">
@@ -149,11 +149,11 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
                       </div>
                     )}
                   </td>
-                  <td className={cn("hidden sm:table-cell whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
+                  <td className={cn("hidden sm:table-cell whitespace-nowrap px-1.5", compact ? "py-0.5" : "py-1.5")}>
                     <Badge
                       variant="outline"
                       className={cn(
-                        'font-mono uppercase px-1.5 py-0',
+                        'font-mono uppercase px-1 py-0',
                         compact ? 'text-[9px]' : 'text-[10px]',
                         levelStyles[normalizedLevel] || levelStyles.info
                       )}
@@ -161,31 +161,31 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
                       {normalizedLevel}
                     </Badge>
                   </td>
-                  <td className={cn("hidden lg:table-cell whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
+                  <td className={cn("hidden lg:table-cell whitespace-nowrap px-1.5", compact ? "py-0.5" : "py-1.5")}>
                     {log.host ? (
-                      <span className={cn("rounded bg-muted/80 px-1.5 py-0.5 font-mono text-muted-foreground", compact ? "text-[11px]" : "text-xs")}>{log.host}</span>
+                      <span className={cn("rounded bg-muted/80 px-1 py-0.5 font-mono text-muted-foreground", compact ? "text-[10px]" : "text-xs")}>{log.host}</span>
                     ) : (
                       <span className="text-xs text-muted-foreground/40">-</span>
                     )}
                   </td>
-                  <td className={cn("hidden md:table-cell whitespace-nowrap px-2", compact ? "py-1" : "py-1.5")}>
+                  <td className={cn("hidden md:table-cell whitespace-nowrap px-1.5", compact ? "py-0.5" : "py-1.5")}>
                     {log.service ? (
-                      <span className={cn("rounded bg-muted/80 px-1.5 py-0.5 font-mono text-muted-foreground", compact ? "text-[11px]" : "text-xs")}>{log.service}</span>
+                      <span className={cn("rounded bg-muted/80 px-1 py-0.5 font-mono text-muted-foreground", compact ? "text-[10px]" : "text-xs")}>{log.service}</span>
                     ) : (
                       <span className="text-xs text-muted-foreground/40">-</span>
                     )}
                   </td>
-                  <td className={cn("min-w-0 px-2", compact ? "py-1" : "py-1.5")}>
+                  <td className={cn("min-w-0 px-1.5", compact ? "py-0.5" : "py-1.5")}>
                     <span className={cn(
-                      'break-all font-mono leading-snug',
-                      compact ? 'text-[11px] line-clamp-1' : 'text-xs line-clamp-2',
+                      'break-all font-mono leading-tight',
+                      compact ? 'text-[10px] line-clamp-1' : 'text-xs line-clamp-2',
                       normalizedLevel === 'error' || normalizedLevel === 'fatal'
                         ? 'text-foreground'
                         : 'text-foreground/80'
                     )}>
                       {/* Show colored dot on mobile to indicate level since column is hidden */}
                       <span className={cn(
-                        "sm:hidden inline-block w-1.5 h-1.5 rounded-full mr-1.5 mb-0.5",
+                        "sm:hidden inline-block w-1.5 h-1.5 rounded-full mr-1 mb-0.5",
                         normalizedLevel === 'trace' && "bg-zinc-500",
                         normalizedLevel === 'debug' && "bg-teal-500",
                         normalizedLevel === 'info' && "bg-indigo-500",

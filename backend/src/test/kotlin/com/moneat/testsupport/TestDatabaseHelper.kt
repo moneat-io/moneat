@@ -17,6 +17,8 @@
 package com.moneat.testsupport
 
 import org.jetbrains.exposed.v1.core.AutoIncColumnType
+import org.jetbrains.exposed.v1.core.Column
+import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -45,12 +47,61 @@ object TestDatabaseHelper {
         }
     }
 
+    /**
+     * Drops all H2 objects, resets auto-increment columns, and patches JSONB
+     * columns to TEXT for H2 compatibility. Use when tests create tables
+     * manually (raw SQL) and the tables use [JsonbColumnType] which relies
+     * on PostgreSQL's PGobject. H2 does not support JSONB; mapping to TEXT
+     * allows Exposed insert/select to work without PGobject.
+     *
+     * Must be called after setting `TransactionManager.defaultDatabase`.
+     */
+    fun resetSchemaForH2WithJsonb(vararg tables: Table) {
+        transaction {
+            exec("DROP ALL OBJECTS")
+        }
+        resetAutoIncNullable(*tables)
+        patchJsonbForH2(*tables)
+    }
+
     private fun resetAutoIncNullable(vararg tables: Table) {
         tables.forEach { table ->
             table.columns.forEach { column ->
                 val colType = column.columnType
                 if (colType is AutoIncColumnType) {
                     colType.nullable = false
+                }
+            }
+        }
+    }
+
+    /**
+     * Replaces JSONB column types with H2-compatible TEXT-based types so
+     * Exposed insert/select operations work without PGobject. Required
+     * because PostgreSQL JsonbColumnType uses PGobject which H2 does not
+     * support. Uses reflection to swap columnType; documented as necessary
+     * workaround for H2 test compatibility.
+     */
+    private fun patchJsonbForH2(vararg tables: Table) {
+        val h2TextJson = object : ColumnType<String>() {
+            override fun sqlType(): String = "TEXT"
+            override fun valueFromDB(value: Any): String = when (value) {
+                is String -> value
+                else -> value.toString()
+            }
+            override fun notNullValueToDB(value: String): Any = value
+        }
+        val field = Column::class.java.getDeclaredField("columnType")
+        field.isAccessible = true
+        val jsonbClassNames = listOf(
+            "com.moneat.dashboards.models.JsonbColumnType",
+            "com.moneat.shared.models.JsonbColumnType"
+        )
+        tables.forEach { table ->
+            table.columns.forEach { col ->
+                val qn = col.columnType::class.qualifiedName
+                if (qn != null && jsonbClassNames.any { qn == it }) {
+                    field.set(col, h2TextJson)
                 }
             }
         }

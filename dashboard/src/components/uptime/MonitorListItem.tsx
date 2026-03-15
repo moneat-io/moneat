@@ -99,23 +99,23 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
 
   return (
     <Card className={cn("hover:shadow-md transition-shadow overflow-hidden border-l-4", statusColor)}>
-      <CardContent className="p-4">
-        <div className="flex flex-col gap-4">
+      <CardContent className="p-3">
+        <div className="flex flex-col gap-3">
           {/* Header Row */}
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-1.5 mb-0.5">
                 <Link 
                   to="/uptime/$monitorId" 
                   params={{monitorId: monitor.id}}
-                  className="text-lg font-bold hover:underline truncate"
+                  className="text-base font-bold hover:underline truncate"
                 >
                   {monitor.name}
                 </Link>
                 {getStatusBadge(monitor.status)}
               </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Badge variant="outline" className="text-xs font-normal h-5 px-1.5">{getMonitorTypeLabel(monitor.type)}</Badge>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="outline" className="text-[10px] font-normal h-4 px-1">{getMonitorTypeLabel(monitor.type)}</Badge>
                 <a 
                   href={monitor.url} 
                   target="_blank" 
@@ -132,16 +132,16 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
-              <div className="text-right mr-4 hidden sm:block">
-                <div className="text-2xl font-bold leading-none">
+            <div className="flex items-center gap-3">
+              <div className="text-right mr-2 hidden sm:block">
+                <div className="text-xl font-bold leading-none">
                   {monitor.uptime24h !== undefined && monitor.uptime24h !== null ? `${monitor.uptime24h.toFixed(0)}%` : '--'}
                 </div>
-                <div className="text-xs text-muted-foreground uppercase tracking-wider">24h Uptime</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">24h Uptime</div>
               </div>
               
-              <div className="text-right mr-4 hidden sm:block">
-                <div className="text-xl font-semibold leading-none flex items-center justify-end gap-1">
+              <div className="text-right mr-2 hidden sm:block">
+                <div className="text-base font-semibold leading-none flex items-center justify-end gap-0.5">
                   {monitor.avgResponseTime !== undefined && monitor.avgResponseTime !== null ? (
                     <>
                       {monitor.avgResponseTime}
@@ -160,7 +160,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
           </div>
 
           {/* Actions Row */}
-          <div className="flex items-center justify-between pt-2 border-t mt-2">
+          <div className="flex items-center justify-between pt-1.5 border-t mt-1.5">
             <div className="text-xs text-muted-foreground">
               {heartbeats.length > 0 ? (
                 <span>Last heartbeat: {formatTime(new Date(heartbeats[heartbeats.length - 1].timestamp), timezone)}</span>
@@ -173,29 +173,29 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                  className="h-7 px-1.5 text-xs text-muted-foreground hover:text-foreground"
                   onClick={() => resumeMutation.mutate(monitor.id)}
                   title="Resume Monitor"
                 >
-                  <Play className="h-4 w-4 mr-1" />
+                  <Play className="h-3 w-3 mr-0.5" />
                   Resume
                 </Button>
               ) : (
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                  className="h-7 px-1.5 text-xs text-muted-foreground hover:text-foreground"
                   onClick={() => pauseMutation.mutate(monitor.id)}
                   title="Pause Monitor"
                 >
-                  <Pause className="h-4 w-4 mr-1" />
+                  <Pause className="h-3 w-3 mr-0.5" />
                   Pause
                 </Button>
               )}
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-8 px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                className="h-7 px-1.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
                 onClick={() => {
                   if (confirm(`Delete monitor "${monitor.name}"?`)) {
                     deleteMutation.mutate(monitor.id)
@@ -203,7 +203,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
                 }}
                 title="Delete Monitor"
               >
-                <Trash2 className="h-4 w-4 mr-1" />
+                <Trash2 className="h-3 w-3 mr-0.5" />
                 Delete
               </Button>
             </div>

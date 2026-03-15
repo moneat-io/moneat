@@ -59,7 +59,7 @@ class AuthTokenServiceTest {
             orgId
         }
 
-    // --- hasScope ---
+    // ──── hasScope ────
 
     @Test
     fun `hasScope returns true when scope present`() {
@@ -76,7 +76,7 @@ class AuthTokenServiceTest {
         assertFalse(service.hasScope(emptyList(), "project:read"))
     }
 
-    // --- hasAnyScope ---
+    // ──── hasAnyScope ────
 
     @Test
     fun `hasAnyScope returns true when any scope matches`() {
@@ -88,7 +88,7 @@ class AuthTokenServiceTest {
         assertFalse(service.hasAnyScope(listOf("project:read"), listOf("org:read")))
     }
 
-    // --- generateToken ---
+    // ──── generateToken ────
 
     @Test
     fun `generateToken creates token with valid scopes`() {
@@ -118,7 +118,7 @@ class AuthTokenServiceTest {
         }
     }
 
-    // --- validateToken ---
+    // ──── validateToken ────
 
     @Test
     fun `validateToken returns user info for valid token`() {
@@ -160,7 +160,7 @@ class AuthTokenServiceTest {
         assertNotNull(tokenRow[AuthTokens.last_used_at])
     }
 
-    // --- listUserTokens ---
+    // ──── listUserTokens ────
 
     @Test
     fun `listUserTokens returns all user tokens`() {
@@ -180,7 +180,7 @@ class AuthTokenServiceTest {
         assertTrue(service.listUserTokens(userId).isEmpty())
     }
 
-    // --- revokeToken ---
+    // ──── revokeToken ────
 
     @Test
     fun `revokeToken deletes the token`() {
@@ -208,7 +208,7 @@ class AuthTokenServiceTest {
         assertFalse(service.revokeToken(userId, 99999))
     }
 
-    // --- updateToken ---
+    // ──── updateToken ────
 
     @Test
     fun `updateToken updates name`() {
@@ -253,7 +253,7 @@ class AuthTokenServiceTest {
         assertFalse(service.updateToken(otherUser, created.id, "renamed", null))
     }
 
-    // --- VALID_SCOPES ---
+    // ──── VALID_SCOPES ────
 
     @Test
     fun `VALID_SCOPES contains expected scopes`() {

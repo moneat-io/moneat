@@ -22,6 +22,8 @@
     --destructive-foreground: 0 0% 98%;
     --input: 0 0% 89.8%;
     --ring: 0 0% 3.9%;
+    --sidebar-active: 0 0% 9%;
+    --sidebar-active-foreground: 0 0% 98%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -49,6 +51,8 @@
     --destructive-foreground: 0 0% 98%;
     --input: 0 0% 14.9%;
     --ring: 0 0% 83.1%;
+    --sidebar-active: 0 0% 98%;
+    --sidebar-active-foreground: 0 0% 9%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -76,6 +80,8 @@
     --border: 217 32% 17%;
     --input: 217 32% 17%;
     --ring: 212 26% 87%;
+    --sidebar-active: 210 40% 98%;
+    --sidebar-active-foreground: 222 47% 11%;
   }
 
   .theme-forest {
@@ -98,6 +104,8 @@
     --border: 150 30% 10%;
     --input: 150 30% 10%;
     --ring: 150 40% 50%;
+    --sidebar-active: 152 48% 38%;
+    --sidebar-active-foreground: 150 20% 95%;
   }
 
   .theme-sunset {
@@ -120,6 +128,8 @@
     --border: 20 30% 10%;
     --input: 20 30% 10%;
     --ring: 20 80% 60%;
+    --sidebar-active: 20 80% 60%;
+    --sidebar-active-foreground: 20 50% 5%;
   }
 
   .theme-gamer {
@@ -142,6 +152,8 @@
     --border: 240 30% 15%;
     --input: 240 30% 15%;
     --ring: 180 100% 50%;
+    --sidebar-active: 180 100% 50%;
+    --sidebar-active-foreground: 240 20% 4%;
     --chart-1: 160 100% 50%;
     --chart-2: 300 100% 60%;
     --chart-3: 180 100% 50%;
@@ -170,6 +182,8 @@
     --input: 20 14% 4%;
     --ring: 20 14% 4%;
     --radius: 0rem;
+    --sidebar-active: 20 14% 4%;
+    --sidebar-active-foreground: 45 30% 96%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -186,6 +200,8 @@
     --popover-foreground: 120 15% 88%;
     --primary: 120 100% 50%;
     --primary-foreground: 216 33% 4%;
+    --sidebar-active: 142 55% 36%;
+    --sidebar-active-foreground: 216 33% 4%;
     --secondary: 216 25% 11%;
     --secondary-foreground: 120 15% 80%;
     --muted: 216 25% 11%;
@@ -226,6 +242,8 @@
     --input: 0 0% 20%;
     --ring: 0 0% 70%;
     --radius: 0rem;
+    --sidebar-active: 0 0% 90%;
+    --sidebar-active-foreground: 0 0% 2%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -380,8 +398,18 @@
   * {
     @apply border-border;
   }
+  html {
+    /* Reserve scrollbar space to prevent layout shift when Radix dropdowns add overflow:hidden to body */
+    scrollbar-gutter: stable;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Prevent Radix scroll lock from hiding the scrollbar (causes layout shift). Radix has no prop to disable this. */
+  body[data-scroll-locked] {
+    overflow: visible !important;
+    margin-right: 0 !important;
+    padding-right: 0 !important;
   }
   
   /* Theme-aware scrollbars */

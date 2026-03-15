@@ -130,7 +130,7 @@ class AccountDeletionRoutesTest {
         }
     }
 
-    // ─── GET /organizations/{orgId} ───────────────────────────────────────────
+    // ──── GET /organizations/{orgId} ────
 
     @Test
     fun `get org details returns 400 for invalid org id`() =
@@ -200,7 +200,7 @@ class AccountDeletionRoutesTest {
             assertTrue(response.bodyAsText().contains("Acme Corp"))
         }
 
-    // ─── GET /account/deletion-validation ────────────────────────────────────
+    // ──── GET /account/deletion-validation ────
 
     @Test
     fun `account deletion validation returns can delete when user has no owned orgs`() =
@@ -251,7 +251,7 @@ class AccountDeletionRoutesTest {
             assertTrue(body.contains("false"))
         }
 
-    // ─── GET /organizations/{orgId}/deletion-validation ───────────────────────
+    // ──── GET /organizations/{orgId}/deletion-validation ────
 
     @Test
     fun `org deletion validation returns 400 for invalid org id`() =
@@ -324,7 +324,7 @@ class AccountDeletionRoutesTest {
             assertTrue(response.bodyAsText().contains("true"))
         }
 
-    // ─── DELETE /account ──────────────────────────────────────────────────────
+    // ──── DELETE /account ────
 
     @Test
     fun `delete account returns 400 for invalid request body`() =
@@ -373,7 +373,7 @@ class AccountDeletionRoutesTest {
             assertTrue(response.bodyAsText().contains("Confirmation does not match"))
         }
 
-    // ─── DELETE /organizations/{orgId} ───────────────────────────────────────
+    // ──── DELETE /organizations/{orgId} ────
 
     @Test
     fun `delete organization returns 400 for invalid org id`() =

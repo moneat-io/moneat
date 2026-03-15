@@ -122,7 +122,7 @@ class UsageTrackingServiceTest {
         }
     }
 
-    // ==================== getUsageForOrg ====================
+    // ──── getUsageForOrg ────
 
     @Test
     fun `getUsageForOrg returns empty when no records`() {
@@ -201,7 +201,7 @@ class UsageTrackingServiceTest {
         assertTrue(types.contains("transaction"))
     }
 
-    // ==================== getTotalBytesForOrg ====================
+    // ──── getTotalBytesForOrg ────
 
     @Test
     fun `getTotalBytesForOrg returns 0 when no records`() {
@@ -230,7 +230,7 @@ class UsageTrackingServiceTest {
         assertEquals(3000L, result)
     }
 
-    // ==================== getEventCountForOrg ====================
+    // ──── getEventCountForOrg ────
 
     @Test
     fun `getEventCountForOrg returns 0 when no records`() {
@@ -289,7 +289,7 @@ class UsageTrackingServiceTest {
         assertEquals(100L, result)
     }
 
-    // ==================== flushBuffer ====================
+    // ──── flushBuffer ────
 
     @Test
     fun `flushBuffer does nothing when buffer is empty`() {
@@ -321,7 +321,7 @@ class UsageTrackingServiceTest {
         service.flushBuffer()
     }
 
-    // ==================== checkQuota ====================
+    // ──── checkQuota ────
 
     @Test
     fun `checkQuota returns quota status for org`() {

@@ -241,16 +241,16 @@ function DataSourcesPage() {
   )
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Custom Data Sources</h1>
-          <p className="text-muted-foreground text-sm">
+    <div className="mx-auto max-w-4xl space-y-4 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold">Custom Data Sources</h1>
+          <p className="text-muted-foreground text-xs mt-0.5">
             Connect external databases and metrics sources to your dashboards
           </p>
         </div>
-        <Button onClick={() => setShowForm(true)} disabled={showForm}>
-          <Plus className="mr-2 h-4 w-4" />
+        <Button size="sm" onClick={() => setShowForm(true)} disabled={showForm} className="gap-1.5 shrink-0">
+          <Plus className="h-3.5 w-3.5" />
           Add Data Source
         </Button>
       </div>

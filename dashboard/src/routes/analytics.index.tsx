@@ -3,7 +3,7 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/ProjectContext'
-import {AnalyticsDatePicker} from '@/components/analytics/AnalyticsDatePicker'
+import {useAnalyticsParams} from '@/contexts/AnalyticsParamsContext'
 import {AnalyticsFilterBar} from '@/components/analytics/AnalyticsFilterBar'
 import {AnalyticsKpiCards, AnalyticsKpiCardsSkeleton} from '@/components/analytics/AnalyticsKpiCards'
 import {AnalyticsChart} from '@/components/analytics/AnalyticsChart'
@@ -14,7 +14,7 @@ import {CopyBlock} from '@/components/ui/copy-block'
 import {
   ArrowRight, BarChart3, BookOpen, FileText, Globe, Laptop, LogIn, LogOut, MapPin, Megaphone, MousePointerClick, Share2,
 } from 'lucide-react'
-import type {AnalyticsFilter, AnalyticsParams, AnalyticsPeriod, AnalyticsBreakdownItem} from '@/lib/api'
+import type {AnalyticsFilter, AnalyticsParams, AnalyticsBreakdownItem} from '@/lib/api'
 
 export const Route = createFileRoute('/analytics/')({
   component: AnalyticsOverview,
@@ -22,9 +22,7 @@ export const Route = createFileRoute('/analytics/')({
 
 function AnalyticsOverview() {
   const {selectedProjectId} = useProject()
-  const [period, setPeriod] = useState<AnalyticsPeriod>('30d')
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
+  const {period, customFrom, customTo} = useAnalyticsParams()
   const [filters, setFilters] = useState<AnalyticsFilter[]>([])
   const [breakdownTab, setBreakdownTab] = useState('pages')
 
@@ -118,11 +116,6 @@ function AnalyticsOverview() {
     enabled: !!projectId && breakdownTab === 'events',
   })
 
-  const handleCustomRangeChange = (from: string, to: string) => {
-    setCustomFrom(from)
-    setCustomTo(to)
-  }
-
   const addFilterFromRow = (property: string) => (item: AnalyticsBreakdownItem) => {
     if (filters.some(f => f.property === property && f.value === item.name)) return
     setFilters([...filters, {property, operator: 'is', value: item.name}])
@@ -155,27 +148,27 @@ function AnalyticsOverview() {
 ></script>`
 
     return (
-      <div className="flex flex-col items-center justify-center py-8">
-        <div className="max-w-2xl w-full space-y-6">
+      <div className="flex flex-col items-center justify-center py-6">
+        <div className="max-w-2xl w-full space-y-4">
           <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-blue-500/10 mb-4">
-              <BarChart3 className="h-7 w-7 text-blue-500" />
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-500/10 mb-3">
+              <BarChart3 className="h-6 w-6 text-blue-500" />
             </div>
-            <h2 className="text-xl font-semibold mb-2">Get Started with Analytics</h2>
+            <h2 className="text-lg font-semibold mb-1.5">Get Started with Analytics</h2>
             <p className="text-muted-foreground text-sm max-w-md mx-auto">
               Add privacy-focused, cookie-free web analytics to your site. No cookies, no personal data stored.
             </p>
           </div>
 
           <Card>
-            <CardContent className="p-6 space-y-5">
+            <CardContent className="p-4 space-y-3">
               <div>
-                <h3 className="text-sm font-medium mb-2.5">1. Add the tracking script to your site</h3>
+                <h3 className="text-xs font-medium mb-1.5">1. Add the tracking script to your site</h3>
                 <CopyBlock code={scriptCode} language="html" />
               </div>
 
               <div>
-                <h3 className="text-sm font-medium mb-2.5">2. Or use the NPM package for SPAs</h3>
+                <h3 className="text-xs font-medium mb-1.5">2. Or use the NPM package for SPAs</h3>
                 <CopyBlock code="npm install @moneat/analytics" language="bash" />
               </div>
             </CardContent>
@@ -184,11 +177,11 @@ function AnalyticsOverview() {
           <div className="text-center">
             <a
               href="/docs/product-analytics"
-              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+              className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-1.5 rounded text-xs font-medium hover:bg-primary/90 transition-colors"
             >
-              <BookOpen className="h-4 w-4" />
+              <BookOpen className="h-3 w-3" />
               View Full Documentation
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-3 w-3" />
             </a>
           </div>
         </div>
@@ -197,18 +190,9 @@ function AnalyticsOverview() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <AnalyticsFilterBar filters={filters} onFiltersChange={setFilters} />
-        <AnalyticsDatePicker
-          period={period}
-          onPeriodChange={setPeriod}
-          customFrom={customFrom}
-          customTo={customTo}
-          onCustomRangeChange={handleCustomRangeChange}
-        />
-      </div>
+    <div className="space-y-2">
+      {/* Filters */}
+      <AnalyticsFilterBar filters={filters} onFiltersChange={setFilters} />
 
       {/* KPI Cards */}
       {overviewLoading ? (
@@ -222,7 +206,7 @@ function AnalyticsOverview() {
 
       {/* Breakdown Tables with Tabs */}
       <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
-        <TabsList className="h-8">
+        <TabsList className="h-7">
           <TabsTrigger value="pages" className="gap-1.5 text-xs">
             <FileText className="h-3.5 w-3.5" /> Pages
           </TabsTrigger>
@@ -249,7 +233,7 @@ function AnalyticsOverview() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pages" className="mt-3">
+        <TabsContent value="pages" className="mt-2">
           <AnalyticsBreakdownTable
             title="Top Pages"
             icon={FileText}
@@ -262,7 +246,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="entry-pages" className="mt-3">
+        <TabsContent value="entry-pages" className="mt-2">
           <AnalyticsBreakdownTable
             title="Entry Pages"
             icon={LogIn}
@@ -274,7 +258,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="exit-pages" className="mt-3">
+        <TabsContent value="exit-pages" className="mt-2">
           <AnalyticsBreakdownTable
             title="Exit Pages"
             icon={LogOut}
@@ -285,7 +269,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="sources" className="mt-3">
+        <TabsContent value="sources" className="mt-2">
           <AnalyticsBreakdownTable
             title="Top Sources"
             icon={Share2}
@@ -296,7 +280,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="locations" className="mt-3">
+        <TabsContent value="locations" className="mt-2">
           <AnalyticsBreakdownTable
             title="Countries"
             icon={MapPin}
@@ -307,8 +291,8 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="devices" className="mt-3">
-          <div className="grid gap-4 lg:grid-cols-3">
+        <TabsContent value="devices" className="mt-2">
+          <div className="grid gap-2 lg:grid-cols-3">
             <AnalyticsBreakdownTable
               title="Browsers"
               icon={Globe}
@@ -336,7 +320,7 @@ function AnalyticsOverview() {
           </div>
         </TabsContent>
 
-        <TabsContent value="utm" className="mt-3">
+        <TabsContent value="utm" className="mt-2">
           <AnalyticsBreakdownTable
             title="UTM Sources"
             icon={Megaphone}
@@ -346,7 +330,7 @@ function AnalyticsOverview() {
           />
         </TabsContent>
 
-        <TabsContent value="events" className="mt-3">
+        <TabsContent value="events" className="mt-2">
           <AnalyticsBreakdownTable
             title="Custom Events"
             icon={MousePointerClick}

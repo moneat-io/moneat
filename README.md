@@ -12,6 +12,7 @@
 <p align="center">
   <a href="#license"><img src="https://img.shields.io/badge/License-AGPLv3%20%2B%20Enterprise-blue.svg?style=flat-square" alt="License: AGPLv3 + Enterprise"></a>
   <a href="https://github.com/moneat-io/moneat/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome"></a>
+  <a href="https://github.com/moneat-io/moneat/actions/workflows/test.yml"><img src="https://img.shields.io/endpoint?style=flat-square&url=https://raw.githubusercontent.com/moneat-io/moneat/develop/badges/coverage-badge.json" alt="Global Code Coverage"></a>
   <a href="https://discord.gg/Fanh3mem"><img src="https://img.shields.io/badge/Discord-community-5865F2.svg?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/moneat-io/moneat/commits"><img src="https://img.shields.io/github/commit-activity/m/moneat-io/moneat?style=flat-square" alt="Commit Activity"></a>
   <a href="https://github.com/moneat-io/moneat/stargazers"><img src="https://img.shields.io/github/stars/moneat-io/moneat?style=flat-square" alt="GitHub Stars"></a>
@@ -51,7 +52,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/moneat-io/moneat/main/install
 curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/v1.0.0/docker-compose.yml -o docker-compose.yml
 curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/v1.0.0/.env.example -o .env.example
 cp .env.example .env
-# Edit .env — set JWT_SECRET, DATABASE_PASSWORD, CLICKHOUSE_PASSWORD, FRONTEND_URL, BACKEND_URL
+# Edit .env — set JWT_SECRET, DATABASE_PASSWORD, CLICKHOUSE_PASSWORD, REDIS_PASSWORD, FRONTEND_URL, BACKEND_URL
 docker compose up -d
 ```
 
@@ -113,16 +114,17 @@ Works with `@sentry/browser`, `@sentry/node`, `@sentry/react`, `@sentry/nextjs`,
 
 ## Screenshots
 
+<details>
+<summary><b>View screenshots</b></summary>
+
+### Core Observability
+
 <p align="center">
-  <img src="dashboard/public/screenshots/dashboard.png" alt="Moneat Dashboard" width="800">
+  <img src="dashboard/public/screenshots/dashboard.png" alt="Dashboard Overview" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/error-tracking.png" alt="Error Monitoring" width="800">
-</p>
-
-<p align="center">
-  <img src="dashboard/public/screenshots/session-replay.png" alt="Session Replay" width="800">
+  <img src="dashboard/public/screenshots/issues.png" alt="Error Tracking / Issues" width="800">
 </p>
 
 <p align="center">
@@ -130,17 +132,102 @@ Works with `@sentry/browser`, `@sentry/node`, `@sentry/react`, `@sentry/nextjs`,
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/log-management.png" alt="Log Management" width="800">
+  <img src="dashboard/public/screenshots/logs.png" alt="Log Management" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/uptime.png" alt="Uptime Monitoring" width="400">
-  <img src="dashboard/public/screenshots/status-pages.png" alt="Status Pages" width="400">
+  <img src="dashboard/public/screenshots/replays.png" alt="Session Replay" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/escalation-policies.png" alt="Escalation Policies" width="800">
+  <img src="dashboard/public/screenshots/profiles.png" alt="Continuous Profiling" width="800">
 </p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/dashboards.png" alt="Custom Dashboards" width="800">
+</p>
+
+### Infrastructure & Monitoring
+
+<p align="center">
+  <img src="dashboard/public/screenshots/monitoring-hosts.png" alt="Monitoring Hosts" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/uptime.png" alt="Uptime Monitoring" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/status-pages.png" alt="Status Pages" width="800">
+</p>
+
+### Enterprise: On-Call
+
+<p align="center">
+  <img src="dashboard/public/screenshots/on-call-overview.png" alt="On-Call Overview" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/on-call-schedules.png" alt="On-Call Schedules" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/on-call-escalation-policies.png" alt="Escalation Policies" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/on-call-alerts.png" alt="On-Call Alerts" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/on-call-incidents.png" alt="On-Call Incidents" width="800">
+</p>
+
+### Status Pages
+
+<p align="center">
+  <img src="dashboard/public/screenshots/status-pages.png" alt="Custom Status Page" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/status-page-public.png" alt="Public Status Page" width="800">
+</p>
+
+### Insights & Analytics
+
+<p align="center">
+  <img src="dashboard/public/screenshots/analytics.png" alt="Product Analytics" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/ai.png" alt="AI Observability" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/feedback.png" alt="User Feedback" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/releases.png" alt="Releases" width="800">
+</p>
+
+### APM & Tracing
+
+<p align="center">
+  <img src="dashboard/public/screenshots/apm-traces.png" alt="APM Traces" width="800">
+</p>
+
+### Security & Synthetics
+
+<p align="center">
+  <img src="dashboard/public/screenshots/security.png" alt="Security & SBOM" width="800">
+</p>
+
+<p align="center">
+  <img src="dashboard/public/screenshots/synthetics.png" alt="Synthetics" width="800">
+</p>
+
+</details>
 
 
 ## Telemetry

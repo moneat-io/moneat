@@ -62,6 +62,7 @@ Thumbs.db
 
 # Node (for dashboard)
 node_modules/
+dashboard/coverage/
 dashboard/public/docs/
 dashboard/public/blog/
 npm-debug.log*

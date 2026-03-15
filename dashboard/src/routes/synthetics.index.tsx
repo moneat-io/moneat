@@ -256,18 +256,18 @@ function SyntheticResults() {
 
   if (testsLoading || resultsLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
+      <div className="flex justify-center py-8">
+        <div className="animate-spin rounded-full h-6 w-6 border-2 border-muted border-t-primary" />
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       <Card>
-        <CardHeader>
+        <CardHeader className="py-2 px-3">
           <div className="flex items-center justify-between">
-            <CardTitle>Tests</CardTitle>
+            <CardTitle className="text-sm">Tests</CardTitle>
             {selectedTests.size > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">{selectedTests.size} selected</span>
@@ -284,20 +284,20 @@ function SyntheticResults() {
             )}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-3 pt-0">
           {/* Filter bar */}
-          <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <div className="relative flex-1 min-w-48">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+            <div className="relative flex-1 min-w-40">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search tests..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9"
+                className="pl-8 h-7 text-xs"
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-32 h-9">
+              <SelectTrigger className="w-28 h-7 text-xs">
                 <Filter className="h-3.5 w-3.5 mr-1.5" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -309,7 +309,7 @@ function SyntheticResults() {
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-32 h-9">
+              <SelectTrigger className="w-28 h-7 text-xs">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
@@ -324,7 +324,7 @@ function SyntheticResults() {
             </Select>
             {allTags.length > 0 && (
               <Select value={tagFilter} onValueChange={setTagFilter}>
-                <SelectTrigger className="w-32 h-9">
+                <SelectTrigger className="w-28 h-7 text-xs">
                   <SelectValue placeholder="Tag" />
                 </SelectTrigger>
                 <SelectContent>
@@ -338,35 +338,35 @@ function SyntheticResults() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
-                  <th className="pb-2 pr-2 w-8">
+                  <th className="pb-1.5 pr-2 w-7">
                     <Checkbox
                       checked={selectedTests.size === filteredTests.length && filteredTests.length > 0}
                       onCheckedChange={toggleSelectAll}
                     />
                   </th>
-                  <th className="pb-2 pr-4 font-medium">Name</th>
-                  <th className="pb-2 pr-4 font-medium">Type</th>
-                  <th className="pb-2 pr-4 font-medium">Status</th>
-                  <th className="pb-2 pr-4 font-medium">Uptime</th>
-                  <th className="pb-2 pr-4 font-medium">Response</th>
-                  <th className="pb-2 pr-4 font-medium">Last Run</th>
-                  <th className="pb-2 pr-4 font-medium">Interval</th>
-                  <th className="pb-2 font-medium">Actions</th>
+                  <th className="pb-1.5 pr-2 font-medium">Name</th>
+                  <th className="pb-1.5 pr-2 font-medium">Type</th>
+                  <th className="pb-1.5 pr-2 font-medium">Status</th>
+                  <th className="pb-1.5 pr-2 font-medium">Uptime</th>
+                  <th className="pb-1.5 pr-2 font-medium">Response</th>
+                  <th className="pb-1.5 pr-2 font-medium">Last Run</th>
+                  <th className="pb-1.5 pr-2 font-medium">Interval</th>
+                  <th className="pb-1.5 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTests.map((t) => (
                   <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="py-2 pr-2">
+                    <td className="py-1.5 pr-2">
                       <Checkbox
                         checked={selectedTests.has(t.id)}
                         onCheckedChange={() => toggleSelect(t.id)}
                       />
                     </td>
-                    <td className="py-2 pr-4">
+                    <td className="py-1.5 pr-2">
                       <Link
                         to="/synthetics/$testId"
                         params={{testId: t.id}}
@@ -382,30 +382,30 @@ function SyntheticResults() {
                         </div>
                       )}
                     </td>
-                    <td className="py-2 pr-4">
-                      <Badge variant="outline" className={cn('text-xs', testTypeColors[t.testType] || '')}>
+                    <td className="py-1.5 pr-2">
+                      <Badge variant="outline" className={cn('text-[10px]', testTypeColors[t.testType] || '')}>
                         {t.testType}
                       </Badge>
                     </td>
-                    <td className="py-2 pr-4">
-                      <Badge variant="outline" className={cn('text-xs', testStatusColors[t.lastStatus ?? t.status] || '')}>
+                    <td className="py-1.5 pr-2">
+                      <Badge variant="outline" className={cn('text-[10px]', testStatusColors[t.lastStatus ?? t.status] || '')}>
                         {t.lastStatus || t.status || 'pending'}
                       </Badge>
                     </td>
-                    <td className="py-2 pr-4 text-xs font-medium">
+                    <td className="py-1.5 pr-2 font-medium">
                       {computeUptime(results, t.id)}
                     </td>
-                    <td className="py-2 pr-4">
+                    <td className="py-1.5 pr-2">
                       <Sparkline results={results} testId={t.id} />
                     </td>
-                    <td className="py-2 pr-4 text-muted-foreground text-xs">{formatLastRun(t.lastRunAt)}</td>
-                    <td className="py-2 pr-4 text-muted-foreground">Every {Math.round((t.intervalSeconds ?? 0) / 60)} min</td>
-                    <td className="py-2">
+                    <td className="py-1.5 pr-2 text-muted-foreground">{formatLastRun(t.lastRunAt)}</td>
+                    <td className="py-1.5 pr-2 text-muted-foreground">Every {Math.round((t.intervalSeconds ?? 0) / 60)} min</td>
+                    <td className="py-1.5">
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-6 w-6"
                           onClick={() => runMutation.mutate(t.id)}
                           disabled={runMutation.isPending}
                           title="Run now"
@@ -415,7 +415,7 @@ function SyntheticResults() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-6 w-6"
                           onClick={() => togglePauseMutation.mutate({testId: t.id, active: !t.active})}
                           title={t.active ? 'Pause' : 'Resume'}
                         >
@@ -437,7 +437,7 @@ function SyntheticResults() {
                 ))}
                 {filteredTests.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={9} className="py-6 text-center text-muted-foreground">
                       {tests.length === 0
                         ? 'No synthetic tests configured. Click "New Test" to create one.'
                         : 'No tests match your filters.'}
@@ -451,38 +451,38 @@ function SyntheticResults() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Recent Results</CardTitle></CardHeader>
-        <CardContent>
+        <CardHeader className="py-2 px-3"><CardTitle className="text-sm">Recent Results</CardTitle></CardHeader>
+        <CardContent className="px-3 pb-3 pt-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
-                  <th className="pb-2 pr-4 font-medium">Test Name</th>
-                  <th className="pb-2 pr-4 font-medium">Type</th>
-                  <th className="pb-2 pr-4 font-medium">Status</th>
-                  <th className="pb-2 pr-4 font-medium">Duration</th>
-                  <th className="pb-2 pr-4 font-medium">Probe</th>
-                  <th className="pb-2 font-medium">Time</th>
+                  <th className="pb-1.5 pr-2 font-medium">Test Name</th>
+                  <th className="pb-1.5 pr-2 font-medium">Type</th>
+                  <th className="pb-1.5 pr-2 font-medium">Status</th>
+                  <th className="pb-1.5 pr-2 font-medium">Duration</th>
+                  <th className="pb-1.5 pr-2 font-medium">Probe</th>
+                  <th className="pb-1.5 font-medium">Time</th>
                 </tr>
               </thead>
               <tbody>
                 {results.slice(0, 50).map((r) => (
                   <tr key={r.resultId} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="py-2 pr-4 font-medium">{r.testName}</td>
-                    <td className="py-2 pr-4"><Badge variant="outline" className="text-xs">{r.testType}</Badge></td>
-                    <td className="py-2 pr-4">
-                      <Badge variant="outline" className={cn('text-xs', resultStatusColors[r.status] || '')}>
+                    <td className="py-1.5 pr-2 font-medium">{r.testName}</td>
+                    <td className="py-1.5 pr-2"><Badge variant="outline" className="text-[10px]">{r.testType}</Badge></td>
+                    <td className="py-1.5 pr-2">
+                      <Badge variant="outline" className={cn('text-[10px]', resultStatusColors[r.status] || '')}>
                         {r.status}
                       </Badge>
                     </td>
-                    <td className="py-2 pr-4">{r.durationMs}ms</td>
-                    <td className="py-2 pr-4">{r.probeDc}</td>
-                    <td className="py-2 text-muted-foreground text-xs">{r.timestamp}</td>
+                    <td className="py-1.5 pr-2">{r.durationMs}ms</td>
+                    <td className="py-1.5 pr-2">{r.probeDc}</td>
+                    <td className="py-1.5 text-muted-foreground">{r.timestamp}</td>
                   </tr>
                 ))}
                 {results.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-muted-foreground">No synthetic test results</td>
+                    <td colSpan={6} className="py-6 text-center text-muted-foreground">No synthetic test results</td>
                   </tr>
                 )}
               </tbody>

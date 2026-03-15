@@ -86,7 +86,7 @@ class SyntheticsCheckExecutorTest {
         )
     }
 
-    // --- API test basics ---
+    // ──── API test basics ────
 
     @Test
     fun `executeTest returns failed when no URL configured`() = runBlocking {
@@ -369,7 +369,7 @@ class SyntheticsCheckExecutorTest {
         }
     }
 
-    // --- Test type dispatch ---
+    // ──── Test type dispatch ────
 
     @Test
     fun `executeTest dispatches DNS type`() = runBlocking {
@@ -497,7 +497,7 @@ class SyntheticsCheckExecutorTest {
         assertEquals("No hostname configured", result.errorMessage)
     }
 
-    // --- Multistep tests ---
+    // ──── Multistep tests ────
 
     @Test
     fun `multistep test fails when no steps configured`() = runBlocking {
@@ -584,7 +584,7 @@ class SyntheticsCheckExecutorTest {
         }
     }
 
-    // --- Connection error handling ---
+    // ──── Connection error handling ────
 
     @Test
     fun `executeTest handles connection refused gracefully`() = runBlocking {

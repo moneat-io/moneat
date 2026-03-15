@@ -40,7 +40,7 @@ class CustomDataSourceExecutorTest {
     private val postgresHandler = PostgresHandler(ConcurrentHashMap())
     private val prometheusHandler = PrometheusHandler()
 
-    // --- SQL Validation Tests (PostgresHandler/JdbcHandler) ---
+    // ──── SQL Validation Tests (PostgresHandler/JdbcHandler) ────
 
     @Test
     fun `validateSqlQuery allows SELECT queries`() {
@@ -166,7 +166,7 @@ class CustomDataSourceExecutorTest {
         postgresHandler.validateSqlQuery("SELECT my_dblink_config FROM settings")
     }
 
-    // --- Encoding / comment-injection bypass tests ---
+    // ──── Encoding / comment-injection bypass tests ────
 
     @Test
     fun `validateSqlQuery rejects comment-split INSERT keyword`() {
@@ -204,7 +204,7 @@ class CustomDataSourceExecutorTest {
         postgresHandler.validateSqlQuery("SELECT /* fetch all */ * FROM users LIMIT 10")
     }
 
-    // --- Prometheus URL building (PrometheusHandler uses HttpApiHandler.buildUrl) ---
+    // ──── Prometheus URL building (PrometheusHandler uses HttpApiHandler.buildUrl) ────
 
     @Test
     fun `buildPrometheusUrl with plain host and explicit port`() {
@@ -248,7 +248,7 @@ class CustomDataSourceExecutorTest {
         assertEquals("http://prometheus.example.com:9090", url)
     }
 
-    // --- SSRF validation (HttpApiHandler.buildUrl) ---
+    // ──── SSRF validation (HttpApiHandler.buildUrl) ────
 
     @Test
     fun `buildUrl blocks cloud metadata address`() {
@@ -267,11 +267,11 @@ class CustomDataSourceExecutorTest {
     @Test
     fun `buildUrl blocks private RFC1918 address`() {
         assertFailsWith<IllegalArgumentException> {
-            prometheusHandler.buildUrl("192.168.1.1", 9090)
+            prometheusHandler.buildUrl("192.168.1.1", 9090) // NOSONAR - must use real RFC1918 IP to test blocking
         }
     }
 
-    // --- Prometheus step resolution ---
+    // ──── Prometheus step resolution ────
 
     @Test
     fun `resolvePrometheusStep for 1 hour range`() {
@@ -298,7 +298,7 @@ class CustomDataSourceExecutorTest {
         assertEquals("1d", prometheusHandler.resolvePrometheusStep(2592000L))
     }
 
-    // --- Relative time resolution ---
+    // ──── Relative time resolution ────
 
     @Test
     fun `resolveRelativeTimeSec for now`() {
@@ -324,7 +324,7 @@ class CustomDataSourceExecutorTest {
         assertEquals(nowSec - 604800, prometheusHandler.resolveRelativeTimeSec("now-7d", nowSec))
     }
 
-    // --- Prometheus response parsing ---
+    // ──── Prometheus response parsing ────
 
     @Test
     fun `parsePrometheusResponse handles vector result`() {
@@ -382,7 +382,7 @@ class CustomDataSourceExecutorTest {
         assertContains(rows[0].keys, "region")
     }
 
-    // --- Query engine custom data source detection ---
+    // ──── Query engine custom data source detection ────
 
     @Test
     fun `isCustomDataSource returns true for custom prefix`() {
@@ -434,7 +434,7 @@ class CustomDataSourceExecutorTest {
         assertTrue(sources.none { it.name == "custom:2" })
     }
 
-    // --- Custom data source model tests ---
+    // ──── Custom data source model tests ────
 
     @Test
     fun `CustomDataSourceType fromString works for postgresql`() {

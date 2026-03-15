@@ -183,12 +183,27 @@ jobs:
           OUTPUT: CHANGES.md
           GITHUB_REPO: ${{ github.repository }}
 
+      - name: Get previous stable tag
+        if: ${{ !contains(github.ref_name, '-') }}
+        id: prev-tag
+        run: |
+          PREV=$(git tag -l 'v*.*.*' --sort=-version:refname | grep -v '\-' | grep -A1 "^${{ github.ref_name }}$" | tail -1)
+          if [ -z "$PREV" ]; then
+            echo "::error::Could not find previous stable release for ${{ github.ref_name }}"
+            exit 1
+          fi
+          if [ "$PREV" = "${{ github.ref_name }}" ]; then
+            echo "::error::No previous release found (this may be the first release)"
+            exit 1
+          fi
+          echo "tag=$PREV" >> $GITHUB_OUTPUT
+
       - name: Generate changelog for stable release
         if: ${{ !contains(github.ref_name, '-') }}
         uses: orhun/git-cliff-action@07dda386992489f0a6151dee53f3a137713644de
         with:
           config: cliff.toml
-          args: --current --strip header --ignore-tags v[0-9]+\.[0-9]+\.[0-9]+-.*
+          args: ${{ steps.prev-tag.outputs.tag }}..${{ github.ref_name }} --tag ${{ github.ref_name }} --strip header --ignore-tags v[0-9]+\.[0-9]+\.[0-9]+-.*
         env:
           OUTPUT: CHANGES.md
           GITHUB_REPO: ${{ github.repository }}

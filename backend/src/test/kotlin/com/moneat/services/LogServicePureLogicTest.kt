@@ -33,7 +33,7 @@ import kotlin.test.assertTrue
 class LogServicePureLogicTest {
     private val service = LogService(LogRepositoryImpl())
 
-    // ==================== estimateBillableBytes (SDK entries) ====================
+    // ──── estimateBillableBytes (SDK entries) ────
 
     @Test
     fun `estimateBillableBytes returns 0 for empty list`() {
@@ -66,7 +66,7 @@ class LogServicePureLogicTest {
         assertEquals(11L, service.estimateBillableBytes(entries))
     }
 
-    // ==================== estimateBillableBytes (Agent entries) ====================
+    // ──── estimateBillableBytes (Agent entries) ────
 
     @Test
     fun `estimateBillableBytes agent returns 0 for empty list`() {
@@ -91,7 +91,7 @@ class LogServicePureLogicTest {
         assertEquals(0L, service.estimateBillableBytes(entries))
     }
 
-    // ==================== decodeQueueMessage / encodeQueueMessage ====================
+    // ──── decodeQueueMessage / encodeQueueMessage ────
 
     @Test
     fun `encodeQueueMessage then decodeQueueMessage round-trips correctly`() {
@@ -154,7 +154,7 @@ class LogServicePureLogicTest {
         assertNull(decoded.organizationId)
     }
 
-    // ==================== parseLiveLog ====================
+    // ──── parseLiveLog ────
 
     @Test
     fun `parseLiveLog returns null for invalid JSON`() {
@@ -179,7 +179,7 @@ class LogServicePureLogicTest {
         assertEquals("hello", result.message)
     }
 
-    // ==================== matchesTailFilters ====================
+    // ──── matchesTailFilters ────
 
     private fun makeLog(
         level: String = "info",
@@ -297,7 +297,7 @@ class LogServicePureLogicTest {
         assertTrue(service.matchesTailFilters(log, LogTailFilters(service = null)))
     }
 
-    // ==================== autoInterval ====================
+    // ──── autoInterval ────
 
     @Test
     fun `autoInterval returns 1h for null inputs`() {
@@ -341,7 +341,7 @@ class LogServicePureLogicTest {
         assertEquals("1d", service.autoInterval(from, to))
     }
 
-    // ==================== parseOtlpJson ====================
+    // ──── parseOtlpJson ────
 
     @Test
     fun `parseOtlpJson returns empty for invalid JSON`() {

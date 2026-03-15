@@ -54,8 +54,8 @@ class LogServiceExecutionTest {
                         exchange.respond(
                             200,
                             """
-                        {"log_id":"00000000-0000-0000-0000-000000000001","timestamp_formatted":"2026-02-01T01:00:00.000Z","timestamp_ms":1738371600000,"level_text":"WARNING","message":"first","body":"first body","service":"api","environment":"prod","host":"host-1","source_text":"agent_stdout","container_name":"","container_id":"","container_image":"","trace_id":"","span_id":"","tags":"{\"region\":\"us-east\"}","resource_attributes":{"deployment.environment":"prod"},"system_id_text":"00000000-0000-0000-0000-000000000000"}
-                        {"log_id":"00000000-0000-0000-0000-000000000000","timestamp_formatted":"2026-02-01T00:59:00.000Z","timestamp_ms":1738371540000,"level_text":"error","message":"second","body":"second body","service":"api","environment":"prod","host":"host-1","source_text":"sdk","container_name":"","container_id":"","container_image":"","trace_id":"","span_id":"","tags":"{}","resource_attributes":"{}","system_id_text":"11111111-1111-1111-1111-111111111111"}
+                        {"log_id_str":"00000000-0000-0000-0000-000000000001","timestamp_ms":1738371600000,"level_text":"WARNING","message":"first","body":"first body","service":"api","environment":"prod","host":"host-1","source_text":"agent_stdout","container_name":"","container_id":"","container_image":"","trace_id":"","span_id":"","tags":"{\"region\":\"us-east\"}","resource_attributes":"{\"deployment.environment\":\"prod\"}","system_id_text":"00000000-0000-0000-0000-000000000000"}
+                        {"log_id_str":"00000000-0000-0000-0000-000000000000","timestamp_ms":1738371540000,"level_text":"error","message":"second","body":"second body","service":"api","environment":"prod","host":"host-1","source_text":"sdk","container_name":"","container_id":"","container_image":"","trace_id":"","span_id":"","tags":"{}","resource_attributes":"{}","system_id_text":"11111111-1111-1111-1111-111111111111"}
                             """.trimIndent(),
                             contentType = "text/plain"
                         )

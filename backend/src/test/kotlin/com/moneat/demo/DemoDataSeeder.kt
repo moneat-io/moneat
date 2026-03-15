@@ -17,6 +17,7 @@
 package com.moneat.demo
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.testsupport.TestIpConstants
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
@@ -1524,7 +1525,7 @@ object DemoDataSeeder {
                     "warn",
                     "Rate limit approaching for IP {ip}: {count}/{limit} requests",
                     mapOf(
-                        "ip" to listOf("192.168.1.100", "10.0.0.45", "172.16.0.23"),
+                        "ip" to listOf(TestIpConstants.IP_100, TestIpConstants.IP_45, TestIpConstants.IP_OTHER_2),
                         "count" to listOf("950", "980", "990"),
                         "limit" to listOf("1000")
                     )

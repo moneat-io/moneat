@@ -29,20 +29,21 @@ const ACCENT_STYLES = {
 
 export type StatsCardAccent = keyof typeof ACCENT_STYLES
 
-export function StatsCardSkeleton({ accent, className }: { readonly accent?: StatsCardAccent; readonly className?: string }) {
+export function StatsCardSkeleton({ accent, compact, className }: { readonly accent?: StatsCardAccent; readonly compact?: boolean; readonly className?: string }) {
   const styles = accent ? ACCENT_STYLES[accent] : null
   return (
     <Card className={cn('overflow-hidden', className)}>
-      {styles && <div className={`h-1 w-full shrink-0 ${styles.bar}`} aria-hidden />}
-      <CardContent className="px-4 py-3">
-        <div className="flex items-center gap-3">
+      {styles && <div className={cn('w-full shrink-0', compact ? 'h-0.5' : 'h-1', styles.bar)} aria-hidden />}
+      <CardContent className={compact ? 'px-3 py-2' : 'px-4 py-3'}>
+        <div className={cn('flex items-center', compact ? 'gap-2' : 'gap-3')}>
           <div className={cn(
-            'h-9 w-9 shrink-0 rounded-lg animate-pulse',
+            'shrink-0 rounded-lg animate-pulse',
+            compact ? 'h-7 w-7' : 'h-9 w-9',
             styles ? styles.icon.replace(/text-\S+/, 'bg-muted') : 'bg-muted'
           )} />
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-3 w-16 bg-muted rounded animate-pulse" />
-            <div className="h-5 w-12 bg-muted rounded animate-pulse" />
+            <div className={cn('bg-muted rounded animate-pulse', compact ? 'h-2.5 w-14' : 'h-3 w-16')} />
+            <div className={cn('bg-muted rounded animate-pulse', compact ? 'h-4 w-10' : 'h-5 w-12')} />
           </div>
         </div>
       </CardContent>
@@ -64,29 +65,32 @@ interface StatsCardProps {
   readonly accent?: StatsCardAccent
   /** Optional color class override for the value text */
   readonly valueColor?: string
+  /** Use smaller padding and typography for compact layouts */
+  readonly compact?: boolean
   readonly className?: string
 }
 
-export function StatsCard({ title, value, icon: Icon, trend, subtitle, accent, valueColor, className }: StatsCardProps) {
+export function StatsCard({ title, value, icon: Icon, trend, subtitle, accent, valueColor, compact, className }: StatsCardProps) {
   const styles = accent ? ACCENT_STYLES[accent] : null
   return (
     <Card className={cn('overflow-hidden', className)}>
-      {styles && <div className={`h-1 w-full shrink-0 ${styles.bar}`} aria-hidden />}
-      <CardContent className="px-3 py-2 sm:px-4 sm:py-3">
-        <div className="flex items-center gap-2 sm:gap-3">
+      {styles && <div className={cn('w-full shrink-0', compact ? 'h-0.5' : 'h-1', styles.bar)} aria-hidden />}
+      <CardContent className={compact ? 'px-3 py-2' : 'px-3 py-2 sm:px-4 sm:py-3'}>
+        <div className={cn('flex items-center', compact ? 'gap-2' : 'gap-2 sm:gap-3')}>
           <div
             className={cn(
-              'h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-lg flex items-center justify-center',
+              'shrink-0 rounded-lg flex items-center justify-center',
+              compact ? 'h-7 w-7' : 'h-8 w-8 sm:h-9 sm:w-9',
               styles ? styles.icon : 'bg-primary/10 text-primary'
             )}
           >
-            <Icon className="h-4 w-4" />
+            <Icon className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-muted-foreground truncate">{title}</p>
-            <p className={cn('text-lg font-bold leading-tight', valueColor)}>{value}</p>
+            <p className={cn('font-medium text-muted-foreground truncate', compact ? 'text-[11px]' : 'text-xs')}>{title}</p>
+            <p className={cn('font-bold leading-tight', compact ? 'text-base' : 'text-lg', valueColor)}>{value}</p>
             {subtitle && (
-              <p className="text-[11px] text-muted-foreground truncate">{subtitle}</p>
+              <p className={cn('text-muted-foreground truncate', compact ? 'text-[10px]' : 'text-[11px]')}>{subtitle}</p>
             )}
             {trend && (
               <p className={`text-[11px] ${trend.positive ? 'text-emerald-600' : 'text-rose-600'}`}>

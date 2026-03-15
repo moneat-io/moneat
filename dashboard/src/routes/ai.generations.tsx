@@ -86,21 +86,21 @@ function GenerationsPage() {
   const totalPages = data ? Math.ceil(data.total / data.pageSize) : 0
 
   return (
-    <div className="space-y-4 p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Brain className="h-6 w-6" />
+    <div className="space-y-2 p-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h1 className="text-lg font-bold flex items-center gap-1.5">
+          <Brain className="h-4 w-4" />
           Generations
         </h1>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           <Input
             placeholder="Filter by model..."
             value={modelFilter}
             onChange={(e) => { setModelFilter(e.target.value); setPage(1) }}
-            className="w-40"
+            className="w-36 h-8 text-xs"
           />
           <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v === 'all' ? '' : v); setPage(1) }}>
-            <SelectTrigger className="w-28">
+            <SelectTrigger className="w-24 h-8 text-xs">
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
@@ -114,7 +114,7 @@ function GenerationsPage() {
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1) }}>
-            <SelectTrigger className="w-28">
+            <SelectTrigger className="w-24 h-8 text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -124,7 +124,7 @@ function GenerationsPage() {
             </SelectContent>
           </Select>
           <Select value={range} onValueChange={(v) => { setRange(v); setPage(1) }}>
-            <SelectTrigger className="w-28">
+            <SelectTrigger className="w-24 h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -140,7 +140,7 @@ function GenerationsPage() {
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
-          <Table>
+          <Table className="[&_th]:h-8 [&_th]:px-1.5 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-1.5">
             <TableHeader>
               <TableRow>
                 <TableHead>Timestamp</TableHead>
@@ -209,7 +209,7 @@ function GenerationsPage() {
               ))}
               {(!data?.generations || data.generations.length === 0) && !isLoading && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-6">
                     No generations found for the selected filters.
                   </TableCell>
                 </TableRow>
@@ -221,8 +221,8 @@ function GenerationsPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
+        <div className="flex items-center justify-between py-1">
+          <span className="text-xs text-muted-foreground">
             Page {page} of {totalPages} ({data?.total} total)
           </span>
           <div className="flex gap-1">
@@ -243,8 +243,8 @@ function GenerationsPage() {
             <DialogTitle>Generation Detail</DialogTitle>
           </DialogHeader>
           {detail && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                 <div><span className="text-muted-foreground">Model:</span> <span className="font-medium">{detail.model}</span></div>
                 <div><span className="text-muted-foreground">Provider:</span> <span className="font-medium">{detail.provider}</span></div>
                 <div><span className="text-muted-foreground">Type:</span> <Badge variant="outline">{detail.type}</Badge></div>
@@ -255,19 +255,19 @@ function GenerationsPage() {
                 <div><span className="text-muted-foreground">Temperature:</span> <span className="font-medium">{detail.temperature}</span></div>
               </div>
               {detail.errorMessage && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
                   <strong>Error:</strong> {detail.errorMessage}
                 </div>
               )}
               <div>
-                <h4 className="text-sm font-semibold mb-2">Input</h4>
-                <pre className="bg-muted rounded-md p-3 text-xs overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap">
+                <h4 className="text-xs font-semibold mb-1">Input</h4>
+                <pre className="bg-muted rounded-md p-2 text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
                   {tryFormatJson(detail.input)}
                 </pre>
               </div>
               <div>
-                <h4 className="text-sm font-semibold mb-2">Output</h4>
-                <pre className="bg-muted rounded-md p-3 text-xs overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap">
+                <h4 className="text-xs font-semibold mb-1">Output</h4>
+                <pre className="bg-muted rounded-md p-2 text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
                   {tryFormatJson(detail.output)}
                 </pre>
               </div>

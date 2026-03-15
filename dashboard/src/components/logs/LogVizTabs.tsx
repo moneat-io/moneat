@@ -33,20 +33,20 @@ const tabs: {value: LogVizMode; label: string; icon: React.ElementType}[] = [
 
 export function LogVizTabs({mode, onModeChange}: LogVizTabsProps) {
   return (
-    <div className="flex items-center gap-0.5 rounded-lg bg-muted/50 p-0.5">
+    <div className="flex items-center gap-0.5 rounded-md bg-muted/50 p-0.5">
       {tabs.map(({value, label, icon: Icon}) => (
         <button
           key={value}
           type="button"
           onClick={() => onModeChange(value)}
           className={cn(
-            'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+            'flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition-colors',
             mode === value
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
-          <Icon className="h-3.5 w-3.5" />
+          <Icon className="h-3 w-3" />
           {label}
         </button>
       ))}

@@ -357,11 +357,11 @@ export function LogSearchBar({
   }, [levels])
 
   return (
-    <div className="flex items-stretch gap-2">
+    <div className="flex items-stretch gap-1.5">
       {/* Search input with chips */}
       <div className="relative flex-1 min-w-0">
-        <div className="flex min-h-[36px] flex-wrap items-center gap-1.5 rounded-lg border bg-card px-3 py-1 ring-offset-background transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="flex min-h-[30px] flex-wrap items-center gap-1 rounded-md border bg-card px-2 py-0.5 ring-offset-background transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 
             {/* Query text chip */}
             {query && (
@@ -435,7 +435,7 @@ export function LogSearchBar({
                   ? 'Add...'
                   : 'Search...'
               }
-              className="min-w-[80px] sm:min-w-[200px] flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="min-w-[80px] sm:min-w-[200px] flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
             />
 
             {hasActiveFilters && (
@@ -500,14 +500,14 @@ export function LogSearchBar({
             variant="outline"
             size="default"
             className={cn(
-              'h-[36px] px-3 sm:px-4 gap-2 whitespace-nowrap font-normal',
+              'h-[30px] px-2 sm:px-3 gap-1.5 whitespace-nowrap font-normal text-xs',
               hasCustomLevelFilter && 'border-primary/40'
             )}
             onClick={() => setShowLevelDropdown(!showLevelDropdown)}
           >
-            <ListFilter className="h-4 w-4 text-muted-foreground" />
-            <span className="hidden sm:inline text-sm">{levelSummary}</span>
-            <ChevronDown className="hidden sm:inline h-3.5 w-3.5 text-muted-foreground" />
+            <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="hidden sm:inline text-xs">{levelSummary}</span>
+            <ChevronDown className="hidden sm:inline h-3 w-3 text-muted-foreground" />
           </Button>
 
           {showLevelDropdown && (
@@ -553,12 +553,12 @@ export function LogSearchBar({
             <Button
               variant="outline"
               size="default"
-              className="h-[36px] px-3 sm:px-4 gap-2 whitespace-nowrap font-normal"
+              className="h-[30px] px-2 sm:px-3 gap-1.5 whitespace-nowrap font-normal text-xs"
               onClick={() => setShowTimeDropdown(!showTimeDropdown)}
             >
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span className="hidden sm:inline text-sm">{activeTimeLabel}</span>
-              <ChevronDown className="hidden sm:inline h-3.5 w-3.5 text-muted-foreground" />
+              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="hidden sm:inline text-xs">{activeTimeLabel}</span>
+              <ChevronDown className="hidden sm:inline h-3 w-3 text-muted-foreground" />
             </Button>
 
           {showTimeDropdown && (

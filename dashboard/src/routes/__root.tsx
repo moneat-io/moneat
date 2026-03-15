@@ -19,7 +19,6 @@ import {useCallback, useEffect, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/Sidebar'
 import {CommandPalette} from '../components/CommandPalette'
-import {AppTopBar, TOPBAR_HEIGHT} from '../components/AppTopBar'
 import {CommandPaletteProvider} from '../contexts/CommandPaletteProvider'
 import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
@@ -206,10 +205,18 @@ function RootComponent() {
   const navigate = useNavigate()
   const currentPath = router.location.pathname
   const [isAuthenticated, setIsAuthenticated] = useState(api.isAuthenticated())
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false)
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
+    if (typeof window === 'undefined') return true
+    const saved = localStorage.getItem('moneat:sidebar-expanded')
+    return saved !== null ? saved === 'true' : true
+  })
+  const handleSidebarExpandedChange = useCallback((expanded: boolean) => {
+    setIsSidebarExpanded(expanded)
+    localStorage.setItem('moneat:sidebar-expanded', String(expanded))
+  }, [])
   const [onboardingChecked, setOnboardingChecked] = useState(false)
   const [authCheckComplete, setAuthCheckComplete] = useState(false)
-  const [headerHeight, setHeaderHeight] = useState(TOPBAR_HEIGHT)
+  const [headerHeight, setHeaderHeight] = useState(0)
   const headerRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
     const update = () => setHeaderHeight(node.offsetHeight)
@@ -314,14 +321,13 @@ function RootComponent() {
     <div className="min-h-screen bg-background">
       {showSidebar && (
         <CommandPaletteProvider>
-          {/* Fixed header: optional demo banner + top bar */}
-          <div ref={headerRef} className="fixed top-0 left-0 right-0 z-50">
+          {/* Fixed header: optional demo banner */}
+          <div ref={headerRef} className="fixed top-0 left-0 right-0 z-50 w-full">
             <DemoBanner />
-            <AppTopBar sidebarWidth={sidebarWidth} isSidebarExpanded={isSidebarExpanded} />
           </div>
           <Sidebar
             isExpanded={isSidebarExpanded}
-            onExpandedChange={setIsSidebarExpanded}
+            onExpandedChange={handleSidebarExpandedChange}
             headerHeight={headerHeight}
           />
           <AuthenticatedContent sidebarWidth={sidebarWidth} headerHeight={headerHeight} />
@@ -376,7 +382,7 @@ function AuthenticatedContent({
 
   return (
     <div
-      className="transition-[margin-left] duration-300"
+      className="relative z-0 transition-[margin-left] duration-300"
       style={{
         marginLeft: sidebarWidth,
         paddingTop: headerHeight,

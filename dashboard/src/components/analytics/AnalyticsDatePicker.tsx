@@ -13,7 +13,7 @@ export function AnalyticsDatePicker({period, onPeriodChange, customFrom, customT
   return (
     <div className="flex items-center gap-2">
       <Select value={period} onValueChange={(v) => onPeriodChange(v as AnalyticsPeriod)}>
-        <SelectTrigger className="w-[140px] h-8 text-xs">
+        <SelectTrigger className="w-[120px] h-7 text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -32,14 +32,14 @@ export function AnalyticsDatePicker({period, onPeriodChange, customFrom, customT
             type="date"
             value={customFrom}
             onChange={(e) => onCustomRangeChange(e.target.value, customTo)}
-            className="h-8 rounded-md border bg-background px-2 text-xs"
+            className="h-7 rounded-md border bg-background px-2 text-xs"
           />
           <span className="text-xs text-muted-foreground">to</span>
           <input
             type="date"
             value={customTo}
             onChange={(e) => onCustomRangeChange(customFrom, e.target.value)}
-            className="h-8 rounded-md border bg-background px-2 text-xs"
+            className="h-7 rounded-md border bg-background px-2 text-xs"
           />
         </div>
       )}

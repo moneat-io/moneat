@@ -28,6 +28,7 @@ import com.moneat.events.models.StackFrame
 import com.moneat.events.models.StackTrace
 import com.moneat.events.models.UserInfo
 import com.moneat.events.repositories.EventRepository
+import com.moneat.testsupport.TestIpConstants
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.services.EventService
 import io.mockk.every
@@ -80,7 +81,7 @@ class EventServiceTest {
         every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
     }
 
-    // ============ PROJECT KEY VERIFICATION TESTS (P0) ============
+    // ──── PROJECT KEY VERIFICATION TESTS (P0) ────
 
     @Test
     fun `verifyProjectKey with valid active public key succeeds`() {
@@ -120,7 +121,7 @@ class EventServiceTest {
         assertFalse(result.isValid, "Public key should be case-sensitive")
     }
 
-    // ============ EVENT FINGERPRINTING TESTS (P0) ============
+    // ──── EVENT FINGERPRINTING TESTS (P0) ────
 
     @Test
     fun `same error with identical exception generates same fingerprint for deduplication`() {
@@ -324,7 +325,7 @@ class EventServiceTest {
         assertEquals("ios", iosEvent.platform)
     }
 
-    // ============ EVENT VALIDATION TESTS (P0) ============
+    // ──── EVENT VALIDATION TESTS (P0) ────
 
     @Test
     fun `valid Sentry event with all required fields is accepted`() {
@@ -364,7 +365,7 @@ class EventServiceTest {
                 id = "user-123",
                 email = "test@example.com",
                 username = "testuser",
-                ip_address = "192.168.1.1"
+                ip_address = TestIpConstants.IP_1
             )
 
         val tags =
@@ -437,7 +438,7 @@ class EventServiceTest {
         assertNotNull(event.exception, "Exception should be present for fingerprint generation")
     }
 
-    // ============ METADATA PARSING TESTS (P0) ============
+    // ──── METADATA PARSING TESTS (P0) ────
 
     @Test
     fun `SDK information is extracted from event`() {
@@ -564,7 +565,7 @@ class EventServiceTest {
         )
     }
 
-    // ============ ORGANIZATION RESOLUTION TESTS (P0) ============
+    // ──── ORGANIZATION RESOLUTION TESTS (P0) ────
 
     @Test
     fun `getOrganizationIdForProject returns correct organization`() {
@@ -580,7 +581,7 @@ class EventServiceTest {
         assertNull(orgId, "Should return null for nonexistent project")
     }
 
-    // ============ MULTIPLE PROJECT KEYS TEST (P0) ============
+    // ──── MULTIPLE PROJECT KEYS TEST (P0) ────
 
     @Test
     fun `multiple active keys for same project are all verified correctly`() {
@@ -612,7 +613,7 @@ class EventServiceTest {
         assertTrue(result2.isValid, "Other active key should still verify")
     }
 
-    // ============ ENVELOPE PROCESSING STRUCTURE TESTS (P0) ============
+    // ──── ENVELOPE PROCESSING STRUCTURE TESTS (P0) ────
 
     @Test
     fun `SentryEnvelope with event item can be created and accessed`() {
@@ -705,7 +706,7 @@ class EventServiceTest {
         )
     }
 
-    // ============ HELPER METHODS ============
+    // ──── HELPER METHODS ────
 
     private fun createSentryEvent(
         eventId: String? = null,

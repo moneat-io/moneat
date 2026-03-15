@@ -45,7 +45,7 @@ class GrafanaTranslatorTest {
 
     private val translator = GrafanaTranslator()
 
-    // --- Import ---
+    // ──── Import ────
 
     @Test
     fun `import extracts dashboard title`() {
@@ -240,7 +240,7 @@ class GrafanaTranslatorTest {
         assertEquals(0, result.dashboard.widgets[0].gridX)
     }
 
-    // --- parseGrafanaTargets ---
+    // ──── parseGrafanaTargets ────
 
     @Test
     fun `parseGrafanaTargets with PromQL expr`() {
@@ -332,7 +332,7 @@ class GrafanaTranslatorTest {
         assertEquals("Process CPU Usage", dsls[1].metrics[0].alias)
     }
 
-    // --- parsePromQL ---
+    // ──── parsePromQL ────
 
     @Test
     fun `parsePromQL with rate function`() {
@@ -434,7 +434,7 @@ class GrafanaTranslatorTest {
         assertEquals(2, dsl.filters.size)
     }
 
-    // --- Export ---
+    // ──── Export ────
 
     @Test
     fun `export generates valid Grafana JSON structure`() {
@@ -518,7 +518,7 @@ class GrafanaTranslatorTest {
         assertEquals("table", panelType)
     }
 
-    // --- buildGrafanaSql ---
+    // ──── buildGrafanaSql ────
 
     @Test
     fun `buildGrafanaSql generates SQL with time bucket`() {
@@ -596,7 +596,7 @@ class GrafanaTranslatorTest {
         assertEquals("Roundtrip Test", exported["title"]?.jsonPrimitive?.content)
     }
 
-    // --- Row panel handling ---
+    // ──── Row panel handling ────
 
     @Test
     fun `import converts row panels to section widgets`() {
@@ -741,7 +741,7 @@ class GrafanaTranslatorTest {
         assertEquals("events", dsl.dataSource)
     }
 
-    // --- parsePromQL with range vectors ---
+    // ──── parsePromQL with range vectors ────
 
     @Test
     fun `parsePromQL with range vector duration`() {
@@ -785,7 +785,7 @@ class GrafanaTranslatorTest {
         assertEquals("irate(node_network_receive_bytes_total{device=\"eth0\"}[5m])", dsl.rawQuery)
     }
 
-    // --- Complex real-world dashboard ---
+    // ──── Complex real-world dashboard ────
 
     @Test
     fun `import complex dashboard with mixed panel types`() {
@@ -995,7 +995,7 @@ class GrafanaTranslatorTest {
         assertTrue(result.warnings.none { it.contains("unknown table") })
     }
 
-    // --- Variable import ---
+    // ──── Variable import ────
 
     @Test
     fun `import parses Grafana templating variables`() {
@@ -1516,7 +1516,7 @@ class GrafanaTranslatorTest {
         assertTrue(config.isEmpty())
     }
 
-    // --- InfluxDB translator tests ---
+    // ──── InfluxDB translator tests ────
 
     @Test
     fun `translateGrafanaInfluxTarget with measurement and select`() {
@@ -1629,7 +1629,7 @@ class GrafanaTranslatorTest {
         assertContains(result, "(r._field == \"bytes_recv\" or r._field == \"bytes_sent\")")
     }
 
-    // --- CloudWatch translator tests ---
+    // ──── CloudWatch translator tests ────
 
     @Test
     fun `translateGrafanaCloudWatchTarget maps keys to PascalCase`() {
@@ -1699,7 +1699,7 @@ class GrafanaTranslatorTest {
         assertEquals("BucketSizeBytes", parsed["MetricName"]?.jsonPrimitive?.content)
     }
 
-    // --- Graphite translator tests ---
+    // ──── Graphite translator tests ────
 
     @Test
     fun `parseTarget detects Graphite target field`() {
@@ -1749,7 +1749,7 @@ class GrafanaTranslatorTest {
         )
     }
 
-    // --- Elasticsearch translator tests ---
+    // ──── Elasticsearch translator tests ────
 
     @Test
     fun `translateGrafanaElasticsearchTarget with metrics and bucketAggs`() {
@@ -1857,7 +1857,7 @@ class GrafanaTranslatorTest {
         assertTrue(aggs?.containsKey("1") == true)
     }
 
-    // --- parseTarget integration tests for new datasource types ---
+    // ──── parseTarget integration tests for new datasource types ────
 
     @Test
     fun `parseTarget detects InfluxDB measurement field`() {
@@ -2012,7 +2012,7 @@ class GrafanaTranslatorTest {
         assertContains(rawQuery, "date_histogram")
     }
 
-    // ─── Redis dashboard import integration tests ────────────────────
+    // ──── Redis dashboard import integration tests ────
 
     /**
      * Build a minimal Redis panel with command-style target and

@@ -106,7 +106,7 @@ class SyntheticsServiceTest {
         )
     }
 
-    // --- CRUD: Create ---
+    // ──── CRUD: Create ────
 
     @Test
     fun `createTest creates a test and returns response`() {
@@ -205,7 +205,7 @@ class SyntheticsServiceTest {
         assertEquals("status_code", response.assertions[0].type)
     }
 
-    // --- CRUD: Read ---
+    // ──── CRUD: Read ────
 
     @Test
     fun `getTest returns test by id and org`() {
@@ -254,7 +254,7 @@ class SyntheticsServiceTest {
         assertTrue(tests.isEmpty())
     }
 
-    // --- CRUD: Update ---
+    // ──── CRUD: Update ────
 
     @Test
     fun `updateTest updates name`() {
@@ -328,7 +328,7 @@ class SyntheticsServiceTest {
         assertNull(result)
     }
 
-    // --- CRUD: Delete ---
+    // ──── CRUD: Delete ────
 
     @Test
     fun `deleteTest removes test`() {
@@ -365,7 +365,7 @@ class SyntheticsServiceTest {
         assertFalse(deleted)
     }
 
-    // --- Status Updates ---
+    // ──── Status Updates ────
 
     @Test
     fun `updateTestStatus updates status fields`() {
@@ -399,7 +399,7 @@ class SyntheticsServiceTest {
         assertEquals("failed", fetched.lastStatus)
     }
 
-    // --- Retry Logic ---
+    // ──── Retry Logic ────
 
     @Test
     fun `executeWithRetries passes on first attempt`() = runBlocking {
@@ -440,7 +440,7 @@ class SyntheticsServiceTest {
         assertEquals("passed", result.status)
     }
 
-    // --- Global Variables CRUD ---
+    // ──── Global Variables CRUD ────
 
     @Test
     fun `createVariable creates and returns variable`() {
@@ -592,7 +592,7 @@ class SyntheticsServiceTest {
         assertEquals("hidden", map["SECRET"])
     }
 
-    // --- getTestsDueForRun ---
+    // ──── getTestsDueForRun ────
 
     @Test
     fun `getTestsDueForRun returns new active tests`() {

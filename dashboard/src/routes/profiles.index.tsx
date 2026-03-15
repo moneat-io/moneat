@@ -19,10 +19,10 @@ function ProfilesIndexPage() {
   const [typeFilter, setTypeFilter] = useState('')
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-3 space-y-2">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Profiles</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
+        <h1 className="text-lg font-bold tracking-tight">Profiles</h1>
+        <p className="text-muted-foreground text-xs mt-0.5">
           Continuous profiling data from your applications
         </p>
       </div>

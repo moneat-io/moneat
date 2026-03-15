@@ -231,56 +231,56 @@ function ReplaysPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-blue-500/5">
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-4 py-4">
         {/* Header */}
-        <div className="mb-6 flex items-center gap-3">
-          <div className="rounded-xl bg-blue-500/15 p-2.5 ring-1 ring-blue-500/20">
-            <Video className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+        <div className="mb-4 flex items-center gap-2.5">
+          <div className="rounded-lg bg-blue-500/15 p-2 ring-1 ring-blue-500/20 shrink-0">
+            <Video className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold">Session Replays</h2>
-            <p className="text-sm text-muted-foreground">Watch real user sessions to understand behavior and debug issues</p>
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold">Session Replays</h2>
+            <p className="text-xs text-muted-foreground">Watch real user sessions to understand behavior and debug issues</p>
           </div>
         </div>
 
         {/* Stats Cards */}
         {replays.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 transition-all hover:shadow-md hover:border-blue-500/30">
-              <div className="flex items-center gap-2 mb-2">
-                <Play className="h-4 w-4 text-blue-500" />
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sessions</span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-2.5 transition-all hover:shadow-md hover:border-blue-500/30">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Play className="h-3 w-3 text-blue-500" />
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Sessions</span>
               </div>
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.total}</div>
+              <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.total}</div>
             </div>
-            <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 transition-all hover:shadow-md hover:border-rose-500/30">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="h-4 w-4 text-rose-500" />
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Errors</span>
+            <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2.5 transition-all hover:shadow-md hover:border-rose-500/30">
+              <div className="flex items-center gap-1.5 mb-1">
+                <AlertCircle className="h-3 w-3 text-rose-500" />
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Errors</span>
               </div>
-              <div className="text-2xl font-bold text-rose-600 dark:text-rose-400">{stats.totalErrors}</div>
+              <div className="text-xl font-bold text-rose-600 dark:text-rose-400">{stats.totalErrors}</div>
             </div>
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 transition-all hover:shadow-md hover:border-emerald-500/30">
-              <div className="flex items-center gap-2 mb-2">
-                <Timer className="h-4 w-4 text-emerald-500" />
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Avg Duration</span>
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 transition-all hover:shadow-md hover:border-emerald-500/30">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Timer className="h-3 w-3 text-emerald-500" />
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Avg Duration</span>
               </div>
-              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+              <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
                 {formatDuration(stats.avgDuration)}
               </div>
             </div>
-            <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 transition-all hover:shadow-md hover:border-violet-500/30">
-              <div className="flex items-center gap-2 mb-2">
-                <User className="h-4 w-4 text-violet-500" />
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unique Users</span>
+            <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5 transition-all hover:shadow-md hover:border-violet-500/30">
+              <div className="flex items-center gap-1.5 mb-1">
+                <User className="h-3 w-3 text-violet-500" />
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Unique Users</span>
               </div>
-              <div className="text-2xl font-bold text-violet-600 dark:text-violet-400">{stats.uniqueUsers}</div>
+              <div className="text-xl font-bold text-violet-600 dark:text-violet-400">{stats.uniqueUsers}</div>
             </div>
           </div>
         )}
 
         {/* Toolbar */}
-        <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -386,9 +386,9 @@ function ReplaysPage() {
                         : 'border-l-blue-500/40 border-border/60 hover:border-blue-500/30'
                     }`}
                   >
-                    <div className="flex items-center gap-4 p-4">
+                    <div className="flex items-center gap-3 p-3">
                       {/* Avatar */}
-                      <Avatar className="h-9 w-9 shrink-0">
+                      <Avatar className="h-8 w-8 shrink-0">
                         <AvatarFallback className={`text-xs font-semibold ${avatarColor}`}>
                           {initials}
                         </AvatarFallback>

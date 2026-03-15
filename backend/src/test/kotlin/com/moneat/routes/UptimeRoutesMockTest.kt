@@ -55,11 +55,11 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.TestDatabaseHelper
 
 class UptimeRoutesMockTest {
     companion object {
-        private const val JWT_SECRET = "uptime-mock-secret"
         private var dbInitialized = false
     }
 
@@ -84,7 +84,7 @@ class UptimeRoutesMockTest {
         install(Authentication) {
             jwt("auth-jwt") {
                 verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
+                    JWT.require(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
                         .withIssuer("moneat").withAudience("moneat-users").build()
                 )
                 validate { JWTPrincipal(it.payload) }
@@ -94,7 +94,7 @@ class UptimeRoutesMockTest {
 
     private fun token(userId: Int): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
-            .withClaim("userId", userId).sign(Algorithm.HMAC256(JWT_SECRET))
+            .withClaim("userId", userId).sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUser(): Int =
         transaction {
@@ -142,7 +142,7 @@ class UptimeRoutesMockTest {
         )
     }
 
-    // ─── GET /monitors ────────────────────────────────────────────────────────
+    // ──── GET /monitors ────
 
     @Test
     fun `GET monitors returns 200 with list`() =
@@ -166,7 +166,7 @@ class UptimeRoutesMockTest {
             assertTrue(response.bodyAsText().contains("test-monitor"))
         }
 
-    // ─── POST /monitors ───────────────────────────────────────────────────────
+    // ──── POST /monitors ────
 
     @Test
     fun `POST monitors returns 201 with created monitor`() =
@@ -195,7 +195,7 @@ class UptimeRoutesMockTest {
             assertTrue(response.bodyAsText().contains("test-monitor"))
         }
 
-    // ─── GET /monitors/{id} ───────────────────────────────────────────────────
+    // ──── GET /monitors/{id} ────
 
     @Test
     fun `GET monitor by id returns 200`() =
@@ -241,7 +241,7 @@ class UptimeRoutesMockTest {
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
-    // ─── PUT /monitors/{id} ───────────────────────────────────────────────────
+    // ──── PUT /monitors/{id} ────
 
     @Test
     fun `PUT monitor returns 200 when updated`() =
@@ -290,7 +290,7 @@ class UptimeRoutesMockTest {
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
-    // ─── DELETE /monitors/{id} ────────────────────────────────────────────────
+    // ──── DELETE /monitors/{id} ────
 
     @Test
     fun `DELETE monitor returns 200 when deleted`() =
@@ -334,7 +334,7 @@ class UptimeRoutesMockTest {
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
-    // ─── POST /monitors/{id}/pause ─────────────────────────────────────────────
+    // ──── POST /monitors/{id}/pause ────
 
     @Test
     fun `POST pause monitor returns 200`() =
@@ -357,7 +357,7 @@ class UptimeRoutesMockTest {
             assertEquals(HttpStatusCode.OK, response.status)
         }
 
-    // ─── POST /monitors/{id}/resume ────────────────────────────────────────────
+    // ──── POST /monitors/{id}/resume ────
 
     @Test
     fun `POST resume monitor returns 200`() =
@@ -380,7 +380,7 @@ class UptimeRoutesMockTest {
             assertEquals(HttpStatusCode.OK, response.status)
         }
 
-    // ─── GET /monitors/{id}/heartbeats ────────────────────────────────────────
+    // ──── GET /monitors/{id}/heartbeats ────
 
     @Test
     fun `GET monitor heartbeats returns 200`() =

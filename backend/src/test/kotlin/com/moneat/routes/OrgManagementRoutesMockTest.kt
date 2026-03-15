@@ -28,6 +28,7 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrgInvitations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -65,7 +66,6 @@ import kotlin.test.assertTrue
 class OrgManagementRoutesMockTest {
 
     companion object {
-        private const val JWT_SECRET = "org-mock-secret"
         private const val OWNER_EMAIL = "owner@acme.test"
         private const val NEW_MEMBER_EMAIL = "new@acme.test"
         private var dbInitialized = false
@@ -91,7 +91,7 @@ class OrgManagementRoutesMockTest {
         install(Authentication) {
             jwt("auth-jwt") {
                 verifier(
-                    JWT.require(Algorithm.HMAC256(JWT_SECRET))
+                    JWT.require(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
                         .withIssuer("moneat").withAudience("moneat-users").build()
                 )
                 validate { JWTPrincipal(it.payload) }
@@ -105,7 +105,7 @@ class OrgManagementRoutesMockTest {
         .withClaim("userId", userId)
         .withClaim("orgId", orgId)
         .withClaim("email", "user$userId@test.com")
-        .sign(Algorithm.HMAC256(JWT_SECRET))
+        .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedOrg(name: String): Int = transaction {
         Organizations.insert {

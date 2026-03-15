@@ -46,10 +46,10 @@ const statusColors: Record<string, string> = {
 function UptimeBar({results}: {results: SyntheticResultResponse[]}) {
   const recent = results.slice(0, 90).reverse()
   if (recent.length === 0) {
-    return <div className="text-sm text-muted-foreground">No data yet</div>
+    return <div className="text-xs text-muted-foreground">No data yet</div>
   }
   return (
-    <div className="flex gap-px items-end h-8">
+    <div className="flex gap-px items-end h-6">
       {recent.map((r, i) => (
         <div
           key={i}
@@ -110,15 +110,15 @@ function SyntheticTestDetail() {
 
   if (testLoading || resultsLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
+      <div className="flex justify-center py-8">
+        <div className="animate-spin rounded-full h-6 w-6 border-2 border-muted border-t-primary" />
       </div>
     )
   }
 
   if (!test) {
     return (
-      <div className="text-center py-12">
+      <div className="text-center py-8">
         <p className="text-muted-foreground">Test not found</p>
         <Link to="/synthetics" className="text-primary hover:underline mt-2 inline-block">
           Back to tests
@@ -128,76 +128,76 @@ function SyntheticTestDetail() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Link to="/synthetics">
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <ArrowLeft className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="h-7 w-7">
+              <ArrowLeft className="h-3.5 w-3.5" />
             </Button>
           </Link>
           <div>
-            <h2 className="text-xl font-bold">{test.name}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant="outline" className="text-xs">{test.testType}</Badge>
+            <h2 className="text-lg font-bold">{test.name}</h2>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <Badge variant="outline" className="text-[10px]">{test.testType}</Badge>
               <Badge
                 variant="outline"
-                className={cn('text-xs', test.lastStatus === 'passed'
+                className={cn('text-[10px]', test.lastStatus === 'passed'
                   ? 'bg-green-500/15 text-green-500' : test.lastStatus === 'failed'
                     ? 'bg-red-500/15 text-red-500' : 'bg-slate-500/15 text-slate-400')}
               >
                 {test.lastStatus || 'pending'}
               </Badge>
               {test.tags && test.tags.length > 0 && test.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                <Badge key={tag} variant="secondary" className="text-[10px]">{tag}</Badge>
               ))}
             </div>
           </div>
         </div>
-        <Button size="sm" onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
-          <Play className="h-4 w-4 mr-1.5" />Run Now
+        <Button size="sm" className="h-7 text-xs" onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
+          <Play className="h-3 w-3 mr-1" />Run Now
         </Button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-              <CheckCircle2 className="h-3.5 w-3.5" />Uptime
+          <CardContent className="pt-3 pb-2 px-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
+              <CheckCircle2 className="h-3 w-3" />Uptime
             </div>
-            <div className="text-2xl font-bold">
+            <div className="text-lg font-bold">
               {summary ? `${summary.uptimePercent.toFixed(1)}%` : '—'}
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-              <Clock className="h-3.5 w-3.5" />Avg Response
+          <CardContent className="pt-3 pb-2 px-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
+              <Clock className="h-3 w-3" />Avg Response
             </div>
-            <div className="text-2xl font-bold">
+            <div className="text-lg font-bold">
               {summary ? `${Math.round(summary.avgResponseMs)}ms` : '—'}
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-              <Activity className="h-3.5 w-3.5" />P95 Response
+          <CardContent className="pt-3 pb-2 px-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
+              <Activity className="h-3 w-3" />P95 Response
             </div>
-            <div className="text-2xl font-bold">
+            <div className="text-lg font-bold">
               {summary ? `${Math.round(summary.p95ResponseMs)}ms` : '—'}
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-              <AlertTriangle className="h-3.5 w-3.5" />Failures
+          <CardContent className="pt-3 pb-2 px-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
+              <AlertTriangle className="h-3 w-3" />Failures
             </div>
-            <div className="text-2xl font-bold">
+            <div className="text-lg font-bold">
               {summary ? summary.failureCount : '—'}
             </div>
           </CardContent>
@@ -206,10 +206,10 @@ function SyntheticTestDetail() {
 
       {/* Uptime Bar */}
       <Card>
-        <CardHeader><CardTitle className="text-sm">Uptime History</CardTitle></CardHeader>
-        <CardContent>
+        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Uptime History</CardTitle></CardHeader>
+        <CardContent className="px-3 pb-3 pt-0">
           <UptimeBar results={results} />
-          <div className="flex justify-between text-xs text-muted-foreground mt-2">
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-1.5">
             <span>Older</span>
             <span>Recent</span>
           </div>
@@ -219,9 +219,9 @@ function SyntheticTestDetail() {
       {/* Response Time Chart */}
       {chartData.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-sm">Response Time</CardTitle></CardHeader>
-          <CardContent>
-            <div className="h-64">
+          <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Response Time</CardTitle></CardHeader>
+          <CardContent className="px-3 pb-3 pt-0">
+            <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -261,9 +261,9 @@ function SyntheticTestDetail() {
 
       {/* Test Configuration */}
       <Card>
-        <CardHeader><CardTitle className="text-sm">Configuration</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Configuration</CardTitle></CardHeader>
+        <CardContent className="px-3 pb-3 pt-0">
+          <div className="grid grid-cols-2 gap-2 text-xs">
             {test.url && (
               <div>
                 <span className="text-muted-foreground">URL</span>
@@ -298,38 +298,38 @@ function SyntheticTestDetail() {
 
       {/* Results History */}
       <Card>
-        <CardHeader><CardTitle className="text-sm">Results History</CardTitle></CardHeader>
-        <CardContent>
+        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Results History</CardTitle></CardHeader>
+        <CardContent className="px-3 pb-3 pt-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
-                  <th className="pb-2 pr-4 font-medium">Status</th>
-                  <th className="pb-2 pr-4 font-medium">Duration</th>
-                  <th className="pb-2 pr-4 font-medium">Error</th>
-                  <th className="pb-2 font-medium">Time</th>
+                  <th className="pb-1.5 pr-2 font-medium">Status</th>
+                  <th className="pb-1.5 pr-2 font-medium">Duration</th>
+                  <th className="pb-1.5 pr-2 font-medium">Error</th>
+                  <th className="pb-1.5 font-medium">Time</th>
                 </tr>
               </thead>
               <tbody>
                 {results.slice(0, 50).map((r) => (
                   <tr key={r.resultId} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="py-2 pr-4">
-                      <Badge variant="outline" className={cn('text-xs', statusColors[r.status] || '')}>
+                    <td className="py-1.5 pr-2">
+                      <Badge variant="outline" className={cn('text-[10px]', statusColors[r.status] || '')}>
                         {r.status}
                       </Badge>
                     </td>
-                    <td className="py-2 pr-4">{r.durationMs}ms</td>
-                    <td className="py-2 pr-4 text-muted-foreground text-xs max-w-xs truncate">
+                    <td className="py-1.5 pr-2">{r.durationMs}ms</td>
+                    <td className="py-1.5 pr-2 text-muted-foreground max-w-xs truncate">
                       {r.errorMessage || '—'}
                     </td>
-                    <td className="py-2 text-muted-foreground text-xs">
+                    <td className="py-1.5 text-muted-foreground">
                       {new Date(r.timestamp).toLocaleString()}
                     </td>
                   </tr>
                 ))}
                 {results.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={4} className="py-6 text-center text-muted-foreground">
                       No results yet. Run the test to see results.
                     </td>
                   </tr>

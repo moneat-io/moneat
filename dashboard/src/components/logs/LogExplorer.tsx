@@ -213,10 +213,19 @@ export function LogExplorer({
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<RefreshInterval>(null)
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isHydratingRef = useRef(false)
+  const didMountRef = useRef(false)
   
-  // Hydrate from URL on back/forward navigation
+  // Hydrate from URL on back/forward navigation (skip initial mount — state is
+  // already initialised from urlSearch via getInitialState)
   useEffect(() => {
-    if (!enableUrlSync || !urlSearch || isHydratingRef.current) return
+    if (!enableUrlSync || !urlSearch) return
+    
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
+    
+    if (isHydratingRef.current) return
     
     isHydratingRef.current = true
     
@@ -233,7 +242,6 @@ export function LogExplorer({
       setCursor(urlSearch.cursor || null)
     })
     
-    // Defer clearing hydration flag to avoid race conditions
     setTimeout(() => {
       isHydratingRef.current = false
     }, 100)
@@ -337,6 +345,7 @@ export function LogExplorer({
 
   const hasCustomLevelFilter = levels.length > 0 && levels.length < LEVEL_OPTIONS.length
   const levelsKey = hasCustomLevelFilter ? levels.join(',') : '__all__'
+  const facetFiltersKey = JSON.stringify(facetFilters)
 
 
   // Reset pagination when filters change
@@ -347,7 +356,7 @@ export function LogExplorer({
       setCursorHistory([])
       setAccumulatedLogs([])
     })
-  }, [systemId, query, levelsKey, timeRange.from, timeRange.to, facetFilters])
+  }, [systemId, query, levelsKey, timeRange.from, timeRange.to, facetFiltersKey])
 
   // Fetch filter options (with counts) - org-scoped when no systemId; monitor systems don't have filters
   const {data: filterOptions} = useQuery({
@@ -618,20 +627,24 @@ export function LogExplorer({
     }
   }, [logs.length, logPage?.hasMore, isFetching])
 
-  // Show loading state only on initial load with no accumulated logs
-  const isInitialLoadingState = isInitialLoading && accumulatedLogs.length === 0
+  // Show loading when no accumulated logs yet — covers both the first fetch
+  // (isInitialLoading) and revisiting the page with stale cache data that
+  // hasn't been accumulated yet.
+  const isInitialLoadingState =
+    accumulatedLogs.length === 0 &&
+    (isInitialLoading || (logPage?.logs?.length ?? 0) > 0)
   const showEmptyState = !isInitialLoadingState && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && (totalCount === 0 || totalCount === null)
 
   return (
     <div className={cn("flex flex-col overflow-hidden bg-gradient-to-br from-background via-background to-blue-500/[0.03]", className)}>
       {/* Header bar */}
       <div className="shrink-0 border-b bg-background/95 backdrop-blur-sm z-20">
-          <div className="flex items-center gap-3 px-3 py-2 sm:px-4 lg:px-6">
-            <div className="flex items-center gap-2.5 shrink-0">
-              <div className="rounded-lg bg-gradient-to-br from-blue-500/15 to-violet-500/15 p-1.5 ring-1 ring-blue-500/20">
-                <TerminalSquare className="h-4 w-4 text-blue-500" />
+          <div className="flex items-center gap-2 px-2 py-1.5 sm:px-3 lg:px-4">
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="rounded-md bg-gradient-to-br from-blue-500/15 to-violet-500/15 p-1 ring-1 ring-blue-500/20">
+                <TerminalSquare className="h-3.5 w-3.5 text-blue-500" />
               </div>
-              <h2 className="text-sm font-semibold leading-tight hidden sm:block">Log Explorer</h2>
+              <h2 className="text-xs font-semibold leading-tight hidden sm:block">Log Explorer</h2>
             </div>
 
             <div className="flex-1 min-w-0">
@@ -669,7 +682,7 @@ export function LogExplorer({
           <div
             className={cn(
               'shrink-0 border-r transition-all duration-200',
-              showFacets && enableFacets ? 'w-[240px]' : 'w-0 overflow-hidden border-r-0'
+              showFacets && enableFacets ? 'w-[200px]' : 'w-0 overflow-hidden border-r-0'
             )}
           >
             {showFacets && enableFacets && (
@@ -689,7 +702,7 @@ export function LogExplorer({
           {/* Log content area */}
           <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
             {/* Toolbar: facets toggle, viz tabs, group by, export, pagination */}
-            <div className="flex items-center gap-2 border-b bg-card/30 px-3 py-[5px]">
+            <div className="flex items-center gap-1.5 border-b bg-card/30 px-2 py-1">
               {enableFacets && (
                 <button
                   type="button"
@@ -713,7 +726,7 @@ export function LogExplorer({
                   <select
                     value={topField}
                     onChange={(e) => setTopField(e.target.value)}
-                    className="h-7 appearance-none rounded-md border bg-background px-2 pr-6 text-xs"
+                    className="h-6 appearance-none rounded border bg-background px-1.5 pr-5 text-[11px]"
                   >
                     <option value="service">service</option>
                     <option value="level">level</option>
@@ -721,7 +734,7 @@ export function LogExplorer({
                     <option value="host">host</option>
                     <option value="container_name">container</option>
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <ChevronDown className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-muted-foreground" />
                 </div>
               )}
 
@@ -730,14 +743,14 @@ export function LogExplorer({
                   <select
                     value={groupBy}
                     onChange={(e) => setGroupBy(e.target.value)}
-                    className="h-7 appearance-none rounded-md border bg-background px-2 pr-6 text-xs"
+                    className="h-6 appearance-none rounded border bg-background px-1.5 pr-5 text-[11px]"
                   >
                     <option value="">No grouping</option>
                     <option value="level">Group by level</option>
                     <option value="service">Group by service</option>
                     <option value="environment">Group by environment</option>
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <ChevronDown className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-muted-foreground" />
                 </div>
               )}
 
@@ -758,8 +771,8 @@ export function LogExplorer({
 
               {/* CSV Export - org-scoped only, not for monitor systems */}
               {!systemId && (
-                <Button variant="ghost" size="sm" onClick={handleExportCsv} className="h-7 gap-1.5 text-xs">
-                  <Download className="h-3.5 w-3.5" />
+                <Button variant="ghost" size="sm" onClick={handleExportCsv} className="h-6 gap-1 text-[11px]">
+                  <Download className="h-3 w-3" />
                   CSV
                 </Button>
               )}
@@ -772,7 +785,7 @@ export function LogExplorer({
                     size="sm"
                     onClick={handlePreviousPage}
                     disabled={cursorHistory.length === 0}
-                    className="h-7 w-7 p-0"
+                    className="h-6 w-6 p-0"
                     title="Reset to first page"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -784,15 +797,15 @@ export function LogExplorer({
             {/* Histogram - always visible above all modes */}
             {vizMode === 'timeseries' && aggregateData && aggregateData.buckets.length > 0 && (
               <div className="shrink-0 border-b bg-card/50">
-                <div className="px-3 pt-2 pb-1.5">
-                  <div className="mb-1 flex items-center justify-between">
+                <div className="px-2 pt-1.5 pb-1">
+                  <div className="mb-0.5 flex items-center justify-between">
                     <span className="text-[10px] font-medium text-muted-foreground">Log volume ({aggregateData.interval} buckets)</span>
                     <span className="text-[10px] text-muted-foreground">Click a bar to zoom</span>
                   </div>
                   <LogHistogram
                     buckets={aggregateData.buckets}
                     grouped={true}
-                    height={108}
+                    height={72}
                     onBucketClick={handleHistogramBucketClick}
                   />
                 </div>
@@ -802,9 +815,9 @@ export function LogExplorer({
             {/* Additional visualizations - shown compactly above list */}
             {(vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table') && topData && (
               <div className="shrink-0 border-b bg-card/50">
-                <div className="px-3 py-2">
+                <div className="px-2 py-1.5">
                   {vizMode === 'toplist' && (
-                    <div className="max-h-64 overflow-y-auto">
+                    <div className="max-h-44 overflow-y-auto">
                       <LogTopList
                         values={topData.values.slice(0, 10)}
                         totalCount={topData.totalCount}
@@ -816,12 +829,12 @@ export function LogExplorer({
                     </div>
                   )}
                   {vizMode === 'pie' && (
-                    <div className="max-h-72">
+                    <div className="max-h-52">
                       <LogPieChart values={topData.values} field={topField} />
                     </div>
                   )}
                   {vizMode === 'table' && (
-                    <div className="max-h-64 overflow-y-auto">
+                    <div className="max-h-44 overflow-y-auto">
                       <LogAggregateTable
                         values={topData.values}
                         totalCount={topData.totalCount}
@@ -839,22 +852,22 @@ export function LogExplorer({
             {/* Content area - logs list */}
             <div className="flex-1 overflow-y-auto" ref={logContainerRef}>
               {showEmptyState ? (
-                <div className="px-3 pb-6 sm:px-4 sm:pb-8">
+                <div className="px-2 pb-4 sm:px-3 sm:pb-6">
                   <LogSetupGuide sdkVersions={sdkVersions} />
                 </div>
               ) : isInitialLoadingState ? (
-                <div className="flex items-center justify-center py-24">
+                <div className="flex items-center justify-center py-12">
                   <div className="text-center">
-                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="mt-3 text-sm text-muted-foreground">Loading logs...</p>
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                    <p className="mt-2 text-xs text-muted-foreground">Loading logs...</p>
                   </div>
                 </div>
               ) : logs.length === 0 ? (
-                <div className="flex items-center justify-center py-24">
+                <div className="flex items-center justify-center py-12">
                   <div className="text-center">
-                    <TerminalSquare className="mx-auto h-10 w-10 text-muted-foreground/30" />
-                    <p className="mt-3 text-sm font-medium text-muted-foreground">No logs match your filters</p>
-                    <p className="mt-1 text-xs text-muted-foreground/70">
+                    <TerminalSquare className="mx-auto h-8 w-8 text-muted-foreground/30" />
+                    <p className="mt-2 text-xs font-medium text-muted-foreground">No logs match your filters</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground/70">
                       Try adjusting your search query, time range, or filters
                     </p>
                   </div>
@@ -869,7 +882,7 @@ export function LogExplorer({
                   />
                   
                   {/* Infinite scroll sentinel and loading indicator */}
-                  <div ref={scrollSentinelRef} className="px-3 py-4">
+                  <div ref={scrollSentinelRef} className="px-2 py-2">
                     {(isLoadingMore || isFetching) && logPage?.hasMore ? (
                       <div className="flex items-center justify-center gap-2 py-2">
                         <div className="h-1 w-full max-w-xs overflow-hidden rounded-full bg-muted">
@@ -881,7 +894,7 @@ export function LogExplorer({
                         Scroll for more
                       </div>
                     ) : logPage && !logPage.hasMore ? (
-                      <div className="border-t pt-3 text-center text-xs text-muted-foreground/70">
+                      <div className="border-t pt-2 text-center text-[11px] text-muted-foreground/70">
                         End of results • {logs.length} logs loaded
                       </div>
                     ) : null}

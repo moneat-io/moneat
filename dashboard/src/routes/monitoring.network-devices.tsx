@@ -13,7 +13,7 @@ import {Badge} from '@/components/ui/badge'
 import {Card, CardContent} from '@/components/ui/card'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Input} from '@/components/ui/input'
-import {AlertTriangle, ArrowRightLeft, BookOpen, Loader2, Router, Search, Wifi} from 'lucide-react'
+import {AlertTriangle, ArrowRightLeft, Loader2, Router, Search, Wifi} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {useMemo, useState} from 'react'
 
@@ -67,23 +67,6 @@ function NetworkDevicesLayout() {
 
   return (
     <div className="container mx-auto px-4 py-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600">
-            <Router className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Network Devices</h1>
-            <p className="text-muted-foreground mt-1">SNMP devices, traps, and network flows</p>
-          </div>
-        </div>
-        <a href="/docs/datadog-agent/network-devices" target="_blank" rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <BookOpen className="h-4 w-4" />
-          View docs
-        </a>
-      </div>
-
       <div className="border-b">
         <nav className="flex gap-1">
           {tabs.map((tab) => {

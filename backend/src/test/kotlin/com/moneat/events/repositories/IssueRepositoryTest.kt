@@ -65,7 +65,7 @@ class IssueRepositoryTest {
         }
     }
 
-    // ============ getIssueStatusOverrides ============
+    // ──── getIssueStatusOverrides ────
 
     @Test
     fun `getIssueStatusOverrides returns empty map when no overrides exist`() {
@@ -90,7 +90,7 @@ class IssueRepositoryTest {
         assertTrue(overrides.isEmpty())
     }
 
-    // ============ getIssueStatus ============
+    // ──── getIssueStatus ────
 
     @Test
     fun `getIssueStatus returns null when issue has no status row`() {
@@ -103,7 +103,7 @@ class IssueRepositoryTest {
         assertEquals("resolved", repository.getIssueStatus("issue-1", projectId))
     }
 
-    // ============ upsertIssueStatus ============
+    // ──── upsertIssueStatus ────
 
     @Test
     fun `upsertIssueStatus inserts new status row`() {
@@ -135,7 +135,7 @@ class IssueRepositoryTest {
         assertNull(repository.getIssueStatus("shared-issue", otherProjectId))
     }
 
-    // ============ getProjectName ============
+    // ──── getProjectName ────
 
     @Test
     fun `getProjectName returns project name for known projectId`() {

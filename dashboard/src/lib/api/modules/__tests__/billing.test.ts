@@ -1,0 +1,197 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+import { describe, it, expect, beforeEach } from 'vitest'
+import { http, HttpResponse } from 'msw'
+import { server } from '@/test/mocks/server'
+import { api } from '@/lib/api'
+
+const API_BASE = 'http://localhost:8080'
+
+describe('Billing API', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    sessionStorage.setItem('authenticated', 'true')
+  })
+
+  // ──── getBillingPlans ────
+
+  it('fetches billing plans', async () => {
+    const mockPlans = {
+      plans: [{ tier: { tierName: 'PRO' }, trialDays: 14 }],
+      stripeEnabled: true,
+      publishableKey: 'pk_test_xxx',
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/billing/plans`, () => {
+        return HttpResponse.json(mockPlans)
+      })
+    )
+
+    const result = await api.getBillingPlans()
+    expect(result).toEqual(mockPlans)
+  })
+
+  // ──── getBillingUsage ────
+
+  it('fetches billing usage', async () => {
+    const mockUsage = {
+      organizationId: 1,
+      plan: 'PRO',
+      status: 'active',
+      usedUnits: 1000,
+      totalLimitUnits: 10000,
+      withinQuota: true,
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/billing/usage`, () => {
+        return HttpResponse.json(mockUsage)
+      })
+    )
+
+    const result = await api.getBillingUsage()
+    expect(result).toEqual(mockUsage)
+  })
+
+  // ──── createBillingCheckoutSession ────
+
+  it('creates a billing checkout session', async () => {
+    const mockSession = { sessionId: 'cs_test_123', url: 'https://checkout.stripe.com/123' }
+
+    server.use(
+      http.post(`${API_BASE}/v1/billing/checkout`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        expect(body.planId).toBe('pro-monthly')
+        return HttpResponse.json(mockSession)
+      })
+    )
+
+    const result = await api.createBillingCheckoutSession({ planId: 'pro-monthly' })
+    expect(result).toEqual(mockSession)
+  })
+
+  // ──── getBillingInvoices ────
+
+  it('fetches billing invoices', async () => {
+    const mockInvoices = [
+      { id: 'inv_1', amountDue: 2900, status: 'paid', created: '2024-01-01' },
+    ]
+
+    server.use(
+      http.get(`${API_BASE}/v1/billing/invoices`, () => {
+        return HttpResponse.json(mockInvoices)
+      })
+    )
+
+    const result = await api.getBillingInvoices()
+    expect(result).toEqual(mockInvoices)
+  })
+
+  // ──── getBillingPaymentMethod ────
+
+  it('fetches billing payment method', async () => {
+    const mockPayment = { brand: 'visa', last4: '4242', expMonth: 12, expYear: 2025 }
+
+    server.use(
+      http.get(`${API_BASE}/v1/billing/payment-method`, () => {
+        return HttpResponse.json(mockPayment)
+      })
+    )
+
+    const result = await api.getBillingPaymentMethod()
+    expect(result).toEqual(mockPayment)
+  })
+
+  // ──── createBillingSetupIntent ────
+
+  it('creates a billing setup intent', async () => {
+    const mockIntent = { clientSecret: 'seti_secret_123' }
+
+    server.use(
+      http.post(`${API_BASE}/v1/billing/setup-intent`, () => {
+        return HttpResponse.json(mockIntent)
+      })
+    )
+
+    const result = await api.createBillingSetupIntent()
+    expect(result).toEqual(mockIntent)
+  })
+
+  // ──── confirmBillingSetupIntent ────
+
+  it('confirms a billing setup intent', async () => {
+    server.use(
+      http.post(`${API_BASE}/v1/billing/setup-intent/confirm`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        expect(body.setupIntentId).toBe('seti_123')
+        return HttpResponse.json({ success: true })
+      })
+    )
+
+    const result = await api.confirmBillingSetupIntent('seti_123')
+    expect(result.success).toBe(true)
+  })
+
+  // ──── cancelBillingSubscription ────
+
+  it('cancels billing subscription', async () => {
+    const mockResponse = { cancelledAt: '2024-03-01T00:00:00Z' }
+
+    server.use(
+      http.post(`${API_BASE}/v1/billing/cancel`, () => {
+        return HttpResponse.json(mockResponse)
+      })
+    )
+
+    const result = await api.cancelBillingSubscription()
+    expect(result).toEqual(mockResponse)
+  })
+
+  // ──── updatePaygBudget ────
+
+  it('updates PAYG budget', async () => {
+    server.use(
+      http.put(`${API_BASE}/v1/billing/payg-budget`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        expect(body.paygBudgetCents).toBe(5000)
+        return HttpResponse.json({ paygBudgetCents: 5000 })
+      })
+    )
+
+    const result = await api.updatePaygBudget(5000)
+    expect(result.paygBudgetCents).toBe(5000)
+  })
+
+  // ──── updateOnCallSeats ────
+
+  it('updates on-call seats', async () => {
+    const mockResponse = { seats: 10, updatedAt: '2024-03-01T00:00:00Z' }
+
+    server.use(
+      http.put(`${API_BASE}/v1/billing/oncall-seats`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        expect(body.seats).toBe(10)
+        return HttpResponse.json(mockResponse)
+      })
+    )
+
+    const result = await api.updateOnCallSeats(10)
+    expect(result).toEqual(mockResponse)
+  })
+})

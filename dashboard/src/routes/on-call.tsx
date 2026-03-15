@@ -23,11 +23,11 @@ export const Route = createFileRoute('/on-call')({
 })
 
 const tabs = [
-  {id: 'overview', label: 'Overview', href: '/on-call', icon: Bell, color: 'text-blue-500'},
-  {id: 'schedules', label: 'Schedules', href: '/on-call/schedules', icon: Calendar, color: 'text-violet-500'},
-  {id: 'escalation-policies', label: 'Escalation Policies', href: '/on-call/escalation-policies', icon: ListChecks, color: 'text-amber-500'},
-  {id: 'alerts', label: 'Alerts', href: '/on-call/incidents', icon: AlertTriangle, color: 'text-red-500'},
-  {id: 'incidents', label: 'Incidents', href: '/on-call/declared-incidents', icon: Shield, color: 'text-orange-500'},
+  {id: 'overview', label: 'Overview', href: '/on-call', icon: Bell},
+  {id: 'schedules', label: 'Schedules', href: '/on-call/schedules', icon: Calendar},
+  {id: 'escalation-policies', label: 'Escalation Policies', href: '/on-call/escalation-policies', icon: ListChecks},
+  {id: 'alerts', label: 'Alerts', href: '/on-call/incidents', icon: AlertTriangle},
+  {id: 'incidents', label: 'Incidents', href: '/on-call/declared-incidents', icon: Shield},
 ]
 
 function OnCallLayout() {
@@ -35,14 +35,14 @@ function OnCallLayout() {
   const currentPath = router.location.pathname
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 shadow-lg shadow-blue-500/20">
-          <Shield className="h-5 w-5 text-white" />
+    <div className="p-4 space-y-4">
+      <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500/80 to-violet-500/80 shadow-md shadow-blue-500/10 shrink-0">
+          <Shield className="h-4 w-4 text-white" />
         </div>
-        <div>
-          <h1 className="text-3xl font-bold">On-Call Management</h1>
-          <p className="text-muted-foreground text-sm">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold">On-Call Management</h1>
+          <p className="text-muted-foreground text-xs">
             Manage schedules, escalation policies, and incidents
           </p>
         </div>
@@ -62,13 +62,13 @@ function OnCallLayout() {
                 key={tab.id}
                 to={tab.href}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-3 border-b-2 transition-all font-medium text-sm rounded-t-md',
+                  'flex items-center gap-1.5 px-2.5 py-2 border-b-2 transition-all font-medium text-xs rounded-t-md',
                   isActive
-                    ? `border-current ${tab.color} bg-current/5`
+                    ? 'border-primary text-foreground bg-muted/50'
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 )}
               >
-                <Icon className={cn('h-4 w-4', isActive && tab.color)} />
+                <Icon className="h-3 w-3" />
                 {tab.label}
               </Link>
             )

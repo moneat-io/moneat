@@ -38,7 +38,7 @@ const SCREENSHOT_MAPPING = {
     alt: 'Uptime monitoring with status checks and availability metrics',
   },
   'StatusPagesMock': {
-    screenshot: 'status-pages.png',
+    screenshot: 'status-page-public.png',
     alt: 'Public status page showing service health and incidents',
   },
   'AlertingMock': {

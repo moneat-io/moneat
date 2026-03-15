@@ -36,7 +36,7 @@ function loadTerminalFont() {
 export function ThemeSwitcher() {
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = globalThis.localStorage?.getItem('theme') as Theme | null
-    return saved || 'dark'
+    return saved || 'retro-dark'
   })
 
   const applyTheme = (newTheme: Theme) => {

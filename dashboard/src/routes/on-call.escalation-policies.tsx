@@ -140,41 +140,41 @@ function EscalationPolicies() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Escalation Policies</h2>
-          <p className="text-muted-foreground text-sm">Define how incidents escalate through your team</p>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold">Escalation Policies</h2>
+          <p className="text-muted-foreground text-xs">Define how incidents escalate through your team</p>
         </div>
-        <Button onClick={() => {setEditingPolicy(null); setShowEditor(true)}} className="bg-amber-600 hover:bg-amber-700">
-          <Plus className="h-4 w-4 mr-2" />
+        <Button size="sm" onClick={() => {setEditingPolicy(null); setShowEditor(true)}} className="bg-amber-600 hover:bg-amber-700 gap-1.5 shrink-0">
+          <Plus className="h-3 w-3" />
           Create Policy
         </Button>
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
+        <div className="flex items-center justify-center py-10">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-amber-500" />
         </div>
       ) : policies && policies.length > 0 ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {policies.map((policy) => (
             <Card key={policy.id} className="overflow-hidden hover:border-amber-500/30 transition-all">
-              <div className="p-5">
+              <div className="p-3">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-amber-500/15 flex-shrink-0">
-                        <Zap className="h-5 w-5 text-amber-500" />
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/15 flex-shrink-0">
+                        <Zap className="h-4 w-4 text-amber-500" />
                       </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">{policy.name}</h3>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-base">{policy.name}</h3>
                         {policy.description && (
-                          <p className="text-sm text-muted-foreground mt-0.5">{policy.description}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{policy.description}</p>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-3 ml-[52px]">
+                    <div className="flex items-center gap-1.5 mt-2 ml-10">
                       <Badge variant="outline" className="text-xs gap-1 bg-amber-500/10 text-amber-400 border-amber-500/30">
                         {policy.steps.length} step{policy.steps.length !== 1 ? 's' : ''}
                       </Badge>
@@ -187,25 +187,25 @@ function EscalationPolicies() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(policy)}>
-                      <Pencil className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(policy)}>
+                      <Pencil className="h-3 w-3" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
                       onClick={() => {
                         if (confirm('Delete this escalation policy?')) deleteMutation.mutate(policy.id)
                       }}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
                 </div>
 
                 {/* Visual Step Flow */}
                 {policy.steps.length > 0 && (
-                  <div className="mt-5 ml-[52px]">
+                  <div className="mt-3 ml-10">
                     {policy.steps
                       .sort((a, b) => a.stepOrder - b.stepOrder)
                       .map((step, stepIdx) => {
@@ -221,19 +221,19 @@ function EscalationPolicies() {
                           <div key={step.id} className="relative">
                             {/* Step card */}
                             <div className={cn(
-                              'relative flex items-start gap-3 p-3.5 rounded-lg border',
+                              'relative flex items-start gap-2 p-2.5 rounded-lg border',
                               'border-border/60 bg-card/60',
                             )}>
                               <div className={cn(
-                                'flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold flex-shrink-0 mt-0.5',
+                                'flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold flex-shrink-0 mt-0.5',
                                 stepBgColors[stepIdx % stepBgColors.length],
                                 stepTextColors[stepIdx % stepTextColors.length],
                               )}>
                                 {stepIdx + 1}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  <span className="text-sm font-medium">Notify</span>
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <span className="text-xs font-medium">Notify</span>
                                   {step.targets.map((target) => (
                                     <Badge key={target.id} variant="secondary" className="text-xs gap-1">
                                       {target.targetType === 'USER' ? (
@@ -245,7 +245,7 @@ function EscalationPolicies() {
                                     </Badge>
                                   ))}
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
                                   {stepDescription}
                                 </p>
                               </div>
@@ -257,7 +257,7 @@ function EscalationPolicies() {
 
                             {/* Connector between steps */}
                             {!isLast && (
-                              <div className="flex items-center gap-3 py-1.5 pl-[14px]">
+                              <div className="flex items-center gap-2 py-1 pl-[11px]">
                                 <div className="flex flex-col items-center w-2">
                                   <div className="w-px h-1.5 bg-muted-foreground/25" />
                                   <div className="w-px h-1 bg-muted-foreground/20" />
@@ -281,16 +281,16 @@ function EscalationPolicies() {
         </div>
       ) : (
         <Card className="border-2 border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-amber-500/10 mb-4">
-              <ListChecks className="h-8 w-8 text-amber-500" />
+          <CardContent className="flex flex-col items-center justify-center py-10">
+            <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-amber-500/10 mb-3">
+              <ListChecks className="h-6 w-6 text-amber-500" />
             </div>
-            <h3 className="text-lg font-semibold mb-1">No Escalation Policies</h3>
-            <p className="text-sm text-muted-foreground text-center mb-6 max-w-md">
+            <h3 className="text-base font-semibold mb-0.5">No Escalation Policies</h3>
+            <p className="text-xs text-muted-foreground text-center mb-4 max-w-md">
               Define how incidents escalate through your team. Set notification chains with configurable timeouts.
             </p>
-            <Button onClick={() => setShowEditor(true)} className="bg-amber-600 hover:bg-amber-700">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button size="sm" onClick={() => setShowEditor(true)} className="bg-amber-600 hover:bg-amber-700 gap-1.5">
+              <Plus className="h-3 w-3" />
               Create Your First Policy
             </Button>
           </CardContent>

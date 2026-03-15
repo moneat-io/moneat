@@ -32,10 +32,10 @@ interface KpiCardProps {
 function KpiCard({label, value, comparison, previous, invert}: KpiCardProps) {
   return (
     <Card>
-      <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground mb-1">{label}</p>
-        <div className="flex items-baseline gap-2">
-          <p className="text-2xl font-semibold">{value}</p>
+      <CardContent className="p-2.5">
+        <p className="text-[11px] text-muted-foreground mb-0.5">{label}</p>
+        <div className="flex items-baseline gap-1.5">
+          <p className="text-lg font-semibold">{value}</p>
           {comparison != null && <ComparisonBadge current={comparison} previous={previous} invert={invert} />}
         </div>
       </CardContent>
@@ -47,7 +47,7 @@ export function AnalyticsKpiCards({data}: {data?: AnalyticsOverview; isLoading?:
   if (!data) return null
   const c = data.comparison
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
       <KpiCard label="Unique Visitors" value={data.uniqueVisitors.toLocaleString()} comparison={data.uniqueVisitors} previous={c?.uniqueVisitors} />
       <KpiCard label="Total Pageviews" value={data.totalPageviews.toLocaleString()} comparison={data.totalPageviews} previous={c?.totalPageviews} />
       <KpiCard label="Bounce Rate" value={`${data.bounceRate.toFixed(1)}%`} comparison={data.bounceRate} previous={c?.bounceRate} invert />
@@ -59,12 +59,12 @@ export function AnalyticsKpiCards({data}: {data?: AnalyticsOverview; isLoading?:
 
 export function AnalyticsKpiCardsSkeleton() {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
       {Array.from({length: 5}).map((_, i) => (
         <Card key={i}>
-          <CardContent className="p-4 space-y-2">
-            <div className="h-3 w-20 animate-pulse rounded bg-muted" />
-            <div className="h-7 w-16 animate-pulse rounded bg-muted" />
+          <CardContent className="p-2.5 space-y-1.5">
+            <div className="h-2.5 w-16 animate-pulse rounded bg-muted" />
+            <div className="h-5 w-12 animate-pulse rounded bg-muted" />
           </CardContent>
         </Card>
       ))}

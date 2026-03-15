@@ -122,7 +122,7 @@ class MonitorServiceAlertTest {
         return hostId
     }
 
-    // ==================== createAlert ====================
+    // ──── createAlert ────
 
     @Test
     fun `createAlert creates system-scoped alert`() {
@@ -190,7 +190,7 @@ class MonitorServiceAlertTest {
         assertTrue(alert.id > 0)
     }
 
-    // ==================== listAlerts ====================
+    // ──── listAlerts ────
 
     @Test
     fun `listAlerts returns seeded default alerts when system is created`() {
@@ -237,7 +237,7 @@ class MonitorServiceAlertTest {
         assertTrue(alerts.any { it.metric == "cpu_percent" })
     }
 
-    // ==================== updateAlert ====================
+    // ──── updateAlert ────
 
     @Test
     fun `updateAlert returns false for non-existent alert`() {
@@ -361,7 +361,7 @@ class MonitorServiceAlertTest {
         assertEquals(90.0, alerts.first().threshold)
     }
 
-    // ==================== deleteAlert ====================
+    // ──── deleteAlert ────
 
     @Test
     fun `deleteAlert removes system alert`() {
@@ -418,7 +418,7 @@ class MonitorServiceAlertTest {
         assertTrue(result)
     }
 
-    // ==================== getAlertConfig ====================
+    // ──── getAlertConfig ────
 
     @Test
     fun `getAlertConfig returns global scope when system is newly created`() {
@@ -469,7 +469,7 @@ class MonitorServiceAlertTest {
         assertEquals(config.systemAlerts.map { it.id }.toSet(), config.effectiveAlerts.map { it.id }.toSet())
     }
 
-    // ==================== updateAlertScope ====================
+    // ──── updateAlertScope ────
 
     @Test
     fun `updateAlertScope returns false for invalid scope`() {

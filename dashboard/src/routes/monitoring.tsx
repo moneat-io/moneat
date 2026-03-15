@@ -24,6 +24,7 @@ import {
     CalendarClock,
     Database,
     HardDrive,
+    HelpCircle,
     Network,
     Package,
     Router,
@@ -32,6 +33,9 @@ import {
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {Button} from '@/components/ui/button'
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
+import {HostsHeaderActions} from './monitoring.index'
+import {DebuggerHeaderActions} from './monitoring.debugger'
 
 export const Route = createFileRoute('/monitoring')({
   beforeLoad: async () => {
@@ -42,6 +46,19 @@ export const Route = createFileRoute('/monitoring')({
   },
   component: MonitoringLayout,
 })
+
+const TAB_DOCS_URLS: Record<string, string> = {
+  hosts: '/docs/datadog-agent/agent-setup',
+  containers: '/docs/datadog-agent/agent-setup',
+  processes: '/docs/datadog-agent/',
+  network: '/docs/datadog-agent/',
+  events: '/docs/datadog-agent/',
+  kubernetes: '/docs/datadog-agent/kubernetes',
+  databases: '/docs/datadog-agent/database-monitoring',
+  debugger: '/docs/datadog-agent/debugger',
+  'network-devices': '/docs/datadog-agent/network-devices',
+  sbom: '/docs/datadog-agent/sbom',
+}
 
 const allTabs = [
   {id: 'hosts', label: 'Hosts', href: '/monitoring', icon: HardDrive},
@@ -75,7 +92,10 @@ function MonitoringLayout() {
     (tab) => !tab.requiresDatadog || hasEnterpriseModule(features, 'datadog')
   )
 
-  if (isHostDetailPage || isSystemDetailPage) {
+  if (isHostDetailPage) {
+    return <Outlet />
+  }
+  if (isSystemDetailPage) {
     return (
       <div>
         <div className="border-b bg-card/50">
@@ -93,12 +113,21 @@ function MonitoringLayout() {
     )
   }
 
+  const isHostsPage = currentPath === '/monitoring' || currentPath === '/monitoring/'
+  const activeTabId = tabs.find((t) =>
+    t.href === '/monitoring'
+      ? currentPath === '/monitoring' || currentPath === '/monitoring/'
+      : currentPath.startsWith(t.href)
+  )?.id
+  const docsUrl = activeTabId ? TAB_DOCS_URLS[activeTabId] : null
+
   return (
     <div>
       <div className="border-b bg-card/50">
-        <div className="container mx-auto px-4 py-4">
-          <nav className="flex gap-1" aria-label="Monitoring tabs">
-            {tabs.map((tab) => {
+        <div className="container mx-auto px-4 py-2.5">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+            <nav className="flex gap-0.5 min-w-0 overflow-x-auto pb-1 sm:flex-1 sm:pb-0" aria-label="Monitoring tabs">
+              {tabs.map((tab) => {
               const isActive =
                 tab.href === '/monitoring'
                   ? currentPath === '/monitoring' || currentPath === '/monitoring/'
@@ -110,18 +139,41 @@ function MonitoringLayout() {
                   key={tab.id}
                   to={tab.href}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-3 border-b-2 transition-all font-medium text-sm rounded-t-md',
+                    'flex items-center gap-1.5 px-2.5 py-2 border-b-2 transition-all font-medium text-xs rounded-t-md whitespace-nowrap',
                     isActive
                       ? 'border-primary text-primary bg-primary/5'
                       : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   )}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
                   {tab.label}
                 </Link>
               )
             })}
-          </nav>
+            </nav>
+            <div className="flex items-center gap-2 shrink-0">
+            {isHostsPage ? (
+              <HostsHeaderActions />
+            ) : currentPath.startsWith('/monitoring/debugger') ? (
+              <DebuggerHeaderActions />
+            ) : docsUrl ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a href={docsUrl} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                      aria-label="View docs">
+                      <HelpCircle className="h-4 w-4" />
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>View docs</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : null}
+            </div>
+          </div>
         </div>
       </div>
       <Outlet />

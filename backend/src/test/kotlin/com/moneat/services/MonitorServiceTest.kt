@@ -113,7 +113,7 @@ class MonitorServiceTest {
             hostId
         }
 
-    // --- listHosts ---
+    // ──── listHosts ────
 
     @Test
     fun `listHosts returns all hosts for org`() {
@@ -143,7 +143,7 @@ class MonitorServiceTest {
         assertEquals("server-1", hosts1[0].displayName)
     }
 
-    // --- getHostById ---
+    // ──── getHostById ────
 
     @Test
     fun `getHostById returns host when exists`() {
@@ -160,7 +160,7 @@ class MonitorServiceTest {
         assertNull(service.getHostById(Int.MAX_VALUE))
     }
 
-    // --- deleteHost ---
+    // ──── deleteHost ────
 
     @Test
     fun `deleteHost removes host after clearing alerts`() {
@@ -195,7 +195,7 @@ class MonitorServiceTest {
         assertFalse(runBlocking { service.deleteHost(Int.MAX_VALUE, orgId) })
     }
 
-    // --- checkHostQuota ---
+    // ──── checkHostQuota ────
 
     @Test
     fun `checkHostQuota returns true when under limit`() {

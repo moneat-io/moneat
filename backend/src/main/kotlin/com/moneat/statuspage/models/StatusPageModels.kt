@@ -37,7 +37,7 @@ object StatusPages : Table("status_pages") {
     val logoUrl = text("logo_url").nullable()
     val faviconUrl = text("favicon_url").nullable()
     val primaryColor = varchar("primary_color", 7).default("#3B82F6")
-    val darkMode = bool("dark_mode").default(false)
+    val darkMode = bool("dark_mode").default(true)
 
     // Settings
     val showUptimeHistory = bool("show_uptime_history").default(true)
@@ -110,7 +110,7 @@ data class CreateStatusPageRequest(
     val logoUrl: String? = null,
     val faviconUrl: String? = null,
     val primaryColor: String = "#3B82F6",
-    val darkMode: Boolean = false,
+    val darkMode: Boolean = true,
     val showUptimeHistory: Boolean = true,
     val historyDays: Int = 90,
     val isPublic: Boolean = true

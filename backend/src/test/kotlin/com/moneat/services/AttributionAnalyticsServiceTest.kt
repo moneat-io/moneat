@@ -95,7 +95,7 @@ class AttributionAnalyticsServiceTest {
             } get Subscriptions.id
         }
 
-    // ==================== getAttributionMetrics ====================
+    // ──── getAttributionMetrics ────
 
     @Test
     fun `getAttributionMetrics returns empty metrics when no orgs`() {

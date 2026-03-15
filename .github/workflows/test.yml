@@ -15,7 +15,7 @@ on:
       coverage_gate_phase:
         description: 'Coverage gate phase (reporting-only, soft, hard)'
         required: false
-        default: 'reporting-only'
+        default: 'hard'
         type: choice
         options:
           - reporting-only
@@ -25,8 +25,8 @@ on:
 env:
   JAVA_VERSION: '21'
   NODE_VERSION: '24'
-  # Staged rollout: Week 3=reporting-only, Week 4=soft, Week 6=hard
-  COVERAGE_GATE_PHASE: ${{ github.event.inputs.coverage_gate_phase || 'reporting-only' }}
+  # Enforce 60% line coverage on all PRs and pushes; manual runs can override
+  COVERAGE_GATE_PHASE: ${{ github.event.inputs.coverage_gate_phase || 'hard' }}
 
 jobs:
   # PR-Required: Backend unit and route tests
@@ -286,36 +286,79 @@ jobs:
       - name: Parse coverage reports
         id: parse_coverage
         run: |
-          # Parse backend coverage from JaCoCo XML
-          if [ -f backend-coverage/jacocoTestReport.xml ]; then
-            BACKEND_MISSED=$(grep -oP 'counter type="LINE" missed="\K\d+' backend-coverage/jacocoTestReport.xml | tail -1 || echo "0")
-            BACKEND_COVERED=$(grep -oP 'counter type="LINE" missed="\d+" covered="\K\d+' backend-coverage/jacocoTestReport.xml | tail -1 || echo "0")
-            BACKEND_TOTAL=$((BACKEND_MISSED + BACKEND_COVERED))
-            if [ "$BACKEND_TOTAL" -gt 0 ]; then
-              BACKEND_PCT=$(awk "BEGIN {printf \"%.1f\", ($BACKEND_COVERED / $BACKEND_TOTAL) * 100}")
-            else
-              BACKEND_PCT="0.0"
-            fi
-          else
-            BACKEND_PCT="0.0"
-          fi
-          
-          # Parse frontend coverage from coverage-summary.json
-          if [ -f frontend-coverage/coverage-summary.json ]; then
-            FRONTEND_PCT=$(jq -r '.total.lines.pct' frontend-coverage/coverage-summary.json || echo "0.0")
-          else
-            FRONTEND_PCT="0.0"
-          fi
-          
-          # Calculate global coverage (weighted average)
-          GLOBAL_PCT=$(awk "BEGIN {printf \"%.1f\", ($BACKEND_PCT + $FRONTEND_PCT) / 2}")
-          
-          echo "backend_coverage=$BACKEND_PCT" >> $GITHUB_OUTPUT
-          echo "frontend_coverage=$FRONTEND_PCT" >> $GITHUB_OUTPUT
-          echo "global_coverage=$GLOBAL_PCT" >> $GITHUB_OUTPUT
+          python3 <<'PY'
+          import json
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          def find_report(base_dir: str, file_name: str) -> Path | None:
+              matches = sorted(Path(base_dir).rglob(file_name))
+              return matches[0] if matches else None
+
+          def pct(covered: int, total: int) -> float:
+              return round((covered / total) * 100, 1) if total > 0 else 0.0
+
+          backend_report = find_report("backend-coverage", "jacocoTestReport.xml")
+          frontend_report = find_report("frontend-coverage", "coverage-summary.json")
+
+          backend_covered = 0
+          backend_total = 0
+          if backend_report:
+              root = ET.parse(backend_report).getroot()
+              # JaCoCo XML: root may have direct <counter> children, or only nested in <package>
+              line_counter = next(
+                  (c for c in root.findall("counter") if c.attrib.get("type") == "LINE"),
+                  None,
+              )
+              if line_counter is not None:
+                  missed = int(line_counter.attrib.get("missed", "0"))
+                  backend_covered = int(line_counter.attrib.get("covered", "0"))
+                  backend_total = missed + backend_covered
+              else:
+                  # Fallback: aggregate from package-level counters (some JaCoCo formats)
+                  for pkg in root.findall("package"):
+                      for c in pkg.findall("counter"):
+                          if c.attrib.get("type") == "LINE":
+                              backend_covered += int(c.attrib.get("covered", "0"))
+                              backend_total += int(c.attrib.get("missed", "0")) + int(c.attrib.get("covered", "0"))
+                              break
+
+          frontend_covered = 0
+          frontend_total = 0
+          if frontend_report:
+              coverage = json.loads(frontend_report.read_text(encoding="utf-8"))
+              lines = coverage.get("total", {}).get("lines", {})
+              frontend_total = int(lines.get("total", 0))
+              frontend_covered = int(lines.get("covered", 0))
+
+          backend_pct = pct(backend_covered, backend_total)
+          frontend_pct = pct(frontend_covered, frontend_total)
+
+          # Keep global coverage behavior consistent with existing gate thresholds.
+          global_pct = round((backend_pct + frontend_pct) / 2, 1)
+
+          has_complete_reports = backend_total > 0 and frontend_total > 0
+
+          print(f"Backend report: {backend_report or 'missing'}")
+          print(f"Frontend report: {frontend_report or 'missing'}")
+          print(
+              "Coverage: "
+              f"backend={backend_pct:.1f}% "
+              f"frontend={frontend_pct:.1f}% "
+              f"global={global_pct:.1f}% "
+              f"(complete_reports={has_complete_reports})"
+          )
+
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"backend_coverage={backend_pct:.1f}\n")
+              output.write(f"frontend_coverage={frontend_pct:.1f}\n")
+              output.write(f"global_coverage={global_pct:.1f}\n")
+              output.write(f"has_complete_reports={'true' if has_complete_reports else 'false'}\n")
+          PY
 
       - name: Update coverage badge endpoint
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop' && needs.backend-unit.result == 'success' && needs.frontend-unit.result == 'success' && steps.parse_coverage.outputs.has_complete_reports == 'true'
         env:
           GLOBAL_COV: ${{ steps.parse_coverage.outputs.global_coverage }}
         run: |
@@ -338,7 +381,7 @@ jobs:
           EOF
 
       - name: Commit coverage badge
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop' && needs.backend-unit.result == 'success' && needs.frontend-unit.result == 'success' && steps.parse_coverage.outputs.has_complete_reports == 'true'
         continue-on-error: true
         run: |
           if git diff --quiet -- badges/coverage-badge.json; then
@@ -365,8 +408,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Coverage | Target (Week 6) | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|----------|-----------------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend   | $BACKEND_COV% | 65% | $([ $(echo "$BACKEND_COV >= 65" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend  | $FRONTEND_COV% | 55% | $([ $(echo "$FRONTEND_COV >= 55" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend   | $BACKEND_COV% | 60% | $([ $(echo "$BACKEND_COV >= 60" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend  | $FRONTEND_COV% | 80% | $([ $(echo "$FRONTEND_COV >= 80" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
           echo "| Global    | $GLOBAL_COV% | 60% | $([ $(echo "$GLOBAL_COV >= 60" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
@@ -382,8 +425,8 @@ jobs:
               echo "- Frontend coverage below 45% threshold" >> $GITHUB_STEP_SUMMARY
             fi
           elif [ "$PHASE" = "hard" ]; then
-            echo "🚨 **Week 6 - Hard Gate:** Coverage enforced (backend ≥65%, frontend ≥55%, global ≥60%)." >> $GITHUB_STEP_SUMMARY
-            if [ $(echo "$BACKEND_COV < 65" | bc -l) -eq 1 ] || [ $(echo "$FRONTEND_COV < 55" | bc -l) -eq 1 ] || [ $(echo "$GLOBAL_COV < 60" | bc -l) -eq 1 ]; then
+            echo "🚨 **Hard Gate:** Coverage enforced (backend ≥60%, frontend ≥80%, global ≥60%)." >> $GITHUB_STEP_SUMMARY
+            if [ $(echo "$BACKEND_COV < 60" | bc -l) -eq 1 ] || [ $(echo "$FRONTEND_COV < 80" | bc -l) -eq 1 ] || [ $(echo "$GLOBAL_COV < 60" | bc -l) -eq 1 ]; then
               echo "❌ **Coverage gate failed. Add more tests before merging.**" >> $GITHUB_STEP_SUMMARY
               exit 1
             fi
@@ -397,12 +440,12 @@ jobs:
           GLOBAL_COV: ${{ steps.parse_coverage.outputs.global_coverage }}
         run: |
           FAIL=0
-          if [ $(echo "$BACKEND_COV < 65" | bc -l) -eq 1 ]; then
-            echo "❌ Backend coverage $BACKEND_COV% is below 65% threshold"
+          if [ $(echo "$BACKEND_COV < 60" | bc -l) -eq 1 ]; then
+            echo "❌ Backend coverage $BACKEND_COV% is below 60% threshold"
             FAIL=1
           fi
-          if [ $(echo "$FRONTEND_COV < 55" | bc -l) -eq 1 ]; then
-            echo "❌ Frontend coverage $FRONTEND_COV% is below 55% threshold"
+          if [ $(echo "$FRONTEND_COV < 80" | bc -l) -eq 1 ]; then
+            echo "❌ Frontend coverage $FRONTEND_COV% is below 80% threshold"
             FAIL=1
           fi
           if [ $(echo "$GLOBAL_COV < 60" | bc -l) -eq 1 ]; then

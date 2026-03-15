@@ -24,9 +24,9 @@ export function DemoBanner() {
   }
 
   return (
-    <div className="bg-amber-100 dark:bg-amber-950 border-b border-amber-500/20 px-4 py-2">
-      <div className="flex items-center justify-center gap-2 text-sm text-amber-700 dark:text-amber-300">
-        <Info className="h-4 w-4 shrink-0" />
+    <div className="w-full min-w-full bg-amber-100 dark:bg-amber-950 border-b border-amber-500/20 px-4 py-1.5">
+      <div className="flex items-center justify-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+        <Info className="h-3.5 w-3.5 shrink-0" />
         <span className="font-medium">Demo Mode</span>
         <span className="text-muted-foreground">•</span>
         <span>You're viewing read-only demo data.</span>

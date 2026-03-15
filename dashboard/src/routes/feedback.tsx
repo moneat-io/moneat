@@ -222,15 +222,15 @@ function FeedbackPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-4 py-4">
         {/* Header */}
-        <div className="mb-6 flex items-center gap-3">
-          <div className="rounded-xl bg-violet-500/15 p-2.5 ring-1 ring-violet-500/20">
-            <MessageSquare className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+        <div className="mb-3 flex items-center gap-2">
+          <div className="rounded-lg bg-violet-500/15 p-1.5 ring-1 ring-violet-500/20 shrink-0">
+            <MessageSquare className="h-4 w-4 text-violet-600 dark:text-violet-400" />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold">User Feedback</h2>
-            <p className="text-sm text-muted-foreground">Review and manage feedback from your users</p>
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold">User Feedback</h2>
+            <p className="text-xs text-muted-foreground">Review and manage feedback from your users</p>
           </div>
         </div>
 
@@ -254,68 +254,68 @@ function FeedbackPage() {
           <>
             {/* Stats Cards */}
             {allFeedback.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 mb-3">
                 <button
                   onClick={() => setStatusFilter('all')}
-                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2 text-left transition-all hover:shadow-md ${
                     statusFilter === 'all'
                       ? 'border-violet-500/40 bg-violet-500/10 shadow-sm ring-1 ring-violet-500/20'
                       : 'border-border/60 bg-card hover:border-violet-500/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Inbox className="h-4 w-4 text-violet-500" />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total</span>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Inbox className="h-3 w-3 text-violet-500" />
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Total</span>
                   </div>
-                  <div className="text-2xl font-bold text-violet-600 dark:text-violet-400">{stats.total}</div>
+                  <div className="text-lg font-bold text-violet-600 dark:text-violet-400">{stats.total}</div>
                 </button>
                 <button
                   onClick={() => setStatusFilter('unresolved')}
-                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2 text-left transition-all hover:shadow-md ${
                     statusFilter === 'unresolved'
                       ? 'border-amber-500/40 bg-amber-500/10 shadow-sm ring-1 ring-amber-500/20'
                       : 'border-border/60 bg-card hover:border-amber-500/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <CircleDot className="h-4 w-4 text-amber-500" />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unresolved</span>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <CircleDot className="h-3 w-3 text-amber-500" />
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Unresolved</span>
                   </div>
-                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.unresolved}</div>
+                  <div className="text-lg font-bold text-amber-600 dark:text-amber-400">{stats.unresolved}</div>
                 </button>
                 <button
                   onClick={() => setStatusFilter('resolved')}
-                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2 text-left transition-all hover:shadow-md ${
                     statusFilter === 'resolved'
                       ? 'border-emerald-500/40 bg-emerald-500/10 shadow-sm ring-1 ring-emerald-500/20'
                       : 'border-border/60 bg-card hover:border-emerald-500/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Resolved</span>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Resolved</span>
                   </div>
-                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.resolved}</div>
+                  <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{stats.resolved}</div>
                 </button>
                 <button
                   onClick={() => setStatusFilter('archived')}
-                  className={`rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2 text-left transition-all hover:shadow-md ${
                     statusFilter === 'archived'
                       ? 'border-slate-500/40 bg-slate-500/10 shadow-sm ring-1 ring-slate-500/20'
                       : 'border-border/60 bg-card hover:border-slate-500/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Archive className="h-4 w-4 text-slate-500" />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Archived</span>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Archive className="h-3 w-3 text-slate-500" />
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Archived</span>
                   </div>
-                  <div className="text-2xl font-bold text-slate-600 dark:text-slate-400">{stats.archived}</div>
+                  <div className="text-lg font-bold text-slate-600 dark:text-slate-400">{stats.archived}</div>
                 </button>
               </div>
             )}
 
             {/* Toolbar */}
-            <div className="mb-4 flex gap-3 items-center flex-wrap">
+            <div className="mb-3 flex gap-2 items-center flex-wrap">
               {filteredFeedback.length > 0 && (
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -323,53 +323,53 @@ function FeedbackPage() {
                     onCheckedChange={handleToggleAll}
                     aria-label="Select all feedback"
                   />
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">Select all</span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">Select all</span>
                 </div>
               )}
               {selectedFeedback.size > 0 && (
-                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-sm font-medium whitespace-nowrap">
+                <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2.5 py-1">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-medium whitespace-nowrap">
                     {selectedFeedback.size} selected
                   </span>
                   <Button
                     onClick={handleResolveSelected}
                     disabled={resolveMutation.isPending}
                     size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700 h-7 ml-2"
+                    className="bg-emerald-600 hover:bg-emerald-700 h-6 text-xs ml-1.5"
                   >
                     {resolveMutation.isPending ? 'Resolving...' : 'Resolve'}
                   </Button>
                 </div>
               )}
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                 <Input
                   placeholder="Search by message, name, or email..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  className="pl-8 h-8 text-xs"
                 />
               </div>
             </div>
 
             {filteredFeedback.length === 0 ? (
-              <Card className="p-12 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
-                <div className="max-w-md mx-auto space-y-4">
+              <Card className="p-8 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
+                <div className="max-w-md mx-auto space-y-3">
                   <div className="flex justify-center">
-                    <div className="rounded-full bg-blue-500/10 p-4">
+                    <div className="rounded-full bg-blue-500/10 p-3">
                       {searchQuery ? (
-                        <Search className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+                        <Search className="h-8 w-8 text-blue-600 dark:text-blue-400" />
                       ) : (
-                        <MessageSquare className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+                        <MessageSquare className="h-8 w-8 text-blue-600 dark:text-blue-400" />
                       )}
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold mb-2">
+                    <h3 className="text-base font-semibold mb-1">
                       {searchQuery ? 'No feedback match your search' : 'No feedback yet'}
                     </h3>
-                    <p className="text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       {searchQuery
                         ? 'Try adjusting your search or changing the status filter.'
                         : 'Use the Sentry User Feedback widget in your app to collect user feedback. It will appear here.'}
@@ -379,7 +379,7 @@ function FeedbackPage() {
               </Card>
             ) : (
               <TooltipProvider>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {filteredFeedback.map((f) => {
                     const config = statusConfig[f.status as keyof typeof statusConfig] || statusConfig.unresolved
                     const displayName = f.name || f.contactEmail || 'Anonymous'
@@ -390,11 +390,11 @@ function FeedbackPage() {
                       <div
                         key={f.feedbackId}
                         onClick={() => navigate({ to: '/feedback/$feedbackId', params: { feedbackId: f.feedbackId } })}
-                        className={`cursor-pointer rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/20 transition-all hover:shadow-md border-l-[3px] ${config.border}`}
+                        className={`cursor-pointer rounded-lg border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/20 transition-all hover:shadow-md border-l-[3px] ${config.border}`}
                       >
-                        <div className="flex items-start gap-4 p-4">
+                        <div className="flex items-start gap-2 p-2">
                           {/* Checkbox */}
-                          <div className="flex items-center pt-1">
+                          <div className="flex items-center pt-0.5">
                             <Checkbox
                               checked={selectedFeedback.has(f.feedbackId)}
                               onCheckedChange={() => handleToggleFeedback(f.feedbackId)}
@@ -404,8 +404,8 @@ function FeedbackPage() {
                           </div>
 
                           {/* Avatar */}
-                          <Avatar className="h-9 w-9 shrink-0 mt-0.5">
-                            <AvatarFallback className={`text-xs font-semibold ${avatarColor}`}>
+                          <Avatar className="h-6 w-6 shrink-0 mt-0.5">
+                            <AvatarFallback className={`text-[10px] font-semibold ${avatarColor}`}>
                               {initials}
                             </AvatarFallback>
                           </Avatar>
@@ -413,52 +413,52 @@ function FeedbackPage() {
                           {/* Content */}
                           <div className="flex-1 min-w-0">
                             {/* Top row: name + time */}
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-semibold text-sm truncate">{displayName}</span>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="font-semibold text-xs truncate">{displayName}</span>
                               {f.contactEmail && f.name && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Mail className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                                    <Mail className="h-3 w-3 text-muted-foreground/60 shrink-0" />
                                   </TooltipTrigger>
                                   <TooltipContent>{f.contactEmail}</TooltipContent>
                                 </Tooltip>
                               )}
-                              <span className="text-xs text-muted-foreground ml-auto shrink-0 flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
+                              <span className="text-[11px] text-muted-foreground ml-auto shrink-0 flex items-center gap-0.5">
+                                <Clock className="h-2.5 w-2.5" />
                                 {formatRelativeTime(f.timestamp)}
                               </span>
                             </div>
 
                             {/* Message */}
-                            <p className="text-sm text-foreground/80 line-clamp-2 mb-2">
+                            <p className="text-xs text-foreground/80 line-clamp-2 mb-1.5">
                               {f.message || '(No message)'}
                             </p>
 
                             {/* Bottom row: badges */}
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <Badge
                                 variant="outline"
-                                className={`text-xs font-medium ${config.color}`}
+                                className={`text-[11px] font-medium py-0 ${config.color}`}
                               >
-                                <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 ${config.dot}`} />
+                                <span className={`inline-block h-1 w-1 rounded-full mr-1 ${config.dot}`} />
                                 {config.label}
                               </Badge>
                               {f.environment && (
-                                <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                                <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground py-0">
                                   {f.environment}
                                 </Badge>
                               )}
                               {f.platform && (
-                                <Badge variant="outline" className="text-xs font-normal gap-1">
-                                  <Monitor className="h-3 w-3" />
+                                <Badge variant="outline" className="text-[11px] font-normal gap-0.5 py-0">
+                                  <Monitor className="h-2.5 w-2.5" />
                                   {f.platform}
                                 </Badge>
                               )}
                               {f.url && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Badge variant="outline" className="text-xs font-normal gap-1 max-w-[200px] truncate">
-                                      <Globe className="h-3 w-3 shrink-0" />
+                                    <Badge variant="outline" className="text-[11px] font-normal gap-0.5 max-w-[180px] truncate py-0">
+                                      <Globe className="h-2.5 w-2.5 shrink-0" />
                                       <span className="truncate">{f.url.replace(/^https?:\/\//, '')}</span>
                                     </Badge>
                                   </TooltipTrigger>
@@ -466,8 +466,8 @@ function FeedbackPage() {
                                 </Tooltip>
                               )}
                               {f.associatedEventId && (
-                                <Badge variant="outline" className="text-xs font-normal gap-1 text-orange-600 dark:text-orange-400 border-orange-500/30">
-                                  <AlertCircle className="h-3 w-3" />
+                                <Badge variant="outline" className="text-[11px] font-normal gap-0.5 text-orange-600 dark:text-orange-400 border-orange-500/30 py-0">
+                                  <AlertCircle className="h-2.5 w-2.5" />
                                   Event linked
                                 </Badge>
                               )}
@@ -477,9 +477,9 @@ function FeedbackPage() {
                                     e.stopPropagation()
                                     navigate({ to: '/replays/$replayId', params: { replayId: f.replayId! } })
                                   }}
-                                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer bg-blue-500/10 border border-blue-500/20 rounded-full px-2.5 py-0.5"
+                                  className="inline-flex items-center gap-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5"
                                 >
-                                  <Video className="h-3 w-3" />
+                                  <Video className="h-2.5 w-2.5" />
                                   Replay
                                 </span>
                               )}
@@ -495,7 +495,7 @@ function FeedbackPage() {
 
             {/* Footer count */}
             {filteredFeedback.length > 0 && (
-              <div className="mt-4 text-center">
+              <div className="mt-3 text-center">
                 <p className="text-xs text-muted-foreground">
                   Showing {filteredFeedback.length} feedback item{filteredFeedback.length === 1 ? '' : 's'}
                   {searchQuery && ' matching your search'}

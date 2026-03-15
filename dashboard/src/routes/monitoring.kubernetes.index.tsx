@@ -7,15 +7,16 @@
 // (at your option) any later version.
 
 import {createFileRoute} from '@tanstack/react-router'
+import {useContext} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
+import {KubernetesPodsSearchContext} from './monitoring.kubernetes.context'
 import {Badge} from '@/components/ui/badge'
 import {Card, CardContent} from '@/components/ui/card'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
-import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
-import {Box, Loader2, Search} from 'lucide-react'
-import {useMemo, useState} from 'react'
+import {Box, Loader2} from 'lucide-react'
+import {useMemo} from 'react'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/monitoring/kubernetes/')({
@@ -46,7 +47,7 @@ function statusColor(status: string) {
 }
 
 function KubernetesPods() {
-  const [searchQuery, setSearchQuery] = useState('')
+  const {searchQuery} = useContext(KubernetesPodsSearchContext)
 
   const {data, isLoading} = useQuery({
     queryKey: ['k8s-resources', 'Pod'],
@@ -95,24 +96,6 @@ function KubernetesPods() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5 text-sm">
-          <Box className="h-3.5 w-3.5 text-blue-500" />
-          <span className="font-semibold tabular-nums">{resources.length}</span>
-          <span className="text-muted-foreground text-xs">pods</span>
-        </div>
-        <div className="h-4 w-px bg-border" />
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, namespace, or cluster..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-      </div>
-
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <p className="font-medium">No pods match your search</p>

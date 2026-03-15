@@ -5,11 +5,11 @@ export function AnalyticsChart({data, isLoading}: {data?: AnalyticsTimeseriesPoi
   if (isLoading) {
     return (
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Visitors & Pageviews</CardTitle>
+        <CardHeader className="pb-1">
+          <CardTitle className="text-xs font-medium">Visitors & Pageviews</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[200px] w-full animate-pulse rounded bg-muted" />
+          <div className="h-[160px] w-full animate-pulse rounded bg-muted" />
         </CardContent>
       </Card>
     )
@@ -18,7 +18,7 @@ export function AnalyticsChart({data, isLoading}: {data?: AnalyticsTimeseriesPoi
   if (!data || data.length === 0) {
     return (
       <Card>
-        <CardContent className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
+        <CardContent className="flex items-center justify-center h-[160px] text-xs text-muted-foreground">
           No data for the selected period
         </CardContent>
       </Card>
@@ -29,11 +29,11 @@ export function AnalyticsChart({data, isLoading}: {data?: AnalyticsTimeseriesPoi
 
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Visitors & Pageviews</CardTitle>
+      <CardHeader className="pb-1">
+        <CardTitle className="text-xs font-medium">Visitors & Pageviews</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex items-end gap-px h-[200px]">
+        <div className="flex items-end gap-px h-[160px]">
           {data.map((point, i) => {
             const visitorsH = (point.visitors / maxVal) * 100
             const pageviewsH = (point.pageviews / maxVal) * 100
@@ -45,7 +45,7 @@ export function AnalyticsChart({data, isLoading}: {data?: AnalyticsTimeseriesPoi
             )
           })}
         </div>
-        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500/70" /> Visitors</span>
           <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-cyan-400/50" /> Pageviews</span>
         </div>
