@@ -71,6 +71,13 @@ describe('use-toast reducer', () => {
       expect(result.toasts[0].open).toBe(false)
     })
 
+    it('addToRemoveQueue early return when toastId already in queue', () => {
+      const state = { toasts: [{ id: '1', title: 'Test', open: true } as ToastItem] }
+      const first = reducer(state, { type: 'DISMISS_TOAST', toastId: '1' })
+      const second = reducer(first, { type: 'DISMISS_TOAST', toastId: '1' })
+      expect(second.toasts[0].open).toBe(false)
+    })
+
     it('dismisses all toasts when no toastId', () => {
       const state = { toasts: [{ id: '1', open: true } as ToastItem] }
       const result = reducer(state, { type: 'DISMISS_TOAST' })
