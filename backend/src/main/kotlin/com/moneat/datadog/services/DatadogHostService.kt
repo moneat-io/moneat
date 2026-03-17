@@ -163,7 +163,7 @@ object DatadogHostService {
         organizationId: Int,
         metadata: DatadogHostMetadata
     ) {
-        logger.info {
+        logger.debug {
             "upsertFromMetadata called: hostname=${metadata.hostname}, " +
                 "gohai.length=${metadata.gohai.length}, " +
                 "hostMeta=${metadata.hostMeta}, " +
@@ -238,7 +238,7 @@ object DatadogHostService {
             }
         }
 
-        logger.info {
+        logger.debug {
             "Upserted DD host ${metadata.hostname} for org $organizationId: " +
                 "cpuCores=$gohaiCpuCores, memoryKb=$gohaiMemoryKb, processor=$gohaiProcessor"
         }
@@ -248,7 +248,7 @@ object DatadogHostService {
         organizationId: Int,
         payload: DatadogIntakePayload
     ) {
-        logger.info {
+        logger.debug {
             "upsertFromIntake called: hostname=${payload.meta?.hostname}, " +
                 "gohai.length=${payload.gohai.length}, " +
                 "meta.os=${payload.meta?.os}, " +
@@ -267,7 +267,7 @@ object DatadogHostService {
         val gohaiProcessor = parseProcessorFromGohai(payload.gohai)
         val gohaiMemoryKb = parseMemoryKbFromGohai(payload.gohai)
 
-        logger.info {
+        logger.debug {
             "Parsed gohai for $hostname: cpuCores=$gohaiCpuCores, processor=$gohaiProcessor, memoryKb=$gohaiMemoryKb"
         }
 
@@ -335,7 +335,7 @@ object DatadogHostService {
         }
 
         if (didUpsert) {
-            logger.info {
+            logger.debug {
                 "Upserted DD host $hostname from intake for org $organizationId: " +
                     "cpuCores=$gohaiCpuCores, memoryKb=$gohaiMemoryKb, processor=$gohaiProcessor"
             }
