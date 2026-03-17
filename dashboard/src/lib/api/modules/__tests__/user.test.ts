@@ -218,4 +218,17 @@ describe('User API', () => {
     const result = await api.getSubscription()
     expect(result).toBeNull()
   })
+
+  it('rethrows non-404 errors from getSubscription', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/subscription`, () => {
+        return new HttpResponse(
+          JSON.stringify({ error: 'Internal server error' }),
+          { status: 500 }
+        )
+      })
+    )
+
+    await expect(api.getSubscription()).rejects.toThrow()
+  })
 })
