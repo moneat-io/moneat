@@ -208,7 +208,9 @@ function RootComponent() {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
     if (typeof window === 'undefined') return true
     const saved = localStorage.getItem('moneat:sidebar-expanded')
-    return saved !== null ? saved === 'true' : true
+    if (saved !== null) return saved === 'true'
+    // Desktop: expanded by default; mobile: collapsed by default
+    return window.matchMedia('(min-width: 768px)').matches
   })
   const handleSidebarExpandedChange = useCallback((expanded: boolean) => {
     setIsSidebarExpanded(expanded)
