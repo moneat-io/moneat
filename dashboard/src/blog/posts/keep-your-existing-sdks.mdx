@@ -1,0 +1,69 @@
+---
+title: "This Sentry and Datadog Replacement Lets You Keep Your Existing SDKs and Agents"
+description: "Moneat is a drop-in replacement for Sentry and Datadog. Change a DSN, swap some auth tokens, and you're done. No new SDKs, no code rewrites."
+date: 2026-03-17
+author: "Adrian Elder"
+tags: ["sentry", "datadog", "migration", "observability"]
+published: true
+---
+
+We've all been there. Your bill hits some absurd number, and then you decide it's time to move on to a new Sentry/Datadog alternative. Then you're met with instructions for how to adopt an entirely new toolset. This is one of the primary reasons I built Moneat.
+
+With [Moneat](https://moneat.io), swapping over between the two tools is a breeze. You change a DSN, potentially some auth tokens, and your service or app is now sending data to Moneat without any other code changes.
+
+## Sentry SDK
+
+Already using a Sentry SDK? Just update the DSN to point at your Moneat instance. That's it.
+
+```javascript
+import * as Sentry from "@sentry/node";
+
+Sentry.init({
+  dsn: "https://<public_key>@api.moneat.io/api/<project_id>",
+  tracesSampleRate: 1.0,
+});
+```
+
+Your DSN is available in **Projects → [Your Project] → Settings**. All 90+ Sentry SDK platforms (JavaScript, Python, Java, Kotlin, Swift, Go, Ruby, etc.) work out of the box.
+
+## Datadog Agent
+
+Already running the Datadog Agent? Update your `datadog.yaml` to redirect telemetry to Moneat:
+
+```yaml
+# /etc/datadog-agent/datadog.yaml
+container_lifecycle:
+  dd_url: https://api.moneat.io
+container_image:
+  dd_url: https://api.moneat.io
+database_monitoring:
+  metrics:
+    dd_url: https://api.moneat.io
+  samples:
+    dd_url: https://api.moneat.io
+  activity:
+    dd_url: https://api.moneat.io
+apm_config:
+  profiling_dd_url: https://ingest.moneat.io/profiling/v1/input
+```
+
+Then run the agent with your Moneat API key:
+
+```bash
+docker run \
+  -e DD_API_KEY=<YOUR_KEY> \
+  -v /path/to/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v /proc/:/host/proc/:ro \
+  -v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
+  --pid host \
+  gcr.io/datadoghq/agent:7
+```
+
+Your host will appear in **Monitoring → Hosts** within a few minutes. API keys are managed under **Settings → Agent Keys**.
+
+## Pricing That Makes Sense
+
+Enable whatever features you want. We don't charge per-host fees. All features, with a few exceptions like metrics, are ingestion based. That means you'll only ever pay for what you use. I mean, why do we care how many features you have enabled, or how many hosts you're using?
+
+[Moneat](https://moneat.io) is also [open-source](https://github.com/moneat-io/moneat) and self-hostable.

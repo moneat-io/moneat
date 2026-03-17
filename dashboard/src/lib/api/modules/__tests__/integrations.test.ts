@@ -384,6 +384,31 @@ describe('Integrations API', () => {
     })
   })
 
+  describe('getIncidentProviders with apiBase fallback', () => {
+    it('uses fallback when base has no path after /v1', async () => {
+      const { integrationsMethods } = await import('../integrations')
+      const mockRequest = async (endpoint: string) => {
+        if (endpoint.includes('https://api.moneat.io/api/incident-providers')) {
+          return [{ id: 1, name: 'PagerDuty', type: 'pagerduty' }]
+        }
+        throw new Error(`Unexpected endpoint: ${endpoint}`)
+      }
+      const core = {
+        API_BASE: '/v1',
+        request: mockRequest,
+        get: mockRequest,
+        fetchWithAuth: async () => new Response(),
+        logout: async () => {},
+        checkAuth: async () => true,
+        isAuthenticated: () => true,
+      }
+      const methods = integrationsMethods(core)
+      const result = await methods.getIncidentProviders()
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('PagerDuty')
+    })
+  })
+
   describe('getIncidentProviderEvents', () => {
     it('fetches event log for a provider with default limit', async () => {
       server.use(

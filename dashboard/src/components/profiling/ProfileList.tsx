@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import {useMemo} from 'react'
 import {Link} from '@tanstack/react-router'
+import {formatRelativeTime} from '@/lib/utils'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -52,24 +53,9 @@ function formatDuration(ns: number): string {
   return `${(ns / 1_000_000_000).toFixed(1)}s`
 }
 
-function timeAgo(iso: string): string {
-  const now = Date.now()
-  const then = new Date(iso).getTime()
-  const diffMs = now - then
-  if (diffMs < 0) return 'just now'
-
-  const seconds = Math.floor(diffMs / 1000)
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  })
+function parseUtcDate(value: string): Date {
+  if (value.includes('T')) return new Date(value)
+  return new Date(value + ' UTC')
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -234,69 +220,72 @@ export function ProfileList({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {profiles.map((profile: ProfileResponse) => (
-              <TableRow key={profile.profileId} className="group">
-                <TableCell>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Link
-                      to="/profiles/$profileId"
-                      params={{profileId: profile.profileId}}
-                      className="font-medium text-primary hover:underline truncate"
+            {profiles.map((profile: ProfileResponse) => {
+              const parsedStart = parseUtcDate(profile.startTime)
+              return (
+                <TableRow key={profile.profileId} className="group">
+                  <TableCell>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Link
+                        to="/profiles/$profileId"
+                        params={{profileId: profile.profileId}}
+                        className="font-medium text-primary hover:underline truncate"
+                      >
+                        {profile.service || '(unknown)'}
+                      </Link>
+                      {profile.language && (
+                        <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                          {profile.language}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={`text-[11px] border ${profileTypeBadgeClass(profile.profileType)}`}
                     >
-                      {profile.service || '(unknown)'}
-                    </Link>
-                    {profile.language && (
-                      <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
-                        {profile.language}
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
-                    className={`text-[11px] border ${profileTypeBadgeClass(profile.profileType)}`}
-                  >
-                    {profile.profileType}
-                  </Badge>
-                </TableCell>
-                <TableCell className="hidden md:table-cell text-muted-foreground">
-                  {profile.env || '—'}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell text-muted-foreground font-mono truncate max-w-[140px]">
-                  {profile.host || '—'}
-                </TableCell>
-                <TableCell className="font-mono tabular-nums">
-                  {formatDuration(profile.durationNs)}
-                </TableCell>
-                <TableCell className="hidden sm:table-cell font-mono tabular-nums text-muted-foreground">
-                  {formatBytes(profile.sizeBytes)}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  <span title={new Date(profile.startTime).toLocaleString()}>
-                    <Clock className="h-3 w-3 inline mr-1 -mt-px" />
-                    {timeAgo(profile.startTime)}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      api.downloadProfile(
-                        profile.profileId,
-                        undefined,
-                        profile.profileType
-                      )
-                    }}
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+                      {profile.profileType}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-muted-foreground">
+                    {profile.env || '—'}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell text-muted-foreground font-mono truncate max-w-[140px]">
+                    {profile.host || '—'}
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {formatDuration(profile.durationNs)}
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell font-mono tabular-nums text-muted-foreground">
+                    {formatBytes(profile.sizeBytes)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    <span title={parsedStart.toLocaleString()}>
+                      <Clock className="h-3 w-3 inline mr-1 -mt-px" />
+                      {formatRelativeTime(parsedStart.getTime())}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        api.downloadProfile(
+                          profile.profileId,
+                          undefined,
+                          profile.profileType
+                        )
+                      }}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       </div>
