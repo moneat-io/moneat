@@ -56,6 +56,37 @@ class IngestRoutesAuthParsingTest {
     }
 
     @Test
+    fun `extractPublicKey reads key with underscores from auth header`() {
+        val key =
+            extractPublicKey(
+                authHeader = "Sentry sentry_key=URkP8i_m9_fR0rI087QrK1NMYQP8BbHelMCKUDHj, sentry_version=7"
+            )
+
+        assertEquals("URkP8i_m9_fR0rI087QrK1NMYQP8BbHelMCKUDHj", key)
+    }
+
+    @Test
+    fun `extractPublicKey reads key with hyphens from auth header`() {
+        val key =
+            extractPublicKey(
+                authHeader = "Sentry sentry_key=abc-def-123, sentry_version=7"
+            )
+
+        assertEquals("abc-def-123", key)
+    }
+
+    @Test
+    fun `extractPublicKey accepts query param with underscores`() {
+        val key =
+            extractPublicKey(
+                authHeader = null,
+                sentryKeyParam = "URkP8i_m9_fR0rI087QrK1NMYQP8BbHelMCKUDHj"
+            )
+
+        assertEquals("URkP8i_m9_fR0rI087QrK1NMYQP8BbHelMCKUDHj", key)
+    }
+
+    @Test
     fun `extractPublicKey rejects invalid query param characters`() {
         val key =
             extractPublicKey(
@@ -70,6 +101,12 @@ class IngestRoutesAuthParsingTest {
     fun `extractPublicKeyFromDsn parses DSN auth header`() {
         val key = extractPublicKeyFromDsn("DSN https://abc123def@o1.ingest.sentry.io/42")
         assertEquals("abc123def", key)
+    }
+
+    @Test
+    fun `extractPublicKeyFromDsn parses DSN with underscores in key`() {
+        val key = extractPublicKeyFromDsn("DSN https://abc_123_def@o1.ingest.sentry.io/42")
+        assertEquals("abc_123_def", key)
     }
 
     @Test
