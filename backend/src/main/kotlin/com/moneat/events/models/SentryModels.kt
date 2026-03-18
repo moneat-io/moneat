@@ -187,12 +187,36 @@ data class SentryEvent(
     val tags: Map<String, String>? = null,
     val user: UserInfo? = null,
     val contexts: JsonObject? = null,
+    @Serializable(with = BreadcrumbsSerializer::class)
     val breadcrumbs: JsonArray? = null,
     val request: JsonObject? = null,
     val fingerprint: List<String>? = null,
     val server_name: String? = null,
     val threads: JsonObject? = null
 )
+
+object BreadcrumbsSerializer : KSerializer<JsonArray?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("Breadcrumbs", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): JsonArray? {
+        val jsonDecoder = decoder as? JsonDecoder ?: return null
+        return when (val element = jsonDecoder.decodeJsonElement()) {
+            JsonNull -> null
+            is JsonArray -> element
+            is JsonObject -> {
+                // Python/Java SDKs send {"values": [...]}
+                element["values"] as? JsonArray ?: JsonArray(emptyList())
+            }
+            else -> null
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: JsonArray?) {
+        val jsonEncoder = encoder as? kotlinx.serialization.json.JsonEncoder ?: return
+        jsonEncoder.encodeJsonElement(value ?: JsonArray(emptyList()))
+    }
+}
 
 object SentryMessageSerializer : KSerializer<String?> {
     override val descriptor: SerialDescriptor =
@@ -293,6 +317,7 @@ data class SentryTransaction(
     val sdk: SdkInfo? = null,
     val server_name: String? = null,
     val request: JsonObject? = null,
+    @Serializable(with = BreadcrumbsSerializer::class)
     val breadcrumbs: JsonArray? = null,
     val measurements: JsonObject? = null
 )
