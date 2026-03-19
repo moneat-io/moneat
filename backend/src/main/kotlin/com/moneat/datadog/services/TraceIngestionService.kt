@@ -250,8 +250,10 @@ object TraceIngestionService {
         }
         val whereClause = filters.joinToString(" AND ")
 
+        val canonicalTraceId = "if(trace_id_hex != '', trace_id_hex, toString(trace_id))"
+
         val countQuery = """
-            SELECT count(DISTINCT trace_id)
+            SELECT count(DISTINCT $canonicalTraceId)
             FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
         """.trimIndent()
@@ -263,17 +265,18 @@ object TraceIngestionService {
 
         val query = """
             SELECT
-                trace_id,
+                $canonicalTraceId as trace_id_canonical,
                 argMin(service, if(parent_id = 0, 0, 1)) as root_service,
                 argMin(resource, if(parent_id = 0, 0, 1)) as root_resource,
                 argMin(name, if(parent_id = 0, 0, 1)) as root_name,
                 count() as span_count,
                 max(duration) as duration_ns,
                 toInt64(toUnixTimestamp64Nano(min(start))) as start_ns,
-                max(error) as has_error
+                max(error) as has_error,
+                argMin(source, if(parent_id = 0, 0, 1)) as source
             FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
-            GROUP BY trace_id
+            GROUP BY trace_id_canonical
             ORDER BY start_ns DESC
             LIMIT $limit OFFSET $offset
             FORMAT JSONEachRow
@@ -288,7 +291,7 @@ object TraceIngestionService {
                 .map { line ->
                     val obj = json.parseToJsonElement(line).jsonObject
                     DdTraceListItem(
-                        traceId = obj["trace_id"]!!
+                        traceId = obj["trace_id_canonical"]!!
                             .jsonPrimitive.content,
                         rootService = obj["root_service"]!!
                             .jsonPrimitive.content,
@@ -306,6 +309,8 @@ object TraceIngestionService {
                             obj["has_error"]
                                 ?.jsonPrimitive?.int ?: 0
                             ) > 0,
+                        source = obj["source"]
+                            ?.jsonPrimitive?.content ?: "datadog",
                     )
                 }
         }
@@ -317,18 +322,30 @@ object TraceIngestionService {
         organizationId: Int,
         traceId: String,
     ): DdTraceDetailResponse? {
-        val parsedTraceId = parseTraceId(traceId) ?: return null
+        val orgClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+
+        val traceIdClause = when {
+            parseTraceId(traceId) != null ->
+                "trace_id = ${parseTraceId(traceId)}"
+            else ->
+                "trace_id_hex = '${escapeSql(traceId)}'"
+        }
+
         val query = """
             SELECT
-                span_id, trace_id, parent_id,
+                if(span_id_hex != '', span_id_hex, toString(span_id)) as span_id_out,
+                if(trace_id_hex != '', trace_id_hex, toString(trace_id)) as trace_id_out,
+                if(parent_id_hex != '', parent_id_hex, toString(parent_id)) as parent_id_out,
                 name, service, resource, type,
                 toInt64(toUnixTimestamp64Nano(start)) as start_ns,
                 duration, error,
                 meta, metrics,
-                host, env, version
+                host, env, version,
+                source, kind, status_code, status_message,
+                events, links, resource_attributes
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
-              AND trace_id = $parsedTraceId
+            WHERE $orgClause
+              AND $traceIdClause
             ORDER BY start_ns ASC
             FORMAT JSONEachRow
         """.trimIndent()
@@ -341,9 +358,9 @@ object TraceIngestionService {
             .map { line ->
                 val obj = json.parseToJsonElement(line).jsonObject
                 DdSpanResponse(
-                    spanId = obj["span_id"]!!.jsonPrimitive.content,
-                    traceId = obj["trace_id"]!!.jsonPrimitive.content,
-                    parentId = obj["parent_id"]!!.jsonPrimitive.content,
+                    spanId = obj["span_id_out"]!!.jsonPrimitive.content,
+                    traceId = obj["trace_id_out"]!!.jsonPrimitive.content,
+                    parentId = obj["parent_id_out"]!!.jsonPrimitive.content,
                     name = obj["name"]!!.jsonPrimitive.content,
                     service = obj["service"]!!.jsonPrimitive.content,
                     resource = obj["resource"]!!.jsonPrimitive.content,
@@ -355,8 +372,14 @@ object TraceIngestionService {
                     metrics = parseDoubleMap(obj["metrics"]),
                     host = obj["host"]?.jsonPrimitive?.content ?: "",
                     env = obj["env"]?.jsonPrimitive?.content ?: "",
-                    version = obj["version"]?.jsonPrimitive?.content
-                        ?: "",
+                    version = obj["version"]?.jsonPrimitive?.content ?: "",
+                    source = obj["source"]?.jsonPrimitive?.content ?: "datadog",
+                    kind = obj["kind"]?.jsonPrimitive?.content ?: "",
+                    statusCode = obj["status_code"]?.jsonPrimitive?.int ?: 0,
+                    statusMessage = obj["status_message"]?.jsonPrimitive?.content ?: "",
+                    events = obj["events"]?.jsonPrimitive?.content ?: "[]",
+                    links = obj["links"]?.jsonPrimitive?.content ?: "[]",
+                    resourceAttributes = parseStringMap(obj["resource_attributes"]),
                 )
             }
         if (spans.isEmpty()) return null

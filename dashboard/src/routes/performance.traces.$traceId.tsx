@@ -10,6 +10,7 @@ import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {SpanWaterfall} from '@/components/apm/SpanWaterfall'
+import {SourceBadge} from '@/components/apm/SourceBadge'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {
@@ -147,9 +148,7 @@ function PerformanceTraceDetailPage() {
               <span className="text-muted-foreground font-normal mx-1">.</span>
               {rootSpan?.name}
             </h1>
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-              Datadog
-            </Badge>
+            <SourceBadge source={rootSpan?.source ?? 'datadog'} />
             {rootSpan?.env && (
               <Badge variant="outline" className="text-xs">
                 {rootSpan.env}

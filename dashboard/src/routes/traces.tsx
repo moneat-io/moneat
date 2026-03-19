@@ -111,7 +111,7 @@ function Traces() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">APM Traces</h1>
             <p className="text-sm text-muted-foreground">
-              Resource performance aggregated from Datadog trace stats
+              Resource performance aggregated from trace stats
             </p>
           </div>
         </div>
@@ -243,7 +243,7 @@ function Traces() {
           <p className="text-sm text-muted-foreground text-center max-w-sm">
             {serviceFilter
               ? 'No resources match your current filter.'
-              : 'No APM trace stats have been recorded yet. Make sure your Datadog agent is sending stats to the /dd/v0.6/stats endpoint.'}
+              : 'No APM trace stats have been recorded yet. Make sure your tracing agent is sending stats.'}
           </p>
         </div>
       )}
