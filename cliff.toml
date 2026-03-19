@@ -23,16 +23,28 @@ body = """
 | sort(attribute="scope") %}
 - **{{ commit.scope }}**: {{ commit.message }}
   {%- if commit.breaking %} (**BREAKING**) {%- endif -%}
+  {%- if commit.remote.username %} by @{{ commit.remote.username }}{%- endif -%}
+  {%- if commit.remote.pr_number %} in [#{{ commit.remote.pr_number }}]({{ self::remote_url() }}/pull/{{ commit.remote.pr_number }}){%- endif -%}
   {%- if commit.body %}\n{{ commit.body | indent(prefix="  ") }}{%- endif %}
 {%- endfor -%}
 {% for commit in commits %}
 {%- if not commit.scope %}
 - {{ commit.message }}
   {%- if commit.breaking %} (**BREAKING**) {%- endif -%}
+  {%- if commit.remote.username %} by @{{ commit.remote.username }}{%- endif -%}
+  {%- if commit.remote.pr_number %} in [#{{ commit.remote.pr_number }}]({{ self::remote_url() }}/pull/{{ commit.remote.pr_number }}){%- endif -%}
   {%- if commit.body %}\n{{ commit.body | indent(prefix="  ") }}{%- endif %}
 {%- endif -%}
 {%- endfor -%}
-{% endfor %}\n
+{% endfor %}
+{%- if github.contributors | filter(attribute="is_first_time", value=true) | length > 0 %}
+
+### New Contributors
+{% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
+- @{{ contributor.username }} made their first contribution
+  {%- if contributor.pr_number %} in [#{{ contributor.pr_number }}]({{ self::remote_url() }}/pull/{{ contributor.pr_number }}){%- endif %}
+{%- endfor %}
+{% endif -%}
 """
 footer = ""
 trim = true

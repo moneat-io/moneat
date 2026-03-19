@@ -69,6 +69,20 @@ describe('initDatadog', () => {
     expect(rumCall.env).toBe('staging')
   })
 
+  it.each([
+    {desc: 'applicationId is empty', applicationId: '', clientToken: 'tok-456'},
+    {desc: 'clientToken is empty', applicationId: 'app-123', clientToken: ''},
+    {desc: 'values are unreplaced placeholders', applicationId: '__MONEAT_DD_APPLICATION_ID__', clientToken: '__MONEAT_DD_CLIENT_TOKEN__'},
+  ])('skips init when $desc', async ({applicationId, clientToken}) => {
+    const {datadogRum} = await import('@datadog/browser-rum')
+    const {datadogLogs} = await import('@datadog/browser-logs')
+
+    initDatadog({applicationId, clientToken})
+
+    expect(datadogRum.init).not.toHaveBeenCalled()
+    expect(datadogLogs.init).not.toHaveBeenCalled()
+  })
+
   it('uses explicit proxyUrl over backendUrl', async () => {
     const {datadogRum} = await import('@datadog/browser-rum')
 

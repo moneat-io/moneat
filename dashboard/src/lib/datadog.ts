@@ -19,7 +19,17 @@ function joinUrl(base: string, path: string): string {
   return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '')
 }
 
+function isConfigured(value: string | undefined): value is string {
+  if (!value || !value.trim()) return false
+  if (value.startsWith('__') && value.endsWith('__')) return false
+  return true
+}
+
 export function initDatadog(options: DatadogInitOptions): void {
+  if (!isConfigured(options.applicationId) || !isConfigured(options.clientToken)) {
+    return
+  }
+
   const ddProxyUrl = resolveProxyUrl(options.proxyUrl, options.backendUrl)
   const service = options.service || 'moneat-dashboard'
   const env = options.env || 'production'

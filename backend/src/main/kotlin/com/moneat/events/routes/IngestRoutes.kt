@@ -290,21 +290,21 @@ fun extractPublicKey(
     val headerKey =
         authHeader?.let { header ->
             // Parse "Sentry sentry_key=xxx, sentry_version=7"
-            val keyRegex = "(?i)sentry_key=([a-z0-9]+)".toRegex()
+            val keyRegex = "(?i)sentry_key=([a-z0-9_-]+)".toRegex()
             keyRegex.find(header)?.groupValues?.get(1)
         }
     if (headerKey != null) return headerKey
 
     // Fallback for SDKs that pass auth in query params:
     // ?sentry_key=xxx&sentry_version=7&sentry_client=...
-    val keyRegex = "^[a-zA-Z0-9]+$".toRegex()
+    val keyRegex = "^[a-zA-Z0-9_-]+$".toRegex()
     return sentryKeyParam?.takeIf { keyRegex.matches(it) }
 }
 
 fun extractPublicKeyFromDsn(dsnLikeHeader: String?): String? {
     if (dsnLikeHeader.isNullOrBlank()) return null
     val cleaned = dsnLikeHeader.removePrefix("DSN ").trim()
-    val regex = "https?://([a-zA-Z0-9]+)@[^/]+/[0-9]+".toRegex(RegexOption.IGNORE_CASE)
+    val regex = "https?://([a-zA-Z0-9_-]+)@[^/]+/[0-9]+".toRegex(RegexOption.IGNORE_CASE)
     return regex.find(cleaned)?.groupValues?.getOrNull(1)
 }
 
