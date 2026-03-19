@@ -31,7 +31,7 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: Cache Gradle packages
-        uses: actions/cache@565629816435f6c0b50676926c9b05c254113c0c
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7
         with:
           path: |
             ~/.gradle/caches
