@@ -60,9 +60,9 @@ import com.moneat.incident.services.IncidentService
 import com.moneat.llm.services.LlmDashboardService
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.logs.repositories.LogRepositoryImpl
-import com.moneat.logs.services.LogApiKeyService
 import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogService
+import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.monitor.repositories.HostAlertRepository
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
 import com.moneat.monitor.repositories.HostRepository
@@ -204,7 +204,7 @@ val logsModule = module {
     single<LogRepository> { LogRepositoryImpl() }
 
     single { LogService(get()) }
-    single { LogApiKeyService() }
+    single { OtlpApiKeyService() }
     single { LogIndexService() }
 }
 

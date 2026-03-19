@@ -16,7 +16,7 @@
 
 import {useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, type LogApiKey} from '@/lib/api'
+import {api, type OtlpApiKey} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
@@ -46,31 +46,31 @@ function formatDate(iso: string | null | undefined, timezone: string): string {
   }
 }
 
-export function LogApiKeysTab() {
+export function OtlpApiKeysTab() {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const {timezone} = useTimezone()
   const [createOpen, setCreateOpen] = useState(false)
   const [newKeyName, setNewKeyName] = useState('')
   const [createdKey, setCreatedKey] = useState<{key: string; name: string} | null>(null)
-  const [revokeKey, setRevokeKey] = useState<LogApiKey | null>(null)
+  const [revokeKey, setRevokeKey] = useState<OtlpApiKey | null>(null)
 
   const {data: keysData, isLoading} = useQuery({
-    queryKey: ['logApiKeys'],
-    queryFn: () => api.getLogApiKeys(),
+    queryKey: ['otlpApiKeys'],
+    queryFn: () => api.getOtlpApiKeys(),
     enabled: api.isAuthenticated(),
   })
 
   const keys = keysData?.keys ?? []
 
   const createMutation = useMutation({
-    mutationFn: (name: string) => api.createLogApiKey(name),
+    mutationFn: (name: string) => api.createOtlpApiKey(name),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({queryKey: ['logApiKeys']})
+      queryClient.invalidateQueries({queryKey: ['otlpApiKeys']})
       setCreatedKey({key: data.key, name: data.name})
       setNewKeyName('')
       setCreateOpen(false)
-      toast({title: 'Log API key created', description: 'Copy the key now—it won\'t be shown again.'})
+      toast({title: 'OTLP API key created', description: 'Copy the key now—it won\'t be shown again.'})
     },
     onError: (err: Error) => {
       toast({
@@ -82,11 +82,11 @@ export function LogApiKeysTab() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteLogApiKey(id),
+    mutationFn: (id: number) => api.deleteOtlpApiKey(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['logApiKeys']})
+      queryClient.invalidateQueries({queryKey: ['otlpApiKeys']})
       setRevokeKey(null)
-      toast({title: 'Key revoked', description: 'The log API key has been revoked.'})
+      toast({title: 'Key revoked', description: 'The OTLP API key has been revoked.'})
     },
     onError: (err: Error) => {
       toast({
@@ -119,16 +119,17 @@ export function LogApiKeysTab() {
 
   return (
     <>
-      <Card id="log-api-keys">
+      <Card id="otlp-api-keys">
         <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
           <div>
             <CardTitle className="flex items-center gap-2">
               <ScrollText className="h-5 w-5" />
-              Log API Keys
+              OTLP API Keys
             </CardTitle>
             <CardDescription>
-              Create org-level API keys for log ingestion. Use these keys with OTLP exporters or the
-              log ingest API. Keys are shown in full only once when created.
+              Create org-level API keys for OpenTelemetry ingestion (logs, traces, and metrics).
+              Use these keys with OTLP exporters or the ingest API. Keys are shown in full only once
+              when created.
             </CardDescription>
           </div>
           <Button onClick={() => setCreateOpen(true)} disabled={!!createdKey}>
@@ -142,9 +143,9 @@ export function LogApiKeysTab() {
           ) : keys.length === 0 ? (
             <div className="border rounded-lg p-8 text-center text-muted-foreground">
               <ScrollText className="h-10 w-10 mx-auto mb-2 opacity-50" />
-              <p className="font-medium">No log API keys yet</p>
+              <p className="font-medium">No OTLP API keys yet</p>
               <p className="text-sm mt-1">
-                Create a key to send logs via OTLP or the structured log ingest API.
+                Create a key to send logs, traces, and metrics via OpenTelemetry.
               </p>
               <Button variant="outline" className="mt-4" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -200,26 +201,32 @@ export function LogApiKeysTab() {
         <CardHeader>
           <CardTitle className="text-base">Setup Instructions</CardTitle>
           <CardDescription>
-            Configure your OTLP exporter or SDK to send logs to Moneat using your log API key.
+            Configure your OpenTelemetry SDK or Collector to send telemetry data to Moneat.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <p className="text-sm font-medium mb-1">OTLP endpoint</p>
+            <p className="text-sm font-medium mb-1">OTLP endpoints</p>
             <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all">
-              {BACKEND_URL.replace(/\/$/, '')}/v1/logs/otlp
+              Logs: {BACKEND_URL.replace(/\/$/, '')}/v1/logs/otlp
+            </code>
+            <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all mt-1">
+              Traces: {BACKEND_URL.replace(/\/$/, '')}/v1/traces/otlp
+            </code>
+            <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all mt-1">
+              Metrics: {BACKEND_URL.replace(/\/$/, '')}/v1/metrics/otlp
             </code>
           </div>
           <div>
             <p className="text-sm font-medium mb-1">Authentication</p>
             <p className="text-sm text-muted-foreground">
               Set the <code className="bg-muted px-1 rounded">Authorization</code> header to{' '}
-              <code className="bg-muted px-1 rounded">Bearer YOUR_LOG_API_KEY</code>
+              <code className="bg-muted px-1 rounded">Bearer YOUR_OTLP_API_KEY</code>
             </p>
           </div>
           <p className="text-sm text-muted-foreground">
             For OpenTelemetry SDKs, configure the OTLP exporter with the endpoint URL and the
-            Authorization header containing your log API key.
+            Authorization header containing your OTLP API key.
           </p>
         </CardContent>
       </Card>
@@ -228,7 +235,7 @@ export function LogApiKeysTab() {
       <Dialog open={createOpen} onOpenChange={(o) => !o && handleCloseCreateDialog()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create Log API Key</DialogTitle>
+            <DialogTitle>Create OTLP API Key</DialogTitle>
             <DialogDescription>
               Give this key a name to identify it (e.g. &quot;Production OTLP&quot;). The full key
               will be shown once and cannot be retrieved later.
@@ -267,7 +274,7 @@ export function LogApiKeysTab() {
       <Dialog open={!!createdKey} onOpenChange={(o) => !o && handleCloseCreateDialog()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Log API Key Created</DialogTitle>
+            <DialogTitle>OTLP API Key Created</DialogTitle>
             <DialogDescription>
               Copy your key now. It won&apos;t be shown again. Store it securely.
             </DialogDescription>
@@ -304,10 +311,10 @@ export function LogApiKeysTab() {
       <Dialog open={!!revokeKey} onOpenChange={(o) => !o && setRevokeKey(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Revoke Log API Key</DialogTitle>
+            <DialogTitle>Revoke OTLP API Key</DialogTitle>
             <DialogDescription>
               Are you sure you want to revoke &quot;{revokeKey?.name}&quot;? Any clients using this
-              key will no longer be able to send logs.
+              key will no longer be able to send data.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

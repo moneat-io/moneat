@@ -19,7 +19,7 @@ package com.moneat.plugins
 import com.moneat.config.EnvConfig
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.events.routes.extractPublicKey
-import com.moneat.logs.services.LogApiKeyService
+import com.moneat.otlp.services.OtlpApiKeyService
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
@@ -155,7 +155,7 @@ fun Application.configureRateLimiting() {
             rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
         }
         register(RateLimitName("log-ingestion")) {
-            val logApiKeyService = LogApiKeyService()
+            val otlpApiKeyService = OtlpApiKeyService()
             requestKey { call ->
                 val parts = call.request.headers[HttpHeaders.Authorization]?.split(Regex("\\s+"), limit = 2)
                 val token = if (parts != null && parts.size == 2 && parts[0].equals("Bearer", ignoreCase = true)) {
@@ -164,7 +164,7 @@ fun Application.configureRateLimiting() {
                     null
                 }
                 if (token != null) {
-                    logApiKeyService.validateKey(token)
+                    otlpApiKeyService.validateKey(token)
                         ?.let { "org:$it" }
                         ?: call.request.clientIp()
                 } else {

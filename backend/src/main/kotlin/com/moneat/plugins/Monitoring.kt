@@ -50,7 +50,7 @@ fun Application.configureMonitoring() {
             val method = call.request.httpMethod.value
             val path = call.request.path()
 
-            if (shouldSkipTracing(path)) {
+            if (shouldSkipTracing(path, method)) {
                 proceed()
                 return@intercept
             }
@@ -170,12 +170,24 @@ fun Application.configureMonitoring() {
     }
 }
 
-private fun shouldSkipTracing(path: String): Boolean {
+private fun shouldSkipTracing(path: String, method: String): Boolean {
     if (path == "/health" || path == "/health/" || path.startsWith("/health/")) {
         return true
     }
-    if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/") {
-        return true
+    if (method == "POST") {
+        if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/" || path == "/v1/logs") {
+            return true
+        }
+        if (path == "/v1/traces" || path == "/v1/traces/otlp" ||
+            path == "/v1/traces/" || path == "/v1/traces/otlp/"
+        ) {
+            return true
+        }
+        if (path == "/v1/metrics" || path == "/v1/metrics/otlp" ||
+            path == "/v1/metrics/" || path == "/v1/metrics/otlp/"
+        ) {
+            return true
+        }
     }
     return ingestPathRegex.matches(path)
 }

@@ -20,7 +20,7 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {loadStripe} from '@stripe/stripe-js'
 import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
 import {type AlertNotificationPreference, type AlertSource, api, type AuthToken} from '@/lib/api'
-import {LogApiKeysTab} from '@/components/settings/LogApiKeysTab'
+import {OtlpApiKeysTab} from '@/components/settings/OtlpApiKeysTab'
 import {AgentApiKeysTab} from '@/components/settings/AgentApiKeysTab'
 import {trackEvent} from '@/lib/analytics'
 import {buildPricingCardModel} from '@/lib/pricing-display'
@@ -356,7 +356,7 @@ function ApiKeysTab() {
         {hasDatadog && <AgentApiKeysTab />}
       </TabsContent>
       <TabsContent value="logs" className="space-y-8 mt-0">
-        <LogApiKeysTab />
+        <OtlpApiKeysTab />
       </TabsContent>
     </Tabs>
   )

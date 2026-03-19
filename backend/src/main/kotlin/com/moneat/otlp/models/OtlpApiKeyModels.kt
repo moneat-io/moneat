@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.logs.models
+package com.moneat.otlp.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class CreateLogApiKeyRequest(
+data class CreateOtlpApiKeyRequest(
     val name: String
 )
 
 @Serializable
-data class CreateLogApiKeyResponse(
+data class CreateOtlpApiKeyResponse(
     val id: Int,
     val name: String,
     @SerialName("key_prefix") val keyPrefix: String,
@@ -34,7 +34,7 @@ data class CreateLogApiKeyResponse(
 )
 
 @Serializable
-data class LogApiKeyResponse(
+data class OtlpApiKeyResponse(
     val id: Int,
     val name: String,
     @SerialName("key_prefix") val keyPrefix: String,

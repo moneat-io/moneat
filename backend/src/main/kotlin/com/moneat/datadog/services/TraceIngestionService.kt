@@ -142,7 +142,11 @@ object TraceIngestionService {
                 ${doubleMapToSqlMap(span.metrics)},
                 '${escapeSql(host)}',
                 '${escapeSql(spanEnv)}',
-                '${escapeSql(ver)}'
+                '${escapeSql(ver)}',
+                '${java.lang.Long.toUnsignedString(span.traceId.toLong(), 16)}',
+                '${java.lang.Long.toUnsignedString(span.spanId.toLong(), 16)}',
+                '${if (span.parentId != 0UL) java.lang.Long.toUnsignedString(span.parentId.toLong(), 16) else ""}',
+                'datadog'
             )"""
         }
 
@@ -151,7 +155,8 @@ object TraceIngestionService {
                 span_id, trace_id, parent_id, organization_id,
                 name, service, resource, type,
                 start, duration, error,
-                meta, metrics, host, env, version
+                meta, metrics, host, env, version,
+                trace_id_hex, span_id_hex, parent_id_hex, source
             ) VALUES
             $rows
         """.trimIndent()

@@ -178,14 +178,16 @@ object DatadogMetricService {
                 '${escapeSql(m.host)}',
                 map($tagsMap),
                 '${escapeSql(m.unit)}',
-                '${escapeSql(m.sourceTypeName)}'
+                '${escapeSql(m.sourceTypeName)}',
+                'datadog'
             )"""
         }
 
         val insert = """
             INSERT INTO `$db`.metrics (
                 organization_id, metric_name, metric_type, timestamp,
-                value, host, tags, unit, source_type_name
+                value, host, tags, unit, source_type_name,
+                source
             ) VALUES $rows
         """.trimIndent()
 

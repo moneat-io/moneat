@@ -20,6 +20,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.config.isClickHouseError
 import com.moneat.logs.repositories.LogRepository
+import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.logs.models.AgentLogEntry
 import com.moneat.logs.models.LogAggregateBucket
 import com.moneat.logs.models.LogAggregateResponse
@@ -1272,7 +1273,7 @@ class LogService(private val logRepository: LogRepository) {
 
         resourceLogs.forEach { resourceLogElement ->
             val resourceLog = resourceLogElement.jsonObject
-            val resourceAttrs = attributesToMap(resourceLog["resource"]?.jsonObject?.get("attributes"))
+            val resourceCtx = OtlpParsingUtils.extractResourceContext(resourceLog["resource"]?.jsonObject)
             val scopeLogs =
                 resourceLog["scopeLogs"]?.jsonArray
                     ?: resourceLog["instrumentationLibraryLogs"]?.jsonArray
@@ -1280,19 +1281,20 @@ class LogService(private val logRepository: LogRepository) {
 
             scopeLogs.forEach { scopeElement ->
                 val scopeLog = scopeElement.jsonObject
-                val logRecords = scopeLog["logRecords"]?.jsonArray ?: JsonArray(emptyList())
+                val logRecords = OtlpParsingUtils.safeJsonArray(scopeLog["logRecords"])
 
                 logRecords.forEach { recordElement ->
                     val record = recordElement.jsonObject
-                    val attributes = attributesToMap(record["attributes"])
-                    val mergedAttributes = resourceAttrs + attributes
-                    val bodyText = extractAnyValue(record["body"]) ?: ""
+                    val attributes = OtlpParsingUtils.attributesToMap(record["attributes"])
+                    val bodyText = OtlpParsingUtils.extractAnyValue(record["body"]) ?: ""
                     val message = if (bodyText.isBlank()) "OTLP log record" else bodyText
                     val severityText = record["severityText"]?.jsonPrimitive?.contentOrNull
-                    val timestampNs =
-                        record["timeUnixNano"]?.jsonPrimitive?.longOrNull
-                            ?: record["observedTimeUnixNano"]?.jsonPrimitive?.longOrNull
-                    val timestampMs = timestampNs?.div(1_000_000)
+                    val timestampNs = OtlpParsingUtils.extractTimestampNanos(
+                        record,
+                        "timeUnixNano",
+                        "observedTimeUnixNano"
+                    )
+                    val timestampMs = OtlpParsingUtils.nanoToEpochMs(timestampNs)
 
                     val entry =
                         LogIngestEntry(
@@ -1300,14 +1302,16 @@ class LogService(private val logRepository: LogRepository) {
                             level = severityText,
                             message = message,
                             body = bodyText,
-                            service = mergedAttributes["service.name"],
-                            environment = mergedAttributes["deployment.environment"] ?: mergedAttributes["service.environment"],
-                            host = mergedAttributes["host.name"],
+                            service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
+                            environment = resourceCtx.environment.ifEmpty {
+                                attributes["deployment.environment"] ?: attributes["service.environment"]
+                            },
+                            host = resourceCtx.hostName.ifEmpty { attributes["host.name"] },
                             source = "otlp",
                             traceId = record["traceId"]?.jsonPrimitive?.contentOrNull,
                             spanId = record["spanId"]?.jsonPrimitive?.contentOrNull,
                             tags = HashMap(attributes),
-                            resourceAttributes = HashMap(resourceAttrs)
+                            resourceAttributes = HashMap(resourceCtx.attributes)
                         )
                     entries += entry
                 }
@@ -1315,31 +1319,6 @@ class LogService(private val logRepository: LogRepository) {
         }
 
         return entries
-    }
-
-    private fun attributesToMap(attributes: JsonElement?): Map<String, String> {
-        val array = attributes as? JsonArray ?: return emptyMap()
-        return array
-            .mapNotNull { attributeElement ->
-                val attribute = attributeElement.jsonObject
-                val key = attribute["key"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                val value = extractAnyValue(attribute["value"]) ?: return@mapNotNull null
-                key to value
-            }.toMap()
-    }
-
-    private fun extractAnyValue(anyValue: JsonElement?): String? {
-        val obj = anyValue as? JsonObject ?: return anyValue?.jsonPrimitive?.contentOrNull
-        return when {
-            obj.containsKey("stringValue") -> obj["stringValue"]?.jsonPrimitive?.contentOrNull
-            obj.containsKey("intValue") -> obj["intValue"]?.jsonPrimitive?.contentOrNull
-            obj.containsKey("doubleValue") -> obj["doubleValue"]?.jsonPrimitive?.contentOrNull
-            obj.containsKey("boolValue") -> obj["boolValue"]?.jsonPrimitive?.contentOrNull
-            obj.containsKey("bytesValue") -> obj["bytesValue"]?.jsonPrimitive?.contentOrNull
-            obj.containsKey("arrayValue") -> obj["arrayValue"]?.toString()
-            obj.containsKey("kvlistValue") -> obj["kvlistValue"]?.toString()
-            else -> null
-        }
     }
 
     private fun parseTimeToMillis(value: String?): Long? {
