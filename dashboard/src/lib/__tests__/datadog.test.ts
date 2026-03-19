@@ -69,40 +69,15 @@ describe('initDatadog', () => {
     expect(rumCall.env).toBe('staging')
   })
 
-  it('skips init when applicationId is empty', async () => {
+  it.each([
+    {desc: 'applicationId is empty', applicationId: '', clientToken: 'tok-456'},
+    {desc: 'clientToken is empty', applicationId: 'app-123', clientToken: ''},
+    {desc: 'values are unreplaced placeholders', applicationId: '__MONEAT_DD_APPLICATION_ID__', clientToken: '__MONEAT_DD_CLIENT_TOKEN__'},
+  ])('skips init when $desc', async ({applicationId, clientToken}) => {
     const {datadogRum} = await import('@datadog/browser-rum')
     const {datadogLogs} = await import('@datadog/browser-logs')
 
-    initDatadog({
-      applicationId: '',
-      clientToken: 'tok-456',
-    })
-
-    expect(datadogRum.init).not.toHaveBeenCalled()
-    expect(datadogLogs.init).not.toHaveBeenCalled()
-  })
-
-  it('skips init when clientToken is empty', async () => {
-    const {datadogRum} = await import('@datadog/browser-rum')
-    const {datadogLogs} = await import('@datadog/browser-logs')
-
-    initDatadog({
-      applicationId: 'app-123',
-      clientToken: '',
-    })
-
-    expect(datadogRum.init).not.toHaveBeenCalled()
-    expect(datadogLogs.init).not.toHaveBeenCalled()
-  })
-
-  it('skips init when values are unreplaced placeholders', async () => {
-    const {datadogRum} = await import('@datadog/browser-rum')
-    const {datadogLogs} = await import('@datadog/browser-logs')
-
-    initDatadog({
-      applicationId: '__MONEAT_DD_APPLICATION_ID__',
-      clientToken: '__MONEAT_DD_CLIENT_TOKEN__',
-    })
+    initDatadog({applicationId, clientToken})
 
     expect(datadogRum.init).not.toHaveBeenCalled()
     expect(datadogLogs.init).not.toHaveBeenCalled()
