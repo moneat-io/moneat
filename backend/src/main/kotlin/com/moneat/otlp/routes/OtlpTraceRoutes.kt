@@ -146,16 +146,18 @@ private fun extractOrgIdFromLegacyDsn(
         call.request.header("x-moneat-dsn")
             ?: call.request.header("X-Moneat-Dsn")
             ?: call.request.header(HttpHeaders.Authorization)
-    val projectId =
-        extractProjectIdFromDsn(dsnLikeHeader)
-            ?: call.request.queryParameters["projectId"]?.toLongOrNull()
-            ?: return null
-    val publicKey =
-        extractPublicKey(
-            call.request.header("X-Sentry-Auth"),
-            call.request.queryParameters["sentry_key"]
-        ) ?: extractPublicKeyFromDsn(dsnLikeHeader)
-            ?: return null
+    val projectIdFromDsn = extractProjectIdFromDsn(dsnLikeHeader)
+    val projectIdFromQuery = call.request.queryParameters["projectId"]?.toLongOrNull()
+    val projectId = projectIdFromDsn ?: projectIdFromQuery
+    if (projectId == null) return null
+
+    val publicKeyFromAuth = extractPublicKey(
+        call.request.header("X-Sentry-Auth"),
+        call.request.queryParameters["sentry_key"]
+    )
+    val publicKeyFromDsn = extractPublicKeyFromDsn(dsnLikeHeader)
+    val publicKey = publicKeyFromAuth ?: publicKeyFromDsn
+    if (publicKey == null) return null
     val verification = eventService.verifyProjectKey(projectId, publicKey)
     if (!verification.isValid) return null
     return eventService.getOrganizationIdForProject(projectId)

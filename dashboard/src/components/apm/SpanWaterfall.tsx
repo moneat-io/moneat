@@ -391,6 +391,20 @@ function parseSpanLinks(linksJson?: string): SpanLink[] {
   }
 }
 
+function spanEventStableKey(spanId: string, evt: SpanEvent): string {
+  return `${spanId}:${JSON.stringify(evt)}`
+}
+
+function spanLinkStableKey(link: SpanLink): string {
+  const attrs =
+    link.attributes &&
+    Object.entries(link.attributes)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('|')
+  return `${link.traceId}:${link.spanId ?? ''}:${attrs ?? ''}`
+}
+
 function SpanDetailPanel({
   span,
   traceStart,
@@ -533,8 +547,8 @@ function SpanDetailPanel({
               Events ({spanEvents.length})
             </div>
             <div className="space-y-2">
-              {spanEvents.map((evt, i) => (
-                <div key={i} className="rounded border bg-muted/30 px-2 py-1.5">
+              {spanEvents.map((evt) => (
+                <div key={spanEventStableKey(span.spanId, evt)} className="rounded border bg-muted/30 px-2 py-1.5">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-medium">{evt.name}</span>
                     {evt.name === 'exception' && (
@@ -566,8 +580,8 @@ function SpanDetailPanel({
               Linked Traces ({spanLinks.length})
             </div>
             <div className="space-y-1">
-              {spanLinks.map((link, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
+              {spanLinks.map((link) => (
+                <div key={spanLinkStableKey(link)} className="flex items-center gap-2 text-xs">
                   <Link
                     to="/performance/traces/$traceId"
                     params={{traceId: link.traceId}}

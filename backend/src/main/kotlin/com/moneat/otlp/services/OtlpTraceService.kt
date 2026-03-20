@@ -234,9 +234,7 @@ class OtlpTraceService(
         """.trimIndent()
 
         val response = ClickHouseClient.execute(insert)
-        if (!response.status.isSuccess()) {
-            throw IllegalStateException("Failed to insert OTLP spans into ClickHouse")
-        }
+        check(response.status.isSuccess()) { "Failed to insert OTLP spans into ClickHouse" }
 
         val totalBytes = batch.spans.sumOf { span ->
             span.name.length + span.service.length +

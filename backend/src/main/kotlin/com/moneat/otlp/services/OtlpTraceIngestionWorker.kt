@@ -37,8 +37,7 @@ class OtlpTraceIngestionWorker(
             val batch = traceService.decodeBatch(payload)
             traceService.insertBatch(batch)
 
-            // TODO: Feed extracted exceptions into project-scoped error tracking
-            // once org->project resolution is implemented (see OtlpErrorExtractor)
+            // Extracted for future project-scoped error tracking once org→project resolution exists.
             val exceptions = OtlpErrorExtractor.extractExceptions(batch.spans)
             if (exceptions.isNotEmpty()) {
                 logger.debug {

@@ -68,6 +68,26 @@ data class QueuedOtlpMetricsBatch(
     val metrics: List<OtlpMetricInsert>
 )
 
+@Suppress("LongParameterList")
+private data class MetricInsertSpec(
+    val name: String,
+    val type: String,
+    val description: String,
+    val unit: String,
+    val timestampNs: Long,
+    val value: Double,
+    val attrs: Map<String, String>,
+    val resourceCtx: com.moneat.otlp.ResourceContext,
+    val isMonotonic: Int = 0,
+    val aggregationTemporality: String = "",
+    val histCount: Long = 0,
+    val histSum: Double? = null,
+    val histMin: Double? = null,
+    val histMax: Double? = null,
+    val histBucketCounts: List<Long> = emptyList(),
+    val histExplicitBounds: List<Double> = emptyList(),
+)
+
 class OtlpMetricsService(
     private val usageTracking: UsageTrackingService = UsageTrackingService(),
 ) {
@@ -180,8 +200,16 @@ class OtlpMetricsService(
                 ?: dpObj["asInt"]?.jsonPrimitive?.longOrNull?.toDouble() ?: 0.0
 
             results += buildMetricInsert(
-                name, "gauge", description, unit, tsNs, value,
-                attrs, resourceCtx
+                MetricInsertSpec(
+                    name = name,
+                    type = "gauge",
+                    description = description,
+                    unit = unit,
+                    timestampNs = tsNs,
+                    value = value,
+                    attrs = attrs,
+                    resourceCtx = resourceCtx,
+                )
             )
         }
     }
@@ -207,10 +235,18 @@ class OtlpMetricsService(
                 ?: dpObj["asInt"]?.jsonPrimitive?.longOrNull?.toDouble() ?: 0.0
 
             results += buildMetricInsert(
-                name, "sum", description, unit, tsNs, value,
-                attrs, resourceCtx,
-                isMonotonic = if (isMonotonic) 1 else 0,
-                aggregationTemporality = temporality
+                MetricInsertSpec(
+                    name = name,
+                    type = "sum",
+                    description = description,
+                    unit = unit,
+                    timestampNs = tsNs,
+                    value = value,
+                    attrs = attrs,
+                    resourceCtx = resourceCtx,
+                    isMonotonic = if (isMonotonic) 1 else 0,
+                    aggregationTemporality = temporality,
+                )
             )
         }
     }
@@ -241,13 +277,23 @@ class OtlpMetricsService(
                 ?.mapNotNull { it.jsonPrimitive.doubleOrNull } ?: emptyList()
 
             results += buildMetricInsert(
-                name, "histogram", description, unit, tsNs, sum ?: 0.0,
-                attrs, resourceCtx,
-                aggregationTemporality = temporality,
-                histCount = count, histSum = sum,
-                histMin = min, histMax = max,
-                histBucketCounts = bucketCounts,
-                histExplicitBounds = explicitBounds
+                MetricInsertSpec(
+                    name = name,
+                    type = "histogram",
+                    description = description,
+                    unit = unit,
+                    timestampNs = tsNs,
+                    value = sum ?: 0.0,
+                    attrs = attrs,
+                    resourceCtx = resourceCtx,
+                    aggregationTemporality = temporality,
+                    histCount = count,
+                    histSum = sum,
+                    histMin = min,
+                    histMax = max,
+                    histBucketCounts = bucketCounts,
+                    histExplicitBounds = explicitBounds,
+                )
             )
         }
     }
@@ -274,11 +320,21 @@ class OtlpMetricsService(
             val max = dpObj["max"]?.jsonPrimitive?.doubleOrNull
 
             results += buildMetricInsert(
-                name, "exp_histogram", description, unit, tsNs, sum ?: 0.0,
-                attrs, resourceCtx,
-                aggregationTemporality = temporality,
-                histCount = count, histSum = sum,
-                histMin = min, histMax = max
+                MetricInsertSpec(
+                    name = name,
+                    type = "exp_histogram",
+                    description = description,
+                    unit = unit,
+                    timestampNs = tsNs,
+                    value = sum ?: 0.0,
+                    attrs = attrs,
+                    resourceCtx = resourceCtx,
+                    aggregationTemporality = temporality,
+                    histCount = count,
+                    histSum = sum,
+                    histMin = min,
+                    histMax = max,
+                )
             )
         }
     }
@@ -300,54 +356,45 @@ class OtlpMetricsService(
             val sum = dpObj["sum"]?.jsonPrimitive?.doubleOrNull ?: 0.0
 
             results += buildMetricInsert(
-                name, "summary", description, unit, tsNs, sum,
-                attrs, resourceCtx,
-                histCount = count, histSum = sum
+                MetricInsertSpec(
+                    name = name,
+                    type = "summary",
+                    description = description,
+                    unit = unit,
+                    timestampNs = tsNs,
+                    value = sum,
+                    attrs = attrs,
+                    resourceCtx = resourceCtx,
+                    histCount = count,
+                    histSum = sum,
+                )
             )
         }
     }
 
-    @Suppress("LongParameterList")
-    private fun buildMetricInsert(
-        name: String,
-        type: String,
-        description: String,
-        unit: String,
-        timestampNs: Long,
-        value: Double,
-        attrs: Map<String, String>,
-        resourceCtx: com.moneat.otlp.ResourceContext,
-        isMonotonic: Int = 0,
-        aggregationTemporality: String = "",
-        histCount: Long = 0,
-        histSum: Double? = null,
-        histMin: Double? = null,
-        histMax: Double? = null,
-        histBucketCounts: List<Long> = emptyList(),
-        histExplicitBounds: List<Double> = emptyList(),
-    ): OtlpMetricInsert {
-        val tsMs = OtlpParsingUtils.nanoToEpochMs(timestampNs) ?: 0L
+    private fun buildMetricInsert(spec: MetricInsertSpec): OtlpMetricInsert {
+        val tsMs = OtlpParsingUtils.nanoToEpochMs(spec.timestampNs) ?: 0L
         return OtlpMetricInsert(
             organizationId = 0,
-            metricName = name,
-            metricType = type,
-            description = description,
-            unit = unit,
+            metricName = spec.name,
+            metricType = spec.type,
+            description = spec.description,
+            unit = spec.unit,
             timestampMs = tsMs,
-            value = value,
-            isMonotonic = isMonotonic,
-            aggregationTemporality = aggregationTemporality,
-            histCount = histCount,
-            histSum = histSum,
-            histMin = histMin,
-            histMax = histMax,
-            histBucketCounts = histBucketCounts,
-            histExplicitBounds = histExplicitBounds,
-            tags = attrs,
-            resourceAttributes = resourceCtx.attributes,
-            service = resourceCtx.serviceName,
-            env = resourceCtx.environment,
-            host = resourceCtx.hostName,
+            value = spec.value,
+            isMonotonic = spec.isMonotonic,
+            aggregationTemporality = spec.aggregationTemporality,
+            histCount = spec.histCount,
+            histSum = spec.histSum,
+            histMin = spec.histMin,
+            histMax = spec.histMax,
+            histBucketCounts = spec.histBucketCounts,
+            histExplicitBounds = spec.histExplicitBounds,
+            tags = spec.attrs,
+            resourceAttributes = spec.resourceCtx.attributes,
+            service = spec.resourceCtx.serviceName,
+            env = spec.resourceCtx.environment,
+            host = spec.resourceCtx.hostName,
         )
     }
 
@@ -417,9 +464,7 @@ class OtlpMetricsService(
         """.trimIndent()
 
         val response = ClickHouseClient.execute(insert)
-        if (!response.status.isSuccess()) {
-            throw IllegalStateException("Failed to insert OTLP metrics into ClickHouse")
-        }
+        check(response.status.isSuccess()) { "Failed to insert OTLP metrics into ClickHouse" }
 
         val totalBytes = batch.metrics.sumOf { it.metricName.length + 64 }
         usageTracking.recordOrgUsage(

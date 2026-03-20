@@ -22,40 +22,45 @@ import kotlin.test.assertTrue
 
 class OtlpErrorExtractorTest {
 
-    private fun buildSpan(
-        traceId: String = "aabb",
-        spanId: String = "ccdd",
-        organizationId: Long = 1L,
-        service: String = "my-svc",
-        env: String = "prod",
-        statusCode: Int = 0,
-        statusMessage: String = "",
-        startNanos: Long = 1700000000000000000L,
-        events: String = "[]",
-    ) = OtlpSpanInsert(
-        traceIdHex = traceId,
-        spanIdHex = spanId,
-        parentIdHex = "",
-        organizationId = organizationId,
-        name = "test-op",
-        service = service,
-        resource = "test-op",
-        kind = "SERVER",
-        startNanos = startNanos,
-        durationNanos = 50000000L,
-        error = if (statusCode == 2) 1 else 0,
-        statusCode = statusCode,
-        statusMessage = statusMessage,
-        meta = emptyMap(),
-        resourceAttributes = emptyMap(),
-        host = "web-01",
-        env = env,
-        version = "1.0",
-        scopeName = "",
-        scopeVersion = "",
-        events = events,
-        links = "[]",
-    )
+    private class SpanTestBuilder {
+        var traceId: String = "aabb"
+        var spanId: String = "ccdd"
+        var organizationId: Long = 1L
+        var service: String = "my-svc"
+        var env: String = "prod"
+        var statusCode: Int = 0
+        var statusMessage: String = ""
+        var startNanos: Long = 1700000000000000000L
+        var events: String = "[]"
+
+        fun build(): OtlpSpanInsert = OtlpSpanInsert(
+            traceIdHex = traceId,
+            spanIdHex = spanId,
+            parentIdHex = "",
+            organizationId = organizationId,
+            name = "test-op",
+            service = service,
+            resource = "test-op",
+            kind = "SERVER",
+            startNanos = startNanos,
+            durationNanos = 50000000L,
+            error = if (statusCode == 2) 1 else 0,
+            statusCode = statusCode,
+            statusMessage = statusMessage,
+            meta = emptyMap(),
+            resourceAttributes = emptyMap(),
+            host = "web-01",
+            env = env,
+            version = "1.0",
+            scopeName = "",
+            scopeVersion = "",
+            events = events,
+            links = "[]",
+        )
+    }
+
+    private fun buildSpan(configure: SpanTestBuilder.() -> Unit = {}): OtlpSpanInsert =
+        SpanTestBuilder().apply(configure).build()
 
     // ──── EXCEPTION EVENTS ────
 
@@ -73,7 +78,10 @@ class OtlpErrorExtractorTest {
         }]
         """.trimIndent()
 
-        val span = buildSpan(statusCode = 2, events = eventsJson)
+        val span = buildSpan {
+            statusCode = 2;
+            events = eventsJson
+        }
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
 
         assertEquals(1, exceptions.size)
@@ -110,7 +118,10 @@ class OtlpErrorExtractorTest {
         ]
         """.trimIndent()
 
-        val span = buildSpan(statusCode = 2, events = eventsJson)
+        val span = buildSpan {
+            statusCode = 2;
+            events = eventsJson
+        }
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
 
         assertEquals(2, exceptions.size)
@@ -122,11 +133,11 @@ class OtlpErrorExtractorTest {
 
     @Test
     fun `creates synthetic exception for error status without exception events`() {
-        val span = buildSpan(
-            statusCode = 2,
-            statusMessage = "Deadline exceeded",
+        val span = buildSpan {
+            statusCode = 2
+            statusMessage = "Deadline exceeded"
             events = "[]"
-        )
+        }
 
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
 
@@ -139,7 +150,11 @@ class OtlpErrorExtractorTest {
 
     @Test
     fun `uses default message for error status without message`() {
-        val span = buildSpan(statusCode = 2, statusMessage = "", events = "[]")
+        val span = buildSpan {
+            statusCode = 2
+            statusMessage = ""
+            events = "[]"
+        }
 
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
 
@@ -161,7 +176,10 @@ class OtlpErrorExtractorTest {
         }]
         """.trimIndent()
 
-        val span = buildSpan(statusCode = 0, events = eventsJson)
+        val span = buildSpan {
+            statusCode = 0;
+            events = eventsJson
+        }
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
 
         assertEquals(1, exceptions.size)
@@ -172,7 +190,10 @@ class OtlpErrorExtractorTest {
 
     @Test
     fun `returns empty list for non-error spans without exception events`() {
-        val span = buildSpan(statusCode = 0, events = "[]")
+        val span = buildSpan {
+            statusCode = 0;
+            events = "[]"
+        }
 
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
         assertTrue(exceptions.isEmpty())
@@ -195,7 +216,10 @@ class OtlpErrorExtractorTest {
         ]
         """.trimIndent()
 
-        val span = buildSpan(statusCode = 2, events = eventsJson)
+        val span = buildSpan {
+            statusCode = 2;
+            events = eventsJson
+        }
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
 
         assertEquals(1, exceptions.size)
@@ -215,7 +239,10 @@ class OtlpErrorExtractorTest {
         }]
         """.trimIndent()
 
-        val span = buildSpan(statusCode = 2, events = eventsJson)
+        val span = buildSpan {
+            statusCode = 2;
+            events = eventsJson
+        }
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
 
         assertEquals("UnknownError", exceptions[0].exceptionType)
@@ -226,7 +253,10 @@ class OtlpErrorExtractorTest {
 
     @Test
     fun `handles malformed events JSON gracefully`() {
-        val span = buildSpan(statusCode = 2, events = "not valid json")
+        val span = buildSpan {
+            statusCode = 2;
+            events = "not valid json"
+        }
 
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
         assertEquals(1, exceptions.size)
@@ -237,30 +267,30 @@ class OtlpErrorExtractorTest {
 
     @Test
     fun `extracts exceptions from multiple spans`() {
-        val span1 = buildSpan(
-            traceId = "trace1",
-            spanId = "span1",
-            statusCode = 2,
-            statusMessage = "error 1",
+        val span1 = buildSpan {
+            traceId = "trace1"
+            spanId = "span1"
+            statusCode = 2
+            statusMessage = "error 1"
             events = "[]"
-        )
-        val span2 = buildSpan(
-            traceId = "trace2",
-            spanId = "span2",
-            statusCode = 0,
+        }
+        val span2 = buildSpan {
+            traceId = "trace2"
+            spanId = "span2"
+            statusCode = 0
             events = "[]"
-        )
+        }
         val span3Events = """
         [{"name": "exception", "attributes": [
           {"key": "exception.type", "value": {"stringValue": "FatalError"}}
         ]}]
         """.trimIndent()
-        val span3 = buildSpan(
-            traceId = "trace3",
-            spanId = "span3",
-            statusCode = 2,
+        val span3 = buildSpan {
+            traceId = "trace3"
+            spanId = "span3"
+            statusCode = 2
             events = span3Events
-        )
+        }
 
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span1, span2, span3))
 

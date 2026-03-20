@@ -25,10 +25,15 @@ import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class OtlpParsingUtilsTest {
+
+    companion object {
+        private const val SERVICE_NAME_ATTR_KEY = "service.name"
+    }
 
     // ──── attributesToMap ────
 
@@ -40,7 +45,7 @@ class OtlpParsingUtilsTest {
             val attrs = buildJsonArray {
                 add(
                     buildJsonObject {
-                        put("key", "service.name")
+                        put("key", SERVICE_NAME_ATTR_KEY)
                         put("value", buildJsonObject { put("stringValue", "my-app") })
                     }
                 )
@@ -54,7 +59,7 @@ class OtlpParsingUtilsTest {
 
             val result = OtlpParsingUtils.attributesToMap(attrs)
 
-            assertEquals("my-app", result["service.name"])
+            assertEquals("my-app", result[SERVICE_NAME_ATTR_KEY])
             assertEquals("200", result["http.status_code"])
         }
 
@@ -140,8 +145,12 @@ class OtlpParsingUtilsTest {
 
             val result = OtlpParsingUtils.attributesToMap(attrs)
 
-            assertTrue(result["tags"]!!.contains("values"))
-            assertTrue(result["meta"]!!.contains("values"))
+            val tagsJson = result["tags"]
+            val metaJson = result["meta"]
+            assertNotNull(tagsJson)
+            assertNotNull(metaJson)
+            assertTrue(tagsJson.contains("values"))
+            assertTrue(metaJson.contains("values"))
         }
 
         @Test
@@ -238,7 +247,7 @@ class OtlpParsingUtilsTest {
                     buildJsonArray {
                         add(
                             buildJsonObject {
-                                put("key", "service.name")
+                                put("key", SERVICE_NAME_ATTR_KEY)
                                 put("value", buildJsonObject { put("stringValue", "payment-svc") })
                             }
                         )

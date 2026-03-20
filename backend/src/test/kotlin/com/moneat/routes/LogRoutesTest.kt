@@ -46,6 +46,10 @@ import kotlin.test.BeforeTest
 class LogRoutesTest {
     private val jwtSecret = "log-routes-secret"
 
+    companion object {
+        private const val OTLP_LOGS_PATH = "/v1/logs/otlp"
+    }
+
     private fun token(userId: Int, orgId: Int = 1) =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", userId)
@@ -81,7 +85,7 @@ class LogRoutesTest {
             }
 
             val response =
-                client.post("/v1/logs/otlp") {
+                client.post(OTLP_LOGS_PATH) {
                     header(HttpHeaders.ContentType, "application/x-protobuf")
                     setBody(ByteArray(0))
                 }
@@ -167,7 +171,7 @@ class LogRoutesTest {
                 """.trimIndent()
 
             val response =
-                client.post("/v1/logs/otlp") {
+                client.post(OTLP_LOGS_PATH) {
                     setBody(payload)
                 }
 

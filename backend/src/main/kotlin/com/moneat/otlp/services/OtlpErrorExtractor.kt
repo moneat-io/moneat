@@ -54,10 +54,10 @@ data class OtlpExceptionEvent(
  *
  * These are extracted here so they can be fed into Moneat's error tracking pipeline.
  *
- * TODO: Resolve org-scoped OTLP traces to project IDs so these exceptions can be
- *       inserted into the project-scoped `events` table via EventRepository.
- *       Possible approaches: match by service.name -> project mapping table,
- *       or allow OTLP API keys to be scoped to a project.
+ * Exceptions are org-scoped; persisting them to the project-scoped `events` table requires
+ * resolving organization IDs to project IDs (for example via a `service.name` → project
+ * mapping table or project-scoped OTLP API keys). Until that exists, callers only extract
+ * and log (for example `OtlpTraceIngestionWorker` logs extracted exception counts).
  */
 object OtlpErrorExtractor {
 

@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {type LucideIcon} from 'lucide-react'
-import {useState} from 'react'
+import {type ReactNode, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -44,27 +44,27 @@ export interface ApiKeyRow {
 }
 
 export interface ApiKeysTabConfig<T extends ApiKeyRow> {
-  cardId: string
-  cardTitle: string
-  cardDescription: string
-  icon: LucideIcon
-  emptyTitle: string
-  emptyDescription: string
-  queryKey: string[]
-  queryFn: () => Promise<{keys: T[]}>
-  queryEnabled?: boolean
-  createMutationFn: (name: string) => Promise<{key: string; name: string}>
-  deleteMutationFn: (id: number) => Promise<void>
-  createSuccessToast: {title: string; description: string}
-  revokeSuccessToast: {title: string; description: string}
-  createDialogTitle: string
-  createDialogDescription: string
-  inputId: string
-  inputPlaceholder: string
-  createdDialogTitle: string
-  revokeDialogTitle: string
-  revokeDialogDescription: (name: string) => string
-  setupInstructions?: React.ReactNode
+  readonly cardId: string
+  readonly cardTitle: string
+  readonly cardDescription: string
+  readonly icon: LucideIcon
+  readonly emptyTitle: string
+  readonly emptyDescription: string
+  readonly queryKey: string[]
+  readonly queryFn: () => Promise<{keys: T[]}>
+  readonly queryEnabled?: boolean
+  readonly createMutationFn: (name: string) => Promise<{key: string; name: string}>
+  readonly deleteMutationFn: (id: number) => Promise<void>
+  readonly createSuccessToast: {title: string; description: string}
+  readonly revokeSuccessToast: {title: string; description: string}
+  readonly createDialogTitle: string
+  readonly createDialogDescription: string
+  readonly inputId: string
+  readonly inputPlaceholder: string
+  readonly createdDialogTitle: string
+  readonly revokeDialogTitle: string
+  readonly revokeDialogDescription: (name: string) => string
+  readonly setupInstructions?: React.ReactNode
 }
 
 function formatDate(iso: string | null | undefined, timezone: string): string {
@@ -76,7 +76,7 @@ function formatDate(iso: string | null | undefined, timezone: string): string {
   }
 }
 
-export function ApiKeysTabBase<T extends ApiKeyRow>(config: ApiKeysTabConfig<T>) {
+export function ApiKeysTabBase<T extends ApiKeyRow>(config: Readonly<ApiKeysTabConfig<T>>) {
   const {
     cardId,
     cardTitle,
@@ -171,6 +171,65 @@ export function ApiKeysTabBase<T extends ApiKeyRow>(config: ApiKeysTabConfig<T>)
     createMutation.reset()
   }
 
+  let keysBody: ReactNode
+  if (isLoading) {
+    keysBody = <p className="text-muted-foreground text-sm py-8">Loading keys...</p>
+  } else if (keys.length === 0) {
+    keysBody = (
+      <div className="border rounded-lg p-8 text-center text-muted-foreground">
+        <Icon className="h-10 w-10 mx-auto mb-2 opacity-50" />
+        <p className="font-medium">{emptyTitle}</p>
+        <p className="text-sm mt-1">{emptyDescription}</p>
+        <Button variant="outline" className="mt-4" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Create key
+        </Button>
+      </div>
+    )
+  } else {
+    keysBody = (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Prefix</TableHead>
+            <TableHead>Last Used</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead className="w-[80px]"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {keys.map((key) => (
+            <TableRow key={key.id}>
+              <TableCell className="font-medium">{key.name}</TableCell>
+              <TableCell className="font-mono text-sm text-muted-foreground">
+                {key.keyPrefix}…
+              </TableCell>
+              <TableCell className="text-muted-foreground text-sm">
+                {formatDate(key.lastUsedAt, timezone)}
+              </TableCell>
+              <TableCell className="text-muted-foreground text-sm">
+                {formatDate(key.createdAt, timezone)}
+              </TableCell>
+              <TableCell>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setRevokeKey(key)}
+                  aria-label={`Revoke API key ${key.name}`}
+                  title="Revoke API key"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    )
+  }
+
   return (
     <>
       <Card id={cardId}>
@@ -187,61 +246,7 @@ export function ApiKeysTabBase<T extends ApiKeyRow>(config: ApiKeysTabConfig<T>)
             New Key
           </Button>
         </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="text-muted-foreground text-sm py-8">Loading keys...</p>
-          ) : keys.length === 0 ? (
-            <div className="border rounded-lg p-8 text-center text-muted-foreground">
-              <Icon className="h-10 w-10 mx-auto mb-2 opacity-50" />
-              <p className="font-medium">{emptyTitle}</p>
-              <p className="text-sm mt-1">{emptyDescription}</p>
-              <Button variant="outline" className="mt-4" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create key
-              </Button>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Prefix</TableHead>
-                  <TableHead>Last Used</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-[80px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {keys.map((key) => (
-                  <TableRow key={key.id}>
-                    <TableCell className="font-medium">{key.name}</TableCell>
-                    <TableCell className="font-mono text-sm text-muted-foreground">
-                      {key.keyPrefix}…
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {formatDate(key.lastUsedAt, timezone)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {formatDate(key.createdAt, timezone)}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => setRevokeKey(key)}
-                        aria-label={`Revoke API key ${key.name}`}
-                        title="Revoke API key"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
+        <CardContent>{keysBody}</CardContent>
       </Card>
 
       {setupInstructions}

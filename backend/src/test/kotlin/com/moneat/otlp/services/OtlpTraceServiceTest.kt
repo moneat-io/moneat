@@ -31,6 +31,12 @@ import kotlin.test.assertTrue
 
 class OtlpTraceServiceTest {
 
+    companion object {
+        private const val TEST_SPAN_NAME = "test-span"
+        private const val MY_SVC = "my-svc"
+        private const val SERVICE_NAME_ATTR_KEY = "service.name"
+    }
+
     @BeforeTest
     fun setup() {
         mockkObject(ClickHouseClient)
@@ -400,9 +406,9 @@ class OtlpTraceServiceTest {
                     spanIdHex = "ccdd",
                     parentIdHex = "",
                     organizationId = 42L,
-                    name = "test-span",
-                    service = "my-svc",
-                    resource = "test-span",
+                    name = TEST_SPAN_NAME,
+                    service = MY_SVC,
+                    resource = TEST_SPAN_NAME,
                     kind = "SERVER",
                     startNanos = 1000000000L,
                     durationNanos = 500000L,
@@ -410,7 +416,7 @@ class OtlpTraceServiceTest {
                     statusCode = 1,
                     statusMessage = "OK",
                     meta = mapOf("key" to "value"),
-                    resourceAttributes = mapOf("service.name" to "my-svc"),
+                    resourceAttributes = mapOf(SERVICE_NAME_ATTR_KEY to MY_SVC),
                     host = "web-01",
                     env = "prod",
                     version = "1.0",
@@ -427,8 +433,8 @@ class OtlpTraceServiceTest {
 
         assertEquals(batch.organizationId, decoded.organizationId)
         assertEquals(batch.spans.size, decoded.spans.size)
-        assertEquals("test-span", decoded.spans[0].name)
-        assertEquals("my-svc", decoded.spans[0].service)
+        assertEquals(TEST_SPAN_NAME, decoded.spans[0].name)
+        assertEquals(MY_SVC, decoded.spans[0].service)
         assertEquals("SERVER", decoded.spans[0].kind)
         assertEquals(mapOf("key" to "value"), decoded.spans[0].meta)
     }

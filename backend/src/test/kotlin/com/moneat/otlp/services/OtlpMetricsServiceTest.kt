@@ -32,6 +32,10 @@ import kotlin.test.assertTrue
 
 class OtlpMetricsServiceTest {
 
+    companion object {
+        private const val TEST_SVC = "test-svc"
+    }
+
     @BeforeTest
     fun setup() {
         mockkObject(ClickHouseClient)
@@ -50,7 +54,7 @@ class OtlpMetricsServiceTest {
       "resourceMetrics": [{
         "resource": {
           "attributes": [
-            {"key": "service.name", "value": {"stringValue": "test-svc"}},
+            {"key": "service.name", "value": {"stringValue": "$TEST_SVC"}},
             {"key": "deployment.environment", "value": {"stringValue": "prod"}},
             {"key": "host.name", "value": {"stringValue": "host-01"}}
             ${if (resourceAttrs.isNotEmpty()) ",$resourceAttrs" else ""}
@@ -100,7 +104,7 @@ class OtlpMetricsServiceTest {
             assertEquals(1700000000000L, m.timestampMs)
             assertEquals(75.5, m.value)
             assertEquals("0", m.tags["cpu.core"])
-            assertEquals("test-svc", m.service)
+            assertEquals(TEST_SVC, m.service)
             assertEquals("prod", m.env)
             assertEquals("host-01", m.host)
         }
@@ -468,8 +472,8 @@ class OtlpMetricsServiceTest {
                     histBucketCounts = emptyList(),
                     histExplicitBounds = emptyList(),
                     tags = mapOf("env" to "prod"),
-                    resourceAttributes = mapOf("service.name" to "test-svc"),
-                    service = "test-svc",
+                    resourceAttributes = mapOf("service.name" to TEST_SVC),
+                    service = TEST_SVC,
                     env = "prod",
                     host = "host-01",
                 )
