@@ -13,9 +13,9 @@ ALTER TABLE metrics ADD COLUMN IF NOT EXISTS aggregation_temporality LowCardinal
 
 -- Histogram fields (zero-cost defaults for gauge/count/rate rows)
 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS hist_count UInt64 DEFAULT 0;
-ALTER TABLE metrics ADD COLUMN IF NOT EXISTS hist_sum Float64 DEFAULT 0;
-ALTER TABLE metrics ADD COLUMN IF NOT EXISTS hist_min Float64 DEFAULT 0;
-ALTER TABLE metrics ADD COLUMN IF NOT EXISTS hist_max Float64 DEFAULT 0;
+ALTER TABLE metrics ADD COLUMN IF NOT EXISTS hist_sum Nullable(Float64) DEFAULT NULL;
+ALTER TABLE metrics ADD COLUMN IF NOT EXISTS hist_min Nullable(Float64) DEFAULT NULL;
+ALTER TABLE metrics ADD COLUMN IF NOT EXISTS hist_max Nullable(Float64) DEFAULT NULL;
 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS hist_bucket_counts Array(UInt64) DEFAULT [];
 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS hist_explicit_bounds Array(Float64) DEFAULT [];
 

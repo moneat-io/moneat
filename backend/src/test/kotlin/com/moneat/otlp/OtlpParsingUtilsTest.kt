@@ -64,13 +64,13 @@ class OtlpParsingUtilsTest {
                 add(
                     buildJsonObject {
                         put("key", "latency")
-                        put("value", buildJsonObject { put("doubleValue", "3.14") })
+                        put("value", buildJsonObject { put("doubleValue", 3.14) })
                     }
                 )
                 add(
                     buildJsonObject {
                         put("key", "enabled")
-                        put("value", buildJsonObject { put("boolValue", "true") })
+                        put("value", buildJsonObject { put("boolValue", true) })
                     }
                 )
             }
@@ -197,13 +197,13 @@ class OtlpParsingUtilsTest {
 
         @Test
         fun `extracts doubleValue`() {
-            val value = buildJsonObject { put("doubleValue", "3.14") }
+            val value = buildJsonObject { put("doubleValue", 3.14) }
             assertEquals("3.14", OtlpParsingUtils.extractAnyValue(value))
         }
 
         @Test
         fun `extracts boolValue`() {
-            val value = buildJsonObject { put("boolValue", "true") }
+            val value = buildJsonObject { put("boolValue", true) }
             assertEquals("true", OtlpParsingUtils.extractAnyValue(value))
         }
 

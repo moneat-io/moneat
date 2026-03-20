@@ -61,6 +61,37 @@ class LogRoutesTest {
     }
 
     @Test
+    fun `otlp endpoint returns 415 for application-x-protobuf content type`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
+                }
+                routing { logIngestRoutes() }
+            }
+
+            val response =
+                client.post("/v1/logs/otlp") {
+                    header(HttpHeaders.ContentType, "application/x-protobuf")
+                    setBody(ByteArray(0))
+                }
+
+            assertEquals(HttpStatusCode.UnsupportedMediaType, response.status)
+            assertTrue(response.bodyAsText().contains("application/json"))
+            assertTrue(response.bodyAsText().contains("Protobuf"))
+        }
+
+    @Test
     fun `otlp endpoint returns 401 without auth even for empty payload`() =
         testApplication {
             application {

@@ -16,63 +16,23 @@
 
 package com.moneat.otlp.services
 
-import com.moneat.config.BRPOP_TIMEOUT_SECONDS
-import com.moneat.config.RedisConfig
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-private const val ERROR_RETRY_DELAY_MS = 1000L
 
 class OtlpMetricsIngestionWorker(
-    private val queueKey: String,
-    private val dlqKey: String,
-    private val workerCount: Int,
+    queueKey: String,
+    dlqKey: String,
+    workerCount: Int,
     private val metricsService: OtlpMetricsService = OtlpMetricsService(),
+) : OtlpIngestionWorkerBase(
+    queueKey,
+    dlqKey,
+    workerCount,
+    "OtlpMetricsIngestionWorker",
+    "metrics",
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var jobs: List<Job> = emptyList()
-
-    fun start() {
-        logger.info {
-            "Starting OtlpMetricsIngestionWorker with $workerCount workers, queue=$queueKey"
-        }
-        jobs = (1..workerCount).map { workerId ->
-            scope.launch { runWorker(workerId) }
-        }
-    }
-
-    fun stop() {
-        jobs.forEach { it.cancel() }
-        scope.cancel()
-        logger.info { "OtlpMetricsIngestionWorker stopped" }
-    }
-
-    private suspend fun runWorker(workerId: Int) {
-        val redis = RedisConfig.newBlockingConnection()
-        while (scope.isActive) {
-            try {
-                val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-                val payload = result?.value ?: continue
-                processMessage(workerId, payload)
-            } catch (e: CancellationException) {
-                break
-            } catch (e: Exception) {
-                logger.error(e) { "OTLP metrics worker $workerId error in BRPOP loop" }
-                delay(ERROR_RETRY_DELAY_MS)
-            }
-        }
-    }
-
-    private suspend fun processMessage(workerId: Int, payload: String) {
+    override suspend fun processMessage(workerId: Int, payload: String) {
         try {
             val batch = metricsService.decodeBatch(payload)
             metricsService.insertBatch(batch)
@@ -84,11 +44,7 @@ class OtlpMetricsIngestionWorker(
             logger.error(e) {
                 "OTLP metrics worker $workerId failed to process batch, sending to DLQ"
             }
-            try {
-                RedisConfig.sync().rpush(dlqKey, payload)
-            } catch (dlqErr: Exception) {
-                logger.error(dlqErr) { "Failed to push to DLQ $dlqKey" }
-            }
+            pushToDlq(workerId, payload)
         }
     }
 }

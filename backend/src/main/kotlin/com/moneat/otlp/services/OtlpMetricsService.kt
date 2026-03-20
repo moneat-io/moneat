@@ -50,9 +50,9 @@ data class OtlpMetricInsert(
     val isMonotonic: Int,
     val aggregationTemporality: String,
     val histCount: Long,
-    val histSum: Double,
-    val histMin: Double,
-    val histMax: Double,
+    val histSum: Double?,
+    val histMin: Double?,
+    val histMax: Double?,
     val histBucketCounts: List<Long>,
     val histExplicitBounds: List<Double>,
     val tags: Map<String, String>,
@@ -232,16 +232,16 @@ class OtlpMetricsService(
             val attrs = OtlpParsingUtils.attributesToMap(dpObj["attributes"])
             val tsNs = dpObj["timeUnixNano"]?.jsonPrimitive?.longOrNull ?: 0L
             val count = dpObj["count"]?.jsonPrimitive?.longOrNull ?: 0L
-            val sum = dpObj["sum"]?.jsonPrimitive?.doubleOrNull ?: 0.0
-            val min = dpObj["min"]?.jsonPrimitive?.doubleOrNull ?: 0.0
-            val max = dpObj["max"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+            val sum = dpObj["sum"]?.jsonPrimitive?.doubleOrNull
+            val min = dpObj["min"]?.jsonPrimitive?.doubleOrNull
+            val max = dpObj["max"]?.jsonPrimitive?.doubleOrNull
             val bucketCounts = dpObj["bucketCounts"]?.jsonArray
                 ?.mapNotNull { it.jsonPrimitive.longOrNull } ?: emptyList()
             val explicitBounds = dpObj["explicitBounds"]?.jsonArray
                 ?.mapNotNull { it.jsonPrimitive.doubleOrNull } ?: emptyList()
 
             results += buildMetricInsert(
-                name, "histogram", description, unit, tsNs, sum,
+                name, "histogram", description, unit, tsNs, sum ?: 0.0,
                 attrs, resourceCtx,
                 aggregationTemporality = temporality,
                 histCount = count, histSum = sum,
@@ -269,12 +269,12 @@ class OtlpMetricsService(
             val attrs = OtlpParsingUtils.attributesToMap(dpObj["attributes"])
             val tsNs = dpObj["timeUnixNano"]?.jsonPrimitive?.longOrNull ?: 0L
             val count = dpObj["count"]?.jsonPrimitive?.longOrNull ?: 0L
-            val sum = dpObj["sum"]?.jsonPrimitive?.doubleOrNull ?: 0.0
-            val min = dpObj["min"]?.jsonPrimitive?.doubleOrNull ?: 0.0
-            val max = dpObj["max"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+            val sum = dpObj["sum"]?.jsonPrimitive?.doubleOrNull
+            val min = dpObj["min"]?.jsonPrimitive?.doubleOrNull
+            val max = dpObj["max"]?.jsonPrimitive?.doubleOrNull
 
             results += buildMetricInsert(
-                name, "exp_histogram", description, unit, tsNs, sum,
+                name, "exp_histogram", description, unit, tsNs, sum ?: 0.0,
                 attrs, resourceCtx,
                 aggregationTemporality = temporality,
                 histCount = count, histSum = sum,
@@ -320,9 +320,9 @@ class OtlpMetricsService(
         isMonotonic: Int = 0,
         aggregationTemporality: String = "",
         histCount: Long = 0,
-        histSum: Double = 0.0,
-        histMin: Double = 0.0,
-        histMax: Double = 0.0,
+        histSum: Double? = null,
+        histMin: Double? = null,
+        histMax: Double? = null,
         histBucketCounts: List<Long> = emptyList(),
         histExplicitBounds: List<Double> = emptyList(),
     ): OtlpMetricInsert {
@@ -392,9 +392,9 @@ class OtlpMetricsService(
                 ${m.isMonotonic},
                 '${escapeSql(m.aggregationTemporality)}',
                 ${m.histCount},
-                ${m.histSum},
-                ${m.histMin},
-                ${m.histMax},
+                ${m.histSum?.let { "$it" } ?: "NULL"},
+                ${m.histMin?.let { "$it" } ?: "NULL"},
+                ${m.histMax?.let { "$it" } ?: "NULL"},
                 [$bucketCountsArr],
                 [$boundsArr],
                 ${mapToSqlMap(m.resourceAttributes)},

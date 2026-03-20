@@ -698,6 +698,15 @@ private suspend fun handleOtlpLogIngest(
     otlpApiKeyService: OtlpApiKeyService,
     eventService: EventService,
 ) {
+    val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
+    if (!contentType.contains("application/json")) {
+        call.respond(
+            HttpStatusCode.UnsupportedMediaType,
+            ErrorResponse("OTLP logs endpoint requires Content-Type: application/json. Protobuf encoding is not supported.")
+        )
+        return
+    }
+
     val organizationId: Int? =
         extractOrgIdFromOtlpApiKey(call, otlpApiKeyService)
             ?: extractOrgIdFromLegacyDsn(call, eventService)

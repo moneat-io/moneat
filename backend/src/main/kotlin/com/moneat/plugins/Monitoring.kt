@@ -175,7 +175,7 @@ private fun shouldSkipTracing(path: String, method: String): Boolean {
         return true
     }
     if (method == "POST") {
-        if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/" || path == "/v1/logs") {
+        if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/" || path == "/v1/logs" || path == "/v1/logs/") {
             return true
         }
         if (path == "/v1/traces" || path == "/v1/traces/otlp" ||

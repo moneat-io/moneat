@@ -28,11 +28,13 @@ import org.jetbrains.exposed.v1.jdbc.update
 import java.security.MessageDigest
 import java.security.SecureRandom
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 
 private const val NEW_KEY_PREFIX = "motlp_"
 private const val LEGACY_KEY_PREFIX = "mlog_"
 private const val KEY_RANDOM_BYTES = 32
 private const val DISPLAY_PREFIX_LENGTH = 12
+private val LAST_USED_UPDATE_THRESHOLD = 5.minutes
 
 class OtlpApiKeyService {
 
@@ -88,10 +90,14 @@ class OtlpApiKeyService {
                     .firstOrNull()
                     ?: return@transaction null
 
-            OtlpApiKeys
-                .update({ OtlpApiKeys.id eq row[OtlpApiKeys.id] }) {
-                    it[OtlpApiKeys.last_used_at] = Clock.System.now()
-                }
+            val now = Clock.System.now()
+            val lastUsed = row[OtlpApiKeys.last_used_at]
+            if (lastUsed == null || (now - lastUsed) > LAST_USED_UPDATE_THRESHOLD) {
+                OtlpApiKeys
+                    .update({ OtlpApiKeys.id eq row[OtlpApiKeys.id] }) {
+                        it[OtlpApiKeys.last_used_at] = now
+                    }
+            }
 
             row[OtlpApiKeys.organization_id]
         }
