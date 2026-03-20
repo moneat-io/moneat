@@ -13,11 +13,17 @@ Moneat supports structured log ingestion via the OpenTelemetry Logs Protocol (OT
 
 ### OTLP Endpoint
 
-Send logs to Moneat using the OTLP HTTP endpoint. Configure your OpenTelemetry SDK or collector to export logs to:
+Send logs to Moneat using the OTLP HTTP endpoint. Configure your OpenTelemetry SDK or Collector to export logs to:
 
 ```text
-POST https://api.moneat.io/v1/logs/otlp
+POST {{BACKEND_URL}}/v1/logs/otlp
 ```
+
+Authenticate with an OTLP API key passed as a `Bearer` token in the `Authorization` header. Create keys from **Settings → OTLP API Keys** in the dashboard.
+
+:::tip[Shared API keys]
+OTLP API keys are organization-level and work for all three signal types: logs, [traces](/docs/performance-monitoring), and metrics. You only need one key to send all your OpenTelemetry data.
+:::
 
 ### SDK Ingestion
 

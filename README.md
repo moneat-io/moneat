@@ -6,7 +6,7 @@
 
 <p align="center">
   Open-source, self-hostable observability.<br>
-  Errors, replays, performance, logs, uptime, and incidents in one place.
+  Errors, replays, performance, logs, metrics, uptime, and incidents in one place.
 </p>
 
 <p align="center">
@@ -81,7 +81,7 @@ cd dashboard && npm install && npm run dev
 
 ## Features
 
-Moneat is Sentry SDK and Datadog Agent compatible. Point your existing SDKs and agents at your Moneat instance with no code changes.
+Moneat is Sentry SDK, Datadog Agent, and OpenTelemetry (OTLP) compatible. Point your existing SDKs, agents, or OTLP exporters at your Moneat instance with no code changes.
 
 | Feature | Description | Docs |
 |---------|-------------|------|
@@ -89,7 +89,8 @@ Moneat is Sentry SDK and Datadog Agent compatible. Point your existing SDKs and 
 | Session Replay | DOM-based recordings linked to error events | [Docs](https://moneat.io/docs) |
 | Performance Monitoring | Distributed tracing with transaction and span breakdowns | [Docs](https://moneat.io/docs) |
 | Continuous Profiling | Flamegraph visualization (pprof, JFR, Sentry formats) | [Docs](https://moneat.io/docs) |
-| Logging | Centralized, searchable log management via ClickHouse | [Docs](https://moneat.io/docs) |
+| Logging | Centralized, searchable log management via OTLP and ClickHouse | [Docs](https://moneat.io/docs) |
+| OpenTelemetry (OTLP) | Ingest logs, traces, and metrics via standard OTLP/HTTP endpoints | [Docs](https://moneat.io/docs) |
 | Uptime & Status Pages | HTTP/TCP/ping checks with public status pages | [Docs](https://moneat.io/docs) |
 | Synthetics | API, multi-step, SSL, DNS, TCP, and UDP synthetic tests | [Docs](https://moneat.io/docs) |
 | Custom Dashboards | Drag-and-drop widgets, Grafana dashboard import | [Docs](https://moneat.io/docs) |
@@ -111,6 +112,18 @@ Sentry.init({
 ```
 
 Works with `@sentry/browser`, `@sentry/node`, `@sentry/react`, `@sentry/nextjs`, `sentry-sdk` (Python), `sentry-kotlin`, `sentry-java`, `sentry-android`, `sentry-cocoa`, `sentry-go`, `sentry-ruby`, `Sentry.NET`, and any SDK that sends to the standard Sentry envelope endpoint.
+
+### OpenTelemetry (OTLP) Compatibility
+
+Send logs, traces, and metrics to Moneat using any OpenTelemetry SDK or Collector via standard OTLP/HTTP endpoints:
+
+```text
+Logs:    POST https://<your-moneat-host>/v1/logs/otlp
+Traces:  POST https://<your-moneat-host>/v1/traces/otlp
+Metrics: POST https://<your-moneat-host>/v1/metrics/otlp
+```
+
+Authenticate with an OTLP API key (created in **Settings → OTLP API Keys**) passed as a `Bearer` token in the `Authorization` header.
 
 ## Screenshots
 
