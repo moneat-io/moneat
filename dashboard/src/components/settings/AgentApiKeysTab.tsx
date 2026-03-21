@@ -16,12 +16,11 @@
 
 import {Shield} from 'lucide-react'
 import {api, type DdApiKey} from '@/lib/api'
+import {backendBaseUrl} from '@/lib/backend-url'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {ApiKeysTabBase} from './ApiKeysTabBase'
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
-const baseUrl = BACKEND_URL.replace(/\/$/, '')
-const ingestUrl = baseUrl + '/dd'
+const ingestUrl = backendBaseUrl + '/dd'
 
 export function AgentApiKeysTab() {
   return (
@@ -82,27 +81,27 @@ logs_config:
 # Route event platform forwarder tracks to Moneat
 # (these use only the host, path is appended automatically)
 container_lifecycle:
-  dd_url: ${baseUrl}
+  dd_url: ${backendBaseUrl}
 container_image:
-  dd_url: ${baseUrl}
+  dd_url: ${backendBaseUrl}
 sbom:
-  dd_url: ${baseUrl}
+  dd_url: ${backendBaseUrl}
 synthetics:
   forwarder:
-    dd_url: ${baseUrl}
+    dd_url: ${backendBaseUrl}
 data_streams:
   forwarder:
-    dd_url: ${baseUrl}
+    dd_url: ${backendBaseUrl}
 event_management:
   forwarder:
-    dd_url: ${baseUrl}
+    dd_url: ${backendBaseUrl}
 database_monitoring:
   metrics:
-    dd_url: ${baseUrl}
+    dd_url: ${backendBaseUrl}
   samples:
-    dd_url: ${baseUrl}
+    dd_url: ${backendBaseUrl}
   activity:
-    dd_url: ${baseUrl}`}
+    dd_url: ${backendBaseUrl}`}
               </pre>
             </div>
             <div>

@@ -19,6 +19,7 @@ package com.moneat.plugins
 import com.moneat.config.EnvConfig
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.events.routes.extractPublicKey
+import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.services.OtlpApiKeyService
 import io.ktor.http.HttpHeaders
 import org.koin.core.context.GlobalContext
@@ -156,17 +157,10 @@ fun Application.configureRateLimiting() {
             rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
         }
         fun registerOtlpApiKeyIngestBucket(name: String) {
+            val otlpApiKeyService = GlobalContext.get().get<OtlpApiKeyService>()
             register(RateLimitName(name)) {
                 requestKey { call ->
-                    val otlpApiKeyService = GlobalContext.get().get<OtlpApiKeyService>()
-                    val parts =
-                        call.request.headers[HttpHeaders.Authorization]?.split(Regex("\\s+"), limit = 2)
-                    val token =
-                        if (parts != null && parts.size == 2 && parts[0].equals("Bearer", ignoreCase = true)) {
-                            parts[1].trim().takeIf { it.isNotBlank() }
-                        } else {
-                            null
-                        }
+                    val token = OtlpAuth.extractBearerToken(call.request.headers[HttpHeaders.Authorization])
                     if (token != null) {
                         otlpApiKeyService.validateKey(token)
                             ?.let { "org:$it" }

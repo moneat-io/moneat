@@ -43,4 +43,27 @@ class OtlpHexIdsTest {
         assertEquals(0uL, high)
         assertEquals(0xabcuL, low)
     }
+
+    @Test
+    fun `hexToULongPair blank input returns zeros`() {
+        val (high, low) = hexToULongPair("   ")
+        assertEquals(0uL, high)
+        assertEquals(0uL, low)
+    }
+
+    @Test
+    fun `hexToULongPair invalid hex maps to zero chunks`() {
+        val (high, low) = hexToULongPair("ghij")
+        assertEquals(0uL, high)
+        assertEquals(0uL, low)
+    }
+
+    @Test
+    fun `hexToULongPair longer than 32 chars uses last 32 hex digits for high and low`() {
+        // 8 ignored + 16 high + 16 low (see hexToULongPair: dropLast(16).takeLast(16) / takeLast(16))
+        val hex = "11111111" + "bbbbbbbbbbbbbbbb" + "cccccccccccccccc"
+        val (high, low) = hexToULongPair(hex)
+        assertEquals(0xbbbbbbbbbbbbbbbbuL, high)
+        assertEquals(0xccccccccccccccccuL, low)
+    }
 }

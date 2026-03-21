@@ -120,9 +120,10 @@ object OtlpErrorExtractor {
         return exceptions
     }
 
-    private fun hasExceptionEvents(eventsJson: String): Boolean {
-        return eventsJson.contains("\"exception\"")
-    }
+    private fun hasExceptionEvents(eventsJson: String): Boolean =
+        parseSpanEvents(eventsJson).any {
+            it["name"]?.jsonPrimitive?.contentOrNull == "exception"
+        }
 
     private fun parseSpanEvents(eventsJson: String): List<JsonObject> {
         if (eventsJson == "[]" || eventsJson.isBlank()) return emptyList()

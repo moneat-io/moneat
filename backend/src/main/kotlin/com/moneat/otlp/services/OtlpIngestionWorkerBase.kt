@@ -27,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 
@@ -40,6 +41,10 @@ abstract class OtlpIngestionWorkerBase(
     private val workerName: String,
     private val workerLabel: String,
 ) {
+    init {
+        require(workerCount > 0) { "workerCount must be > 0" }
+    }
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
 
@@ -52,8 +57,9 @@ abstract class OtlpIngestionWorkerBase(
         }
     }
 
-    fun stop() {
+    suspend fun stop() {
         jobs.forEach { it.cancel() }
+        jobs.joinAll()
         scope.cancel()
         logger.info { "$workerName stopped" }
     }
@@ -108,7 +114,7 @@ abstract class OtlpIngestionWorkerBase(
         try {
             RedisConfig.sync().rpush(dlqKey, payload)
         } catch (dlqErr: Exception) {
-            logger.error(dlqErr) { "Failed to push to DLQ $dlqKey" }
+            logger.error(dlqErr) { "Failed to push to DLQ $dlqKey for worker=$workerId" }
         }
     }
 }

@@ -40,6 +40,7 @@ import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
 import kotlin.time.Duration.Companion.hours
@@ -180,8 +181,10 @@ fun Application.configureBackgroundJobs() {
         ingestionWorker.stop()
         logIngestionWorker.stop()
         llmIngestionWorker.stop()
-        otlpTraceIngestionWorker.stop()
-        otlpMetricsIngestionWorker.stop()
+        runBlocking {
+            otlpTraceIngestionWorker.stop()
+            otlpMetricsIngestionWorker.stop()
+        }
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
 

@@ -14,14 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.otlp
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
 
-import com.moneat.otlp.services.OtlpSpanInsert
-
-fun Iterable<OtlpSpanInsert>.calculateBillableBytes(): Int =
-    sumOf { s ->
-        utf8Size(s.name) + utf8Size(s.service) +
-            s.meta.entries.sumOf { e -> utf8Size(e.key) + utf8Size(e.value) }
-    }
-
-private fun utf8Size(s: String): Int = s.toByteArray(Charsets.UTF_8).size
+/** Normalized API origin (no trailing slash) for docs and client-side links. */
+export const backendBaseUrl = BACKEND_URL.replace(/\/$/, '')

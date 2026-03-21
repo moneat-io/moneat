@@ -145,7 +145,6 @@ private fun extractOrgIdFromLegacyDsn(
 ): Int? {
     val dsnLikeHeader =
         call.request.header("x-moneat-dsn")
-            ?: call.request.header("X-Moneat-Dsn")
             ?: call.request.header(HttpHeaders.Authorization)
     val projectIdFromDsn = extractProjectIdFromDsn(dsnLikeHeader)
     val projectIdFromQuery = call.request.queryParameters["projectId"]?.toLongOrNull()

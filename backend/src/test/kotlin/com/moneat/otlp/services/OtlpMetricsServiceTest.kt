@@ -34,6 +34,8 @@ class OtlpMetricsServiceTest {
 
     companion object {
         private const val TEST_SVC = "test-svc"
+        private const val TEST_ENV = "prod"
+        private const val TEST_HOST = "host-01"
     }
 
     @BeforeTest
@@ -55,8 +57,8 @@ class OtlpMetricsServiceTest {
         "resource": {
           "attributes": [
             {"key": "service.name", "value": {"stringValue": "$TEST_SVC"}},
-            {"key": "deployment.environment", "value": {"stringValue": "prod"}},
-            {"key": "host.name", "value": {"stringValue": "host-01"}}
+            {"key": "deployment.environment", "value": {"stringValue": "$TEST_ENV"}},
+            {"key": "host.name", "value": {"stringValue": "$TEST_HOST"}}
             ${if (resourceAttrs.isNotEmpty()) ",$resourceAttrs" else ""}
           ]
         },
@@ -105,8 +107,8 @@ class OtlpMetricsServiceTest {
             assertEquals(75.5, m.value)
             assertEquals("0", m.tags["cpu.core"])
             assertEquals(TEST_SVC, m.service)
-            assertEquals("prod", m.env)
-            assertEquals("host-01", m.host)
+            assertEquals(TEST_ENV, m.env)
+            assertEquals(TEST_HOST, m.host)
         }
 
         @Test
@@ -474,8 +476,8 @@ class OtlpMetricsServiceTest {
                     tags = mapOf("env" to "prod"),
                     resourceAttributes = mapOf("service.name" to TEST_SVC),
                     service = TEST_SVC,
-                    env = "prod",
-                    host = "host-01",
+                    env = TEST_ENV,
+                    host = TEST_HOST,
                 )
             )
         )

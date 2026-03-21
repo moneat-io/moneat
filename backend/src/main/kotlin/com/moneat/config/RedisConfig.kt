@@ -72,10 +72,13 @@ object RedisConfig {
      * Closes a blocking worker connection and removes it from the shutdown list so it is not closed twice.
      */
     fun closeBlockingConnection(conn: StatefulRedisConnection<String, String>) {
-        synchronized(blockingConnections) {
-            blockingConnections.remove(conn)
+        val removed =
+            synchronized(blockingConnections) {
+                blockingConnections.remove(conn)
+            }
+        if (removed) {
+            conn.close()
         }
-        conn.close()
     }
 
     fun async(): RedisAsyncCommands<String, String> {

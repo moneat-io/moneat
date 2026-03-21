@@ -540,17 +540,16 @@ private fun parseExcludeTagQueryParams(call: ApplicationCall): Map<String, Strin
 }
 
 private fun extractOrgIdFromOtlpApiKey(
-    call: io.ktor.server.application.ApplicationCall,
+    call: ApplicationCall,
     otlpApiKeyService: OtlpApiKeyService
 ): Int? = OtlpAuth.extractOrgId(call, otlpApiKeyService)
 
 private fun extractOrgIdFromLegacyDsn(
-    call: io.ktor.server.application.ApplicationCall,
+    call: ApplicationCall,
     eventService: EventService
 ): Int? {
     val dsnLikeHeader =
         call.request.header("x-moneat-dsn")
-            ?: call.request.header("X-Moneat-Dsn")
             ?: call.request.header(HttpHeaders.Authorization)
     val projectId =
         extractProjectIdFromDsn(dsnLikeHeader)

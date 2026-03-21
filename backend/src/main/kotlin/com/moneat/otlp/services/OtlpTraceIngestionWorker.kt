@@ -16,6 +16,7 @@
 
 package com.moneat.otlp.services
 
+import kotlinx.coroutines.CancellationException
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -33,11 +34,31 @@ class OtlpTraceIngestionWorker(
     "trace",
 ) {
     override suspend fun processMessage(workerId: Int, payload: String) {
+        val batch =
+            try {
+                traceService.decodeBatch(payload)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.error(e) {
+                    "OTLP trace worker $workerId failed to decode batch, sending to DLQ"
+                }
+                pushToDlq(workerId, payload)
+                return
+            }
         try {
-            val batch = traceService.decodeBatch(payload)
             traceService.insertBatch(batch)
-
-            // Extracted for future project-scoped error tracking once org→project resolution exists.
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.error(e) {
+                "OTLP trace worker $workerId failed to insert batch, sending to DLQ"
+            }
+            pushToDlq(workerId, payload)
+            return
+        }
+        try {
+            // TODO(ISSUE-TBD): OtlpErrorExtractor — org→project resolution + project-scoped error tracking; replace ISSUE-TBD with tracker link when filed.
             val exceptions = OtlpErrorExtractor.extractExceptions(batch.spans)
             if (exceptions.isNotEmpty()) {
                 logger.debug {
@@ -45,16 +66,16 @@ class OtlpTraceIngestionWorker(
                         "from ${batch.spans.size} spans (org ${batch.organizationId})"
                 }
             }
-
-            logger.debug {
-                "OTLP trace worker $workerId inserted ${batch.spans.size} spans " +
-                    "for org ${batch.organizationId}"
-            }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.error(e) {
-                "OTLP trace worker $workerId failed to process batch, sending to DLQ"
+                "OTLP trace worker $workerId failed after insert (exception extraction)"
             }
-            pushToDlq(workerId, payload)
+        }
+        logger.debug {
+            "OTLP trace worker $workerId inserted ${batch.spans.size} spans " +
+                "for org ${batch.organizationId}"
         }
     }
 }

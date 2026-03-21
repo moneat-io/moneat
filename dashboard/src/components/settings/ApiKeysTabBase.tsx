@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {type LucideIcon} from 'lucide-react'
+import {Check, Copy, Loader2, Plus, Trash2, type LucideIcon} from 'lucide-react'
 import {type ReactNode, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {Button} from '@/components/ui/button'
@@ -31,7 +31,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {useToast} from '@/hooks/useToast'
-import {Check, Copy, Loader2, Plus, Trash2} from 'lucide-react'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate as formatDateUtil} from '@/lib/date-format'
 
@@ -64,7 +63,7 @@ export interface ApiKeysTabConfig<T extends ApiKeyRow> {
   readonly createdDialogTitle: string
   readonly revokeDialogTitle: string
   readonly revokeDialogDescription: (name: string) => string
-  readonly setupInstructions?: React.ReactNode
+  readonly setupInstructions?: ReactNode
 }
 
 function formatDate(iso: string | null | undefined, timezone: string): string {
@@ -172,7 +171,7 @@ export function ApiKeysTabBase<T extends ApiKeyRow>(config: Readonly<ApiKeysTabC
   }
 
   let keysBody: ReactNode
-  if (isLoading) {
+  if (isPending) {
     keysBody = <p className="text-muted-foreground text-sm py-8">Loading keys...</p>
   } else if (keys.length === 0) {
     keysBody = (

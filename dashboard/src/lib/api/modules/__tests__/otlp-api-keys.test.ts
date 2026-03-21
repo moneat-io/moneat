@@ -107,7 +107,7 @@ describe('OTLP API Keys', () => {
         })
       )
 
-      await api.deleteOtlpApiKey(7)
+      await expect(api.deleteOtlpApiKey(7)).resolves.toBeUndefined()
     })
   })
 

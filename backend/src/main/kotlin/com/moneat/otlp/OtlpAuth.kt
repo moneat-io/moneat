@@ -28,17 +28,17 @@ import io.ktor.server.request.header
 object OtlpAuth {
     private const val BEARER_PREFIX = "Bearer "
 
+    fun extractBearerToken(authorizationHeader: String?): String? {
+        if (authorizationHeader == null) return null
+        if (!authorizationHeader.startsWith(BEARER_PREFIX, ignoreCase = true)) return null
+        return authorizationHeader.substring(BEARER_PREFIX.length).trim().takeIf { it.isNotBlank() }
+    }
+
     fun extractOrgId(
         call: ApplicationCall,
         otlpApiKeyService: OtlpApiKeyService
     ): Int? {
-        val authHeader = call.request.header(HttpHeaders.Authorization)
-        val key =
-            authHeader
-                ?.takeIf { it.startsWith(BEARER_PREFIX, ignoreCase = true) }
-                ?.substring(BEARER_PREFIX.length)
-                ?.trim()
-                ?: return null
+        val key = extractBearerToken(call.request.header(HttpHeaders.Authorization)) ?: return null
         return otlpApiKeyService.validateKey(key)
     }
 }

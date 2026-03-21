@@ -16,6 +16,10 @@
 
 package com.moneat.otlp
 
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
+
 private const val HEX_RADIX = 16
 private const val HEX_CHUNK_LEN = 16
 
@@ -39,7 +43,8 @@ private fun parseHexChunk(chunk: String): ULong {
     if (chunk.isEmpty()) return 0uL
     return try {
         chunk.toULong(HEX_RADIX)
-    } catch (_: NumberFormatException) {
+    } catch (e: NumberFormatException) {
+        logger.warn(e) { "Invalid hex chunk for trace id (radix=$HEX_RADIX): \"$chunk\"" }
         0uL
     }
 }

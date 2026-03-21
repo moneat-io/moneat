@@ -16,11 +16,9 @@
 
 import {ScrollText} from 'lucide-react'
 import {api, type OtlpApiKey} from '@/lib/api'
+import {backendBaseUrl} from '@/lib/backend-url'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {ApiKeysTabBase} from './ApiKeysTabBase'
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
-const baseUrl = BACKEND_URL.replace(/\/$/, '')
 
 export function OtlpApiKeysTab() {
   return (
@@ -65,13 +63,13 @@ export function OtlpApiKeysTab() {
             <div>
               <p className="text-sm font-medium mb-1">OTLP endpoints</p>
               <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all">
-                Logs: {baseUrl}/v1/logs/otlp
+                Logs: {backendBaseUrl}/v1/logs/otlp
               </code>
               <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all mt-1">
-                Traces: {baseUrl}/v1/traces/otlp
+                Traces: {backendBaseUrl}/v1/traces/otlp
               </code>
               <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all mt-1">
-                Metrics: {baseUrl}/v1/metrics/otlp
+                Metrics: {backendBaseUrl}/v1/metrics/otlp
               </code>
             </div>
             <div>
