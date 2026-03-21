@@ -19,8 +19,10 @@ package com.moneat.plugins
 import com.moneat.config.EnvConfig
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.events.routes.extractPublicKey
-import com.moneat.logs.services.LogApiKeyService
-import io.ktor.http.HttpHeaders
+import com.moneat.events.services.EventService
+import com.moneat.otlp.OtlpAuth
+import com.moneat.otlp.services.OtlpApiKeyService
+import org.koin.core.context.GlobalContext
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -154,25 +156,34 @@ fun Application.configureRateLimiting() {
             }
             rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
         }
-        register(RateLimitName("log-ingestion")) {
-            val logApiKeyService = LogApiKeyService()
-            requestKey { call ->
-                val parts = call.request.headers[HttpHeaders.Authorization]?.split(Regex("\\s+"), limit = 2)
-                val token = if (parts != null && parts.size == 2 && parts[0].equals("Bearer", ignoreCase = true)) {
-                    parts[1].trim().takeIf { it.isNotBlank() }
-                } else {
-                    null
-                }
-                if (token != null) {
-                    logApiKeyService.validateKey(token)
+        fun registerOtlpApiKeyIngestBucket(
+            name: String,
+            allowLegacyDsn: Boolean,
+        ) {
+            val otlpApiKeyService = GlobalContext.get().get<OtlpApiKeyService>()
+            val eventService = if (allowLegacyDsn) {
+                GlobalContext.get().get<EventService>()
+            } else {
+                null
+            }
+            register(RateLimitName(name)) {
+                requestKey { call ->
+                    val organizationId = if (allowLegacyDsn && eventService != null) {
+                        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService)
+                    } else {
+                        OtlpAuth.extractOrgId(call, otlpApiKeyService)
+                    }
+                    organizationId
                         ?.let { "org:$it" }
                         ?: call.request.clientIp()
-                } else {
-                    call.request.clientIp()
                 }
+                rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
             }
-            rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
         }
+        // Logs keep DSN fallback for legacy ingest clients.
+        registerOtlpApiKeyIngestBucket("log-ingestion", allowLegacyDsn = true)
+        // Traces and metrics are OTLP-key only.
+        registerOtlpApiKeyIngestBucket("otlp-ingestion", allowLegacyDsn = false)
         register(RateLimitName("telemetry")) {
             requestKey { call -> call.request.clientIp() }
             rateLimiter(limit = TELEMETRY_RATE_LIMIT, refillPeriod = TELEMETRY_REFILL_SECONDS.seconds)

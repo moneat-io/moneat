@@ -99,6 +99,13 @@ data class DdSpanResponse(
     val host: String,
     val env: String,
     val version: String,
+    val source: String = "datadog",
+    val kind: String = "",
+    val statusCode: Int = 0,
+    val statusMessage: String = "",
+    val events: String = "[]",
+    val links: String = "[]",
+    val resourceAttributes: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -117,6 +124,7 @@ data class DdTraceListItem(
     val durationNs: Long,
     val startNs: Long,
     val hasError: Boolean,
+    val source: String = "datadog",
 )
 
 @Serializable

@@ -210,7 +210,7 @@ object ProjectKeys : Table("project_keys") {
     override val primaryKey = PrimaryKey(id)
 }
 
-object LogApiKeys : Table("log_api_keys") {
+object OtlpApiKeys : Table("otlp_api_keys") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)

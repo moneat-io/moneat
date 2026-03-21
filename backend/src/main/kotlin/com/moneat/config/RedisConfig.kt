@@ -57,11 +57,31 @@ object RedisConfig {
     }
 
     /** Returns a dedicated blocking connection for a single worker. Each call creates a new connection. */
-    fun newBlockingConnection(): RedisCommands<String, String> {
+    fun newStatefulBlockingConnection(): StatefulRedisConnection<String, String> {
         val c = checkNotNull(client) { "RedisConfig is not initialized. Call init() first." }
         val conn = c.connect().also { it.timeout = BLOCKING_COMMAND_TIMEOUT }
         synchronized(blockingConnections) { blockingConnections.add(conn) }
-        return conn.sync()
+        return conn
+    }
+
+    /**
+     * Returns a dedicated blocking connection for a single worker (same as [newStatefulBlockingConnection]).
+     * Callers must pass the returned connection to [closeBlockingConnection] when the worker stops.
+     */
+    fun newBlockingConnection(): StatefulRedisConnection<String, String> =
+        newStatefulBlockingConnection()
+
+    /**
+     * Closes a blocking worker connection and removes it from the shutdown list so it is not closed twice.
+     */
+    fun closeBlockingConnection(conn: StatefulRedisConnection<String, String>) {
+        val removed =
+            synchronized(blockingConnections) {
+                blockingConnections.remove(conn)
+            }
+        if (removed) {
+            conn.close()
+        }
     }
 
     fun async(): RedisAsyncCommands<String, String> {

@@ -14,30 +14,14 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.logs.models
+package com.moneat.otlp
 
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import com.moneat.otlp.services.OtlpSpanInsert
 
-@Serializable
-data class CreateLogApiKeyRequest(
-    val name: String
-)
+fun Iterable<OtlpSpanInsert>.calculateBillableBytes(): Int =
+    sumOf { s ->
+        utf8Size(s.name) + utf8Size(s.service) +
+            s.meta.entries.sumOf { e -> utf8Size(e.key) + utf8Size(e.value) }
+    }
 
-@Serializable
-data class CreateLogApiKeyResponse(
-    val id: Int,
-    val name: String,
-    @SerialName("key_prefix") val keyPrefix: String,
-    @SerialName("key") val key: String,
-    @SerialName("created_at") val createdAt: String
-)
-
-@Serializable
-data class LogApiKeyResponse(
-    val id: Int,
-    val name: String,
-    @SerialName("key_prefix") val keyPrefix: String,
-    @SerialName("created_at") val createdAt: String,
-    @SerialName("last_used_at") val lastUsedAt: String? = null
-)
+private fun utf8Size(s: String): Int = s.toByteArray(Charsets.UTF_8).size

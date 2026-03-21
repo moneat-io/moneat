@@ -59,23 +59,28 @@ class NdmIngestionWorker(
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun runWorker(workerId: Int) {
-        val redis = RedisConfig.newBlockingConnection()
-        while (scope.isActive) {
-            try {
-                val result = redis.brpop(
-                    BRPOP_TIMEOUT_SECONDS,
-                    queueKey
-                )
-                val payload = result?.value ?: continue
-                processMessage(workerId, payload)
-            } catch (e: CancellationException) {
-                break
-            } catch (e: Exception) {
-                logger.error(e) {
-                    "NDM worker $workerId error in BRPOP loop"
+        val conn = RedisConfig.newBlockingConnection()
+        try {
+            val redis = conn.sync()
+            while (scope.isActive) {
+                try {
+                    val result = redis.brpop(
+                        BRPOP_TIMEOUT_SECONDS,
+                        queueKey
+                    )
+                    val payload = result?.value ?: continue
+                    processMessage(workerId, payload)
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Exception) {
+                    logger.error(e) {
+                        "NDM worker $workerId error in BRPOP loop"
+                    }
+                    delay(ERROR_DELAY_MS)
                 }
-                delay(ERROR_DELAY_MS)
             }
+        } finally {
+            RedisConfig.closeBlockingConnection(conn)
         }
     }
 

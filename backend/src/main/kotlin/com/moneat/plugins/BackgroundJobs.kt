@@ -25,6 +25,8 @@ import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.services.IngestionWorker
 import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.logs.services.LogIngestionWorker
+import com.moneat.otlp.services.OtlpMetricsIngestionWorker
+import com.moneat.otlp.services.OtlpTraceIngestionWorker
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.PulseService
@@ -38,6 +40,7 @@ import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
 import kotlin.time.Duration.Companion.hours
@@ -98,6 +101,30 @@ fun Application.configureBackgroundJobs() {
             ?.toIntOrNull() ?: 2
     val llmIngestionWorker = LlmIngestionWorker(llmQueueKey, llmDlqKey, llmWorkerCount)
 
+    val otlpTracesQueueKey = environment.config.propertyOrNull("otlp.tracesQueueKey")
+        ?.getString() ?: "moneat:otlp-traces:queue"
+    val otlpTracesDlqKey = environment.config.propertyOrNull("otlp.tracesDlqKey")
+        ?.getString() ?: "moneat:otlp-traces:dlq"
+    val otlpTracesWorkerCount = environment.config.propertyOrNull("otlp.tracesWorkerCount")
+        ?.getString()?.toIntOrNull() ?: 2
+    val otlpTraceIngestionWorker = OtlpTraceIngestionWorker(
+        otlpTracesQueueKey,
+        otlpTracesDlqKey,
+        otlpTracesWorkerCount
+    )
+
+    val otlpMetricsQueueKey = environment.config.propertyOrNull("otlp.metricsQueueKey")
+        ?.getString() ?: "moneat:otlp-metrics:queue"
+    val otlpMetricsDlqKey = environment.config.propertyOrNull("otlp.metricsDlqKey")
+        ?.getString() ?: "moneat:otlp-metrics:dlq"
+    val otlpMetricsWorkerCount = environment.config.propertyOrNull("otlp.metricsWorkerCount")
+        ?.getString()?.toIntOrNull() ?: 2
+    val otlpMetricsIngestionWorker = OtlpMetricsIngestionWorker(
+        otlpMetricsQueueKey,
+        otlpMetricsDlqKey,
+        otlpMetricsWorkerCount
+    )
+
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
@@ -113,6 +140,8 @@ fun Application.configureBackgroundJobs() {
     ingestionWorker.start()
     logIngestionWorker.start()
     llmIngestionWorker.start()
+    otlpTraceIngestionWorker.start()
+    otlpMetricsIngestionWorker.start()
 
     // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
     FeatureRegistry.startBackgroundJobs(this)
@@ -152,6 +181,10 @@ fun Application.configureBackgroundJobs() {
         ingestionWorker.stop()
         logIngestionWorker.stop()
         llmIngestionWorker.stop()
+        runBlocking {
+            otlpTraceIngestionWorker.stop()
+            otlpMetricsIngestionWorker.stop()
+        }
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
 

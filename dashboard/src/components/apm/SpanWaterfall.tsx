@@ -10,6 +10,8 @@ import {type ApmSpanResponse} from '@/lib/api'
 import {cn} from '@/lib/utils'
 import {useState, useMemo, useCallback} from 'react'
 import {Badge} from '@/components/ui/badge'
+import {SourceBadge} from '@/components/apm/SourceBadge'
+import {Link} from '@tanstack/react-router'
 import {
   ChevronDown,
   ChevronRight,
@@ -20,6 +22,7 @@ import {
   AlertTriangle,
   Copy,
   Check,
+  ExternalLink,
 } from 'lucide-react'
 
 interface Props {
@@ -39,6 +42,11 @@ const SERVICE_COLORS: Record<string, string> = {
   cache: 'bg-violet-500',
   grpc: 'bg-cyan-500',
   custom: 'bg-gray-500',
+  SERVER: 'bg-blue-500',
+  CLIENT: 'bg-emerald-500',
+  INTERNAL: 'bg-gray-500',
+  PRODUCER: 'bg-orange-500',
+  CONSUMER: 'bg-pink-500',
 }
 
 const SERVICE_COLORS_BORDER: Record<string, string> = {
@@ -48,14 +56,23 @@ const SERVICE_COLORS_BORDER: Record<string, string> = {
   cache: 'border-violet-500',
   grpc: 'border-cyan-500',
   custom: 'border-gray-500',
+  SERVER: 'border-blue-500',
+  CLIENT: 'border-emerald-500',
+  INTERNAL: 'border-gray-500',
+  PRODUCER: 'border-orange-500',
+  CONSUMER: 'border-pink-500',
 }
 
-function getSpanColor(type: string): string {
-  return SERVICE_COLORS[type] || SERVICE_COLORS.custom
+function getSpanColorKey(span: ApmSpanResponse): string {
+  return span.type || span.kind || 'custom'
 }
 
-function getSpanBorderColor(type: string): string {
-  return SERVICE_COLORS_BORDER[type] || SERVICE_COLORS_BORDER.custom
+function getSpanColor(key: string): string {
+  return SERVICE_COLORS[key] || SERVICE_COLORS.custom
+}
+
+function getSpanBorderColor(key: string): string {
+  return SERVICE_COLORS_BORDER[key] || SERVICE_COLORS_BORDER.custom
 }
 
 function formatDuration(ns: number): string {
@@ -180,9 +197,9 @@ export function SpanWaterfall({spans}: Props) {
     [spans, selectedSpanId]
   )
 
-  const spanTypes = useMemo(() => {
-    const types = new Set(spans.map((s) => s.type).filter(Boolean))
-    return [...types]
+  const spanColorKeys = useMemo(() => {
+    const keys = new Set(spans.map((s) => getSpanColorKey(s)).filter((k) => k !== 'custom'))
+    return [...keys]
   }, [spans])
 
   if (spans.length === 0) {
@@ -203,21 +220,21 @@ export function SpanWaterfall({spans}: Props) {
         )}
       >
         {/* Legend */}
-        {spanTypes.length > 0 && (
+        {spanColorKeys.length > 0 && (
           <div className="flex items-center gap-3 px-3 py-1.5 border-b bg-muted/30 flex-wrap">
             <span className="text-[10px] text-muted-foreground uppercase font-medium tracking-wider">
               Types
             </span>
-            {spanTypes.map((type) => (
-              <div key={type} className="flex items-center gap-1">
+            {spanColorKeys.map((key) => (
+              <div key={key} className="flex items-center gap-1">
                 <span
                   className={cn(
                     'w-2 h-2 rounded-full',
-                    getSpanColor(type)
+                    getSpanColor(key)
                   )}
                 />
                 <span className="text-[11px] text-muted-foreground">
-                  {type}
+                  {key}
                 </span>
               </div>
             ))}
@@ -283,7 +300,7 @@ export function SpanWaterfall({spans}: Props) {
                   <span
                     className={cn(
                       'w-2 h-2 rounded-full shrink-0',
-                      getSpanColor(span.type)
+                      getSpanColor(getSpanColorKey(span))
                     )}
                   />
                   <span className="truncate font-medium text-xs">
@@ -309,7 +326,7 @@ export function SpanWaterfall({spans}: Props) {
                       'absolute top-1.5 h-3 rounded-sm transition-opacity',
                       span.error > 0
                         ? 'bg-red-500/70'
-                        : getSpanColor(span.type),
+                        : getSpanColor(getSpanColorKey(span)),
                       span.error === 0 && 'opacity-70',
                       isSelected && 'opacity-100 ring-1 ring-primary'
                     )}
@@ -344,6 +361,68 @@ export function SpanWaterfall({spans}: Props) {
   )
 }
 
+interface SpanEvent {
+  name: string
+  timeUnixNano?: string
+  attributes?: Record<string, string>
+}
+
+interface SpanLink {
+  traceId: string
+  spanId: string
+  attributes?: Record<string, string>
+}
+
+function parseSpanEvents(eventsJson?: string): SpanEvent[] {
+  if (!eventsJson || eventsJson === '[]') return []
+  try {
+    const parsed: unknown = JSON.parse(eventsJson)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (item): item is SpanEvent =>
+        item != null &&
+        typeof item === 'object' &&
+        'name' in item &&
+        typeof (item as SpanEvent).name === 'string'
+    )
+  } catch {
+    return []
+  }
+}
+
+function parseSpanLinks(linksJson?: string): SpanLink[] {
+  if (!linksJson || linksJson === '[]') return []
+  try {
+    const parsed: unknown = JSON.parse(linksJson)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (item): item is SpanLink =>
+        item != null &&
+        typeof item === 'object' &&
+        'traceId' in item &&
+        'spanId' in item &&
+        typeof (item as SpanLink).traceId === 'string' &&
+        typeof (item as SpanLink).spanId === 'string'
+    )
+  } catch {
+    return []
+  }
+}
+
+function spanEventStableKey(spanId: string, evt: SpanEvent): string {
+  return `${spanId}:${JSON.stringify(evt)}`
+}
+
+function spanLinkStableKey(link: SpanLink): string {
+  const attrs =
+    link.attributes &&
+    Object.entries(link.attributes)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('|')
+  return `${link.traceId}:${link.spanId ?? ''}:${attrs ?? ''}`
+}
+
 function SpanDetailPanel({
   span,
   traceStart,
@@ -354,6 +433,10 @@ function SpanDetailPanel({
   onClose: () => void
 }) {
   const offsetFromStart = span.startNs - traceStart
+  const colorKey = getSpanColorKey(span)
+  const spanEvents = useMemo(() => parseSpanEvents(span.events), [span.events])
+  const spanLinks = useMemo(() => parseSpanLinks(span.links), [span.links])
+  const hasResourceAttrs = span.resourceAttributes && Object.keys(span.resourceAttributes).length > 0
 
   return (
     <div className="w-[360px] shrink-0 border rounded-lg overflow-hidden">
@@ -361,7 +444,7 @@ function SpanDetailPanel({
       <div
         className={cn(
           'flex items-center justify-between px-3 py-2 border-b border-l-2',
-          getSpanBorderColor(span.type)
+          getSpanBorderColor(colorKey)
         )}
       >
         <div className="min-w-0 flex-1">
@@ -369,12 +452,13 @@ function SpanDetailPanel({
             <span
               className={cn(
                 'w-2 h-2 rounded-full shrink-0',
-                getSpanColor(span.type)
+                getSpanColor(colorKey)
               )}
             />
             <span className="font-semibold text-sm truncate">
               {span.service}
             </span>
+            <SourceBadge source={span.source} />
           </div>
           <p className="text-xs text-muted-foreground truncate mt-0.5">
             {span.name}
@@ -408,10 +492,20 @@ function SpanDetailPanel({
           />
           <InfoCell
             icon={<Tag className="h-3 w-3" />}
-            label="Type"
-            value={span.type || '—'}
+            label={span.kind ? 'Kind' : 'Type'}
+            value={span.kind || span.type || '—'}
           />
         </div>
+
+        {/* Status message for OTLP spans */}
+        {span.statusMessage && (
+          <div className="mx-3 mt-3 rounded-md bg-muted/50 border px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase font-medium tracking-wider mb-0.5">
+              Status Message
+            </div>
+            <span className="text-xs">{span.statusMessage}</span>
+          </div>
+        )}
 
         {/* Error indicator */}
         {span.error > 0 && (
@@ -444,7 +538,7 @@ function SpanDetailPanel({
           <div className="space-y-1">
             <IdRow label="Span ID" value={span.spanId} />
             <IdRow label="Trace ID" value={span.traceId} />
-            {span.parentId !== '0' && (
+            {span.parentId !== '0' && span.parentId !== '' && (
               <IdRow label="Parent ID" value={span.parentId} />
             )}
           </div>
@@ -460,6 +554,93 @@ function SpanDetailPanel({
               {span.host && <IdRow label="Host" value={span.host} />}
               {span.env && <IdRow label="Env" value={span.env} />}
               {span.version && <IdRow label="Version" value={span.version} />}
+            </div>
+          </div>
+        )}
+
+        {/* Span Events (OTLP) */}
+        {spanEvents.length > 0 && (
+          <div className="px-3 pt-3">
+            <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1.5">
+              Events ({spanEvents.length})
+            </div>
+            <div className="space-y-2">
+              {spanEvents.map((evt) => (
+                <div key={spanEventStableKey(span.spanId, evt)} className="rounded border bg-muted/30 px-2 py-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium">{evt.name}</span>
+                    {evt.name === 'exception' && (
+                      <Badge variant="destructive" className="h-4 text-[10px] px-1">
+                        exception
+                      </Badge>
+                    )}
+                  </div>
+                  {evt.attributes && Object.keys(evt.attributes).length > 0 && (
+                    <div className="mt-1 space-y-0.5">
+                      {Object.entries(evt.attributes).map(([k, v]) => (
+                        <div key={k} className="flex items-start gap-2 text-xs">
+                          <span className="text-muted-foreground font-mono shrink-0 min-w-[80px]">{k}</span>
+                          <span className="break-all flex-1 text-[11px]">{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Span Links (OTLP) */}
+        {spanLinks.length > 0 && (
+          <div className="px-3 pt-3">
+            <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1.5">
+              Linked Traces ({spanLinks.length})
+            </div>
+            <div className="space-y-1">
+              {spanLinks.map((link) => (
+                <div key={spanLinkStableKey(link)} className="flex items-center gap-2 text-xs">
+                  <Link
+                    to="/performance/traces/$traceId"
+                    params={{traceId: link.traceId}}
+                    className="font-mono text-[11px] text-primary hover:underline flex items-center gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {link.traceId.slice(0, 16)}...
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                  {link.spanId && (
+                    <span className="text-muted-foreground font-mono text-[10px]">
+                      span: {link.spanId.slice(0, 12)}...
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Resource Attributes (OTLP) */}
+        {hasResourceAttrs && (
+          <div className="px-3 pt-3">
+            <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1.5">
+              Resource Attributes ({Object.keys(span.resourceAttributes!).length})
+            </div>
+            <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
+              {Object.entries(span.resourceAttributes!).map(([k, v]) => (
+                <div
+                  key={k}
+                  className="flex items-start gap-2 text-xs py-0.5 group"
+                >
+                  <span className="text-muted-foreground font-mono shrink-0 min-w-[100px]">
+                    {k}
+                  </span>
+                  <span className="break-all flex-1">{v}</span>
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <CopyButton text={v} />
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}

@@ -17,13 +17,13 @@
 import type { ApiClientCore } from '../client'
 import { urlWithQuery } from '../utils'
 import type {
-  LogApiKey,
+  OtlpApiKey,
   LogEntry,
   LogQueryResponse,
   LogFilterOptionsWithCounts,
   LogAggregateResponse,
   LogTopResponse,
-  CreateLogApiKeyResponse,
+  CreateOtlpApiKeyResponse,
   RawLogResponse,
   RawLogFilterResponse,
   RawLogAggregateResponse,
@@ -190,7 +190,7 @@ export function logsMethods(core: ApiClientCore) {
       }
     },
 
-    getLogApiKeys: async (): Promise<{ keys: LogApiKey[] }> => {
+    getOtlpApiKeys: async (): Promise<{ keys: OtlpApiKey[] }> => {
       const response = await core.request<{ keys: Record<string, unknown>[] }>(`${base}/logs/api-keys`)
       const keys = (response.keys ?? []).map((k) => ({
         id: k.id as number,
@@ -202,14 +202,19 @@ export function logsMethods(core: ApiClientCore) {
       return { keys }
     },
 
-    createLogApiKey: (name: string) =>
-      core.request<CreateLogApiKeyResponse>(`${base}/logs/api-keys`, {
+    createOtlpApiKey: (name: string) =>
+      core.request<CreateOtlpApiKeyResponse>(`${base}/logs/api-keys`, {
         method: 'POST',
         body: JSON.stringify({ name }),
       }),
 
-    deleteLogApiKey: (id: number) =>
+    deleteOtlpApiKey: (id: number) =>
       core.request<void>(`${base}/logs/api-keys/${id}`, { method: 'DELETE' }),
+
+    // Backward-compat aliases
+    get getLogApiKeys() { return this.getOtlpApiKeys },
+    get createLogApiKey() { return this.createOtlpApiKey },
+    get deleteLogApiKey() { return this.deleteOtlpApiKey },
 
     getLogTagValues: async (
       key: string,

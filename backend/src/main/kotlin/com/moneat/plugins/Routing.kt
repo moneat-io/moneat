@@ -34,6 +34,8 @@ import com.moneat.llm.routes.llmIngestRoutes
 import com.moneat.llm.routes.llmRoutes
 import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
+import com.moneat.otlp.routes.otlpMetricsRoutes
+import com.moneat.otlp.routes.otlpTraceRoutes
 import com.moneat.monitor.routes.infraRoutes
 import com.moneat.monitor.routes.monitorRoutes
 import com.moneat.org.routes.adminRoutes
@@ -209,6 +211,12 @@ fun Application.configureRouting() {
             logIngestRoutes()
         }
         logRoutes()
+
+        // OTLP trace and metrics ingestion endpoints
+        rateLimit(RateLimitName("otlp-ingestion")) {
+            otlpTraceRoutes()
+            otlpMetricsRoutes()
+        }
 
         // Uptime monitoring endpoints
         uptimeRoutes()

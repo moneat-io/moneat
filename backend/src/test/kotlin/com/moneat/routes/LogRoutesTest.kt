@@ -25,8 +25,10 @@ import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
 import io.ktor.server.auth.Authentication
@@ -46,6 +48,10 @@ import kotlin.test.BeforeTest
 class LogRoutesTest {
     private val jwtSecret = "log-routes-secret"
 
+    companion object {
+        private const val OTLP_LOGS_PATH = "/v1/logs/otlp"
+    }
+
     private fun token(userId: Int, orgId: Int = 1) =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", userId)
@@ -59,6 +65,37 @@ class LogRoutesTest {
     fun setupKoin() {
         startTestKoin()
     }
+
+    @Test
+    fun `otlp endpoint returns 415 for application-x-protobuf content type`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
+                }
+                routing { logIngestRoutes() }
+            }
+
+            val response =
+                client.post(OTLP_LOGS_PATH) {
+                    header(HttpHeaders.ContentType, "application/x-protobuf")
+                    setBody(ByteArray(0))
+                }
+
+            assertEquals(HttpStatusCode.UnsupportedMediaType, response.status)
+            assertTrue(response.bodyAsText().contains("application/json"))
+            assertTrue(response.bodyAsText().contains("Protobuf"))
+        }
 
     @Test
     fun `otlp endpoint returns 401 without auth even for empty payload`() =
@@ -81,7 +118,8 @@ class LogRoutesTest {
             }
 
             val response =
-                client.post("/v1/logs/otlp") {
+                client.post(OTLP_LOGS_PATH) {
+                    contentType(ContentType.Application.Json)
                     setBody("""{"resourceLogs":[]}""")
                 }
 
@@ -136,7 +174,8 @@ class LogRoutesTest {
                 """.trimIndent()
 
             val response =
-                client.post("/v1/logs/otlp") {
+                client.post(OTLP_LOGS_PATH) {
+                    contentType(ContentType.Application.Json)
                     setBody(payload)
                 }
 

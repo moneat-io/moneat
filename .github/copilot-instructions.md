@@ -1,6 +1,6 @@
 # Copilot Instructions for Moneat
 
-Moneat is a Sentry-compatible error monitoring platform built with Kotlin/Ktor backend, React frontend, PostgreSQL for operational data, and ClickHouse for high-performance event analytics.
+Moneat is a Sentry-compatible, OpenTelemetry-compatible observability platform built with Kotlin/Ktor backend, React frontend, PostgreSQL for operational data, and ClickHouse for high-performance event analytics.
 
 ## Build, Test, and Lint
 
@@ -70,9 +70,10 @@ Backend connects to services at (configurable via `.env`):
 ## Architecture Overview
 
 ### Request Flow
-1. **Ingestion path**: Client → `/api/{projectId}/envelope/` → `IngestRoutes.kt` → `EventService.kt` → PostgreSQL + ClickHouse
-2. **Dashboard API**: React → `/v1/*` → `ApiRoutes.kt` → `DashboardService.kt` → PostgreSQL/ClickHouse
-3. **Authentication**: All `/v1/*` endpoints require JWT (except `/auth/*`)
+1. **Sentry ingestion**: Client → `/api/{projectId}/envelope/` → `IngestRoutes.kt` → `EventService.kt` → PostgreSQL + ClickHouse
+2. **OTLP ingestion**: Client → `/v1/{logs,traces,metrics}/otlp` → `OtlpTraceRoutes.kt` / `OtlpMetricsRoutes.kt` / `LogRoutes.kt` → ClickHouse (authenticated via `Authorization: Bearer <OTLP API key>`)
+3. **Dashboard API**: React → `/v1/*` → `ApiRoutes.kt` → `DashboardService.kt` → PostgreSQL/ClickHouse
+4. **Authentication**: All `/v1/*` endpoints require JWT (except `/auth/*` and OTLP ingestion endpoints which use OTLP API keys)
 
 ### Data Storage Strategy
 - **PostgreSQL**: Users, organizations, projects, project_keys, subscriptions (relational data)
@@ -88,6 +89,10 @@ com.moneat/
 ├── routes/                  # HTTP endpoints: IngestRoutes, ApiRoutes, AuthRoutes
 ├── services/                # Business logic: EventService, DashboardService, AuthService
 ├── models/                  # Data classes: SentryModels, ApiModels, database tables
+├── otlp/                    # OpenTelemetry (OTLP) ingestion: routes, services, auth, parsing
+│   ├── routes/              # OtlpTraceRoutes, OtlpMetricsRoutes
+│   ├── services/            # OtlpTraceService, OtlpMetricsService, OtlpApiKeyService
+│   └── models/              # OtlpApiKeyModels
 ├── utils/                   # Shared utilities
 └── logging/                 # Custom logging configuration
 ```
@@ -276,9 +281,8 @@ Moneat can monitor itself using Sentry SDK:
 4. Backend validates JWT in `Security.kt` plugin
 
 ### Ingestion Authentication
-- Uses Sentry DSN format: `http://{public_key}@{host}/api/{project_id}`
-- `X-Sentry-Auth` header contains `sentry_key={public_key}`
-- Public key validated against `project_keys` table in PostgreSQL
+- **Sentry**: Uses DSN format: `http://{public_key}@{host}/api/{project_id}` with `X-Sentry-Auth` header containing `sentry_key={public_key}`. Public key validated against `project_keys` table in PostgreSQL.
+- **OTLP**: Uses `Authorization: Bearer <OTLP API key>` header. OTLP API keys are organization-level and shared across logs, traces, and metrics. Managed via `OtlpApiKeyService` and the Settings → OTLP API Keys UI.
 
 ### E2E Testing
 The `e2e/` directory contains Android and KMP test apps:

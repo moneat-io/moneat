@@ -17,6 +17,7 @@
 package com.moneat.plugins
 
 import com.moneat.config.SentryConfig
+import com.moneat.utils.ErrorResponse
 import com.moneat.utils.SentryUtils
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -24,6 +25,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.httpMethod
@@ -50,7 +52,7 @@ fun Application.configureMonitoring() {
             val method = call.request.httpMethod.value
             val path = call.request.path()
 
-            if (shouldSkipTracing(path)) {
+            if (shouldSkipTracing(path, method)) {
                 proceed()
                 return@intercept
             }
@@ -113,6 +115,14 @@ fun Application.configureMonitoring() {
     }
 
     install(StatusPages) {
+        exception<BadRequestException> { call, cause ->
+            if (!call.response.isCommitted) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponse(cause.message ?: "Bad request"),
+                )
+            }
+        }
         exception<Throwable> { call, cause ->
             logger.error(cause) { "Unhandled exception: ${cause.message}" }
 
@@ -170,12 +180,24 @@ fun Application.configureMonitoring() {
     }
 }
 
-private fun shouldSkipTracing(path: String): Boolean {
+private fun shouldSkipTracing(path: String, method: String): Boolean {
     if (path == "/health" || path == "/health/" || path.startsWith("/health/")) {
         return true
     }
-    if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/") {
-        return true
+    if (method == "POST") {
+        if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/" || path == "/v1/logs" || path == "/v1/logs/") {
+            return true
+        }
+        if (path == "/v1/traces" || path == "/v1/traces/otlp" ||
+            path == "/v1/traces/" || path == "/v1/traces/otlp/"
+        ) {
+            return true
+        }
+        if (path == "/v1/metrics" || path == "/v1/metrics/otlp" ||
+            path == "/v1/metrics/" || path == "/v1/metrics/otlp/"
+        ) {
+            return true
+        }
     }
     return ingestPathRegex.matches(path)
 }

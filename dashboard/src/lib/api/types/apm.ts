@@ -23,6 +23,7 @@ export interface ApmTraceListItem {
   durationNs: number
   startNs: number
   hasError: boolean
+  source: string
 }
 
 export interface ApmTraceListResponse {
@@ -46,6 +47,13 @@ export interface ApmSpanResponse {
   host: string
   env: string
   version: string
+  source: string
+  kind?: string
+  statusCode?: number
+  statusMessage?: string
+  events?: string
+  links?: string
+  resourceAttributes?: Record<string, string>
 }
 
 export interface ApmTraceDetailResponse {

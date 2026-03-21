@@ -61,18 +61,23 @@ class LogIngestionWorker(
     }
 
     private suspend fun runWorker(workerId: Int) {
-        val redis = RedisConfig.newBlockingConnection()
-        while (scope.isActive) {
-            try {
-                val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-                val payload = result?.value ?: continue
-                processMessageForTest(workerId, payload)
-            } catch (e: CancellationException) {
-                break
-            } catch (e: Exception) {
-                logger.error(e) { "Log worker $workerId error in BRPOP loop" }
-                delay(1000)
+        val conn = RedisConfig.newBlockingConnection()
+        try {
+            val redis = conn.sync()
+            while (scope.isActive) {
+                try {
+                    val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
+                    val payload = result?.value ?: continue
+                    processMessageForTest(workerId, payload)
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Exception) {
+                    logger.error(e) { "Log worker $workerId error in BRPOP loop" }
+                    delay(1000)
+                }
             }
+        } finally {
+            RedisConfig.closeBlockingConnection(conn)
         }
     }
 

@@ -5,7 +5,7 @@ description: Distributed tracing, transaction tracking, and service maps.
 
 # Performance Monitoring
 
-Moneat supports two performance monitoring paths: Sentry-compatible transactions and Datadog-compatible APM traces. Both store data in ClickHouse and are accessible from the **Performance** section in the sidebar.
+Moneat supports three performance monitoring paths: Sentry-compatible transactions, Datadog-compatible APM traces, and OpenTelemetry (OTLP) traces. All store data in ClickHouse and are accessible from the **Performance** section in the sidebar.
 
 ## Sentry Transactions
 
@@ -30,8 +30,34 @@ The traces view shows:
 - Trace detail with a span waterfall
 - Resource-level aggregated stats (hits, errors, latency percentiles)
 
+## OpenTelemetry (OTLP) Traces
+
+You can send traces to Moneat using any OpenTelemetry SDK or Collector. Configure your OTLP exporter to send trace data to:
+
+```text
+POST {{BACKEND_URL}}/v1/traces/otlp
+```
+
+Authenticate using an OTLP API key passed as a `Bearer` token in the `Authorization` header. Create OTLP API keys from **Settings → OTLP API Keys** in the dashboard.
+
+OTLP spans are parsed, stored in ClickHouse alongside Sentry and Datadog traces, and appear in the same traces view with full span waterfall support. Moneat automatically extracts error information from OTLP span status and events.
+
+:::tip[OTLP API keys]
+OTLP API keys are organization-level and shared across logs, traces, and metrics ingestion. A single key works for all three signal types.
+:::
+
+## OTLP Metrics
+
+Moneat also supports OTLP metric ingestion. Send metrics (gauges, sums, and histograms) to:
+
+```text
+POST {{BACKEND_URL}}/v1/metrics/otlp
+```
+
+Metrics are stored in ClickHouse and available for querying via custom dashboards.
+
 ## Service Map
 
-The service map is built from Datadog APM spans. It shows services as nodes and inter-service calls as edges, with error rates and average durations per edge. The map uses automatic layout via Dagre.
+The service map is built from APM spans (Datadog and OTLP). It shows services as nodes and inter-service calls as edges, with error rates and average durations per edge. The map uses automatic layout via Dagre.
 
 Available at **Performance > Service Map**.
