@@ -376,7 +376,15 @@ interface SpanLink {
 function parseSpanEvents(eventsJson?: string): SpanEvent[] {
   if (!eventsJson || eventsJson === '[]') return []
   try {
-    return JSON.parse(eventsJson)
+    const parsed: unknown = JSON.parse(eventsJson)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (item): item is SpanEvent =>
+        item != null &&
+        typeof item === 'object' &&
+        'name' in item &&
+        typeof (item as SpanEvent).name === 'string'
+    )
   } catch {
     return []
   }
@@ -385,7 +393,17 @@ function parseSpanEvents(eventsJson?: string): SpanEvent[] {
 function parseSpanLinks(linksJson?: string): SpanLink[] {
   if (!linksJson || linksJson === '[]') return []
   try {
-    return JSON.parse(linksJson)
+    const parsed: unknown = JSON.parse(linksJson)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (item): item is SpanLink =>
+        item != null &&
+        typeof item === 'object' &&
+        'traceId' in item &&
+        'spanId' in item &&
+        typeof (item as SpanLink).traceId === 'string' &&
+        typeof (item as SpanLink).spanId === 'string'
+    )
   } catch {
     return []
   }

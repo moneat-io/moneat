@@ -79,7 +79,7 @@ class OtlpErrorExtractorTest {
         """.trimIndent()
 
         val span = buildSpan {
-            statusCode = 2;
+            statusCode = 2
             events = eventsJson
         }
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
@@ -119,7 +119,7 @@ class OtlpErrorExtractorTest {
         """.trimIndent()
 
         val span = buildSpan {
-            statusCode = 2;
+            statusCode = 2
             events = eventsJson
         }
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
@@ -177,7 +177,7 @@ class OtlpErrorExtractorTest {
         """.trimIndent()
 
         val span = buildSpan {
-            statusCode = 0;
+            statusCode = 0
             events = eventsJson
         }
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
@@ -191,7 +191,7 @@ class OtlpErrorExtractorTest {
     @Test
     fun `returns empty list for non-error spans without exception events`() {
         val span = buildSpan {
-            statusCode = 0;
+            statusCode = 0
             events = "[]"
         }
 
@@ -217,7 +217,7 @@ class OtlpErrorExtractorTest {
         """.trimIndent()
 
         val span = buildSpan {
-            statusCode = 2;
+            statusCode = 2
             events = eventsJson
         }
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
@@ -240,7 +240,7 @@ class OtlpErrorExtractorTest {
         """.trimIndent()
 
         val span = buildSpan {
-            statusCode = 2;
+            statusCode = 2
             events = eventsJson
         }
         val exceptions = OtlpErrorExtractor.extractExceptions(listOf(span))
@@ -254,7 +254,7 @@ class OtlpErrorExtractorTest {
     @Test
     fun `handles malformed events JSON gracefully`() {
         val span = buildSpan {
-            statusCode = 2;
+            statusCode = 2
             events = "not valid json"
         }
 

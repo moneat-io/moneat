@@ -411,7 +411,7 @@ class TraceIngestionServiceCoverageTest {
                 }
             )
         } returns """
-            {"trace_id":"123","root_service":"api","root_resource":"GET /","root_name":"web.request","span_count":5,"duration_ns":500000000,"start_ns":1700000000000000000,"has_error":0}
+            {"trace_id_canonical":"123","root_service":"api","root_resource":"GET /","root_name":"web.request","span_count":5,"duration_ns":500000000,"start_ns":1700000000000000000,"has_error":0,"source":"datadog"}
         """.trimIndent()
 
         val result = TraceIngestionService.listTraces(
@@ -435,6 +435,8 @@ class TraceIngestionServiceCoverageTest {
 
     @Test
     fun `getTraceDetail returns null for invalid trace id`() = runBlocking {
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } returns ""
+
         val result = TraceIngestionService.getTraceDetail(1, "not-a-number")
         assertNull(result)
     }
@@ -452,8 +454,8 @@ class TraceIngestionServiceCoverageTest {
         coEvery {
             ClickHouseClient.executeWithFormat(any(), any())
         } returns """
-            {"span_id":"10","trace_id":"100","parent_id":"0","name":"root","service":"web","resource":"GET /","type":"web","start_ns":1700000000000000000,"duration":500000000,"error":0,"meta":{},"metrics":{},"host":"web-01","env":"prod","version":"1.0"}
-            {"span_id":"20","trace_id":"100","parent_id":"10","name":"db.query","service":"pg","resource":"SELECT","type":"sql","start_ns":1700000000100000000,"duration":200000000,"error":0,"meta":{},"metrics":{},"host":"web-01","env":"prod","version":"1.0"}
+            {"span_id_out":"10","trace_id_out":"100","parent_id_out":"0","name":"root","service":"web","resource":"GET /","type":"web","start_ns":1700000000000000000,"duration":500000000,"error":0,"meta":{},"metrics":{},"host":"web-01","env":"prod","version":"1.0"}
+            {"span_id_out":"20","trace_id_out":"100","parent_id_out":"10","name":"db.query","service":"pg","resource":"SELECT","type":"sql","start_ns":1700000000100000000,"duration":200000000,"error":0,"meta":{},"metrics":{},"host":"web-01","env":"prod","version":"1.0"}
         """.trimIndent()
 
         val result = TraceIngestionService.getTraceDetail(1, "100")

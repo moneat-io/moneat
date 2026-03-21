@@ -18,6 +18,7 @@ package com.moneat.otlp.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
 import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
@@ -37,6 +38,10 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
+
+// OTLP AggregationTemporality (opentelemetry.proto.metrics.v1.AggregationTemporality)
+private const val AGGREGATION_TEMPORALITY_DELTA = 1
+private const val AGGREGATION_TEMPORALITY_CUMULATIVE = 2
 
 @Serializable
 data class OtlpMetricInsert(
@@ -466,7 +471,7 @@ class OtlpMetricsService(
         val response = ClickHouseClient.execute(insert)
         check(response.status.isSuccess()) { "Failed to insert OTLP metrics into ClickHouse" }
 
-        val totalBytes = batch.metrics.sumOf { it.metricName.length + 64 }
+        val totalBytes = batch.metrics.sumOf { it.metricName.length + METRIC_BILLABLE_OVERHEAD_BYTES }
         usageTracking.recordOrgUsage(
             batch.organizationId.toInt(),
             "otlp_metric",
@@ -475,8 +480,8 @@ class OtlpMetricsService(
     }
 
     private fun mapAggregationTemporality(value: Int): String = when (value) {
-        1 -> "delta"
-        2 -> "cumulative"
+        AGGREGATION_TEMPORALITY_DELTA -> "delta"
+        AGGREGATION_TEMPORALITY_CUMULATIVE -> "cumulative"
         else -> ""
     }
 

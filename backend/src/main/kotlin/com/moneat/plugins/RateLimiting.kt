@@ -21,6 +21,7 @@ import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.otlp.services.OtlpApiKeyService
 import io.ktor.http.HttpHeaders
+import org.koin.core.context.GlobalContext
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -154,25 +155,31 @@ fun Application.configureRateLimiting() {
             }
             rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
         }
-        register(RateLimitName("log-ingestion")) {
-            val otlpApiKeyService = OtlpApiKeyService()
-            requestKey { call ->
-                val parts = call.request.headers[HttpHeaders.Authorization]?.split(Regex("\\s+"), limit = 2)
-                val token = if (parts != null && parts.size == 2 && parts[0].equals("Bearer", ignoreCase = true)) {
-                    parts[1].trim().takeIf { it.isNotBlank() }
-                } else {
-                    null
+        fun registerOtlpApiKeyIngestBucket(name: String) {
+            register(RateLimitName(name)) {
+                requestKey { call ->
+                    val otlpApiKeyService = GlobalContext.get().get<OtlpApiKeyService>()
+                    val parts =
+                        call.request.headers[HttpHeaders.Authorization]?.split(Regex("\\s+"), limit = 2)
+                    val token =
+                        if (parts != null && parts.size == 2 && parts[0].equals("Bearer", ignoreCase = true)) {
+                            parts[1].trim().takeIf { it.isNotBlank() }
+                        } else {
+                            null
+                        }
+                    if (token != null) {
+                        otlpApiKeyService.validateKey(token)
+                            ?.let { "org:$it" }
+                            ?: call.request.clientIp()
+                    } else {
+                        call.request.clientIp()
+                    }
                 }
-                if (token != null) {
-                    otlpApiKeyService.validateKey(token)
-                        ?.let { "org:$it" }
-                        ?: call.request.clientIp()
-                } else {
-                    call.request.clientIp()
-                }
+                rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
             }
-            rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
         }
+        registerOtlpApiKeyIngestBucket("log-ingestion")
+        registerOtlpApiKeyIngestBucket("otlp-ingestion")
         register(RateLimitName("telemetry")) {
             requestKey { call -> call.request.clientIp() }
             rateLimiter(limit = TELEMETRY_RATE_LIMIT, refillPeriod = TELEMETRY_REFILL_SECONDS.seconds)

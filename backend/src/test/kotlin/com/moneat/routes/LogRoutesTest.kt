@@ -25,8 +25,10 @@ import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
 import io.ktor.server.auth.Authentication
@@ -116,7 +118,8 @@ class LogRoutesTest {
             }
 
             val response =
-                client.post("/v1/logs/otlp") {
+                client.post(OTLP_LOGS_PATH) {
+                    contentType(ContentType.Application.Json)
                     setBody("""{"resourceLogs":[]}""")
                 }
 
@@ -172,6 +175,7 @@ class LogRoutesTest {
 
             val response =
                 client.post(OTLP_LOGS_PATH) {
+                    contentType(ContentType.Application.Json)
                     setBody(payload)
                 }
 

@@ -213,7 +213,7 @@ fun Application.configureRouting() {
         logRoutes()
 
         // OTLP trace and metrics ingestion endpoints
-        rateLimit(RateLimitName("log-ingestion")) {
+        rateLimit(RateLimitName("otlp-ingestion")) {
             otlpTraceRoutes()
             otlpMetricsRoutes()
         }

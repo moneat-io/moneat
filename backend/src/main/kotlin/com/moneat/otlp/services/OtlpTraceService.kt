@@ -19,6 +19,8 @@ package com.moneat.otlp.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.otlp.OtlpParsingUtils
+import com.moneat.otlp.calculateBillableBytes
+import com.moneat.otlp.hexToULongPair
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
@@ -36,7 +38,13 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 private const val OTLP_SPAN_STATUS_ERROR = 2
-private const val HEX_RADIX = 16
+
+// OTLP SpanKind enum numeric codes (opentelemetry.proto.trace.v1.Span.SpanKind)
+private const val OTLP_SPAN_KIND_INTERNAL = 1
+private const val OTLP_SPAN_KIND_SERVER = 2
+private const val OTLP_SPAN_KIND_CLIENT = 3
+private const val OTLP_SPAN_KIND_PRODUCER = 4
+private const val OTLP_SPAN_KIND_CONSUMER = 5
 
 @Serializable
 data class OtlpSpanInsert(
@@ -183,14 +191,17 @@ class OtlpTraceService(
         if (batch.spans.isEmpty()) return
 
         val rows = batch.spans.joinToString(",\n") { s ->
-            val traceIdLow = hexToULong(s.traceIdHex)
-            val spanIdNum = hexToULong(s.spanIdHex)
-            val parentIdNum = hexToULong(s.parentIdHex)
+            val (traceIdHigh, traceIdLow) = hexToULongPair(s.traceIdHex)
+            val (spanIdHigh, spanIdLow) = hexToULongPair(s.spanIdHex)
+            val (parentIdHigh, parentIdLow) = hexToULongPair(s.parentIdHex)
 
             """(
-                $spanIdNum,
+                $spanIdLow,
+                $spanIdHigh,
                 $traceIdLow,
-                $parentIdNum,
+                $traceIdHigh,
+                $parentIdLow,
+                $parentIdHigh,
                 ${s.organizationId},
                 '${escapeSql(s.name)}',
                 '${escapeSql(s.service)}',
@@ -221,7 +232,7 @@ class OtlpTraceService(
 
         val insert = """
             INSERT INTO `$clickhouseDb`.apm_spans (
-                span_id, trace_id, parent_id, organization_id,
+                span_id, span_id_high, trace_id, trace_id_high, parent_id, parent_id_high, organization_id,
                 name, service, resource, type,
                 start, duration, error,
                 meta, metrics, host, env, version,
@@ -236,10 +247,7 @@ class OtlpTraceService(
         val response = ClickHouseClient.execute(insert)
         check(response.status.isSuccess()) { "Failed to insert OTLP spans into ClickHouse" }
 
-        val totalBytes = batch.spans.sumOf { span ->
-            span.name.length + span.service.length +
-                span.meta.entries.sumOf { e -> e.key.length + e.value.length }
-        }
+        val totalBytes = batch.spans.calculateBillableBytes()
         usageTracking.recordOrgUsage(
             batch.organizationId.toInt(),
             "otlp_trace",
@@ -248,22 +256,12 @@ class OtlpTraceService(
     }
 
     private fun mapSpanKind(kind: Int): String = when (kind) {
-        1 -> "INTERNAL"
-        2 -> "SERVER"
-        3 -> "CLIENT"
-        4 -> "PRODUCER"
-        5 -> "CONSUMER"
+        OTLP_SPAN_KIND_INTERNAL -> "INTERNAL"
+        OTLP_SPAN_KIND_SERVER -> "SERVER"
+        OTLP_SPAN_KIND_CLIENT -> "CLIENT"
+        OTLP_SPAN_KIND_PRODUCER -> "PRODUCER"
+        OTLP_SPAN_KIND_CONSUMER -> "CONSUMER"
         else -> ""
-    }
-
-    private fun hexToULong(hex: String): ULong {
-        if (hex.isBlank()) return 0u
-        val lower = if (hex.length > HEX_RADIX) hex.takeLast(HEX_RADIX) else hex
-        return try {
-            lower.toULong(HEX_RADIX)
-        } catch (_: NumberFormatException) {
-            0u
-        }
     }
 
     private fun mapToSqlMap(map: Map<String, String>): String {

@@ -18,6 +18,7 @@ package com.moneat.otlp.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.otlp.services.OtlpMetricsService
@@ -94,7 +95,8 @@ private suspend fun handleOtlpMetricsIngest(
     }
 
     if (quotaService.isEnforcementEnabled()) {
-        val billableBytes = parsedMetrics.sumOf { it.metricName.length + 64 }.toLong()
+        val billableBytes =
+            parsedMetrics.sumOf { it.metricName.length + METRIC_BILLABLE_OVERHEAD_BYTES }.toLong()
         val reservation = quotaService.reserveUnits(
             organizationId = organizationId,
             requestedUnits = parsedMetrics.size,

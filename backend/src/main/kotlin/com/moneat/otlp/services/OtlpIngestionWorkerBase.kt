@@ -18,6 +18,7 @@ package com.moneat.otlp.services
 
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
+import io.lettuce.core.api.StatefulRedisConnection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,18 +59,46 @@ abstract class OtlpIngestionWorkerBase(
     }
 
     private suspend fun runWorker(workerId: Int) {
-        val redis = RedisConfig.newBlockingConnection()
-        while (scope.isActive) {
-            try {
-                val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-                val payload = result?.value ?: continue
-                processMessage(workerId, payload)
-            } catch (e: CancellationException) {
-                break
-            } catch (e: Exception) {
-                logger.error(e) { "OTLP $workerLabel worker $workerId error in BRPOP loop" }
-                delay(ERROR_RETRY_DELAY_MS)
+        var conn: StatefulRedisConnection<String, String>? = null
+        try {
+            while (scope.isActive) {
+                try {
+                    if (conn == null || !conn.isOpen) {
+                        conn?.let { disposeRedisConnection(workerId, it) }
+                        conn = RedisConfig.newStatefulBlockingConnection()
+                    }
+                    val redis = conn.sync()
+                    val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
+                    val payload = result?.value ?: continue
+                    try {
+                        processMessage(workerId, payload)
+                    } catch (proc: Exception) {
+                        logger.error(proc) {
+                            "OTLP $workerLabel worker $workerId failed processing message"
+                        }
+                        delay(ERROR_RETRY_DELAY_MS)
+                    }
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Exception) {
+                    logger.error(e) { "OTLP $workerLabel worker $workerId error in BRPOP loop" }
+                    conn?.let {
+                        disposeRedisConnection(workerId, it)
+                        conn = null
+                    }
+                    delay(ERROR_RETRY_DELAY_MS)
+                }
             }
+        } finally {
+            conn?.let { disposeRedisConnection(workerId, it) }
+        }
+    }
+
+    private fun disposeRedisConnection(workerId: Int, c: StatefulRedisConnection<String, String>) {
+        try {
+            RedisConfig.closeBlockingConnection(c)
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to close Redis connection for OTLP worker $workerId" }
         }
     }
 

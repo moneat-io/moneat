@@ -78,10 +78,10 @@ describe('OTLP API Keys', () => {
 
   describe('createOtlpApiKey', () => {
     it('creates a new OTLP API key', async () => {
+      let capturedBody: Record<string, unknown> | null = null
       server.use(
         http.post(`${API_BASE}/v1/logs/api-keys`, async ({ request }) => {
-          const body = (await request.json()) as Record<string, unknown>
-          expect(body.name).toBe('my-new-key')
+          capturedBody = (await request.json()) as Record<string, unknown>
           return HttpResponse.json({
             id: 3,
             name: 'my-new-key',
@@ -92,6 +92,7 @@ describe('OTLP API Keys', () => {
       )
 
       const result = await api.createOtlpApiKey('my-new-key')
+      expect(capturedBody?.name).toBe('my-new-key')
       expect(result.key).toBe('motlp_full_secret_key_here')
     })
   })

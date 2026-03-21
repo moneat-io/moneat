@@ -22,6 +22,7 @@ import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.routes.extractPublicKeyFromDsn
 import com.moneat.events.services.EventService
 import com.moneat.otlp.OtlpAuth
+import com.moneat.otlp.calculateBillableBytes
 import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.otlp.services.OtlpTraceService
 import com.moneat.utils.ErrorResponse
@@ -38,6 +39,9 @@ import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_QUEUE_KEY = "moneat:otlp-traces:queue"
+
+private val projectIdFromDsnRegex =
+    "https?://[^@]+@[^/]+/([0-9]+)".toRegex(RegexOption.IGNORE_CASE)
 
 fun Route.otlpTraceRoutes(
     traceService: OtlpTraceService = OtlpTraceService(),
@@ -103,10 +107,7 @@ private suspend fun handleOtlpTraceIngest(
     }
 
     if (quotaService.isEnforcementEnabled()) {
-        val billableBytes = parsedSpans.sumOf { s ->
-            s.name.length + s.service.length +
-                s.meta.entries.sumOf { e -> e.key.length + e.value.length }
-        }
+        val billableBytes = parsedSpans.calculateBillableBytes()
         val reservation = quotaService.reserveUnits(
             organizationId = organizationId,
             requestedUnits = parsedSpans.size,
@@ -166,6 +167,5 @@ private fun extractOrgIdFromLegacyDsn(
 private fun extractProjectIdFromDsn(dsnLike: String?): Long? {
     if (dsnLike.isNullOrBlank()) return null
     val cleaned = dsnLike.removePrefix("DSN ").trim()
-    val regex = "https?://[^@]+@[^/]+/([0-9]+)".toRegex(RegexOption.IGNORE_CASE)
-    return regex.find(cleaned)?.groupValues?.getOrNull(1)?.toLongOrNull()
+    return projectIdFromDsnRegex.find(cleaned)?.groupValues?.getOrNull(1)?.toLongOrNull()
 }

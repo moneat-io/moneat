@@ -48,6 +48,10 @@ import org.msgpack.core.MessageUnpacker
 
 private val logger = KotlinLogging.logger {}
 
+/** Public trace id: prefer hex when stored, else numeric string. */
+private const val CANONICAL_TRACE_ID_SQL =
+    "if(trace_id_hex != '', trace_id_hex, toString(trace_id))"
+
 private const val MAX_META_VALUE_LENGTH = 5000
 private const val DEFAULT_QUERY_LIMIT = 50
 private const val MAX_QUERY_LIMIT = 200
@@ -128,8 +132,11 @@ object TraceIngestionService {
 
             """(
                 ${span.spanId},
+                0,
                 ${span.traceId},
+                0,
                 ${span.parentId},
+                0,
                 $organizationId,
                 '${escapeSql(span.name)}',
                 '${escapeSql(span.service)}',
@@ -152,7 +159,7 @@ object TraceIngestionService {
 
         val insert = """
             INSERT INTO `$clickhouseDb`.apm_spans (
-                span_id, trace_id, parent_id, organization_id,
+                span_id, span_id_high, trace_id, trace_id_high, parent_id, parent_id_high, organization_id,
                 name, service, resource, type,
                 start, duration, error,
                 meta, metrics, host, env, version,
@@ -250,10 +257,8 @@ object TraceIngestionService {
         }
         val whereClause = filters.joinToString(" AND ")
 
-        val canonicalTraceId = "if(trace_id_hex != '', trace_id_hex, toString(trace_id))"
-
         val countQuery = """
-            SELECT count(DISTINCT $canonicalTraceId)
+            SELECT count(DISTINCT $CANONICAL_TRACE_ID_SQL)
             FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
         """.trimIndent()
@@ -265,7 +270,7 @@ object TraceIngestionService {
 
         val query = """
             SELECT
-                $canonicalTraceId as trace_id_canonical,
+                $CANONICAL_TRACE_ID_SQL as trace_id_canonical,
                 argMin(service, if(parent_id = 0, 0, 1)) as root_service,
                 argMin(resource, if(parent_id = 0, 0, 1)) as root_resource,
                 argMin(name, if(parent_id = 0, 0, 1)) as root_name,
@@ -324,14 +329,7 @@ object TraceIngestionService {
     ): DdTraceDetailResponse? {
         val orgClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
 
-        val traceIdClause = when {
-            parseTraceId(traceId) != null ->
-                "trace_id = ${parseTraceId(traceId)}"
-            else ->
-                "trace_id_hex = '${escapeSql(traceId)}'"
-        }
-
-        val query = """
+        fun detailQuery(traceClause: String) = """
             SELECT
                 if(span_id_hex != '', span_id_hex, toString(span_id)) as span_id_out,
                 if(trace_id_hex != '', trace_id_hex, toString(trace_id)) as trace_id_out,
@@ -345,12 +343,21 @@ object TraceIngestionService {
                 events, links, resource_attributes
             FROM `$clickhouseDb`.apm_spans
             WHERE $orgClause
-              AND $traceIdClause
+              AND $traceClause
             ORDER BY start_ns ASC
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val result = ClickHouseClient.executeWithFormat(query, "")
+        var result = ClickHouseClient.executeWithFormat(
+            detailQuery("trace_id_hex = '${escapeSql(traceId)}'"),
+            "",
+        )
+        if (result.isBlank() && parseTraceId(traceId) != null) {
+            result = ClickHouseClient.executeWithFormat(
+                detailQuery("trace_id = ${parseTraceId(traceId)}"),
+                "",
+            )
+        }
         if (result.isBlank()) return null
 
         val spans = result.trim().lines()
@@ -435,7 +442,9 @@ object TraceIngestionService {
             FROM `$clickhouseDb`.apm_spans child
             INNER JOIN `$clickhouseDb`.apm_spans parent
                 ON child.parent_id = parent.span_id
+                AND child.parent_id_high = parent.span_id_high
                 AND child.trace_id = parent.trace_id
+                AND child.trace_id_high = parent.trace_id_high
                 AND child.organization_id = parent.organization_id
             WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong(), "child.organization_id")}
               AND child.start >= now() - INTERVAL 1 HOUR
@@ -508,7 +517,7 @@ object TraceIngestionService {
                 meta['error.type'] as error_type,
                 count() as error_count,
                 max(start) as last_seen,
-                any(trace_id) as sample_trace_id
+                any($CANONICAL_TRACE_ID_SQL) as sample_trace_id
             FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
             GROUP BY service, resource,
