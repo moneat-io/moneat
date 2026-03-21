@@ -156,20 +156,34 @@ fun Application.configureRateLimiting() {
             }
             rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
         }
-        fun registerOtlpApiKeyIngestBucket(name: String) {
+        fun registerOtlpApiKeyIngestBucket(
+            name: String,
+            allowLegacyDsn: Boolean,
+        ) {
             val otlpApiKeyService = GlobalContext.get().get<OtlpApiKeyService>()
-            val eventService = GlobalContext.get().get<EventService>()
+            val eventService = if (allowLegacyDsn) {
+                GlobalContext.get().get<EventService>()
+            } else {
+                null
+            }
             register(RateLimitName(name)) {
                 requestKey { call ->
-                    OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService)
+                    val organizationId = if (allowLegacyDsn && eventService != null) {
+                        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService)
+                    } else {
+                        OtlpAuth.extractOrgId(call, otlpApiKeyService)
+                    }
+                    organizationId
                         ?.let { "org:$it" }
                         ?: call.request.clientIp()
                 }
                 rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
             }
         }
-        registerOtlpApiKeyIngestBucket("log-ingestion")
-        registerOtlpApiKeyIngestBucket("otlp-ingestion")
+        // Logs keep DSN fallback for legacy ingest clients.
+        registerOtlpApiKeyIngestBucket("log-ingestion", allowLegacyDsn = true)
+        // Traces and metrics are OTLP-key only.
+        registerOtlpApiKeyIngestBucket("otlp-ingestion", allowLegacyDsn = false)
         register(RateLimitName("telemetry")) {
             requestKey { call -> call.request.clientIp() }
             rateLimiter(limit = TELEMETRY_RATE_LIMIT, refillPeriod = TELEMETRY_REFILL_SECONDS.seconds)

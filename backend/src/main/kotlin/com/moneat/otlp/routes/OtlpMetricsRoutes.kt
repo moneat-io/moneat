@@ -58,6 +58,17 @@ private suspend fun handleOtlpMetricsIngest(
     quotaService: BillingQuotaService,
     otlpApiKeyService: OtlpApiKeyService,
 ) {
+    val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
+    if (!contentType.contains("application/json", ignoreCase = true)) {
+        call.respond(
+            HttpStatusCode.UnsupportedMediaType,
+            ErrorResponse(
+                "OTLP metrics endpoint requires Content-Type: application/json. Protobuf encoding is not supported."
+            )
+        )
+        return
+    }
+
     val organizationId = OtlpAuth.extractOrgId(call, otlpApiKeyService)
 
     if (organizationId == null) {

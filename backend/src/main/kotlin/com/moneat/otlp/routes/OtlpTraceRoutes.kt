@@ -18,7 +18,6 @@ package com.moneat.otlp.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.decompression.DecompressionService
-import com.moneat.events.services.EventService
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.calculateBillableBytes
 import com.moneat.otlp.services.OtlpApiKeyService
@@ -43,16 +42,15 @@ fun Route.otlpTraceRoutes(
     traceService: OtlpTraceService = OtlpTraceService(),
     quotaService: BillingQuotaService = GlobalContext.get().get(),
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
-    eventService: EventService = GlobalContext.get().get(),
 ) {
     route("/v1") {
         // Standard OTLP path
         post("/traces") {
-            handleOtlpTraceIngest(call, traceService, quotaService, otlpApiKeyService, eventService)
+            handleOtlpTraceIngest(call, traceService, quotaService, otlpApiKeyService)
         }
         // Moneat convention (matches /v1/logs/otlp)
         post("/traces/otlp") {
-            handleOtlpTraceIngest(call, traceService, quotaService, otlpApiKeyService, eventService)
+            handleOtlpTraceIngest(call, traceService, quotaService, otlpApiKeyService)
         }
     }
 }
@@ -62,15 +60,24 @@ private suspend fun handleOtlpTraceIngest(
     traceService: OtlpTraceService,
     quotaService: BillingQuotaService,
     otlpApiKeyService: OtlpApiKeyService,
-    eventService: EventService,
 ) {
-    val organizationId: Int? =
-        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService)
+    val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
+    if (!contentType.contains("application/json", ignoreCase = true)) {
+        call.respond(
+            HttpStatusCode.UnsupportedMediaType,
+            ErrorResponse(
+                "OTLP traces endpoint requires Content-Type: application/json. Protobuf encoding is not supported."
+            )
+        )
+        return
+    }
+
+    val organizationId: Int? = OtlpAuth.extractOrgId(call, otlpApiKeyService)
 
     if (organizationId == null) {
         call.respond(
             HttpStatusCode.Unauthorized,
-            ErrorResponse("Missing or invalid OTLP API key or DSN")
+            ErrorResponse("Missing or invalid OTLP API key")
         )
         return
     }

@@ -5,6 +5,14 @@
 // it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {Badge} from '@/components/ui/badge'
 import {cn} from '@/lib/utils'
@@ -18,13 +26,21 @@ const SOURCE_CONFIG: Record<string, {label: string; className: string}> = {
     label: 'OTEL',
     className: 'text-teal-600 border-teal-600/30 dark:text-teal-400 dark:border-teal-400/30',
   },
+  sdk: {
+    label: 'SDK',
+    className: 'text-muted-foreground border-border/50',
+  },
 }
 
 export function SourceBadge({source, className}: {source: string; className?: string}) {
-  const config = SOURCE_CONFIG[source] ?? {
-    label: source.charAt(0).toUpperCase() + source.slice(1),
-    className: 'text-muted-foreground',
-  }
+  const key = source.trim().toLowerCase()
+  const config =
+    key === ''
+      ? {label: 'Unknown', className: 'text-muted-foreground border-border/50'}
+      : SOURCE_CONFIG[key] ?? {
+          label: source.charAt(0).toUpperCase() + source.slice(1),
+          className: 'text-muted-foreground border-border/50',
+        }
 
   return (
     <Badge
