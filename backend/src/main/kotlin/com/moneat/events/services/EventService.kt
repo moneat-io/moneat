@@ -422,7 +422,7 @@ class EventService(
         try {
             val success = eventRepository.insertErrorEvent(eventData)
             if (!success) return false
-            logger.info { "Event stored: $eventId for project $projectId" }
+            logger.trace { "Event stored: $eventId for project $projectId" }
             CacheService.invalidatePattern("cache:issues:$projectId:*")
             event.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
                 try {
@@ -588,7 +588,7 @@ class EventService(
         try {
             val success = eventRepository.insertReplayEvent(replayData)
             if (!success) return false
-            logger.info { "Replay event stored: $replayId segment $segmentId for project $projectId" }
+            logger.trace { "Replay event stored: $replayId segment $segmentId for project $projectId" }
             return true
         } catch (e: Exception) {
             logger.error(e) { "Error storing replay event in ClickHouse" }
@@ -612,7 +612,7 @@ class EventService(
                     recordingData = payload
                 )
             )
-            logger.info { "Replay recording stored: $replayId segment $segmentId for project $projectId" }
+            logger.trace { "Replay recording stored: $replayId segment $segmentId for project $projectId" }
         } catch (e: Exception) {
             logger.error(e) { "Error storing replay recording in ClickHouse" }
         }
@@ -668,7 +668,7 @@ class EventService(
                     tags = "{}"
                 )
             )
-            logger.info { "Synthetic replay event stored: $replayId for project $projectId" }
+            logger.trace { "Synthetic replay event stored: $replayId for project $projectId" }
         } catch (e: Exception) {
             logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
         }
@@ -777,9 +777,9 @@ class EventService(
         val firstException = event.exception?.values?.firstOrNull()
         val type = firstException?.type
 
-        logger.info { "=== FINGERPRINT GENERATION ===" }
-        logger.info { "Exception type: $type" }
-        logger.info { "Total frames: ${firstException?.stacktrace?.frames?.size}" }
+        logger.trace { "=== FINGERPRINT GENERATION ===" }
+        logger.trace { "Exception type: $type" }
+        logger.trace { "Total frames: ${firstException?.stacktrace?.frames?.size}" }
 
         // Find the last in_app frame (innermost/actual error location), or fall back to the last frame
         val relevantFrame =
@@ -789,7 +789,7 @@ class EventService(
         val function = relevantFrame?.function
         val filename = relevantFrame?.filename
 
-        logger.info { "Selected frame: filename=$filename, function=$function, in_app=${relevantFrame?.in_app}" }
+        logger.trace { "Selected frame: filename=$filename, function=$function, in_app=${relevantFrame?.in_app}" }
 
         val fingerprint =
             buildList {
@@ -798,7 +798,7 @@ class EventService(
                 filename?.let { add(it) }
             }
 
-        logger.info { "Final fingerprint: $fingerprint" }
+        logger.trace { "Final fingerprint: $fingerprint" }
 
         return fingerprint.ifEmpty { listOf("{{ default }}") }
     }
