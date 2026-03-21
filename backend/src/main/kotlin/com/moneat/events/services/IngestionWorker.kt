@@ -86,21 +86,26 @@ class IngestionWorker(
     }
 
     private suspend fun runWorker(workerId: Int) {
-        val redis = RedisConfig.newBlockingConnection()
-        while (scope.isActive) {
-            try {
-                // BRPOP block with 5s timeout so we can check isActive periodically
-                val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-                val value = result?.value ?: continue
-                processMessageForTest(workerId, value) { message ->
-                    RedisConfig.sync().rpush(dlqKey, message)
+        val conn = RedisConfig.newBlockingConnection()
+        try {
+            val redis = conn.sync()
+            while (scope.isActive) {
+                try {
+                    // BRPOP block with 5s timeout so we can check isActive periodically
+                    val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
+                    val value = result?.value ?: continue
+                    processMessageForTest(workerId, value) { message ->
+                        RedisConfig.sync().rpush(dlqKey, message)
+                    }
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Exception) {
+                    logger.error(e) { "Worker $workerId error in BRPOP loop" }
+                    delay(1000)
                 }
-            } catch (e: CancellationException) {
-                break
-            } catch (e: Exception) {
-                logger.error(e) { "Worker $workerId error in BRPOP loop" }
-                delay(1000)
             }
+        } finally {
+            RedisConfig.closeBlockingConnection(conn)
         }
     }
 

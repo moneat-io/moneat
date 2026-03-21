@@ -17,6 +17,7 @@
 package com.moneat.plugins
 
 import com.moneat.config.SentryConfig
+import com.moneat.utils.ErrorResponse
 import com.moneat.utils.SentryUtils
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -24,6 +25,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.httpMethod
@@ -113,6 +115,14 @@ fun Application.configureMonitoring() {
     }
 
     install(StatusPages) {
+        exception<BadRequestException> { call, cause ->
+            if (!call.response.isCommitted) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponse(cause.message ?: "Bad request"),
+                )
+            }
+        }
         exception<Throwable> { call, cause ->
             logger.error(cause) { "Unhandled exception: ${cause.message}" }
 

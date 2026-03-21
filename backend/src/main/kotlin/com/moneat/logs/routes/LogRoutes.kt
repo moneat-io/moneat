@@ -20,8 +20,6 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.decompression.DecompressionService
-import com.moneat.events.routes.extractPublicKey
-import com.moneat.events.routes.extractPublicKeyFromDsn
 import com.moneat.events.services.EventService
 import com.moneat.logs.models.CreateLogIndexRequest
 import com.moneat.logs.models.LogQueryRequest
@@ -539,42 +537,6 @@ private fun parseExcludeTagQueryParams(call: ApplicationCall): Map<String, Strin
         }.toMap()
 }
 
-private fun extractOrgIdFromOtlpApiKey(
-    call: ApplicationCall,
-    otlpApiKeyService: OtlpApiKeyService
-): Int? = OtlpAuth.extractOrgId(call, otlpApiKeyService)
-
-private fun extractOrgIdFromLegacyDsn(
-    call: ApplicationCall,
-    eventService: EventService
-): Int? {
-    val dsnLikeHeader =
-        call.request.header("x-moneat-dsn")
-            ?: call.request.header(HttpHeaders.Authorization)
-    val projectId =
-        extractProjectIdFromDsn(dsnLikeHeader)
-            ?: call.request.queryParameters["projectId"]?.toLongOrNull()
-            ?: return null
-    val publicKey =
-        extractPublicKey(call.request.header("X-Sentry-Auth"), call.request.queryParameters["sentry_key"])
-            ?: extractPublicKeyFromDsn(dsnLikeHeader)
-            ?: return null
-    val verification = eventService.verifyProjectKey(projectId, publicKey)
-    if (!verification.isValid) return null
-    return eventService.getOrganizationIdForProject(projectId)
-}
-
-private fun extractProjectIdFromDsn(dsnLike: String?): Long? {
-    if (dsnLike.isNullOrBlank()) return null
-    val cleaned = dsnLike.removePrefix("DSN ").trim()
-    val regex = "https?://[^@]+@[^/]+/([0-9]+)".toRegex(RegexOption.IGNORE_CASE)
-    return regex
-        .find(cleaned)
-        ?.groupValues
-        ?.getOrNull(1)
-        ?.toLongOrNull()
-}
-
 private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
     val authHeader = call.request.header(HttpHeaders.Authorization)
     val bearerPrefix = "Bearer "
@@ -627,7 +589,7 @@ fun Route.logIngestRoutes(
         }
 
         post("/logs/ingest") {
-            val organizationId = extractOrgIdFromOtlpApiKey(call, otlpApiKeyService)
+            val organizationId = OtlpAuth.extractOrgId(call, otlpApiKeyService)
             if (organizationId == null) {
                 call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid OTLP API key"))
                 return@post
@@ -709,8 +671,7 @@ private suspend fun handleOtlpLogIngest(
     }
 
     val organizationId: Int? =
-        extractOrgIdFromOtlpApiKey(call, otlpApiKeyService)
-            ?: extractOrgIdFromLegacyDsn(call, eventService)
+        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService)
 
     if (organizationId == null) {
         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid OTLP API key or DSN"))

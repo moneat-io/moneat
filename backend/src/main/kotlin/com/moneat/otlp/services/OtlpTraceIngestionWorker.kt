@@ -58,7 +58,7 @@ class OtlpTraceIngestionWorker(
             return
         }
         try {
-            // TODO(ISSUE-TBD): OtlpErrorExtractor — org→project resolution + project-scoped error tracking; replace ISSUE-TBD with tracker link when filed.
+            // Tracked: https://github.com/moneat-io/moneat/issues/275 — org→project resolution + project-scoped error tracking for extracted span exceptions.
             val exceptions = OtlpErrorExtractor.extractExceptions(batch.spans)
             if (exceptions.isNotEmpty()) {
                 logger.debug {

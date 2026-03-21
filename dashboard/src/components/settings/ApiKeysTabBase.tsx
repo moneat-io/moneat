@@ -108,7 +108,7 @@ export function ApiKeysTabBase<T extends ApiKeyRow>(config: Readonly<ApiKeysTabC
   const [createdKey, setCreatedKey] = useState<{key: string; name: string} | null>(null)
   const [revokeKey, setRevokeKey] = useState<T | null>(null)
 
-  const {data: keysData, isLoading} = useQuery({
+  const {data: keysData, isPending} = useQuery({
     queryKey,
     queryFn,
     enabled: queryEnabled,

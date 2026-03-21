@@ -20,7 +20,7 @@ import com.moneat.config.ClickHouseClient
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import kotlin.test.AfterTest
@@ -36,20 +36,42 @@ class OtlpMetricsServiceTest {
         private const val TEST_SVC = "test-svc"
         private const val TEST_ENV = "prod"
         private const val TEST_HOST = "host-01"
+        private const val TEST_TIME_UNIX_NANO_PRIMARY = 1700000000000000000L
+        private const val TEST_TIMESTAMP_MS_PRIMARY = 1700000000000L
+        private const val TEST_TIME_UNIX_NANO_MULTI_FIRST = 1000000000L
+        private const val TEST_TIME_UNIX_NANO_MULTI_SECOND = 2000000000L
+        private const val GAUGE_CPU_USAGE_VALUE = 75.5
+        private const val GAUGE_THREADS_AS_INT = 42
+        private const val GAUGE_MULTI_FIRST_VALUE = 1.0
+        private const val GAUGE_MULTI_SECOND_VALUE = 2.0
+        private const val SUM_HTTP_REQUESTS_VALUE = 12345.0
+        private const val SUM_QUEUE_DEPTH_VALUE = 50.0
+        private const val HIST_REQUEST_DURATION_COUNT = 100L
+        private const val HIST_REQUEST_DURATION_SUM = 5000.0
+        private const val HIST_REQUEST_DURATION_MIN = 5.0
+        private const val HIST_REQUEST_DURATION_MAX = 500.0
+        private const val EXP_HIST_RPC_COUNT = 200L
+        private const val EXP_HIST_RPC_SUM = 10000.0
+        private const val EXP_HIST_RPC_MIN = 1.0
+        private const val EXP_HIST_RPC_MAX = 800.0
+        private const val SUMMARY_GC_COUNT = 50L
+        private const val SUMMARY_GC_SUM = 250.5
+        private const val DECODE_BATCH_METRIC_VALUE = 42.5
     }
+
+    private lateinit var service: OtlpMetricsService
 
     @BeforeTest
     fun setup() {
         mockkObject(ClickHouseClient)
         every { ClickHouseClient.getDatabase() } returns "test_db"
+        service = OtlpMetricsService()
     }
 
     @AfterTest
     fun teardown() {
         unmockkObject(ClickHouseClient)
     }
-
-    private val service by lazy { OtlpMetricsService() }
 
     private fun wrapMetric(metricJson: String, resourceAttrs: String = ""): String = """
     {
@@ -84,8 +106,8 @@ class OtlpMetricsServiceTest {
               "unit": "%",
               "gauge": {
                 "dataPoints": [{
-                  "timeUnixNano": 1700000000000000000,
-                  "asDouble": 75.5,
+                  "timeUnixNano": $TEST_TIME_UNIX_NANO_PRIMARY,
+                  "asDouble": $GAUGE_CPU_USAGE_VALUE,
                   "attributes": [
                     {"key": "cpu.core", "value": {"stringValue": "0"}}
                   ]
@@ -103,8 +125,8 @@ class OtlpMetricsServiceTest {
             assertEquals("gauge", m.metricType)
             assertEquals("CPU usage percentage", m.description)
             assertEquals("%", m.unit)
-            assertEquals(1700000000000L, m.timestampMs)
-            assertEquals(75.5, m.value)
+            assertEquals(TEST_TIMESTAMP_MS_PRIMARY, m.timestampMs)
+            assertEquals(GAUGE_CPU_USAGE_VALUE, m.value)
             assertEquals("0", m.tags["cpu.core"])
             assertEquals(TEST_SVC, m.service)
             assertEquals(TEST_ENV, m.env)
@@ -119,8 +141,8 @@ class OtlpMetricsServiceTest {
               "name": "process.threads",
               "gauge": {
                 "dataPoints": [{
-                  "timeUnixNano": 1700000000000000000,
-                  "asInt": 42
+                  "timeUnixNano": $TEST_TIME_UNIX_NANO_PRIMARY,
+                  "asInt": $GAUGE_THREADS_AS_INT
                 }]
               }
             }
@@ -128,7 +150,7 @@ class OtlpMetricsServiceTest {
             )
 
             val metrics = service.parseOtlpMetricsJson(payload)!!
-            assertEquals(42.0, metrics[0].value)
+            assertEquals(GAUGE_THREADS_AS_INT.toDouble(), metrics[0].value)
         }
 
         @Test
@@ -139,8 +161,8 @@ class OtlpMetricsServiceTest {
               "name": "multi.gauge",
               "gauge": {
                 "dataPoints": [
-                  {"timeUnixNano": 1000000000, "asDouble": 1.0},
-                  {"timeUnixNano": 2000000000, "asDouble": 2.0}
+                  {"timeUnixNano": $TEST_TIME_UNIX_NANO_MULTI_FIRST, "asDouble": $GAUGE_MULTI_FIRST_VALUE},
+                  {"timeUnixNano": $TEST_TIME_UNIX_NANO_MULTI_SECOND, "asDouble": $GAUGE_MULTI_SECOND_VALUE}
                 ]
               }
             }
@@ -149,8 +171,8 @@ class OtlpMetricsServiceTest {
 
             val metrics = service.parseOtlpMetricsJson(payload)!!
             assertEquals(2, metrics.size)
-            assertEquals(1.0, metrics[0].value)
-            assertEquals(2.0, metrics[1].value)
+            assertEquals(GAUGE_MULTI_FIRST_VALUE, metrics[0].value)
+            assertEquals(GAUGE_MULTI_SECOND_VALUE, metrics[1].value)
         }
     }
 
@@ -170,8 +192,8 @@ class OtlpMetricsServiceTest {
                 "isMonotonic": true,
                 "aggregationTemporality": 2,
                 "dataPoints": [{
-                  "timeUnixNano": 1700000000000000000,
-                  "asDouble": 12345.0,
+                  "timeUnixNano": $TEST_TIME_UNIX_NANO_PRIMARY,
+                  "asDouble": $SUM_HTTP_REQUESTS_VALUE,
                   "attributes": [
                     {"key": "http.method", "value": {"stringValue": "GET"}}
                   ]
@@ -187,7 +209,7 @@ class OtlpMetricsServiceTest {
             val m = metrics[0]
             assertEquals("http.requests.total", m.metricName)
             assertEquals("sum", m.metricType)
-            assertEquals(12345.0, m.value)
+            assertEquals(SUM_HTTP_REQUESTS_VALUE, m.value)
             assertEquals(1, m.isMonotonic)
             assertEquals("cumulative", m.aggregationTemporality)
             assertEquals("GET", m.tags["http.method"])
@@ -203,8 +225,8 @@ class OtlpMetricsServiceTest {
                 "isMonotonic": false,
                 "aggregationTemporality": 1,
                 "dataPoints": [{
-                  "timeUnixNano": 1700000000000000000,
-                  "asDouble": 50.0
+                  "timeUnixNano": $TEST_TIME_UNIX_NANO_PRIMARY,
+                  "asDouble": $SUM_QUEUE_DEPTH_VALUE
                 }]
               }
             }
@@ -234,11 +256,11 @@ class OtlpMetricsServiceTest {
               "histogram": {
                 "aggregationTemporality": 2,
                 "dataPoints": [{
-                  "timeUnixNano": 1700000000000000000,
-                  "count": 100,
-                  "sum": 5000.0,
-                  "min": 5.0,
-                  "max": 500.0,
+                  "timeUnixNano": $TEST_TIME_UNIX_NANO_PRIMARY,
+                  "count": $HIST_REQUEST_DURATION_COUNT,
+                  "sum": $HIST_REQUEST_DURATION_SUM,
+                  "min": $HIST_REQUEST_DURATION_MIN,
+                  "max": $HIST_REQUEST_DURATION_MAX,
                   "bucketCounts": [10, 30, 40, 15, 5],
                   "explicitBounds": [10.0, 50.0, 100.0, 250.0],
                   "attributes": [
@@ -257,13 +279,13 @@ class OtlpMetricsServiceTest {
             assertEquals("http.request.duration", m.metricName)
             assertEquals("histogram", m.metricType)
             assertEquals("cumulative", m.aggregationTemporality)
-            assertEquals(100L, m.histCount)
-            assertEquals(5000.0, m.histSum)
-            assertEquals(5.0, m.histMin)
-            assertEquals(500.0, m.histMax)
+            assertEquals(HIST_REQUEST_DURATION_COUNT, m.histCount)
+            assertEquals(HIST_REQUEST_DURATION_SUM, m.histSum)
+            assertEquals(HIST_REQUEST_DURATION_MIN, m.histMin)
+            assertEquals(HIST_REQUEST_DURATION_MAX, m.histMax)
             assertEquals(listOf(10L, 30L, 40L, 15L, 5L), m.histBucketCounts)
             assertEquals(listOf(10.0, 50.0, 100.0, 250.0), m.histExplicitBounds)
-            assertEquals(5000.0, m.value)
+            assertEquals(HIST_REQUEST_DURATION_SUM, m.value)
             assertEquals("/api/users", m.tags["http.route"])
         }
     }
@@ -282,11 +304,11 @@ class OtlpMetricsServiceTest {
               "exponentialHistogram": {
                 "aggregationTemporality": 1,
                 "dataPoints": [{
-                  "timeUnixNano": 1700000000000000000,
-                  "count": 200,
-                  "sum": 10000.0,
-                  "min": 1.0,
-                  "max": 800.0
+                  "timeUnixNano": $TEST_TIME_UNIX_NANO_PRIMARY,
+                  "count": $EXP_HIST_RPC_COUNT,
+                  "sum": $EXP_HIST_RPC_SUM,
+                  "min": $EXP_HIST_RPC_MIN,
+                  "max": $EXP_HIST_RPC_MAX
                 }]
               }
             }
@@ -300,10 +322,10 @@ class OtlpMetricsServiceTest {
             assertEquals("rpc.latency", m.metricName)
             assertEquals("exp_histogram", m.metricType)
             assertEquals("delta", m.aggregationTemporality)
-            assertEquals(200L, m.histCount)
-            assertEquals(10000.0, m.histSum)
-            assertEquals(1.0, m.histMin)
-            assertEquals(800.0, m.histMax)
+            assertEquals(EXP_HIST_RPC_COUNT, m.histCount)
+            assertEquals(EXP_HIST_RPC_SUM, m.histSum)
+            assertEquals(EXP_HIST_RPC_MIN, m.histMin)
+            assertEquals(EXP_HIST_RPC_MAX, m.histMax)
             assertTrue(m.histBucketCounts.isEmpty())
             assertTrue(m.histExplicitBounds.isEmpty())
         }
@@ -322,9 +344,9 @@ class OtlpMetricsServiceTest {
               "name": "process.runtime.gc.pause",
               "summary": {
                 "dataPoints": [{
-                  "timeUnixNano": 1700000000000000000,
-                  "count": 50,
-                  "sum": 250.5
+                  "timeUnixNano": $TEST_TIME_UNIX_NANO_PRIMARY,
+                  "count": $SUMMARY_GC_COUNT,
+                  "sum": $SUMMARY_GC_SUM
                 }]
               }
             }
@@ -337,9 +359,9 @@ class OtlpMetricsServiceTest {
             val m = metrics[0]
             assertEquals("process.runtime.gc.pause", m.metricName)
             assertEquals("summary", m.metricType)
-            assertEquals(50L, m.histCount)
-            assertEquals(250.5, m.histSum)
-            assertEquals(250.5, m.value)
+            assertEquals(SUMMARY_GC_COUNT, m.histCount)
+            assertEquals(SUMMARY_GC_SUM, m.histSum)
+            assertEquals(SUMMARY_GC_SUM, m.value)
         }
     }
 
@@ -463,8 +485,8 @@ class OtlpMetricsServiceTest {
                     metricType = "gauge",
                     description = "CPU",
                     unit = "%",
-                    timestampMs = 1700000000000L,
-                    value = 42.5,
+                    timestampMs = TEST_TIMESTAMP_MS_PRIMARY,
+                    value = DECODE_BATCH_METRIC_VALUE,
                     isMonotonic = 0,
                     aggregationTemporality = "",
                     histCount = 0,
@@ -473,7 +495,7 @@ class OtlpMetricsServiceTest {
                     histMax = null,
                     histBucketCounts = emptyList(),
                     histExplicitBounds = emptyList(),
-                    tags = mapOf("env" to "prod"),
+                    tags = mapOf("env" to TEST_ENV),
                     resourceAttributes = mapOf("service.name" to TEST_SVC),
                     service = TEST_SVC,
                     env = TEST_ENV,
@@ -482,13 +504,13 @@ class OtlpMetricsServiceTest {
             )
         )
 
-        val encoded = Json.encodeToString(batch)
+        val encoded = OtlpMetricsService.queuedBatchJson.encodeToString(batch)
         val decoded = service.decodeBatch(encoded)
 
         assertEquals(batch.organizationId, decoded.organizationId)
         assertEquals(1, decoded.metrics.size)
         assertEquals("cpu.usage", decoded.metrics[0].metricName)
-        assertEquals(42.5, decoded.metrics[0].value)
-        assertEquals("prod", decoded.metrics[0].tags["env"])
+        assertEquals(DECODE_BATCH_METRIC_VALUE, decoded.metrics[0].value)
+        assertEquals(TEST_ENV, decoded.metrics[0].tags["env"])
     }
 }

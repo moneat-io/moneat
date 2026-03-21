@@ -18,8 +18,6 @@ package com.moneat.otlp.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.decompression.DecompressionService
-import com.moneat.events.routes.extractPublicKey
-import com.moneat.events.routes.extractPublicKeyFromDsn
 import com.moneat.events.services.EventService
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.calculateBillableBytes
@@ -28,6 +26,7 @@ import com.moneat.otlp.services.OtlpTraceService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -39,9 +38,6 @@ import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_QUEUE_KEY = "moneat:otlp-traces:queue"
-
-private val projectIdFromDsnRegex =
-    "https?://[^@]+@[^/]+/([0-9]+)".toRegex(RegexOption.IGNORE_CASE)
 
 fun Route.otlpTraceRoutes(
     traceService: OtlpTraceService = OtlpTraceService(),
@@ -69,8 +65,7 @@ private suspend fun handleOtlpTraceIngest(
     eventService: EventService,
 ) {
     val organizationId: Int? =
-        OtlpAuth.extractOrgId(call, otlpApiKeyService)
-            ?: extractOrgIdFromLegacyDsn(call, eventService)
+        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService)
 
     if (organizationId == null) {
         call.respond(
@@ -84,23 +79,13 @@ private suspend fun handleOtlpTraceIngest(
     val encoding = call.request.header(HttpHeaders.ContentEncoding)
     val payloadBytes = try {
         DecompressionService.decompress(bodyBytes, encoding)
-    } catch (e: Exception) {
-        call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse("Failed to decompress request body")
-        )
-        return
+    } catch (_: Exception) {
+        throw BadRequestException("Failed to decompress request body")
     }
 
     val payload = payloadBytes.decodeToString()
     val parsedSpans = traceService.parseOtlpTracesJson(payload)
-    if (parsedSpans == null) {
-        call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse("Invalid OTLP traces payload: malformed JSON or missing resourceSpans")
-        )
-        return
-    }
+        ?: throw BadRequestException("Invalid OTLP traces payload: malformed JSON or missing resourceSpans")
     if (parsedSpans.isEmpty()) {
         call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
         return
@@ -137,34 +122,4 @@ private suspend fun handleOtlpTraceIngest(
         queueKey
     )
     call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
-}
-
-private fun extractOrgIdFromLegacyDsn(
-    call: io.ktor.server.application.ApplicationCall,
-    eventService: EventService
-): Int? {
-    val dsnLikeHeader =
-        call.request.header("x-moneat-dsn")
-            ?: call.request.header(HttpHeaders.Authorization)
-    val projectIdFromDsn = extractProjectIdFromDsn(dsnLikeHeader)
-    val projectIdFromQuery = call.request.queryParameters["projectId"]?.toLongOrNull()
-    val projectId = projectIdFromDsn ?: projectIdFromQuery
-    if (projectId == null) return null
-
-    val publicKeyFromAuth = extractPublicKey(
-        call.request.header("X-Sentry-Auth"),
-        call.request.queryParameters["sentry_key"]
-    )
-    val publicKeyFromDsn = extractPublicKeyFromDsn(dsnLikeHeader)
-    val publicKey = publicKeyFromAuth ?: publicKeyFromDsn
-    if (publicKey == null) return null
-    val verification = eventService.verifyProjectKey(projectId, publicKey)
-    if (!verification.isValid) return null
-    return eventService.getOrganizationIdForProject(projectId)
-}
-
-private fun extractProjectIdFromDsn(dsnLike: String?): Long? {
-    if (dsnLike.isNullOrBlank()) return null
-    val cleaned = dsnLike.removePrefix("DSN ").trim()
-    return projectIdFromDsnRegex.find(cleaned)?.groupValues?.getOrNull(1)?.toLongOrNull()
 }

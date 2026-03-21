@@ -67,18 +67,23 @@ class LlmIngestionWorker(
     }
 
     private suspend fun runWorker(workerId: Int) {
-        val redis = RedisConfig.newBlockingConnection()
-        while (scope.isActive) {
-            try {
-                val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-                val value = result?.value ?: continue
-                processMessageForTest(workerId, value)
-            } catch (e: CancellationException) {
-                break
-            } catch (e: Exception) {
-                logger.error(e) { "LLM worker $workerId error in BRPOP loop" }
-                delay(1000)
+        val conn = RedisConfig.newBlockingConnection()
+        try {
+            val redis = conn.sync()
+            while (scope.isActive) {
+                try {
+                    val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
+                    val value = result?.value ?: continue
+                    processMessageForTest(workerId, value)
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Exception) {
+                    logger.error(e) { "LLM worker $workerId error in BRPOP loop" }
+                    delay(1000)
+                }
             }
+        } finally {
+            RedisConfig.closeBlockingConnection(conn)
         }
     }
 

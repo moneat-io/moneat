@@ -64,9 +64,12 @@ object RedisConfig {
         return conn
     }
 
-    /** Returns sync commands for a dedicated blocking connection (see [newStatefulBlockingConnection]). */
-    fun newBlockingConnection(): RedisCommands<String, String> =
-        newStatefulBlockingConnection().sync()
+    /**
+     * Returns a dedicated blocking connection for a single worker (same as [newStatefulBlockingConnection]).
+     * Callers must pass the returned connection to [closeBlockingConnection] when the worker stops.
+     */
+    fun newBlockingConnection(): StatefulRedisConnection<String, String> =
+        newStatefulBlockingConnection()
 
     /**
      * Closes a blocking worker connection and removes it from the shutdown list so it is not closed twice.

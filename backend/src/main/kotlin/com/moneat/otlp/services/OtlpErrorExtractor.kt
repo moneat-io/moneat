@@ -65,11 +65,13 @@ object OtlpErrorExtractor {
         val exceptions = mutableListOf<OtlpExceptionEvent>()
 
         for (span in spans) {
-            if (span.statusCode != OTLP_SPAN_STATUS_ERROR && !hasExceptionEvents(span.events)) {
+            val parsedEvents = parseSpanEvents(span.events)
+            val hasExceptionEvent =
+                parsedEvents.any { it["name"]?.jsonPrimitive?.contentOrNull == "exception" }
+            if (span.statusCode != OTLP_SPAN_STATUS_ERROR && !hasExceptionEvent) {
                 continue
             }
 
-            val parsedEvents = parseSpanEvents(span.events)
             for (event in parsedEvents) {
                 val eventName = event["name"]?.jsonPrimitive?.contentOrNull ?: continue
                 if (eventName != "exception") continue
@@ -119,11 +121,6 @@ object OtlpErrorExtractor {
 
         return exceptions
     }
-
-    private fun hasExceptionEvents(eventsJson: String): Boolean =
-        parseSpanEvents(eventsJson).any {
-            it["name"]?.jsonPrimitive?.contentOrNull == "exception"
-        }
 
     private fun parseSpanEvents(eventsJson: String): List<JsonObject> {
         if (eventsJson == "[]" || eventsJson.isBlank()) return emptyList()

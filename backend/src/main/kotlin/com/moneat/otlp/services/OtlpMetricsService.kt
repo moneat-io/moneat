@@ -37,7 +37,6 @@ import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-private val json = Json { ignoreUnknownKeys = true }
 
 // OTLP AggregationTemporality (opentelemetry.proto.metrics.v1.AggregationTemporality)
 private const val AGGREGATION_TEMPORALITY_DELTA = 1
@@ -96,6 +95,13 @@ private data class MetricInsertSpec(
 class OtlpMetricsService(
     private val usageTracking: UsageTrackingService = UsageTrackingService(),
 ) {
+    companion object {
+        /** Json for queued OTLP metric batches; use in tests for symmetric encode/decode with [decodeBatch]. */
+        val queuedBatchJson: Json = Json { ignoreUnknownKeys = true }
+    }
+
+    private val json = queuedBatchJson
+
     private val clickhouseDb = ClickHouseClient.getDatabase()
 
     fun parseOtlpMetricsJson(payload: String): List<OtlpMetricInsert>? {

@@ -78,6 +78,8 @@ abstract class OtlpIngestionWorkerBase(
                     val payload = result?.value ?: continue
                     try {
                         processMessage(workerId, payload)
+                    } catch (proc: CancellationException) {
+                        throw proc
                     } catch (proc: Exception) {
                         logger.error(proc) {
                             "OTLP $workerLabel worker $workerId failed processing message"

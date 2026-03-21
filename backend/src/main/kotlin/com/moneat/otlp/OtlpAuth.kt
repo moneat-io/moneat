@@ -16,6 +16,9 @@
 
 package com.moneat.otlp
 
+import com.moneat.events.routes.extractPublicKey
+import com.moneat.events.routes.extractPublicKeyFromDsn
+import com.moneat.events.services.EventService
 import com.moneat.otlp.services.OtlpApiKeyService
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.ApplicationCall
@@ -27,6 +30,9 @@ import io.ktor.server.request.header
  */
 object OtlpAuth {
     private const val BEARER_PREFIX = "Bearer "
+
+    private val projectIdFromDsnRegex =
+        "https?://[^@]+@[^/]+/([0-9]+)".toRegex(RegexOption.IGNORE_CASE)
 
     fun extractBearerToken(authorizationHeader: String?): String? {
         if (authorizationHeader == null) return null
@@ -40,5 +46,45 @@ object OtlpAuth {
     ): Int? {
         val key = extractBearerToken(call.request.header(HttpHeaders.Authorization)) ?: return null
         return otlpApiKeyService.validateKey(key)
+    }
+
+    /**
+     * Resolves the organization for OTLP log/trace-style ingest: Bearer OTLP API key, else legacy DSN / project key.
+     */
+    fun resolveOtlpIngestOrganizationId(
+        call: ApplicationCall,
+        otlpApiKeyService: OtlpApiKeyService,
+        eventService: EventService,
+    ): Int? =
+        extractOrgId(call, otlpApiKeyService)
+            ?: extractOrgIdFromLegacyDsn(call, eventService)
+
+    private fun extractOrgIdFromLegacyDsn(
+        call: ApplicationCall,
+        eventService: EventService,
+    ): Int? {
+        val dsnLikeHeader =
+            call.request.header("x-moneat-dsn")
+                ?: call.request.header(HttpHeaders.Authorization)
+        val projectId =
+            extractProjectIdFromDsn(dsnLikeHeader)
+                ?: call.request.queryParameters["projectId"]?.toLongOrNull()
+                ?: return null
+        val publicKey =
+            extractPublicKey(
+                call.request.header("X-Sentry-Auth"),
+                call.request.queryParameters["sentry_key"]
+            )
+                ?: extractPublicKeyFromDsn(dsnLikeHeader)
+                ?: return null
+        val verification = eventService.verifyProjectKey(projectId, publicKey)
+        if (!verification.isValid) return null
+        return eventService.getOrganizationIdForProject(projectId)
+    }
+
+    private fun extractProjectIdFromDsn(dsnLike: String?): Long? {
+        if (dsnLike.isNullOrBlank()) return null
+        val cleaned = dsnLike.removePrefix("DSN ").trim()
+        return projectIdFromDsnRegex.find(cleaned)?.groupValues?.getOrNull(1)?.toLongOrNull()
     }
 }
