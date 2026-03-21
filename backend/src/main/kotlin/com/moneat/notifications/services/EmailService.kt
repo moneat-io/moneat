@@ -791,7 +791,7 @@ class EmailService {
                           </td>
                           <td style="width:33%;">
                             <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Crash-Free</p>
-                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#16a34a;">${project.crashFree.escapeHtml()}%</p>
+                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#16a34a;">${project.crashFree.escapeHtml()}</p>
                           </td>
                         </tr>
                       </table>
