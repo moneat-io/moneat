@@ -379,7 +379,13 @@ class OtlpTraceService(
     }
 
     private fun escapeJsonString(s: String): String =
-        s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+        s.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\b", "\\b")
+            .replace("\u000c", "\\f")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
 
     private fun mapToSqlMap(map: Map<String, String>): String {
         if (map.isEmpty()) return "map()"
