@@ -177,6 +177,9 @@ dependencies {
     // Protobuf for decoding DD process-agent binary payloads
     implementation(libs.protobuf.java)
 
+    // OTLP protobuf definitions (ExportLogsServiceRequest, ExportTraceServiceRequest, etc.)
+    implementation(libs.opentelemetry.proto)
+
     // Enterprise modules (SSO, On-Call) — always included, license-gated at runtime
     runtimeOnly(project(":ee"))
 }

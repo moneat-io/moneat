@@ -20,6 +20,13 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
 import com.moneat.otlp.OtlpParsingUtils
+import com.moneat.otlp.OtlpProtobufParser
+import io.opentelemetry.proto.collector.metrics.v1.ExportMetricsServiceRequest
+import io.opentelemetry.proto.metrics.v1.ExponentialHistogramDataPoint
+import io.opentelemetry.proto.metrics.v1.HistogramDataPoint
+import io.opentelemetry.proto.metrics.v1.Metric
+import io.opentelemetry.proto.metrics.v1.NumberDataPoint
+import io.opentelemetry.proto.metrics.v1.SummaryDataPoint
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
@@ -103,6 +110,147 @@ class OtlpMetricsService(
     private val json = queuedBatchJson
 
     private val clickhouseDb = ClickHouseClient.getDatabase()
+
+    @Suppress("CyclomaticComplexMethod")
+    fun parseOtlpMetricsProtobuf(bytes: ByteArray): List<OtlpMetricInsert>? {
+        val request =
+            try {
+                ExportMetricsServiceRequest.parseFrom(bytes)
+            } catch (e: Exception) {
+                logger.warn(e) { "Invalid OTLP protobuf metrics payload" }
+                return null
+            }
+
+        val results = mutableListOf<OtlpMetricInsert>()
+
+        request.resourceMetricsList.forEach { rm ->
+            val resourceCtx = OtlpProtobufParser.extractResourceContext(rm.resource)
+
+            rm.scopeMetricsList.forEach { sm ->
+                sm.metricsList.forEach { metric ->
+                    parseProtoMetric(metric, resourceCtx, results)
+                }
+            }
+        }
+
+        return results
+    }
+
+    private fun parseProtoMetric(
+        metric: Metric,
+        resourceCtx: com.moneat.otlp.ResourceContext,
+        results: MutableList<OtlpMetricInsert>
+    ) {
+        val name = metric.name
+        val description = metric.description
+        val unit = metric.unit
+
+        when (metric.dataCase) {
+            Metric.DataCase.GAUGE -> metric.gauge.dataPointsList.forEach { dp ->
+                results += buildMetricInsert(
+                    MetricInsertSpec(
+                        name = name, type = "gauge", description = description, unit = unit,
+                        timestampNs = dp.timeUnixNano, value = numberDataPointValue(dp),
+                        attrs = OtlpProtobufParser.attributesToMap(dp.attributesList),
+                        resourceCtx = resourceCtx,
+                    )
+                )
+            }
+            Metric.DataCase.SUM -> {
+                val sum = metric.sum
+                val temporality = mapAggregationTemporality(sum.aggregationTemporalityValue)
+                val isMonotonic = if (sum.isMonotonic) 1 else 0
+                sum.dataPointsList.forEach { dp ->
+                    results += buildMetricInsert(
+                        MetricInsertSpec(
+                            name = name, type = "sum", description = description, unit = unit,
+                            timestampNs = dp.timeUnixNano, value = numberDataPointValue(dp),
+                            attrs = OtlpProtobufParser.attributesToMap(dp.attributesList),
+                            resourceCtx = resourceCtx,
+                            isMonotonic = isMonotonic, aggregationTemporality = temporality,
+                        )
+                    )
+                }
+            }
+            Metric.DataCase.HISTOGRAM -> {
+                val temporality = mapAggregationTemporality(metric.histogram.aggregationTemporalityValue)
+                metric.histogram.dataPointsList.forEach { dp ->
+                    results += buildMetricInsert(histogramSpec(dp, name, description, unit, resourceCtx, temporality))
+                }
+            }
+            Metric.DataCase.EXPONENTIAL_HISTOGRAM -> {
+                val temporality = mapAggregationTemporality(
+                    metric.exponentialHistogram.aggregationTemporalityValue
+                )
+                metric.exponentialHistogram.dataPointsList.forEach { dp ->
+                    results += buildMetricInsert(
+                        expHistogramSpec(dp, name, description, unit, resourceCtx, temporality)
+                    )
+                }
+            }
+            Metric.DataCase.SUMMARY -> metric.summary.dataPointsList.forEach { dp ->
+                results += buildMetricInsert(summarySpec(dp, name, description, unit, resourceCtx))
+            }
+            Metric.DataCase.DATA_NOT_SET, null -> {}
+        }
+    }
+
+    private fun numberDataPointValue(dp: NumberDataPoint): Double =
+        when (dp.valueCase) {
+            NumberDataPoint.ValueCase.AS_DOUBLE -> dp.asDouble
+            NumberDataPoint.ValueCase.AS_INT -> dp.asInt.toDouble()
+            NumberDataPoint.ValueCase.VALUE_NOT_SET, null -> 0.0
+        }
+
+    @Suppress("LongParameterList")
+    private fun histogramSpec(
+        dp: HistogramDataPoint,
+        name: String,
+        description: String,
+        unit: String,
+        resourceCtx: com.moneat.otlp.ResourceContext,
+        temporality: String
+    ) = MetricInsertSpec(
+        name = name, type = "histogram", description = description, unit = unit,
+        timestampNs = dp.timeUnixNano, value = dp.sum.takeIf { dp.hasSum() } ?: 0.0,
+        attrs = OtlpProtobufParser.attributesToMap(dp.attributesList),
+        resourceCtx = resourceCtx, aggregationTemporality = temporality,
+        histCount = dp.count, histSum = dp.sum.takeIf { dp.hasSum() },
+        histMin = dp.min.takeIf { dp.hasMin() }, histMax = dp.max.takeIf { dp.hasMax() },
+        histBucketCounts = dp.bucketCountsList,
+        histExplicitBounds = dp.explicitBoundsList,
+    )
+
+    @Suppress("LongParameterList")
+    private fun expHistogramSpec(
+        dp: ExponentialHistogramDataPoint,
+        name: String,
+        description: String,
+        unit: String,
+        resourceCtx: com.moneat.otlp.ResourceContext,
+        temporality: String
+    ) = MetricInsertSpec(
+        name = name, type = "exp_histogram", description = description, unit = unit,
+        timestampNs = dp.timeUnixNano, value = dp.sum.takeIf { dp.hasSum() } ?: 0.0,
+        attrs = OtlpProtobufParser.attributesToMap(dp.attributesList),
+        resourceCtx = resourceCtx, aggregationTemporality = temporality,
+        histCount = dp.count, histSum = dp.sum.takeIf { dp.hasSum() },
+        histMin = dp.min.takeIf { dp.hasMin() }, histMax = dp.max.takeIf { dp.hasMax() },
+    )
+
+    private fun summarySpec(
+        dp: SummaryDataPoint,
+        name: String,
+        description: String,
+        unit: String,
+        resourceCtx: com.moneat.otlp.ResourceContext,
+    ) = MetricInsertSpec(
+        name = name, type = "summary", description = description, unit = unit,
+        timestampNs = dp.timeUnixNano, value = dp.sum,
+        attrs = OtlpProtobufParser.attributesToMap(dp.attributesList),
+        resourceCtx = resourceCtx,
+        histCount = dp.count, histSum = dp.sum,
+    )
 
     fun parseOtlpMetricsJson(payload: String): List<OtlpMetricInsert>? {
         val parsed =

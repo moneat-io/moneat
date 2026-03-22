@@ -16,11 +16,22 @@
 
 package com.moneat.otlp.services
 
+import com.google.protobuf.ByteString
 import com.moneat.config.ClickHouseClient
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
+import io.opentelemetry.proto.common.v1.AnyValue
+import io.opentelemetry.proto.common.v1.KeyValue
+import io.opentelemetry.proto.resource.v1.Resource
+import io.opentelemetry.proto.trace.v1.ResourceSpans
+import io.opentelemetry.proto.trace.v1.ScopeSpans
+import io.opentelemetry.proto.trace.v1.Span
+import io.opentelemetry.proto.trace.v1.Status
+import io.opentelemetry.proto.common.v1.InstrumentationScope
 import kotlinx.serialization.json.Json
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -437,5 +448,142 @@ class OtlpTraceServiceTest {
         assertEquals(MY_SVC, decoded.spans[0].service)
         assertEquals("SERVER", decoded.spans[0].kind)
         assertEquals(mapOf("key" to "value"), decoded.spans[0].meta)
+    }
+
+    // ──── PROTOBUF PARSING ────
+
+    @Nested
+    inner class ProtobufParsing {
+
+        private fun traceIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(
+                    0x0A, 0xF7.toByte(), 0x65, 0x19, 0x16, 0xCD.toByte(), 0x43, 0xDD.toByte(),
+                    0x84.toByte(), 0x48, 0xEB.toByte(), 0x21, 0x1C, 0x80.toByte(), 0x31, 0x9C.toByte(),
+                ),
+            )
+
+        private fun spanIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(0xB7.toByte(), 0xAD.toByte(), 0x6B, 0x71, 0x69, 0x20, 0x33, 0x31)
+            )
+
+        private fun buildRequest(
+            spanBuilder: Span.Builder = Span.newBuilder(),
+            resourceAttrs: List<KeyValue> = emptyList(),
+            scopeName: String = "",
+            scopeVersion: String = ""
+        ): ByteArray {
+            val span = spanBuilder.build()
+            val scopeSpans = ScopeSpans.newBuilder()
+                .addSpans(span)
+                .apply {
+                    if (scopeName.isNotEmpty() || scopeVersion.isNotEmpty()) {
+                        scope = InstrumentationScope.newBuilder()
+                            .setName(scopeName)
+                            .setVersion(scopeVersion)
+                            .build()
+                    }
+                }
+                .build()
+            val resourceSpans = ResourceSpans.newBuilder()
+                .setResource(Resource.newBuilder().addAllAttributes(resourceAttrs))
+                .addScopeSpans(scopeSpans)
+                .build()
+            return ExportTraceServiceRequest.newBuilder()
+                .addResourceSpans(resourceSpans)
+                .build()
+                .toByteArray()
+        }
+
+        private fun kv(key: String, value: String) =
+            KeyValue.newBuilder()
+                .setKey(key)
+                .setValue(AnyValue.newBuilder().setStringValue(value))
+                .build()
+
+        @Test
+        fun `parses single span from protobuf`() {
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setName("GET /api/users")
+                    .setKind(Span.SpanKind.SPAN_KIND_SERVER)
+                    .setStartTimeUnixNano(1700000000000000000L)
+                    .setEndTimeUnixNano(1700000000050000000L)
+                    .setStatus(Status.newBuilder().setCode(Status.StatusCode.STATUS_CODE_OK).setMessage("OK"))
+                    .addAttributes(kv("http.method", "GET")),
+                resourceAttrs = listOf(
+                    kv(SERVICE_NAME_ATTR_KEY, "my-service"),
+                    kv("deployment.environment", "prod"),
+                    kv("host.name", "web-01"),
+                    kv("service.version", "1.0.0"),
+                ),
+                scopeName = "io.otel.sdk",
+                scopeVersion = "1.30.0"
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+
+            assertEquals(1, spans.size)
+            val s = spans[0]
+            assertEquals("0af7651916cd43dd8448eb211c80319c", s.traceIdHex)
+            assertEquals("b7ad6b7169203331", s.spanIdHex)
+            assertEquals("GET /api/users", s.name)
+            assertEquals("my-service", s.service)
+            assertEquals("SERVER", s.kind)
+            assertEquals(1700000000000000000L, s.startNanos)
+            assertEquals(50000000L, s.durationNanos)
+            assertEquals(0, s.error)
+            assertEquals("GET", s.meta["http.method"])
+            assertEquals("prod", s.env)
+            assertEquals("web-01", s.host)
+            assertEquals("1.0.0", s.version)
+            assertEquals("io.otel.sdk", s.scopeName)
+            assertEquals("1.30.0", s.scopeVersion)
+        }
+
+        @Test
+        fun `marks error for status code ERROR`() {
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setName("fail-op")
+                    .setStatus(Status.newBuilder().setCode(Status.StatusCode.STATUS_CODE_ERROR).setMessage("boom"))
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertEquals(1, spans[0].error)
+            assertEquals(2, spans[0].statusCode)
+            assertEquals("boom", spans[0].statusMessage)
+        }
+
+        @Test
+        fun `clamps negative duration to zero`() {
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setStartTimeUnixNano(2000000000L)
+                    .setEndTimeUnixNano(1000000000L)
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertEquals(0L, spans[0].durationNanos)
+        }
+
+        @Test
+        fun `returns null for invalid protobuf`() {
+            assertNull(service.parseOtlpTracesProtobuf(byteArrayOf(0xFF.toByte(), 0x00)))
+        }
+
+        @Test
+        fun `returns empty list for empty request`() {
+            val bytes = ExportTraceServiceRequest.getDefaultInstance().toByteArray()
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertTrue(spans.isEmpty())
+        }
     }
 }

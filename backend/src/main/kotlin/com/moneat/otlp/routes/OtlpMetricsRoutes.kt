@@ -59,11 +59,13 @@ private suspend fun handleOtlpMetricsIngest(
     otlpApiKeyService: OtlpApiKeyService,
 ) {
     val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
-    if (!contentType.contains("application/json", ignoreCase = true)) {
+    val isJson = contentType.contains("application/json", ignoreCase = true)
+    val isProtobuf = contentType.contains("application/x-protobuf", ignoreCase = true)
+    if (!isJson && !isProtobuf) {
         call.respond(
             HttpStatusCode.UnsupportedMediaType,
             ErrorResponse(
-                "OTLP metrics endpoint requires Content-Type: application/json. Protobuf encoding is not supported."
+                "OTLP metrics endpoint requires Content-Type: application/json or application/x-protobuf."
             )
         )
         return
@@ -91,8 +93,11 @@ private suspend fun handleOtlpMetricsIngest(
         return
     }
 
-    val payload = payloadBytes.decodeToString()
-    val parsedMetrics = metricsService.parseOtlpMetricsJson(payload)
+    val parsedMetrics = if (isProtobuf) {
+        metricsService.parseOtlpMetricsProtobuf(payloadBytes)
+    } else {
+        metricsService.parseOtlpMetricsJson(payloadBytes.decodeToString())
+    }
     if (parsedMetrics == null) {
         call.respond(
             HttpStatusCode.BadRequest,

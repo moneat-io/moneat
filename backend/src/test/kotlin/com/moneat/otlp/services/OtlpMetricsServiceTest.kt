@@ -20,6 +20,21 @@ import com.moneat.config.ClickHouseClient
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.opentelemetry.proto.collector.metrics.v1.ExportMetricsServiceRequest
+import io.opentelemetry.proto.common.v1.AnyValue
+import io.opentelemetry.proto.common.v1.KeyValue
+import io.opentelemetry.proto.metrics.v1.AggregationTemporality
+import io.opentelemetry.proto.metrics.v1.Gauge
+import io.opentelemetry.proto.metrics.v1.Histogram
+import io.opentelemetry.proto.metrics.v1.HistogramDataPoint
+import io.opentelemetry.proto.metrics.v1.Metric
+import io.opentelemetry.proto.metrics.v1.NumberDataPoint
+import io.opentelemetry.proto.metrics.v1.ResourceMetrics
+import io.opentelemetry.proto.metrics.v1.ScopeMetrics
+import io.opentelemetry.proto.metrics.v1.Sum
+import io.opentelemetry.proto.metrics.v1.Summary
+import io.opentelemetry.proto.metrics.v1.SummaryDataPoint
+import io.opentelemetry.proto.resource.v1.Resource
 import kotlinx.serialization.encodeToString
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -512,5 +527,187 @@ class OtlpMetricsServiceTest {
         assertEquals("cpu.usage", decoded.metrics[0].metricName)
         assertEquals(DECODE_BATCH_METRIC_VALUE, decoded.metrics[0].value)
         assertEquals(TEST_ENV, decoded.metrics[0].tags["env"])
+    }
+
+    // ──── PROTOBUF PARSING ────
+
+    @Nested
+    inner class ProtobufParsing {
+
+        private fun kv(key: String, value: String) =
+            KeyValue.newBuilder()
+                .setKey(key)
+                .setValue(AnyValue.newBuilder().setStringValue(value))
+                .build()
+
+        private fun resourceWithAttrs() = Resource.newBuilder().addAllAttributes(
+            listOf(
+                kv("service.name", TEST_SVC),
+                kv("deployment.environment", TEST_ENV),
+                kv("host.name", TEST_HOST),
+            )
+        ).build()
+
+        private fun wrapMetric(metric: Metric): ByteArray {
+            val rm = ResourceMetrics.newBuilder()
+                .setResource(resourceWithAttrs())
+                .addScopeMetrics(
+                    ScopeMetrics.newBuilder().addMetrics(metric)
+                )
+                .build()
+            return ExportMetricsServiceRequest.newBuilder()
+                .addResourceMetrics(rm)
+                .build()
+                .toByteArray()
+        }
+
+        @Test
+        fun `parses gauge with asDouble`() {
+            val metric = Metric.newBuilder()
+                .setName("system.cpu.usage")
+                .setDescription("CPU usage percentage")
+                .setUnit("%")
+                .setGauge(
+                    Gauge.newBuilder().addDataPoints(
+                        NumberDataPoint.newBuilder()
+                            .setTimeUnixNano(TEST_TIME_UNIX_NANO_PRIMARY)
+                            .setAsDouble(GAUGE_CPU_USAGE_VALUE)
+                            .addAttributes(kv("cpu.core", "0"))
+                    )
+                )
+                .build()
+
+            val metrics = service.parseOtlpMetricsProtobuf(wrapMetric(metric))!!
+
+            assertEquals(1, metrics.size)
+            val m = metrics[0]
+            assertEquals("system.cpu.usage", m.metricName)
+            assertEquals("gauge", m.metricType)
+            assertEquals("CPU usage percentage", m.description)
+            assertEquals("%", m.unit)
+            assertEquals(TEST_TIMESTAMP_MS_PRIMARY, m.timestampMs)
+            assertEquals(GAUGE_CPU_USAGE_VALUE, m.value)
+            assertEquals("0", m.tags["cpu.core"])
+            assertEquals(TEST_SVC, m.service)
+            assertEquals(TEST_ENV, m.env)
+            assertEquals(TEST_HOST, m.host)
+        }
+
+        @Test
+        fun `parses gauge with asInt`() {
+            val metric = Metric.newBuilder()
+                .setName("process.threads")
+                .setGauge(
+                    Gauge.newBuilder().addDataPoints(
+                        NumberDataPoint.newBuilder()
+                            .setTimeUnixNano(TEST_TIME_UNIX_NANO_PRIMARY)
+                            .setAsInt(GAUGE_THREADS_AS_INT.toLong())
+                    )
+                )
+                .build()
+
+            val metrics = service.parseOtlpMetricsProtobuf(wrapMetric(metric))!!
+            assertEquals(GAUGE_THREADS_AS_INT.toDouble(), metrics[0].value)
+        }
+
+        @Test
+        fun `parses monotonic cumulative sum`() {
+            val metric = Metric.newBuilder()
+                .setName("http.requests.total")
+                .setSum(
+                    Sum.newBuilder()
+                        .setIsMonotonic(true)
+                        .setAggregationTemporality(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE)
+                        .addDataPoints(
+                            NumberDataPoint.newBuilder()
+                                .setTimeUnixNano(TEST_TIME_UNIX_NANO_PRIMARY)
+                                .setAsDouble(SUM_HTTP_REQUESTS_VALUE)
+                                .addAttributes(kv("http.method", "GET"))
+                        )
+                )
+                .build()
+
+            val metrics = service.parseOtlpMetricsProtobuf(wrapMetric(metric))!!
+
+            assertEquals(1, metrics.size)
+            val m = metrics[0]
+            assertEquals("http.requests.total", m.metricName)
+            assertEquals("sum", m.metricType)
+            assertEquals(SUM_HTTP_REQUESTS_VALUE, m.value)
+            assertEquals(1, m.isMonotonic)
+            assertEquals("cumulative", m.aggregationTemporality)
+            assertEquals("GET", m.tags["http.method"])
+        }
+
+        @Test
+        fun `parses histogram with bucket counts and bounds`() {
+            val metric = Metric.newBuilder()
+                .setName("http.request.duration")
+                .setUnit("ms")
+                .setHistogram(
+                    Histogram.newBuilder()
+                        .setAggregationTemporality(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE)
+                        .addDataPoints(
+                            HistogramDataPoint.newBuilder()
+                                .setTimeUnixNano(TEST_TIME_UNIX_NANO_PRIMARY)
+                                .setCount(HIST_REQUEST_DURATION_COUNT)
+                                .setSum(HIST_REQUEST_DURATION_SUM)
+                                .setMin(HIST_REQUEST_DURATION_MIN)
+                                .setMax(HIST_REQUEST_DURATION_MAX)
+                                .addAllBucketCounts(listOf(10L, 30L, 40L, 15L, 5L))
+                                .addAllExplicitBounds(listOf(10.0, 50.0, 100.0, 250.0))
+                        )
+                )
+                .build()
+
+            val metrics = service.parseOtlpMetricsProtobuf(wrapMetric(metric))!!
+
+            assertEquals(1, metrics.size)
+            val m = metrics[0]
+            assertEquals("histogram", m.metricType)
+            assertEquals("cumulative", m.aggregationTemporality)
+            assertEquals(HIST_REQUEST_DURATION_COUNT, m.histCount)
+            assertEquals(HIST_REQUEST_DURATION_SUM, m.histSum)
+            assertEquals(HIST_REQUEST_DURATION_MIN, m.histMin)
+            assertEquals(HIST_REQUEST_DURATION_MAX, m.histMax)
+            assertEquals(listOf(10L, 30L, 40L, 15L, 5L), m.histBucketCounts)
+            assertEquals(listOf(10.0, 50.0, 100.0, 250.0), m.histExplicitBounds)
+        }
+
+        @Test
+        fun `parses summary`() {
+            val metric = Metric.newBuilder()
+                .setName("process.runtime.gc.pause")
+                .setSummary(
+                    Summary.newBuilder().addDataPoints(
+                        SummaryDataPoint.newBuilder()
+                            .setTimeUnixNano(TEST_TIME_UNIX_NANO_PRIMARY)
+                            .setCount(SUMMARY_GC_COUNT)
+                            .setSum(SUMMARY_GC_SUM)
+                    )
+                )
+                .build()
+
+            val metrics = service.parseOtlpMetricsProtobuf(wrapMetric(metric))!!
+
+            assertEquals(1, metrics.size)
+            val m = metrics[0]
+            assertEquals("summary", m.metricType)
+            assertEquals(SUMMARY_GC_COUNT, m.histCount)
+            assertEquals(SUMMARY_GC_SUM, m.histSum)
+            assertEquals(SUMMARY_GC_SUM, m.value)
+        }
+
+        @Test
+        fun `returns null for invalid protobuf`() {
+            assertNull(service.parseOtlpMetricsProtobuf(byteArrayOf(0xFF.toByte(), 0x00)))
+        }
+
+        @Test
+        fun `returns empty list for empty request`() {
+            val bytes = ExportMetricsServiceRequest.getDefaultInstance().toByteArray()
+            val metrics = service.parseOtlpMetricsProtobuf(bytes)!!
+            assertTrue(metrics.isEmpty())
+        }
     }
 }

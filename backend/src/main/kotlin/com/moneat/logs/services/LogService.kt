@@ -21,6 +21,8 @@ import com.moneat.config.RedisConfig
 import com.moneat.config.isClickHouseError
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.otlp.OtlpParsingUtils
+import com.moneat.otlp.OtlpProtobufParser
+import io.opentelemetry.proto.collector.logs.v1.ExportLogsServiceRequest
 import com.moneat.logs.models.AgentLogEntry
 import com.moneat.logs.models.LogAggregateBucket
 import com.moneat.logs.models.LogAggregateResponse
@@ -1257,6 +1259,53 @@ class LogService(private val logRepository: LogRepository) {
             systemId = systemId,
             hostId = hostId
         )
+    }
+
+    fun parseOtlpProtobuf(bytes: ByteArray): List<LogIngestEntry> {
+        val request =
+            try {
+                ExportLogsServiceRequest.parseFrom(bytes)
+            } catch (e: Exception) {
+                logger.warn(e) { "Invalid OTLP protobuf logs payload" }
+                return emptyList()
+            }
+
+        val entries = mutableListOf<LogIngestEntry>()
+
+        request.resourceLogsList.forEach { resourceLogs ->
+            val resourceCtx = OtlpProtobufParser.extractResourceContext(resourceLogs.resource)
+
+            resourceLogs.scopeLogsList.forEach { scopeLogs ->
+                scopeLogs.logRecordsList.forEach { record ->
+                    val attributes = OtlpProtobufParser.attributesToMap(record.attributesList)
+                    val bodyText = OtlpProtobufParser.extractAnyValue(record.body) ?: ""
+                    val message = if (bodyText.isBlank()) "OTLP log record" else bodyText
+                    val severityText = record.severityText.ifEmpty { null }
+                    val timestampNs = record.timeUnixNano.takeIf { it != 0L }
+                        ?: record.observedTimeUnixNano.takeIf { it != 0L }
+                    val timestampMs = timestampNs?.let { OtlpProtobufParser.nanoToEpochMs(it) }
+
+                    entries += LogIngestEntry(
+                        timestampMs = timestampMs,
+                        level = severityText,
+                        message = message,
+                        body = bodyText,
+                        service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
+                        environment = resourceCtx.environment.ifEmpty {
+                            attributes["deployment.environment"] ?: attributes["service.environment"]
+                        },
+                        host = resourceCtx.hostName.ifEmpty { attributes["host.name"] },
+                        source = "otlp",
+                        traceId = OtlpProtobufParser.bytesToHex(record.traceId).ifEmpty { null },
+                        spanId = OtlpProtobufParser.bytesToHex(record.spanId).ifEmpty { null },
+                        tags = HashMap(attributes),
+                        resourceAttributes = HashMap(resourceCtx.attributes),
+                    )
+                }
+            }
+        }
+
+        return entries
     }
 
     fun parseOtlpJson(payload: String): List<LogIngestEntry> {
