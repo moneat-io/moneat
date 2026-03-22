@@ -735,7 +735,6 @@ object TraceIngestionService {
         return element.mapValues { it.value.jsonPrimitive.double }
     }
 
-
     /**
      * Parse a protobuf AgentPayload (v0.2 format sent by dd-agent trace writer).
      * AgentPayload fields:

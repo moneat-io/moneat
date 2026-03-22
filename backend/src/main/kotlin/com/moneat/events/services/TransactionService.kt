@@ -354,7 +354,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FROM `$clickhouseDb`.apm_spans
             WHERE organization_id = $orgId
               AND trace_id_hex = '$escapedTraceId'
-              AND meta['sentry.project_id'] = '${projectId}'
+              AND meta['sentry.project_id'] = '$projectId'
               AND source = 'sentry'
             ORDER BY start ASC
             FORMAT JSONEachRow
@@ -404,7 +404,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FROM `$clickhouseDb`.apm_spans
             WHERE organization_id = $orgId
               AND span_id_hex = '$escapedSpanId'
-              AND meta['sentry.project_id'] = '${projectId}'
+              AND meta['sentry.project_id'] = '$projectId'
               AND source = 'sentry'
             LIMIT 1
             FORMAT JSONEachRow

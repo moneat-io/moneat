@@ -18,7 +18,6 @@ package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Projects
-import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.selectAll

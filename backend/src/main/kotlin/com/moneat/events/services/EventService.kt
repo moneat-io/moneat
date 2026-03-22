@@ -977,7 +977,8 @@ class EventService(
             val (traceIdHigh, traceIdLow) = hexToULongPair(traceId)
             val (spanIdHigh, spanIdLow) = hexToULongPair(rootSpanId)
 
-            rows.add("""(
+            rows.add(
+                """(
                 $spanIdLow, $spanIdHigh,
                 $traceIdLow, $traceIdHigh,
                 0, 0,
@@ -998,7 +999,8 @@ class EventService(
                 '$rootSpanId',
                 '',
                 'sentry'
-            )""")
+            )"""
+            )
         }
 
         for (span in childSpans) {
@@ -1033,7 +1035,8 @@ class EventService(
                 }
             }
 
-            rows.add("""(
+            rows.add(
+                """(
                 $spanIdLow, $spanIdHigh,
                 $traceIdLow, $traceIdHigh,
                 $parentIdLow, $parentIdHigh,
@@ -1054,7 +1057,8 @@ class EventService(
                 '${escapeSql(spanId)}',
                 '${escapeSql(parentHex)}',
                 'sentry'
-            )""")
+            )"""
+            )
         }
 
         if (rows.isEmpty()) return

@@ -894,7 +894,8 @@ class ReplayService(
         )
 
         val spansOrgId = getOrganizationIdForProject(projectId)
-        val spansInRangeQuery = if (spansOrgId != null) """
+        val spansInRangeQuery = if (spansOrgId != null) {
+            """
             SELECT
                 span_id_hex as span_id,
                 trace_id_hex as trace_id,
@@ -913,7 +914,10 @@ class ReplayService(
             ORDER BY start ASC
             LIMIT 200
             FORMAT JSONEachRow
-            """.trimIndent() else ""
+            """.trimIndent()
+        } else {
+            ""
+        }
         if (spansInRangeQuery.isNotBlank()) {
             fetchAndAddTimelineItems(
                 query = spansInRangeQuery,
