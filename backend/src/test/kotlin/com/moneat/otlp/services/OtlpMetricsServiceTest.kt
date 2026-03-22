@@ -88,6 +88,45 @@ class OtlpMetricsServiceTest {
         unmockkObject(ClickHouseClient)
     }
 
+    private fun assertGaugeWithCpuCore(m: OtlpMetricInsert) {
+        assertEquals("system.cpu.usage", m.metricName)
+        assertEquals("gauge", m.metricType)
+        assertEquals("CPU usage percentage", m.description)
+        assertEquals("%", m.unit)
+        assertEquals(TEST_TIMESTAMP_MS_PRIMARY, m.timestampMs)
+        assertEquals(GAUGE_CPU_USAGE_VALUE, m.value)
+        assertEquals("0", m.tags["cpu.core"])
+        assertEquals(TEST_SVC, m.service)
+        assertEquals(TEST_ENV, m.env)
+        assertEquals(TEST_HOST, m.host)
+    }
+
+    private fun assertMonotonicCumulativeSum(m: OtlpMetricInsert) {
+        assertEquals("http.requests.total", m.metricName)
+        assertEquals("sum", m.metricType)
+        assertEquals(SUM_HTTP_REQUESTS_VALUE, m.value)
+        assertEquals(1, m.isMonotonic)
+        assertEquals("cumulative", m.aggregationTemporality)
+        assertEquals("GET", m.tags["http.method"])
+    }
+
+    private fun assertHistogramStats(m: OtlpMetricInsert) {
+        assertEquals("cumulative", m.aggregationTemporality)
+        assertEquals(HIST_REQUEST_DURATION_COUNT, m.histCount)
+        assertEquals(HIST_REQUEST_DURATION_SUM, m.histSum)
+        assertEquals(HIST_REQUEST_DURATION_MIN, m.histMin)
+        assertEquals(HIST_REQUEST_DURATION_MAX, m.histMax)
+        assertEquals(listOf(10L, 30L, 40L, 15L, 5L), m.histBucketCounts)
+        assertEquals(listOf(10.0, 50.0, 100.0, 250.0), m.histExplicitBounds)
+    }
+
+    private fun assertSummaryGcPause(m: OtlpMetricInsert) {
+        assertEquals("summary", m.metricType)
+        assertEquals(SUMMARY_GC_COUNT, m.histCount)
+        assertEquals(SUMMARY_GC_SUM, m.histSum)
+        assertEquals(SUMMARY_GC_SUM, m.value)
+    }
+
     private fun wrapMetric(metricJson: String, resourceAttrs: String = ""): String = """
     {
       "resourceMetrics": [{
@@ -135,17 +174,7 @@ class OtlpMetricsServiceTest {
             val metrics = service.parseOtlpMetricsJson(payload)!!
 
             assertEquals(1, metrics.size)
-            val m = metrics[0]
-            assertEquals("system.cpu.usage", m.metricName)
-            assertEquals("gauge", m.metricType)
-            assertEquals("CPU usage percentage", m.description)
-            assertEquals("%", m.unit)
-            assertEquals(TEST_TIMESTAMP_MS_PRIMARY, m.timestampMs)
-            assertEquals(GAUGE_CPU_USAGE_VALUE, m.value)
-            assertEquals("0", m.tags["cpu.core"])
-            assertEquals(TEST_SVC, m.service)
-            assertEquals(TEST_ENV, m.env)
-            assertEquals(TEST_HOST, m.host)
+            assertGaugeWithCpuCore(metrics[0])
         }
 
         @Test
@@ -221,13 +250,7 @@ class OtlpMetricsServiceTest {
             val metrics = service.parseOtlpMetricsJson(payload)!!
 
             assertEquals(1, metrics.size)
-            val m = metrics[0]
-            assertEquals("http.requests.total", m.metricName)
-            assertEquals("sum", m.metricType)
-            assertEquals(SUM_HTTP_REQUESTS_VALUE, m.value)
-            assertEquals(1, m.isMonotonic)
-            assertEquals("cumulative", m.aggregationTemporality)
-            assertEquals("GET", m.tags["http.method"])
+            assertMonotonicCumulativeSum(metrics[0])
         }
 
         @Test
@@ -293,13 +316,7 @@ class OtlpMetricsServiceTest {
             val m = metrics[0]
             assertEquals("http.request.duration", m.metricName)
             assertEquals("histogram", m.metricType)
-            assertEquals("cumulative", m.aggregationTemporality)
-            assertEquals(HIST_REQUEST_DURATION_COUNT, m.histCount)
-            assertEquals(HIST_REQUEST_DURATION_SUM, m.histSum)
-            assertEquals(HIST_REQUEST_DURATION_MIN, m.histMin)
-            assertEquals(HIST_REQUEST_DURATION_MAX, m.histMax)
-            assertEquals(listOf(10L, 30L, 40L, 15L, 5L), m.histBucketCounts)
-            assertEquals(listOf(10.0, 50.0, 100.0, 250.0), m.histExplicitBounds)
+            assertHistogramStats(m)
             assertEquals(HIST_REQUEST_DURATION_SUM, m.value)
             assertEquals("/api/users", m.tags["http.route"])
         }
@@ -373,10 +390,7 @@ class OtlpMetricsServiceTest {
             assertEquals(1, metrics.size)
             val m = metrics[0]
             assertEquals("process.runtime.gc.pause", m.metricName)
-            assertEquals("summary", m.metricType)
-            assertEquals(SUMMARY_GC_COUNT, m.histCount)
-            assertEquals(SUMMARY_GC_SUM, m.histSum)
-            assertEquals(SUMMARY_GC_SUM, m.value)
+            assertSummaryGcPause(m)
         }
     }
 
@@ -580,17 +594,7 @@ class OtlpMetricsServiceTest {
             val metrics = service.parseOtlpMetricsProtobuf(wrapMetric(metric))!!
 
             assertEquals(1, metrics.size)
-            val m = metrics[0]
-            assertEquals("system.cpu.usage", m.metricName)
-            assertEquals("gauge", m.metricType)
-            assertEquals("CPU usage percentage", m.description)
-            assertEquals("%", m.unit)
-            assertEquals(TEST_TIMESTAMP_MS_PRIMARY, m.timestampMs)
-            assertEquals(GAUGE_CPU_USAGE_VALUE, m.value)
-            assertEquals("0", m.tags["cpu.core"])
-            assertEquals(TEST_SVC, m.service)
-            assertEquals(TEST_ENV, m.env)
-            assertEquals(TEST_HOST, m.host)
+            assertGaugeWithCpuCore(metrics[0])
         }
 
         @Test
@@ -630,13 +634,7 @@ class OtlpMetricsServiceTest {
             val metrics = service.parseOtlpMetricsProtobuf(wrapMetric(metric))!!
 
             assertEquals(1, metrics.size)
-            val m = metrics[0]
-            assertEquals("http.requests.total", m.metricName)
-            assertEquals("sum", m.metricType)
-            assertEquals(SUM_HTTP_REQUESTS_VALUE, m.value)
-            assertEquals(1, m.isMonotonic)
-            assertEquals("cumulative", m.aggregationTemporality)
-            assertEquals("GET", m.tags["http.method"])
+            assertMonotonicCumulativeSum(metrics[0])
         }
 
         @Test
@@ -665,13 +663,7 @@ class OtlpMetricsServiceTest {
             assertEquals(1, metrics.size)
             val m = metrics[0]
             assertEquals("histogram", m.metricType)
-            assertEquals("cumulative", m.aggregationTemporality)
-            assertEquals(HIST_REQUEST_DURATION_COUNT, m.histCount)
-            assertEquals(HIST_REQUEST_DURATION_SUM, m.histSum)
-            assertEquals(HIST_REQUEST_DURATION_MIN, m.histMin)
-            assertEquals(HIST_REQUEST_DURATION_MAX, m.histMax)
-            assertEquals(listOf(10L, 30L, 40L, 15L, 5L), m.histBucketCounts)
-            assertEquals(listOf(10.0, 50.0, 100.0, 250.0), m.histExplicitBounds)
+            assertHistogramStats(m)
         }
 
         @Test
@@ -692,10 +684,8 @@ class OtlpMetricsServiceTest {
 
             assertEquals(1, metrics.size)
             val m = metrics[0]
-            assertEquals("summary", m.metricType)
-            assertEquals(SUMMARY_GC_COUNT, m.histCount)
-            assertEquals(SUMMARY_GC_SUM, m.histSum)
-            assertEquals(SUMMARY_GC_SUM, m.value)
+            assertEquals("process.runtime.gc.pause", m.metricName)
+            assertSummaryGcPause(m)
         }
 
         @Test
