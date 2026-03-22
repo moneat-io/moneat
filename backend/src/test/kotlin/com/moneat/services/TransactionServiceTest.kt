@@ -20,13 +20,19 @@ import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.TransactionService
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,6 +46,7 @@ class TransactionServiceTest {
         private const val TXN_UUID = "01234567-89ab-cdef-0123-456789abcdef"
         private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
         private const val TRACE_1 = "trace-1"
+        private var db: Database? = null
     }
 
     private val retentionPolicyService = mockk<RetentionPolicyService>()
@@ -49,6 +56,28 @@ class TransactionServiceTest {
 
     @BeforeTest
     fun setup() {
+        if (db == null) {
+            db = Database.connect(
+                url = "jdbc:h2:mem:moneat_txn_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+        }
+        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(Organizations, Projects)
+        transaction {
+            Organizations.insert {
+                it[id] = 1
+                it[name] = "Test Org"
+                it[slug] = "test-org"
+            }
+            Projects.insert {
+                it[id] = 1
+                it[organization_id] = 1
+                it[name] = "Test Project"
+                it[slug] = "test-project"
+            }
+        }
+
         coEvery { retentionPolicyService.getRetentionDaysForProject(any()) } returns 30
         queryHelper = DashboardQueryHelper(retentionPolicyService, pricingTierService)
         service = TransactionService(queryHelper)
@@ -244,8 +273,8 @@ class TransactionServiceTest {
 
     @Test
     fun `getTraceDetails assembles spans into trace`() = runBlocking {
-        val body = """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_1","transaction_id":"tx-1","op":"http.server","description":"GET /","start_ts_ms":"1000","end_ts_ms":"2500","duration_ms":"1500","status":"ok","tags":{},"data":"{}"}
-{"span_id":"s2","parent_span_id":"s1","trace_id":"$TRACE_1","transaction_id":"tx-1","op":"db","description":"SELECT","start_ts_ms":"1200","end_ts_ms":"1800","duration_ms":"600","status":"ok","tags":{},"data":"{}"}"""
+        val body = """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_1","meta":{"sentry.transaction_id":"tx-1","sentry.project_id":"1"},"op":"http.server","description":"GET /","start_ns":"1000000000","duration_ns":"1500000000","error":0}
+{"span_id":"s2","parent_span_id":"s1","trace_id":"$TRACE_1","meta":{"sentry.transaction_id":"tx-1","sentry.project_id":"1"},"op":"db","description":"SELECT","start_ns":"1200000000","duration_ns":"600000000","error":0}"""
         MockHttpServer { exchange ->
             exchange.respond(200, body, CONTENT_TYPE_TEXT_PLAIN)
         }.use { server ->
@@ -279,10 +308,10 @@ class TransactionServiceTest {
             val query = exchange.requestBodyText()
             callCount++
             when {
-                query.contains("spans") && query.contains("span_id") -> {
+                query.contains("apm_spans") && query.contains("span_id_hex") -> {
                     exchange.respond(
                         200,
-                        """{"span_id":"s1","parent_span_id":"","trace_id":"t1","transaction_id":"01234567-89ab-cdef-0123-456789abcdef","op":"db","description":"SELECT","start_ts_ms":"1000","end_ts_ms":"1500","duration_ms":"500","status":"ok","tags":{},"data":"{}"}
+                        """{"span_id":"s1","parent_span_id":"","trace_id":"t1","meta":{"sentry.transaction_id":"01234567-89ab-cdef-0123-456789abcdef","sentry.project_id":"1"},"op":"db","description":"SELECT","start_ns":"1000000000","duration_ns":"500000000","error":0}
                         """.trimIndent(),
                         CONTENT_TYPE_TEXT_PLAIN
                     )

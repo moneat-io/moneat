@@ -23,9 +23,13 @@ import com.moneat.events.models.ReplayListItem
 import com.moneat.events.models.ReplayRecordingResponse
 import com.moneat.events.models.ReplayTimelineItem
 import com.moneat.events.models.ReplayTimelineResponse
+import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.coroutines.CancellationException
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -726,27 +730,40 @@ class ReplayService(
         FORMAT JSONEachRow
         """.trimIndent()
 
+    private fun getOrganizationIdForProject(projectId: Long): Int? =
+        transaction {
+            Projects
+                .selectAll()
+                .where { Projects.id eq projectId }
+                .firstOrNull()
+                ?.get(Projects.organization_id)
+        }
+
     private fun buildSpansByTraceQuery(
         projectId: Long,
         traceIdList: String,
         retentionDays: Int,
         demoEpochMs: Long?
-    ): String =
-        """
+    ): String {
+        val orgId = getOrganizationIdForProject(projectId) ?: return ""
+        return """
         SELECT
-            span_id,
-            trace_id,
-            toString(transaction_id) as transaction_id,
-            description,
-            op,
-            toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
-            duration_ms
-        FROM `$clickhouseDb`.spans
-        WHERE project_id = $projectId
-            AND trace_id IN ($traceIdList)
-            AND ${queryHelper.timestampRetentionClause("start_timestamp", retentionDays, demoEpochMs)}
+            span_id_hex as span_id,
+            trace_id_hex as trace_id,
+            meta['sentry.transaction_id'] as transaction_id,
+            resource as description,
+            type as op,
+            toUnixTimestamp64Milli(start) as start_ts_ms,
+            duration / 1000000.0 as duration_ms
+        FROM `$clickhouseDb`.apm_spans
+        WHERE organization_id = $orgId
+            AND trace_id_hex IN ($traceIdList)
+            AND meta['sentry.project_id'] = '$projectId'
+            AND source = 'sentry'
+            AND ${queryHelper.timestampRetentionClause("start", retentionDays, demoEpochMs)}
         FORMAT JSONEachRow
         """.trimIndent()
+    }
 
     suspend fun getReplayTimeline(
         replayId: String,
@@ -805,15 +822,17 @@ class ReplayService(
             )
 
             val spansQuery = buildSpansByTraceQuery(projectId, traceIdList, retentionDays, demoEpochMs)
-            fetchAndAddTimelineItems(
-                query = spansQuery,
-                errorContext = "Replay timeline spans by trace IDs",
-                failureMessage = "replay timeline spans",
-                replayStartMs = replayStartMs,
-                mapper = ::mapSpanTimelineItem,
-                items = items,
-                addedIds = addedIds
-            )
+            if (spansQuery.isNotBlank()) {
+                fetchAndAddTimelineItems(
+                    query = spansQuery,
+                    errorContext = "Replay timeline spans by trace IDs",
+                    failureMessage = "replay timeline spans",
+                    replayStartMs = replayStartMs,
+                    mapper = ::mapSpanTimelineItem,
+                    items = items,
+                    addedIds = addedIds
+                )
+            }
         }
 
         // Link by time range: include errors/transactions/spans that occurred during the replay
@@ -874,34 +893,38 @@ class ReplayService(
             addedIds = addedIds
         )
 
-        val spansInRangeQuery =
-            """
+        val spansOrgId = getOrganizationIdForProject(projectId)
+        val spansInRangeQuery = if (spansOrgId != null) """
             SELECT
-                span_id,
-                trace_id,
-                toString(transaction_id) as transaction_id,
-                description,
-                op,
-                toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
-                duration_ms
-            FROM `$clickhouseDb`.spans
-            WHERE project_id = $projectId
-                AND start_timestamp >= fromUnixTimestamp64Milli($replayStartMs)
-                AND start_timestamp <= fromUnixTimestamp64Milli($replayEndMs)
-                AND ${queryHelper.timestampRetentionClause("start_timestamp", retentionDays, demoEpochMs)}
-            ORDER BY start_timestamp ASC
+                span_id_hex as span_id,
+                trace_id_hex as trace_id,
+                meta['sentry.transaction_id'] as transaction_id,
+                resource as description,
+                type as op,
+                toUnixTimestamp64Milli(start) as start_ts_ms,
+                duration / 1000000.0 as duration_ms
+            FROM `$clickhouseDb`.apm_spans
+            WHERE organization_id = $spansOrgId
+                AND meta['sentry.project_id'] = '$projectId'
+                AND source = 'sentry'
+                AND start >= fromUnixTimestamp64Milli($replayStartMs)
+                AND start <= fromUnixTimestamp64Milli($replayEndMs)
+                AND ${queryHelper.timestampRetentionClause("start", retentionDays, demoEpochMs)}
+            ORDER BY start ASC
             LIMIT 200
             FORMAT JSONEachRow
-            """.trimIndent()
-        fetchAndAddTimelineItems(
-            query = spansInRangeQuery,
-            errorContext = "Replay timeline spans by time range",
-            failureMessage = "replay timeline spans by time range",
-            replayStartMs = replayStartMs,
-            mapper = ::mapSpanTimelineItem,
-            items = items,
-            addedIds = addedIds
-        )
+            """.trimIndent() else ""
+        if (spansInRangeQuery.isNotBlank()) {
+            fetchAndAddTimelineItems(
+                query = spansInRangeQuery,
+                errorContext = "Replay timeline spans by time range",
+                failureMessage = "replay timeline spans by time range",
+                replayStartMs = replayStartMs,
+                mapper = ::mapSpanTimelineItem,
+                items = items,
+                addedIds = addedIds
+            )
+        }
 
         val sorted = items.sortedBy { it.offsetMs }
         return ReplayTimelineResponse(items = sorted, replayStartMs = replayStartMs)

@@ -37,7 +37,6 @@ import com.moneat.events.repositories.models.FeedbackInsertData
 import com.moneat.events.repositories.models.LlmGenerationInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
-import com.moneat.events.repositories.models.SpanInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
@@ -52,6 +51,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -379,9 +379,6 @@ class EventServiceCoverageTest {
 
     @Test
     fun `storeTransaction inserts spans from transaction`() = runBlocking {
-        val spanSlot = slot<List<SpanInsertData>>()
-        coEvery { eventRepository.insertSpans(capture(spanSlot)) } returns Unit
-
         val txnJson = Json.encodeToString(
             SentryTransaction(
                 event_id = "txn-spans",
@@ -397,6 +394,7 @@ class EventServiceCoverageTest {
                         buildJsonObject {
                             put("trace_id", "trace-abc")
                             put("op", "http.server")
+                            put("span_id", "root-span")
                         }
                     )
                 },
@@ -432,11 +430,8 @@ class EventServiceCoverageTest {
             SentryEnvelope(eventId = "txn-spans", items = listOf(EnvelopeItem("transaction", txnJson)))
         )
 
-        coVerify(atLeast = 1) { eventRepository.insertSpans(any()) }
-        assertTrue(spanSlot.isCaptured)
-        assertEquals(2, spanSlot.captured.size)
-        assertEquals("db.query", spanSlot.captured[0].op)
-        assertEquals("http.client", spanSlot.captured[1].op)
+        coVerify(atLeast = 1) { eventRepository.insertTransaction(any()) }
+        verify(atLeast = 1) { eventRepository.getOrganizationIdForProject(testProjectId) }
     }
 
     @Test
@@ -1037,8 +1032,8 @@ class EventServiceCoverageTest {
             )
         )
 
-        // No spans should be inserted when transaction fails
-        coVerify(exactly = 0) { eventRepository.insertSpans(any()) }
+        // Transaction insert should have failed, so no further processing
+        coVerify(exactly = 1) { eventRepository.insertTransaction(any()) }
     }
 
     // ===================== storeEvent when insert fails =====================

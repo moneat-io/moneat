@@ -32,6 +32,8 @@ import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
+import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -733,21 +735,6 @@ object TraceIngestionService {
         return element.mapValues { it.value.jsonPrimitive.double }
     }
 
-    private fun mapToSqlMap(map: Map<String, String>): String {
-        if (map.isEmpty()) return "map()"
-        val entries = map.entries.joinToString(", ") { (k, v) ->
-            "'${escapeSql(k)}', '${escapeSql(v)}'"
-        }
-        return "map($entries)"
-    }
-
-    private fun doubleMapToSqlMap(map: Map<String, Double>): String {
-        if (map.isEmpty()) return "map()"
-        val entries = map.entries.joinToString(", ") { (k, v) ->
-            "'${escapeSql(k)}', $v"
-        }
-        return "map($entries)"
-    }
 
     /**
      * Parse a protobuf AgentPayload (v0.2 format sent by dd-agent trace writer).

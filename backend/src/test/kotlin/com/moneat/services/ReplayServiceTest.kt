@@ -20,13 +20,19 @@ import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.ReplayService
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,6 +45,7 @@ class ReplayServiceTest {
     companion object {
         private const val TEXT_PLAIN = "text/plain"
         private const val REPLAY_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        private var db: Database? = null
     }
 
     private val retentionPolicyService = mockk<RetentionPolicyService>()
@@ -48,6 +55,28 @@ class ReplayServiceTest {
 
     @BeforeTest
     fun setup() {
+        if (db == null) {
+            db = Database.connect(
+                url = "jdbc:h2:mem:moneat_replay_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+        }
+        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(Organizations, Projects)
+        transaction {
+            Organizations.insert {
+                it[id] = 1
+                it[name] = "Test Org"
+                it[slug] = "test-org"
+            }
+            Projects.insert {
+                it[id] = 1
+                it[organization_id] = 1
+                it[name] = "Test Project"
+                it[slug] = "test-project"
+            }
+        }
+
         coEvery { retentionPolicyService.getRetentionDaysForProject(any()) } returns 30
         queryHelper = DashboardQueryHelper(retentionPolicyService, pricingTierService)
         service = ReplayService(queryHelper)
@@ -170,7 +199,7 @@ class ReplayServiceTest {
 {"event_id":"22222222-3333-4444-5555-666666666666","timestamp":"2026-01-01T00:02:00.000Z","ts_ms":"1767225720000","transaction_name":"GET /api","duration_ms":"150.0","transaction_op":"http.server","contexts":"{}"}
         """.trimIndent()
         val spanRow = """
-{"span_id":"span-1","trace_id":"trace-aaa","transaction_id":"22222222-3333-4444-5555-666666666666","description":"SELECT *","op":"db","start_ts_ms":"1767225720500","duration_ms":"50.0"}
+{"span_id":"span-1","trace_id":"trace-aaa","transaction_id":"22222222-3333-4444-5555-666666666666","description":"SELECT *","op":"db","start_ts_ms":"1767225720500","duration_ms":"50"}
         """.trimIndent()
 
         MockHttpServer { exchange ->
@@ -184,13 +213,13 @@ class ReplayServiceTest {
                     exchange.respond(200, errorRow, TEXT_PLAIN)
                 query.contains("event_type = 'transaction'") && query.contains("trace_id") ->
                     exchange.respond(200, txRow, TEXT_PLAIN)
-                query.contains("spans") && query.contains("trace_id IN") ->
+                query.contains("apm_spans") && query.contains("trace_id_hex IN") ->
                     exchange.respond(200, spanRow, TEXT_PLAIN)
                 query.contains("event_type = 'error'") ->
                     exchange.respond(200, "", TEXT_PLAIN)
                 query.contains("event_type = 'transaction'") ->
                     exchange.respond(200, "", TEXT_PLAIN)
-                query.contains("spans") ->
+                query.contains("apm_spans") ->
                     exchange.respond(200, "", TEXT_PLAIN)
                 else ->
                     exchange.respond(200, "", TEXT_PLAIN)

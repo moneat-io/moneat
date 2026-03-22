@@ -94,4 +94,20 @@ object ClickHouseSqlUtils {
             "Invalid operator: $operator. Must be one of: ${allowedOperators.joinToString()}"
         }
     }
+
+    fun mapToSqlMap(map: Map<String, String>): String {
+        if (map.isEmpty()) return "map()"
+        val entries = map.entries.joinToString(", ") { (k, v) ->
+            "'${escapeSql(k)}', '${escapeSql(v)}'"
+        }
+        return "map($entries)"
+    }
+
+    fun doubleMapToSqlMap(map: Map<String, Double>): String {
+        if (map.isEmpty()) return "map()"
+        val entries = map.entries.joinToString(", ") { (k, v) ->
+            "'${escapeSql(k)}', $v"
+        }
+        return "map($entries)"
+    }
 }

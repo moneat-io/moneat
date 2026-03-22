@@ -262,7 +262,7 @@ export function LogDetail({log, open, onClose, onViewInContext, projectId}: LogD
                   <LinkableField
                     label="Trace ID"
                     value={log.traceId}
-                    to={`/projects/${projectId}/traces/${log.traceId}`}
+                    to={`/performance/traces/${log.traceId}`}
                   />
                 )}
                 {log.spanId && projectId && (

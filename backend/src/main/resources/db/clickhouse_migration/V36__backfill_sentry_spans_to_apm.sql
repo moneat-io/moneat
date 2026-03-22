@@ -1,0 +1,14 @@
+-- Backfill existing Sentry spans from the `spans` table into `apm_spans`.
+--
+-- This migration cannot run as a pure SQL statement because `organization_id`
+-- must be resolved from PostgreSQL (projects.organization_id).
+--
+-- To backfill, run the Kotlin helper:
+--   com.moneat.events.services.SentrySpanBackfill.run()
+--
+-- It reads all project_id -> organization_id mappings from PG, then executes:
+--   INSERT INTO apm_spans SELECT ... FROM spans
+-- with a multiIf() for the org mapping.
+--
+-- This file is intentionally a no-op so the migration runner records it as applied.
+SELECT 1;

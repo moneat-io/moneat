@@ -25,6 +25,7 @@ import com.moneat.events.models.TraceDetailResponse
 import com.moneat.events.models.TransactionDetailResponse
 import com.moneat.events.models.TransactionSummaryResponse
 import com.moneat.events.models.TransactionWithSpansResponse
+import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
@@ -34,6 +35,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 
@@ -44,24 +48,38 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
     companion object {
         private const val APDEX_THRESHOLD_MS = 500
     }
-    private fun mapSpanRow(obj: JsonObject): SpanResponse {
-        val startMs = obj["start_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-        val endMs = obj["end_ts_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-        val duration = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
-        val tagsMap = queryHelper.parseStringMap(obj["tags"])
+
+    private fun getOrganizationIdForProject(projectId: Long): Int? =
+        transaction {
+            Projects
+                .selectAll()
+                .where { Projects.id eq projectId }
+                .firstOrNull()
+                ?.get(Projects.organization_id)
+        }
+
+    private fun mapSpanRowFromApm(obj: JsonObject): SpanResponse {
+        val startNs = obj["start_ns"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+        val durationNs = obj["duration_ns"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+        val startMs = startNs / 1_000_000.0
+        val endMs = startMs + (durationNs / 1_000_000.0)
+        val durationMs = durationNs / 1_000_000.0
+        val tagsMap = queryHelper.parseStringMap(obj["meta"])
+        val errorVal = obj["error"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
+        val status = if (errorVal > 0) "error" else "ok"
         return SpanResponse(
             spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
             parentSpanId = obj["parent_span_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
             traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull,
-            transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull,
+            transactionId = tagsMap["sentry.transaction_id"],
             op = obj["op"]?.jsonPrimitive?.content ?: "",
             description = obj["description"]?.jsonPrimitive?.content ?: "",
             startTimestamp = startMs / 1000.0,
             endTimestamp = endMs / 1000.0,
-            duration = duration,
-            status = obj["status"]?.jsonPrimitive?.contentOrNull,
-            tags = tagsMap,
-            data = obj["data"]?.jsonPrimitive?.contentOrNull
+            duration = durationMs,
+            status = status,
+            tags = tagsMap.filterKeys { !it.startsWith("sentry.") },
+            data = null
         )
     }
 
@@ -285,31 +303,33 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
     suspend fun getTransactionSpans(eventId: String): TransactionWithSpansResponse? {
         val transaction = getTransaction(eventId) ?: return null
         val normalizedEventId = queryHelper.normalizeUuid(eventId) ?: return null
+        val projectId = getProjectIdForTransaction(eventId) ?: return null
+        val orgId = getOrganizationIdForProject(projectId)
+            ?: return TransactionWithSpansResponse(transaction, emptyList())
 
         val query = """
             SELECT
-                span_id,
-                parent_span_id,
-                trace_id,
-                toString(transaction_id) as transaction_id,
-                op,
-                description,
-                toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
-                toUnixTimestamp64Milli(end_timestamp) as end_ts_ms,
-                duration_ms,
-                status,
-                tags,
-                data
-            FROM `$clickhouseDb`.spans
-            WHERE toString(transaction_id) = '$normalizedEventId'
-            ORDER BY start_timestamp ASC
+                span_id_hex as span_id,
+                parent_id_hex as parent_span_id,
+                trace_id_hex as trace_id,
+                meta,
+                type as op,
+                resource as description,
+                toInt64(toUnixTimestamp64Nano(start)) as start_ns,
+                duration as duration_ns,
+                error
+            FROM `$clickhouseDb`.apm_spans
+            WHERE organization_id = $orgId
+              AND meta['sentry.transaction_id'] = '${escapeSql(normalizedEventId)}'
+              AND source = 'sentry'
+            ORDER BY start ASC
             FORMAT JSONEachRow
         """.trimIndent()
 
         val rows =
             queryHelper.executeJsonEachRowQuery(query, "Transaction spans")
                 ?: return TransactionWithSpansResponse(transaction, emptyList())
-        val spans = rows.map { mapSpanRow(it) }
+        val spans = rows.map { mapSpanRowFromApm(it) }
         return TransactionWithSpansResponse(transaction, spans)
     }
 
@@ -318,30 +338,30 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
         traceId: String
     ): TraceDetailResponse? {
         val escapedTraceId = escapeSql(traceId)
-        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        val orgId = getOrganizationIdForProject(projectId) ?: return null
 
         val query = """
             SELECT
-                span_id,
-                parent_span_id,
-                trace_id,
-                toString(transaction_id) as transaction_id,
-                op,
-                description,
-                toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
-                toUnixTimestamp64Milli(end_timestamp) as end_ts_ms,
-                duration_ms,
-                status,
-                tags,
-                data
-            FROM `$clickhouseDb`.spans
-            WHERE $projectIdClause AND trace_id = '$escapedTraceId'
-            ORDER BY start_timestamp ASC
+                span_id_hex as span_id,
+                parent_id_hex as parent_span_id,
+                trace_id_hex as trace_id,
+                meta,
+                type as op,
+                resource as description,
+                toInt64(toUnixTimestamp64Nano(start)) as start_ns,
+                duration as duration_ns,
+                error
+            FROM `$clickhouseDb`.apm_spans
+            WHERE organization_id = $orgId
+              AND trace_id_hex = '$escapedTraceId'
+              AND meta['sentry.project_id'] = '${projectId}'
+              AND source = 'sentry'
+            ORDER BY start ASC
             FORMAT JSONEachRow
         """.trimIndent()
 
         val rows = queryHelper.executeJsonEachRowQuery(query, "Trace spans") ?: return null
-        val spans = rows.map { mapSpanRow(it) }
+        val spans = rows.map { mapSpanRowFromApm(it) }
         if (spans.isEmpty()) return null
 
         return try {
@@ -368,31 +388,31 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
         spanId: String
     ): SpanDetailResponse? {
         val escapedSpanId = escapeSql(spanId)
-        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        val orgId = getOrganizationIdForProject(projectId) ?: return null
 
         val query = """
             SELECT
-                span_id,
-                parent_span_id,
-                trace_id,
-                toString(transaction_id) as transaction_id,
-                op,
-                description,
-                toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
-                toUnixTimestamp64Milli(end_timestamp) as end_ts_ms,
-                duration_ms,
-                status,
-                tags,
-                data
-            FROM `$clickhouseDb`.spans
-            WHERE $projectIdClause AND span_id = '$escapedSpanId'
+                span_id_hex as span_id,
+                parent_id_hex as parent_span_id,
+                trace_id_hex as trace_id,
+                meta,
+                type as op,
+                resource as description,
+                toInt64(toUnixTimestamp64Nano(start)) as start_ns,
+                duration as duration_ns,
+                error
+            FROM `$clickhouseDb`.apm_spans
+            WHERE organization_id = $orgId
+              AND span_id_hex = '$escapedSpanId'
+              AND meta['sentry.project_id'] = '${projectId}'
+              AND source = 'sentry'
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()
 
         val obj = queryHelper.executeJsonEachRowQuery(query, "Span")?.firstOrNull() ?: return null
-        val span = mapSpanRow(obj)
-        val transactionId = obj["transaction_id"]?.jsonPrimitive?.contentOrNull
+        val span = mapSpanRowFromApm(obj)
+        val transactionId = queryHelper.parseStringMap(obj["meta"])["sentry.transaction_id"]
         val transaction = transactionId?.let { getTransaction(it) }
         return SpanDetailResponse(span = span, transaction = transaction)
     }

@@ -62,7 +62,7 @@ class AiContextAggregator {
      */
     suspend fun aggregate(orgId: Int, projectIds: List<Long>, timeFilter: AiTimeFilter): AggregatedContext {
         val logs = if (projectIds.isNotEmpty()) queryLogs(projectIds.joinToString(","), timeFilter) else emptyList()
-        val spans = if (projectIds.isNotEmpty()) querySpans(projectIds.joinToString(","), timeFilter) else emptyList()
+        val spans = if (projectIds.isNotEmpty()) querySpans(orgId, timeFilter) else emptyList()
         val events = if (projectIds.isNotEmpty()) queryEvents(projectIds.joinToString(","), timeFilter) else emptyList()
         val metrics = queryMetrics(orgId, timeFilter)
         val containers = queryContainers(orgId, timeFilter)
@@ -111,14 +111,20 @@ class AiContextAggregator {
         }
     }
 
-    private suspend fun querySpans(projectIdList: String, timeFilter: AiTimeFilter): List<SpanEntry> {
+    private suspend fun querySpans(orgId: Int, timeFilter: AiTimeFilter): List<SpanEntry> {
         return try {
             val query = """
-                SELECT trace_id, span_id, op AS operation, duration_ms, status
-                FROM spans
-                WHERE project_id IN ($projectIdList)
-                  AND ${timeFilter.toCondition("start_timestamp")}
-                ORDER BY start_timestamp DESC
+                SELECT
+                    trace_id_hex AS trace_id,
+                    span_id_hex AS span_id,
+                    type AS operation,
+                    duration / 1000000 AS duration_ms,
+                    if(error > 0, 'error', 'ok') AS status,
+                    service
+                FROM apm_spans
+                WHERE organization_id = $orgId
+                  AND ${timeFilter.toCondition("start")}
+                ORDER BY start DESC
                 LIMIT $MAX_SPANS
                 FORMAT JSON
             """.trimIndent()
@@ -233,7 +239,7 @@ class AiContextAggregator {
                     operation = obj["operation"]?.jsonPrimitive?.content ?: "",
                     duration = obj["duration_ms"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
                     status = obj["status"]?.jsonPrimitive?.content ?: "",
-                    service = null,
+                    service = obj["service"]?.jsonPrimitive?.content,
                 )
             }
         } catch (e: Exception) {
