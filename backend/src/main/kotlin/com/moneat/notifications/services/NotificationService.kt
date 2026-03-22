@@ -374,11 +374,12 @@ class NotificationService(
         val projectSummaries =
             projects.map { (projectId, projectName) ->
                 val stats = getStatsForPeriod(listOf(projectId), startDate, endDate)
+                val crashFreeRate = getCrashFreeRate(projectId, startDate, endDate)
                 EmailService.ProjectSummary(
                     name = projectName,
                     events = formatNumber(stats.totalEvents),
                     issues = formatNumber(stats.uniqueIssues),
-                    crashFree = "99.5" // TODO: Calculate actual crash-free rate
+                    crashFree = crashFreeRate?.let { "%.1f%%".format(it) } ?: "N/A"
                 )
             }
 
@@ -444,6 +445,38 @@ class NotificationService(
             uniqueIssues = data?.get("unique_issues")?.jsonPrimitive?.longOrNull ?: 0,
             uniqueUsers = data?.get("unique_users")?.jsonPrimitive?.longOrNull ?: 0
         )
+    }
+
+    private suspend fun getCrashFreeRate(
+        projectId: Long,
+        startDate: Instant,
+        endDate: Instant
+    ): Double? {
+        val startMs = startDate.toEpochMilli()
+        val endMs = endDate.toEpochMilli()
+
+        val query =
+            """
+            SELECT countIf(errors = 0) * 100.0 / count() as rate
+            FROM `$clickhouseDb`.sessions
+            WHERE project_id = $projectId
+              AND started >= fromUnixTimestamp64Milli($startMs)
+              AND started < fromUnixTimestamp64Milli($endMs)
+            FORMAT JSON
+            """.trimIndent()
+
+        return try {
+            val response = ClickHouseClient.execute(query)
+            val responseBody = response.bodyAsText()
+            if (!response.status.isSuccess()) return null
+            val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
+            val data = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
+            val rate = data?.get("rate")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+            if (rate == null || rate.isNaN() || rate.isInfinite()) null else rate
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
+            null
+        }
     }
 
     private suspend fun getTopIssues(
