@@ -72,6 +72,7 @@ class OtlpMetricsServiceTest {
         private const val SUMMARY_GC_COUNT = 50L
         private const val SUMMARY_GC_SUM = 250.5
         private const val DECODE_BATCH_METRIC_VALUE = 42.5
+        private const val SUMMARY_METRIC_NAME = "process.runtime.gc.pause"
     }
 
     private lateinit var service: OtlpMetricsService
@@ -373,7 +374,7 @@ class OtlpMetricsServiceTest {
             val payload = wrapMetric(
                 """
             {
-              "name": "process.runtime.gc.pause",
+              "name": "$SUMMARY_METRIC_NAME",
               "summary": {
                 "dataPoints": [{
                   "timeUnixNano": $TEST_TIME_UNIX_NANO_PRIMARY,
@@ -389,7 +390,7 @@ class OtlpMetricsServiceTest {
 
             assertEquals(1, metrics.size)
             val m = metrics[0]
-            assertEquals("process.runtime.gc.pause", m.metricName)
+            assertEquals(SUMMARY_METRIC_NAME, m.metricName)
             assertSummaryGcPause(m)
         }
     }
@@ -684,7 +685,7 @@ class OtlpMetricsServiceTest {
 
             assertEquals(1, metrics.size)
             val m = metrics[0]
-            assertEquals("process.runtime.gc.pause", m.metricName)
+            assertEquals(SUMMARY_METRIC_NAME, m.metricName)
             assertSummaryGcPause(m)
         }
 

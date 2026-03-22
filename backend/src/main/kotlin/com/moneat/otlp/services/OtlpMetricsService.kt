@@ -85,6 +85,18 @@ private data class HistLikeFields(
     val max: Double?,
 )
 
+private data class HistLikeInsertArgs(
+    val type: String,
+    val name: String,
+    val description: String,
+    val unit: String,
+    val resourceCtx: com.moneat.otlp.ResourceContext,
+    val temporality: String,
+    val fields: HistLikeFields,
+    val bucketCounts: List<Long> = emptyList(),
+    val explicitBounds: List<Double> = emptyList(),
+)
+
 @Suppress("LongParameterList")
 private data class MetricInsertSpec(
     val name: String,
@@ -183,11 +195,24 @@ class OtlpMetricsService(
                 metric.histogram.dataPointsList.forEach { dp ->
                     results += buildMetricInsert(
                         histLikeSpec(
-                            "histogram", name, description, unit, resourceCtx, temporality,
-                            dp.timeUnixNano, dp.count, dp.sum.takeIf { dp.hasSum() },
-                            dp.min.takeIf { dp.hasMin() }, dp.max.takeIf { dp.hasMax() },
-                            OtlpProtobufParser.attributesToMap(dp.attributesList),
-                            dp.bucketCountsList, dp.explicitBoundsList,
+                            HistLikeInsertArgs(
+                                type = "histogram",
+                                name = name,
+                                description = description,
+                                unit = unit,
+                                resourceCtx = resourceCtx,
+                                temporality = temporality,
+                                fields = HistLikeFields(
+                                    attrs = OtlpProtobufParser.attributesToMap(dp.attributesList),
+                                    tsNs = dp.timeUnixNano,
+                                    count = dp.count,
+                                    sum = dp.sum.takeIf { dp.hasSum() },
+                                    min = dp.min.takeIf { dp.hasMin() },
+                                    max = dp.max.takeIf { dp.hasMax() },
+                                ),
+                                bucketCounts = dp.bucketCountsList,
+                                explicitBounds = dp.explicitBoundsList,
+                            )
                         )
                     )
                 }
@@ -199,10 +224,22 @@ class OtlpMetricsService(
                 metric.exponentialHistogram.dataPointsList.forEach { dp ->
                     results += buildMetricInsert(
                         histLikeSpec(
-                            "exp_histogram", name, description, unit, resourceCtx, temporality,
-                            dp.timeUnixNano, dp.count, dp.sum.takeIf { dp.hasSum() },
-                            dp.min.takeIf { dp.hasMin() }, dp.max.takeIf { dp.hasMax() },
-                            OtlpProtobufParser.attributesToMap(dp.attributesList),
+                            HistLikeInsertArgs(
+                                type = "exp_histogram",
+                                name = name,
+                                description = description,
+                                unit = unit,
+                                resourceCtx = resourceCtx,
+                                temporality = temporality,
+                                fields = HistLikeFields(
+                                    attrs = OtlpProtobufParser.attributesToMap(dp.attributesList),
+                                    tsNs = dp.timeUnixNano,
+                                    count = dp.count,
+                                    sum = dp.sum.takeIf { dp.hasSum() },
+                                    min = dp.min.takeIf { dp.hasMin() },
+                                    max = dp.max.takeIf { dp.hasMax() },
+                                ),
+                            )
                         )
                     )
                 }
@@ -210,13 +247,26 @@ class OtlpMetricsService(
             Metric.DataCase.SUMMARY -> metric.summary.dataPointsList.forEach { dp ->
                 results += buildMetricInsert(
                     histLikeSpec(
-                        "summary", name, description, unit, resourceCtx, "",
-                        dp.timeUnixNano, dp.count, dp.sum, null, null,
-                        OtlpProtobufParser.attributesToMap(dp.attributesList),
+                        HistLikeInsertArgs(
+                            type = "summary",
+                            name = name,
+                            description = description,
+                            unit = unit,
+                            resourceCtx = resourceCtx,
+                            temporality = "",
+                            fields = HistLikeFields(
+                                attrs = OtlpProtobufParser.attributesToMap(dp.attributesList),
+                                tsNs = dp.timeUnixNano,
+                                count = dp.count,
+                                sum = dp.sum,
+                                min = null,
+                                max = null,
+                            ),
+                        )
                     )
                 )
             }
-            Metric.DataCase.DATA_NOT_SET, null -> {}
+            Metric.DataCase.DATA_NOT_SET, null -> Unit
         }
     }
 
@@ -227,29 +277,16 @@ class OtlpMetricsService(
             NumberDataPoint.ValueCase.VALUE_NOT_SET, null -> 0.0
         }
 
-    @Suppress("LongParameterList")
-    private fun histLikeSpec(
-        type: String,
-        name: String,
-        description: String,
-        unit: String,
-        resourceCtx: com.moneat.otlp.ResourceContext,
-        temporality: String,
-        timestampNs: Long,
-        count: Long,
-        sum: Double?,
-        min: Double?,
-        max: Double?,
-        attrs: Map<String, String>,
-        bucketCounts: List<Long> = emptyList(),
-        explicitBounds: List<Double> = emptyList(),
-    ) = MetricInsertSpec(
-        name = name, type = type, description = description, unit = unit,
-        timestampNs = timestampNs, value = sum ?: 0.0,
-        attrs = attrs, resourceCtx = resourceCtx, aggregationTemporality = temporality,
-        histCount = count, histSum = sum, histMin = min, histMax = max,
-        histBucketCounts = bucketCounts, histExplicitBounds = explicitBounds,
-    )
+    private fun histLikeSpec(args: HistLikeInsertArgs) = with(args) {
+        val f = fields
+        MetricInsertSpec(
+            name = name, type = type, description = description, unit = unit,
+            timestampNs = f.tsNs, value = f.sum ?: 0.0,
+            attrs = f.attrs, resourceCtx = resourceCtx, aggregationTemporality = temporality,
+            histCount = f.count, histSum = f.sum, histMin = f.min, histMax = f.max,
+            histBucketCounts = bucketCounts, histExplicitBounds = explicitBounds,
+        )
+    }
 
     fun parseOtlpMetricsJson(payload: String): List<OtlpMetricInsert>? {
         val parsed =
@@ -421,12 +458,19 @@ class OtlpMetricsService(
             val h = readJsonHistLikeFields(dpObj)
             results += buildMetricInsert(
                 histLikeSpec(
-                    "histogram", name, description, unit, resourceCtx, temporality,
-                    h.tsNs, h.count, h.sum, h.min, h.max, h.attrs,
-                    dpObj["bucketCounts"]?.jsonArray
-                        ?.mapNotNull { it.jsonPrimitive.longOrNull } ?: emptyList(),
-                    dpObj["explicitBounds"]?.jsonArray
-                        ?.mapNotNull { it.jsonPrimitive.doubleOrNull } ?: emptyList(),
+                    HistLikeInsertArgs(
+                        type = "histogram",
+                        name = name,
+                        description = description,
+                        unit = unit,
+                        resourceCtx = resourceCtx,
+                        temporality = temporality,
+                        fields = h,
+                        bucketCounts = dpObj["bucketCounts"]?.jsonArray
+                            ?.mapNotNull { it.jsonPrimitive.longOrNull } ?: emptyList(),
+                        explicitBounds = dpObj["explicitBounds"]?.jsonArray
+                            ?.mapNotNull { it.jsonPrimitive.doubleOrNull } ?: emptyList(),
+                    )
                 )
             )
         }
@@ -448,8 +492,15 @@ class OtlpMetricsService(
             val h = readJsonHistLikeFields(dp.jsonObject)
             results += buildMetricInsert(
                 histLikeSpec(
-                    "exp_histogram", name, description, unit, resourceCtx, temporality,
-                    h.tsNs, h.count, h.sum, h.min, h.max, h.attrs,
+                    HistLikeInsertArgs(
+                        type = "exp_histogram",
+                        name = name,
+                        description = description,
+                        unit = unit,
+                        resourceCtx = resourceCtx,
+                        temporality = temporality,
+                        fields = h,
+                    )
                 )
             )
         }
@@ -469,10 +520,22 @@ class OtlpMetricsService(
             val sum = dpObj["sum"]?.jsonPrimitive?.doubleOrNull ?: 0.0
             results += buildMetricInsert(
                 histLikeSpec(
-                    "summary", name, description, unit, resourceCtx, "",
-                    dpObj["timeUnixNano"]?.jsonPrimitive?.longOrNull ?: 0L,
-                    count, sum, null, null,
-                    OtlpParsingUtils.attributesToMap(dpObj["attributes"]),
+                    HistLikeInsertArgs(
+                        type = "summary",
+                        name = name,
+                        description = description,
+                        unit = unit,
+                        resourceCtx = resourceCtx,
+                        temporality = "",
+                        fields = HistLikeFields(
+                            attrs = OtlpParsingUtils.attributesToMap(dpObj["attributes"]),
+                            tsNs = dpObj["timeUnixNano"]?.jsonPrimitive?.longOrNull ?: 0L,
+                            count = count,
+                            sum = sum,
+                            min = null,
+                            max = null,
+                        ),
+                    )
                 )
             )
         }

@@ -27,6 +27,10 @@ import kotlin.test.assertNull
 
 class OtlpProtobufParserTest {
 
+    companion object {
+        private const val TEST_SERVICE_NAME = "my-svc"
+    }
+
     // ──── attributesToMap ────
 
     @Nested
@@ -100,7 +104,7 @@ class OtlpProtobufParserTest {
         fun `extracts service, env, host, version from resource`() {
             val resource = Resource.newBuilder().addAllAttributes(
                 listOf(
-                    kv("service.name", stringAnyValue("my-svc")),
+                    kv("service.name", stringAnyValue(TEST_SERVICE_NAME)),
                     kv("deployment.environment", stringAnyValue("prod")),
                     kv("host.name", stringAnyValue("web-01")),
                     kv("service.version", stringAnyValue("1.0.0")),
@@ -108,11 +112,11 @@ class OtlpProtobufParserTest {
             ).build()
 
             val ctx = OtlpProtobufParser.extractResourceContext(resource)
-            assertEquals("my-svc", ctx.serviceName)
+            assertEquals(TEST_SERVICE_NAME, ctx.serviceName)
             assertEquals("prod", ctx.environment)
             assertEquals("web-01", ctx.hostName)
             assertEquals("1.0.0", ctx.serviceVersion)
-            assertEquals("my-svc", ctx.attributes["service.name"])
+            assertEquals(TEST_SERVICE_NAME, ctx.attributes["service.name"])
         }
 
         @Test

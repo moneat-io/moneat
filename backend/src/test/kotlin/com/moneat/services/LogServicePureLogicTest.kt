@@ -39,6 +39,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LogServicePureLogicTest {
+    companion object {
+        private const val OTLP_TEST_SERVICE_NAME = "my-service"
+        private const val OTLP_TEST_LOG_MESSAGE = "Connection refused"
+    }
+
     private val service = LogService(LogRepositoryImpl())
 
     // ──── estimateBillableBytes (SDK entries) ────
@@ -376,7 +381,7 @@ class LogServicePureLogicTest {
             "resourceLogs": [{
                 "resource": {
                     "attributes": [
-                        {"key": "service.name", "value": {"stringValue": "my-service"}},
+                        {"key": "service.name", "value": {"stringValue": "$OTLP_TEST_SERVICE_NAME"}},
                         {"key": "deployment.environment", "value": {"stringValue": "production"}}
                     ]
                 },
@@ -384,7 +389,7 @@ class LogServicePureLogicTest {
                     "logRecords": [{
                         "timeUnixNano": "1738000000000000000",
                         "severityText": "ERROR",
-                        "body": {"stringValue": "Connection refused"},
+                        "body": {"stringValue": "$OTLP_TEST_LOG_MESSAGE"},
                         "attributes": [
                             {"key": "component", "value": {"stringValue": "db"}}
                         ],
@@ -399,9 +404,9 @@ class LogServicePureLogicTest {
         val result = service.parseOtlpJson(otlpPayload)
         assertEquals(1, result.size)
         val entry = result.first()
-        assertEquals("Connection refused", entry.message)
+        assertEquals(OTLP_TEST_LOG_MESSAGE, entry.message)
         assertEquals("ERROR", entry.level)
-        assertEquals("my-service", entry.service)
+        assertEquals(OTLP_TEST_SERVICE_NAME, entry.service)
         assertEquals("production", entry.environment)
         assertEquals("abc123", entry.traceId)
         assertEquals("def456", entry.spanId)
@@ -546,7 +551,7 @@ class LogServicePureLogicTest {
                 ResourceLogs.newBuilder()
                     .setResource(
                         Resource.newBuilder()
-                            .addAttributes(kv("service.name", "my-service"))
+                            .addAttributes(kv("service.name", OTLP_TEST_SERVICE_NAME))
                             .addAttributes(kv("deployment.environment", "production"))
                     )
                     .addScopeLogs(
@@ -554,7 +559,7 @@ class LogServicePureLogicTest {
                             LogRecord.newBuilder()
                                 .setTimeUnixNano(1738000000000000000L)
                                 .setSeverityText("ERROR")
-                                .setBody(AnyValue.newBuilder().setStringValue("Connection refused"))
+                                .setBody(AnyValue.newBuilder().setStringValue(OTLP_TEST_LOG_MESSAGE))
                                 .addAttributes(kv("component", "db"))
                                 .setTraceId(traceIdBytes)
                                 .setSpanId(spanIdBytes)
@@ -567,9 +572,9 @@ class LogServicePureLogicTest {
 
         assertEquals(1, result.size)
         val entry = result.first()
-        assertEquals("Connection refused", entry.message)
+        assertEquals(OTLP_TEST_LOG_MESSAGE, entry.message)
         assertEquals("ERROR", entry.level)
-        assertEquals("my-service", entry.service)
+        assertEquals(OTLP_TEST_SERVICE_NAME, entry.service)
         assertEquals("production", entry.environment)
         assertEquals(
             "abcd0000000000000000000000000123",

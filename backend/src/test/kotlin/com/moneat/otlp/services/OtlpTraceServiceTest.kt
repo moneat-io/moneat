@@ -46,6 +46,12 @@ class OtlpTraceServiceTest {
         private const val TEST_SPAN_NAME = "test-span"
         private const val MY_SVC = "my-svc"
         private const val SERVICE_NAME_ATTR_KEY = "service.name"
+        private const val TRACE_RESOURCE_SERVICE = "my-service"
+        private const val TRACE_RESOURCE_HOST = "web-01"
+        private const val TRACE_HTTP_METHOD_ATTR = "http.method"
+        private const val TRACE_OTEL_SCOPE_NAME = "io.otel.sdk"
+        private const val TRACE_OTEL_SCOPE_VERSION = "1.30.0"
+        private const val TRACE_SPAN_NAME_GET_USERS = "GET /api/users"
     }
 
     @BeforeTest
@@ -70,25 +76,25 @@ class OtlpTraceServiceTest {
           "resourceSpans": [{
             "resource": {
               "attributes": [
-                {"key": "service.name", "value": {"stringValue": "my-service"}},
+                {"key": "service.name", "value": {"stringValue": "$TRACE_RESOURCE_SERVICE"}},
                 {"key": "deployment.environment", "value": {"stringValue": "prod"}},
-                {"key": "host.name", "value": {"stringValue": "web-01"}},
+                {"key": "host.name", "value": {"stringValue": "$TRACE_RESOURCE_HOST"}},
                 {"key": "service.version", "value": {"stringValue": "1.0.0"}}
               ]
             },
             "scopeSpans": [{
-              "scope": {"name": "io.otel.sdk", "version": "1.30.0"},
+              "scope": {"name": "$TRACE_OTEL_SCOPE_NAME", "version": "$TRACE_OTEL_SCOPE_VERSION"},
               "spans": [{
                 "traceId": "0af7651916cd43dd8448eb211c80319c",
                 "spanId": "b7ad6b7169203331",
                 "parentSpanId": "",
-                "name": "GET /api/users",
+                "name": "$TRACE_SPAN_NAME_GET_USERS",
                 "kind": 2,
                 "startTimeUnixNano": 1700000000000000000,
                 "endTimeUnixNano":   1700000000050000000,
                 "status": {"code": 1, "message": "OK"},
                 "attributes": [
-                  {"key": "http.method", "value": {"stringValue": "GET"}},
+                  {"key": "$TRACE_HTTP_METHOD_ATTR", "value": {"stringValue": "GET"}},
                   {"key": "http.status_code", "value": {"intValue": "200"}}
                 ],
                 "events": [],
@@ -106,22 +112,22 @@ class OtlpTraceServiceTest {
         assertEquals("0af7651916cd43dd8448eb211c80319c", s.traceIdHex)
         assertEquals("b7ad6b7169203331", s.spanIdHex)
         assertEquals("", s.parentIdHex)
-        assertEquals("GET /api/users", s.name)
-        assertEquals("my-service", s.service)
+        assertEquals(TRACE_SPAN_NAME_GET_USERS, s.name)
+        assertEquals(TRACE_RESOURCE_SERVICE, s.service)
         assertEquals("SERVER", s.kind)
         assertEquals(1700000000000000000L, s.startNanos)
         assertEquals(50000000L, s.durationNanos)
         assertEquals(1, s.statusCode)
         assertEquals("OK", s.statusMessage)
         assertEquals(0, s.error)
-        assertEquals("GET", s.meta["http.method"])
+        assertEquals("GET", s.meta[TRACE_HTTP_METHOD_ATTR])
         assertEquals("200", s.meta["http.status_code"])
         assertEquals("prod", s.env)
-        assertEquals("web-01", s.host)
+        assertEquals(TRACE_RESOURCE_HOST, s.host)
         assertEquals("1.0.0", s.version)
-        assertEquals("io.otel.sdk", s.scopeName)
-        assertEquals("1.30.0", s.scopeVersion)
-        assertEquals("my-service", s.resourceAttributes["service.name"])
+        assertEquals(TRACE_OTEL_SCOPE_NAME, s.scopeName)
+        assertEquals(TRACE_OTEL_SCOPE_VERSION, s.scopeVersion)
+        assertEquals(TRACE_RESOURCE_SERVICE, s.resourceAttributes[SERVICE_NAME_ATTR_KEY])
     }
 
     // ──── SPAN KIND MAPPING ────
@@ -428,11 +434,11 @@ class OtlpTraceServiceTest {
                     statusMessage = "OK",
                     meta = mapOf("key" to "value"),
                     resourceAttributes = mapOf(SERVICE_NAME_ATTR_KEY to MY_SVC),
-                    host = "web-01",
+                    host = TRACE_RESOURCE_HOST,
                     env = "prod",
                     version = "1.0",
                     scopeName = "otel-sdk",
-                    scopeVersion = "1.30.0",
+                    scopeVersion = TRACE_OTEL_SCOPE_VERSION,
                     events = "[]",
                     links = "[]",
                 )
@@ -508,20 +514,20 @@ class OtlpTraceServiceTest {
                 spanBuilder = Span.newBuilder()
                     .setTraceId(traceIdBytes())
                     .setSpanId(spanIdBytes())
-                    .setName("GET /api/users")
+                    .setName(TRACE_SPAN_NAME_GET_USERS)
                     .setKind(Span.SpanKind.SPAN_KIND_SERVER)
                     .setStartTimeUnixNano(1700000000000000000L)
                     .setEndTimeUnixNano(1700000000050000000L)
                     .setStatus(Status.newBuilder().setCode(Status.StatusCode.STATUS_CODE_OK).setMessage("OK"))
-                    .addAttributes(kv("http.method", "GET")),
+                    .addAttributes(kv(TRACE_HTTP_METHOD_ATTR, "GET")),
                 resourceAttrs = listOf(
-                    kv(SERVICE_NAME_ATTR_KEY, "my-service"),
+                    kv(SERVICE_NAME_ATTR_KEY, TRACE_RESOURCE_SERVICE),
                     kv("deployment.environment", "prod"),
-                    kv("host.name", "web-01"),
+                    kv("host.name", TRACE_RESOURCE_HOST),
                     kv("service.version", "1.0.0"),
                 ),
-                scopeName = "io.otel.sdk",
-                scopeVersion = "1.30.0"
+                scopeName = TRACE_OTEL_SCOPE_NAME,
+                scopeVersion = TRACE_OTEL_SCOPE_VERSION
             )
 
             val spans = service.parseOtlpTracesProtobuf(bytes)!!
@@ -530,18 +536,18 @@ class OtlpTraceServiceTest {
             val s = spans[0]
             assertEquals("0af7651916cd43dd8448eb211c80319c", s.traceIdHex)
             assertEquals("b7ad6b7169203331", s.spanIdHex)
-            assertEquals("GET /api/users", s.name)
-            assertEquals("my-service", s.service)
+            assertEquals(TRACE_SPAN_NAME_GET_USERS, s.name)
+            assertEquals(TRACE_RESOURCE_SERVICE, s.service)
             assertEquals("SERVER", s.kind)
             assertEquals(1700000000000000000L, s.startNanos)
             assertEquals(50000000L, s.durationNanos)
             assertEquals(0, s.error)
-            assertEquals("GET", s.meta["http.method"])
+            assertEquals("GET", s.meta[TRACE_HTTP_METHOD_ATTR])
             assertEquals("prod", s.env)
-            assertEquals("web-01", s.host)
+            assertEquals(TRACE_RESOURCE_HOST, s.host)
             assertEquals("1.0.0", s.version)
-            assertEquals("io.otel.sdk", s.scopeName)
-            assertEquals("1.30.0", s.scopeVersion)
+            assertEquals(TRACE_OTEL_SCOPE_NAME, s.scopeName)
+            assertEquals(TRACE_OTEL_SCOPE_VERSION, s.scopeVersion)
         }
 
         @Test
