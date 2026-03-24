@@ -18,6 +18,7 @@ package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Projects
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -91,7 +92,13 @@ object SentrySpanBackfill {
         if (response.status.isSuccess()) {
             logger.info { "Spans backfill completed successfully" }
         } else {
-            logger.error { "Spans backfill failed: HTTP ${response.status}" }
+            val bodySnippet =
+                try {
+                    response.bodyAsText().take(500)
+                } catch (e: Exception) {
+                    (e.message ?: "").take(500)
+                }
+            logger.error { "Spans backfill failed: HTTP ${response.status}, body: $bodySnippet" }
         }
     }
 

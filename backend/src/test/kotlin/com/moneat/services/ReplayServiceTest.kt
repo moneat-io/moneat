@@ -17,22 +17,17 @@
 package com.moneat.services
 
 import com.moneat.billing.services.PricingTierService
-import com.moneat.config.ClickHouseClient
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.ReplayService
-import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.Projects
 import com.moneat.shared.services.RetentionPolicyService
-import com.moneat.testsupport.MockHttpServer
-import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.OrgProjectTestFixtures
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
+import com.moneat.testsupport.withClickHouseMockServer
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,27 +50,7 @@ class ReplayServiceTest {
 
     @BeforeTest
     fun setup() {
-        if (db == null) {
-            db = Database.connect(
-                url = "jdbc:h2:mem:moneat_replay_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-                driver = "org.h2.Driver"
-            )
-        }
-        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(Organizations, Projects)
-        transaction {
-            Organizations.insert {
-                it[id] = 1
-                it[name] = "Test Org"
-                it[slug] = "test-org"
-            }
-            Projects.insert {
-                it[id] = 1
-                it[organization_id] = 1
-                it[name] = "Test Project"
-                it[slug] = "test-project"
-            }
-        }
+        db = OrgProjectTestFixtures.connectResetAndSeedDefaultOrgProject(db, "moneat_replay_service")
 
         coEvery { retentionPolicyService.getRetentionDaysForProject(any()) } returns 30
         queryHelper = DashboardQueryHelper(retentionPolicyService, pricingTierService)
@@ -85,11 +60,9 @@ class ReplayServiceTest {
     @Test
     fun `getProjectIdForReplay returns project id for valid replay`() = runBlocking {
         val replayId = "01234567-89ab-cdef-0123-456789abcdef"
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(200, """{"project_id":42}""", TEXT_PLAIN)
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) {
             val result = service.getProjectIdForReplay(replayId)
             assertEquals(42L, result)
         }
@@ -104,12 +77,10 @@ class ReplayServiceTest {
     @Test
     fun `getProjectIdForReplay normalizes compact uuid`() = runBlocking {
         val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             queries += exchange.requestBodyText()
             exchange.respond(200, """{"project_id":10}""", TEXT_PLAIN)
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) {
             val result = service.getProjectIdForReplay("0123456789abcdef0123456789abcdef")
             assertEquals(10L, result)
             assertTrue(queries.any { it.contains("01234567-89ab-cdef-0123-456789abcdef") })
@@ -121,11 +92,9 @@ class ReplayServiceTest {
         val replayRow = """
 {"replay_id":"$REPLAY_UUID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_count":2,"user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8}
         """.trimIndent()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(200, replayRow, TEXT_PLAIN)
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) {
             val result = service.getReplays(projectId = 1, page = 1, limit = 25, period = "7d")
             assertEquals(1, result.size)
             assertEquals(REPLAY_UUID, result[0].replayId)
@@ -140,11 +109,9 @@ class ReplayServiceTest {
 
     @Test
     fun `getReplays returns empty list on error`() = runBlocking {
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             exchange.respond(500, "Internal Server Error", TEXT_PLAIN)
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) {
             val result = service.getReplays(projectId = 1)
             assertTrue(result.isEmpty())
         }
@@ -156,7 +123,7 @@ class ReplayServiceTest {
         val detailRow = """
 {"replay_id":"$replayId","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_ids":["err-1"],"trace_ids":["trace-1"],"segment_count":5,"environment":"prod","release":"1.0.0","platform":"javascript","user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8,"tags":"{}"}
         """.trimIndent()
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             when {
                 query.contains("replay_events") && query.contains("project_id") && !query.contains("GROUP BY") ->
@@ -164,9 +131,7 @@ class ReplayServiceTest {
                 else ->
                     exchange.respond(200, detailRow, TEXT_PLAIN)
             }
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) {
             val result = service.getReplay(replayId)
             assertNotNull(result)
             assertEquals(replayId, result.replayId)
@@ -202,7 +167,7 @@ class ReplayServiceTest {
 {"span_id":"span-1","trace_id":"trace-aaa","transaction_id":"22222222-3333-4444-5555-666666666666","description":"SELECT *","op":"db","start_ts_ms":"1767225720500","duration_ms":"50"}
         """.trimIndent()
 
-        MockHttpServer { exchange ->
+        withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             when {
                 query.contains("replay_events") && !query.contains("GROUP BY") ->
@@ -224,9 +189,7 @@ class ReplayServiceTest {
                 else ->
                     exchange.respond(200, "", TEXT_PLAIN)
             }
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        }) {
             val result = service.getReplayTimeline(replayId)
             assertTrue(result.replayStartMs > 0)
             assertTrue(result.items.isNotEmpty())

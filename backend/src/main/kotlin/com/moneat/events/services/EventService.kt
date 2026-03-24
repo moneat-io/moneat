@@ -73,6 +73,9 @@ class EventService(
 ) {
     companion object {
         private const val DEFAULT_PROFILE_MAX_PAYLOAD_BYTES = 10 * 1024 * 1024 // 10 MiB
+
+        /** Keys set by the server for apm_spans; must not be overwritten by SDK tag maps. */
+        private val SENTRY_APM_META_RESERVED_KEYS = setOf("sentry.transaction_id", "sentry.project_id")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -955,7 +958,7 @@ class EventService(
             "sentry.transaction_id" to eventId,
             "sentry.project_id" to projectId.toString()
         )
-        transaction.tags?.let { baseMeta.putAll(it) }
+        transaction.tags?.let { mergeNonReservedTags(baseMeta, it) }
 
         val ctx = ApmSpanContext(
             orgId = orgId,
@@ -1083,9 +1086,17 @@ class EventService(
         return metrics
     }
 
+    private fun mergeNonReservedTags(target: MutableMap<String, String>, tags: Map<String, String>) {
+        for ((key, value) in tags) {
+            if (key !in SENTRY_APM_META_RESERVED_KEYS) {
+                target[key] = value
+            }
+        }
+    }
+
     private fun extractSpanMeta(span: SentrySpan, baseMeta: Map<String, String>): Map<String, String> {
         val meta = baseMeta.toMutableMap()
-        span.tags?.let { meta.putAll(it) }
+        span.tags?.let { mergeNonReservedTags(meta, it) }
         span.data?.let { data ->
             for ((key, value) in data) {
                 try {
@@ -1130,11 +1141,11 @@ class EventService(
         """.trimIndent()
 
         val response = ClickHouseClient.execute(insert)
-        if (!response.status.isSuccess()) {
+        if (response.status.isSuccess()) {
+            usageTracker.recordOrgUsage(ctx.orgId, "sentry_trace", rows.sumOf { it.length })
+        } else {
             logger.error { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
         }
-
-        usageTracker.recordOrgUsage(ctx.orgId, "sentry_trace", rows.sumOf { it.length })
     }
 
     private suspend fun storeProfile(

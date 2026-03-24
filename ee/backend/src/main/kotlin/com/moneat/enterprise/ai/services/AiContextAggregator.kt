@@ -62,7 +62,7 @@ class AiContextAggregator {
      */
     suspend fun aggregate(orgId: Int, projectIds: List<Long>, timeFilter: AiTimeFilter): AggregatedContext {
         val logs = if (projectIds.isNotEmpty()) queryLogs(projectIds.joinToString(","), timeFilter) else emptyList()
-        val spans = if (projectIds.isNotEmpty()) querySpans(orgId, timeFilter) else emptyList()
+        val spans = if (projectIds.isNotEmpty()) querySpans(orgId, projectIds, timeFilter) else emptyList()
         val events = if (projectIds.isNotEmpty()) queryEvents(projectIds.joinToString(","), timeFilter) else emptyList()
         val metrics = queryMetrics(orgId, timeFilter)
         val containers = queryContainers(orgId, timeFilter)
@@ -111,7 +111,8 @@ class AiContextAggregator {
         }
     }
 
-    private suspend fun querySpans(orgId: Int, timeFilter: AiTimeFilter): List<SpanEntry> {
+    private suspend fun querySpans(orgId: Int, projectIds: List<Long>, timeFilter: AiTimeFilter): List<SpanEntry> {
+        val projectInList = projectIds.joinToString(", ") { "'$it'" }
         return try {
             val query = """
                 SELECT
@@ -123,6 +124,7 @@ class AiContextAggregator {
                     service
                 FROM apm_spans
                 WHERE organization_id = $orgId
+                  AND (source != 'sentry' OR meta['sentry.project_id'] IN ($projectInList))
                   AND ${timeFilter.toCondition("start")}
                 ORDER BY start DESC
                 LIMIT $MAX_SPANS

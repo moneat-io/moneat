@@ -45,12 +45,17 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
+import com.moneat.config.ClickHouseClient
 import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.slot
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -115,8 +120,8 @@ class EventServiceCoverageTest {
             ProjectKeyVerification(false, null)
         every { eventRepository.verifyProjectKey(testProjectId, "valid-key") } returns
             ProjectKeyVerification(true, "jvm")
-        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
         every { eventRepository.getOrganizationIdForProject(any()) } returns null
+        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
 
         coEvery { eventRepository.insertErrorEvent(any()) } returns true
         coEvery { eventRepository.insertTransaction(any()) } returns true
@@ -379,6 +384,17 @@ class EventServiceCoverageTest {
 
     @Test
     fun `storeTransaction inserts spans from transaction`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        val chResponse =
+            mockk<HttpResponse>(relaxed = true) {
+                every { status } returns HttpStatusCode.OK
+            }
+        val executedSql = mutableListOf<String>()
+        coEvery { ClickHouseClient.execute(any(), any()) } coAnswers {
+            executedSql.add(firstArg())
+            chResponse
+        }
+        try {
         val txnJson = Json.encodeToString(
             SentryTransaction(
                 event_id = "txn-spans",
@@ -432,6 +448,11 @@ class EventServiceCoverageTest {
 
         coVerify(atLeast = 1) { eventRepository.insertTransaction(any()) }
         verify(atLeast = 1) { eventRepository.getOrganizationIdForProject(testProjectId) }
+        coVerify(atLeast = 1) { ClickHouseClient.execute(any(), any()) }
+        assertTrue(executedSql.any { it.contains("apm_spans") }, "expected apm_spans INSERT")
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
     }
 
     @Test

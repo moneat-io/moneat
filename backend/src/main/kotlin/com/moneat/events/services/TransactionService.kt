@@ -322,6 +322,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FROM `$clickhouseDb`.apm_spans
             WHERE organization_id = $orgId
               AND meta['sentry.transaction_id'] = '${escapeSql(normalizedEventId)}'
+              AND meta['sentry.project_id'] = '$projectId'
               AND source = 'sentry'
             ORDER BY start ASC
             FORMAT JSONEachRow
