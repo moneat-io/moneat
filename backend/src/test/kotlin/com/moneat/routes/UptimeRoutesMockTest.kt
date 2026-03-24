@@ -16,14 +16,16 @@
 
 package com.moneat.routes
 
-import com.moneat.uptime.routes.uptimeRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.uptime.services.UptimeService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
-import com.moneat.uptime.models.UptimeMonitorResponse
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.uptime.models.UptimeMonitorResponse
+import com.moneat.uptime.routes.uptimeRoutes
+import com.moneat.uptime.services.UptimeService
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -55,8 +57,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import com.moneat.testsupport.RouteTestSupport
-import com.moneat.testsupport.TestDatabaseHelper
 
 class UptimeRoutesMockTest {
     companion object {

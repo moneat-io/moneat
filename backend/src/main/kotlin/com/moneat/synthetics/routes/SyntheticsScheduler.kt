@@ -16,6 +16,7 @@
 
 package com.moneat.synthetics.routes
 
+import com.moneat.shared.services.TaskLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,7 +24,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import com.moneat.shared.services.TaskLock
 import mu.KotlinLogging
 import java.util.Collections
 import java.util.UUID

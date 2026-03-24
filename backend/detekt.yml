@@ -88,4 +88,4 @@ potential-bugs:
 
 formatting:
   ImportOrdering:
-    active: false
+    active: true

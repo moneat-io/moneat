@@ -20,6 +20,7 @@ import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.services.AttributionAnalyticsService
+import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -28,7 +29,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 class AttributionAnalyticsServiceTest {
     private val service = AttributionAnalyticsService()

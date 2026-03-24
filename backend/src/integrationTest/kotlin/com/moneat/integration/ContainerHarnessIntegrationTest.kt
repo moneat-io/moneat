@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.postgresql.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
+import kotlin.test.assertTrue
 
 private val logger = KotlinLogging.logger {}
 

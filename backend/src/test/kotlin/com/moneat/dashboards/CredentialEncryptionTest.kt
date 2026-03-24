@@ -20,9 +20,9 @@ import com.moneat.dashboards.services.CredentialEncryption
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
-import kotlin.test.assertFailsWith
 
 class CredentialEncryptionTest {
 

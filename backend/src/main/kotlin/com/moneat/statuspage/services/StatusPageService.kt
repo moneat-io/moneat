@@ -16,6 +16,7 @@
 
 package com.moneat.statuspage.services
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.statuspage.models.AddCustomDomainRequest
 import com.moneat.statuspage.models.AddMonitorsRequest
@@ -35,7 +36,6 @@ import com.moneat.statuspage.models.StatusPageMonitorResponse
 import com.moneat.statuspage.models.StatusPageMonitors
 import com.moneat.statuspage.models.StatusPageResponse
 import com.moneat.statuspage.models.StatusPages
-import com.moneat.billing.services.BillingQuotaService
 import com.moneat.statuspage.models.UpdateIncidentRequest
 import com.moneat.statuspage.models.UpdateStatusPageRequest
 import com.moneat.statuspage.models.UptimeDataPoint

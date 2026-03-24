@@ -21,6 +21,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.services.RetentionPolicyService
+import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -29,7 +30,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import com.moneat.testsupport.TestDatabaseHelper
 
 class RetentionPolicyServiceTest {
     private val service = RetentionPolicyService()

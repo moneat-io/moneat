@@ -17,7 +17,6 @@
 package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
-import io.ktor.client.statement.bodyAsText
 import com.moneat.events.models.ReplayDetailResponse
 import com.moneat.events.models.ReplayListItem
 import com.moneat.events.models.ReplayRecordingResponse
@@ -25,6 +24,7 @@ import com.moneat.events.models.ReplayTimelineItem
 import com.moneat.events.models.ReplayTimelineResponse
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement

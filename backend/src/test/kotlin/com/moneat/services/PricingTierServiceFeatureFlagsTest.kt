@@ -19,6 +19,7 @@ package com.moneat.services
 import com.moneat.billing.models.CreateTierVersionRequest
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.services.PricingTierService
+import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -30,7 +31,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 class PricingTierServiceFeatureFlagsTest {
     companion object {

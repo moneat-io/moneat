@@ -16,10 +16,10 @@
 
 package com.moneat.analytics.services
 
+import com.moneat.analytics.models.EnrichedAnalyticsEvent
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.config.isClickHouseError
-import com.moneat.analytics.models.EnrichedAnalyticsEvent
 import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CancellationException

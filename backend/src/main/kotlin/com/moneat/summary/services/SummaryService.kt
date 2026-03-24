@@ -16,6 +16,7 @@
 
 package com.moneat.summary.services
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.services.DashboardService
 import com.moneat.events.services.ReleaseService
@@ -42,7 +43,6 @@ import com.moneat.summary.models.IssueSummaryItem
 import com.moneat.summary.models.LogVolumeComparison
 import com.moneat.summary.models.OvernightSummaryResponse
 import com.moneat.summary.models.RelatedLogEntry
-import com.moneat.billing.services.BillingQuotaService
 import com.moneat.summary.models.TransactionLatencySummary
 import com.moneat.summary.models.UptimeIncidentSummary
 import com.moneat.summary.models.UptimeMonitorSummary

@@ -19,8 +19,6 @@ package com.moneat.logs.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.config.isClickHouseError
-import com.moneat.logs.repositories.LogRepository
-import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.logs.models.AgentLogEntry
 import com.moneat.logs.models.LogAggregateBucket
 import com.moneat.logs.models.LogAggregateResponse
@@ -37,6 +35,8 @@ import com.moneat.logs.models.LogTopResponse
 import com.moneat.logs.models.LogTopValue
 import com.moneat.logs.models.QueuedLogBatch
 import com.moneat.logs.models.QueuedLogEntry
+import com.moneat.logs.repositories.LogRepository
+import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils

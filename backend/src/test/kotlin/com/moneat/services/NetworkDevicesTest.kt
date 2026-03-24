@@ -34,8 +34,8 @@ import com.moneat.datadog.networkdevices.QueuedNdmFlowEntry
 import com.moneat.datadog.networkdevices.QueuedNdmPathEntry
 import com.moneat.datadog.networkdevices.QueuedNdmTrapEntry
 import com.moneat.testsupport.MockHttpServer
-import com.moneat.testsupport.TestOidConstants
 import com.moneat.testsupport.TestIpConstants
+import com.moneat.testsupport.TestOidConstants
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import io.lettuce.core.api.sync.RedisCommands

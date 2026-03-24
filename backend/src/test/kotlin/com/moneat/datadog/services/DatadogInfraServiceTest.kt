@@ -17,12 +17,12 @@
 package com.moneat.datadog.services
 
 import com.moneat.datadog.models.DatadogConnection
-import com.moneat.testsupport.TestIpConstants
 import com.moneat.datadog.models.DatadogConnectionsPayload
 import com.moneat.datadog.models.DatadogContainer
 import com.moneat.datadog.models.DatadogContainerPayload
 import com.moneat.datadog.models.DatadogProcess
 import com.moneat.datadog.models.DatadogProcessPayload
+import com.moneat.testsupport.TestIpConstants
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

@@ -22,15 +22,15 @@ import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.services.EventService
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.services.OtlpApiKeyService
-import org.koin.core.context.GlobalContext
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.origin
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
-import io.ktor.server.plugins.origin
 import io.ktor.server.request.ApplicationRequest
+import org.koin.core.context.GlobalContext
 import java.net.InetAddress
 import kotlin.time.Duration.Companion.seconds
 

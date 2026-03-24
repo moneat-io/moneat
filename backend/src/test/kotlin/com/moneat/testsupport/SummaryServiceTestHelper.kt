@@ -17,9 +17,9 @@
 package com.moneat.testsupport
 
 import com.moneat.config.ClickHouseClient
-import com.sun.net.httpserver.HttpExchange
 import com.moneat.monitor.services.MonitorService
 import com.moneat.uptime.services.UptimeService
+import com.sun.net.httpserver.HttpExchange
 import io.mockk.every
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager

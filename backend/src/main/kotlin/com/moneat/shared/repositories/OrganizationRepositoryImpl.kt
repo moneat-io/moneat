@@ -16,9 +16,9 @@
 
 package com.moneat.shared.repositories
 
-import com.moneat.shared.repositories.models.OrganizationRow
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.shared.repositories.models.OrganizationRow
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.selectAll

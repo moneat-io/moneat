@@ -23,6 +23,9 @@ import com.moneat.shared.models.AuthTokens
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -46,14 +49,11 @@ import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
-import com.moneat.testsupport.startTestKoin
-import com.moneat.testsupport.stopTestKoin
-import kotlin.test.AfterTest
 
 class AuthTokenRoutesTest {
     private val jwtSecret = "test-secret-for-auth-token-routes"

@@ -17,7 +17,6 @@
 package com.moneat.datadog.services
 
 import com.moneat.datadog.decompression.DecompressionService
-import java.nio.file.Files
 import jdk.jfr.consumer.RecordedFrame
 import jdk.jfr.consumer.RecordedStackTrace
 import jdk.jfr.consumer.RecordingFile
@@ -27,6 +26,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
+import java.nio.file.Files
 
 private val logger = KotlinLogging.logger {}
 

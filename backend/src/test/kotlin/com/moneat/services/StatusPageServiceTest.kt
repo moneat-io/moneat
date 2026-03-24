@@ -32,6 +32,7 @@ import com.moneat.statuspage.models.StatusPages
 import com.moneat.statuspage.models.UpdateIncidentRequest
 import com.moneat.statuspage.models.UpdateStatusPageRequest
 import com.moneat.statuspage.services.StatusPageService
+import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.uptime.models.UptimeMonitors
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -45,7 +46,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 class StatusPageServiceTest {
     private var orgId: Int = 0

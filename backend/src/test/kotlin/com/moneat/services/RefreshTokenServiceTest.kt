@@ -23,6 +23,7 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.RefreshTokens
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.server.config.ApplicationConfig
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -37,7 +38,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 class RefreshTokenServiceTest {
     private val refreshTokenService = RefreshTokenService()

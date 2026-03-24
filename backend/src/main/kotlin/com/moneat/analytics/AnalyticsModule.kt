@@ -16,10 +16,10 @@
 
 package com.moneat.analytics
 
-import com.moneat.enterprise.EnterpriseModule
 import com.moneat.analytics.routes.analyticsIngestRoutes
 import com.moneat.analytics.routes.analyticsRoutes
 import com.moneat.analytics.services.AnalyticsIngestionWorker
+import com.moneat.enterprise.EnterpriseModule
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import mu.KotlinLogging
