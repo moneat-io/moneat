@@ -1,5 +1,5 @@
 {
   "setup-worktree": [
-    "npm install"
+    "npm ci --prefix dashboard"
   ]
 }
