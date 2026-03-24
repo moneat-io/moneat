@@ -474,6 +474,29 @@ class OtlpTraceServiceTest {
                 byteArrayOf(0xB7.toByte(), 0xAD.toByte(), 0x6B, 0x71, 0x69, 0x20, 0x33, 0x31)
             )
 
+        private fun linkedTraceIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(
+                    0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88.toByte(),
+                    0x99.toByte(), 0x00, 0xAA.toByte(), 0xBB.toByte(),
+                    0xCC.toByte(), 0xDD.toByte(), 0xEE.toByte(), 0xFF.toByte(),
+                )
+            )
+
+        private fun linkedSpanIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(
+                    0xAA.toByte(),
+                    0xBB.toByte(),
+                    0xCC.toByte(),
+                    0xDD.toByte(),
+                    0xEE.toByte(),
+                    0xFF.toByte(),
+                    0x00,
+                    0x11,
+                )
+            )
+
         private fun buildRequest(
             spanBuilder: Span.Builder = Span.newBuilder(),
             resourceAttrs: List<KeyValue> = emptyList(),
@@ -502,11 +525,14 @@ class OtlpTraceServiceTest {
                 .toByteArray()
         }
 
-        private fun kv(key: String, value: String) =
+        private fun kv(key: String, value: AnyValue) =
             KeyValue.newBuilder()
                 .setKey(key)
-                .setValue(AnyValue.newBuilder().setStringValue(value))
+                .setValue(value)
                 .build()
+
+        private fun kv(key: String, value: String) =
+            kv(key, AnyValue.newBuilder().setStringValue(value).build())
 
         @Test
         fun `parses single span from protobuf`() {
@@ -548,6 +574,63 @@ class OtlpTraceServiceTest {
             assertEquals("1.0.0", s.version)
             assertEquals(TRACE_OTEL_SCOPE_NAME, s.scopeName)
             assertEquals(TRACE_OTEL_SCOPE_VERSION, s.scopeVersion)
+        }
+
+        @Test
+        fun `serializes protobuf events and links into json fields`() {
+            val linkedTraceIdHex = "11223344556677889900aabbccddeeff"
+            val linkedSpanIdHex = "aabbccddeeff0011"
+            val traceState = "congo=t61rcWkgMzE"
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setName("span-with-events-links")
+                    .setStartTimeUnixNano(1700000000000000000L)
+                    .setEndTimeUnixNano(1700000000050000000L)
+                    .addEvents(
+                        Span.Event.newBuilder()
+                            .setTimeUnixNano(1700000000005000000L)
+                            .setName("exception")
+                            .addAttributes(kv("exception.type", "java.net.ConnectException"))
+                            .addAttributes(kv("exception.message", "Connection refused"))
+                            .addAttributes(kv("retryable", AnyValue.newBuilder().setBoolValue(true).build()))
+                            .setDroppedAttributesCount(2)
+                    )
+                    .addLinks(
+                        Span.Link.newBuilder()
+                            .setTraceId(linkedTraceIdBytes())
+                            .setSpanId(linkedSpanIdBytes())
+                            .addAttributes(kv("link.kind", "follows_from"))
+                            .addAttributes(
+                                kv("sampling.priority", AnyValue.newBuilder().setIntValue(1).build())
+                            )
+                            .setTraceState(traceState)
+                            .setDroppedAttributesCount(3)
+                            .setFlags(1)
+                    )
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertEquals(1, spans.size)
+            val span = spans[0]
+            assertTrue(span.events.contains("\"name\":\"exception\""))
+            assertTrue(span.events.contains("\"exception.type\""))
+            assertTrue(span.events.contains("java.net.ConnectException"))
+            assertTrue(span.events.contains("\"exception.message\""))
+            assertTrue(span.events.contains("Connection refused"))
+            assertTrue(span.events.contains("\"retryable\""))
+            assertTrue(span.events.contains("\"value\":true"))
+            assertTrue(span.events.contains("\"droppedAttributesCount\":2"))
+            assertTrue(span.links.contains("\"traceId\":\"$linkedTraceIdHex\""))
+            assertTrue(span.links.contains("\"spanId\":\"$linkedSpanIdHex\""))
+            assertTrue(span.links.contains("\"link.kind\""))
+            assertTrue(span.links.contains("follows_from"))
+            assertTrue(span.links.contains("\"sampling.priority\""))
+            assertTrue(span.links.contains("\"value\":1"))
+            assertTrue(span.links.contains("\"traceState\":\"$traceState\""))
+            assertTrue(span.links.contains("\"droppedAttributesCount\":3"))
+            assertTrue(span.links.contains("\"flags\":1"))
         }
 
         @Test

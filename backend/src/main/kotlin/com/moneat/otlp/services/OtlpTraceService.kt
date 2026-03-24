@@ -16,12 +16,15 @@
 
 package com.moneat.otlp.services
 
+import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.otlp.OtlpProtobufParser
 import com.moneat.otlp.calculateBillableBytes
 import com.moneat.otlp.hexToULongPair
+import io.opentelemetry.proto.common.v1.AnyValue
+import io.opentelemetry.proto.common.v1.KeyValue
 import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
 import io.opentelemetry.proto.trace.v1.Span
 import com.moneat.shared.services.UsageTrackingService
@@ -31,6 +34,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -91,8 +99,8 @@ class OtlpTraceService(
         val request =
             try {
                 ExportTraceServiceRequest.parseFrom(bytes)
-            } catch (e: Exception) {
-                logger.warn(e) { "Invalid OTLP protobuf traces payload" }
+            } catch (e: InvalidProtocolBufferException) {
+                logger.warn { "Invalid OTLP protobuf traces payload: ${e.message?.take(500)}" }
                 return null
             }
 
@@ -336,56 +344,82 @@ class OtlpTraceService(
     }
 
     private fun protoEventsToJson(events: List<Span.Event>): String {
-        if (events.isEmpty()) return "[]"
-        val elements = events.map { ev ->
-            val attrs = OtlpProtobufParser.attributesToMap(ev.attributesList)
-            buildString {
-                append("{\"timeUnixNano\":${ev.timeUnixNano}")
-                append(",\"name\":\"${escapeJsonString(ev.name)}\"")
-                if (attrs.isNotEmpty()) {
-                    append(",\"attributes\":")
-                    appendMapAsJsonArray(attrs)
+        val jsonEvents =
+            buildJsonArray {
+                events.forEach { event ->
+                    add(
+                        buildJsonObject {
+                            put("timeUnixNano", JsonPrimitive(event.timeUnixNano))
+                            put("name", JsonPrimitive(event.name))
+                            if (event.attributesList.isNotEmpty()) {
+                                put("attributes", keyValuesToJsonArray(event.attributesList))
+                            }
+                            if (event.droppedAttributesCount > 0) {
+                                put("droppedAttributesCount", JsonPrimitive(event.droppedAttributesCount))
+                            }
+                        }
+                    )
                 }
-                append("}")
             }
-        }
-        return "[${elements.joinToString(",")}]"
+        return json.encodeToString(jsonEvents)
     }
 
     private fun protoLinksToJson(links: List<Span.Link>): String {
-        if (links.isEmpty()) return "[]"
-        val elements = links.map { lk ->
-            val attrs = OtlpProtobufParser.attributesToMap(lk.attributesList)
-            buildString {
-                append("{\"traceId\":\"${OtlpProtobufParser.bytesToHex(lk.traceId)}\"")
-                append(",\"spanId\":\"${OtlpProtobufParser.bytesToHex(lk.spanId)}\"")
-                if (attrs.isNotEmpty()) {
-                    append(",\"attributes\":")
-                    appendMapAsJsonArray(attrs)
+        val jsonLinks =
+            buildJsonArray {
+                links.forEach { link ->
+                    add(
+                        buildJsonObject {
+                            put("traceId", JsonPrimitive(OtlpProtobufParser.bytesToHex(link.traceId)))
+                            put("spanId", JsonPrimitive(OtlpProtobufParser.bytesToHex(link.spanId)))
+                            if (link.traceState.isNotEmpty()) {
+                                put("traceState", JsonPrimitive(link.traceState))
+                            }
+                            if (link.attributesList.isNotEmpty()) {
+                                put("attributes", keyValuesToJsonArray(link.attributesList))
+                            }
+                            if (link.droppedAttributesCount > 0) {
+                                put("droppedAttributesCount", JsonPrimitive(link.droppedAttributesCount))
+                            }
+                            if (link.flags != 0) {
+                                put("flags", JsonPrimitive(link.flags))
+                            }
+                        }
+                    )
                 }
-                append("}")
+            }
+        return json.encodeToString(jsonLinks)
+    }
+
+    private fun keyValuesToJsonArray(values: List<KeyValue>): JsonArray =
+        buildJsonArray {
+            values.forEach { kv ->
+                add(
+                    buildJsonObject {
+                        put("key", JsonPrimitive(kv.key))
+                        put("value", anyValueToJsonElement(kv.value))
+                    }
+                )
             }
         }
-        return "[${elements.joinToString(",")}]"
-    }
 
-    private fun StringBuilder.appendMapAsJsonArray(map: Map<String, String>) {
-        append("[")
-        map.entries.forEachIndexed { i, (k, v) ->
-            if (i > 0) append(",")
-            append("{\"key\":\"${escapeJsonString(k)}\",\"value\":{\"stringValue\":\"${escapeJsonString(v)}\"}}")
+    private fun anyValueToJsonElement(value: AnyValue): JsonElement =
+        when (value.valueCase) {
+            AnyValue.ValueCase.STRING_VALUE -> JsonPrimitive(value.stringValue)
+            AnyValue.ValueCase.INT_VALUE -> JsonPrimitive(value.intValue)
+            AnyValue.ValueCase.DOUBLE_VALUE -> JsonPrimitive(value.doubleValue)
+            AnyValue.ValueCase.BOOL_VALUE -> JsonPrimitive(value.boolValue)
+            AnyValue.ValueCase.BYTES_VALUE -> JsonPrimitive(
+                OtlpProtobufParser.bytesToHex(value.bytesValue)
+            )
+            AnyValue.ValueCase.ARRAY_VALUE ->
+                buildJsonArray {
+                    value.arrayValue.valuesList.forEach { add(anyValueToJsonElement(it)) }
+                }
+            AnyValue.ValueCase.KVLIST_VALUE -> keyValuesToJsonArray(value.kvlistValue.valuesList)
+            AnyValue.ValueCase.VALUE_NOT_SET -> JsonNull
+            else -> value.stringValue.takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull
         }
-        append("]")
-    }
-
-    private fun escapeJsonString(s: String): String =
-        s.replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\b", "\\b")
-            .replace("\u000c", "\\f")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t")
 
     private fun mapToSqlMap(map: Map<String, String>): String {
         if (map.isEmpty()) return "map()"

@@ -16,6 +16,7 @@
 
 package com.moneat.logs.services
 
+import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.config.isClickHouseError
@@ -1265,8 +1266,8 @@ class LogService(private val logRepository: LogRepository) {
         val request =
             try {
                 ExportLogsServiceRequest.parseFrom(bytes)
-            } catch (e: Exception) {
-                logger.warn(e) { "Invalid OTLP protobuf logs payload" }
+            } catch (e: InvalidProtocolBufferException) {
+                logger.warn { "Invalid OTLP protobuf logs payload: ${e.message?.take(500)}" }
                 return emptyList()
             }
 

@@ -36,6 +36,7 @@ import kotlin.test.assertTrue
 
 class TransactionServiceTest {
 
+    // ──── Constants ────
     companion object {
         private const val TXN_UUID = "01234567-89ab-cdef-0123-456789abcdef"
         private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
@@ -47,6 +48,7 @@ class TransactionServiceTest {
     private lateinit var queryHelper: DashboardQueryHelper
     private lateinit var service: TransactionService
 
+    // ──── Test Setup ────
     @BeforeTest
     fun setup() {
         coEvery { retentionPolicyService.getRetentionDaysForProject(any()) } returns 30
@@ -54,6 +56,7 @@ class TransactionServiceTest {
         service = TransactionService(queryHelper)
     }
 
+    // ──── getProjectIdForTransaction Tests ────
     @Test
     fun `getProjectIdForTransaction returns project id`() = runBlocking {
         val eventId = TXN_UUID
@@ -88,6 +91,7 @@ class TransactionServiceTest {
         }
     }
 
+    // ──── getTransactions Tests ────
     @Test
     fun `getTransactions returns parsed transaction summaries`() = runBlocking {
         val row = """
@@ -121,6 +125,7 @@ class TransactionServiceTest {
         }
     }
 
+    // ──── getPerformanceStats Tests ────
     @Test
     fun `getPerformanceStats returns apdex and stats`() = runBlocking {
         var requestCount = 0
@@ -204,6 +209,7 @@ class TransactionServiceTest {
         }
     }
 
+    // ──── getTransaction Tests ────
     @Test
     fun `getTransaction returns detail for valid event`() = runBlocking {
         val eventId = TXN_UUID
@@ -242,6 +248,7 @@ class TransactionServiceTest {
         }
     }
 
+    // ──── Trace and Span Tests ────
     @Test
     fun `getTraceDetails assembles spans into trace`() = runBlocking {
         val body = """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_1","transaction_id":"tx-1","op":"http.server","description":"GET /","start_ts_ms":"1000","end_ts_ms":"2500","duration_ms":"1500","status":"ok","tags":{},"data":"{}"}
@@ -308,6 +315,7 @@ class TransactionServiceTest {
         }
     }
 
+    // ──── getRelatedErrorsForTransaction Tests ────
     @Test
     fun `getRelatedErrorsForTransaction returns errors for trace`() = runBlocking {
         var callCount = 0

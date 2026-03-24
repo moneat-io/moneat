@@ -16,6 +16,7 @@
 
 package com.moneat.otlp.services
 
+import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
@@ -134,8 +135,8 @@ class OtlpMetricsService(
         val request =
             try {
                 ExportMetricsServiceRequest.parseFrom(bytes)
-            } catch (e: Exception) {
-                logger.warn(e) { "Invalid OTLP protobuf metrics payload" }
+            } catch (e: InvalidProtocolBufferException) {
+                logger.warn { "Invalid OTLP protobuf metrics payload: ${e.message?.take(500)}" }
                 return null
             }
 
