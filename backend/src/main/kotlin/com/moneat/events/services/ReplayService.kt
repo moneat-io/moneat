@@ -741,12 +741,11 @@ class ReplayService(
 
     private fun buildSpansByTraceQuery(
         projectId: Long,
+        orgId: Int,
         traceIdList: String,
         retentionDays: Int,
         demoEpochMs: Long?
-    ): String {
-        val orgId = getOrganizationIdForProject(projectId) ?: return ""
-        return """
+    ): String = """
         SELECT
             span_id_hex as span_id,
             trace_id_hex as trace_id,
@@ -762,8 +761,7 @@ class ReplayService(
             AND source = 'sentry'
             AND ${queryHelper.timestampRetentionClause("start", retentionDays, demoEpochMs)}
         FORMAT JSONEachRow
-        """.trimIndent()
-    }
+    """.trimIndent()
 
     suspend fun getReplayTimeline(
         replayId: String,
@@ -807,6 +805,8 @@ class ReplayService(
             )
         }
 
+        val spansOrgId = getOrganizationIdForProject(projectId)
+
         if (replay.traceIds.isNotEmpty()) {
             val traceIdList = replay.traceIds.distinct().map { "'${escapeSql(it)}'" }.joinToString(",")
             val traceConditions = "JSONExtractString(e.contexts, 'trace', 'trace_id') IN ($traceIdList)"
@@ -821,8 +821,8 @@ class ReplayService(
                 addedIds = addedIds
             )
 
-            val spansQuery = buildSpansByTraceQuery(projectId, traceIdList, retentionDays, demoEpochMs)
-            if (spansQuery.isNotBlank()) {
+            if (spansOrgId != null) {
+                val spansQuery = buildSpansByTraceQuery(projectId, spansOrgId, traceIdList, retentionDays, demoEpochMs)
                 fetchAndAddTimelineItems(
                     query = spansQuery,
                     errorContext = "Replay timeline spans by trace IDs",
@@ -893,7 +893,6 @@ class ReplayService(
             addedIds = addedIds
         )
 
-        val spansOrgId = getOrganizationIdForProject(projectId)
         val spansInRangeQuery = if (spansOrgId != null) {
             """
             SELECT

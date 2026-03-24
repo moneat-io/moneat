@@ -47,6 +47,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
 
     companion object {
         private const val APDEX_THRESHOLD_MS = 500
+        private const val NANOS_PER_MILLI = 1_000_000.0
     }
 
     private fun getOrganizationIdForProject(projectId: Long): Int? =
@@ -61,9 +62,9 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
     private fun mapSpanRowFromApm(obj: JsonObject): SpanResponse {
         val startNs = obj["start_ns"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
         val durationNs = obj["duration_ns"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
-        val startMs = startNs / 1_000_000.0
-        val endMs = startMs + (durationNs / 1_000_000.0)
-        val durationMs = durationNs / 1_000_000.0
+        val startMs = startNs / NANOS_PER_MILLI
+        val endMs = startMs + (durationNs / NANOS_PER_MILLI)
+        val durationMs = durationNs / NANOS_PER_MILLI
         val tagsMap = queryHelper.parseStringMap(obj["meta"])
         val errorVal = obj["error"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
         val status = if (errorVal > 0) "error" else "ok"

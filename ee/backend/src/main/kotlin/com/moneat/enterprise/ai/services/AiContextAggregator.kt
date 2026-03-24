@@ -118,7 +118,7 @@ class AiContextAggregator {
                     trace_id_hex AS trace_id,
                     span_id_hex AS span_id,
                     type AS operation,
-                    duration / 1000000 AS duration_ms,
+                    intDiv(duration, 1000000) AS duration_ms,
                     if(error > 0, 'error', 'ok') AS status,
                     service
                 FROM apm_spans

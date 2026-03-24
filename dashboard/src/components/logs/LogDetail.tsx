@@ -258,7 +258,7 @@ export function LogDetail({log, open, onClose, onViewInContext, projectId}: LogD
           {hasTracing && (
             <>
               <div className="grid gap-3 sm:grid-cols-2">
-                {log.traceId && projectId && (
+                {log.traceId && (
                   <LinkableField
                     label="Trace ID"
                     value={log.traceId}

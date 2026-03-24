@@ -920,6 +920,17 @@ class EventService(
     private fun sentryStatusToError(status: String?): Int =
         if (status == null || status == "ok" || status == "cancelled") 0 else 1
 
+    private class ApmSpanContext(
+        val orgId: Int,
+        val clickhouseDb: String,
+        val service: String,
+        val host: String,
+        val env: String,
+        val version: String,
+        val transactionName: String,
+        val baseMeta: Map<String, String>,
+    )
+
     private suspend fun insertSentrySpansToApm(
         projectId: Long,
         eventId: String,
@@ -940,131 +951,172 @@ class EventService(
             return
         }
 
-        val clickhouseDb = ClickHouseClient.getDatabase()
-        val service = transaction.server_name?.takeIf { it.isNotBlank() }
-            ?: transaction.sdk?.name?.takeIf { it.isNotBlank() }
-            ?: "sentry"
-        val host = transaction.server_name ?: ""
-        val env = transaction.environment ?: "production"
-        val version = transaction.release ?: ""
-        val transactionName = transaction.transaction ?: transactionOp.ifBlank { "transaction" }
-
         val baseMeta = mutableMapOf(
             "sentry.transaction_id" to eventId,
             "sentry.project_id" to projectId.toString()
         )
         transaction.tags?.let { baseMeta.putAll(it) }
 
-        val rootMetrics = mutableMapOf<String, Double>()
+        val ctx = ApmSpanContext(
+            orgId = orgId,
+            clickhouseDb = ClickHouseClient.getDatabase(),
+            service = transaction.server_name?.takeIf { it.isNotBlank() }
+                ?: transaction.sdk?.name?.takeIf { it.isNotBlank() }
+                ?: "sentry",
+            host = transaction.server_name ?: "",
+            env = transaction.environment ?: "production",
+            version = transaction.release ?: "",
+            transactionName = transaction.transaction ?: transactionOp.ifBlank { "transaction" },
+            baseMeta = baseMeta,
+        )
+
+        val rows = mutableListOf<String>()
+        buildRootSpanRow(ctx, traceId, transactionOp, traceStatus, transaction)?.let { rows.add(it) }
+        for (span in childSpans) {
+            buildChildSpanRow(ctx, span, traceId, transaction)?.let { rows.add(it) }
+        }
+
+        if (rows.isNotEmpty()) {
+            executeApmSpanInsert(ctx, rows, eventId)
+        }
+    }
+
+    private fun buildRootSpanRow(
+        ctx: ApmSpanContext,
+        traceId: String,
+        transactionOp: String,
+        traceStatus: String?,
+        transaction: SentryTransaction
+    ): String? {
+        val rootSpanId = transaction.contexts?.get("trace")?.jsonObject
+            ?.get("span_id")?.jsonPrimitive?.contentOrNull ?: ""
+        if (rootSpanId.isBlank()) return null
+
+        val startTs = transaction.start_timestamp ?: (System.currentTimeMillis() / 1000.0)
+        val (traceIdHigh, traceIdLow) = hexToULongPair(traceId)
+        val (spanIdHigh, spanIdLow) = hexToULongPair(rootSpanId)
+        val rootMetrics = extractMeasurementMetrics(transaction)
+
+        return """
+            (
+            $spanIdLow, $spanIdHigh,
+            $traceIdLow, $traceIdHigh,
+            0, 0,
+            ${ctx.orgId},
+            '${escapeSql(ctx.transactionName)}',
+            '${escapeSql(ctx.service)}',
+            '${escapeSql(ctx.transactionName)}',
+            '${escapeSql(transactionOp)}',
+            fromUnixTimestamp64Nano(${unixSecondsToNanos(startTs)}),
+            ${durationNanos(transaction.start_timestamp, transaction.timestamp)},
+            ${sentryStatusToError(traceStatus)},
+            ${mapToSqlMap(ctx.baseMeta)},
+            ${doubleMapToSqlMap(rootMetrics)},
+            '${escapeSql(ctx.host)}',
+            '${escapeSql(ctx.env)}',
+            '${escapeSql(ctx.version)}',
+            '$traceId',
+            '$rootSpanId',
+            '',
+            'sentry'
+            )
+        """.trimIndent()
+    }
+
+    private fun buildChildSpanRow(
+        ctx: ApmSpanContext,
+        span: SentrySpan,
+        fallbackTraceId: String,
+        transaction: SentryTransaction
+    ): String? {
+        val spanStart = span.start_timestamp ?: transaction.start_timestamp ?: return null
+        val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
+        val spanId = span.span_id?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
+        val spanTraceId = span.trace_id ?: fallbackTraceId
+
+        val (traceIdHigh, traceIdLow) = hexToULongPair(spanTraceId)
+        val (spanIdHigh, spanIdLow) = hexToULongPair(spanId)
+        val parentHex = span.parent_span_id ?: ""
+        val (parentIdHigh, parentIdLow) = hexToULongPair(parentHex)
+
+        val spanMeta = extractSpanMeta(span, ctx.baseMeta)
+        val spanMetrics = extractSpanMetrics(span)
+
+        return """
+            (
+            $spanIdLow, $spanIdHigh,
+            $traceIdLow, $traceIdHigh,
+            $parentIdLow, $parentIdHigh,
+            ${ctx.orgId},
+            '${escapeSql(ctx.transactionName)}',
+            '${escapeSql(ctx.service)}',
+            '${escapeSql(span.description ?: "")}',
+            '${escapeSql(span.op ?: "")}',
+            fromUnixTimestamp64Nano(${unixSecondsToNanos(spanStart)}),
+            ${durationNanos(spanStart, spanEnd)},
+            ${sentryStatusToError(span.status)},
+            ${mapToSqlMap(spanMeta)},
+            ${doubleMapToSqlMap(spanMetrics)},
+            '${escapeSql(ctx.host)}',
+            '${escapeSql(ctx.env)}',
+            '${escapeSql(ctx.version)}',
+            '${escapeSql(spanTraceId)}',
+            '${escapeSql(spanId)}',
+            '${escapeSql(parentHex)}',
+            'sentry'
+            )
+        """.trimIndent()
+    }
+
+    private fun extractMeasurementMetrics(transaction: SentryTransaction): Map<String, Double> {
+        val metrics = mutableMapOf<String, Double>()
         transaction.measurements?.let { measurements ->
             for ((key, value) in measurements) {
                 try {
-                    val valueObj = value.jsonObject
-                    val numericValue = valueObj["value"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
-                    if (numericValue != null) {
-                        rootMetrics["measurement.$key"] = numericValue
-                    }
-                } catch (_: Exception) { }
-            }
-        }
-
-        val rows = mutableListOf<String>()
-
-        val rootSpanId = transaction.contexts?.get("trace")?.jsonObject
-            ?.get("span_id")?.jsonPrimitive?.contentOrNull ?: ""
-        if (rootSpanId.isNotBlank()) {
-            val startTs = transaction.start_timestamp ?: (System.currentTimeMillis() / 1000.0)
-            val (traceIdHigh, traceIdLow) = hexToULongPair(traceId)
-            val (spanIdHigh, spanIdLow) = hexToULongPair(rootSpanId)
-
-            rows.add(
-                """(
-                $spanIdLow, $spanIdHigh,
-                $traceIdLow, $traceIdHigh,
-                0, 0,
-                $orgId,
-                '${escapeSql(transactionName)}',
-                '${escapeSql(service)}',
-                '${escapeSql(transactionName)}',
-                '${escapeSql(transactionOp)}',
-                fromUnixTimestamp64Nano(${unixSecondsToNanos(startTs)}),
-                ${durationNanos(transaction.start_timestamp, transaction.timestamp)},
-                ${sentryStatusToError(traceStatus)},
-                ${mapToSqlMap(baseMeta)},
-                ${doubleMapToSqlMap(rootMetrics)},
-                '${escapeSql(host)}',
-                '${escapeSql(env)}',
-                '${escapeSql(version)}',
-                '$traceId',
-                '$rootSpanId',
-                '',
-                'sentry'
-            )"""
-            )
-        }
-
-        for (span in childSpans) {
-            val spanStart = span.start_timestamp ?: transaction.start_timestamp ?: continue
-            val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
-            val spanId = span.span_id?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
-            val spanTraceId = span.trace_id ?: traceId
-
-            val (traceIdHigh, traceIdLow) = hexToULongPair(spanTraceId)
-            val (spanIdHigh, spanIdLow) = hexToULongPair(spanId)
-            val parentHex = span.parent_span_id ?: ""
-            val (parentIdHigh, parentIdLow) = hexToULongPair(parentHex)
-
-            val spanMeta = baseMeta.toMutableMap()
-            span.tags?.let { spanMeta.putAll(it) }
-            span.data?.let { data ->
-                for ((key, value) in data) {
-                    try {
-                        val str = value.jsonPrimitive.contentOrNull
-                        if (str != null) spanMeta["data.$key"] = str
-                    } catch (_: Exception) { }
+                    val numericValue = value.jsonObject["value"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+                    if (numericValue != null) metrics["measurement.$key"] = numericValue
+                } catch (e: Exception) {
+                    logger.debug(e) { "Skipping malformed measurement '$key'" }
                 }
             }
+        }
+        return metrics
+    }
 
-            val spanMetrics = mutableMapOf<String, Double>()
-            span.data?.let { data ->
-                for ((key, value) in data) {
-                    try {
-                        val num = value.jsonPrimitive.contentOrNull?.toDoubleOrNull()
-                        if (num != null) spanMetrics["data.$key"] = num
-                    } catch (_: Exception) { }
+    private fun extractSpanMeta(span: SentrySpan, baseMeta: Map<String, String>): Map<String, String> {
+        val meta = baseMeta.toMutableMap()
+        span.tags?.let { meta.putAll(it) }
+        span.data?.let { data ->
+            for ((key, value) in data) {
+                try {
+                    val str = value.jsonPrimitive.contentOrNull
+                    if (str != null) meta["data.$key"] = str
+                } catch (e: Exception) {
+                    logger.debug(e) { "Skipping malformed span data key '$key'" }
                 }
             }
-
-            rows.add(
-                """(
-                $spanIdLow, $spanIdHigh,
-                $traceIdLow, $traceIdHigh,
-                $parentIdLow, $parentIdHigh,
-                $orgId,
-                '${escapeSql(transactionName)}',
-                '${escapeSql(service)}',
-                '${escapeSql(span.description ?: "")}',
-                '${escapeSql(span.op ?: "")}',
-                fromUnixTimestamp64Nano(${unixSecondsToNanos(spanStart)}),
-                ${durationNanos(spanStart, spanEnd)},
-                ${sentryStatusToError(span.status)},
-                ${mapToSqlMap(spanMeta)},
-                ${doubleMapToSqlMap(spanMetrics)},
-                '${escapeSql(host)}',
-                '${escapeSql(env)}',
-                '${escapeSql(version)}',
-                '${escapeSql(spanTraceId)}',
-                '${escapeSql(spanId)}',
-                '${escapeSql(parentHex)}',
-                'sentry'
-            )"""
-            )
         }
+        return meta
+    }
 
-        if (rows.isEmpty()) return
+    private fun extractSpanMetrics(span: SentrySpan): Map<String, Double> {
+        val metrics = mutableMapOf<String, Double>()
+        span.data?.let { data ->
+            for ((key, value) in data) {
+                try {
+                    val num = value.jsonPrimitive.contentOrNull?.toDoubleOrNull()
+                    if (num != null) metrics["data.$key"] = num
+                } catch (e: Exception) {
+                    logger.debug(e) { "Skipping non-numeric span data key '$key'" }
+                }
+            }
+        }
+        return metrics
+    }
 
+    private suspend fun executeApmSpanInsert(ctx: ApmSpanContext, rows: List<String>, eventId: String) {
         val insert = """
-            INSERT INTO `$clickhouseDb`.apm_spans (
+            INSERT INTO `${ctx.clickhouseDb}`.apm_spans (
                 span_id, span_id_high,
                 trace_id, trace_id_high,
                 parent_id, parent_id_high,
@@ -1082,8 +1134,7 @@ class EventService(
             logger.error { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
         }
 
-        val totalBytes = rows.sumOf { it.length }
-        usageTracker.recordOrgUsage(orgId, "sentry_trace", totalBytes)
+        usageTracker.recordOrgUsage(ctx.orgId, "sentry_trace", rows.sumOf { it.length })
     }
 
     private suspend fun storeProfile(

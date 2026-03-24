@@ -1,9 +1,11 @@
 -- Backfill existing Sentry spans from the `spans` table into `apm_spans`.
 --
--- This migration cannot run as a pure SQL statement because `organization_id`
--- must be resolved from PostgreSQL (projects.organization_id).
+-- This migration cannot run as pure SQL because `organization_id` must be
+-- resolved from PostgreSQL (projects.organization_id), which requires a
+-- cross-database lookup that ClickHouse SQL alone cannot perform.
 --
--- To backfill, run the Kotlin helper:
+-- IMPORTANT: Before deploying the read-path switch from `spans` to `apm_spans`,
+-- invoke the Kotlin helper as part of the deployment sequence:
 --   com.moneat.events.services.SentrySpanBackfill.run()
 --
 -- It reads all project_id -> organization_id mappings from PG, then executes:

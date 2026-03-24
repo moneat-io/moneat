@@ -91,7 +91,7 @@ object SentrySpanBackfill {
         if (response.status.isSuccess()) {
             logger.info { "Spans backfill completed successfully" }
         } else {
-            logger.error { "Spans backfill failed" }
+            logger.error { "Spans backfill failed: HTTP ${response.status}" }
         }
     }
 
@@ -109,6 +109,6 @@ object SentrySpanBackfill {
         val cases = mapping.entries.joinToString(", ") { (pid, oid) ->
             "project_id = $pid, $oid"
         }
-        return "multiIf($cases, 0)"
+        return "multiIf($cases, NULL)"
     }
 }
