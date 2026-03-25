@@ -36,6 +36,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -364,30 +365,26 @@ class OtlpTraceService(
         return json.encodeToString(jsonEvents)
     }
 
-    private fun protoLinksToJson(links: List<Span.Link>): String {
-        val jsonLinks =
-            buildJsonArray {
-                links.forEach { link ->
-                    add(
-                        buildJsonObject {
-                            put("traceId", JsonPrimitive(OtlpProtobufParser.bytesToHex(link.traceId)))
-                            put("spanId", JsonPrimitive(OtlpProtobufParser.bytesToHex(link.spanId)))
-                            if (link.traceState.isNotEmpty()) {
-                                put("traceState", JsonPrimitive(link.traceState))
-                            }
-                            if (link.attributesList.isNotEmpty()) {
-                                put("attributes", keyValuesToJsonArray(link.attributesList))
-                            }
-                            if (link.droppedAttributesCount > 0) {
-                                put("droppedAttributesCount", JsonPrimitive(link.droppedAttributesCount))
-                            }
-                            if (link.flags != 0) {
-                                put("flags", JsonPrimitive(link.flags))
-                            }
-                        }
-                    )
-                }
+    private fun protoLinkToJsonObject(link: Span.Link): JsonObject =
+        buildJsonObject {
+            put("traceId", JsonPrimitive(OtlpProtobufParser.bytesToHex(link.traceId)))
+            put("spanId", JsonPrimitive(OtlpProtobufParser.bytesToHex(link.spanId)))
+            if (link.traceState.isNotEmpty()) {
+                put("traceState", JsonPrimitive(link.traceState))
             }
+            if (link.attributesList.isNotEmpty()) {
+                put("attributes", keyValuesToJsonArray(link.attributesList))
+            }
+            if (link.droppedAttributesCount > 0) {
+                put("droppedAttributesCount", JsonPrimitive(link.droppedAttributesCount))
+            }
+            if (link.flags != 0) {
+                put("flags", JsonPrimitive(link.flags))
+            }
+        }
+
+    private fun protoLinksToJson(links: List<Span.Link>): String {
+        val jsonLinks = buildJsonArray { links.forEach { add(protoLinkToJsonObject(it)) } }
         return json.encodeToString(jsonLinks)
     }
 

@@ -73,6 +73,8 @@ class OtlpMetricsServiceTest {
         private const val SUMMARY_GC_SUM = 250.5
         private const val DECODE_BATCH_METRIC_VALUE = 42.5
         private const val SUMMARY_METRIC_NAME = "process.runtime.gc.pause"
+        private const val SUM_HTTP_REQUESTS_METRIC_NAME = "http.requests.total"
+        private const val HTTP_METHOD_ATTR_KEY = "http.method"
     }
 
     private lateinit var service: OtlpMetricsService
@@ -103,12 +105,12 @@ class OtlpMetricsServiceTest {
     }
 
     private fun assertMonotonicCumulativeSum(m: OtlpMetricInsert) {
-        assertEquals("http.requests.total", m.metricName)
+        assertEquals(SUM_HTTP_REQUESTS_METRIC_NAME, m.metricName)
         assertEquals("sum", m.metricType)
         assertEquals(SUM_HTTP_REQUESTS_VALUE, m.value)
         assertEquals(1, m.isMonotonic)
         assertEquals("cumulative", m.aggregationTemporality)
-        assertEquals("GET", m.tags["http.method"])
+        assertEquals("GET", m.tags[HTTP_METHOD_ATTR_KEY])
     }
 
     private fun assertHistogramStats(m: OtlpMetricInsert) {
@@ -252,7 +254,7 @@ class OtlpMetricsServiceTest {
             val payload = wrapMetric(
                 """
             {
-              "name": "http.requests.total",
+              "name": "$SUM_HTTP_REQUESTS_METRIC_NAME",
               "description": "Total HTTP requests",
               "sum": {
                 "isMonotonic": true,
@@ -261,7 +263,7 @@ class OtlpMetricsServiceTest {
                   "timeUnixNano": $TEST_TIME_UNIX_NANO_PRIMARY,
                   "asDouble": $SUM_HTTP_REQUESTS_VALUE,
                   "attributes": [
-                    {"key": "http.method", "value": {"stringValue": "GET"}}
+                    {"key": "$HTTP_METHOD_ATTR_KEY", "value": {"stringValue": "GET"}}
                   ]
                 }]
               }
@@ -304,7 +306,7 @@ class OtlpMetricsServiceTest {
             val payload = wrapMetric(
                 """
             {
-              "name": "http.requests.total",
+              "name": "$SUM_HTTP_REQUESTS_METRIC_NAME",
               "sum": {
                 "isMonotonic": true,
                 "aggregationTemporality": 2,
@@ -314,7 +316,7 @@ class OtlpMetricsServiceTest {
                     "timeUnixNano": $TEST_TIME_UNIX_NANO_MULTI_SECOND,
                     "asDouble": $SUM_HTTP_REQUESTS_VALUE,
                     "attributes": [
-                      {"key": "http.method", "value": {"stringValue": "GET"}}
+                      {"key": "$HTTP_METHOD_ATTR_KEY", "value": {"stringValue": "GET"}}
                     ]
                   }
                 ]
@@ -693,7 +695,7 @@ class OtlpMetricsServiceTest {
         @Test
         fun `parses monotonic cumulative sum`() {
             val metric = Metric.newBuilder()
-                .setName("http.requests.total")
+                .setName(SUM_HTTP_REQUESTS_METRIC_NAME)
                 .setSum(
                     Sum.newBuilder()
                         .setIsMonotonic(true)
@@ -702,7 +704,7 @@ class OtlpMetricsServiceTest {
                             NumberDataPoint.newBuilder()
                                 .setTimeUnixNano(TEST_TIME_UNIX_NANO_PRIMARY)
                                 .setAsDouble(SUM_HTTP_REQUESTS_VALUE)
-                                .addAttributes(kv("http.method", "GET"))
+                                .addAttributes(kv(HTTP_METHOD_ATTR_KEY, "GET"))
                         )
                 )
                 .build()
@@ -716,7 +718,7 @@ class OtlpMetricsServiceTest {
         @Test
         fun `skips sum datapoints with no numeric value set`() {
             val metric = Metric.newBuilder()
-                .setName("http.requests.total")
+                .setName(SUM_HTTP_REQUESTS_METRIC_NAME)
                 .setSum(
                     Sum.newBuilder()
                         .setIsMonotonic(true)
@@ -729,7 +731,7 @@ class OtlpMetricsServiceTest {
                             NumberDataPoint.newBuilder()
                                 .setTimeUnixNano(TEST_TIME_UNIX_NANO_PRIMARY)
                                 .setAsDouble(SUM_HTTP_REQUESTS_VALUE)
-                                .addAttributes(kv("http.method", "GET"))
+                                .addAttributes(kv(HTTP_METHOD_ATTR_KEY, "GET"))
                         )
                 )
                 .build()
