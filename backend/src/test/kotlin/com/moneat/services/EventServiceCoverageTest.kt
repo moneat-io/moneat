@@ -384,17 +384,6 @@ class EventServiceCoverageTest {
 
     @Test
     fun `storeTransaction inserts spans from transaction`() = runBlocking {
-        mockkObject(ClickHouseClient)
-        val chResponse =
-            mockk<HttpResponse>(relaxed = true) {
-                every { status } returns HttpStatusCode.OK
-            }
-        val executedSql = mutableListOf<String>()
-        coEvery { ClickHouseClient.execute(any(), any()) } coAnswers {
-            executedSql.add(firstArg())
-            chResponse
-        }
-        try {
         val txnJson = Json.encodeToString(
             SentryTransaction(
                 event_id = "txn-spans",
@@ -441,15 +430,26 @@ class EventServiceCoverageTest {
             )
         )
 
-        eventService.processEnvelope(
-            testProjectId,
-            SentryEnvelope(eventId = "txn-spans", items = listOf(EnvelopeItem("transaction", txnJson)))
-        )
+        mockkObject(ClickHouseClient)
+        val chResponse =
+            mockk<HttpResponse>(relaxed = true) {
+                every { status } returns HttpStatusCode.OK
+            }
+        val executedSql = mutableListOf<String>()
+        coEvery { ClickHouseClient.execute(any(), any()) } coAnswers {
+            executedSql.add(firstArg())
+            chResponse
+        }
+        try {
+            eventService.processEnvelope(
+                testProjectId,
+                SentryEnvelope(eventId = "txn-spans", items = listOf(EnvelopeItem("transaction", txnJson)))
+            )
 
-        coVerify(atLeast = 1) { eventRepository.insertTransaction(any()) }
-        verify(atLeast = 1) { eventRepository.getOrganizationIdForProject(testProjectId) }
-        coVerify(atLeast = 1) { ClickHouseClient.execute(any(), any()) }
-        assertTrue(executedSql.any { it.contains("apm_spans") }, "expected apm_spans INSERT")
+            coVerify(atLeast = 1) { eventRepository.insertTransaction(any()) }
+            verify(atLeast = 1) { eventRepository.getOrganizationIdForProject(testProjectId) }
+            coVerify(atLeast = 1) { ClickHouseClient.execute(any(), any()) }
+            assertTrue(executedSql.any { it.contains("apm_spans") }, "expected apm_spans INSERT")
         } finally {
             unmockkObject(ClickHouseClient)
         }
