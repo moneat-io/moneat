@@ -16,6 +16,7 @@
 
 package com.moneat.events.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.ExceptionInfo
@@ -36,13 +37,12 @@ import com.moneat.events.repositories.models.ReplayRecordingInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.notifications.services.NotificationService
 import com.moneat.otlp.hexToULongPair
-import com.moneat.config.ClickHouseClient
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.UsageTrackingService
-import com.moneat.utils.ClickHouseSqlUtils.escapeSql
-import io.ktor.http.isSuccess
-import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
 import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException

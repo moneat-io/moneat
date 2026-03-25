@@ -18,6 +18,7 @@
 
 package com.moneat.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.ExceptionInfo
 import com.moneat.events.models.ExceptionValue
@@ -45,7 +46,6 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
-import com.moneat.config.ClickHouseClient
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
