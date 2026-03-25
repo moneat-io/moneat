@@ -18,6 +18,7 @@ package com.moneat.routes
 
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.services.PricingTierService
+import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -25,7 +26,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 class PublicBillingRoutesTest {
     companion object {

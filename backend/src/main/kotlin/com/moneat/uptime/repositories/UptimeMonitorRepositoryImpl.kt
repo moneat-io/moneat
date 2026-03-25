@@ -21,9 +21,9 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
+import com.moneat.uptime.models.UpdateUptimeMonitorRequest
 import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.models.UptimeMonitors
-import com.moneat.uptime.models.UpdateUptimeMonitorRequest
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.ResultRow

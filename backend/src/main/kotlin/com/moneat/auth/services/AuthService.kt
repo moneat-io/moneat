@@ -16,9 +16,9 @@
 
 package com.moneat.auth.services
 
-import com.moneat.auth.repositories.UserRepository
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.auth.repositories.UserRepository
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.AuthResponse
 import com.moneat.events.models.LoginRequest

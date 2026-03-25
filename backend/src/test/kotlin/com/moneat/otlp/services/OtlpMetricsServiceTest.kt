@@ -219,6 +219,27 @@ class OtlpMetricsServiceTest {
             assertEquals(GAUGE_MULTI_FIRST_VALUE, metrics[0].value)
             assertEquals(GAUGE_MULTI_SECOND_VALUE, metrics[1].value)
         }
+
+        @Test
+        fun `skips gauge datapoints without asDouble or asInt`() {
+            val payload = wrapMetric(
+                """
+            {
+              "name": "mixed.gauge",
+              "gauge": {
+                "dataPoints": [
+                  {"timeUnixNano": $TEST_TIME_UNIX_NANO_MULTI_FIRST},
+                  {"timeUnixNano": $TEST_TIME_UNIX_NANO_MULTI_SECOND, "asDouble": $GAUGE_MULTI_SECOND_VALUE}
+                ]
+              }
+            }
+                """.trimIndent()
+            )
+
+            val metrics = service.parseOtlpMetricsJson(payload)!!
+            assertEquals(1, metrics.size)
+            assertEquals(GAUGE_MULTI_SECOND_VALUE, metrics[0].value)
+        }
     }
 
     // ──── SUM ────
@@ -276,6 +297,35 @@ class OtlpMetricsServiceTest {
 
             assertEquals(0, metrics[0].isMonotonic)
             assertEquals("delta", metrics[0].aggregationTemporality)
+        }
+
+        @Test
+        fun `skips sum datapoints without asDouble or asInt`() {
+            val payload = wrapMetric(
+                """
+            {
+              "name": "http.requests.total",
+              "sum": {
+                "isMonotonic": true,
+                "aggregationTemporality": 2,
+                "dataPoints": [
+                  {"timeUnixNano": $TEST_TIME_UNIX_NANO_MULTI_FIRST},
+                  {
+                    "timeUnixNano": $TEST_TIME_UNIX_NANO_MULTI_SECOND,
+                    "asDouble": $SUM_HTTP_REQUESTS_VALUE,
+                    "attributes": [
+                      {"key": "http.method", "value": {"stringValue": "GET"}}
+                    ]
+                  }
+                ]
+              }
+            }
+                """.trimIndent()
+            )
+
+            val metrics = service.parseOtlpMetricsJson(payload)!!
+            assertEquals(1, metrics.size)
+            assertMonotonicCumulativeSum(metrics[0])
         }
     }
 
@@ -616,6 +666,31 @@ class OtlpMetricsServiceTest {
         }
 
         @Test
+        fun `skips gauge datapoints with no numeric value set`() {
+            val metric = Metric.newBuilder()
+                .setName("mixed.gauge")
+                .setGauge(
+                    Gauge.newBuilder()
+                        .addDataPoints(
+                            NumberDataPoint.newBuilder()
+                                .setTimeUnixNano(TEST_TIME_UNIX_NANO_MULTI_FIRST)
+                        )
+                        .addDataPoints(
+                            NumberDataPoint.newBuilder()
+                                .setTimeUnixNano(TEST_TIME_UNIX_NANO_MULTI_SECOND)
+                                .setAsDouble(GAUGE_MULTI_SECOND_VALUE)
+                        )
+                )
+                .build()
+
+            val metrics = service.parseOtlpMetricsProtobuf(wrapMetric(metric))!!
+
+            assertEquals(1, metrics.size)
+            assertEquals(GAUGE_MULTI_SECOND_VALUE, metrics[0].value)
+            assertEquals("mixed.gauge", metrics[0].metricName)
+        }
+
+        @Test
         fun `parses monotonic cumulative sum`() {
             val metric = Metric.newBuilder()
                 .setName("http.requests.total")
@@ -623,6 +698,33 @@ class OtlpMetricsServiceTest {
                     Sum.newBuilder()
                         .setIsMonotonic(true)
                         .setAggregationTemporality(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE)
+                        .addDataPoints(
+                            NumberDataPoint.newBuilder()
+                                .setTimeUnixNano(TEST_TIME_UNIX_NANO_PRIMARY)
+                                .setAsDouble(SUM_HTTP_REQUESTS_VALUE)
+                                .addAttributes(kv("http.method", "GET"))
+                        )
+                )
+                .build()
+
+            val metrics = service.parseOtlpMetricsProtobuf(wrapMetric(metric))!!
+
+            assertEquals(1, metrics.size)
+            assertMonotonicCumulativeSum(metrics[0])
+        }
+
+        @Test
+        fun `skips sum datapoints with no numeric value set`() {
+            val metric = Metric.newBuilder()
+                .setName("http.requests.total")
+                .setSum(
+                    Sum.newBuilder()
+                        .setIsMonotonic(true)
+                        .setAggregationTemporality(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE)
+                        .addDataPoints(
+                            NumberDataPoint.newBuilder()
+                                .setTimeUnixNano(TEST_TIME_UNIX_NANO_MULTI_FIRST)
+                        )
                         .addDataPoints(
                             NumberDataPoint.newBuilder()
                                 .setTimeUnixNano(TEST_TIME_UNIX_NANO_PRIMARY)

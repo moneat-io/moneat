@@ -19,7 +19,6 @@ package com.moneat.monitor.routes
 import com.moneat.monitor.models.CreateAgentApiKeyRequest
 import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.utils.ErrorResponse
-import org.koin.core.context.GlobalContext
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -31,6 +30,7 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import org.koin.core.context.GlobalContext
 
 fun Route.agentApiKeyRoutes(
     agentApiKeyService: AgentApiKeyService = GlobalContext.get().get(),

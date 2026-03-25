@@ -31,9 +31,9 @@ import com.moneat.shared.models.Projects
 import com.moneat.summary.services.SummaryService
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
-import com.moneat.testsupport.withSummaryServiceMockServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
+import com.moneat.testsupport.withSummaryServiceMockServer
 import com.moneat.uptime.models.UptimeMonitorResponse
 import com.moneat.uptime.services.UptimeService
 import io.mockk.coEvery

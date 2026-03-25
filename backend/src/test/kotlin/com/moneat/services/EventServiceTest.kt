@@ -28,9 +28,9 @@ import com.moneat.events.models.StackFrame
 import com.moneat.events.models.StackTrace
 import com.moneat.events.models.UserInfo
 import com.moneat.events.repositories.EventRepository
-import com.moneat.testsupport.TestIpConstants
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.services.EventService
+import com.moneat.testsupport.TestIpConstants
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.serialization.json.Json

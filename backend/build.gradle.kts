@@ -275,8 +275,10 @@ jacoco {
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
 
+    // Unit tests only — avoids implicit dependency on :integrationTest (Gradle 9 validates
+    // executionData inputs against tasks that produce them).
     executionData.setFrom(
-        fileTree(layout.buildDirectory.asFile).include("jacoco/*.exec")
+        fileTree(layout.buildDirectory.asFile).include("jacoco/test.exec")
     )
 
     reports {

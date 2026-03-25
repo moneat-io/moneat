@@ -23,13 +23,13 @@ import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.otlp.OtlpProtobufParser
 import com.moneat.otlp.calculateBillableBytes
 import com.moneat.otlp.hexToULongPair
-import io.opentelemetry.proto.common.v1.AnyValue
-import io.opentelemetry.proto.common.v1.KeyValue
-import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
-import io.opentelemetry.proto.trace.v1.Span
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
+import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
+import io.opentelemetry.proto.common.v1.AnyValue
+import io.opentelemetry.proto.common.v1.KeyValue
+import io.opentelemetry.proto.trace.v1.Span
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json

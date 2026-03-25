@@ -18,8 +18,8 @@
 
 package com.moneat.events.repositories
 
-import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.models.UpdateProjectRequest
+import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys

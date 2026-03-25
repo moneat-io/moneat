@@ -24,11 +24,11 @@ import com.moneat.events.models.IssueResponse
 import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.models.PerformanceStatsResponse
 import com.moneat.events.models.SlowTransactionResponse
+import com.moneat.events.models.SpanResponse
 import com.moneat.events.models.TimelinePoint
 import com.moneat.events.models.TransactionDetailResponse
 import com.moneat.events.models.TransactionSummaryResponse
 import com.moneat.events.models.TransactionWithSpansResponse
-import com.moneat.events.models.SpanResponse
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.services.DashboardService
 import com.moneat.shared.models.Memberships

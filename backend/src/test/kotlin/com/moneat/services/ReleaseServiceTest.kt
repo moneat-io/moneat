@@ -9,11 +9,11 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.ReleaseFiles
 import com.moneat.shared.models.Releases
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
-import com.moneat.testsupport.TestDatabaseHelper
 
 class ReleaseServiceTest {
     private val service = ReleaseService()

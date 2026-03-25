@@ -31,8 +31,8 @@ import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TimeRangeDef
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class QueryDslTest {

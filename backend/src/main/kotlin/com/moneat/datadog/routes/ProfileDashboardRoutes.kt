@@ -18,9 +18,9 @@ package com.moneat.datadog.routes
 
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.services.DatadogJfrFlamegraphService
+import com.moneat.datadog.services.DatadogPprofFlamegraphService
 import com.moneat.datadog.services.ProfileIngestionService
 import com.moneat.datadog.services.ProfileStorageService
-import com.moneat.datadog.services.DatadogPprofFlamegraphService
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode

@@ -27,8 +27,8 @@ import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DashboardQueryEngine
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue

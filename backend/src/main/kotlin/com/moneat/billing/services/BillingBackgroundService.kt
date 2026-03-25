@@ -17,14 +17,15 @@
 package com.moneat.billing.services
 
 import com.moneat.billing.models.BillingUsageResponse
-import com.moneat.billing.repositories.SubscriptionRepositoryImpl
-import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.billing.models.QuotaNotificationsSent
+import com.moneat.billing.repositories.SubscriptionRepositoryImpl
 import com.moneat.notifications.services.EmailService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.shared.repositories.OrganizationRepositoryImpl
+import com.moneat.shared.services.TaskLock
 import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +33,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import com.moneat.shared.services.TaskLock
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and

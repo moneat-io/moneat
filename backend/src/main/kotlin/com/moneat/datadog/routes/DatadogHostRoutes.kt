@@ -16,12 +16,12 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DatadogHostMetadata
 import com.moneat.datadog.models.DatadogIntakePayload
 import com.moneat.datadog.services.DatadogHostService
-import com.moneat.config.ClickHouseClient
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode

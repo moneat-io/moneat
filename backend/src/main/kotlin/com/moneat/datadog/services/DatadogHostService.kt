@@ -19,8 +19,6 @@ package com.moneat.datadog.services
 import com.moneat.datadog.models.DatadogHostMeta
 import com.moneat.datadog.models.DatadogHostMetadata
 import com.moneat.datadog.models.DatadogIntakePayload
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.minutes
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -29,15 +27,17 @@ import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.and
-import org.postgresql.util.PGobject
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import org.postgresql.util.PGobject
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 
 private val logger = KotlinLogging.logger {}
 private const val BYTES_PER_KB = 1024L

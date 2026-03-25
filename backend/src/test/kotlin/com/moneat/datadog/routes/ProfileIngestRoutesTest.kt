@@ -18,8 +18,8 @@ package com.moneat.datadog.routes
 
 import com.google.protobuf.CodedOutputStream
 import com.moneat.datadog.buildJfrLikePayload
-import java.io.ByteArrayOutputStream
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull

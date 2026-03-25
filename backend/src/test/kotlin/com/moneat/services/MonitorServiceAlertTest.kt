@@ -22,16 +22,17 @@ import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
 import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
+import com.moneat.shared.models.HostAlertSettings
+import com.moneat.shared.models.HostAlertTemplateStates
+import com.moneat.shared.models.HostAlerts
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
-import com.moneat.shared.models.HostAlertSettings
-import com.moneat.shared.models.HostAlertTemplateStates
-import com.moneat.shared.models.HostAlerts
-import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -41,7 +42,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 /**
  * Tests for MonitorService alert CRUD operations (createAlert, updateAlert, deleteAlert,

@@ -23,13 +23,13 @@ import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
 import io.opentelemetry.proto.common.v1.AnyValue
+import io.opentelemetry.proto.common.v1.InstrumentationScope
 import io.opentelemetry.proto.common.v1.KeyValue
 import io.opentelemetry.proto.resource.v1.Resource
 import io.opentelemetry.proto.trace.v1.ResourceSpans
 import io.opentelemetry.proto.trace.v1.ScopeSpans
 import io.opentelemetry.proto.trace.v1.Span
 import io.opentelemetry.proto.trace.v1.Status
-import io.opentelemetry.proto.common.v1.InstrumentationScope
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test

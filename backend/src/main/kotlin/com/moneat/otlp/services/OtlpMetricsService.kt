@@ -22,12 +22,12 @@ import com.moneat.config.RedisConfig
 import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
 import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.otlp.OtlpProtobufParser
-import io.opentelemetry.proto.collector.metrics.v1.ExportMetricsServiceRequest
-import io.opentelemetry.proto.metrics.v1.Metric
-import io.opentelemetry.proto.metrics.v1.NumberDataPoint
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
+import io.opentelemetry.proto.collector.metrics.v1.ExportMetricsServiceRequest
+import io.opentelemetry.proto.metrics.v1.Metric
+import io.opentelemetry.proto.metrics.v1.NumberDataPoint
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -166,10 +166,11 @@ class OtlpMetricsService(
 
         when (metric.dataCase) {
             Metric.DataCase.GAUGE -> metric.gauge.dataPointsList.forEach { dp ->
+                val value = numberDataPointValue(dp) ?: return@forEach
                 results += buildMetricInsert(
                     MetricInsertSpec(
                         name = name, type = "gauge", description = description, unit = unit,
-                        timestampNs = dp.timeUnixNano, value = numberDataPointValue(dp),
+                        timestampNs = dp.timeUnixNano, value = value,
                         attrs = OtlpProtobufParser.attributesToMap(dp.attributesList),
                         resourceCtx = resourceCtx,
                     )
@@ -180,10 +181,11 @@ class OtlpMetricsService(
                 val temporality = mapAggregationTemporality(sum.aggregationTemporalityValue)
                 val isMonotonic = if (sum.isMonotonic) 1 else 0
                 sum.dataPointsList.forEach { dp ->
+                    val value = numberDataPointValue(dp) ?: return@forEach
                     results += buildMetricInsert(
                         MetricInsertSpec(
                             name = name, type = "sum", description = description, unit = unit,
-                            timestampNs = dp.timeUnixNano, value = numberDataPointValue(dp),
+                            timestampNs = dp.timeUnixNano, value = value,
                             attrs = OtlpProtobufParser.attributesToMap(dp.attributesList),
                             resourceCtx = resourceCtx,
                             isMonotonic = isMonotonic, aggregationTemporality = temporality,
@@ -271,11 +273,11 @@ class OtlpMetricsService(
         }
     }
 
-    private fun numberDataPointValue(dp: NumberDataPoint): Double =
+    private fun numberDataPointValue(dp: NumberDataPoint): Double? =
         when (dp.valueCase) {
             NumberDataPoint.ValueCase.AS_DOUBLE -> dp.asDouble
             NumberDataPoint.ValueCase.AS_INT -> dp.asInt.toDouble()
-            NumberDataPoint.ValueCase.VALUE_NOT_SET, null -> 0.0
+            NumberDataPoint.ValueCase.VALUE_NOT_SET, null -> null
         }
 
     private fun histLikeSpec(args: HistLikeInsertArgs) = with(args) {
@@ -379,9 +381,9 @@ class OtlpMetricsService(
         return results
     }
 
-    private fun readJsonNumberValue(dpObj: kotlinx.serialization.json.JsonObject): Double =
+    private fun readJsonNumberValue(dpObj: kotlinx.serialization.json.JsonObject): Double? =
         dpObj["asDouble"]?.jsonPrimitive?.doubleOrNull
-            ?: dpObj["asInt"]?.jsonPrimitive?.longOrNull?.toDouble() ?: 0.0
+            ?: dpObj["asInt"]?.jsonPrimitive?.longOrNull?.toDouble()
 
     private fun parseGaugeDataPoints(
         gauge: kotlinx.serialization.json.JsonObject,
@@ -393,11 +395,12 @@ class OtlpMetricsService(
     ) {
         OtlpParsingUtils.safeJsonArray(gauge["dataPoints"]).forEach { dp ->
             val dpObj = dp.jsonObject
+            val value = readJsonNumberValue(dpObj) ?: return@forEach
             results += buildMetricInsert(
                 MetricInsertSpec(
                     name = name, type = "gauge", description = description, unit = unit,
                     timestampNs = dpObj["timeUnixNano"]?.jsonPrimitive?.longOrNull ?: 0L,
-                    value = readJsonNumberValue(dpObj),
+                    value = value,
                     attrs = OtlpParsingUtils.attributesToMap(dpObj["attributes"]),
                     resourceCtx = resourceCtx,
                 )
@@ -419,11 +422,12 @@ class OtlpMetricsService(
         )
         OtlpParsingUtils.safeJsonArray(sum["dataPoints"]).forEach { dp ->
             val dpObj = dp.jsonObject
+            val value = readJsonNumberValue(dpObj) ?: return@forEach
             results += buildMetricInsert(
                 MetricInsertSpec(
                     name = name, type = "sum", description = description, unit = unit,
                     timestampNs = dpObj["timeUnixNano"]?.jsonPrimitive?.longOrNull ?: 0L,
-                    value = readJsonNumberValue(dpObj),
+                    value = value,
                     attrs = OtlpParsingUtils.attributesToMap(dpObj["attributes"]),
                     resourceCtx = resourceCtx,
                     isMonotonic = if (isMonotonic) 1 else 0,
