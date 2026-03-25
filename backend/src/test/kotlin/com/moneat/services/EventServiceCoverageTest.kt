@@ -18,6 +18,7 @@
 
 package com.moneat.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.ExceptionInfo
 import com.moneat.events.models.ExceptionValue
@@ -37,7 +38,6 @@ import com.moneat.events.repositories.models.FeedbackInsertData
 import com.moneat.events.repositories.models.LlmGenerationInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
-import com.moneat.events.repositories.models.SpanInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
@@ -47,11 +47,16 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
 import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.slot
+import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -115,8 +120,8 @@ class EventServiceCoverageTest {
             ProjectKeyVerification(false, null)
         every { eventRepository.verifyProjectKey(testProjectId, "valid-key") } returns
             ProjectKeyVerification(true, "jvm")
-        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
         every { eventRepository.getOrganizationIdForProject(any()) } returns null
+        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
 
         coEvery { eventRepository.insertErrorEvent(any()) } returns true
         coEvery { eventRepository.insertTransaction(any()) } returns true
@@ -379,9 +384,6 @@ class EventServiceCoverageTest {
 
     @Test
     fun `storeTransaction inserts spans from transaction`() = runBlocking {
-        val spanSlot = slot<List<SpanInsertData>>()
-        coEvery { eventRepository.insertSpans(capture(spanSlot)) } returns Unit
-
         val txnJson = Json.encodeToString(
             SentryTransaction(
                 event_id = "txn-spans",
@@ -397,6 +399,7 @@ class EventServiceCoverageTest {
                         buildJsonObject {
                             put("trace_id", "trace-abc")
                             put("op", "http.server")
+                            put("span_id", "root-span")
                         }
                     )
                 },
@@ -427,16 +430,29 @@ class EventServiceCoverageTest {
             )
         )
 
-        eventService.processEnvelope(
-            testProjectId,
-            SentryEnvelope(eventId = "txn-spans", items = listOf(EnvelopeItem("transaction", txnJson)))
-        )
+        mockkObject(ClickHouseClient)
+        val chResponse =
+            mockk<HttpResponse>(relaxed = true) {
+                every { status } returns HttpStatusCode.OK
+            }
+        val executedSql = mutableListOf<String>()
+        coEvery { ClickHouseClient.execute(any(), any()) } coAnswers {
+            executedSql.add(firstArg())
+            chResponse
+        }
+        try {
+            eventService.processEnvelope(
+                testProjectId,
+                SentryEnvelope(eventId = "txn-spans", items = listOf(EnvelopeItem("transaction", txnJson)))
+            )
 
-        coVerify(atLeast = 1) { eventRepository.insertSpans(any()) }
-        assertTrue(spanSlot.isCaptured)
-        assertEquals(2, spanSlot.captured.size)
-        assertEquals("db.query", spanSlot.captured[0].op)
-        assertEquals("http.client", spanSlot.captured[1].op)
+            coVerify(atLeast = 1) { eventRepository.insertTransaction(any()) }
+            verify(atLeast = 1) { eventRepository.getOrganizationIdForProject(testProjectId) }
+            coVerify(atLeast = 1) { ClickHouseClient.execute(any(), any()) }
+            assertTrue(executedSql.any { it.contains("apm_spans") }, "expected apm_spans INSERT")
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
     }
 
     @Test
@@ -1037,8 +1053,8 @@ class EventServiceCoverageTest {
             )
         )
 
-        // No spans should be inserted when transaction fails
-        coVerify(exactly = 0) { eventRepository.insertSpans(any()) }
+        // Transaction insert should have failed, so no further processing
+        coVerify(exactly = 1) { eventRepository.insertTransaction(any()) }
     }
 
     // ===================== storeEvent when insert fails =====================
