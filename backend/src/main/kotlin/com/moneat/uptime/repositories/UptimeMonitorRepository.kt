@@ -18,8 +18,8 @@ package com.moneat.uptime.repositories
 
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
-import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.models.UpdateUptimeMonitorRequest
+import com.moneat.uptime.models.UptimeMonitorData
 import java.util.UUID
 
 /**

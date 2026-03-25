@@ -16,10 +16,12 @@
 
 package com.moneat.routes
 
-import com.moneat.logs.routes.logIngestRoutes
-import com.moneat.logs.routes.logRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.logs.routes.logIngestRoutes
+import com.moneat.logs.routes.logRoutes
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -37,13 +39,11 @@ import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import com.moneat.testsupport.startTestKoin
-import com.moneat.testsupport.stopTestKoin
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 
 class LogRoutesTest {
     private val jwtSecret = "log-routes-secret"

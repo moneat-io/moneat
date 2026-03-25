@@ -20,12 +20,12 @@ import io.ktor.events.*
 import io.ktor.server.application.*
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
-import io.lettuce.core.resource.ClientResources
-import io.netty.resolver.DefaultAddressResolverGroup
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.async.RedisAsyncCommands
 import io.lettuce.core.api.reactive.RedisReactiveCommands
 import io.lettuce.core.api.sync.RedisCommands
+import io.lettuce.core.resource.ClientResources
+import io.netty.resolver.DefaultAddressResolverGroup
 import java.time.Duration
 
 const val BRPOP_TIMEOUT_SECONDS = 5L

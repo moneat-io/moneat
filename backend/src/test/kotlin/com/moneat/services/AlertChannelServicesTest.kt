@@ -23,6 +23,7 @@ import com.moneat.shared.models.EmailsSent
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -32,7 +33,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import com.moneat.testsupport.TestDatabaseHelper
 
 class AlertChannelServicesTest {
     companion object {

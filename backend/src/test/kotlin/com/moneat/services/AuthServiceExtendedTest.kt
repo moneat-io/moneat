@@ -23,6 +23,7 @@ import com.moneat.auth.services.RefreshTokenCleaner
 import com.moneat.auth.services.RefreshTokenCleanupService
 import com.moneat.auth.services.RefreshTokenService
 import com.moneat.billing.services.StripeService
+import com.moneat.config.EnvConfig
 import com.moneat.events.models.LoginRequest
 import com.moneat.events.models.SignupRequest
 import com.moneat.notifications.services.EmailService
@@ -37,7 +38,6 @@ import com.moneat.shared.models.UsageRecords
 import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.Users
 import com.moneat.shared.repositories.MembershipRepositoryImpl
-import com.moneat.config.EnvConfig
 import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.testsupport.TestDatabaseHelper
 import io.mockk.every
@@ -48,12 +48,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.mindrot.jbcrypt.BCrypt
 import kotlin.test.BeforeTest
 import kotlin.test.Test

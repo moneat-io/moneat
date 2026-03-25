@@ -22,6 +22,7 @@ import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
+import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +32,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import com.moneat.shared.services.TaskLock
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
 import java.util.*

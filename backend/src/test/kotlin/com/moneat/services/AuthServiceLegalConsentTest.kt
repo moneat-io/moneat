@@ -17,25 +17,25 @@
 package com.moneat.services
 
 import com.moneat.auth.repositories.UserRepositoryImpl
-import com.moneat.shared.repositories.MembershipRepositoryImpl
-import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.auth.services.AuthService
 import com.moneat.auth.services.SignupRequestContext
 import com.moneat.events.models.SignupRequest
 import com.moneat.shared.models.EmailsSent
 import com.moneat.shared.models.Memberships
-import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.OrgInvitations
+import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.RefreshTokens
 import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.Users
+import com.moneat.shared.repositories.MembershipRepositoryImpl
+import com.moneat.shared.repositories.OrganizationRepositoryImpl
+import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.server.config.*
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
-import com.moneat.testsupport.TestDatabaseHelper
 
 class AuthServiceLegalConsentTest {
     private val authService = AuthService(

@@ -18,9 +18,9 @@ package com.moneat.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.routes.apiRoutes
-import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
@@ -28,8 +28,11 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -48,15 +51,12 @@ import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import java.util.Collections
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
-import com.moneat.testsupport.TestDatabaseHelper
-import com.moneat.testsupport.startTestKoin
-import com.moneat.testsupport.stopTestKoin
-import kotlin.test.AfterTest
 
 class ApiRoutesTest {
     private val jwtSecret = "test-secret-for-unit-tests"

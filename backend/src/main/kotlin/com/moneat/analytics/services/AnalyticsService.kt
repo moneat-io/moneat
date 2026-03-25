@@ -16,8 +16,6 @@
 
 package com.moneat.analytics.services
 
-import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.analytics.models.AnalyticsFilter
 import com.moneat.analytics.models.AnalyticsOverviewResponse
 import com.moneat.analytics.models.BreakdownResponse
@@ -26,6 +24,8 @@ import com.moneat.analytics.models.FunnelResponse
 import com.moneat.analytics.models.FunnelStep
 import com.moneat.analytics.models.RealtimeResponse
 import com.moneat.analytics.models.TimeseriesPoint
+import com.moneat.config.ClickHouseClient
+import com.moneat.config.RedisConfig
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject

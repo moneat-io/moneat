@@ -27,11 +27,11 @@ import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.AlertSilencePeriods
-import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
 import com.moneat.shared.models.HostAlerts
 import com.moneat.shared.models.Hosts
+import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.services.TaskLock
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess

@@ -5,11 +5,11 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SidebarPreferenceEvents
 import com.moneat.shared.models.Users
 import com.moneat.shared.services.SidebarPreferenceService
+import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
-import com.moneat.testsupport.TestDatabaseHelper
 
 class SidebarPreferenceServiceTest {
     companion object {

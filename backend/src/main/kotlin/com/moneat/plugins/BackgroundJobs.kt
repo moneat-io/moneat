@@ -25,9 +25,9 @@ import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.services.IngestionWorker
 import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.logs.services.LogIngestionWorker
+import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.otlp.services.OtlpMetricsIngestionWorker
 import com.moneat.otlp.services.OtlpTraceIngestionWorker
-import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionBackgroundService
@@ -36,12 +36,12 @@ import com.moneat.shared.services.UsageTrackingService
 import com.moneat.uptime.services.UptimeScheduler
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
-import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
+import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import org.koin.core.context.GlobalContext
 import kotlin.time.Duration.Companion.hours
 

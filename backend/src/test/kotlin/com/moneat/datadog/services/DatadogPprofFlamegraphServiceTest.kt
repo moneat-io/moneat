@@ -19,13 +19,13 @@ package com.moneat.datadog.services
 import com.google.protobuf.CodedOutputStream
 import com.moneat.datadog.buildJfrLikePayload
 import com.moneat.datadog.zstd
-import java.io.ByteArrayOutputStream
-import java.util.zip.GZIPOutputStream
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPOutputStream
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue

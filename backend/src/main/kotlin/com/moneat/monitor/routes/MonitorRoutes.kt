@@ -22,13 +22,13 @@ import com.moneat.monitor.models.AllContainersResponse
 import com.moneat.monitor.models.ContainerStatsResponse
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.CreateSilencePeriodRequest
+import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.HostResponse
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
-import com.moneat.monitor.models.HostData
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
 import com.moneat.utils.ErrorResponse
@@ -47,11 +47,11 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
-import org.koin.core.context.GlobalContext
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_PROJECT_ID = 0L
