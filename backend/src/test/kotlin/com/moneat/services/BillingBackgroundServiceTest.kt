@@ -25,6 +25,7 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
@@ -40,7 +41,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
-import com.moneat.testsupport.TestDatabaseHelper
 
 class BillingBackgroundServiceTest {
     private var testOrgId: Int = 0

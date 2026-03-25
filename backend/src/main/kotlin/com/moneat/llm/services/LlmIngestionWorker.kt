@@ -16,8 +16,8 @@
 
 package com.moneat.llm.services
 
-import com.moneat.config.ClickHouseClient
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
+import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.llm.models.LlmGenerationIngest
 import com.moneat.llm.models.LlmIngestPayload

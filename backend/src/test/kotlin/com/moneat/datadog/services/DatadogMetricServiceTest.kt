@@ -18,9 +18,9 @@ package com.moneat.datadog.services
 
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogMetricV1
+import com.moneat.datadog.models.DatadogSketch
 import com.moneat.datadog.models.DatadogSketchPayload
 import com.moneat.datadog.models.DatadogSketchPoint
-import com.moneat.datadog.models.DatadogSketch
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

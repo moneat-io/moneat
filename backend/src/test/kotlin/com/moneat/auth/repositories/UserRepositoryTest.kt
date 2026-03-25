@@ -16,10 +16,10 @@
 
 package com.moneat.auth.repositories
 
-import com.moneat.shared.models.Users
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SsoConfigurations
+import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert

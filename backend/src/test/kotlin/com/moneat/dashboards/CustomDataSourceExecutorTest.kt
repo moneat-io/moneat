@@ -21,14 +21,14 @@ import com.moneat.dashboards.models.CustomDataSourceType
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.handlers.PostgresHandler
 import com.moneat.dashboards.services.handlers.PrometheusHandler
-import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.long
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertContains
-import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class CustomDataSourceExecutorTest {
 

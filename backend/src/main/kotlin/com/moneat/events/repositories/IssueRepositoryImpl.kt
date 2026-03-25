@@ -17,16 +17,16 @@
 package com.moneat.events.repositories
 
 import com.moneat.events.models.EventResponse
+import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.repositories.models.IssueDetailRow
 import com.moneat.events.repositories.models.IssueRow
-import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and

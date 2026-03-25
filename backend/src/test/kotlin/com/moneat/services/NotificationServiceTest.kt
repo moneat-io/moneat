@@ -25,6 +25,7 @@ import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -34,7 +35,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Clock
-import com.moneat.testsupport.TestDatabaseHelper
 
 class NotificationServiceTest {
     companion object {

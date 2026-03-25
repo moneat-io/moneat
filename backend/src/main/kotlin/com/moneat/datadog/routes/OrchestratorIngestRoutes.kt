@@ -17,6 +17,7 @@
 package com.moneat.datadog.routes
 
 import com.moneat.datadog.auth.DatadogAuthMiddleware
+import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdManifestPayload
 import com.moneat.datadog.models.DdOrchestratorPayload
 import com.moneat.datadog.services.OrchestratorIngestionService
@@ -29,7 +30,6 @@ import io.ktor.server.routing.route
 import io.ktor.utils.io.toByteArray
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import com.moneat.datadog.decompression.DecompressionService
 
 private val logger = KotlinLogging.logger {}
 private val json = Json {

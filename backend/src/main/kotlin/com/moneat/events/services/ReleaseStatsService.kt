@@ -17,16 +17,16 @@
 package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
-import io.ktor.client.statement.bodyAsText
 import com.moneat.events.models.ReleaseDetailStats
 import com.moneat.events.models.ReleaseListResponse
 import com.moneat.shared.services.CacheService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import io.ktor.client.statement.bodyAsText
 import io.sentry.ISpan
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
 
