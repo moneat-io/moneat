@@ -148,6 +148,47 @@ def coderabbit_feedback(*, comments: str, issue_title: str) -> str:
     """)
 
 
+def test_failure_feedback(
+    *,
+    failures: str,
+    issue_title: str,
+) -> str:
+    return dedent(f"""\
+        You are fixing CI test / coverage failures for the Moneat project.
+
+        IMPORTANT: Before you begin, read these files for project context:
+        - AGENTS.md
+        - .github/copilot-instructions.md
+
+        ## Original task
+
+        **{issue_title}**
+
+        ## CI check failures
+
+        The following GitHub Actions checks failed on the pull request. Fix
+        every failure so the checks pass on the next push.
+
+        {failures}
+
+        ## Instructions
+
+        1. Read the failure details carefully. Common causes:
+           - **backend-unit** — Kotlin compilation errors, test assertion
+             failures, or detekt lint violations.
+           - **frontend-unit** — ESLint errors, TypeScript compilation errors,
+             or Jest test failures.
+           - **coverage-check** — Code coverage dropped below the required
+             thresholds (backend >= 60 %, frontend >= 80 %). Add tests for
+             the code you introduced or modified.
+        2. Fix the root cause of each failure. If coverage is too low, write
+           new unit tests; do not lower thresholds.
+        3. Run the relevant commands locally to verify:
+           - Backend: `./gradlew build` (in `backend/`)
+           - Dashboard: `npm run lint && npm run test:coverage` (in `dashboard/`)
+    """)
+
+
 def sonarqube_feedback(*, issues: str, issue_title: str) -> str:
     return dedent(f"""\
         You are fixing SonarQube issues for the Moneat project.

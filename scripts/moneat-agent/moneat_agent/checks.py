@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import subprocess
 import time
+from dataclasses import dataclass
 
 from moneat_agent import log
 
@@ -25,6 +26,8 @@ _CR_BOT_LOGIN = "coderabbitai[bot]"
 
 _SONAR_CHECK_NAME = "Build and analyze"
 _SONAR_PROJECT_KEY = "moneat"
+
+_TEST_CHECK_NAMES = ("backend-unit", "frontend-unit", "coverage-check")
 
 
 def wait_for_coderabbit(
@@ -118,6 +121,92 @@ def _has_review(repo: str, pr_number: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Generic check-run helpers
+# ---------------------------------------------------------------------------
+
+def _get_pr_head_sha(repo: str, pr_number: int) -> str | None:
+    """Return the HEAD commit SHA on a PR's branch."""
+    try:
+        raw = subprocess.run(
+            [
+                "gh", "api",
+                f"repos/{repo}/pulls/{pr_number}",
+                "--jq", ".head.sha",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        return raw or None
+    except subprocess.CalledProcessError:
+        return None
+
+
+def _check_run_info(
+    repo: str,
+    sha: str,
+    check_name: str,
+) -> tuple[str | None, str | None]:
+    """Return ``(status, conclusion)`` for the latest check run matching *check_name*.
+
+    *status* is ``'queued'``, ``'in_progress'``, or ``'completed'``.
+    *conclusion* is ``'success'``, ``'failure'``, ``'neutral'``, etc. (only
+    meaningful when status is ``completed``).
+
+    Returns ``(None, None)`` when the check run is not found.
+    """
+    try:
+        raw = subprocess.run(
+            [
+                "gh", "api",
+                f"repos/{repo}/commits/{sha}/check-runs",
+                "--jq",
+                (
+                    f'.check_runs | map(select(.name == "{check_name}")) '
+                    f'| last | [.status, .conclusion] | @tsv'
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        if not raw or raw == "null":
+            return None, None
+        parts = raw.split("\t")
+        status = parts[0] if parts[0] and parts[0] != "null" else None
+        conclusion = parts[1] if len(parts) > 1 and parts[1] and parts[1] != "null" else None
+        return status, conclusion
+    except subprocess.CalledProcessError:
+        return None, None
+
+
+def _get_check_failure_details(repo: str, sha: str, check_name: str) -> str:
+    """Fetch the output summary and annotations from a failed check run."""
+    try:
+        raw = subprocess.run(
+            [
+                "gh", "api",
+                f"repos/{repo}/commits/{sha}/check-runs",
+                "--jq",
+                (
+                    f'.check_runs | map(select(.name == "{check_name}")) | last '
+                    f'| {{ summary: .output.summary, title: .output.title, '
+                    f'annotations: [.output.annotations[]? | '
+                    f'{{ path: .path, line: .start_line, message: .message, level: .annotation_level }}] }}'
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        if raw and raw != "null":
+            return raw
+    except subprocess.CalledProcessError:
+        pass
+    return ""
+
+
+# ---------------------------------------------------------------------------
 # SonarQube Analysis check
 # ---------------------------------------------------------------------------
 
@@ -144,7 +233,8 @@ def wait_for_sonarqube(
             return False
 
         attempt += 1
-        status = _sonarqube_check_status(repo, pr_number)
+        sha = _get_pr_head_sha(repo, pr_number)
+        status, _ = _check_run_info(repo, sha, _SONAR_CHECK_NAME) if sha else (None, None)
 
         if status == "completed":
             log.success(f"SonarQube Analysis completed after {int(elapsed)}s")
@@ -158,47 +248,6 @@ def wait_for_sonarqube(
             f"  Poll #{attempt}: SonarQube {status or 'not started'} ({int(elapsed)}s elapsed)"
         )
         time.sleep(poll_interval)
-
-
-def _get_pr_head_sha(repo: str, pr_number: int) -> str | None:
-    """Return the HEAD commit SHA on a PR's branch."""
-    try:
-        raw = subprocess.run(
-            [
-                "gh", "api",
-                f"repos/{repo}/pulls/{pr_number}",
-                "--jq", ".head.sha",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-        return raw or None
-    except subprocess.CalledProcessError:
-        return None
-
-
-def _sonarqube_check_status(repo: str, pr_number: int) -> str | None:
-    """Return ``'completed'``, ``'in_progress'``, ``'queued'``, or ``None``."""
-    sha = _get_pr_head_sha(repo, pr_number)
-    if not sha:
-        return None
-
-    try:
-        raw = subprocess.run(
-            [
-                "gh", "api",
-                f"repos/{repo}/commits/{sha}/check-runs",
-                "--jq",
-                f'.check_runs | map(select(.name == "{_SONAR_CHECK_NAME}")) | last | .status',
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-        return raw if raw and raw != "null" else None
-    except subprocess.CalledProcessError:
-        return None
 
 
 def fetch_sonar_issues(branch: str) -> str:
@@ -227,3 +276,80 @@ def fetch_sonar_issues(branch: str) -> str:
     except subprocess.TimeoutExpired:
         log.warn("sonar list issues timed out after 120s.")
         return ""
+
+
+# ---------------------------------------------------------------------------
+# Test / coverage-check gate
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CheckResult:
+    name: str
+    conclusion: str | None
+    details: str
+
+    @property
+    def passed(self) -> bool:
+        return self.conclusion == "success"
+
+
+def wait_for_test_checks(
+    repo: str,
+    pr_number: int,
+    *,
+    poll_interval: int = DEFAULT_POLL_INTERVAL,
+    max_poll_time: int = MAX_POLL_TIME,
+) -> list[CheckResult]:
+    """Block until all required test checks have completed.
+
+    Returns a list of :class:`CheckResult` for each check in
+    ``_TEST_CHECK_NAMES``.  An empty list means the checks were never found
+    or we timed out.
+    """
+    log.system(f"Waiting for test / coverage checks on PR #{pr_number}...")
+
+    start = time.monotonic()
+    attempt = 0
+    while True:
+        elapsed = time.monotonic() - start
+        if elapsed > max_poll_time:
+            log.warn(f"Timed out after {max_poll_time}s waiting for test checks.")
+            return []
+
+        attempt += 1
+        sha = _get_pr_head_sha(repo, pr_number)
+        if not sha:
+            if attempt > 5:
+                log.warn("Could not resolve PR HEAD SHA — skipping test checks.")
+                return []
+            time.sleep(poll_interval)
+            continue
+
+        all_completed = True
+        pending_names: list[str] = []
+        for name in _TEST_CHECK_NAMES:
+            status, _ = _check_run_info(repo, sha, name)
+            if status != "completed":
+                all_completed = False
+                pending_names.append(name)
+
+        if all_completed:
+            log.success(f"All test checks completed after {int(elapsed)}s")
+            results: list[CheckResult] = []
+            for name in _TEST_CHECK_NAMES:
+                _, conclusion = _check_run_info(repo, sha, name)
+                details = ""
+                if conclusion and conclusion != "success":
+                    details = _get_check_failure_details(repo, sha, name)
+                results.append(CheckResult(name=name, conclusion=conclusion, details=details))
+            return results
+
+        still_waiting = ", ".join(pending_names)
+        if all(s is None for s, _ in [_check_run_info(repo, sha, n) for n in _TEST_CHECK_NAMES]) and attempt > 5:
+            log.warn("Test check runs not found — skipping.")
+            return []
+
+        log.system(
+            f"  Poll #{attempt}: waiting on [{still_waiting}] ({int(elapsed)}s elapsed)"
+        )
+        time.sleep(poll_interval)

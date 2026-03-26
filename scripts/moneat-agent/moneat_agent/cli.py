@@ -320,6 +320,51 @@ def run_pipeline(
         else:
             log.warn(f"Reached max CodeRabbit rounds ({max_cr_rounds}).")
 
+    # ── Test / coverage gate ─────────────────────────────────────────
+    if pr_number is None:
+        pr_number = github.pr_exists(repo, branch)
+    if pr_number is None:
+        log.warn("No PR found — skipping test checks.")
+    else:
+        log.step("Test / coverage check gate")
+
+        for ci_round in range(1, max_sonar_rounds + 1):
+            log.system(f"CI check round {ci_round}/{max_sonar_rounds}")
+
+            results = checks.wait_for_test_checks(repo, pr_number)
+            if not results:
+                log.warn("Test checks not found or timed out — skipping.")
+                break
+
+            failed = [r for r in results if not r.passed]
+            if not failed:
+                log.success("All test / coverage checks passed!")
+                break
+
+            failure_summary_parts: list[str] = []
+            for r in failed:
+                header = f"### {r.name} — {r.conclusion or 'unknown'}"
+                detail = r.details if r.details else "(no details available)"
+                failure_summary_parts.append(f"{header}\n\n{detail}")
+
+            names = ", ".join(r.name for r in failed)
+            log.warn(f"Failed checks: {names} — addressing them.")
+
+            failure_text = "\n\n---\n\n".join(failure_summary_parts)
+            ci_prompt = prompts.test_failure_feedback(
+                failures=failure_text,
+                issue_title=issue_title,
+            )
+            cursor_agent.fix_feedback_with_composer(wt, ci_prompt)
+
+            worktree.commit_all(
+                wt,
+                f"fix: address CI failures ({names}) (round {ci_round}) for #{target_number}",
+            )
+            github.push_branch(str(wt), branch)
+        else:
+            log.warn(f"Reached max CI check rounds ({max_sonar_rounds}).")
+
     # ── SonarQube feedback loop ───────────────────────────────────────
     if pr_number is None:
         pr_number = github.pr_exists(repo, branch)
