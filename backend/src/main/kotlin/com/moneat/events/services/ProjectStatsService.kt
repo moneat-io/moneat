@@ -273,7 +273,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
                         releaseMarkers = releaseMarkersDeferred.await()
                     )
                 }
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 logger.error(e) { "Failed to fetch project stats" }
                 ProjectStatsResponse(
                     totalEvents = 0,
@@ -331,7 +331,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
                         timestamp = obj["timestamp"]?.jsonPrimitive?.contentOrNull ?: ""
                     )
                 }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.warn(e) { "Failed to fetch release markers" }
             emptyList()
         }

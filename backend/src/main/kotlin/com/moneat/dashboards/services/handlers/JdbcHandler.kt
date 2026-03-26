@@ -63,7 +63,7 @@ abstract class JdbcHandler(
             } finally {
                 ds.close()
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.warn(e) { "JDBC connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }

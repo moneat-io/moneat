@@ -17,6 +17,7 @@
 package com.moneat.analytics.services
 
 import java.net.URI
+import java.net.URISyntaxException
 
 /**
  * Parses referrer URLs into human-readable source names.
@@ -60,7 +61,7 @@ object ReferrerParser {
         if (referrer.isNullOrBlank()) return "Direct"
         val host = try {
             URI(referrer).host?.lowercase() ?: return "Direct"
-        } catch (_: Exception) {
+        } catch (_: URISyntaxException) {
             return "Direct"
         }
 

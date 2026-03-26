@@ -243,7 +243,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 totalTransactions = totalCount,
                 avgDuration = avgDuration
             )
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to fetch performance stats for project $projectId" }
             PerformanceStatsResponse(
                 apdex = 0.0,
@@ -379,7 +379,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 endTimestamp = endTs,
                 duration = duration * 1000.0
             )
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to fetch trace $traceId" }
             null
         }

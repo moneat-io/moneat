@@ -40,7 +40,7 @@ object SentryUtils {
             block(span).also {
                 span.status = SpanStatus.OK
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             span.status = SpanStatus.INTERNAL_ERROR
             span.throwable = e
             throw e
@@ -66,7 +66,7 @@ object SentryUtils {
             block(transaction).also {
                 transaction.status = SpanStatus.OK
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             transaction.status = SpanStatus.INTERNAL_ERROR
             transaction.throwable = e
             throw e

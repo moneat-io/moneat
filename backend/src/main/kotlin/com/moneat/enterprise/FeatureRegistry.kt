@@ -116,7 +116,7 @@ object FeatureRegistry {
             try {
                 module.registerRoutes(route)
                 logger.info { "Routes registered for enterprise module: ${module.name}" }
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 logger.error(e) { "Failed to register routes for enterprise module: ${module.name}" }
                 throw e
             }

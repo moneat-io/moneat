@@ -49,7 +49,7 @@ class RedisHandler : DataSourceHandler {
                     TestConnectionResult(true, "Connected successfully", keys = keys)
                 }
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.warn(e) { "Redis connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -184,7 +184,7 @@ class RedisHandler : DataSourceHandler {
                     result.take(limit)
                 }
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Redis query failed" }
             emptyList()
         }
@@ -206,7 +206,7 @@ class RedisHandler : DataSourceHandler {
                     keys.map { DataSourceField(it, "key", "Redis key") }
                 }
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Redis schema fetch failed" }
             emptyList()
         }
@@ -325,7 +325,7 @@ class RedisHandler : DataSourceHandler {
                         "Duration" to JsonPrimitive(duration),
                         "Command" to JsonPrimitive(args)
                     )
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     null
                 }
             }

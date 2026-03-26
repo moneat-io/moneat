@@ -93,7 +93,7 @@ object ClickHouseMigrations {
             }
 
             logger.info("ClickHouse migrations complete (${migrations.size} total migrations)")
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error("ClickHouse migration failed: ${e.message}", e)
             throw RuntimeException("ClickHouse migration failed", e)
         }

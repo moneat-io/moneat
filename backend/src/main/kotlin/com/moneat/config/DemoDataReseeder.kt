@@ -191,7 +191,7 @@ object DemoDataReseeder {
             logger.info { "Demo data reseed complete" }
             reseedUptimeHeartbeats()
             ensureDemoProfileFiles()
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Demo data reseed failed (non-fatal): ${e.message}" }
         }
     }
@@ -3040,7 +3040,7 @@ object DemoDataReseeder {
                 seedWebAnalyticsDashboard()
             }
             logger.info { "Demo dashboards seeded successfully" }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.warn { "Demo dashboard seeding failed (non-fatal): ${e.message}" }
         }
     }

@@ -85,7 +85,7 @@ class DataDogTranslator : DashboardTranslator {
         val widgets = ddWidgets.mapIndexedNotNull { index, element ->
             try {
                 importWidget(element.jsonObject, index, warnings)
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 warnings.add("Widget $index: failed to import - ${e.message}")
                 null
             }
@@ -287,7 +287,7 @@ class DataDogTranslator : DashboardTranslator {
                     options = availableValues,
                     datasource = null
                 )
-            } catch (_: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
                 null
             }
         }

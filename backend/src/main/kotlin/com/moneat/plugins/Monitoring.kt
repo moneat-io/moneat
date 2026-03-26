@@ -102,7 +102,7 @@ fun Application.configureMonitoring() {
                         "description" to (status?.description ?: "")
                     )
                 )
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 transaction.status = SpanStatus.INTERNAL_ERROR
                 transaction.throwable = e
                 throw e
@@ -149,7 +149,7 @@ fun Application.configureMonitoring() {
                                 }.associate { (key, values) -> key to values.joinToString(", ") }
                         scope.setExtra("request_headers", safeHeaders.toString())
                     }
-                } catch (e: Throwable) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
                     logger.error(e) { "Failed to capture exception to Sentry" }
                 }
             }

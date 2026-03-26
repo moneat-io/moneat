@@ -228,7 +228,7 @@ class ProjectRepositoryImpl(
             obj["total"]?.jsonPrimitive?.long ?: 0
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to get issue count for project $projectId" }
             0
         }

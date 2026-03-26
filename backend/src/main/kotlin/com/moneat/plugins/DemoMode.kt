@@ -77,7 +77,7 @@ private fun isDemoToken(token: String?): Boolean {
 
         val email = decoded.getClaim("email")?.asString()
         email != null && email.equals(demoUserEmail, ignoreCase = true)
-    } catch (_: Exception) {
+    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
         false
     }
 }
@@ -130,7 +130,7 @@ fun ApplicationCall.isDemoUser(): Boolean {
             if (userId == demoUserId) return true
             val email = jwtPrincipal.payload.getClaim("email")?.asString()
             if (email != null && email.equals(demoUserEmail, ignoreCase = true)) return true
-        } catch (_: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
             // Fall through and try other principal types.
         }
     }
@@ -155,7 +155,7 @@ fun ApplicationCall.getDemoEpochMs(): Long? {
     return try {
         principal.payload.getClaim("demoEpochMs")?.asLong()
             ?: if (isDemoUser()) EnvConfig.Demo.epochMs else null
-    } catch (_: Exception) {
+    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
         if (isDemoUser()) EnvConfig.Demo.epochMs else null
     }
 }

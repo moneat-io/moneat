@@ -93,7 +93,7 @@ class IssueService(
                 if (result.size >= limit) break
             }
             result
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to fetch issues for project $projectId" }
             emptyList()
         }

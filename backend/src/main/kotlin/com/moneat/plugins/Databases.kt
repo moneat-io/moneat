@@ -169,7 +169,7 @@ fun Application.configureDatabases() {
                         runBlocking {
                             try {
                                 configureClickHouseMigrations()
-                            } catch (e: Exception) {
+                            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                                 log.error("Failed to run ClickHouse migrations.", e)
                                 throw e
                             }
@@ -177,7 +177,7 @@ fun Application.configureDatabases() {
                             try {
                                 com.moneat.config.DemoDataReseeder
                                     .reseedIfNeeded()
-                            } catch (e: Exception) {
+                            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                                 log.warn("Demo data reseed failed (non-fatal)", e)
                             }
                         }
@@ -202,7 +202,7 @@ fun Application.configureDatabases() {
         monitor.subscribe(ApplicationStopping) {
             log.info("Stopping background services...")
         }
-    } catch (e: Exception) {
+    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
         if (e.message?.contains("ClickHouse") == true) {
             // Already logged above
             throw e

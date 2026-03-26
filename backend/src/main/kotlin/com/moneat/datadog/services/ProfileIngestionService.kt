@@ -472,7 +472,7 @@ object ProfileIngestionService {
             element.jsonObject.mapValues {
                 it.value.jsonPrimitive.content
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             emptyMap()
         }
     }

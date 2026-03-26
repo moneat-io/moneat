@@ -82,7 +82,7 @@ class PulseService(
                     sendPulse(metrics)
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.debug(e) { "Telemetry pulse failed — will retry next interval" }
                 }
                 delay(interval)
@@ -151,7 +151,7 @@ class PulseService(
 
                 Pair(projects, users)
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.debug(e) { "Failed to collect PostgreSQL counts" }
             Pair(0L, 0L)
         }
@@ -160,12 +160,12 @@ class PulseService(
         val eventCount = try {
             ClickHouseClient.execute("SELECT COUNT(*) FROM events")
                 .bodyAsText().trim().toLongOrNull() ?: 0L
-        } catch (_: Exception) { 0L }
+        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) { 0L }
 
         val issueCount = try {
             ClickHouseClient.execute("SELECT COUNT(*) FROM issues")
                 .bodyAsText().trim().toLongOrNull() ?: 0L
-        } catch (_: Exception) { 0L }
+        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) { 0L }
 
         return UsageCounts(
             projectCount = projectCount,
@@ -195,7 +195,7 @@ class PulseService(
                     newId
                 }
             }
-        } catch (_: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
             // Table may not exist yet — generate a transient ID
             "transient-${UUID.randomUUID()}"
         }
@@ -227,7 +227,7 @@ class PulseService(
             val snapshot = if (enabled) {
                 try {
                     PulseService().collectMetrics()
-                } catch (_: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
                     null
                 }
             } else {

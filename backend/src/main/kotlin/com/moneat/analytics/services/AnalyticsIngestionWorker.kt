@@ -76,7 +76,7 @@ class AnalyticsIngestionWorker(
                     processMessage(workerId, value)
                 } catch (_: CancellationException) {
                     break
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
                     delay(ERROR_BACKOFF_MS)
                 }
@@ -91,11 +91,11 @@ class AnalyticsIngestionWorker(
         try {
             val event = json.decodeFromString<EnrichedAnalyticsEvent>(value)
             insertEvent(event)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Analytics worker $workerId failed to process message, sending to DLQ" }
             try {
                 RedisConfig.sync().rpush(dlqKey, value)
-            } catch (dlqError: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") dlqError: Exception) {
                 logger.error(dlqError) { "Failed to push to analytics DLQ" }
             }
         }

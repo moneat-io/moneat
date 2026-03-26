@@ -39,7 +39,7 @@ class OtlpTraceIngestionWorker(
                 traceService.decodeBatch(payload)
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 logger.error(e) {
                     "OTLP trace worker $workerId failed to decode batch, sending to DLQ"
                 }
@@ -50,7 +50,7 @@ class OtlpTraceIngestionWorker(
             traceService.insertBatch(batch)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) {
                 "OTLP trace worker $workerId failed to insert batch, sending to DLQ"
             }
@@ -68,7 +68,7 @@ class OtlpTraceIngestionWorker(
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) {
                 "OTLP trace worker $workerId failed after insert (exception extraction)"
             }

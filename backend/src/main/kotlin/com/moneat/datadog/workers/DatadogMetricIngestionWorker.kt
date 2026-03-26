@@ -75,7 +75,7 @@ class DatadogMetricIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.error(e) {
                         "DD metric worker $workerId error in BRPOP loop"
                     }
@@ -98,7 +98,7 @@ class DatadogMetricIngestionWorker(
             val batch =
                 DatadogMetricService.decodeMetricBatch(payload)
             DatadogMetricService.insertMetricBatch(batch)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) {
                 "DD metric worker $workerId failed, " +
                     "pushing to DLQ"

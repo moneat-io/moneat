@@ -59,7 +59,7 @@ class UptimeExtendedTest {
     fun tearDown() {
         try {
             unmockkObject(UrlValidator)
-        } catch (_: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
             Unit // best-effort cleanup; ignore if already unmocked
         }
     }

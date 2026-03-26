@@ -41,6 +41,7 @@ import com.moneat.dashboards.repositories.DashboardRepository
 import com.moneat.dashboards.repositories.DashboardWidgetRepository
 import com.moneat.dashboards.repositories.DashboardWithFavoriteFlag
 import com.moneat.events.repositories.ProjectRepository
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlin.time.Clock
 
@@ -59,7 +60,7 @@ class CustomDashboardService(
     private fun parseVariables(variablesJson: String): List<DashboardVariable> {
         return try {
             json.decodeFromString<List<DashboardVariable>>(variablesJson)
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
             emptyList()
         }
     }
@@ -86,10 +87,10 @@ class CustomDashboardService(
         dashboardWidgetRepository.listByDashboardId(dashboardId).map { wd ->
             val queryConfigs: List<QueryDsl> = try {
                 json.decodeFromString(wd.queryConfigs)
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
                 try {
                     listOf(json.decodeFromString<QueryDsl>(wd.queryConfig))
-                } catch (_: Exception) { emptyList() }
+                } catch (_: SerializationException) { emptyList() }
             }
             WidgetResponse(
                 id = wd.id,
@@ -103,7 +104,7 @@ class CustomDashboardService(
                 queryConfigs = queryConfigs,
                 displayConfig = try {
                     json.decodeFromString(wd.displayConfig)
-                } catch (_: Exception) {
+                } catch (_: SerializationException) {
                     emptyMap()
                 },
                 sortOrder = wd.sortOrder

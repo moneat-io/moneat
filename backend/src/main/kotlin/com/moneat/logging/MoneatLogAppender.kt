@@ -81,7 +81,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
         executor.submit {
             try {
                 sendLog(event)
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 // Use stderr to avoid log loops
                 System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
             }

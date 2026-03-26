@@ -55,7 +55,7 @@ complexity:
 
 exceptions:
   TooGenericExceptionCaught:
-    active: false
+    active: true
   TooGenericExceptionThrown:
     active: false
   SwallowedException:

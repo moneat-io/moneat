@@ -123,7 +123,7 @@ object ProfileStorageService {
                 File(tempDir, legacyName).writeBytes(legacyData)
                 Files.move(tempDir.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)
                 backup.delete()
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 // Restore backup if migration fails
                 if (!dir.exists() && backup.exists()) {
                     Files.move(backup.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)

@@ -218,7 +218,7 @@ class AnalyticsService {
         val key = "${AnalyticsIngestionWorker.REALTIME_KEY_PREFIX}$projectId"
         val count = try {
             RedisConfig.sync().pfcount(key)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.debug { "Failed to read realtime counter: ${e.message}" }
             0L
         }
@@ -416,7 +416,7 @@ class AnalyticsService {
             try {
                 val row = jsonParser.parseToJsonElement(line).jsonObject
                 mapper(row)
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 logger.debug { "Failed to parse row: ${e.message}" }
                 null
             }

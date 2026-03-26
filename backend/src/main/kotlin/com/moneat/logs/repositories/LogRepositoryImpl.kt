@@ -30,7 +30,7 @@ class LogRepositoryImpl : LogRepository {
             val response = ClickHouseClient.execute(sql)
             val body = response.bodyAsText()
             !response.isClickHouseError(body)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "ClickHouse log insert failed" }
             false
         }
@@ -39,7 +39,7 @@ class LogRepositoryImpl : LogRepository {
         try {
             val response = ClickHouseClient.execute(sql)
             response.bodyAsText()
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "ClickHouse log query failed" }
             ""
         }

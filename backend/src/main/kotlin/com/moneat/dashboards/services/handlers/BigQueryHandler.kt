@@ -50,7 +50,7 @@ class BigQueryHandler : DataSourceHandler {
             val queryConfig = QueryJobConfiguration.newBuilder("SELECT 1 AS test").build()
             bigQuery.query(queryConfig)
             TestConnectionResult(true, "Connected successfully")
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.warn(e) { "BigQuery connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -82,7 +82,7 @@ class BigQueryHandler : DataSourceHandler {
             val schema = results.schema ?: return emptyList()
             val columns = schema.fields.map { it.name }
             results.values.toList().map { row -> rowToMap(row, columns) }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "BigQuery query failed" }
             emptyList()
         }
@@ -120,7 +120,7 @@ class BigQueryHandler : DataSourceHandler {
                     description = ""
                 )
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "BigQuery schema fetch failed" }
             emptyList()
         }

@@ -59,7 +59,7 @@ class ElasticsearchHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Elasticsearch returned ${response.status}")
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.warn(e) { "Elasticsearch connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -91,7 +91,7 @@ class ElasticsearchHandler : HttpApiHandler() {
                     )
                 )
             }
-        } catch (_: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
             JsonObject(
                 mapOf(
                     "query" to JsonObject(
@@ -118,7 +118,7 @@ class ElasticsearchHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseSearchResponse(response.bodyAsText(), limit)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Elasticsearch query failed" }
             emptyList()
         }
@@ -145,7 +145,7 @@ class ElasticsearchHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Elasticsearch schema fetch failed" }
             emptyList()
         }

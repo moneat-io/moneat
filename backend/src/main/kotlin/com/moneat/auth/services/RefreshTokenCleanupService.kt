@@ -51,7 +51,7 @@ class RefreshTokenCleanupService(
                         if (deletedCount > 0) {
                             logger.info { "Cleaned up $deletedCount expired/revoked refresh tokens" }
                         }
-                    } catch (e: Exception) {
+                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                         logger.error(e) { "Error during refresh token cleanup" }
                     }
 

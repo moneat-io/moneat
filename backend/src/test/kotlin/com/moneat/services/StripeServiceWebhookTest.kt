@@ -286,7 +286,7 @@ class StripeServiceWebhookTest {
         // Second processing (should be ignored due to unique constraint)
         try {
             stripeService.markEventProcessed(event, "success")
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             // Unique constraint violation is expected and ignored
         }
 
@@ -999,7 +999,7 @@ class StripeServiceWebhookTest {
         // Try marking again - should be ignored by unique constraint
         try {
             stripeService.markEventProcessed(event, "success")
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             // Unique constraint violation is expected and fine
         }
 

@@ -21,6 +21,8 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.URI
+import java.net.URISyntaxException
+import java.net.UnknownHostException
 
 object UrlValidator {
 
@@ -49,7 +51,7 @@ object UrlValidator {
     fun validateAndResolve(url: String): List<InetAddress> {
         val uri = try {
             URI(url)
-        } catch (e: Exception) {
+        } catch (e: URISyntaxException) {
             throw SsrfException("Invalid URL: $url")
         }
 
@@ -63,7 +65,7 @@ object UrlValidator {
 
         val addresses = try {
             InetAddress.getAllByName(host)
-        } catch (e: Exception) {
+        } catch (e: UnknownHostException) {
             throw SsrfException("Cannot resolve host: $host")
         }
 

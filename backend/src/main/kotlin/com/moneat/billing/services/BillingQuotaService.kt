@@ -1216,7 +1216,7 @@ class BillingQuotaService(
             method.invoke(instance, organizationId) as? Int ?: 0
         } catch (_: ClassNotFoundException) {
             0
-        } catch (_: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
             0
         }
     }

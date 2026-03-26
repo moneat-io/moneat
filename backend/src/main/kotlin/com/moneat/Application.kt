@@ -93,7 +93,7 @@ fun Application.module() {
         log.info("About to configure routing...")
         configureRouting()
         log.info("Routing configured successfully, application startup complete")
-    } catch (e: Exception) {
+    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
         log.error("Failed to start application", e)
         throw e
     }

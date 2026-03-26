@@ -1378,7 +1378,7 @@ fun Route.apiRoutes() {
                     val request =
                         try {
                             call.receive<UpdateAlertNotificationPreferenceRequest>()
-                        } catch (e: Exception) {
+                        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                             call.respond(HttpStatusCode.BadRequest, "Invalid request body")
                             return@put
                         }

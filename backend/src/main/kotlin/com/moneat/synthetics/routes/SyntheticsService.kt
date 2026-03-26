@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+@file:Suppress("TooGenericExceptionCaught")
+
 package com.moneat.synthetics.routes
 
 import com.moneat.config.ClickHouseClient

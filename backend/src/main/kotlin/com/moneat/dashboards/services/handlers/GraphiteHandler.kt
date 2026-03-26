@@ -56,7 +56,7 @@ class GraphiteHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Graphite returned ${response.status}")
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.warn(e) { "Graphite connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -91,7 +91,7 @@ class GraphiteHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseGraphiteResponse(response.bodyAsText(), limit)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Graphite query failed" }
             emptyList()
         }
@@ -114,7 +114,7 @@ class GraphiteHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Graphite schema fetch failed" }
             emptyList()
         }

@@ -80,7 +80,7 @@ abstract class OtlpIngestionWorkerBase(
                         processMessage(workerId, payload)
                     } catch (proc: CancellationException) {
                         throw proc
-                    } catch (proc: Exception) {
+                    } catch (@Suppress("TooGenericExceptionCaught") proc: Exception) {
                         logger.error(proc) {
                             "OTLP $workerLabel worker $workerId failed processing message"
                         }
@@ -88,7 +88,7 @@ abstract class OtlpIngestionWorkerBase(
                     }
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.error(e) { "OTLP $workerLabel worker $workerId error in BRPOP loop" }
                     conn?.let {
                         disposeRedisConnection(workerId, it)
@@ -105,7 +105,7 @@ abstract class OtlpIngestionWorkerBase(
     private fun disposeRedisConnection(workerId: Int, c: StatefulRedisConnection<String, String>) {
         try {
             RedisConfig.closeBlockingConnection(c)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.warn(e) { "Failed to close Redis connection for OTLP worker $workerId" }
         }
     }
@@ -115,7 +115,7 @@ abstract class OtlpIngestionWorkerBase(
     protected fun pushToDlq(workerId: Int, payload: String) {
         try {
             RedisConfig.sync().rpush(dlqKey, payload)
-        } catch (dlqErr: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") dlqErr: Exception) {
             logger.error(dlqErr) { "Failed to push to DLQ $dlqKey for worker=$workerId" }
         }
     }

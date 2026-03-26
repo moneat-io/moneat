@@ -129,7 +129,7 @@ class LogQueryParser {
 
             val node = parseExpression(tokens)
             return ParsedQuery(node, errors)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             errors.add("Parse error: ${e.message}")
             // Fallback to simple full-text search
             return ParsedQuery(

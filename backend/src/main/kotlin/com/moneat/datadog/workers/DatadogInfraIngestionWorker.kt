@@ -75,7 +75,7 @@ class DatadogInfraIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.error(e) {
                         "DD infra worker $workerId error in BRPOP loop"
                     }
@@ -98,7 +98,7 @@ class DatadogInfraIngestionWorker(
             val batch =
                 DatadogInfraService.decodeInfraBatch(payload)
             DatadogInfraService.insertInfraBatch(batch)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) {
                 "DD infra worker $workerId failed, " +
                     "pushing to DLQ"

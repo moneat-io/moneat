@@ -225,7 +225,7 @@ class BillingBackgroundService(
                     textBody = body,
                     emailType = "quota_notification"
                 )
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 logger.error(e) { "Failed to send quota notification to $email" }
             }
         }

@@ -83,7 +83,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                         userCount = r.userCount
                     )
                 }
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 logger.error(e) { "Failed to fetch releases for project $projectId" }
                 emptyList()
             }
@@ -175,7 +175,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 eventsByLevel = queryHelper.executeMapQuery(eventsByLevelQuery, "level"),
                 topIssues = queryHelper.executeTopIssuesQuery(topIssuesQuery)
             )
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to fetch release stats for $version" }
             null
         }
@@ -302,7 +302,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: return null
             if (rate.isNaN() || rate.isInfinite()) null else rate
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             null
         }
     }

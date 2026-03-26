@@ -71,7 +71,7 @@ class LogIngestionWorker(
                     processMessageForTest(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.error(e) { "Log worker $workerId error in BRPOP loop" }
                     delay(1000)
                 }
@@ -108,7 +108,7 @@ class LogIngestionWorker(
             val taggedBatch = batch.copy(logs = taggedLogs)
             val inserted = logService.insertBatch(taggedBatch)
             logService.publishLiveLogs(orgId, inserted)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
             onDlq(payload)
         }
@@ -153,7 +153,7 @@ class LogIngestionWorker(
                     } else {
                         evaluateFilter(parsed.rootNode, entryMap)
                     }
-                } catch (_: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
                     false
                 }
             }
@@ -184,7 +184,7 @@ class LogIngestionWorker(
                         .replace("\\?", ".")
                     try {
                         value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
-                    } catch (_: Exception) {
+                    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
                         false
                     }
                 } else {

@@ -75,7 +75,7 @@ class DatadogEventIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.error(e) {
                         "DD event worker $workerId error in BRPOP loop"
                     }
@@ -98,7 +98,7 @@ class DatadogEventIngestionWorker(
             val batch =
                 DatadogEventService.decodeEventBatch(payload)
             DatadogEventService.insertEventBatch(batch)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) {
                 "DD event worker $workerId failed, " +
                     "pushing to DLQ"

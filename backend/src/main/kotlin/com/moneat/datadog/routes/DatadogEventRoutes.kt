@@ -60,7 +60,7 @@ fun Route.datadogEventRoutes() {
                     json.decodeFromString<List<DatadogServiceCheck>>(
                         bodyStr
                     )
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.warn(e) {
                         "Failed to parse DD V1 check_run payload"
                     }
@@ -121,7 +121,7 @@ fun Route.datadogEventRoutes() {
                     json.decodeFromString<DatadogEventPayload>(
                         bodyStr
                     )
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.warn(e) {
                         "Failed to parse DD events payload"
                     }
@@ -167,7 +167,7 @@ fun Route.datadogEventRoutes() {
                     json.decodeFromString<DatadogServiceCheckPayload>(
                         bodyStr
                     )
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.warn(e) {
                         "Failed to parse DD service checks"
                     }

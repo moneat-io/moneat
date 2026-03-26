@@ -387,7 +387,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
         call.respond(HttpStatusCode.Created, fileResponse)
     } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-    } catch (e: Exception) {
+    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
         logger.error(e) { "Failed to upload source map" }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
     }
@@ -508,7 +508,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
                         val bos = ByteArrayOutputStream()
                         GZIPInputStream(rawBytes.inputStream()).use { it.copyTo(bos) }
                         bos.toByteArray()
-                    } catch (e: Exception) {
+                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                         rawBytes
                     }
                 } else {
@@ -600,7 +600,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifact
                 missingChunks = emptyList()
             )
         )
-    } catch (e: Exception) {
+    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
         logger.error(e) { "Failed to assemble artifact bundle" }
         call.respond(
             AssembleResponse(

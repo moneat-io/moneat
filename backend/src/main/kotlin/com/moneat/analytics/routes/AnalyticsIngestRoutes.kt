@@ -137,7 +137,7 @@ private suspend fun processAndEnqueueEvent(
         } else {
             call.receive<AnalyticsEventPayload>()
         }
-    } catch (e: Exception) {
+    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
         logger.debug { "Invalid analytics payload: ${e.message}" }
         call.respond(HttpStatusCode.BadRequest, "Invalid payload")
         return
@@ -187,7 +187,7 @@ private fun updateRealtimeCounter(projectId: Long, sessionId: String) {
         val key = "${AnalyticsIngestionWorker.REALTIME_KEY_PREFIX}$projectId"
         RedisConfig.sync().pfadd(key, sessionId)
         RedisConfig.sync().expire(key, REALTIME_TTL_SECONDS)
-    } catch (e: Exception) {
+    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
         logger.debug { "Failed to update realtime counter: ${e.message}" }
     }
 }
@@ -205,7 +205,7 @@ internal fun extractAnalyticsPublicKey(authHeader: String?, sentryKeyParam: Stri
 internal fun extractPathname(url: String): String {
     return try {
         URI(url).path ?: "/"
-    } catch (_: Exception) {
+    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
         "/"
     }
 }
@@ -223,7 +223,7 @@ internal fun extractUtmParams(url: String): Map<String, String> {
                 }
             }
             .toMap()
-    } catch (_: Exception) {
+    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
         emptyMap()
     }
 }

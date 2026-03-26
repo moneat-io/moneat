@@ -168,7 +168,7 @@ fun Application.configureBackgroundJobs() {
         try {
             UsageTrackingService.instance.flushBuffer()
             logger.info { "Flushed usage tracking buffer on shutdown" }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
         }
         monitorAlertService.stop()

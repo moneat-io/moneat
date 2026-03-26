@@ -753,7 +753,7 @@ class StatusPageService(
                 0 -> "down"
                 else -> "unknown"
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to get monitor status for $monitorId" }
             "unknown"
         }
@@ -797,12 +797,12 @@ class StatusPageService(
                     val uptime = if (totalCount == 0L) 0.0 else (upCount.toDouble() / totalCount.toDouble() * 100.0)
 
                     UptimeDataPoint(date = date, uptime = uptime)
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.error(e) { "Failed to parse uptime history line: $line" }
                     null
                 }
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to get uptime history for monitor $monitorId" }
             emptyList()
         }
@@ -846,7 +846,7 @@ class StatusPageService(
             }
 
             found
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to verify DNS TXT record for $domain" }
             false
         }

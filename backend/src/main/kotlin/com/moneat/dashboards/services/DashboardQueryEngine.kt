@@ -359,7 +359,7 @@ class DashboardQueryEngine {
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line -> json.parseToJsonElement(line).jsonObject.toMap() }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to execute dashboard query" }
             emptyList()
         }

@@ -167,7 +167,7 @@ class OtlpTraceService(
         val parsed =
             try {
                 json.parseToJsonElement(payload).jsonObject
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 logger.warn(e) { "Invalid OTLP traces JSON payload" }
                 return null
             }

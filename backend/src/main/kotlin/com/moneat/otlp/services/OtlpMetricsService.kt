@@ -295,7 +295,7 @@ class OtlpMetricsService(
         val parsed =
             try {
                 json.parseToJsonElement(payload).jsonObject
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 logger.warn(e) { "Invalid OTLP metrics JSON payload" }
                 return null
             }

@@ -621,7 +621,7 @@ class AdminService(
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to query ClickHouse system.parts" }
         }
 
@@ -824,7 +824,7 @@ class AdminService(
                 }
 
             Triple(allTime, last30Count, timeline)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to query ClickHouse for events" }
             Triple(0L, 0L, emptyList<AdminTimelinePoint>())
         }
@@ -962,7 +962,7 @@ class AdminService(
                     Users.deleteWhere { Users.id eq userId }
 
                     deletedCount++
-                } catch (e: Exception) {
+                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                     logger.error(e) { "Failed to delete user $userId" }
                     errors.add("Failed to delete user $userId: ${e.message}")
                 }
@@ -1060,7 +1060,7 @@ class AdminService(
             Organizations.deleteWhere { Organizations.id eq orgId }
 
             logger.info { "Deleted organization $orgId and all related data" }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Failed to delete organization data for org $orgId" }
             throw e
         }

@@ -61,7 +61,7 @@ class SessionHashService {
 
         val existing = try {
             RedisConfig.sync().get(key)
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.warn(e) { "Failed to read daily salt from Redis, generating ephemeral salt" }
             null
         }
@@ -82,7 +82,7 @@ class SessionHashService {
             }
             // Another worker won the race — read their salt
             return RedisConfig.sync().get(key) ?: salt
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.warn(e) { "Failed to store daily salt in Redis, using ephemeral salt" }
             return salt
         }
