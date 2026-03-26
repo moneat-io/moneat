@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.google.protobuf.ByteString
 import com.moneat.logs.models.LogEntryResponse
 import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.models.LogTailFilters
@@ -23,6 +24,13 @@ import com.moneat.logs.models.QueuedLogBatch
 import com.moneat.logs.models.QueuedLogEntry
 import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
+import io.opentelemetry.proto.collector.logs.v1.ExportLogsServiceRequest
+import io.opentelemetry.proto.common.v1.AnyValue
+import io.opentelemetry.proto.common.v1.KeyValue
+import io.opentelemetry.proto.logs.v1.LogRecord
+import io.opentelemetry.proto.logs.v1.ResourceLogs
+import io.opentelemetry.proto.logs.v1.ScopeLogs
+import io.opentelemetry.proto.resource.v1.Resource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -31,6 +39,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LogServicePureLogicTest {
+    companion object {
+        private const val OTLP_TEST_SERVICE_NAME = "my-service"
+        private const val OTLP_TEST_LOG_MESSAGE = "Connection refused"
+    }
+
     private val service = LogService(LogRepositoryImpl())
 
     // ──── estimateBillableBytes (SDK entries) ────
@@ -368,7 +381,7 @@ class LogServicePureLogicTest {
             "resourceLogs": [{
                 "resource": {
                     "attributes": [
-                        {"key": "service.name", "value": {"stringValue": "my-service"}},
+                        {"key": "service.name", "value": {"stringValue": "$OTLP_TEST_SERVICE_NAME"}},
                         {"key": "deployment.environment", "value": {"stringValue": "production"}}
                     ]
                 },
@@ -376,7 +389,7 @@ class LogServicePureLogicTest {
                     "logRecords": [{
                         "timeUnixNano": "1738000000000000000",
                         "severityText": "ERROR",
-                        "body": {"stringValue": "Connection refused"},
+                        "body": {"stringValue": "$OTLP_TEST_LOG_MESSAGE"},
                         "attributes": [
                             {"key": "component", "value": {"stringValue": "db"}}
                         ],
@@ -391,9 +404,9 @@ class LogServicePureLogicTest {
         val result = service.parseOtlpJson(otlpPayload)
         assertEquals(1, result.size)
         val entry = result.first()
-        assertEquals("Connection refused", entry.message)
+        assertEquals(OTLP_TEST_LOG_MESSAGE, entry.message)
         assertEquals("ERROR", entry.level)
-        assertEquals("my-service", entry.service)
+        assertEquals(OTLP_TEST_SERVICE_NAME, entry.service)
         assertEquals("production", entry.environment)
         assertEquals("abc123", entry.traceId)
         assertEquals("def456", entry.spanId)
@@ -498,5 +511,151 @@ class LogServicePureLogicTest {
         assertEquals(1, result.size)
         assertEquals("server-1", result.first().host)
         assertEquals("req-123", result.first().tags?.get("request.id"))
+    }
+
+    // ──── parseOtlpProtobuf ────
+
+    private fun kv(key: String, value: String) =
+        KeyValue.newBuilder()
+            .setKey(key)
+            .setValue(AnyValue.newBuilder().setStringValue(value))
+            .build()
+
+    @Test
+    fun `parseOtlpProtobuf returns empty for invalid bytes`() {
+        val result = service.parseOtlpProtobuf(byteArrayOf(0xFF.toByte(), 0x00))
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseOtlpProtobuf returns empty for empty request`() {
+        val bytes = ExportLogsServiceRequest.getDefaultInstance().toByteArray()
+        val result = service.parseOtlpProtobuf(bytes)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseOtlpProtobuf parses single log record`() {
+        val traceIdBytes = ByteString.copyFrom(
+            byteArrayOf(
+                0xAB.toByte(), 0xCD.toByte(), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x23,
+            ),
+        )
+        val spanIdBytes = ByteString.copyFrom(
+            byteArrayOf(0xDE.toByte(), 0xF4.toByte(), 0x56, 0x00, 0x00, 0x00, 0x00, 0x00)
+        )
+
+        val request = ExportLogsServiceRequest.newBuilder()
+            .addResourceLogs(
+                ResourceLogs.newBuilder()
+                    .setResource(
+                        Resource.newBuilder()
+                            .addAttributes(kv("service.name", OTLP_TEST_SERVICE_NAME))
+                            .addAttributes(kv("deployment.environment", "production"))
+                    )
+                    .addScopeLogs(
+                        ScopeLogs.newBuilder().addLogRecords(
+                            LogRecord.newBuilder()
+                                .setTimeUnixNano(1738000000000000000L)
+                                .setSeverityText("ERROR")
+                                .setBody(AnyValue.newBuilder().setStringValue(OTLP_TEST_LOG_MESSAGE))
+                                .addAttributes(kv("component", "db"))
+                                .setTraceId(traceIdBytes)
+                                .setSpanId(spanIdBytes)
+                        )
+                    )
+            )
+            .build()
+
+        val result = service.parseOtlpProtobuf(request.toByteArray())
+
+        assertEquals(1, result.size)
+        val entry = result.first()
+        assertEquals(OTLP_TEST_LOG_MESSAGE, entry.message)
+        assertEquals("ERROR", entry.level)
+        assertEquals(OTLP_TEST_SERVICE_NAME, entry.service)
+        assertEquals("production", entry.environment)
+        assertEquals(
+            "abcd0000000000000000000000000123",
+            entry.traceId,
+        )
+        assertEquals("db", entry.tags?.get("component"))
+        assertEquals("otlp", entry.source)
+        assertEquals(1738000000000L, entry.timestampMs)
+    }
+
+    @Test
+    fun `parseOtlpProtobuf parses multiple records across resource logs`() {
+        val request = ExportLogsServiceRequest.newBuilder()
+            .addResourceLogs(
+                ResourceLogs.newBuilder()
+                    .setResource(Resource.getDefaultInstance())
+                    .addScopeLogs(
+                        ScopeLogs.newBuilder()
+                            .addLogRecords(
+                                LogRecord.newBuilder()
+                                    .setBody(AnyValue.newBuilder().setStringValue("First log")),
+                            )
+                            .addLogRecords(
+                                LogRecord.newBuilder()
+                                    .setBody(AnyValue.newBuilder().setStringValue("Second log")),
+                            ),
+                    )
+            )
+            .addResourceLogs(
+                ResourceLogs.newBuilder()
+                    .setResource(Resource.getDefaultInstance())
+                    .addScopeLogs(
+                        ScopeLogs.newBuilder()
+                            .addLogRecords(
+                                LogRecord.newBuilder()
+                                    .setBody(AnyValue.newBuilder().setStringValue("Third log")),
+                            ),
+                    )
+            )
+            .build()
+
+        val result = service.parseOtlpProtobuf(request.toByteArray())
+        assertEquals(3, result.size)
+    }
+
+    @Test
+    fun `parseOtlpProtobuf uses default message when body is blank`() {
+        val request = ExportLogsServiceRequest.newBuilder()
+            .addResourceLogs(
+                ResourceLogs.newBuilder()
+                    .setResource(Resource.getDefaultInstance())
+                    .addScopeLogs(
+                        ScopeLogs.newBuilder().addLogRecords(
+                            LogRecord.newBuilder().setBody(AnyValue.newBuilder().setStringValue(""))
+                        )
+                    )
+            )
+            .build()
+
+        val result = service.parseOtlpProtobuf(request.toByteArray())
+        assertEquals(1, result.size)
+        assertEquals("OTLP log record", result.first().message)
+    }
+
+    @Test
+    fun `parseOtlpProtobuf falls back to observedTimeUnixNano`() {
+        val request = ExportLogsServiceRequest.newBuilder()
+            .addResourceLogs(
+                ResourceLogs.newBuilder()
+                    .setResource(Resource.getDefaultInstance())
+                    .addScopeLogs(
+                        ScopeLogs.newBuilder().addLogRecords(
+                            LogRecord.newBuilder()
+                                .setObservedTimeUnixNano(1700000000000000000L)
+                                .setBody(AnyValue.newBuilder().setStringValue("test"))
+                        )
+                    )
+            )
+            .build()
+
+        val result = service.parseOtlpProtobuf(request.toByteArray())
+        assertEquals(1700000000000L, result.first().timestampMs)
     }
 }

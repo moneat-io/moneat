@@ -16,11 +16,22 @@
 
 package com.moneat.otlp.services
 
+import com.google.protobuf.ByteString
 import com.moneat.config.ClickHouseClient
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
+import io.opentelemetry.proto.common.v1.AnyValue
+import io.opentelemetry.proto.common.v1.InstrumentationScope
+import io.opentelemetry.proto.common.v1.KeyValue
+import io.opentelemetry.proto.resource.v1.Resource
+import io.opentelemetry.proto.trace.v1.ResourceSpans
+import io.opentelemetry.proto.trace.v1.ScopeSpans
+import io.opentelemetry.proto.trace.v1.Span
+import io.opentelemetry.proto.trace.v1.Status
 import kotlinx.serialization.json.Json
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -35,6 +46,12 @@ class OtlpTraceServiceTest {
         private const val TEST_SPAN_NAME = "test-span"
         private const val MY_SVC = "my-svc"
         private const val SERVICE_NAME_ATTR_KEY = "service.name"
+        private const val TRACE_RESOURCE_SERVICE = "my-service"
+        private const val TRACE_RESOURCE_HOST = "web-01"
+        private const val TRACE_HTTP_METHOD_ATTR = "http.method"
+        private const val TRACE_OTEL_SCOPE_NAME = "io.otel.sdk"
+        private const val TRACE_OTEL_SCOPE_VERSION = "1.30.0"
+        private const val TRACE_SPAN_NAME_GET_USERS = "GET /api/users"
     }
 
     @BeforeTest
@@ -59,25 +76,25 @@ class OtlpTraceServiceTest {
           "resourceSpans": [{
             "resource": {
               "attributes": [
-                {"key": "service.name", "value": {"stringValue": "my-service"}},
+                {"key": "service.name", "value": {"stringValue": "$TRACE_RESOURCE_SERVICE"}},
                 {"key": "deployment.environment", "value": {"stringValue": "prod"}},
-                {"key": "host.name", "value": {"stringValue": "web-01"}},
+                {"key": "host.name", "value": {"stringValue": "$TRACE_RESOURCE_HOST"}},
                 {"key": "service.version", "value": {"stringValue": "1.0.0"}}
               ]
             },
             "scopeSpans": [{
-              "scope": {"name": "io.otel.sdk", "version": "1.30.0"},
+              "scope": {"name": "$TRACE_OTEL_SCOPE_NAME", "version": "$TRACE_OTEL_SCOPE_VERSION"},
               "spans": [{
                 "traceId": "0af7651916cd43dd8448eb211c80319c",
                 "spanId": "b7ad6b7169203331",
                 "parentSpanId": "",
-                "name": "GET /api/users",
+                "name": "$TRACE_SPAN_NAME_GET_USERS",
                 "kind": 2,
                 "startTimeUnixNano": 1700000000000000000,
                 "endTimeUnixNano":   1700000000050000000,
                 "status": {"code": 1, "message": "OK"},
                 "attributes": [
-                  {"key": "http.method", "value": {"stringValue": "GET"}},
+                  {"key": "$TRACE_HTTP_METHOD_ATTR", "value": {"stringValue": "GET"}},
                   {"key": "http.status_code", "value": {"intValue": "200"}}
                 ],
                 "events": [],
@@ -95,22 +112,22 @@ class OtlpTraceServiceTest {
         assertEquals("0af7651916cd43dd8448eb211c80319c", s.traceIdHex)
         assertEquals("b7ad6b7169203331", s.spanIdHex)
         assertEquals("", s.parentIdHex)
-        assertEquals("GET /api/users", s.name)
-        assertEquals("my-service", s.service)
+        assertEquals(TRACE_SPAN_NAME_GET_USERS, s.name)
+        assertEquals(TRACE_RESOURCE_SERVICE, s.service)
         assertEquals("SERVER", s.kind)
         assertEquals(1700000000000000000L, s.startNanos)
         assertEquals(50000000L, s.durationNanos)
         assertEquals(1, s.statusCode)
         assertEquals("OK", s.statusMessage)
         assertEquals(0, s.error)
-        assertEquals("GET", s.meta["http.method"])
+        assertEquals("GET", s.meta[TRACE_HTTP_METHOD_ATTR])
         assertEquals("200", s.meta["http.status_code"])
         assertEquals("prod", s.env)
-        assertEquals("web-01", s.host)
+        assertEquals(TRACE_RESOURCE_HOST, s.host)
         assertEquals("1.0.0", s.version)
-        assertEquals("io.otel.sdk", s.scopeName)
-        assertEquals("1.30.0", s.scopeVersion)
-        assertEquals("my-service", s.resourceAttributes["service.name"])
+        assertEquals(TRACE_OTEL_SCOPE_NAME, s.scopeName)
+        assertEquals(TRACE_OTEL_SCOPE_VERSION, s.scopeVersion)
+        assertEquals(TRACE_RESOURCE_SERVICE, s.resourceAttributes[SERVICE_NAME_ATTR_KEY])
     }
 
     // ──── SPAN KIND MAPPING ────
@@ -417,11 +434,11 @@ class OtlpTraceServiceTest {
                     statusMessage = "OK",
                     meta = mapOf("key" to "value"),
                     resourceAttributes = mapOf(SERVICE_NAME_ATTR_KEY to MY_SVC),
-                    host = "web-01",
+                    host = TRACE_RESOURCE_HOST,
                     env = "prod",
                     version = "1.0",
                     scopeName = "otel-sdk",
-                    scopeVersion = "1.30.0",
+                    scopeVersion = TRACE_OTEL_SCOPE_VERSION,
                     events = "[]",
                     links = "[]",
                 )
@@ -437,5 +454,225 @@ class OtlpTraceServiceTest {
         assertEquals(MY_SVC, decoded.spans[0].service)
         assertEquals("SERVER", decoded.spans[0].kind)
         assertEquals(mapOf("key" to "value"), decoded.spans[0].meta)
+    }
+
+    // ──── PROTOBUF PARSING ────
+
+    @Nested
+    inner class ProtobufParsing {
+
+        private fun traceIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(
+                    0x0A, 0xF7.toByte(), 0x65, 0x19, 0x16, 0xCD.toByte(), 0x43, 0xDD.toByte(),
+                    0x84.toByte(), 0x48, 0xEB.toByte(), 0x21, 0x1C, 0x80.toByte(), 0x31, 0x9C.toByte(),
+                ),
+            )
+
+        private fun spanIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(0xB7.toByte(), 0xAD.toByte(), 0x6B, 0x71, 0x69, 0x20, 0x33, 0x31)
+            )
+
+        private fun linkedTraceIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(
+                    0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88.toByte(),
+                    0x99.toByte(), 0x00, 0xAA.toByte(), 0xBB.toByte(),
+                    0xCC.toByte(), 0xDD.toByte(), 0xEE.toByte(), 0xFF.toByte(),
+                )
+            )
+
+        private fun linkedSpanIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(
+                    0xAA.toByte(),
+                    0xBB.toByte(),
+                    0xCC.toByte(),
+                    0xDD.toByte(),
+                    0xEE.toByte(),
+                    0xFF.toByte(),
+                    0x00,
+                    0x11,
+                )
+            )
+
+        private fun buildRequest(
+            spanBuilder: Span.Builder = Span.newBuilder(),
+            resourceAttrs: List<KeyValue> = emptyList(),
+            scopeName: String = "",
+            scopeVersion: String = ""
+        ): ByteArray {
+            val span = spanBuilder.build()
+            val scopeSpans = ScopeSpans.newBuilder()
+                .addSpans(span)
+                .apply {
+                    if (scopeName.isNotEmpty() || scopeVersion.isNotEmpty()) {
+                        scope = InstrumentationScope.newBuilder()
+                            .setName(scopeName)
+                            .setVersion(scopeVersion)
+                            .build()
+                    }
+                }
+                .build()
+            val resourceSpans = ResourceSpans.newBuilder()
+                .setResource(Resource.newBuilder().addAllAttributes(resourceAttrs))
+                .addScopeSpans(scopeSpans)
+                .build()
+            return ExportTraceServiceRequest.newBuilder()
+                .addResourceSpans(resourceSpans)
+                .build()
+                .toByteArray()
+        }
+
+        private fun kv(key: String, value: AnyValue) =
+            KeyValue.newBuilder()
+                .setKey(key)
+                .setValue(value)
+                .build()
+
+        private fun kv(key: String, value: String) =
+            kv(key, AnyValue.newBuilder().setStringValue(value).build())
+
+        @Test
+        fun `parses single span from protobuf`() {
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setName(TRACE_SPAN_NAME_GET_USERS)
+                    .setKind(Span.SpanKind.SPAN_KIND_SERVER)
+                    .setStartTimeUnixNano(1700000000000000000L)
+                    .setEndTimeUnixNano(1700000000050000000L)
+                    .setStatus(Status.newBuilder().setCode(Status.StatusCode.STATUS_CODE_OK).setMessage("OK"))
+                    .addAttributes(kv(TRACE_HTTP_METHOD_ATTR, "GET")),
+                resourceAttrs = listOf(
+                    kv(SERVICE_NAME_ATTR_KEY, TRACE_RESOURCE_SERVICE),
+                    kv("deployment.environment", "prod"),
+                    kv("host.name", TRACE_RESOURCE_HOST),
+                    kv("service.version", "1.0.0"),
+                ),
+                scopeName = TRACE_OTEL_SCOPE_NAME,
+                scopeVersion = TRACE_OTEL_SCOPE_VERSION
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+
+            assertEquals(1, spans.size)
+            val s = spans[0]
+            assertEquals("0af7651916cd43dd8448eb211c80319c", s.traceIdHex)
+            assertEquals("b7ad6b7169203331", s.spanIdHex)
+            assertEquals(TRACE_SPAN_NAME_GET_USERS, s.name)
+            assertEquals(TRACE_RESOURCE_SERVICE, s.service)
+            assertEquals("SERVER", s.kind)
+            assertEquals(1700000000000000000L, s.startNanos)
+            assertEquals(50000000L, s.durationNanos)
+            assertEquals(0, s.error)
+            assertEquals("GET", s.meta[TRACE_HTTP_METHOD_ATTR])
+            assertEquals("prod", s.env)
+            assertEquals(TRACE_RESOURCE_HOST, s.host)
+            assertEquals("1.0.0", s.version)
+            assertEquals(TRACE_OTEL_SCOPE_NAME, s.scopeName)
+            assertEquals(TRACE_OTEL_SCOPE_VERSION, s.scopeVersion)
+        }
+
+        @Test
+        fun `serializes protobuf events and links into json fields`() {
+            val linkedTraceIdHex = "11223344556677889900aabbccddeeff"
+            val linkedSpanIdHex = "aabbccddeeff0011"
+            val traceState = "congo=t61rcWkgMzE"
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setName("span-with-events-links")
+                    .setStartTimeUnixNano(1700000000000000000L)
+                    .setEndTimeUnixNano(1700000000050000000L)
+                    .addEvents(
+                        Span.Event.newBuilder()
+                            .setTimeUnixNano(1700000000005000000L)
+                            .setName("exception")
+                            .addAttributes(kv("exception.type", "java.net.ConnectException"))
+                            .addAttributes(kv("exception.message", "Connection refused"))
+                            .addAttributes(kv("retryable", AnyValue.newBuilder().setBoolValue(true).build()))
+                            .setDroppedAttributesCount(2)
+                    )
+                    .addLinks(
+                        Span.Link.newBuilder()
+                            .setTraceId(linkedTraceIdBytes())
+                            .setSpanId(linkedSpanIdBytes())
+                            .addAttributes(kv("link.kind", "follows_from"))
+                            .addAttributes(
+                                kv("sampling.priority", AnyValue.newBuilder().setIntValue(1).build())
+                            )
+                            .setTraceState(traceState)
+                            .setDroppedAttributesCount(3)
+                            .setFlags(1)
+                    )
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertEquals(1, spans.size)
+            val span = spans[0]
+            assertTrue(span.events.contains("\"name\":\"exception\""))
+            assertTrue(span.events.contains("\"exception.type\""))
+            assertTrue(span.events.contains("java.net.ConnectException"))
+            assertTrue(span.events.contains("\"exception.message\""))
+            assertTrue(span.events.contains("Connection refused"))
+            assertTrue(span.events.contains("\"retryable\""))
+            assertTrue(span.events.contains("\"value\":true"))
+            assertTrue(span.events.contains("\"droppedAttributesCount\":2"))
+            assertTrue(span.links.contains("\"traceId\":\"$linkedTraceIdHex\""))
+            assertTrue(span.links.contains("\"spanId\":\"$linkedSpanIdHex\""))
+            assertTrue(span.links.contains("\"link.kind\""))
+            assertTrue(span.links.contains("follows_from"))
+            assertTrue(span.links.contains("\"sampling.priority\""))
+            assertTrue(span.links.contains("\"value\":1"))
+            assertTrue(span.links.contains("\"traceState\":\"$traceState\""))
+            assertTrue(span.links.contains("\"droppedAttributesCount\":3"))
+            assertTrue(span.links.contains("\"flags\":1"))
+        }
+
+        @Test
+        fun `marks error for status code ERROR`() {
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setName("fail-op")
+                    .setStatus(Status.newBuilder().setCode(Status.StatusCode.STATUS_CODE_ERROR).setMessage("boom"))
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertEquals(1, spans[0].error)
+            assertEquals(2, spans[0].statusCode)
+            assertEquals("boom", spans[0].statusMessage)
+        }
+
+        @Test
+        fun `clamps negative duration to zero`() {
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setStartTimeUnixNano(2000000000L)
+                    .setEndTimeUnixNano(1000000000L)
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertEquals(0L, spans[0].durationNanos)
+        }
+
+        @Test
+        fun `returns null for invalid protobuf`() {
+            assertNull(service.parseOtlpTracesProtobuf(byteArrayOf(0xFF.toByte(), 0x00)))
+        }
+
+        @Test
+        fun `returns empty list for empty request`() {
+            val bytes = ExportTraceServiceRequest.getDefaultInstance().toByteArray()
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertTrue(spans.isEmpty())
+        }
     }
 }

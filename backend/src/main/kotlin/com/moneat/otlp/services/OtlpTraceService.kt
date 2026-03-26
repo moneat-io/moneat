@@ -16,18 +16,30 @@
 
 package com.moneat.otlp.services
 
+import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.otlp.OtlpParsingUtils
+import com.moneat.otlp.OtlpProtobufParser
 import com.moneat.otlp.calculateBillableBytes
 import com.moneat.otlp.hexToULongPair
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
+import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
+import io.opentelemetry.proto.common.v1.AnyValue
+import io.opentelemetry.proto.common.v1.KeyValue
+import io.opentelemetry.proto.trace.v1.Span
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -82,6 +94,74 @@ class OtlpTraceService(
     private val usageTracking: UsageTrackingService = UsageTrackingService(),
 ) {
     private val clickhouseDb = ClickHouseClient.getDatabase()
+
+    @Suppress("CyclomaticComplexMethod")
+    fun parseOtlpTracesProtobuf(bytes: ByteArray): List<OtlpSpanInsert>? {
+        val request =
+            try {
+                ExportTraceServiceRequest.parseFrom(bytes)
+            } catch (e: InvalidProtocolBufferException) {
+                logger.warn { "Invalid OTLP protobuf traces payload: ${e.message?.take(500)}" }
+                return null
+            }
+
+        val spans = mutableListOf<OtlpSpanInsert>()
+
+        request.resourceSpansList.forEach { rs ->
+            val resourceCtx = OtlpProtobufParser.extractResourceContext(rs.resource)
+
+            rs.scopeSpansList.forEach { ss ->
+                val scopeName = ss.scope?.name ?: ""
+                val scopeVersion = ss.scope?.version ?: ""
+
+                ss.spansList.forEach { span ->
+                    val traceId = OtlpProtobufParser.bytesToHex(span.traceId)
+                    val spanId = OtlpProtobufParser.bytesToHex(span.spanId)
+                    val parentSpanId = OtlpProtobufParser.bytesToHex(span.parentSpanId)
+                    val kind = mapSpanKind(span.kindValue)
+
+                    val startNanos = span.startTimeUnixNano
+                    val endNanos = span.endTimeUnixNano.takeIf { it != 0L } ?: startNanos
+                    val durationNanos = maxOf(0L, endNanos - startNanos)
+
+                    val statusCode = span.status?.codeValue ?: 0
+                    val statusMessage = span.status?.message ?: ""
+                    val error = if (statusCode == OTLP_SPAN_STATUS_ERROR) 1 else 0
+
+                    val attributes = OtlpProtobufParser.attributesToMap(span.attributesList)
+                    val events = protoEventsToJson(span.eventsList)
+                    val links = protoLinksToJson(span.linksList)
+
+                    spans += OtlpSpanInsert(
+                        traceIdHex = traceId,
+                        spanIdHex = spanId,
+                        parentIdHex = parentSpanId,
+                        organizationId = 0,
+                        name = span.name,
+                        service = resourceCtx.serviceName,
+                        resource = span.name,
+                        kind = kind,
+                        startNanos = startNanos,
+                        durationNanos = durationNanos,
+                        error = error,
+                        statusCode = statusCode,
+                        statusMessage = statusMessage,
+                        meta = attributes,
+                        resourceAttributes = resourceCtx.attributes,
+                        host = resourceCtx.hostName,
+                        env = resourceCtx.environment,
+                        version = resourceCtx.serviceVersion,
+                        scopeName = scopeName,
+                        scopeVersion = scopeVersion,
+                        events = events,
+                        links = links,
+                    )
+                }
+            }
+        }
+
+        return spans
+    }
 
     fun parseOtlpTracesJson(payload: String): List<OtlpSpanInsert>? {
         val parsed =
@@ -263,6 +343,80 @@ class OtlpTraceService(
         OTLP_SPAN_KIND_CONSUMER -> "CONSUMER"
         else -> ""
     }
+
+    private fun protoEventsToJson(events: List<Span.Event>): String {
+        val jsonEvents =
+            buildJsonArray {
+                events.forEach { event ->
+                    add(
+                        buildJsonObject {
+                            put("timeUnixNano", JsonPrimitive(event.timeUnixNano))
+                            put("name", JsonPrimitive(event.name))
+                            if (event.attributesList.isNotEmpty()) {
+                                put("attributes", keyValuesToJsonArray(event.attributesList))
+                            }
+                            if (event.droppedAttributesCount > 0) {
+                                put("droppedAttributesCount", JsonPrimitive(event.droppedAttributesCount))
+                            }
+                        }
+                    )
+                }
+            }
+        return json.encodeToString(jsonEvents)
+    }
+
+    private fun protoLinkToJsonObject(link: Span.Link): JsonObject =
+        buildJsonObject {
+            put("traceId", JsonPrimitive(OtlpProtobufParser.bytesToHex(link.traceId)))
+            put("spanId", JsonPrimitive(OtlpProtobufParser.bytesToHex(link.spanId)))
+            if (link.traceState.isNotEmpty()) {
+                put("traceState", JsonPrimitive(link.traceState))
+            }
+            if (link.attributesList.isNotEmpty()) {
+                put("attributes", keyValuesToJsonArray(link.attributesList))
+            }
+            if (link.droppedAttributesCount > 0) {
+                put("droppedAttributesCount", JsonPrimitive(link.droppedAttributesCount))
+            }
+            if (link.flags != 0) {
+                put("flags", JsonPrimitive(link.flags))
+            }
+        }
+
+    private fun protoLinksToJson(links: List<Span.Link>): String {
+        val jsonLinks = buildJsonArray { links.forEach { add(protoLinkToJsonObject(it)) } }
+        return json.encodeToString(jsonLinks)
+    }
+
+    private fun keyValuesToJsonArray(values: List<KeyValue>): JsonArray =
+        buildJsonArray {
+            values.forEach { kv ->
+                add(
+                    buildJsonObject {
+                        put("key", JsonPrimitive(kv.key))
+                        put("value", anyValueToJsonElement(kv.value))
+                    }
+                )
+            }
+        }
+
+    private fun anyValueToJsonElement(value: AnyValue): JsonElement =
+        when (value.valueCase) {
+            AnyValue.ValueCase.STRING_VALUE -> JsonPrimitive(value.stringValue)
+            AnyValue.ValueCase.INT_VALUE -> JsonPrimitive(value.intValue)
+            AnyValue.ValueCase.DOUBLE_VALUE -> JsonPrimitive(value.doubleValue)
+            AnyValue.ValueCase.BOOL_VALUE -> JsonPrimitive(value.boolValue)
+            AnyValue.ValueCase.BYTES_VALUE -> JsonPrimitive(
+                OtlpProtobufParser.bytesToHex(value.bytesValue)
+            )
+            AnyValue.ValueCase.ARRAY_VALUE ->
+                buildJsonArray {
+                    value.arrayValue.valuesList.forEach { add(anyValueToJsonElement(it)) }
+                }
+            AnyValue.ValueCase.KVLIST_VALUE -> keyValuesToJsonArray(value.kvlistValue.valuesList)
+            AnyValue.ValueCase.VALUE_NOT_SET -> JsonNull
+            else -> value.stringValue.takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull
+        }
 
     private fun mapToSqlMap(map: Map<String, String>): String {
         if (map.isEmpty()) return "map()"

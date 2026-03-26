@@ -62,11 +62,13 @@ private suspend fun handleOtlpTraceIngest(
     otlpApiKeyService: OtlpApiKeyService,
 ) {
     val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
-    if (!contentType.contains("application/json", ignoreCase = true)) {
+    val isJson = contentType.contains("application/json", ignoreCase = true)
+    val isProtobuf = contentType.contains("application/x-protobuf", ignoreCase = true)
+    if (!isJson && !isProtobuf) {
         call.respond(
             HttpStatusCode.UnsupportedMediaType,
             ErrorResponse(
-                "OTLP traces endpoint requires Content-Type: application/json. Protobuf encoding is not supported."
+                "OTLP traces endpoint requires Content-Type: application/json or application/x-protobuf."
             )
         )
         return
@@ -90,9 +92,11 @@ private suspend fun handleOtlpTraceIngest(
         throw BadRequestException("Failed to decompress request body")
     }
 
-    val payload = payloadBytes.decodeToString()
-    val parsedSpans = traceService.parseOtlpTracesJson(payload)
-        ?: throw BadRequestException("Invalid OTLP traces payload: malformed JSON or missing resourceSpans")
+    val parsedSpans = if (isProtobuf) {
+        traceService.parseOtlpTracesProtobuf(payloadBytes)
+    } else {
+        traceService.parseOtlpTracesJson(payloadBytes.decodeToString())
+    } ?: throw BadRequestException("Invalid OTLP traces payload: malformed or missing resourceSpans")
     if (parsedSpans.isEmpty()) {
         call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
         return

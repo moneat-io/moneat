@@ -67,7 +67,36 @@ class LogRoutesTest {
     }
 
     @Test
-    fun `otlp endpoint returns 415 for application-x-protobuf content type`() =
+    fun `otlp endpoint returns 415 for unsupported content type`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                install(Authentication) {
+                    jwt("auth-jwt") {
+                        verifier(
+                            JWT
+                                .require(Algorithm.HMAC256(jwtSecret))
+                                .withIssuer("moneat")
+                                .withAudience("moneat-users")
+                                .build()
+                        )
+                        validate { JWTPrincipal(it.payload) }
+                    }
+                }
+                routing { logIngestRoutes() }
+            }
+
+            val response =
+                client.post(OTLP_LOGS_PATH) {
+                    header(HttpHeaders.ContentType, "text/plain")
+                    setBody("hello")
+                }
+
+            assertEquals(HttpStatusCode.UnsupportedMediaType, response.status)
+        }
+
+    @Test
+    fun `otlp endpoint accepts application-x-protobuf content type`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -92,9 +121,8 @@ class LogRoutesTest {
                     setBody(ByteArray(0))
                 }
 
-            assertEquals(HttpStatusCode.UnsupportedMediaType, response.status)
-            assertTrue(response.bodyAsText().contains("application/json"))
-            assertTrue(response.bodyAsText().contains("Protobuf"))
+            // Protobuf is now accepted; no auth → 401 (not 415)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test

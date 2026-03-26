@@ -660,11 +660,13 @@ private suspend fun handleOtlpLogIngest(
     eventService: EventService,
 ) {
     val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
-    if (!contentType.contains("application/json")) {
+    val isJson = contentType.contains("application/json", ignoreCase = true)
+    val isProtobuf = contentType.contains("application/x-protobuf", ignoreCase = true)
+    if (!isJson && !isProtobuf) {
         call.respond(
             HttpStatusCode.UnsupportedMediaType,
             ErrorResponse(
-                "OTLP logs endpoint requires Content-Type: application/json. Protobuf encoding is not supported."
+                "OTLP logs endpoint requires Content-Type: application/json or application/x-protobuf."
             )
         )
         return
@@ -687,8 +689,11 @@ private suspend fun handleOtlpLogIngest(
         return
     }
 
-    val payload = payloadBytes.decodeToString()
-    val parsedEntries = logService.parseOtlpJson(payload)
+    val parsedEntries = if (isProtobuf) {
+        logService.parseOtlpProtobuf(payloadBytes)
+    } else {
+        logService.parseOtlpJson(payloadBytes.decodeToString())
+    }
     if (parsedEntries.isEmpty()) {
         call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
         return
