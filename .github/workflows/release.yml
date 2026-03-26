@@ -211,7 +211,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@e798e6a1ede8d07b74ac4cdac6bdfa4cc1653907
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe
         with:
           body_path: CHANGES.md
           draft: false
