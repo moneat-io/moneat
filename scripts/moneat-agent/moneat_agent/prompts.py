@@ -148,6 +148,39 @@ def coderabbit_feedback(*, comments: str, issue_title: str) -> str:
     """)
 
 
+def sonarqube_feedback(*, issues: str, issue_title: str) -> str:
+    return dedent(f"""\
+        You are fixing SonarQube issues for the Moneat project.
+
+        IMPORTANT: Before you begin, read these files for project context:
+        - AGENTS.md
+        - .github/copilot-instructions.md
+
+        ## Original task
+
+        **{issue_title}**
+
+        ## SonarQube issues to fix
+
+        The following issues were reported by SonarQube static analysis. Fix each
+        one. Prefer minimal, targeted changes — do not refactor unrelated code.
+
+        ```
+        {issues}
+        ```
+
+        ## Instructions
+
+        1. Address every SonarQube issue listed above.
+        2. If an issue is a false positive (e.g. test code flagged for hardcoded
+           IPs), suppress it with the appropriate mechanism (``@Suppress``,
+           ``// NOSONAR``, or a ``sonar-project.properties`` exclusion) and
+           add a brief comment explaining why.
+        3. Run the relevant lint and test commands after changes
+           (backend: `./gradlew build`; dashboard: `npm run lint`).
+    """)
+
+
 def rebase_conflict(*, conflict_files: str, base_branch: str) -> str:
     return dedent(f"""\
         The branch has rebase conflicts against {base_branch}.

@@ -60,6 +60,7 @@ class Phase(enum.Enum):
     PUSH = "push"
     PR = "pr"
     CODERABBIT = "coderabbit"
+    SONAR = "sonar"
 
 
 def _detect_resume_phase(
@@ -137,6 +138,7 @@ def run_pipeline(
     target_number: int,
     max_verify_rounds: int,
     max_cr_rounds: int,
+    max_sonar_rounds: int,
     dry_run: bool,
     plan_file: Path | None = None,
 ) -> None:
@@ -318,6 +320,42 @@ def run_pipeline(
         else:
             log.warn(f"Reached max CodeRabbit rounds ({max_cr_rounds}).")
 
+    # ── SonarQube feedback loop ───────────────────────────────────────
+    if pr_number is None:
+        pr_number = github.pr_exists(repo, branch)
+    if pr_number is None:
+        log.warn("No PR found — skipping SonarQube loop.")
+    else:
+        log.step("SonarQube analysis loop")
+
+        for sonar_round in range(1, max_sonar_rounds + 1):
+            log.system(f"SonarQube round {sonar_round}/{max_sonar_rounds}")
+
+            if not checks.wait_for_sonarqube(repo, pr_number):
+                log.warn("SonarQube check not detected or timed out — skipping.")
+                break
+
+            issues = checks.fetch_sonar_issues(branch)
+            if not issues:
+                log.success("No SonarQube issues found — we're done!")
+                break
+
+            log.system("SonarQube reported issues — addressing them.")
+
+            sonar_prompt = prompts.sonarqube_feedback(
+                issues=issues,
+                issue_title=issue_title,
+            )
+            cursor_agent.fix_feedback_with_composer(wt, sonar_prompt)
+
+            worktree.commit_all(
+                wt,
+                f"fix: address SonarQube issues (round {sonar_round}) for #{target_number}",
+            )
+            github.push_branch(str(wt), branch)
+        else:
+            log.warn(f"Reached max SonarQube rounds ({max_sonar_rounds}).")
+
     log.step("Done")
     if pr_number:
         log.success(f"PR #{pr_number} is ready for human review.")
@@ -368,6 +406,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=3,
         help="Max CodeRabbit feedback rounds (default: 3)",
+    )
+    p.add_argument(
+        "--max-sonar-rounds",
+        type=int,
+        default=2,
+        help="Max SonarQube fix rounds (default: 2)",
     )
     p.add_argument(
         "--plan-file",
@@ -421,6 +465,7 @@ def main(argv: list[str] | None = None) -> None:
             target_number=target_number,
             max_verify_rounds=args.max_verify_rounds,
             max_cr_rounds=args.max_cr_rounds,
+            max_sonar_rounds=args.max_sonar_rounds,
             dry_run=args.dry_run,
             plan_file=plan_file,
         )
