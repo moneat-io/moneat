@@ -38,7 +38,18 @@ def plan(*, issue_title: str, issue_body: str, extra_context: str = "") -> str:
     """)
 
 
-def implement(*, plan_text: str, issue_title: str, issue_body: str) -> str:
+def implement(
+    *,
+    plan_text: str,
+    issue_title: str,
+    issue_body: str,
+    prior_feedback: str = "",
+) -> str:
+    feedback_section = (
+        f"\n## Feedback from previous implementation round\n\n{prior_feedback}\n"
+        if prior_feedback
+        else ""
+    )
     return dedent(f"""\
         You are implementing a code change for the Moneat project.
 
@@ -58,7 +69,7 @@ def implement(*, plan_text: str, issue_title: str, issue_body: str) -> str:
         plan — if so, note the deviation clearly in a commit message.
 
         {plan_text}
-
+        {feedback_section}
         ## After making changes
 
         - Run the relevant lint and test commands from copilot-instructions.md

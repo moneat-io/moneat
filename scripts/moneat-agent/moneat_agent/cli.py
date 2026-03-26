@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import enum
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -137,6 +138,7 @@ def run_pipeline(
     max_verify_rounds: int,
     max_cr_rounds: int,
     dry_run: bool,
+    plan_file: Path | None = None,
 ) -> None:
     log.step(f"moneat-agent v{__version__}")
     log.system(f"Repo:   {repo}")
@@ -166,6 +168,8 @@ def run_pipeline(
     if dry_run:
         log.system("──── DRY RUN ────")
         log.system(f"Would create worktree on branch: {branch}")
+        if plan_file:
+            log.system(f"Plan file:      {plan_file} (planning phase will be skipped)")
         log.system(f"Opus model:     {cursor_agent.opus_model()}")
         log.system(f"Composer model: {cursor_agent.composer_model()}")
         return
@@ -175,22 +179,31 @@ def run_pipeline(
     wt = worktree.create(branch, base_branch)
     (wt / ".moneat-agent").mkdir(exist_ok=True)
 
+    # ── Seed external plan ────────────────────────────────────────────
+    external_plan = plan_file is not None
+    if external_plan:
+        dest = wt / ".moneat-agent" / "PLAN.md"
+        shutil.copyfile(plan_file, dest)
+        log.system(f"Plan loaded from {plan_file} — Opus planning phase skipped.")
+
     # ── Detect resume point ───────────────────────────────────────────
     phase = _detect_resume_phase(wt, repo, branch, base_branch)
 
     # ── Plan → Implement → Verify loop ───────────────────────────────
     if phase == Phase.PLAN:
-        extra_context = ""
+        prior_feedback = ""
         for verify_round in range(1, max_verify_rounds + 1):
             log.step(f"Plan / Implement / Verify — round {verify_round}/{max_verify_rounds}")
 
-            # Plan
-            plan_prompt = prompts.plan(
-                issue_title=issue_title,
-                issue_body=issue_body,
-                extra_context=extra_context,
-            )
-            cursor_agent.plan_with_opus(wt, plan_prompt)
+            if not external_plan:
+                # Opus generates (or re-generates) the plan each round
+                plan_prompt = prompts.plan(
+                    issue_title=issue_title,
+                    issue_body=issue_body,
+                    extra_context=prior_feedback,
+                )
+                cursor_agent.plan_with_opus(wt, plan_prompt)
+
             plan_text = _read_plan(wt)
 
             # Implement
@@ -198,6 +211,7 @@ def run_pipeline(
                 plan_text=plan_text,
                 issue_title=issue_title,
                 issue_body=issue_body,
+                prior_feedback=prior_feedback,
             )
             cursor_agent.implement_with_composer(wt, impl_prompt)
 
@@ -213,9 +227,9 @@ def run_pipeline(
             log.warn(f"Opus 4.6 is NOT satisfied (round {verify_round}).")
             delta = _read_delta_plan(wt)
             if delta:
-                extra_context = f"## Previous review feedback (delta plan)\n\n{delta}"
+                prior_feedback = f"## Previous review feedback (delta plan)\n\n{delta}"
             else:
-                extra_context = (
+                prior_feedback = (
                     "## Previous review feedback\n\n"
                     "The reviewer was not satisfied. Re-read the diff carefully and "
                     "improve the implementation."
@@ -356,6 +370,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Max CodeRabbit feedback rounds (default: 3)",
     )
     p.add_argument(
+        "--plan-file",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Path to a pre-written markdown plan file. "
+            "Copied into the worktree and used as-is; Opus planning is skipped. "
+            "Re-running with --plan-file overwrites any existing PLAN.md in the worktree."
+        ),
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="Parse and resolve target, then print what would happen without executing",
@@ -382,6 +407,13 @@ def main(argv: list[str] | None = None) -> None:
 
     repo = args.repo or github.detect_repo()
 
+    # Validate --plan-file early, before any side effects
+    plan_file: Path | None = None
+    if args.plan_file is not None:
+        plan_file = args.plan_file.resolve()
+        if not plan_file.exists() or not plan_file.is_file():
+            log.fatal(f"--plan-file path does not exist or is not a file: {plan_file}")
+
     try:
         run_pipeline(
             repo=repo,
@@ -390,6 +422,7 @@ def main(argv: list[str] | None = None) -> None:
             max_verify_rounds=args.max_verify_rounds,
             max_cr_rounds=args.max_cr_rounds,
             dry_run=args.dry_run,
+            plan_file=plan_file,
         )
     except KeyboardInterrupt:
         log.warn("\nInterrupted by user.")

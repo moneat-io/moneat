@@ -67,6 +67,9 @@ moneat-agent "finish PR #45"
 moneat-agent "implement the new auth flow" --issue 223
 moneat-agent "address the remaining feedback" --pr 45
 
+# Use a pre-written plan file — skips Opus planning entirely
+moneat-agent "fix issue #223" --plan-file ./my-plan.md
+
 # Dry run (parse target + print what would happen)
 moneat-agent "fix issue #223" --dry-run
 
@@ -111,6 +114,7 @@ To see all available model IDs: `agent models`
 | `--repo OWNER/REPO` | auto-detected | GitHub repository |
 | `--issue N` | parsed from prompt | Explicit issue number |
 | `--pr N` | parsed from prompt | Explicit PR number |
+| `--plan-file PATH` | none | Path to a pre-written markdown plan; Opus planning is skipped. Re-running with this flag overwrites the existing `PLAN.md` in the worktree. |
 | `--max-verify-rounds N` | 3 | Max plan/implement/verify iterations |
 | `--max-cr-rounds N` | 3 | Max CodeRabbit feedback rounds |
 | `--dry-run` | off | Print resolved target and exit |
