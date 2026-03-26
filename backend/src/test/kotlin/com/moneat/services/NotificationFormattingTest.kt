@@ -830,7 +830,7 @@ class NotificationFormattingTest {
                     name = "Backend",
                     events = "1.0K",
                     issues = "30",
-                    crashFree = "99.5"
+                    crashFree = "99.5%"
                 )
             ),
             dashboardUrl = "https://app.moneat.io",
@@ -844,6 +844,7 @@ class NotificationFormattingTest {
         assertEquals("NPE", data.topIssues[0].title)
         assertEquals(1, data.projects.size)
         assertEquals("Backend", data.projects[0].name)
+        assertEquals("99.5%", data.projects[0].crashFree)
     }
 
     @Test
@@ -863,9 +864,9 @@ class NotificationFormattingTest {
             name = "Frontend",
             events = "500",
             issues = "10",
-            crashFree = "99.9"
+            crashFree = "99.9%"
         )
         assertEquals("Frontend", summary.name)
-        assertEquals("99.9", summary.crashFree)
+        assertEquals("99.9%", summary.crashFree)
     }
 }
