@@ -128,6 +128,8 @@ class IngestionWorker(
 
             val envelope = SentryEnvelope.parse(envelopeBytes)
             eventService.processEnvelope(projectId, envelope)
+        } catch (e: CancellationException) {
+            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
             onDlq(value)

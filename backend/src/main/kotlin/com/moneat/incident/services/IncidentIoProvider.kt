@@ -30,6 +30,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -115,6 +116,8 @@ class IncidentIoProvider : IncidentProvider {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error("Error sending alert to incident.io", e)
             Result.failure(e)
@@ -153,6 +156,8 @@ class IncidentIoProvider : IncidentProvider {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error("Error resolving alert with incident.io", e)
             Result.failure(e)
@@ -191,6 +196,8 @@ class IncidentIoProvider : IncidentProvider {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error("Error testing incident.io connection", e)
             Result.failure(e)
