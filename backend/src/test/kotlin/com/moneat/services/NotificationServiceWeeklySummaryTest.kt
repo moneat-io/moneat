@@ -46,6 +46,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class NotificationServiceWeeklySummaryTest {
+    // ──── Constants & Mocks ────
     companion object {
         private var db: Database? = null
         private const val TEXT_PLAIN = "text/plain"
@@ -59,6 +60,7 @@ class NotificationServiceWeeklySummaryTest {
     private val slackService = mockk<SlackService>(relaxed = true)
     private val discordService = mockk<DiscordService>(relaxed = true)
 
+    // ──── Setup & Helpers ────
     @BeforeTest
     fun setupDatabase() {
         clearMocks(emailService, slackService, discordService)
@@ -121,6 +123,7 @@ class NotificationServiceWeeklySummaryTest {
             } get Projects.id
         }
 
+    // ──── HTTP Handlers ────
     private fun weeklySummaryClickHouseHandler(
         sessionsJson: String,
         sessionsStatus: Int = 200
@@ -148,6 +151,7 @@ class NotificationServiceWeeklySummaryTest {
             }
         }
 
+    // ──── Test Cases ────
     @Test
     fun `sendWeeklySummaryForUser includes crash-free rate from sessions query`() =
         runBlocking {
