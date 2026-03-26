@@ -316,11 +316,14 @@ def run_pipeline(
             )
             cursor_agent.fix_feedback_with_composer(wt, feedback_prompt)
 
-            worktree.commit_all(
+            changed = worktree.commit_all(
                 wt,
                 f"fix: address CodeRabbit feedback (round {cr_round}) for #{target_number}",
             )
-            github.push_branch(str(wt), branch)
+            if changed:
+                github.push_branch(str(wt), branch)
+            else:
+                log.system("No changes produced — skipping push.")
 
             prev_review = current_review
             prev_issue = current_issue
@@ -364,11 +367,14 @@ def run_pipeline(
             )
             cursor_agent.fix_feedback_with_composer(wt, ci_prompt)
 
-            worktree.commit_all(
+            changed = worktree.commit_all(
                 wt,
                 f"fix: address CI failures ({names}) (round {ci_round}) for #{target_number}",
             )
-            github.push_branch(str(wt), branch)
+            if changed:
+                github.push_branch(str(wt), branch)
+            else:
+                log.system("No changes produced — skipping push.")
         else:
             log.warn(f"Reached max CI check rounds ({max_sonar_rounds}).")
 
@@ -400,11 +406,14 @@ def run_pipeline(
             )
             cursor_agent.fix_feedback_with_composer(wt, sonar_prompt)
 
-            worktree.commit_all(
+            changed = worktree.commit_all(
                 wt,
                 f"fix: address SonarQube issues (round {sonar_round}) for #{target_number}",
             )
-            github.push_branch(str(wt), branch)
+            if changed:
+                github.push_branch(str(wt), branch)
+            else:
+                log.system("No changes produced — skipping push.")
         else:
             log.warn(f"Reached max SonarQube rounds ({max_sonar_rounds}).")
 

@@ -103,8 +103,12 @@ def run(
     )
 
     stdout_lines: list[str] = []
+    started = False
     assert proc.stdout is not None
     for line in proc.stdout:
+        if not started and not line.strip():
+            continue
+        started = True
         stdout_lines.append(line)
         sys.stdout.write(f"  {model_name} │ {line}")
         sys.stdout.flush()
@@ -145,8 +149,12 @@ def run_copilot(
     )
 
     stdout_lines: list[str] = []
+    started = False
     assert proc.stdout is not None
     for line in proc.stdout:
+        if not started and not line.strip():
+            continue
+        started = True
         stdout_lines.append(line)
         sys.stdout.write(f"  Copilot │ {line}")
         sys.stdout.flush()

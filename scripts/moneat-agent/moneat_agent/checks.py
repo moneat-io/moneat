@@ -254,6 +254,7 @@ def fetch_sonar_issues(branch: str) -> str:
     """Run ``sonar list issues`` and return the raw output.
 
     Returns an empty string when no issues are reported or the command fails.
+    If the output is JSON with an empty ``issues`` array, returns empty string.
     """
     try:
         result = subprocess.run(
@@ -269,6 +270,14 @@ def fetch_sonar_issues(branch: str) -> str:
         output = result.stdout.strip()
         if result.returncode != 0 and result.stderr.strip():
             log.warn(f"sonar list issues stderr: {result.stderr.strip()}")
+        if not output:
+            return ""
+        try:
+            data = json.loads(output)
+            if isinstance(data, dict) and not data.get("issues"):
+                return ""
+        except (json.JSONDecodeError, TypeError):
+            pass
         return output
     except FileNotFoundError:
         log.warn("'sonar' CLI not found on PATH — skipping issue fetch.")
