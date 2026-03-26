@@ -28,6 +28,7 @@ import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -118,7 +119,8 @@ fun Route.ssoRoutes() {
                         "Missing state parameter"
                     )
 
-                val callbackData = ssoService.handleOidcCallback(code, state)
+                val callbackData =
+                    ssoService.handleOidcCallback(code, state)
 
                 AuthCookieUtils.setAuthCookie(call, callbackData.token)
                 call.respondRedirect("$frontendUrl/auth/sso/callback")
@@ -157,54 +159,37 @@ fun Route.ssoRoutes() {
 
             put(SSO_CONFIG_PATH) {
                 val ctx = call.requireSsoAuth() ?: return@put
-                try {
-                    val request = call.receive<SsoConfigRequest>()
-                    val providerType = SsoProviderType.fromString(request.providerType)
-                    if (providerType == SsoProviderType.SAML &&
-                        !FeatureRegistry.hasModule("SAML")
-                    ) {
-                        call.respond(
-                            HttpStatusCode.Forbidden,
-                            ErrorResponse("SAML SSO requires an enterprise license")
-                        )
-                        return@put
+                val request = call.receive<SsoConfigRequest>()
+                val providerType =
+                    try {
+                        SsoProviderType.fromString(request.providerType)
+                    } catch (e: IllegalArgumentException) {
+                        throw BadRequestException(e.message ?: "Invalid SSO provider type")
                     }
-                    val config = ssoService.configureSso(ctx.orgId, ctx.userId, request)
-                    call.respond(config)
-                } catch (e: IllegalArgumentException) {
-                    logger.error(e) { "Configure SSO failed: ${e.message}" }
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-                } catch (e: Exception) {
-                    logger.error(e) { "Configure SSO error" }
+                if (providerType == SsoProviderType.SAML &&
+                    !FeatureRegistry.hasModule("SAML")
+                ) {
                     call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ErrorResponse("Failed to configure SSO")
+                        HttpStatusCode.Forbidden,
+                        ErrorResponse("SAML SSO requires an enterprise license")
                     )
+                    return@put
                 }
+                val config = ssoService.configureSso(ctx.orgId, ctx.userId, request)
+                call.respond(config)
             }
 
             delete(SSO_CONFIG_PATH) {
                 val ctx = call.requireSsoAuth() ?: return@delete
-                try {
-                    val deleted = ssoService.deleteSsoConfig(ctx.orgId, ctx.userId)
-                    when (deleted) {
-                        true -> call.respond(
-                            HttpStatusCode.OK,
-                            MessageResponse("SSO configuration deleted")
-                        )
-                        false -> call.respond(
-                            HttpStatusCode.NotFound,
-                            ErrorResponse("SSO configuration not found")
-                        )
-                    }
-                } catch (e: IllegalArgumentException) {
-                    logger.error(e) { "Delete SSO config failed: ${e.message}" }
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-                } catch (e: Exception) {
-                    logger.error(e) { "Delete SSO config error" }
-                    call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ErrorResponse("Failed to delete SSO configuration")
+                val deleted = ssoService.deleteSsoConfig(ctx.orgId, ctx.userId)
+                when (deleted) {
+                    true -> call.respond(
+                        HttpStatusCode.OK,
+                        MessageResponse("SSO configuration deleted")
+                    )
+                    false -> call.respond(
+                        HttpStatusCode.NotFound,
+                        ErrorResponse("SSO configuration not found")
                     )
                 }
             }

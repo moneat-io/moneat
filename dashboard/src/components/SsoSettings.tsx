@@ -28,7 +28,11 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/useToast'
 import { AlertCircle, Check, Loader2, Shield } from 'lucide-react'
 
-export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boolean }>) {
+export function SsoTab({
+  hasSamlModule = false,
+  canConfigure = true,
+}: Readonly<{ hasSamlModule?: boolean; canConfigure?: boolean }>) {
+  const readOnly = !canConfigure
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [providerType, setProviderType] = useState<'saml' | 'oidc'>('oidc')
@@ -139,6 +143,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (readOnly) return
     saveMutation.mutate()
   }
 
@@ -172,6 +177,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                 <Select
                   value={providerType}
                   onValueChange={(value: 'saml' | 'oidc') => setProviderType(value)}
+                  disabled={readOnly}
                 >
                   <SelectTrigger className="h-8">
                     <SelectValue />
@@ -201,6 +207,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                       onChange={(e) => setFormData({ ...formData, idpEntityId: e.target.value })}
                       placeholder="https://idp.example.com/metadata"
                       required={providerType === 'saml'}
+                      disabled={readOnly}
                     />
                   </div>
 
@@ -213,6 +220,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                       onChange={(e) => setFormData({ ...formData, idpSsoUrl: e.target.value })}
                       placeholder="https://idp.example.com/sso/saml"
                       required={providerType === 'saml'}
+                      disabled={readOnly}
                     />
                   </div>
 
@@ -226,6 +234,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                       rows={4}
                       className="font-mono text-xs min-h-0 py-2"
                       required={providerType === 'saml'}
+                      disabled={readOnly}
                     />
                     <p className="text-xs text-muted-foreground">
                       Paste the X.509 certificate from your identity provider
@@ -253,6 +262,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                       onChange={(e) => setFormData({ ...formData, oidcIssuerUrl: e.target.value })}
                       placeholder="https://your-domain.okta.com"
                       required={providerType === 'oidc'}
+                      disabled={readOnly}
                     />
                     <p className="text-xs text-muted-foreground">
                       The base URL of your OIDC provider
@@ -268,6 +278,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                       onChange={(e) => setFormData({ ...formData, oidcClientId: e.target.value })}
                       placeholder="0oa2abc3defGHI4jkl5m"
                       required={providerType === 'oidc'}
+                      disabled={readOnly}
                     />
                   </div>
 
@@ -281,6 +292,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                       onChange={(e) => setFormData({ ...formData, oidcClientSecret: e.target.value })}
                       placeholder={ssoConfig?.hasClientSecret ? '••••••••••••••••' : 'Enter client secret'}
                       required={providerType === 'oidc' && !ssoConfig?.hasClientSecret}
+                      disabled={readOnly}
                     />
                     {ssoConfig?.hasClientSecret && (
                       <p className="text-xs text-muted-foreground">
@@ -299,6 +311,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                   value={formData.emailDomain}
                   onChange={(e) => setFormData({ ...formData, emailDomain: e.target.value })}
                   placeholder="company.com"
+                  disabled={readOnly}
                 />
                 <p className="text-xs text-muted-foreground">
                   Users with this email domain will be prompted to use SSO (e.g., "company.com")
@@ -321,7 +334,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                   id="requireSso"
                   checked={formData.requireSso}
                   onCheckedChange={(checked) => setFormData({ ...formData, requireSso: checked })}
-                  disabled={!hasSamlModule}
+                  disabled={readOnly || (!hasSamlModule && !formData.requireSso)}
                 />
               </div>
 
@@ -338,12 +351,13 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                   id="isEnabled"
                   checked={formData.isEnabled}
                   onCheckedChange={(checked) => setFormData({ ...formData, isEnabled: checked })}
+                  disabled={readOnly}
                 />
               </div>
             </div>
 
             <div className="flex gap-2 pt-1">
-              <Button type="submit" size="sm" disabled={saveMutation.isPending}>
+              <Button type="submit" size="sm" disabled={readOnly || saveMutation.isPending}>
                 {saveMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -363,7 +377,7 @@ export function SsoTab({ hasSamlModule = false }: Readonly<{ hasSamlModule?: boo
                   variant="destructive"
                   size="sm"
                   onClick={() => deleteMutation.mutate()}
-                  disabled={deleteMutation.isPending}
+                  disabled={readOnly || deleteMutation.isPending}
                 >
                   {deleteMutation.isPending ? (
                     <>

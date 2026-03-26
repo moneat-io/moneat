@@ -217,11 +217,21 @@ class AuthService(
 
         val tokenPair = refreshTokenService.generateRefreshToken(userId, normalizedEmail, orgId, orgRole)
         SentryUtils.breadcrumb("auth", "Signup completed", mapOf("user_id" to userId))
+        val organizationSlug = organizationRepository.findById(orgId)?.slug
         return AuthResponse(
             token = tokenPair.accessToken,
             refreshToken = tokenPair.refreshToken,
             expiresIn = tokenPair.expiresIn,
-            user = UserResponse(userId, normalizedEmail, request.name, emailVerified, false, isAdmin)
+            user = UserResponse(
+                id = userId,
+                email = normalizedEmail,
+                name = request.name,
+                emailVerified = emailVerified,
+                onboardingCompleted = false,
+                isAdmin = isAdmin,
+                organizationSlug = organizationSlug,
+                orgRole = orgRole,
+            )
         )
     }
 
@@ -374,17 +384,20 @@ class AuthService(
         }
 
         val tokenPair = refreshTokenService.generateRefreshToken(user.id, user.email, orgId, orgRole)
+        val organizationSlug = organizationRepository.findById(orgId)?.slug
         return AuthResponse(
             token = tokenPair.accessToken,
             refreshToken = tokenPair.refreshToken,
             expiresIn = tokenPair.expiresIn,
             user = UserResponse(
-                user.id,
-                user.email,
-                user.name,
-                user.emailVerified,
-                user.onboardingCompleted,
-                user.isAdmin
+                id = user.id,
+                email = user.email,
+                name = user.name,
+                emailVerified = user.emailVerified,
+                onboardingCompleted = user.onboardingCompleted,
+                isAdmin = user.isAdmin,
+                organizationSlug = organizationSlug,
+                orgRole = orgRole,
             )
         )
     }
@@ -576,13 +589,18 @@ class AuthService(
 
         val user = run {
             val userRow = userRepository.findById(userId) ?: return null
+            val membership = membershipRepository.getFirstMembershipForUser(userId)
+            val organizationSlug =
+                membership?.let { organizationRepository.findById(it.organizationId)?.slug }
             UserResponse(
-                userId,
-                email,
-                userRow.name,
-                userRow.emailVerified,
-                userRow.onboardingCompleted,
-                userRow.isAdmin
+                id = userId,
+                email = email,
+                name = userRow.name,
+                emailVerified = userRow.emailVerified,
+                onboardingCompleted = userRow.onboardingCompleted,
+                isAdmin = userRow.isAdmin,
+                organizationSlug = organizationSlug,
+                orgRole = membership?.role,
             )
         }
 

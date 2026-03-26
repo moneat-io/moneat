@@ -44,11 +44,11 @@ export function useAuth() {
           orgRole: userData.orgRole,
         })
         // Keep session flag in sync
-        sessionStorage.setItem('authenticated', 'true')
+        globalThis.sessionStorage?.setItem('authenticated', 'true')
       })
       .catch(() => {
         setUser(null)
-        sessionStorage.removeItem('authenticated')
+        globalThis.sessionStorage?.removeItem('authenticated')
       })
       .finally(() => {
         setIsLoading(false)

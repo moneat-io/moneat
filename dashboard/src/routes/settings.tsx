@@ -175,11 +175,13 @@ function SettingsPage() {
   const tier = subscription?.tier?.tierName || 'FREE'
   const isSelfHosted = useIsSelfHosted()
   
-  // SSO: OIDC is always available for self-hosted; SAML and enforcement require enterprise
+  // SSO: self-hosted can view/configure when entitled; SaaS only Team/Business (not FREE via feature flags)
   const { data: features } = useEnterpriseFeatures()
   const hasSamlModule = hasEnterpriseModule(features, 'saml')
   const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
-  const canUseSso = canManageTeam && (isSelfHosted || hasSamlModule || (!isSelfHosted && (tier === 'TEAM' || tier === 'BUSINESS')))
+  const canViewSsoTab =
+    isSelfHosted || (!isSelfHosted && (tier === 'TEAM' || tier === 'BUSINESS'))
+  const canConfigureSso = user?.orgRole === 'owner' && canViewSsoTab
   
   return (
     <div>
@@ -245,7 +247,7 @@ function SettingsPage() {
                 <Database className="h-4 w-4 mr-2" />
                 Log Indexes
               </TabsTrigger>
-              {(canManageTeam || canUseSso) && (
+              {(canManageTeam || canViewSsoTab) && (
                 <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
                   Organization
                 </div>
@@ -275,7 +277,7 @@ function SettingsPage() {
                 <Layers className="h-4 w-4 mr-2" />
                 Usage
               </TabsTrigger>
-              {canUseSso && (
+              {canViewSsoTab && (
                 <TabsTrigger 
                   value="sso" 
                   className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
@@ -330,9 +332,9 @@ function SettingsPage() {
             <TabsContent value="usage" className="space-y-4 mt-0">
               <UsageTab />
             </TabsContent>
-            {canUseSso && (
+            {canViewSsoTab && (
               <TabsContent value="sso" className="space-y-4 mt-0">
-                <SsoTab hasSamlModule={hasSamlModule} />
+                <SsoTab hasSamlModule={hasSamlModule} canConfigure={canConfigureSso} />
               </TabsContent>
             )}
             <TabsContent value="account" className="space-y-4 mt-0">

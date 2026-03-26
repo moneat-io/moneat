@@ -72,7 +72,12 @@ private suspend fun handleSamlAcs(call: ApplicationCall, samlService: SamlServic
 
 fun Route.samlRoutes() {
     val samlService = SamlService()
-    val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
+    val frontendUrl =
+        EnvConfig.get("FRONTEND_URL")
+            ?: throw IllegalStateException(
+                "FRONTEND_URL must be set for SAML routes (SAML startup). " +
+                    "Set FRONTEND_URL in the environment or use a documented dev default."
+            )
 
     route("/auth/sso") {
         post("/init/saml") { handleSamlInit(call, samlService) }

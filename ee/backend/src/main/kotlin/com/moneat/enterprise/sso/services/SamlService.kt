@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.sso.services
 
+import com.moneat.config.RedisConfig
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SsoConfigurations
 import com.moneat.sso.models.SsoCallbackData
@@ -35,7 +36,7 @@ class SamlService {
         email: String?,
         orgSlug: String?,
     ): SsoInitResponse {
-        require(!(email == null && orgSlug == null)) {
+        require(email != null || orgSlug != null) {
             "Either email or orgSlug must be provided"
         }
 
@@ -96,6 +97,21 @@ class SamlService {
 
             val orgId = stateData.orgId
 
+            val requestId =
+                if (RedisConfig.isInitialized()) {
+                    val key =
+                        "${SsoService.SSO_SAML_AUTHN_REQUEST_KEY_PREFIX}${stateData.nonce}"
+                    val rid = RedisConfig.sync().get(key)
+                    RedisConfig.sync().del(key)
+                    rid
+                } else {
+                    null
+                }
+                ?: throw IllegalStateException(
+                    "Missing SAML AuthnRequest binding (Redis unavailable or expired). " +
+                        "Expected key prefix ${SsoService.SSO_SAML_AUTHN_REQUEST_KEY_PREFIX}"
+                )
+
             val ssoConfig =
                 SsoConfigurations
                     .selectAll()
@@ -110,7 +126,7 @@ class SamlService {
             val samlResponseObj = SamlResponse(settings, null)
             samlResponseObj.loadXmlFromBase64(samlResponse)
 
-            if (!samlResponseObj.isValid(relayState)) {
+            if (!samlResponseObj.isValid(requestId)) {
                 val error = samlResponseObj.error
                 logger.error { "SAML authentication failed: $error" }
                 throw IllegalArgumentException(
@@ -193,6 +209,15 @@ class SamlService {
         val settings = buildSamlSettings(ssoConfig)
 
         val authnRequest = AuthnRequest(settings)
+        val requestId = authnRequest.id
+        val nonceB64 = ssoService.peekVerifiedNonceWithoutConsume(state)
+        if (RedisConfig.isInitialized()) {
+            RedisConfig.sync().setex(
+                "${SsoService.SSO_SAML_AUTHN_REQUEST_KEY_PREFIX}$nonceB64",
+                SSO_SAML_AUTHN_TTL_SECONDS,
+                requestId,
+            )
+        }
         val samlRequest = authnRequest.getEncodedAuthnRequest()
 
         val idpSsoUrl =
@@ -292,6 +317,8 @@ class SamlService {
             .replace("\\s".toRegex(), "")
 
     companion object {
+        private const val SSO_SAML_AUTHN_TTL_SECONDS = 600L
+
         private const val EMAIL_CLAIM_URI =
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/" +
                 "emailaddress"
