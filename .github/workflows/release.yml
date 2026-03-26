@@ -92,7 +92,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@b13d25e5fcf2e04305d8aedc9a6c28ebe258e934
+        uses: docker/metadata-action@4378dc6be7f72231dfe78ac7e0364a44f1c9f54b
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-backend
           tags: |
@@ -140,7 +140,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@b13d25e5fcf2e04305d8aedc9a6c28ebe258e934
+        uses: docker/metadata-action@4378dc6be7f72231dfe78ac7e0364a44f1c9f54b
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-dashboard
           tags: |
