@@ -159,8 +159,8 @@ function SpanDetailPage() {
                 <div className="text-sm font-medium text-muted-foreground">Trace ID</div>
                 <div className="font-mono text-sm">
                   <Link
-                    to="/projects/$projectId/traces/$traceId"
-                    params={{ projectId, traceId: span.traceId }}
+                    to="/performance/traces/$traceId"
+                    params={{ traceId: span.traceId }}
                     className="text-primary hover:underline inline-flex items-center gap-1"
                   >
                     {span.traceId}
