@@ -43,11 +43,12 @@ class NotificationFormattingTest {
         private const val MONITOR_DOWN = "Monitor Down"
         private const val MONITOR_RECOVERED = "Monitor Recovered"
         private const val SETTINGS_NOTIFICATIONS_URL = "https://app.moneat.io/settings/notifications"
+        private const val CRASH_FREE_NOT_AVAILABLE = "N/A"
     }
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    // ── Slack data class serialization ──────────────────────────────────
+    // ──── Slack data class serialization ────
 
     @Test
     fun `SlackBlock with header type serializes correctly`() {
@@ -102,7 +103,7 @@ class NotificationFormattingTest {
         assertEquals(1, elements?.size)
         assertEquals("button", elements?.get(0)?.jsonObject?.get("type")?.jsonPrimitive?.content)
         assertEquals(
-            "https://app.moneat.io/issues/1",
+            ISSUES_1_URL,
             elements?.get(0)?.jsonObject?.get("url")?.jsonPrimitive?.content
         )
     }
@@ -285,7 +286,7 @@ class NotificationFormattingTest {
         assertEquals("button", obj["accessory"]?.jsonObject?.get("type")?.jsonPrimitive?.content)
     }
 
-    // ── Discord data class serialization ────────────────────────────────
+    // ──── Discord data class serialization ────
 
     @Test
     fun `DiscordEmbed serializes with all fields`() {
@@ -429,7 +430,7 @@ class NotificationFormattingTest {
         assertEquals(2, channel.type)
     }
 
-    // ── Discord color mapping for alert types ───────────────────────────
+    // ──── Discord color mapping for alert types ────
 
     @Test
     fun `Discord error color matches expected hex value`() {
@@ -449,7 +450,7 @@ class NotificationFormattingTest {
         assertEquals(0x2EB67D, embed.color)
     }
 
-    // ── Slack full message construction patterns ────────────────────────
+    // ──── Slack full message construction patterns ────
 
     @Test
     fun `Slack host alert message structure has header and attachment`() {
@@ -540,7 +541,7 @@ class NotificationFormattingTest {
         assertTrue(text.contains("Main.kt:10"))
     }
 
-    // ── Discord full embed construction patterns ────────────────────────
+    // ──── Discord full embed construction patterns ────
 
     @Test
     fun `Discord uptime down embed has correct structure`() {
@@ -614,7 +615,7 @@ class NotificationFormattingTest {
         )
     }
 
-    // ── Round-trip deserialization tests ─────────────────────────────────
+    // ──── Round-trip deserialization tests ────
 
     @Test
     fun `Slack message round-trips through serialization`() {
@@ -678,7 +679,7 @@ class NotificationFormattingTest {
         assertEquals("E2", decoded.embeds?.get(1)?.title)
     }
 
-    // ── Slack severity/color mapping (mirrors SlackService logic) ───────
+    // ──── Slack severity/color mapping (mirrors SlackService logic) ────
 
     @Test
     fun `Slack error alert level determines emoji and color`() {
@@ -741,7 +742,7 @@ class NotificationFormattingTest {
         assertEquals(COLOR_ECB22E, medColor)
     }
 
-    // ── Discord severity color mapping for dashboard alerts ─────────────
+    // ──── Discord severity color mapping for dashboard alerts ────
 
     @Test
     fun `Discord dashboard alert severity determines color`() {
@@ -762,7 +763,7 @@ class NotificationFormattingTest {
         assertEquals(0xECB22E, lowColor)
     }
 
-    // ── Slack uptime alert direction logic ──────────────────────────────
+    // ──── Slack uptime alert direction logic ────
 
     @Test
     fun `Slack uptime alert direction determines emoji and header`() {
@@ -780,7 +781,7 @@ class NotificationFormattingTest {
         assertEquals(MONITOR_RECOVERED, if (isUp) MONITOR_DOWN else MONITOR_RECOVERED)
     }
 
-    // ── EmailService data class construction ────────────────────────────
+    // ──── EmailService data class construction ────
 
     @Test
     fun `ErrorAlertData holds all fields correctly`() {
@@ -868,5 +869,16 @@ class NotificationFormattingTest {
         )
         assertEquals("Frontend", summary.name)
         assertEquals("99.9%", summary.crashFree)
+    }
+
+    @Test
+    fun `ProjectSummary crashFree can be not available placeholder`() {
+        val summary = com.moneat.notifications.services.EmailService.ProjectSummary(
+            name = "Backend",
+            events = "0",
+            issues = "0",
+            crashFree = CRASH_FREE_NOT_AVAILABLE
+        )
+        assertEquals(CRASH_FREE_NOT_AVAILABLE, summary.crashFree)
     }
 }
