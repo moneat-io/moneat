@@ -31,10 +31,12 @@ private suspend fun handleSamlInit(call: ApplicationCall, samlService: SamlServi
         val response = samlService.initSaml(request.email, request.orgSlug)
         call.respond(response)
     } catch (e: IllegalArgumentException) {
-        logger.error(e) { "SAML init failed: ${e.message}" }
+        val err = e.stackTraceToString().take(500)
+        logger.error { "SAML init failed: $err" }
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
     } catch (e: Exception) {
-        logger.error(e) { "SAML init error" }
+        val err = e.stackTraceToString().take(500)
+        logger.error { "SAML init error: $err" }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse("SAML initialization failed"))
     }
 }
@@ -45,10 +47,12 @@ private suspend fun handleSamlMetadata(call: ApplicationCall, samlService: SamlS
         val metadata = samlService.getSamlMetadata(orgSlug)
         call.respondText(metadata, ContentType.Text.Xml)
     } catch (e: IllegalArgumentException) {
-        logger.error(e) { "SAML metadata request failed: ${e.message}" }
+        val err = e.stackTraceToString().take(500)
+        logger.error { "SAML metadata request failed: $err" }
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
     } catch (e: Exception) {
-        logger.error(e) { "SAML metadata error" }
+        val err = e.stackTraceToString().take(500)
+        logger.error { "SAML metadata error: $err" }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to generate SAML metadata"))
     }
 }
@@ -62,10 +66,12 @@ private suspend fun handleSamlAcs(call: ApplicationCall, samlService: SamlServic
         AuthCookieUtils.setAuthCookie(call, callbackData.token)
         call.respondRedirect("$frontendUrl/auth/sso/callback")
     } catch (e: IllegalArgumentException) {
-        logger.error(e) { "SAML ACS failed: ${e.message}" }
+        val err = e.stackTraceToString().take(500)
+        logger.error { "SAML ACS failed: $err" }
         call.respondRedirect("$frontendUrl/login?error=sso_failed")
     } catch (e: Exception) {
-        logger.error(e) { "SAML ACS error" }
+        val err = e.stackTraceToString().take(500)
+        logger.error { "SAML ACS error: $err" }
         call.respondRedirect("$frontendUrl/login?error=sso_failed")
     }
 }

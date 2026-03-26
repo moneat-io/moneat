@@ -133,7 +133,7 @@ open class SsoService {
             transaction {
                 val ssoConfig =
                     if (email != null) {
-                        val domain = email.substringAfter("@")
+                        val domain = normalizeDomain(email.substringAfter("@"))
                         SsoConfigurations
                             .selectAll()
                             .where {
@@ -424,7 +424,7 @@ open class SsoService {
                 it[SsoConfigurations.oidcIssuerUrl] = request.oidcIssuerUrl
                 it[SsoConfigurations.oidcClientId] = request.oidcClientId
                 encryptedSecret?.let { secret -> it[SsoConfigurations.oidcClientSecret] = secret }
-                it[SsoConfigurations.emailDomain] = request.emailDomain
+                it[SsoConfigurations.emailDomain] = request.emailDomain?.let { d -> normalizeDomain(d) }
                 it[SsoConfigurations.requireSso] = effectiveRequireSso
                 it[SsoConfigurations.updatedAt] = Clock.System.now()
             }
@@ -440,7 +440,7 @@ open class SsoService {
                 it[SsoConfigurations.oidcIssuerUrl] = request.oidcIssuerUrl
                 it[SsoConfigurations.oidcClientId] = request.oidcClientId
                 it[SsoConfigurations.oidcClientSecret] = encryptedSecret
-                it[SsoConfigurations.emailDomain] = request.emailDomain
+                it[SsoConfigurations.emailDomain] = request.emailDomain?.let { d -> normalizeDomain(d) }
                 it[SsoConfigurations.requireSso] = effectiveRequireSso
             }
         }
@@ -492,7 +492,7 @@ open class SsoService {
 
     fun checkSsoRequired(email: String): Boolean =
         transaction {
-            val domain = email.substringAfter("@")
+            val domain = normalizeDomain(email.substringAfter("@"))
             // Only enforce "Require SSO" when enterprise license is active
             if (!FeatureRegistry.hasModule("SAML")) return@transaction false
             SsoConfigurations
@@ -564,16 +564,16 @@ open class SsoService {
         val encoded = Base64.getUrlEncoder().withoutPadding()
             .encodeToString(state.toByteArray())
 
-        try {
-            if (RedisConfig.isInitialized()) {
+        if (RedisConfig.isInitialized()) {
+            try {
                 RedisConfig.sync().setex(
                     "$SSO_NONCE_PREFIX$nonceB64",
                     SSO_NONCE_TTL_SECONDS,
                     orgId.toString()
                 )
+            } catch (e: Exception) {
+                throw IllegalStateException("Failed to store SSO nonce in Redis", e)
             }
-        } catch (e: Exception) {
-            logger.warn(e) { "Failed to store SSO nonce in Redis" }
         }
 
         return encoded
@@ -631,7 +631,8 @@ open class SsoService {
 
             return String(cipher.doFinal(ciphertext))
         } catch (e: Exception) {
-            logger.error(e) { "Failed to decrypt SSO secret" }
+            val err = e.stackTraceToString().take(500)
+            logger.error { "Failed to decrypt SSO secret: $err" }
             return null
         }
     }
@@ -862,5 +863,7 @@ open class SsoService {
         private const val STATE_SIGNATURE_INDEX = 3
         private const val TOKEN_TTL_MS = 3_600_000L
         private const val MILLIS_PER_SECOND = 1000L
+
+        fun normalizeDomain(domain: String): String = domain.trim().lowercase()
     }
 }

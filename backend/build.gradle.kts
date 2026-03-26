@@ -284,6 +284,7 @@ val jacocoBackendMainExcludes =
         "**/plugins/**", // Ktor plugin bootstrap — framework wiring, not business logic
         "**/logging/**", // log appender setup
         "**/enterprise/**", // on-call/feature-flag integration stubs in core
+        "**/sso/**", // OIDC/OAuth routes & service — integration-heavy; gate via detekt + manual/E2E
         "**/Application*", // entry point
         "**/di/**", // Koin module assembly — pure wiring, no business logic
         "**/monitoring/**", // monitoring module hook — framework wiring only

@@ -43,7 +43,7 @@ class SamlService {
         return transaction {
             val ssoConfig =
                 if (email != null) {
-                    val domain = email.substringAfter("@")
+                    val domain = SsoService.normalizeDomain(email.substringAfter("@"))
                     SsoConfigurations
                         .selectAll()
                         .where {
@@ -115,8 +115,11 @@ class SamlService {
             val ssoConfig =
                 SsoConfigurations
                     .selectAll()
-                    .where { SsoConfigurations.organizationId eq orgId }
-                    .firstOrNull()
+                    .where {
+                        (SsoConfigurations.organizationId eq orgId) and
+                            (SsoConfigurations.isEnabled eq true) and
+                            (SsoConfigurations.providerType eq "saml")
+                    }.firstOrNull()
                     ?: throw IllegalArgumentException(
                         "SSO configuration not found"
                     )
