@@ -22,6 +22,7 @@ class Color(Enum):
 _MODEL_COLORS: dict[str, Color] = {
     "opus": Color.MAGENTA,
     "composer": Color.CYAN,
+    "copilot": Color.GREEN,
     "system": Color.BLUE,
 }
 
@@ -46,6 +47,10 @@ def opus(msg: str) -> None:
 
 def composer(msg: str) -> None:
     _emit("Composer 2:", _MODEL_COLORS["composer"], msg)
+
+
+def copilot(msg: str) -> None:
+    _emit("Copilot:", _MODEL_COLORS["copilot"], msg)
 
 
 def system(msg: str) -> None:

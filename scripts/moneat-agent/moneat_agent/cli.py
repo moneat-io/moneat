@@ -141,6 +141,7 @@ def run_pipeline(
     max_sonar_rounds: int,
     dry_run: bool,
     plan_file: Path | None = None,
+    plan_provider: str = "cursor",
 ) -> None:
     log.step(f"moneat-agent v{__version__}")
     log.system(f"Repo:   {repo}")
@@ -172,7 +173,11 @@ def run_pipeline(
         log.system(f"Would create worktree on branch: {branch}")
         if plan_file:
             log.system(f"Plan file:      {plan_file} (planning phase will be skipped)")
-        log.system(f"Opus model:     {cursor_agent.opus_model()}")
+        log.system(f"Plan provider:  {plan_provider}")
+        if plan_provider == "copilot":
+            log.system(f"Copilot model:  {cursor_agent.copilot_opus_model()}")
+        else:
+            log.system(f"Opus model:     {cursor_agent.opus_model()}")
         log.system(f"Composer model: {cursor_agent.composer_model()}")
         return
 
@@ -198,13 +203,15 @@ def run_pipeline(
             log.step(f"Plan / Implement / Verify — round {verify_round}/{max_verify_rounds}")
 
             if not external_plan:
-                # Opus generates (or re-generates) the plan each round
                 plan_prompt = prompts.plan(
                     issue_title=issue_title,
                     issue_body=issue_body,
                     extra_context=prior_feedback,
                 )
-                cursor_agent.plan_with_opus(wt, plan_prompt)
+                if plan_provider == "copilot":
+                    cursor_agent.plan_with_copilot(wt, plan_prompt)
+                else:
+                    cursor_agent.plan_with_opus(wt, plan_prompt)
 
             plan_text = _read_plan(wt)
 
@@ -470,6 +477,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--plan-provider",
+        choices=cursor_agent.VALID_PLAN_PROVIDERS,
+        default="cursor",
+        help=(
+            "Which agent CLI to use for the planning phase. "
+            '"cursor" uses the Cursor Agent CLI with Opus (default); '
+            '"copilot" uses the GitHub Copilot CLI. '
+            "Implementation always uses Cursor Composer 2."
+        ),
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="Parse and resolve target, then print what would happen without executing",
@@ -513,6 +531,7 @@ def main(argv: list[str] | None = None) -> None:
             max_sonar_rounds=args.max_sonar_rounds,
             dry_run=args.dry_run,
             plan_file=plan_file,
+            plan_provider=args.plan_provider,
         )
     except KeyboardInterrupt:
         log.warn("\nInterrupted by user.")
