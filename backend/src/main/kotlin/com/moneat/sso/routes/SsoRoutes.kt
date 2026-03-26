@@ -18,20 +18,20 @@ package com.moneat.sso.routes
 
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.shared.models.Memberships
 import com.moneat.sso.models.SsoConfigRequest
 import com.moneat.sso.models.SsoInitRequest
 import com.moneat.sso.models.SsoProviderType
 import com.moneat.sso.services.SsoService
-import com.moneat.shared.models.Memberships
 import com.moneat.utils.AuthCookieUtils
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondRedirect
