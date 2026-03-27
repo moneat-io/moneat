@@ -262,7 +262,7 @@ function MobileNav() {
             <a href="https://github.com/moneat-io/moneat" target="_blank" rel="noopener noreferrer" aria-label="GitHub" onClick={() => setOpen(false)} className="text-slate-400 hover:text-white transition-colors">
               <GithubIcon className="h-5 w-5" />
             </a>
-            <a href="https://discord.com/invite/Fanh3mem" target="_blank" rel="noopener noreferrer" aria-label="Discord" onClick={() => setOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+            <a href="https://discord.com/invite/dTsahnJeyH" target="_blank" rel="noopener noreferrer" aria-label="Discord" onClick={() => setOpen(false)} className="text-slate-400 hover:text-white transition-colors">
               <DiscordIcon className="h-5 w-5" />
             </a>
             <a href="https://x.com/moneat_io" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)" onClick={() => setOpen(false)} className="text-slate-400 hover:text-white transition-colors">
@@ -322,7 +322,7 @@ export function LandingNavbar() {
             <a href="https://github.com/moneat-io/moneat" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="text-muted-foreground hover:text-foreground transition-colors">
               <GithubIcon className="h-5 w-5" />
             </a>
-            <a href="https://discord.com/invite/Fanh3mem" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-muted-foreground hover:text-foreground transition-colors">
+            <a href="https://discord.com/invite/dTsahnJeyH" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-muted-foreground hover:text-foreground transition-colors">
               <DiscordIcon className="h-5 w-5" />
             </a>
             <a href="https://x.com/moneat_io" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)" className="text-muted-foreground hover:text-foreground transition-colors">
@@ -406,7 +406,7 @@ export function LandingFooter() {
               <a href="https://github.com/moneat-io/moneat" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="text-slate-500 hover:text-sky-400 transition-colors">
                 <GithubIcon className="h-5 w-5" />
               </a>
-              <a href="https://discord.com/invite/Fanh3mem" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-slate-500 hover:text-sky-400 transition-colors">
+              <a href="https://discord.com/invite/dTsahnJeyH" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-slate-500 hover:text-sky-400 transition-colors">
                 <DiscordIcon className="h-5 w-5" />
               </a>
               <a href="https://x.com/moneat_io" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)" className="text-slate-500 hover:text-sky-400 transition-colors">

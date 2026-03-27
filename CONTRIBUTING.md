@@ -35,7 +35,7 @@ The CLA does **not** change your copyright ownership. You retain full rights to 
 5. Open a pull request against `develop`
 6. Sign the CLA when prompted by the bot
 7. Address any code review feedback
-8. **When ready for review** (unit tests passing, all review items fixed): [join our Discord](https://discord.gg/gwsZkckf) and let us know that the PR is ready for review.
+8. **When ready for review** (unit tests passing, all review items fixed): [join our Discord](https://discord.com/invite/dTsahnJeyH) and let us know that the PR is ready for review.
 
 ### Coding Conventions
 
