@@ -459,7 +459,7 @@ class AdminService(
                             name = u[Users.name],
                             role = mRow[Memberships.role]
                         )
-                    }.let { listOf(*it.toTypedArray()) }
+                    }
 
             val projectsList =
                 projects
@@ -470,7 +470,7 @@ class AdminService(
                             slug = p[Projects.slug],
                             framework = p[Projects.framework]
                         )
-                    }.let { listOf(*it.toTypedArray()) }
+                    }
 
             AdminOrgDetail(
                 id = orgId,

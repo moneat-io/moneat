@@ -124,7 +124,8 @@ object CacheService {
             if (RedisConfig.isConnected()) {
                 val keys = RedisConfig.sync().keys(pattern)
                 if (keys.isNotEmpty()) {
-                    RedisConfig.sync().del(*keys.toTypedArray())
+                    val sync = RedisConfig.sync()
+                    keys.forEach { key -> sync.del(key) }
                 }
             }
         } catch (e: Exception) {
