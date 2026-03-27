@@ -356,7 +356,9 @@ class DashboardAlertService(
             if ((now - alert.lastTriggeredAt) < MIN_ALERT_INTERVAL_MINUTES.minutes) {
                 try {
                     if (RedisConfig.isConnected()) RedisConfig.sync().set(alertKey, "TRIGGERED")
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                    // intentionally ignored
+                }
                 return
             }
         }

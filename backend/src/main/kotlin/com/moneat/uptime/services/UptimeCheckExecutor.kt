@@ -128,7 +128,9 @@ class UptimeCheckExecutor {
                             headers.forEach { (key, value) ->
                                 header(key, value)
                             }
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) {
+                            // intentionally ignored
+                        }
                     }
 
                     // Authentication

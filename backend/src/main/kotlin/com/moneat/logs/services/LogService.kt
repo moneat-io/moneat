@@ -589,7 +589,9 @@ class LogService(private val logRepository: LogRepository) {
                 } else {
                     groups["_total"] = (groups["_total"] ?: 0L) + cnt
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                // intentionally ignored
+            }
         }
 
         val buckets =
@@ -711,7 +713,9 @@ class LogService(private val logRepository: LogRepository) {
                 val value = obj["field_value"]?.jsonPrimitive?.content ?: return@forEach
                 val cnt = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
                 values += LogTopValue(value = value, count = cnt)
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                // intentionally ignored
+            }
         }
 
         // Get total count for percentage calculation
@@ -925,7 +929,9 @@ class LogService(private val logRepository: LogRepository) {
                 val value = obj["val"]?.jsonPrimitive?.content ?: return@forEach
                 val count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
                 results += LogFilterOptionWithCount(value = value, count = count)
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                // intentionally ignored
+            }
         }
         return results
     }
