@@ -136,7 +136,23 @@ class DbmIngestionWorker(
         }
         try {
             RedisConfig.sync().rpush(dlqKey, payload)
-        } catch (dlqErr: Exception) {
+        } catch (dlqErr: RedisException) {
+            logger.error(dlqErr) {
+                "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
+            }
+        } catch (dlqErr: IOException) {
+            logger.error(dlqErr) {
+                "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
+            }
+        } catch (dlqErr: SerializationException) {
+            logger.error(dlqErr) {
+                "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
+            }
+        } catch (dlqErr: IllegalStateException) {
+            logger.error(dlqErr) {
+                "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
+            }
+        } catch (dlqErr: IllegalArgumentException) {
             logger.error(dlqErr) {
                 "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
             }

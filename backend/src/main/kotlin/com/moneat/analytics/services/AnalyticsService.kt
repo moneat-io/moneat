@@ -26,6 +26,7 @@ import com.moneat.analytics.models.RealtimeResponse
 import com.moneat.analytics.models.TimeseriesPoint
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -33,6 +34,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import java.io.IOException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -220,10 +222,25 @@ class AnalyticsService {
         val key = "${AnalyticsIngestionWorker.REALTIME_KEY_PREFIX}$projectId"
         val count = try {
             RedisConfig.sync().pfcount(key)
-        } catch (e: Exception) {
-            if (e is CancellationException) {
-                throw e
-            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RedisException) {
+            val errorMsg = e.toString().take(500)
+            logger.debug { "Failed to read realtime counter: $errorMsg" }
+            0L
+        } catch (e: SerializationException) {
+            val errorMsg = e.toString().take(500)
+            logger.debug { "Failed to read realtime counter: $errorMsg" }
+            0L
+        } catch (e: IOException) {
+            val errorMsg = e.toString().take(500)
+            logger.debug { "Failed to read realtime counter: $errorMsg" }
+            0L
+        } catch (e: IllegalStateException) {
+            val errorMsg = e.toString().take(500)
+            logger.debug { "Failed to read realtime counter: $errorMsg" }
+            0L
+        } catch (e: IllegalArgumentException) {
             val errorMsg = e.toString().take(500)
             logger.debug { "Failed to read realtime counter: $errorMsg" }
             0L
