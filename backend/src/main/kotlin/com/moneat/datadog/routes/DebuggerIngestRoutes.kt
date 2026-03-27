@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdDebuggerDiagnostic
@@ -64,7 +67,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerInput() 
 
         logger.debug { "Enqueued $count debugger entries for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process debugger input" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process debugger input" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process debugger input" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process debugger input" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -82,7 +94,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerDiagnost
 
         logger.debug { "Enqueued $count debugger diagnostics for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process debugger diagnostics" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process debugger diagnostics" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process debugger diagnostics" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process debugger diagnostics" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

@@ -16,6 +16,9 @@
 
 package com.moneat.config
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.server.application.Application
@@ -93,7 +96,16 @@ object ClickHouseMigrations {
             }
 
             logger.info("ClickHouse migrations complete (${migrations.size} total migrations)")
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("ClickHouse migration failed: ${e.message}", e)
+            throw RuntimeException("ClickHouse migration failed", e)
+        } catch (e: IOException) {
+            logger.error("ClickHouse migration failed: ${e.message}", e)
+            throw RuntimeException("ClickHouse migration failed", e)
+        } catch (e: IllegalStateException) {
+            logger.error("ClickHouse migration failed: ${e.message}", e)
+            throw RuntimeException("ClickHouse migration failed", e)
+        } catch (e: IllegalArgumentException) {
             logger.error("ClickHouse migration failed: ${e.message}", e)
             throw RuntimeException("ClickHouse migration failed", e)
         }

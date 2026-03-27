@@ -75,26 +75,21 @@ fun Application.module() {
         }
     }
 
-    try {
-        install(Koin) {
-            slf4jLogger()
-            modules(appModules)
-        }
-        configureSecurity()
-        configureHTTP()
-        configureSerialization()
-        configureMonitoring()
-        configureRateLimiting()
-        configureDemoModeRestrictions()
-        configureRedis()
-        configureClickHouse()
-        configureDatabases()
-        configureBackgroundJobs()
-        log.info("About to configure routing...")
-        configureRouting()
-        log.info("Routing configured successfully, application startup complete")
-    } catch (e: Exception) {
-        log.error("Failed to start application", e)
-        throw e
+    install(Koin) {
+        slf4jLogger()
+        modules(appModules)
     }
+    configureSecurity()
+    configureHTTP()
+    configureSerialization()
+    configureMonitoring()
+    configureRateLimiting()
+    configureDemoModeRestrictions()
+    configureRedis()
+    configureClickHouse()
+    configureDatabases()
+    configureBackgroundJobs()
+    log.info("About to configure routing...")
+    configureRouting()
+    log.info("Routing configured successfully, application startup complete")
 }

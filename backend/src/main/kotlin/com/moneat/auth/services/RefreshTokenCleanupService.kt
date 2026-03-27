@@ -16,6 +16,9 @@
 
 package com.moneat.auth.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -51,7 +54,13 @@ class RefreshTokenCleanupService(
                         if (deletedCount > 0) {
                             logger.info { "Cleaned up $deletedCount expired/revoked refresh tokens" }
                         }
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Error during refresh token cleanup" }
+                    } catch (e: IOException) {
+                        logger.error(e) { "Error during refresh token cleanup" }
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Error during refresh token cleanup" }
+                    } catch (e: IllegalArgumentException) {
                         logger.error(e) { "Error during refresh token cleanup" }
                     }
 

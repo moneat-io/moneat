@@ -16,6 +16,9 @@
 
 package com.moneat.events.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.ReplayDetailResponse
 import com.moneat.events.models.ReplayListItem
@@ -216,7 +219,16 @@ class ReplayService(
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return 0
             val obj = json.parseToJsonElement(line).jsonObject
             obj["count"]?.jsonPrimitive?.intOrNull ?: 0
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to count replay window errors for project $projectId" }
+            0
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to count replay window errors for project $projectId" }
+            0
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to count replay window errors for project $projectId" }
+            0
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to count replay window errors for project $projectId" }
             0
         }
@@ -262,7 +274,16 @@ class ReplayService(
                             ?.contentOrNull
                     }.getOrNull()
                 }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch replay window error IDs for project $projectId" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch replay window error IDs for project $projectId" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch replay window error IDs for project $projectId" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch replay window error IDs for project $projectId" }
             emptyList()
         }
@@ -280,7 +301,16 @@ class ReplayService(
     ): List<JsonElement> {
         return try {
             parsedToJsonElementList(json.parseToJsonElement(payload))
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Segment $segmentIdx: Failed to parse replay payload as JSON" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Segment $segmentIdx: Failed to parse replay payload as JSON" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Segment $segmentIdx: Failed to parse replay payload as JSON" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Segment $segmentIdx: Failed to parse replay payload as JSON" }
             emptyList()
         }
@@ -308,7 +338,13 @@ class ReplayService(
         return try {
             val obj = json.parseToJsonElement(payload).jsonObject
             obj["segment_id"]?.jsonPrimitive?.intOrNull
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            null
+        } catch (_: IOException) {
+            null
+        } catch (_: IllegalStateException) {
+            null
+        } catch (_: IllegalArgumentException) {
             null
         }
     }
@@ -387,7 +423,16 @@ class ReplayService(
 
             unpacker.close()
             SegmentDecodeResult(events = events, isMobileReplay = true)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Segment $segmentIdx: Failed to parse msgpack replay segment" }
+            SegmentDecodeResult(events = emptyList(), isMobileReplay = true)
+        } catch (e: IOException) {
+            logger.error(e) { "Segment $segmentIdx: Failed to parse msgpack replay segment" }
+            SegmentDecodeResult(events = emptyList(), isMobileReplay = true)
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Segment $segmentIdx: Failed to parse msgpack replay segment" }
+            SegmentDecodeResult(events = emptyList(), isMobileReplay = true)
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Segment $segmentIdx: Failed to parse msgpack replay segment" }
             SegmentDecodeResult(events = emptyList(), isMobileReplay = true)
         }
@@ -521,12 +566,30 @@ class ReplayService(
                             0
                         }
                     buildReplayListItemFromJson(obj, projectId, maxOf(rawErrorCount, fallbackErrorCount))
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to parse replay list row" }
+                    null
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to parse replay list row" }
+                    null
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to parse replay list row" }
+                    null
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to parse replay list row" }
                     null
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch replays for project $projectId" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch replays for project $projectId" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch replays for project $projectId" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch replays for project $projectId" }
             emptyList()
         }
@@ -546,7 +609,15 @@ class ReplayService(
             try {
                 val tagsObj = json.parseToJsonElement(tagsStr) as? JsonObject ?: return null
                 tagsObj.mapValues { it.value.jsonPrimitive.content }
-            } catch (_: Exception) { emptyMap<String, String>() }
+            } catch (_: SerializationException) {
+                emptyMap<String, String>()
+            } catch (_: IOException) {
+                emptyMap<String, String>()
+            } catch (_: IllegalStateException) {
+                emptyMap<String, String>()
+            } catch (_: IllegalArgumentException) {
+                emptyMap<String, String>()
+            }
         val replayErrorIds = parseStringArray(obj["error_ids"]).distinct()
         val fallbackErrorIds =
             if (replayErrorIds.isEmpty() && startedMs != null && finishedMs != null) {
@@ -647,7 +718,16 @@ class ReplayService(
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
             val obj = json.parseToJsonElement(line).jsonObject
             buildReplayDetailFromRow(obj, retentionDays)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch replay $replayId" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch replay $replayId" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch replay $replayId" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch replay $replayId" }
             null
         }
@@ -678,7 +758,13 @@ class ReplayService(
                 }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch $failureMessage" }
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch $failureMessage" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch $failureMessage" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch $failureMessage" }
         }
     }
@@ -771,13 +857,25 @@ class ReplayService(
         val replayStartMs =
             try {
                 Instant.parse(replay.startedAt).toEpochMilli()
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
+                return ReplayTimelineResponse(emptyList(), 0L)
+            } catch (_: IOException) {
+                return ReplayTimelineResponse(emptyList(), 0L)
+            } catch (_: IllegalStateException) {
+                return ReplayTimelineResponse(emptyList(), 0L)
+            } catch (_: IllegalArgumentException) {
                 return ReplayTimelineResponse(emptyList(), 0L)
             }
         val replayEndMs =
             try {
                 Instant.parse(replay.finishedAt).toEpochMilli()
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
+                replayStartMs + 86400_000L
+            } catch (_: IOException) {
+                replayStartMs + 86400_000L
+            } catch (_: IllegalStateException) {
+                replayStartMs + 86400_000L
+            } catch (_: IllegalArgumentException) {
                 replayStartMs + 86400_000L
             }
         val projectId = replay.projectId
@@ -995,7 +1093,16 @@ class ReplayService(
                 logger.info { "Returning response with ${allEvents.size} events, isMobileReplay=$isMobileReplay" }
                 ReplayRecordingResponse(events = allEvents)
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch replay recording $replayId" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch replay recording $replayId" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch replay recording $replayId" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch replay recording $replayId" }
             null
         }
@@ -1053,12 +1160,30 @@ class ReplayService(
                         projectId,
                         obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to parse replay list row for issue" }
+                    null
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to parse replay list row for issue" }
+                    null
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to parse replay list row for issue" }
+                    null
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to parse replay list row for issue" }
                     null
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch replays for issue $issueId" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch replays for issue $issueId" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch replays for issue $issueId" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch replays for issue $issueId" }
             emptyList()
         }

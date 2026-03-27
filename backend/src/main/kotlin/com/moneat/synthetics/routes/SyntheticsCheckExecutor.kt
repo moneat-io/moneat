@@ -16,6 +16,9 @@
 
 package com.moneat.synthetics.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.utils.UrlValidator
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -74,7 +77,22 @@ open class SyntheticsCheckExecutor {
                     url.removePrefix("https://").removePrefix("http://")
                         .split("/").firstOrNull() ?: ""
                 )
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            extractFromAuthority(
+                url.removePrefix("https://").removePrefix("http://")
+                    .split("/").firstOrNull() ?: ""
+            )
+        } catch (_: IOException) {
+            extractFromAuthority(
+                url.removePrefix("https://").removePrefix("http://")
+                    .split("/").firstOrNull() ?: ""
+            )
+        } catch (_: IllegalStateException) {
+            extractFromAuthority(
+                url.removePrefix("https://").removePrefix("http://")
+                    .split("/").firstOrNull() ?: ""
+            )
+        } catch (_: IllegalArgumentException) {
             extractFromAuthority(
                 url.removePrefix("https://").removePrefix("http://")
                     .split("/").firstOrNull() ?: ""
@@ -170,7 +188,31 @@ open class SyntheticsCheckExecutor {
                     timings = timings
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
+            logger.warn { "API test failed for ${test.id}: ${e.message}" }
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = e.message ?: "Request failed"
+            )
+        } catch (e: IOException) {
+            val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
+            logger.warn { "API test failed for ${test.id}: ${e.message}" }
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = e.message ?: "Request failed"
+            )
+        } catch (e: IllegalStateException) {
+            val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
+            logger.warn { "API test failed for ${test.id}: ${e.message}" }
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = e.message ?: "Request failed"
+            )
+        } catch (e: IllegalArgumentException) {
             val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
             logger.warn { "API test failed for ${test.id}: ${e.message}" }
             SyntheticCheckResult(
@@ -189,7 +231,13 @@ open class SyntheticsCheckExecutor {
         val config: SyntheticTestConfig? = test.config?.let {
             try {
                 Json.decodeFromString(it)
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
+                null
+            } catch (_: IOException) {
+                null
+            } catch (_: IllegalStateException) {
+                null
+            } catch (_: IllegalArgumentException) {
                 null
             }
         }
@@ -263,7 +311,25 @@ open class SyntheticsCheckExecutor {
                     )
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "SSL check failed: ${e.message}"
+            )
+        } catch (e: IOException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "SSL check failed: ${e.message}"
+            )
+        } catch (e: IllegalStateException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "SSL check failed: ${e.message}"
+            )
+        } catch (e: IllegalArgumentException) {
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = System.currentTimeMillis() - startTime,
@@ -327,7 +393,25 @@ open class SyntheticsCheckExecutor {
                 durationMs = System.currentTimeMillis() - startTime,
                 errorMessage = "DNS resolution timed out after ${DNS_TIMEOUT_MS}ms"
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "DNS resolution failed: ${e.message}"
+            )
+        } catch (e: IOException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "DNS resolution failed: ${e.message}"
+            )
+        } catch (e: IllegalStateException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "DNS resolution failed: ${e.message}"
+            )
+        } catch (e: IllegalArgumentException) {
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = System.currentTimeMillis() - startTime,
@@ -342,7 +426,13 @@ open class SyntheticsCheckExecutor {
         val config: SyntheticTestConfig? = test.config?.let {
             try {
                 Json.decodeFromString(it)
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
+                null
+            } catch (_: IOException) {
+                null
+            } catch (_: IllegalStateException) {
+                null
+            } catch (_: IllegalArgumentException) {
                 null
             }
         }
@@ -393,7 +483,25 @@ open class SyntheticsCheckExecutor {
                     timings = timings
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "TCP connect failed: ${e.message}"
+            )
+        } catch (e: IOException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "TCP connect failed: ${e.message}"
+            )
+        } catch (e: IllegalStateException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "TCP connect failed: ${e.message}"
+            )
+        } catch (e: IllegalArgumentException) {
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = System.currentTimeMillis() - startTime,
@@ -408,7 +516,13 @@ open class SyntheticsCheckExecutor {
         val config: SyntheticTestConfig? = test.config?.let {
             try {
                 Json.decodeFromString(it)
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
+                null
+            } catch (_: IOException) {
+                null
+            } catch (_: IllegalStateException) {
+                null
+            } catch (_: IllegalArgumentException) {
                 null
             }
         }
@@ -478,7 +592,25 @@ open class SyntheticsCheckExecutor {
                     timings = timings
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "UDP check failed: ${e.message}"
+            )
+        } catch (e: IOException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "UDP check failed: ${e.message}"
+            )
+        } catch (e: IllegalStateException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "UDP check failed: ${e.message}"
+            )
+        } catch (e: IllegalArgumentException) {
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = System.currentTimeMillis() - startTime,
@@ -490,7 +622,13 @@ open class SyntheticsCheckExecutor {
     private suspend fun executeMultistepTest(test: SyntheticTestData): SyntheticCheckResult {
         val steps: List<SyntheticStep> = try {
             test.steps?.let { Json.decodeFromString(it) } ?: emptyList()
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyList()
+        } catch (_: IOException) {
+            emptyList()
+        } catch (_: IllegalStateException) {
+            emptyList()
+        } catch (_: IllegalArgumentException) {
             emptyList()
         }
 
@@ -526,7 +664,28 @@ open class SyntheticsCheckExecutor {
                         stepHeaders?.forEach { (k, v) -> header(k, v) }
                         stepBody?.let { b -> setBody(b) }
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    val durationMs = System.currentTimeMillis() - startTime
+                    return SyntheticCheckResult(
+                        status = "failed",
+                        durationMs = durationMs,
+                        errorMessage = "Step '${step.name}' failed: ${e.message}"
+                    )
+                } catch (e: IOException) {
+                    val durationMs = System.currentTimeMillis() - startTime
+                    return SyntheticCheckResult(
+                        status = "failed",
+                        durationMs = durationMs,
+                        errorMessage = "Step '${step.name}' failed: ${e.message}"
+                    )
+                } catch (e: IllegalStateException) {
+                    val durationMs = System.currentTimeMillis() - startTime
+                    return SyntheticCheckResult(
+                        status = "failed",
+                        durationMs = durationMs,
+                        errorMessage = "Step '${step.name}' failed: ${e.message}"
+                    )
+                } catch (e: IllegalArgumentException) {
                     val durationMs = System.currentTimeMillis() - startTime
                     return SyntheticCheckResult(
                         status = "failed",
@@ -613,7 +772,13 @@ open class SyntheticsCheckExecutor {
                     false
                 }
             }
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            false
+        } catch (_: IOException) {
+            false
+        } catch (_: IllegalStateException) {
+            false
+        } catch (_: IllegalArgumentException) {
             false
         }
     }
@@ -637,7 +802,13 @@ open class SyntheticsCheckExecutor {
                 current = current[segments[i]]?.jsonObject ?: return null
             }
             current[segments.last()]?.jsonPrimitive?.content
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            null
+        } catch (_: IOException) {
+            null
+        } catch (_: IllegalStateException) {
+            null
+        } catch (_: IllegalArgumentException) {
             null
         }
     }
@@ -678,7 +849,13 @@ open class SyntheticsCheckExecutor {
     private fun parseHeaders(headersJson: String?): Map<String, String> {
         return try {
             headersJson?.let { Json.decodeFromString(it) } ?: emptyMap()
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyMap()
+        } catch (_: IOException) {
+            emptyMap()
+        } catch (_: IllegalStateException) {
+            emptyMap()
+        } catch (_: IllegalArgumentException) {
             emptyMap()
         }
     }
@@ -686,7 +863,13 @@ open class SyntheticsCheckExecutor {
     private fun parseAssertions(assertionsJson: String): List<SyntheticAssertion> {
         return try {
             Json.decodeFromString(assertionsJson)
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyList()
+        } catch (_: IOException) {
+            emptyList()
+        } catch (_: IllegalStateException) {
+            emptyList()
+        } catch (_: IllegalArgumentException) {
             emptyList()
         }
     }
@@ -717,7 +900,13 @@ open class SyntheticsCheckExecutor {
                 val valid = try {
                     cert.checkValidity()
                     true
-                } catch (_: Exception) {
+                } catch (_: SerializationException) {
+                    false
+                } catch (_: IOException) {
+                    false
+                } catch (_: IllegalStateException) {
+                    false
+                } catch (_: IllegalArgumentException) {
                     false
                 }
                 valid == expected

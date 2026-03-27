@@ -16,6 +16,9 @@
 
 package com.moneat.shared.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import kotlinx.coroutines.CancellationException
 import mu.KotlinLogging
 import net.javacrumbs.shedlock.core.LockConfiguration
@@ -47,7 +50,16 @@ object TaskLock {
         )
         val lock = try {
             lockProvider.lock(config)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to acquire lock '$name'" }
+            return null
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to acquire lock '$name'" }
+            return null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to acquire lock '$name'" }
+            return null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to acquire lock '$name'" }
             return null
         }
@@ -59,13 +71,28 @@ object TaskLock {
             block()
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error in locked task '$name'" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Error in locked task '$name'" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error in locked task '$name'" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error in locked task '$name'" }
             null
         } finally {
             try {
                 lock.get().unlock()
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to unlock '$name'" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to unlock '$name'" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to unlock '$name'" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to unlock '$name'" }
             }
         }

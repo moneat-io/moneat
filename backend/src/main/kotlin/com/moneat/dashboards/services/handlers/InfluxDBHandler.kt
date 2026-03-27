@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -58,7 +61,16 @@ class InfluxDBHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "InfluxDB returned ${response.status}")
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "InfluxDB connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IOException) {
+            logger.warn(e) { "InfluxDB connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "InfluxDB connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "InfluxDB connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -97,7 +109,16 @@ class InfluxDBHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseFluxCsv(response.bodyAsText(), limit)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "InfluxDB query failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "InfluxDB query failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "InfluxDB query failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "InfluxDB query failed" }
             emptyList()
         }
@@ -135,7 +156,16 @@ class InfluxDBHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "InfluxDB schema fetch failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "InfluxDB schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "InfluxDB schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "InfluxDB schema fetch failed" }
             emptyList()
         }

@@ -16,6 +16,9 @@
 
 package com.moneat.events.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.events.models.EventResponse
 import com.moneat.events.models.IssueDetailResponse
 import com.moneat.events.models.IssueResponse
@@ -93,7 +96,16 @@ class IssueService(
                 if (result.size >= limit) break
             }
             result
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch issues for project $projectId" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch issues for project $projectId" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch issues for project $projectId" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch issues for project $projectId" }
             emptyList()
         }

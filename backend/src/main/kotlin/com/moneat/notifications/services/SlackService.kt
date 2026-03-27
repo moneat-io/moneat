@@ -16,6 +16,9 @@
 
 package com.moneat.notifications.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
 import io.ktor.client.HttpClient
@@ -183,7 +186,16 @@ class SlackService {
                     false to "Could not join channel: ${result.error}"
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn("Error joining Slack channel", e)
+            false to "Error joining channel: ${e.message}"
+        } catch (e: IOException) {
+            logger.warn("Error joining Slack channel", e)
+            false to "Error joining channel: ${e.message}"
+        } catch (e: IllegalStateException) {
+            logger.warn("Error joining Slack channel", e)
+            false to "Error joining channel: ${e.message}"
+        } catch (e: IllegalArgumentException) {
             logger.warn("Error joining Slack channel", e)
             false to "Error joining channel: ${e.message}"
         }
@@ -239,7 +251,16 @@ class SlackService {
                 logger.error("Failed to send to Slack: ${response.status} - ${response.bodyAsText()}")
                 false to errorMsg
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error sending to Slack", e)
+            false to "Error: ${e.message}"
+        } catch (e: IOException) {
+            logger.error("Error sending to Slack", e)
+            false to "Error: ${e.message}"
+        } catch (e: IllegalStateException) {
+            logger.error("Error sending to Slack", e)
+            false to "Error: ${e.message}"
+        } catch (e: IllegalArgumentException) {
             logger.error("Error sending to Slack", e)
             false to "Error: ${e.message}"
         }
@@ -781,7 +802,16 @@ class SlackService {
             } else {
                 false to (error ?: "Failed to send test message")
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error testing Slack connection", e)
+            false to "Error: ${e.message}"
+        } catch (e: IOException) {
+            logger.error("Error testing Slack connection", e)
+            false to "Error: ${e.message}"
+        } catch (e: IllegalStateException) {
+            logger.error("Error testing Slack connection", e)
+            false to "Error: ${e.message}"
+        } catch (e: IllegalArgumentException) {
             logger.error("Error testing Slack connection", e)
             false to "Error: ${e.message}"
         }
@@ -803,7 +833,16 @@ class SlackService {
                 }
 
             json.decodeFromString<SlackOAuthResponse>(response.bodyAsText())
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error exchanging OAuth code", e)
+            SlackOAuthResponse(ok = false, error = e.message)
+        } catch (e: IOException) {
+            logger.error("Error exchanging OAuth code", e)
+            SlackOAuthResponse(ok = false, error = e.message)
+        } catch (e: IllegalStateException) {
+            logger.error("Error exchanging OAuth code", e)
+            SlackOAuthResponse(ok = false, error = e.message)
+        } catch (e: IllegalArgumentException) {
             logger.error("Error exchanging OAuth code", e)
             SlackOAuthResponse(ok = false, error = e.message)
         }
@@ -839,7 +878,16 @@ class SlackService {
                 logger.error("Failed to list Slack channels: ${result.error}")
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error listing Slack channels", e)
+            emptyList()
+        } catch (e: IOException) {
+            logger.error("Error listing Slack channels", e)
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error("Error listing Slack channels", e)
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error("Error listing Slack channels", e)
             emptyList()
         }
@@ -882,7 +930,16 @@ class SlackService {
                 logger.error("Failed to list Slack usergroups: ${result.error}")
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error listing Slack usergroups", e)
+            emptyList()
+        } catch (e: IOException) {
+            logger.error("Error listing Slack usergroups", e)
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error("Error listing Slack usergroups", e)
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error("Error listing Slack usergroups", e)
             emptyList()
         }
@@ -909,7 +966,16 @@ class SlackService {
                 logger.error("Failed to update Slack usergroup: ${result.error}")
                 false
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error updating Slack usergroup members", e)
+            false
+        } catch (e: IOException) {
+            logger.error("Error updating Slack usergroup members", e)
+            false
+        } catch (e: IllegalStateException) {
+            logger.error("Error updating Slack usergroup members", e)
+            false
+        } catch (e: IllegalArgumentException) {
             logger.error("Error updating Slack usergroup members", e)
             false
         }
@@ -987,7 +1053,13 @@ class SlackService {
             } else {
                 logger.error("Failed to send on-call Slack DM: ${result.error}")
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error sending on-call Slack alert", e)
+        } catch (e: IOException) {
+            logger.error("Error sending on-call Slack alert", e)
+        } catch (e: IllegalStateException) {
+            logger.error("Error sending on-call Slack alert", e)
+        } catch (e: IllegalArgumentException) {
             logger.error("Error sending on-call Slack alert", e)
         }
     }

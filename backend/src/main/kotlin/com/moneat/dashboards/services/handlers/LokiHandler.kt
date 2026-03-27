@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -54,7 +57,16 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Loki returned ${response.status}")
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Loki connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IOException) {
+            logger.warn(e) { "Loki connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Loki connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Loki connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -89,7 +101,16 @@ class LokiHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseLokiResponse(response.bodyAsText(), boundedLimit)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Loki query failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Loki query failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Loki query failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Loki query failed" }
             emptyList()
         }
@@ -114,7 +135,16 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Loki schema fetch failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Loki schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Loki schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Loki schema fetch failed" }
             emptyList()
         }
@@ -142,7 +172,16 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Loki label_values failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.warn(e) { "Loki label_values failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Loki label_values failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Loki label_values failed" }
             emptyList()
         }

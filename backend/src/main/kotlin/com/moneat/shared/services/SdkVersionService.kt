@@ -16,6 +16,9 @@
 
 package com.moneat.shared.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.SdkVersionsResponse
 import io.ktor.client.HttpClient
@@ -186,7 +189,16 @@ object SdkVersionService {
                 httpClient.get("$GITHUB_API_BASE/repos/$repository/releases/latest") {
                     applyGitHubHeaders()
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                sdkVersionLogger.warn(e) { "Failed to fetch latest release for $repository" }
+                return null
+            } catch (e: IOException) {
+                sdkVersionLogger.warn(e) { "Failed to fetch latest release for $repository" }
+                return null
+            } catch (e: IllegalStateException) {
+                sdkVersionLogger.warn(e) { "Failed to fetch latest release for $repository" }
+                return null
+            } catch (e: IllegalArgumentException) {
                 sdkVersionLogger.warn(e) { "Failed to fetch latest release for $repository" }
                 return null
             }
@@ -204,7 +216,16 @@ object SdkVersionService {
         val release =
             try {
                 sdkVersionJson.decodeFromString(GitHubLatestReleaseResponse.serializer(), payload)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                sdkVersionLogger.warn(e) { "Failed to decode latest release payload for $repository" }
+                return null
+            } catch (e: IOException) {
+                sdkVersionLogger.warn(e) { "Failed to decode latest release payload for $repository" }
+                return null
+            } catch (e: IllegalStateException) {
+                sdkVersionLogger.warn(e) { "Failed to decode latest release payload for $repository" }
+                return null
+            } catch (e: IllegalArgumentException) {
                 sdkVersionLogger.warn(e) { "Failed to decode latest release payload for $repository" }
                 return null
             }
@@ -223,7 +244,16 @@ object SdkVersionService {
                     applyGitHubHeaders()
                     parameter("per_page", 20)
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                sdkVersionLogger.warn(e) { "Failed to fetch tags for $repository" }
+                return null
+            } catch (e: IOException) {
+                sdkVersionLogger.warn(e) { "Failed to fetch tags for $repository" }
+                return null
+            } catch (e: IllegalStateException) {
+                sdkVersionLogger.warn(e) { "Failed to fetch tags for $repository" }
+                return null
+            } catch (e: IllegalArgumentException) {
                 sdkVersionLogger.warn(e) { "Failed to fetch tags for $repository" }
                 return null
             }
@@ -237,7 +267,16 @@ object SdkVersionService {
         val tags =
             try {
                 sdkVersionJson.decodeFromString(ListSerializer(GitHubTagResponse.serializer()), payload)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                sdkVersionLogger.warn(e) { "Failed to decode tags payload for $repository" }
+                return null
+            } catch (e: IOException) {
+                sdkVersionLogger.warn(e) { "Failed to decode tags payload for $repository" }
+                return null
+            } catch (e: IllegalStateException) {
+                sdkVersionLogger.warn(e) { "Failed to decode tags payload for $repository" }
+                return null
+            } catch (e: IllegalArgumentException) {
                 sdkVersionLogger.warn(e) { "Failed to decode tags payload for $repository" }
                 return null
             }

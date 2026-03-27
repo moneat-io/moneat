@@ -16,6 +16,9 @@
 
 package com.moneat.plugins
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.ai.aiChatRoutes
 import com.moneat.auth.routes.authRoutes
 import com.moneat.auth.routes.authTokenRoutes
@@ -78,13 +81,25 @@ private suspend fun respondWithFullHealth(call: io.ktor.server.application.Appli
                 exec("SELECT pending_meter_batch_id, pending_meter_batch_units FROM subscriptions LIMIT 1")
             }
             "ok"
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            "error"
+        } catch (_: IOException) {
+            "error"
+        } catch (_: IllegalStateException) {
+            "error"
+        } catch (_: IllegalArgumentException) {
             "error"
         }
     val clickhouseStatus =
         try {
             if (ClickHouseClient.ping()) "ok" else "error"
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            "error"
+        } catch (_: IOException) {
+            "error"
+        } catch (_: IllegalStateException) {
+            "error"
+        } catch (_: IllegalArgumentException) {
             "error"
         }
     val redisStatus =
@@ -95,7 +110,13 @@ private suspend fun respondWithFullHealth(call: io.ktor.server.application.Appli
             } else {
                 "error"
             }
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            "error"
+        } catch (_: IOException) {
+            "error"
+        } catch (_: IllegalStateException) {
+            "error"
+        } catch (_: IllegalArgumentException) {
             "error"
         }
     val ingestQueueDepth =
@@ -109,7 +130,13 @@ private suspend fun respondWithFullHealth(call: io.ktor.server.application.Appli
             } else {
                 0L
             }
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            0L
+        } catch (_: IOException) {
+            0L
+        } catch (_: IllegalStateException) {
+            0L
+        } catch (_: IllegalArgumentException) {
             0L
         }
     val status = if (postgresStatus == "ok" && clickhouseStatus == "ok" && redisStatus == "ok") "ok" else "degraded"

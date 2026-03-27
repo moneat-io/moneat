@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -56,7 +59,16 @@ class GraphiteHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Graphite returned ${response.status}")
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Graphite connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IOException) {
+            logger.warn(e) { "Graphite connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Graphite connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Graphite connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -91,7 +103,16 @@ class GraphiteHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseGraphiteResponse(response.bodyAsText(), limit)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Graphite query failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Graphite query failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Graphite query failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Graphite query failed" }
             emptyList()
         }
@@ -114,7 +135,16 @@ class GraphiteHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Graphite schema fetch failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Graphite schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Graphite schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Graphite schema fetch failed" }
             emptyList()
         }

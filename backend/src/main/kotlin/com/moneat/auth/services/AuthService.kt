@@ -16,6 +16,9 @@
 
 package com.moneat.auth.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.auth.repositories.UserRepository
@@ -299,7 +302,16 @@ class AuthService(
         if (!emailVerified && verificationToken != null) {
             try {
                 emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                // Log but don't fail signup if email fails
+                println("Failed to send verification email: ${e.message}")
+            } catch (e: IOException) {
+                // Log but don't fail signup if email fails
+                println("Failed to send verification email: ${e.message}")
+            } catch (e: IllegalStateException) {
+                // Log but don't fail signup if email fails
+                println("Failed to send verification email: ${e.message}")
+            } catch (e: IllegalArgumentException) {
                 // Log but don't fail signup if email fails
                 println("Failed to send verification email: ${e.message}")
             }
@@ -336,7 +348,16 @@ class AuthService(
             emailService.sendVerificationEmail(normalizedEmail, verificationToken, user.name)
             userRepository.updateVerificationToken(user.id, verificationToken, expiresAt)
             true
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            println("Failed to send verification email: ${e.message}")
+            false
+        } catch (e: IOException) {
+            println("Failed to send verification email: ${e.message}")
+            false
+        } catch (e: IllegalStateException) {
+            println("Failed to send verification email: ${e.message}")
+            false
+        } catch (e: IllegalArgumentException) {
             println("Failed to send verification email: ${e.message}")
             false
         }
@@ -458,7 +479,16 @@ class AuthService(
             emailService.sendPasswordResetEmail(normalizedEmail, resetToken, user.name)
             userRepository.updatePasswordResetToken(user.id, resetToken, expiresAt)
             true
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            println("Failed to send password reset email: ${e.message}")
+            false
+        } catch (e: IOException) {
+            println("Failed to send password reset email: ${e.message}")
+            false
+        } catch (e: IllegalStateException) {
+            println("Failed to send password reset email: ${e.message}")
+            false
+        } catch (e: IllegalArgumentException) {
             println("Failed to send password reset email: ${e.message}")
             false
         }

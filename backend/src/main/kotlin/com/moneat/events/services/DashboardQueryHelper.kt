@@ -16,6 +16,9 @@
 
 package com.moneat.events.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.billing.models.PricingTier
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
@@ -87,7 +90,16 @@ class DashboardQueryHelper(
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.longOrNull
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to get project ID for $context" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to get project ID for $context" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to get project ID for $context" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to get project ID for $context" }
             null
         }
@@ -114,7 +126,16 @@ class DashboardQueryHelper(
                 .mapNotNull { line ->
                     runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull()
                 }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to execute $errorContext" }
             null
         }
@@ -195,7 +216,13 @@ class DashboardQueryHelper(
         return try {
             val contextsJson = json.parseToJsonElement(contexts) as? JsonObject ?: return null
             contextsJson["trace"] as? JsonObject
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            null
+        } catch (_: IOException) {
+            null
+        } catch (_: IllegalStateException) {
+            null
+        } catch (_: IllegalArgumentException) {
             null
         }
     }
@@ -271,7 +298,16 @@ class DashboardQueryHelper(
             if (body.isBlank()) return 0
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["total"]?.jsonPrimitive?.long ?: 0
-        } catch (e: Throwable) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Scalar query failed (transport/parse): query=${query.take(200)}, returning 0" }
+            0
+        } catch (e: IOException) {
+            logger.error(e) { "Scalar query failed (transport/parse): query=${query.take(200)}, returning 0" }
+            0
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Scalar query failed (transport/parse): query=${query.take(200)}, returning 0" }
+            0
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Scalar query failed (transport/parse): query=${query.take(200)}, returning 0" }
             0
         }
@@ -298,12 +334,36 @@ class DashboardQueryHelper(
                             timestamp = obj["time"]?.jsonPrimitive?.content ?: "",
                             count = obj["count"]?.jsonPrimitive?.long ?: 0
                         )
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Failed to parse line: $line" }
+                        null
+                    } catch (e: IOException) {
+                        logger.error(e) { "Failed to parse line: $line" }
+                        null
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Failed to parse line: $line" }
+                        null
+                    } catch (e: IllegalArgumentException) {
                         logger.error(e) { "Failed to parse line: $line" }
                         null
                     }
                 }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(
+                e
+            ) { "executeTimelineQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(
+                e
+            ) { "executeTimelineQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(
+                e
+            ) { "executeTimelineQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(
                 e
             ) { "executeTimelineQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
@@ -338,12 +398,42 @@ class DashboardQueryHelper(
                                 ?: obj["timestamp"]?.jsonPrimitive?.content
                                 ?: ""
                         )
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Failed to parse line: $line" }
+                        null
+                    } catch (e: IOException) {
+                        logger.error(e) { "Failed to parse line: $line" }
+                        null
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Failed to parse line: $line" }
+                        null
+                    } catch (e: IllegalArgumentException) {
                         logger.error(e) { "Failed to parse line: $line" }
                         null
                     }
                 }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) {
+                "executeSlowestTransactionsQuery failed (transport/parse): query=${query.take(
+                    200
+                )}, returning emptyList"
+            }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) {
+                "executeSlowestTransactionsQuery failed (transport/parse): query=${query.take(
+                    200
+                )}, returning emptyList"
+            }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) {
+                "executeSlowestTransactionsQuery failed (transport/parse): query=${query.take(
+                    200
+                )}, returning emptyList"
+            }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) {
                 "executeSlowestTransactionsQuery failed (transport/parse): query=${query.take(
                     200
@@ -374,13 +464,31 @@ class DashboardQueryHelper(
                         val key = obj[keyField]?.jsonPrimitive?.content ?: "unknown"
                         val count = obj["count"]?.jsonPrimitive?.long ?: 0
                         key to count
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
+                        null
+                    } catch (e: IOException) {
+                        logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
+                        null
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
+                        null
+                    } catch (e: IllegalArgumentException) {
                         logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
                         null
                     }
                 }
                 .toMap()
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
+            emptyMap()
+        } catch (e: IOException) {
+            logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
+            emptyMap()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
+            emptyMap()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
             emptyMap()
         }
@@ -415,7 +523,16 @@ class DashboardQueryHelper(
                         ?.let(transform)
                 }
                 .toMap()
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            emptyMap()
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            emptyMap()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            emptyMap()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to execute $errorContext" }
             emptyMap()
         }
@@ -431,7 +548,16 @@ class DashboardQueryHelper(
     ) {
         val response = try {
             ClickHouseClient.execute(query)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            throw e
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            throw e
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to execute $errorContext" }
+            throw e
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to execute $errorContext" }
             throw e
         }
@@ -469,12 +595,36 @@ class DashboardQueryHelper(
                             title = obj["title"]?.jsonPrimitive?.content ?: "",
                             count = obj["count"]?.jsonPrimitive?.long ?: 0
                         )
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
+                        null
+                    } catch (e: IOException) {
+                        logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
+                        null
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
+                        null
+                    } catch (e: IllegalArgumentException) {
                         logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
                         null
                     }
                 }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(
+                e
+            ) { "executeTopIssuesQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(
+                e
+            ) { "executeTopIssuesQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(
+                e
+            ) { "executeTopIssuesQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(
                 e
             ) { "executeTopIssuesQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }

@@ -16,6 +16,9 @@
 
 package com.moneat.org.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.SlackService
@@ -211,7 +214,13 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
         }
 
         return Pair(userId, organizationId)
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        return null
+    } catch (e: IOException) {
+        return null
+    } catch (e: IllegalStateException) {
+        return null
+    } catch (e: IllegalArgumentException) {
         return null
     }
 }
@@ -266,7 +275,16 @@ fun Route.integrationRoutes() {
 
                 logger.info("Returning ${integrations.size} integrations")
                 call.respond(integrations)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error("Error fetching integrations", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IOException) {
+                logger.error("Error fetching integrations", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IllegalStateException) {
+                logger.error("Error fetching integrations", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IllegalArgumentException) {
                 logger.error("Error fetching integrations", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -320,7 +338,16 @@ fun Route.integrationRoutes() {
                         "state=$state"
 
                 call.respond(SlackOAuthStartResponse(authUrl))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error("Error starting Slack OAuth", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IOException) {
+                logger.error("Error starting Slack OAuth", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IllegalStateException) {
+                logger.error("Error starting Slack OAuth", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IllegalArgumentException) {
                 logger.error("Error starting Slack OAuth", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -549,7 +576,16 @@ fun Route.integrationRoutes() {
                         "state=$state"
 
                 call.respond(SlackOAuthStartResponse(authUrl))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error("Error starting Discord OAuth", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IOException) {
+                logger.error("Error starting Discord OAuth", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IllegalStateException) {
+                logger.error("Error starting Discord OAuth", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IllegalArgumentException) {
                 logger.error("Error starting Discord OAuth", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -587,7 +623,16 @@ fun Route.integrationRoutes() {
             try {
                 val channels = discordService.listChannels(guildId).map { SlackChannel(it.id, it.name) }
                 call.respond(SlackChannelList(channels))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error("Error fetching Discord channels", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IOException) {
+                logger.error("Error fetching Discord channels", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IllegalStateException) {
+                logger.error("Error fetching Discord channels", e)
+                call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
+            } catch (e: IllegalArgumentException) {
                 logger.error("Error fetching Discord channels", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -1037,7 +1082,16 @@ fun Route.integrationCallbackRoutes() {
 
                 // Default response for unhandled actions
                 call.respond(HttpStatusCode.OK, mapOf("text" to "Action received"))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error("Error processing Slack interaction", e)
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal error"))
+            } catch (e: IOException) {
+                logger.error("Error processing Slack interaction", e)
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal error"))
+            } catch (e: IllegalStateException) {
+                logger.error("Error processing Slack interaction", e)
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal error"))
+            } catch (e: IllegalArgumentException) {
                 logger.error("Error processing Slack interaction", e)
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal error"))
             }
@@ -1090,7 +1144,16 @@ fun Route.integrationCallbackRoutes() {
                     }
 
                     call.respond(HttpStatusCode.OK, MessageResponse("User linked successfully"))
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error("Error linking Slack user", e)
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to link user"))
+                } catch (e: IOException) {
+                    logger.error("Error linking Slack user", e)
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to link user"))
+                } catch (e: IllegalStateException) {
+                    logger.error("Error linking Slack user", e)
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to link user"))
+                } catch (e: IllegalArgumentException) {
                     logger.error("Error linking Slack user", e)
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to link user"))
                 }

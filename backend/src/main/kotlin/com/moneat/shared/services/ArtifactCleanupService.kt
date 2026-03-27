@@ -16,6 +16,9 @@
 
 package com.moneat.shared.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.auth.services.AuthTokenService
 import com.moneat.org.services.OrgInvitationService
 import kotlinx.coroutines.CoroutineScope
@@ -54,7 +57,13 @@ class ArtifactCleanupService(
                         if (inviteDeleted > 0) {
                             logger.info { "Purged $inviteDeleted old invitations" }
                         }
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Error during artifact cleanup" }
+                    } catch (e: IOException) {
+                        logger.error(e) { "Error during artifact cleanup" }
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Error during artifact cleanup" }
+                    } catch (e: IllegalArgumentException) {
                         logger.error(e) { "Error during artifact cleanup" }
                     }
                     delay(cleanupInterval)

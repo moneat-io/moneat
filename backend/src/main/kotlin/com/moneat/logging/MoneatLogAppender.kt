@@ -16,6 +16,9 @@
 
 package com.moneat.logging
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.AppenderBase
 import ch.qos.logback.core.spi.DeferredProcessingAware
@@ -81,7 +84,16 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
         executor.submit {
             try {
                 sendLog(event)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                // Use stderr to avoid log loops
+                System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
+            } catch (e: IOException) {
+                // Use stderr to avoid log loops
+                System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
+            } catch (e: IllegalStateException) {
+                // Use stderr to avoid log loops
+                System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
+            } catch (e: IllegalArgumentException) {
                 // Use stderr to avoid log loops
                 System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
             }

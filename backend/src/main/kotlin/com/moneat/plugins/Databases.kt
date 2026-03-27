@@ -16,6 +16,9 @@
 
 package com.moneat.plugins
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.configureClickHouseMigrations
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
@@ -169,7 +172,16 @@ fun Application.configureDatabases() {
                         runBlocking {
                             try {
                                 configureClickHouseMigrations()
-                            } catch (e: Exception) {
+                            } catch (e: SerializationException) {
+                                log.error("Failed to run ClickHouse migrations.", e)
+                                throw e
+                            } catch (e: IOException) {
+                                log.error("Failed to run ClickHouse migrations.", e)
+                                throw e
+                            } catch (e: IllegalStateException) {
+                                log.error("Failed to run ClickHouse migrations.", e)
+                                throw e
+                            } catch (e: IllegalArgumentException) {
                                 log.error("Failed to run ClickHouse migrations.", e)
                                 throw e
                             }
@@ -177,7 +189,13 @@ fun Application.configureDatabases() {
                             try {
                                 com.moneat.config.DemoDataReseeder
                                     .reseedIfNeeded()
-                            } catch (e: Exception) {
+                            } catch (e: SerializationException) {
+                                log.warn("Demo data reseed failed (non-fatal)", e)
+                            } catch (e: IOException) {
+                                log.warn("Demo data reseed failed (non-fatal)", e)
+                            } catch (e: IllegalStateException) {
+                                log.warn("Demo data reseed failed (non-fatal)", e)
+                            } catch (e: IllegalArgumentException) {
                                 log.warn("Demo data reseed failed (non-fatal)", e)
                             }
                         }
@@ -202,7 +220,28 @@ fun Application.configureDatabases() {
         monitor.subscribe(ApplicationStopping) {
             log.info("Stopping background services...")
         }
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        if (e.message?.contains("ClickHouse") == true) {
+            // Already logged above
+            throw e
+        }
+        log.error("Failed to configure databases. Make sure PostgreSQL is running and accessible.", e)
+        throw e
+    } catch (e: IOException) {
+        if (e.message?.contains("ClickHouse") == true) {
+            // Already logged above
+            throw e
+        }
+        log.error("Failed to configure databases. Make sure PostgreSQL is running and accessible.", e)
+        throw e
+    } catch (e: IllegalStateException) {
+        if (e.message?.contains("ClickHouse") == true) {
+            // Already logged above
+            throw e
+        }
+        log.error("Failed to configure databases. Make sure PostgreSQL is running and accessible.", e)
+        throw e
+    } catch (e: IllegalArgumentException) {
         if (e.message?.contains("ClickHouse") == true) {
             // Already logged above
             throw e

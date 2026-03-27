@@ -16,6 +16,9 @@
 
 package com.moneat.logs.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import com.moneat.logs.repositories.LogRepositoryImpl
@@ -71,7 +74,16 @@ class LogIngestionWorker(
                     processMessageForTest(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Log worker $workerId error in BRPOP loop" }
+                    delay(1000)
+                } catch (e: IOException) {
+                    logger.error(e) { "Log worker $workerId error in BRPOP loop" }
+                    delay(1000)
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Log worker $workerId error in BRPOP loop" }
+                    delay(1000)
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Log worker $workerId error in BRPOP loop" }
                     delay(1000)
                 }
@@ -108,7 +120,16 @@ class LogIngestionWorker(
             val taggedBatch = batch.copy(logs = taggedLogs)
             val inserted = logService.insertBatch(taggedBatch)
             logService.publishLiveLogs(orgId, inserted)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
+            onDlq(payload)
+        } catch (e: IOException) {
+            logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
+            onDlq(payload)
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
+            onDlq(payload)
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
             onDlq(payload)
         }
@@ -153,7 +174,13 @@ class LogIngestionWorker(
                     } else {
                         evaluateFilter(parsed.rootNode, entryMap)
                     }
-                } catch (_: Exception) {
+                } catch (_: SerializationException) {
+                    false
+                } catch (_: IOException) {
+                    false
+                } catch (_: IllegalStateException) {
+                    false
+                } catch (_: IllegalArgumentException) {
                     false
                 }
             }
@@ -184,7 +211,13 @@ class LogIngestionWorker(
                         .replace("\\?", ".")
                     try {
                         value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
-                    } catch (_: Exception) {
+                    } catch (_: SerializationException) {
+                        false
+                    } catch (_: IOException) {
+                        false
+                    } catch (_: IllegalStateException) {
+                        false
+                    } catch (_: IllegalArgumentException) {
                         false
                     }
                 } else {

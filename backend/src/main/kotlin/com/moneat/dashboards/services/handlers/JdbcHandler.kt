@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -63,7 +66,16 @@ abstract class JdbcHandler(
             } finally {
                 ds.close()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "JDBC connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IOException) {
+            logger.warn(e) { "JDBC connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "JDBC connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "JDBC connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }

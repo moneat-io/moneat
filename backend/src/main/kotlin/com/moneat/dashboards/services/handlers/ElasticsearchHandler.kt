@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -59,7 +62,16 @@ class ElasticsearchHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Elasticsearch returned ${response.status}")
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Elasticsearch connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IOException) {
+            logger.warn(e) { "Elasticsearch connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Elasticsearch connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Elasticsearch connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -91,7 +103,40 @@ class ElasticsearchHandler : HttpApiHandler() {
                     )
                 )
             }
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            JsonObject(
+                mapOf(
+                    "query" to JsonObject(
+                        mapOf(
+                            "query_string" to JsonObject(mapOf("query" to JsonPrimitive(query)))
+                        )
+                    ),
+                    "size" to JsonPrimitive(limit.coerceIn(1, 10000))
+                )
+            )
+        } catch (_: IOException) {
+            JsonObject(
+                mapOf(
+                    "query" to JsonObject(
+                        mapOf(
+                            "query_string" to JsonObject(mapOf("query" to JsonPrimitive(query)))
+                        )
+                    ),
+                    "size" to JsonPrimitive(limit.coerceIn(1, 10000))
+                )
+            )
+        } catch (_: IllegalStateException) {
+            JsonObject(
+                mapOf(
+                    "query" to JsonObject(
+                        mapOf(
+                            "query_string" to JsonObject(mapOf("query" to JsonPrimitive(query)))
+                        )
+                    ),
+                    "size" to JsonPrimitive(limit.coerceIn(1, 10000))
+                )
+            )
+        } catch (_: IllegalArgumentException) {
             JsonObject(
                 mapOf(
                     "query" to JsonObject(
@@ -118,7 +163,16 @@ class ElasticsearchHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseSearchResponse(response.bodyAsText(), limit)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Elasticsearch query failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Elasticsearch query failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Elasticsearch query failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Elasticsearch query failed" }
             emptyList()
         }
@@ -145,7 +199,16 @@ class ElasticsearchHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Elasticsearch schema fetch failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Elasticsearch schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Elasticsearch schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Elasticsearch schema fetch failed" }
             emptyList()
         }

@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.translation
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.DashboardImportResult
 import com.moneat.dashboards.models.DashboardResponse
@@ -85,7 +88,16 @@ class DataDogTranslator : DashboardTranslator {
         val widgets = ddWidgets.mapIndexedNotNull { index, element ->
             try {
                 importWidget(element.jsonObject, index, warnings)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                warnings.add("Widget $index: failed to import - ${e.message}")
+                null
+            } catch (e: IOException) {
+                warnings.add("Widget $index: failed to import - ${e.message}")
+                null
+            } catch (e: IllegalStateException) {
+                warnings.add("Widget $index: failed to import - ${e.message}")
+                null
+            } catch (e: IllegalArgumentException) {
                 warnings.add("Widget $index: failed to import - ${e.message}")
                 null
             }
@@ -287,7 +299,13 @@ class DataDogTranslator : DashboardTranslator {
                     options = availableValues,
                     datasource = null
                 )
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
+                null
+            } catch (_: IOException) {
+                null
+            } catch (_: IllegalStateException) {
+                null
+            } catch (_: IllegalArgumentException) {
                 null
             }
         }

@@ -16,6 +16,9 @@
 
 package com.moneat.monitor.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.incident.services.IncidentService
@@ -289,7 +292,13 @@ class MonitorAlertService(
         for ((alert, hostName, orgId) in alerts) {
             try {
                 evaluateAlert(alert, hostName, orgId)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Error evaluating alert ${alert.id}" }
+            } catch (e: IOException) {
+                logger.error(e) { "Error evaluating alert ${alert.id}" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Error evaluating alert ${alert.id}" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Error evaluating alert ${alert.id}" }
             }
         }
@@ -322,7 +331,13 @@ class MonitorAlertService(
                     } else {
                         false // Fallback if Redis is down
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    false
+                } catch (e: IOException) {
+                    false
+                } catch (e: IllegalStateException) {
+                    false
+                } catch (e: IllegalArgumentException) {
                     false
                 }
 
@@ -332,7 +347,13 @@ class MonitorAlertService(
                     if (RedisConfig.isConnected()) {
                         RedisConfig.sync().del(alertKey)
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to clear alert state in Redis" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to clear alert state in Redis" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to clear alert state in Redis" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to clear alert state in Redis" }
                 }
 
@@ -347,7 +368,13 @@ class MonitorAlertService(
                         source = com.moneat.incident.models.AlertSource.HOST_ALERT,
                         deduplicationKey = dedupKey
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
                 }
                 logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
@@ -371,7 +398,13 @@ class MonitorAlertService(
                 if (RedisConfig.isConnected()) {
                     RedisConfig.sync().set(alertKey, "TRIGGERED")
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.debug(e) { "Failed to update throttled alert state in Redis" }
+            } catch (e: IOException) {
+                logger.debug(e) { "Failed to update throttled alert state in Redis" }
+            } catch (e: IllegalStateException) {
+                logger.debug(e) { "Failed to update throttled alert state in Redis" }
+            } catch (e: IllegalArgumentException) {
                 logger.debug(e) { "Failed to update throttled alert state in Redis" }
             }
             return // Don't spam alerts
@@ -393,7 +426,13 @@ class MonitorAlertService(
             if (RedisConfig.isConnected()) {
                 RedisConfig.sync().set(alertKey, "TRIGGERED")
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to set alert state in Redis" }
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to set alert state in Redis" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to set alert state in Redis" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to set alert state in Redis" }
         }
 
@@ -489,7 +528,16 @@ class MonitorAlertService(
             val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return null
 
             data[0].toString().replace("\"", "").toDoubleOrNull()
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error fetching metric value" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Error fetching metric value" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error fetching metric value" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error fetching metric value" }
             null
         }
@@ -600,7 +648,16 @@ class MonitorAlertService(
                 kotlin.math.ceil(alert.durationSeconds.toDouble() / POLL_INTERVAL_SECONDS).toInt()
             }
             count >= expectedDataPoints * MIN_DATA_POINT_RATIO
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error checking sustained condition" }
+            false
+        } catch (e: IOException) {
+            logger.error(e) { "Error checking sustained condition" }
+            false
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error checking sustained condition" }
+            false
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error checking sustained condition" }
             false
         }
@@ -664,7 +721,13 @@ class MonitorAlertService(
                     """.trimIndent()
 
                 emailService.sendEmail(email, subject, htmlBody, textBody, "monitor_alert")
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send alert notification to $email" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send alert notification to $email" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send alert notification to $email" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send alert notification to $email" }
             }
         }
@@ -691,7 +754,13 @@ class MonitorAlertService(
                     hostId = alert.hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send Slack notification for host alert" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send Slack notification for host alert" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send Slack notification for host alert" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send Slack notification for host alert" }
             }
         }
@@ -718,7 +787,13 @@ class MonitorAlertService(
                     hostId = alert.hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send Discord notification for host alert" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send Discord notification for host alert" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send Discord notification for host alert" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send Discord notification for host alert" }
             }
         }
@@ -782,7 +857,13 @@ class MonitorAlertService(
                     )
                 incidentService.fireAlert(incidentEvent)
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fire incident alert" }
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fire incident alert" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fire incident alert" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fire incident alert" }
         }
     }
@@ -880,7 +961,13 @@ class MonitorAlertService(
         for ((_, email) in emailRecipients) {
             try {
                 emailService.sendHostDownEmail(email, hostName, lastSeenText, hostUrl)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send host down notification to $email" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send host down notification to $email" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send host down notification to $email" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send host down notification to $email" }
             }
         }
@@ -904,7 +991,13 @@ class MonitorAlertService(
                     hostId = hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send Slack notification for host down" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send Slack notification for host down" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send Slack notification for host down" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send Slack notification for host down" }
             }
         }
@@ -928,7 +1021,13 @@ class MonitorAlertService(
                     hostId = hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send Discord notification for host down" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send Discord notification for host down" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send Discord notification for host down" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send Discord notification for host down" }
             }
         }
@@ -954,7 +1053,13 @@ class MonitorAlertService(
                     moneatUrl = "$frontendUrl/monitoring/hosts/$hostId"
                 )
             incidentService.fireAlert(incidentEvent)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fire incident alert for host down" }
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fire incident alert for host down" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fire incident alert for host down" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fire incident alert for host down" }
         }
     }
@@ -982,7 +1087,13 @@ class MonitorAlertService(
         for ((_, email) in emailRecipients) {
             try {
                 emailService.sendHostUpEmail(email, hostName, hostUrl)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send host up notification to $email" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send host up notification to $email" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send host up notification to $email" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send host up notification to $email" }
             }
         }
@@ -1005,7 +1116,13 @@ class MonitorAlertService(
                     hostId = hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send Slack notification for host up" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send Slack notification for host up" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send Slack notification for host up" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send Slack notification for host up" }
             }
         }
@@ -1028,7 +1145,13 @@ class MonitorAlertService(
                     hostId = hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send Discord notification for host up" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send Discord notification for host up" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send Discord notification for host up" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send Discord notification for host up" }
             }
         }
@@ -1040,7 +1163,13 @@ class MonitorAlertService(
                 source = com.moneat.incident.models.AlertSource.HOST_DOWN,
                 deduplicationKey = "moneat-host-down-$hostId"
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to resolve incident alert for host up" }
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to resolve incident alert for host up" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to resolve incident alert for host up" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to resolve incident alert for host up" }
         }
     }
@@ -1186,7 +1315,13 @@ class MonitorAlertService(
                     """.trimIndent()
 
                 emailService.sendEmail(email, subject, htmlBody, textBody, "monitor_recovery")
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send recovery notification to $email" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send recovery notification to $email" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send recovery notification to $email" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send recovery notification to $email" }
             }
         }

@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.networkdevices
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdNdmPayload
@@ -61,7 +64,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload() {
         val count = NdmIngestionService.enqueue(orgId, payload)
         logger.debug { "Accepted $count NDM entries (type=${payload.type}) for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process NDM payload" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process NDM payload" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process NDM payload" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process NDM payload" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

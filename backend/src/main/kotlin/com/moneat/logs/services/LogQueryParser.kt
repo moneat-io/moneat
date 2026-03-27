@@ -16,6 +16,9 @@
 
 package com.moneat.logs.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.utils.ClickHouseSqlUtils
 
 /**
@@ -129,7 +132,28 @@ class LogQueryParser {
 
             val node = parseExpression(tokens)
             return ParsedQuery(node, errors)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            errors.add("Parse error: ${e.message}")
+            // Fallback to simple full-text search
+            return ParsedQuery(
+                QueryNode.FullTextNode(query.trim(), false),
+                errors
+            )
+        } catch (e: IOException) {
+            errors.add("Parse error: ${e.message}")
+            // Fallback to simple full-text search
+            return ParsedQuery(
+                QueryNode.FullTextNode(query.trim(), false),
+                errors
+            )
+        } catch (e: IllegalStateException) {
+            errors.add("Parse error: ${e.message}")
+            // Fallback to simple full-text search
+            return ParsedQuery(
+                QueryNode.FullTextNode(query.trim(), false),
+                errors
+            )
+        } catch (e: IllegalArgumentException) {
             errors.add("Parse error: ${e.message}")
             // Fallback to simple full-text search
             return ParsedQuery(

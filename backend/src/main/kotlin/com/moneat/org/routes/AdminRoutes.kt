@@ -16,6 +16,9 @@
 
 package com.moneat.org.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.auth.services.AuthService
 import com.moneat.billing.services.AdminBillingService
 import com.moneat.billing.services.PricingTierService
@@ -146,7 +149,16 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
                     issueCount = obj["issue_count"]?.jsonPrimitive?.longOrNull ?: 0,
                     sslEnabled = (obj["ssl_enabled"]?.jsonPrimitive?.intOrNull ?: 0) == 1,
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn { "Failed to parse telemetry pulse row: ${e.message}" }
+                null
+            } catch (e: IOException) {
+                logger.warn { "Failed to parse telemetry pulse row: ${e.message}" }
+                null
+            } catch (e: IllegalStateException) {
+                logger.warn { "Failed to parse telemetry pulse row: ${e.message}" }
+                null
+            } catch (e: IllegalArgumentException) {
                 logger.warn { "Failed to parse telemetry pulse row: ${e.message}" }
                 null
             }
@@ -349,7 +361,19 @@ fun Route.adminRoutes() {
                     val sourceEnum =
                         try {
                             AlertSource.valueOf(request.source)
-                        } catch (e: Exception) {
+                        } catch (e: SerializationException) {
+                            val msg = "Invalid AlertSource '${request.source}', defaulting to HOST_ALERT: ${e.message}"
+                            logger.warn { msg }
+                            AlertSource.HOST_ALERT
+                        } catch (e: IOException) {
+                            val msg = "Invalid AlertSource '${request.source}', defaulting to HOST_ALERT: ${e.message}"
+                            logger.warn { msg }
+                            AlertSource.HOST_ALERT
+                        } catch (e: IllegalStateException) {
+                            val msg = "Invalid AlertSource '${request.source}', defaulting to HOST_ALERT: ${e.message}"
+                            logger.warn { msg }
+                            AlertSource.HOST_ALERT
+                        } catch (e: IllegalArgumentException) {
                             val msg = "Invalid AlertSource '${request.source}', defaulting to HOST_ALERT: ${e.message}"
                             logger.warn { msg }
                             AlertSource.HOST_ALERT
@@ -370,7 +394,22 @@ fun Route.adminRoutes() {
 
                     incidentService.fireAlert(event)
                     call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Unknown error")
+                    )
+                } catch (e: IOException) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Unknown error")
+                    )
+                } catch (e: IllegalStateException) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Unknown error")
+                    )
+                } catch (e: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         com.moneat.utils.ErrorResponse(e.message ?: "Unknown error")
@@ -499,7 +538,13 @@ fun Route.adminRoutes() {
                                     errors.add("Email type '${request.type}' not supported for email channel")
                                 }
                             }
-                        } catch (e: Exception) {
+                        } catch (e: SerializationException) {
+                            errors.add("Email failed: ${e.message}")
+                        } catch (e: IOException) {
+                            errors.add("Email failed: ${e.message}")
+                        } catch (e: IllegalStateException) {
+                            errors.add("Email failed: ${e.message}")
+                        } catch (e: IllegalArgumentException) {
                             errors.add("Email failed: ${e.message}")
                         }
                     }
@@ -576,7 +621,13 @@ fun Route.adminRoutes() {
                                         "Slack notification failed (no Slack integration configured or error occurred)"
                                     )
                                 }
-                            } catch (e: Exception) {
+                            } catch (e: SerializationException) {
+                                errors.add("Slack failed: ${e.message}")
+                            } catch (e: IOException) {
+                                errors.add("Slack failed: ${e.message}")
+                            } catch (e: IllegalStateException) {
+                                errors.add("Slack failed: ${e.message}")
+                            } catch (e: IllegalArgumentException) {
                                 errors.add("Slack failed: ${e.message}")
                             }
                         }
@@ -649,7 +700,13 @@ fun Route.adminRoutes() {
                                         "Discord notification failed (no Discord integration configured or error occurred)"
                                     )
                                 }
-                            } catch (e: Exception) {
+                            } catch (e: SerializationException) {
+                                errors.add("Discord failed: ${e.message}")
+                            } catch (e: IOException) {
+                                errors.add("Discord failed: ${e.message}")
+                            } catch (e: IllegalStateException) {
+                                errors.add("Discord failed: ${e.message}")
+                            } catch (e: IllegalArgumentException) {
                                 errors.add("Discord failed: ${e.message}")
                             }
                         }
@@ -668,7 +725,37 @@ fun Route.adminRoutes() {
                         if (emailSent || slackSent || discordSent) HttpStatusCode.OK else HttpStatusCode.BadRequest,
                         response
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.events.models.TestNotificationResponse(
+                            success = false,
+                            emailSent = false,
+                            slackSent = false,
+                            errors = listOf(e.message ?: "Unknown error")
+                        )
+                    )
+                } catch (e: IOException) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.events.models.TestNotificationResponse(
+                            success = false,
+                            emailSent = false,
+                            slackSent = false,
+                            errors = listOf(e.message ?: "Unknown error")
+                        )
+                    )
+                } catch (e: IllegalStateException) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.events.models.TestNotificationResponse(
+                            success = false,
+                            emailSent = false,
+                            slackSent = false,
+                            errors = listOf(e.message ?: "Unknown error")
+                        )
+                    )
+                } catch (e: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         com.moneat.events.models.TestNotificationResponse(
@@ -756,7 +843,22 @@ fun Route.adminRoutes() {
                     }
 
                     call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Unknown error")
+                    )
+                } catch (e: IOException) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Unknown error")
+                    )
+                } catch (e: IllegalStateException) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Unknown error")
+                    )
+                } catch (e: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         com.moneat.utils.ErrorResponse(e.message ?: "Unknown error")
@@ -794,7 +896,22 @@ fun Route.adminRoutes() {
                     } else {
                         call.respond(HttpStatusCode.NotFound, com.moneat.utils.ErrorResponse("User not found"))
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                    )
+                } catch (e: IOException) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                    )
+                } catch (e: IllegalStateException) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                    )
+                } catch (e: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
@@ -807,7 +924,22 @@ fun Route.adminRoutes() {
                     val request = call.receive<com.moneat.org.services.DeleteUsersRequest>()
                     val result = adminService.deleteUsers(request.userIds)
                     call.respond(HttpStatusCode.OK, result)
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                    )
+                } catch (e: IOException) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                    )
+                } catch (e: IllegalStateException) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                    )
+                } catch (e: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")

@@ -16,6 +16,9 @@
 
 package com.moneat.incident.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
@@ -95,7 +98,13 @@ fun Route.incidentProviderRoutes() {
                                         json.parseToJsonElement(jsonStr).jsonObject.toMap().mapValues {
                                             it.value.toString().trim('"')
                                         }
-                                    } catch (e: Exception) {
+                                    } catch (e: SerializationException) {
+                                        emptyMap()
+                                    } catch (e: IOException) {
+                                        emptyMap()
+                                    } catch (e: IllegalStateException) {
+                                        emptyMap()
+                                    } catch (e: IllegalArgumentException) {
                                         emptyMap()
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled],
@@ -308,7 +317,13 @@ fun Route.incidentProviderRoutes() {
                                     try {
                                         val jsonStr = row[IncidentProviderConfigs.configJson]
                                         json.parseToJsonElement(jsonStr).jsonObject
-                                    } catch (e: Exception) {
+                                    } catch (e: SerializationException) {
+                                        buildJsonObject {}
+                                    } catch (e: IOException) {
+                                        buildJsonObject {}
+                                    } catch (e: IllegalStateException) {
+                                        buildJsonObject {}
+                                    } catch (e: IllegalArgumentException) {
                                         buildJsonObject {}
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled]

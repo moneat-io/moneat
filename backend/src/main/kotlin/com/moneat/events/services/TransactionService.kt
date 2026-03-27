@@ -16,6 +16,9 @@
 
 package com.moneat.events.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.EventResponse
 import com.moneat.events.models.PerformanceStatsResponse
@@ -243,7 +246,34 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 totalTransactions = totalCount,
                 avgDuration = avgDuration
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch performance stats for project $projectId" }
+            PerformanceStatsResponse(
+                apdex = 0.0,
+                throughput = emptyList(),
+                slowestTransactions = emptyList(),
+                totalTransactions = 0,
+                avgDuration = 0.0
+            )
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch performance stats for project $projectId" }
+            PerformanceStatsResponse(
+                apdex = 0.0,
+                throughput = emptyList(),
+                slowestTransactions = emptyList(),
+                totalTransactions = 0,
+                avgDuration = 0.0
+            )
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch performance stats for project $projectId" }
+            PerformanceStatsResponse(
+                apdex = 0.0,
+                throughput = emptyList(),
+                slowestTransactions = emptyList(),
+                totalTransactions = 0,
+                avgDuration = 0.0
+            )
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch performance stats for project $projectId" }
             PerformanceStatsResponse(
                 apdex = 0.0,
@@ -379,7 +409,16 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 endTimestamp = endTs,
                 duration = duration * 1000.0
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch trace $traceId" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch trace $traceId" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch trace $traceId" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch trace $traceId" }
             null
         }

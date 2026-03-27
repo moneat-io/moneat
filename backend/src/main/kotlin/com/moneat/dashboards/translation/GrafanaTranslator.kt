@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.translation
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.DashboardImportResult
 import com.moneat.dashboards.models.DashboardResponse
@@ -110,7 +113,16 @@ class GrafanaTranslator : DashboardTranslator {
         val widgets = allPanels.mapIndexedNotNull { index, panel ->
             try {
                 importPanel(panel, index, warnings, inputsMap)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                warnings.add("Panel $index: failed to import - ${e.message}")
+                null
+            } catch (e: IOException) {
+                warnings.add("Panel $index: failed to import - ${e.message}")
+                null
+            } catch (e: IllegalStateException) {
+                warnings.add("Panel $index: failed to import - ${e.message}")
+                null
+            } catch (e: IllegalArgumentException) {
                 warnings.add("Panel $index: failed to import - ${e.message}")
                 null
             }
@@ -949,7 +961,16 @@ class GrafanaTranslator : DashboardTranslator {
                     options = options.filter { it != "\$__all" },
                     datasource = datasource
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn { "Failed to parse Grafana variable: ${e.message}" }
+                null
+            } catch (e: IOException) {
+                logger.warn { "Failed to parse Grafana variable: ${e.message}" }
+                null
+            } catch (e: IllegalStateException) {
+                logger.warn { "Failed to parse Grafana variable: ${e.message}" }
+                null
+            } catch (e: IllegalArgumentException) {
                 logger.warn { "Failed to parse Grafana variable: ${e.message}" }
                 null
             }

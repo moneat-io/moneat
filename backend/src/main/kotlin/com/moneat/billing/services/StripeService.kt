@@ -16,6 +16,9 @@
 
 package com.moneat.billing.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.billing.models.CancelSubscriptionResponse
 import com.moneat.billing.models.CheckoutSessionResponse
 import com.moneat.billing.models.InvoiceResponse
@@ -218,7 +221,34 @@ class StripeService(
                 sessionId = session.id,
                 url = session.url ?: ""
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to create Stripe checkout session" }
+            Sentry.captureException(e) { scope ->
+                scope.setTag("stripe.operation", "create_checkout_session")
+                scope.setExtra("organization_id", organizationId.toString())
+                scope.setExtra("tier_name", tierName)
+                scope.setExtra("billing_interval", billingInterval)
+            }
+            throw e
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to create Stripe checkout session" }
+            Sentry.captureException(e) { scope ->
+                scope.setTag("stripe.operation", "create_checkout_session")
+                scope.setExtra("organization_id", organizationId.toString())
+                scope.setExtra("tier_name", tierName)
+                scope.setExtra("billing_interval", billingInterval)
+            }
+            throw e
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to create Stripe checkout session" }
+            Sentry.captureException(e) { scope ->
+                scope.setTag("stripe.operation", "create_checkout_session")
+                scope.setExtra("organization_id", organizationId.toString())
+                scope.setExtra("tier_name", tierName)
+                scope.setExtra("billing_interval", billingInterval)
+            }
+            throw e
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to create Stripe checkout session" }
             Sentry.captureException(e) { scope ->
                 scope.setTag("stripe.operation", "create_checkout_session")
@@ -501,7 +531,13 @@ class StripeService(
                     .setSubscription(stripeSubId)
                     .build()
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            null
+        } catch (e: IOException) {
+            null
+        } catch (e: IllegalStateException) {
+            null
+        } catch (e: IllegalArgumentException) {
             null
         } */
 
@@ -739,7 +775,31 @@ class StripeService(
             )
 
             logger.info { "Updated default payment method for customer $customerId" }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to update default payment method for customer $customerId" }
+            Sentry.captureException(e) { scope ->
+                scope.setTag("stripe.operation", "update_default_payment_method")
+                scope.setExtra("customer_id", customerId)
+                scope.setExtra("payment_method_id", paymentMethodId)
+            }
+            throw e
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to update default payment method for customer $customerId" }
+            Sentry.captureException(e) { scope ->
+                scope.setTag("stripe.operation", "update_default_payment_method")
+                scope.setExtra("customer_id", customerId)
+                scope.setExtra("payment_method_id", paymentMethodId)
+            }
+            throw e
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to update default payment method for customer $customerId" }
+            Sentry.captureException(e) { scope ->
+                scope.setTag("stripe.operation", "update_default_payment_method")
+                scope.setExtra("customer_id", customerId)
+                scope.setExtra("payment_method_id", paymentMethodId)
+            }
+            throw e
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to update default payment method for customer $customerId" }
             Sentry.captureException(e) { scope ->
                 scope.setTag("stripe.operation", "update_default_payment_method")
@@ -886,7 +946,19 @@ class StripeService(
                     }
                 }
                 flushed++
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) {
+                    "Failed to report metered usage for subscription ${batch.subscriptionId} (batchUnits=${batch.batchUnits})"
+                }
+            } catch (e: IOException) {
+                logger.error(e) {
+                    "Failed to report metered usage for subscription ${batch.subscriptionId} (batchUnits=${batch.batchUnits})"
+                }
+            } catch (e: IllegalStateException) {
+                logger.error(e) {
+                    "Failed to report metered usage for subscription ${batch.subscriptionId} (batchUnits=${batch.batchUnits})"
+                }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) {
                     "Failed to report metered usage for subscription ${batch.subscriptionId} (batchUnits=${batch.batchUnits})"
                 }
@@ -999,7 +1071,22 @@ class StripeService(
                     }
                 }
                 flushed++
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) {
+                    "Failed to report $meterEventName metered usage for subscription ${batch.subscriptionId} " +
+                        "(batchUnits=${batch.batchUnits})"
+                }
+            } catch (e: IOException) {
+                logger.error(e) {
+                    "Failed to report $meterEventName metered usage for subscription ${batch.subscriptionId} " +
+                        "(batchUnits=${batch.batchUnits})"
+                }
+            } catch (e: IllegalStateException) {
+                logger.error(e) {
+                    "Failed to report $meterEventName metered usage for subscription ${batch.subscriptionId} " +
+                        "(batchUnits=${batch.batchUnits})"
+                }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) {
                     "Failed to report $meterEventName metered usage for subscription ${batch.subscriptionId} " +
                         "(batchUnits=${batch.batchUnits})"

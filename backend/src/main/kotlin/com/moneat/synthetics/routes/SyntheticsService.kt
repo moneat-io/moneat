@@ -16,6 +16,9 @@
 
 package com.moneat.synthetics.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.AlertNotificationPreferencesService
@@ -282,7 +285,19 @@ class SyntheticsService(
 
         try {
             recordResult(test, result)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) {
+                "Failed to record synthetic result for ${test.id}"
+            }
+        } catch (e: IOException) {
+            logger.error(e) {
+                "Failed to record synthetic result for ${test.id}"
+            }
+        } catch (e: IllegalStateException) {
+            logger.error(e) {
+                "Failed to record synthetic result for ${test.id}"
+            }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) {
                 "Failed to record synthetic result for ${test.id}"
             }
@@ -296,7 +311,19 @@ class SyntheticsService(
                 result.status,
                 oldStatus
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) {
+                "Failed to update synthetic test status for ${test.id}"
+            }
+        } catch (e: IOException) {
+            logger.error(e) {
+                "Failed to update synthetic test status for ${test.id}"
+            }
+        } catch (e: IllegalStateException) {
+            logger.error(e) {
+                "Failed to update synthetic test status for ${test.id}"
+            }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) {
                 "Failed to update synthetic test status for ${test.id}"
             }
@@ -309,7 +336,19 @@ class SyntheticsService(
         ) {
             try {
                 sendFailureAlert(test, result)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) {
+                    "Failed to send alert for synthetic test ${test.id}"
+                }
+            } catch (e: IOException) {
+                logger.error(e) {
+                    "Failed to send alert for synthetic test ${test.id}"
+                }
+            } catch (e: IllegalStateException) {
+                logger.error(e) {
+                    "Failed to send alert for synthetic test ${test.id}"
+                }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) {
                     "Failed to send alert for synthetic test ${test.id}"
                 }
@@ -329,7 +368,37 @@ class SyntheticsService(
                 withTimeout(test.timeoutSeconds * 1000L + 5000) {
                     executor.executeTest(test)
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) {
+                    "Synthetic test execution failed for ${test.id} " +
+                        "(attempt $attempt): ${e.message}"
+                }
+                SyntheticCheckResult(
+                    status = "failed",
+                    durationMs = 0,
+                    errorMessage = "Test execution failed: ${e.message}"
+                )
+            } catch (e: IOException) {
+                logger.error(e) {
+                    "Synthetic test execution failed for ${test.id} " +
+                        "(attempt $attempt): ${e.message}"
+                }
+                SyntheticCheckResult(
+                    status = "failed",
+                    durationMs = 0,
+                    errorMessage = "Test execution failed: ${e.message}"
+                )
+            } catch (e: IllegalStateException) {
+                logger.error(e) {
+                    "Synthetic test execution failed for ${test.id} " +
+                        "(attempt $attempt): ${e.message}"
+                }
+                SyntheticCheckResult(
+                    status = "failed",
+                    durationMs = 0,
+                    errorMessage = "Test execution failed: ${e.message}"
+                )
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) {
                     "Synthetic test execution failed for ${test.id} " +
                         "(attempt $attempt): ${e.message}"
@@ -456,7 +525,22 @@ class SyntheticsService(
     ): SyntheticTestData {
         val vars = try {
             getVariablesMap(test.organizationId)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) {
+                "Failed to load global variables for org ${test.organizationId}"
+            }
+            return test
+        } catch (e: IOException) {
+            logger.warn(e) {
+                "Failed to load global variables for org ${test.organizationId}"
+            }
+            return test
+        } catch (e: IllegalStateException) {
+            logger.warn(e) {
+                "Failed to load global variables for org ${test.organizationId}"
+            }
+            return test
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) {
                 "Failed to load global variables for org ${test.organizationId}"
             }
@@ -533,12 +617,24 @@ class SyntheticsService(
     private fun rowToData(row: ResultRow): SyntheticTestData {
         val tagsList: List<String> = try {
             Json.decodeFromString(row[SyntheticTests.tags])
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyList()
+        } catch (_: IOException) {
+            emptyList()
+        } catch (_: IllegalStateException) {
+            emptyList()
+        } catch (_: IllegalArgumentException) {
             emptyList()
         }
         val alertChannelsList: List<String> = try {
             Json.decodeFromString(row[SyntheticTests.alertChannels])
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyList()
+        } catch (_: IOException) {
+            emptyList()
+        } catch (_: IllegalStateException) {
+            emptyList()
+        } catch (_: IllegalArgumentException) {
             emptyList()
         }
         return SyntheticTestData(
@@ -576,38 +672,74 @@ class SyntheticsService(
     private fun rowToResponse(row: ResultRow): SyntheticTestResponse {
         val assertionsList: List<SyntheticAssertion> = try {
             Json.decodeFromString(row[SyntheticTests.assertions])
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyList()
+        } catch (_: IOException) {
+            emptyList()
+        } catch (_: IllegalStateException) {
+            emptyList()
+        } catch (_: IllegalArgumentException) {
             emptyList()
         }
         val stepsList: List<SyntheticStep> = try {
             row[SyntheticTests.steps]?.let {
                 Json.decodeFromString(it)
             } ?: emptyList()
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyList()
+        } catch (_: IOException) {
+            emptyList()
+        } catch (_: IllegalStateException) {
+            emptyList()
+        } catch (_: IllegalArgumentException) {
             emptyList()
         }
         val headersMap: Map<String, String>? = try {
             row[SyntheticTests.headers]?.let {
                 Json.decodeFromString(it)
             }
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            null
+        } catch (_: IOException) {
+            null
+        } catch (_: IllegalStateException) {
+            null
+        } catch (_: IllegalArgumentException) {
             null
         }
         val tagsList: List<String> = try {
             Json.decodeFromString(row[SyntheticTests.tags])
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyList()
+        } catch (_: IOException) {
+            emptyList()
+        } catch (_: IllegalStateException) {
+            emptyList()
+        } catch (_: IllegalArgumentException) {
             emptyList()
         }
         val alertChannelsList: List<String> = try {
             Json.decodeFromString(row[SyntheticTests.alertChannels])
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyList()
+        } catch (_: IOException) {
+            emptyList()
+        } catch (_: IllegalStateException) {
+            emptyList()
+        } catch (_: IllegalArgumentException) {
             emptyList()
         }
         val testConfig: SyntheticTestConfig? = try {
             row[SyntheticTests.config]?.let {
                 Json.decodeFromString(it)
             }
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            null
+        } catch (_: IOException) {
+            null
+        } catch (_: IllegalStateException) {
+            null
+        } catch (_: IllegalArgumentException) {
             null
         }
 

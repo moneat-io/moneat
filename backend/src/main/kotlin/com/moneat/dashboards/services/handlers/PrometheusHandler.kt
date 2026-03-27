@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -56,7 +59,16 @@ class PrometheusHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Prometheus returned ${response.status}")
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Prometheus connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IOException) {
+            logger.warn(e) { "Prometheus connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Prometheus connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Prometheus connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -100,7 +112,16 @@ class PrometheusHandler : HttpApiHandler() {
                 logger.warn { "Prometheus label_values query failed: ${response.status}" }
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Failed to execute label_values query" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.warn(e) { "Failed to execute label_values query" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Failed to execute label_values query" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Failed to execute label_values query" }
             emptyList()
         }
@@ -145,7 +166,16 @@ class PrometheusHandler : HttpApiHandler() {
                 return emptyList()
             }
             parsePrometheusResponse(response.bodyAsText(), promLimit)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to execute Prometheus query" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to execute Prometheus query" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to execute Prometheus query" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to execute Prometheus query" }
             emptyList()
         }
@@ -170,7 +200,16 @@ class PrometheusHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch Prometheus metrics" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch Prometheus metrics" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch Prometheus metrics" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch Prometheus metrics" }
             emptyList()
         }

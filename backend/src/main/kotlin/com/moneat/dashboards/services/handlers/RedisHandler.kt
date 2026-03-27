@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -49,7 +52,16 @@ class RedisHandler : DataSourceHandler {
                     TestConnectionResult(true, "Connected successfully", keys = keys)
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Redis connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IOException) {
+            logger.warn(e) { "Redis connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Redis connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Redis connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -184,7 +196,16 @@ class RedisHandler : DataSourceHandler {
                     result.take(limit)
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Redis query failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Redis query failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Redis query failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Redis query failed" }
             emptyList()
         }
@@ -206,7 +227,16 @@ class RedisHandler : DataSourceHandler {
                     keys.map { DataSourceField(it, "key", "Redis key") }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Redis schema fetch failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Redis schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Redis schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Redis schema fetch failed" }
             emptyList()
         }
@@ -325,7 +355,13 @@ class RedisHandler : DataSourceHandler {
                         "Duration" to JsonPrimitive(duration),
                         "Command" to JsonPrimitive(args)
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    null
+                } catch (e: IOException) {
+                    null
+                } catch (e: IllegalStateException) {
+                    null
+                } catch (e: IllegalArgumentException) {
                     null
                 }
             }

@@ -16,6 +16,9 @@
 
 package com.moneat.events.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.services.PulsePayload
 import com.moneat.utils.ClickHouseSqlUtils
@@ -67,7 +70,19 @@ fun Route.telemetryIngestRoutes(
         post {
             val payload = try {
                 call.receive<PulsePayload>()
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+                return@post
+            } catch (e: IOException) {
+                logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+                return@post
+            } catch (e: IllegalStateException) {
+                logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+                return@post
+            } catch (e: IllegalArgumentException) {
                 logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
                 return@post
@@ -82,7 +97,16 @@ fun Route.telemetryIngestRoutes(
                 insertPulse(payload)
                 logger.debug { "Telemetry pulse stored for deployment=${payload.deploymentId}" }
                 call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))
             }

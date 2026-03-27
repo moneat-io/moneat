@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -49,7 +52,16 @@ class MongoDBHandler : DataSourceHandler {
                 val databases = client.listDatabaseNames().toList()
                 TestConnectionResult(true, "Connected successfully", databases = databases.take(20))
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "MongoDB connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IOException) {
+            logger.warn(e) { "MongoDB connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "MongoDB connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "MongoDB connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -84,7 +96,16 @@ class MongoDBHandler : DataSourceHandler {
                 }
                 docs.map { docToMap(it) }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "MongoDB query failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "MongoDB query failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "MongoDB query failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "MongoDB query failed" }
             emptyList()
         }
@@ -106,7 +127,16 @@ class MongoDBHandler : DataSourceHandler {
                 val collections = db.listCollectionNames().toList()
                 collections.map { DataSourceField(it, "collection", "MongoDB collection") }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "MongoDB schema fetch failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "MongoDB schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "MongoDB schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "MongoDB schema fetch failed" }
             emptyList()
         }
@@ -137,7 +167,13 @@ class MongoDBHandler : DataSourceHandler {
                 org.bson.BsonDocument.parse(it.toJson())
             }
             Triple(collection, filter, pipeline)
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            Triple("test", BsonDocument(), null)
+        } catch (_: IOException) {
+            Triple("test", BsonDocument(), null)
+        } catch (_: IllegalStateException) {
+            Triple("test", BsonDocument(), null)
+        } catch (_: IllegalArgumentException) {
             Triple("test", BsonDocument(), null)
         }
     }

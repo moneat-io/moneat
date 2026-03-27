@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.RedisConfig
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
 import com.moneat.dashboards.models.DashboardAlertResponse
@@ -250,7 +253,13 @@ class DashboardAlertService(
                         incidentSeverity = row[DashboardWidgetAlerts.incidentSeverity],
                         notificationChannels = try {
                             json.decodeFromString(row[DashboardWidgetAlerts.notificationChannels])
-                        } catch (_: Exception) {
+                        } catch (_: SerializationException) {
+                            NotificationChannels()
+                        } catch (_: IOException) {
+                            NotificationChannels()
+                        } catch (_: IllegalStateException) {
+                            NotificationChannels()
+                        } catch (_: IllegalArgumentException) {
                             NotificationChannels()
                         },
                         lastTriggeredAt = row[DashboardWidgetAlerts.lastTriggeredAt],
@@ -267,7 +276,13 @@ class DashboardAlertService(
         for (alert in alerts) {
             try {
                 evaluateAlert(alert)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Error evaluating dashboard alert ${alert.alertId}" }
+            } catch (e: IOException) {
+                logger.error(e) { "Error evaluating dashboard alert ${alert.alertId}" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Error evaluating dashboard alert ${alert.alertId}" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Error evaluating dashboard alert ${alert.alertId}" }
             }
         }
@@ -279,7 +294,13 @@ class DashboardAlertService(
 
         val queryConfigs: List<QueryDsl> = try {
             json.decodeFromString(alert.queryConfigsJson)
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            return
+        } catch (_: IOException) {
+            return
+        } catch (_: IllegalStateException) {
+            return
+        } catch (_: IllegalArgumentException) {
             return
         }
         if (queryConfigs.isEmpty()) return
@@ -291,7 +312,16 @@ class DashboardAlertService(
 
         val results = try {
             queryEngine.executeQuery(queryDsl, projectId, null, retentionDays)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Failed to execute query for dashboard alert ${alert.alertId}" }
+            return
+        } catch (e: IOException) {
+            logger.warn(e) { "Failed to execute query for dashboard alert ${alert.alertId}" }
+            return
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Failed to execute query for dashboard alert ${alert.alertId}" }
+            return
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Failed to execute query for dashboard alert ${alert.alertId}" }
             return
         }
@@ -315,14 +345,28 @@ class DashboardAlertService(
                 } else {
                     false
                 }
-            } catch (_: Exception) { false }
+            } catch (_: SerializationException) {
+                false
+            } catch (_: IOException) {
+                false
+            } catch (_: IllegalStateException) {
+                false
+            } catch (_: IllegalArgumentException) {
+                false
+            }
 
             clearPendingState(pendingKey, alert.alertId)
 
             if (wasTriggered) {
                 try {
                     if (RedisConfig.isConnected()) RedisConfig.sync().del(alertKey)
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to clear dashboard alert state in Redis" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to clear dashboard alert state in Redis" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to clear dashboard alert state in Redis" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to clear dashboard alert state in Redis" }
                 }
                 sendRecoveryNotification(alert, currentValue)
@@ -332,7 +376,13 @@ class DashboardAlertService(
                         source = AlertSource.DASHBOARD_ALERT,
                         deduplicationKey = "moneat-dashboard-alert-${alert.alertId}"
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to resolve incident for recovered dashboard alert ${alert.alertId}" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to resolve incident for recovered dashboard alert ${alert.alertId}" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to resolve incident for recovered dashboard alert ${alert.alertId}" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to resolve incident for recovered dashboard alert ${alert.alertId}" }
                 }
                 logger.info { "Dashboard alert ${alert.alertId} recovered" }
@@ -356,7 +406,11 @@ class DashboardAlertService(
             if ((now - alert.lastTriggeredAt) < MIN_ALERT_INTERVAL_MINUTES.minutes) {
                 try {
                     if (RedisConfig.isConnected()) RedisConfig.sync().set(alertKey, "TRIGGERED")
-                } catch (_: Exception) {}
+                } catch (_: SerializationException) {
+                } catch (_: IOException) {
+                } catch (_: IllegalStateException) {
+                } catch (_: IllegalArgumentException) {
+                }
                 return
             }
         }
@@ -368,7 +422,13 @@ class DashboardAlertService(
 
         try {
             if (RedisConfig.isConnected()) RedisConfig.sync().set(alertKey, "TRIGGERED")
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to set dashboard alert state in Redis" }
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to set dashboard alert state in Redis" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to set dashboard alert state in Redis" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to set dashboard alert state in Redis" }
         }
 
@@ -432,7 +492,13 @@ class DashboardAlertService(
                 if (existing != null) return Instant.fromEpochMilliseconds(existing * 1000)
                 redis.set(pendingKey, (now.toEpochMilliseconds() / 1000).toString())
                 return now
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
+                // fallback below
+            } catch (_: IOException) {
+                // fallback below
+            } catch (_: IllegalStateException) {
+                // fallback below
+            } catch (_: IllegalArgumentException) {
                 // fallback below
             }
         }
@@ -443,7 +509,13 @@ class DashboardAlertService(
         if (RedisConfig.isConnected()) {
             try {
                 RedisConfig.sync().del(pendingKey)
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
+                // best effort
+            } catch (_: IOException) {
+                // best effort
+            } catch (_: IllegalStateException) {
+                // best effort
+            } catch (_: IllegalArgumentException) {
                 // best effort
             }
         }
@@ -477,7 +549,13 @@ class DashboardAlertService(
                     val htmlBody = buildAlertEmailHtml(alert, formattedValue, formattedThreshold, baseUrl)
                     val textBody = buildAlertEmailText(alert, formattedValue, formattedThreshold, baseUrl)
                     emailService.sendEmail(email, subject, htmlBody, textBody, "dashboard_alert")
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to send dashboard alert email to $email" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to send dashboard alert email to $email" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to send dashboard alert email to $email" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to send dashboard alert email to $email" }
                 }
             }
@@ -494,7 +572,13 @@ class DashboardAlertService(
                         currentValue = formattedValue, severity = alert.incidentSeverity,
                         dashboardId = alert.dashboardId, baseUrl = baseUrl
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to send Slack notification for dashboard alert" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to send Slack notification for dashboard alert" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to send Slack notification for dashboard alert" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to send Slack notification for dashboard alert" }
                 }
             }
@@ -515,7 +599,13 @@ class DashboardAlertService(
                         currentValue = formattedValue, severity = alert.incidentSeverity,
                         dashboardId = alert.dashboardId, baseUrl = baseUrl
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to send Discord notification for dashboard alert" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to send Discord notification for dashboard alert" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to send Discord notification for dashboard alert" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to send Discord notification for dashboard alert" }
                 }
             }
@@ -538,7 +628,13 @@ class DashboardAlertService(
                             moneatUrl = "$baseUrl/dashboards/${alert.dashboardId}"
                         )
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to trigger incident for dashboard alert" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to trigger incident for dashboard alert" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to trigger incident for dashboard alert" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to trigger incident for dashboard alert" }
                 }
             }
@@ -573,7 +669,13 @@ class DashboardAlertService(
                         "Dashboard: ${alert.dashboardTitle}\nWidget: ${alert.widgetTitle}\n" +
                         "Current Value: $formattedValue\nView: $baseUrl/dashboards/${alert.dashboardId}"
                     emailService.sendEmail(email, subject, htmlBody, textBody, "dashboard_alert_recovery")
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to send dashboard alert recovery email to $email" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to send dashboard alert recovery email to $email" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to send dashboard alert recovery email to $email" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to send dashboard alert recovery email to $email" }
                 }
             }
@@ -632,7 +734,13 @@ class DashboardAlertService(
     private fun toResponse(row: ResultRow): DashboardAlertResponse {
         val channels: NotificationChannels = try {
             json.decodeFromString(row[DashboardWidgetAlerts.notificationChannels])
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            NotificationChannels()
+        } catch (_: IOException) {
+            NotificationChannels()
+        } catch (_: IllegalStateException) {
+            NotificationChannels()
+        } catch (_: IllegalArgumentException) {
             NotificationChannels()
         }
 

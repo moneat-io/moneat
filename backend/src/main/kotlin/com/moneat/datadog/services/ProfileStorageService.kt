@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.EnvConfig
 import mu.KotlinLogging
 import java.io.ByteArrayOutputStream
@@ -123,7 +126,28 @@ object ProfileStorageService {
                 File(tempDir, legacyName).writeBytes(legacyData)
                 Files.move(tempDir.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)
                 backup.delete()
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                // Restore backup if migration fails
+                if (!dir.exists() && backup.exists()) {
+                    Files.move(backup.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                }
+                tempDir.deleteRecursively()
+                throw e
+            } catch (e: IOException) {
+                // Restore backup if migration fails
+                if (!dir.exists() && backup.exists()) {
+                    Files.move(backup.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                }
+                tempDir.deleteRecursively()
+                throw e
+            } catch (e: IllegalStateException) {
+                // Restore backup if migration fails
+                if (!dir.exists() && backup.exists()) {
+                    Files.move(backup.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                }
+                tempDir.deleteRecursively()
+                throw e
+            } catch (e: IllegalArgumentException) {
                 // Restore backup if migration fails
                 if (!dir.exists() && backup.exists()) {
                     Files.move(backup.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)

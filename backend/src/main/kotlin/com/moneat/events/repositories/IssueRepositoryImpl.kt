@@ -16,6 +16,9 @@
 
 package com.moneat.events.repositories
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.events.models.EventResponse
 import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.repositories.models.IssueDetailRow
@@ -119,7 +122,16 @@ class IssueRepositoryImpl(
                     status = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved",
                     fingerprint = null
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to parse issue row" }
+                null
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to parse issue row" }
+                null
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to parse issue row" }
+                null
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to parse issue row" }
                 null
             }

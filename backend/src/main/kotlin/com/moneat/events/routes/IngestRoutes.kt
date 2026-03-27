@@ -16,6 +16,9 @@
 
 package com.moneat.events.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.config.RedisConfig
@@ -137,7 +140,28 @@ fun Route.ingestRoutes(
                 enqueueEnvelope(queueKey, message)
 
                 call.respond(HttpStatusCode.Accepted, mapOf("id" to envelope.eventId))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to process envelope: ${e.message}" }
+                e.printStackTrace()
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    DetailedErrorResponse("Invalid envelope format", e.message ?: "Unknown error")
+                )
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to process envelope: ${e.message}" }
+                e.printStackTrace()
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    DetailedErrorResponse("Invalid envelope format", e.message ?: "Unknown error")
+                )
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to process envelope: ${e.message}" }
+                e.printStackTrace()
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    DetailedErrorResponse("Invalid envelope format", e.message ?: "Unknown error")
+                )
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to process envelope: ${e.message}" }
                 e.printStackTrace()
                 call.respond(
@@ -193,7 +217,19 @@ fun Route.ingestRoutes(
             val entries =
                 try {
                     json.decodeFromString<List<LogIngestEntry>>(payloadBytes.decodeToString())
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.warn(e) { "Invalid log payload for project $projectId" }
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
+                    return@post
+                } catch (e: IOException) {
+                    logger.warn(e) { "Invalid log payload for project $projectId" }
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
+                    return@post
+                } catch (e: IllegalStateException) {
+                    logger.warn(e) { "Invalid log payload for project $projectId" }
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
+                    return@post
+                } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid log payload for project $projectId" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
                     return@post
@@ -270,7 +306,16 @@ fun Route.ingestRoutes(
 
                 eventService.processStoreEvent(projectId, body)
                 call.respond(HttpStatusCode.OK)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to process store event" }
+                call.respond(HttpStatusCode.BadRequest, "Invalid event format")
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to process store event" }
+                call.respond(HttpStatusCode.BadRequest, "Invalid event format")
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to process store event" }
+                call.respond(HttpStatusCode.BadRequest, "Invalid event format")
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to process store event" }
                 call.respond(HttpStatusCode.BadRequest, "Invalid event format")
             }

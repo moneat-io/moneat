@@ -16,6 +16,9 @@
 
 package com.moneat.notifications.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.OrganizationIntegrations
 import io.ktor.client.HttpClient
@@ -373,7 +376,16 @@ class DiscordService(
                 logger.error("Failed to send to Discord: ${response.status} - ${response.bodyAsText()}")
                 false to errorMsg
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error sending to Discord", e)
+            false to "Error: ${e.message}"
+        } catch (e: IOException) {
+            logger.error("Error sending to Discord", e)
+            false to "Error: ${e.message}"
+        } catch (e: IllegalStateException) {
+            logger.error("Error sending to Discord", e)
+            false to "Error: ${e.message}"
+        } catch (e: IllegalArgumentException) {
             logger.error("Error sending to Discord", e)
             false to "Error: ${e.message}"
         }
@@ -554,7 +566,16 @@ class DiscordService(
                 )
 
             json.decodeFromString<DiscordOAuthResponse>(response.bodyAsText())
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error exchanging Discord OAuth code", e)
+            DiscordOAuthResponse(error = e.message)
+        } catch (e: IOException) {
+            logger.error("Error exchanging Discord OAuth code", e)
+            DiscordOAuthResponse(error = e.message)
+        } catch (e: IllegalStateException) {
+            logger.error("Error exchanging Discord OAuth code", e)
+            DiscordOAuthResponse(error = e.message)
+        } catch (e: IllegalArgumentException) {
             logger.error("Error exchanging Discord OAuth code", e)
             DiscordOAuthResponse(error = e.message)
         }
@@ -580,7 +601,16 @@ class DiscordService(
                 logger.error("Failed to list Discord channels: ${response.status}")
                 emptyList()
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error listing Discord channels", e)
+            emptyList()
+        } catch (e: IOException) {
+            logger.error("Error listing Discord channels", e)
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error("Error listing Discord channels", e)
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error("Error listing Discord channels", e)
             emptyList()
         }

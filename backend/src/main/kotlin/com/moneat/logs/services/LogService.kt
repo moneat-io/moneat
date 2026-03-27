@@ -16,6 +16,9 @@
 
 package com.moneat.logs.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
@@ -224,7 +227,13 @@ class LogService(private val logRepository: LogRepository) {
     fun parseLiveLog(payload: String): LogEntryResponse? {
         return try {
             json.decodeFromString<LogEntryResponse>(payload)
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            null
+        } catch (_: IOException) {
+            null
+        } catch (_: IllegalStateException) {
+            null
+        } catch (_: IllegalArgumentException) {
             null
         }
     }
@@ -313,7 +322,19 @@ class LogService(private val logRepository: LogRepository) {
                         conditions += "($queryCondition)"
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to parse query '${request.query}', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(request.query)
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to parse query '${request.query}', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(request.query)
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to parse query '${request.query}', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(request.query)
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to parse query '${request.query}', falling back to simple search" }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(request.query)
@@ -414,7 +435,13 @@ class LogService(private val logRepository: LogRepository) {
                 try {
                     val jsonElement = Json.parseToJsonElement(totalCountBody.trim())
                     jsonElement.jsonObject["count"]?.jsonPrimitive?.longOrNull ?: 0L
-                } catch (_: Exception) {
+                } catch (_: SerializationException) {
+                    0L
+                } catch (_: IOException) {
+                    0L
+                } catch (_: IllegalStateException) {
+                    0L
+                } catch (_: IllegalArgumentException) {
                     0L
                 }
             } else {
@@ -510,7 +537,19 @@ class LogService(private val logRepository: LogRepository) {
                         conditions += "($queryCondition)"
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
@@ -589,7 +628,7 @@ class LogService(private val logRepository: LogRepository) {
                 } else {
                     groups["_total"] = (groups["_total"] ?: 0L) + cnt
                 }
-            } catch (_: Exception) {}
+            } catch (_: SerializationException) {} catch (_: IOException) {} catch (_: IllegalStateException) {} catch (_: IllegalArgumentException) {}
         }
 
         val buckets =
@@ -646,7 +685,19 @@ class LogService(private val logRepository: LogRepository) {
                         conditions += "($queryCondition)"
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
@@ -711,7 +762,7 @@ class LogService(private val logRepository: LogRepository) {
                 val value = obj["field_value"]?.jsonPrimitive?.content ?: return@forEach
                 val cnt = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
                 values += LogTopValue(value = value, count = cnt)
-            } catch (_: Exception) {}
+            } catch (_: SerializationException) {} catch (_: IOException) {} catch (_: IllegalStateException) {} catch (_: IllegalArgumentException) {}
         }
 
         // Get total count for percentage calculation
@@ -728,7 +779,7 @@ class LogService(private val logRepository: LogRepository) {
                     .jsonObject["cnt"]
                     ?.jsonPrimitive
                     ?.longOrNull ?: 0L
-            } catch (_: Exception) { 0L }
+            } catch (_: SerializationException) { 0L } catch (_: IOException) { 0L } catch (_: IllegalStateException) { 0L } catch (_: IllegalArgumentException) { 0L }
 
         return LogTopResponse(field = field, values = values, totalCount = totalCount)
     }
@@ -770,7 +821,19 @@ class LogService(private val logRepository: LogRepository) {
                         conditions += "($queryCondition)"
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
@@ -839,7 +902,13 @@ class LogService(private val logRepository: LogRepository) {
                         obj["tags"]?.jsonPrimitive?.content ?: "{}"
                     ).joinToString(",") { csvEscape(it) }
                 sb.appendLine(csvRow)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn(e) { "Failed to parse log line for CSV: $line" }
+            } catch (e: IOException) {
+                logger.warn(e) { "Failed to parse log line for CSV: $line" }
+            } catch (e: IllegalStateException) {
+                logger.warn(e) { "Failed to parse log line for CSV: $line" }
+            } catch (e: IllegalArgumentException) {
                 logger.warn(e) { "Failed to parse log line for CSV: $line" }
             }
         }
@@ -925,7 +994,7 @@ class LogService(private val logRepository: LogRepository) {
                 val value = obj["val"]?.jsonPrimitive?.content ?: return@forEach
                 val count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
                 results += LogFilterOptionWithCount(value = value, count = count)
-            } catch (_: Exception) {}
+            } catch (_: SerializationException) {} catch (_: IOException) {} catch (_: IllegalStateException) {} catch (_: IllegalArgumentException) {}
         }
         return results
     }
@@ -1115,7 +1184,16 @@ class LogService(private val logRepository: LogRepository) {
                             hostId = hostIdFromTags
                         )
                     LogWithCursor(log = log, timestampMs = timestampMs)
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.warn(e) { "Failed to parse log row" }
+                    null
+                } catch (e: IOException) {
+                    logger.warn(e) { "Failed to parse log row" }
+                    null
+                } catch (e: IllegalStateException) {
+                    logger.warn(e) { "Failed to parse log row" }
+                    null
+                } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Failed to parse log row" }
                     null
                 }
@@ -1141,7 +1219,13 @@ class LogService(private val logRepository: LogRepository) {
                     }
                 }
             }
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyMap()
+        } catch (_: IOException) {
+            emptyMap()
+        } catch (_: IllegalStateException) {
+            emptyMap()
+        } catch (_: IllegalArgumentException) {
             emptyMap()
         }
     }
@@ -1313,7 +1397,16 @@ class LogService(private val logRepository: LogRepository) {
         val parsed =
             try {
                 json.parseToJsonElement(payload).jsonObject
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn(e) { "Invalid OTLP JSON payload" }
+                return emptyList()
+            } catch (e: IOException) {
+                logger.warn(e) { "Invalid OTLP JSON payload" }
+                return emptyList()
+            } catch (e: IllegalStateException) {
+                logger.warn(e) { "Invalid OTLP JSON payload" }
+                return emptyList()
+            } catch (e: IllegalArgumentException) {
                 logger.warn(e) { "Invalid OTLP JSON payload" }
                 return emptyList()
             }
@@ -1381,7 +1474,13 @@ class LogService(private val logRepository: LogRepository) {
 
         return try {
             Instant.parse(trimmed).toEpochMilli()
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            null
+        } catch (_: IOException) {
+            null
+        } catch (_: IllegalStateException) {
+            null
+        } catch (_: IllegalArgumentException) {
             null
         }
     }
@@ -1403,7 +1502,13 @@ class LogService(private val logRepository: LogRepository) {
         val parsed =
             try {
                 UUID.fromString(rawSystemId)
-            } catch (_: Exception) {
+            } catch (_: SerializationException) {
+                return null
+            } catch (_: IOException) {
+                return null
+            } catch (_: IllegalStateException) {
+                return null
+            } catch (_: IllegalArgumentException) {
                 return null
             }
 
@@ -1496,7 +1601,13 @@ class LogService(private val logRepository: LogRepository) {
             val ts = parts[0].toLongOrNull() ?: return null
             val logId = parts[1]
             ts to logId
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            null
+        } catch (_: IOException) {
+            null
+        } catch (_: IllegalStateException) {
+            null
+        } catch (_: IllegalArgumentException) {
             null
         }
     }
@@ -1544,7 +1655,16 @@ class LogService(private val logRepository: LogRepository) {
                 } else {
                     ""
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn(e) { "Failed to parse malformed tag as query: $key:$value" }
+                ""
+            } catch (e: IOException) {
+                logger.warn(e) { "Failed to parse malformed tag as query: $key:$value" }
+                ""
+            } catch (e: IllegalStateException) {
+                logger.warn(e) { "Failed to parse malformed tag as query: $key:$value" }
+                ""
+            } catch (e: IllegalArgumentException) {
                 logger.warn(e) { "Failed to parse malformed tag as query: $key:$value" }
                 ""
             }

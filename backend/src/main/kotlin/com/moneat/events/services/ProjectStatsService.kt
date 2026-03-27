@@ -16,6 +16,9 @@
 
 package com.moneat.events.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.ProjectStatsResponse
 import com.moneat.events.models.ReleaseMarker
@@ -273,7 +276,58 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
                         releaseMarkers = releaseMarkersDeferred.await()
                     )
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to fetch project stats" }
+                ProjectStatsResponse(
+                    totalEvents = 0,
+                    totalIssues = 0,
+                    unresolvedIssues = 0,
+                    affectedUsers = 0,
+                    eventsTimeline = emptyList(),
+                    eventsByLevel = emptyMap(),
+                    eventsByPlatform = emptyMap(),
+                    eventsByBrowser = emptyMap(),
+                    eventsByEnvironment = emptyMap(),
+                    issuesByStatus = emptyMap(),
+                    topIssues = emptyList(),
+                    usersTimeline = emptyList(),
+                    releaseMarkers = emptyList()
+                )
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to fetch project stats" }
+                ProjectStatsResponse(
+                    totalEvents = 0,
+                    totalIssues = 0,
+                    unresolvedIssues = 0,
+                    affectedUsers = 0,
+                    eventsTimeline = emptyList(),
+                    eventsByLevel = emptyMap(),
+                    eventsByPlatform = emptyMap(),
+                    eventsByBrowser = emptyMap(),
+                    eventsByEnvironment = emptyMap(),
+                    issuesByStatus = emptyMap(),
+                    topIssues = emptyList(),
+                    usersTimeline = emptyList(),
+                    releaseMarkers = emptyList()
+                )
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to fetch project stats" }
+                ProjectStatsResponse(
+                    totalEvents = 0,
+                    totalIssues = 0,
+                    unresolvedIssues = 0,
+                    affectedUsers = 0,
+                    eventsTimeline = emptyList(),
+                    eventsByLevel = emptyMap(),
+                    eventsByPlatform = emptyMap(),
+                    eventsByBrowser = emptyMap(),
+                    eventsByEnvironment = emptyMap(),
+                    issuesByStatus = emptyMap(),
+                    topIssues = emptyList(),
+                    usersTimeline = emptyList(),
+                    releaseMarkers = emptyList()
+                )
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to fetch project stats" }
                 ProjectStatsResponse(
                     totalEvents = 0,
@@ -331,7 +385,16 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
                         timestamp = obj["timestamp"]?.jsonPrimitive?.contentOrNull ?: ""
                     )
                 }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Failed to fetch release markers" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.warn(e) { "Failed to fetch release markers" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Failed to fetch release markers" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Failed to fetch release markers" }
             emptyList()
         }

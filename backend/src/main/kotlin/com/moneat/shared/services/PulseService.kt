@@ -16,6 +16,9 @@
 
 package com.moneat.shared.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import io.ktor.client.HttpClient
@@ -82,7 +85,13 @@ class PulseService(
                     sendPulse(metrics)
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.debug(e) { "Telemetry pulse failed — will retry next interval" }
+                } catch (e: IOException) {
+                    logger.debug(e) { "Telemetry pulse failed — will retry next interval" }
+                } catch (e: IllegalStateException) {
+                    logger.debug(e) { "Telemetry pulse failed — will retry next interval" }
+                } catch (e: IllegalArgumentException) {
                     logger.debug(e) { "Telemetry pulse failed — will retry next interval" }
                 }
                 delay(interval)
@@ -151,7 +160,16 @@ class PulseService(
 
                 Pair(projects, users)
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.debug(e) { "Failed to collect PostgreSQL counts" }
+            Pair(0L, 0L)
+        } catch (e: IOException) {
+            logger.debug(e) { "Failed to collect PostgreSQL counts" }
+            Pair(0L, 0L)
+        } catch (e: IllegalStateException) {
+            logger.debug(e) { "Failed to collect PostgreSQL counts" }
+            Pair(0L, 0L)
+        } catch (e: IllegalArgumentException) {
             logger.debug(e) { "Failed to collect PostgreSQL counts" }
             Pair(0L, 0L)
         }
@@ -160,12 +178,28 @@ class PulseService(
         val eventCount = try {
             ClickHouseClient.execute("SELECT COUNT(*) FROM events")
                 .bodyAsText().trim().toLongOrNull() ?: 0L
-        } catch (_: Exception) { 0L }
+        } catch (_: SerializationException) {
+            0L
+        } catch (_: IOException) {
+            0L
+        } catch (_: IllegalStateException) {
+            0L
+        } catch (_: IllegalArgumentException) {
+            0L
+        }
 
         val issueCount = try {
             ClickHouseClient.execute("SELECT COUNT(*) FROM issues")
                 .bodyAsText().trim().toLongOrNull() ?: 0L
-        } catch (_: Exception) { 0L }
+        } catch (_: SerializationException) {
+            0L
+        } catch (_: IOException) {
+            0L
+        } catch (_: IllegalStateException) {
+            0L
+        } catch (_: IllegalArgumentException) {
+            0L
+        }
 
         return UsageCounts(
             projectCount = projectCount,
@@ -195,7 +229,16 @@ class PulseService(
                     newId
                 }
             }
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            // Table may not exist yet — generate a transient ID
+            "transient-${UUID.randomUUID()}"
+        } catch (_: IOException) {
+            // Table may not exist yet — generate a transient ID
+            "transient-${UUID.randomUUID()}"
+        } catch (_: IllegalStateException) {
+            // Table may not exist yet — generate a transient ID
+            "transient-${UUID.randomUUID()}"
+        } catch (_: IllegalArgumentException) {
             // Table may not exist yet — generate a transient ID
             "transient-${UUID.randomUUID()}"
         }
@@ -227,7 +270,13 @@ class PulseService(
             val snapshot = if (enabled) {
                 try {
                     PulseService().collectMetrics()
-                } catch (_: Exception) {
+                } catch (_: SerializationException) {
+                    null
+                } catch (_: IOException) {
+                    null
+                } catch (_: IllegalStateException) {
+                    null
+                } catch (_: IllegalArgumentException) {
                     null
                 }
             } else {

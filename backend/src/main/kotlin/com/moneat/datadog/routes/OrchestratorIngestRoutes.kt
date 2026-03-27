@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdManifestPayload
@@ -59,7 +62,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorReso
 
         logger.debug { "Enqueued $count K8s resources for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process orchestrator resources" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process orchestrator resources" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process orchestrator resources" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process orchestrator resources" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -77,7 +89,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorMani
 
         logger.debug { "Enqueued $count K8s manifests for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process orchestrator manifests" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process orchestrator manifests" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process orchestrator manifests" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process orchestrator manifests" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

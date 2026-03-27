@@ -16,6 +16,9 @@
 
 package com.moneat.ai
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.EnvConfig
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -83,7 +86,13 @@ object OpenAiClient {
                     header("Authorization", "Bearer $apiKey")
                     setBody(request)
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
+            } catch (e: IOException) {
+                throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
+            } catch (e: IllegalStateException) {
+                throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
+            } catch (e: IllegalArgumentException) {
                 throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
             }
 

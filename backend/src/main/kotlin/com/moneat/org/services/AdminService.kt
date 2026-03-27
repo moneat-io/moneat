@@ -16,6 +16,9 @@
 
 package com.moneat.org.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.ai.AiConversations
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
@@ -621,7 +624,13 @@ class AdminService(
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to query ClickHouse system.parts" }
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to query ClickHouse system.parts" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to query ClickHouse system.parts" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to query ClickHouse system.parts" }
         }
 
@@ -824,7 +833,16 @@ class AdminService(
                 }
 
             Triple(allTime, last30Count, timeline)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to query ClickHouse for events" }
+            Triple(0L, 0L, emptyList<AdminTimelinePoint>())
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to query ClickHouse for events" }
+            Triple(0L, 0L, emptyList<AdminTimelinePoint>())
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to query ClickHouse for events" }
+            Triple(0L, 0L, emptyList<AdminTimelinePoint>())
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to query ClickHouse for events" }
             Triple(0L, 0L, emptyList<AdminTimelinePoint>())
         }
@@ -962,7 +980,16 @@ class AdminService(
                     Users.deleteWhere { Users.id eq userId }
 
                     deletedCount++
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to delete user $userId" }
+                    errors.add("Failed to delete user $userId: ${e.message}")
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to delete user $userId" }
+                    errors.add("Failed to delete user $userId: ${e.message}")
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to delete user $userId" }
+                    errors.add("Failed to delete user $userId: ${e.message}")
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to delete user $userId" }
                     errors.add("Failed to delete user $userId: ${e.message}")
                 }
@@ -1060,7 +1087,16 @@ class AdminService(
             Organizations.deleteWhere { Organizations.id eq orgId }
 
             logger.info { "Deleted organization $orgId and all related data" }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to delete organization data for org $orgId" }
+            throw e
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to delete organization data for org $orgId" }
+            throw e
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to delete organization data for org $orgId" }
+            throw e
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to delete organization data for org $orgId" }
             throw e
         }

@@ -16,6 +16,9 @@
 
 package com.moneat.events.repositories
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.repositories.models.ErrorEventInsertData
 import com.moneat.events.repositories.models.FeedbackInsertData
@@ -92,7 +95,16 @@ class EventRepositoryImpl : EventRepository {
                 ?.get("cnt")
                 ?.jsonPrimitive
                 ?.longOrNull ?: 0
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error checking event count for issue $issueId" }
+            0
+        } catch (e: IOException) {
+            logger.error(e) { "Error checking event count for issue $issueId" }
+            0
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error checking event count for issue $issueId" }
+            0
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error checking event count for issue $issueId" }
             0
         }
@@ -387,7 +399,16 @@ class EventRepositoryImpl : EventRepository {
         return try {
             val response = ClickHouseClient.execute(sql)
             response.status.isSuccess()
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "ClickHouse insert failed" }
+            false
+        } catch (e: IOException) {
+            logger.error(e) { "ClickHouse insert failed" }
+            false
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "ClickHouse insert failed" }
+            false
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "ClickHouse insert failed" }
             false
         }
@@ -400,7 +421,13 @@ class EventRepositoryImpl : EventRepository {
                 val errorBody = response.bodyAsText()
                 logger.error { "ClickHouse insert failed: $errorBody" }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "ClickHouse insert failed" }
+        } catch (e: IOException) {
+            logger.error(e) { "ClickHouse insert failed" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "ClickHouse insert failed" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "ClickHouse insert failed" }
         }
     }

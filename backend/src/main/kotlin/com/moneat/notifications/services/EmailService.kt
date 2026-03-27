@@ -16,6 +16,9 @@
 
 package com.moneat.notifications.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.shared.models.EmailsSent
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
@@ -247,7 +250,34 @@ class EmailService {
                     "type" to emailType
                 )
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Failed to send email to $to", e)
+            Sentry.captureException(e) { scope ->
+                scope.setTag("email.operation", "send")
+                scope.setExtra("email.to", to)
+                scope.setExtra("email.subject", subject)
+                scope.setExtra("email.type", emailType)
+            }
+            throw e
+        } catch (e: IOException) {
+            logger.error("Failed to send email to $to", e)
+            Sentry.captureException(e) { scope ->
+                scope.setTag("email.operation", "send")
+                scope.setExtra("email.to", to)
+                scope.setExtra("email.subject", subject)
+                scope.setExtra("email.type", emailType)
+            }
+            throw e
+        } catch (e: IllegalStateException) {
+            logger.error("Failed to send email to $to", e)
+            Sentry.captureException(e) { scope ->
+                scope.setTag("email.operation", "send")
+                scope.setExtra("email.to", to)
+                scope.setExtra("email.subject", subject)
+                scope.setExtra("email.type", emailType)
+            }
+            throw e
+        } catch (e: IllegalArgumentException) {
             logger.error("Failed to send email to $to", e)
             Sentry.captureException(e) { scope ->
                 scope.setTag("email.operation", "send")
@@ -291,7 +321,13 @@ class EmailService {
                     it[EmailsSent.success] = success
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Failed to track email sent to $recipient" }
+        } catch (e: IOException) {
+            logger.warn(e) { "Failed to track email sent to $recipient" }
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Failed to track email sent to $recipient" }
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Failed to track email sent to $recipient" }
         }
     }

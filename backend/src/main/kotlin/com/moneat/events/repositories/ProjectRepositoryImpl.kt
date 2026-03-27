@@ -16,6 +16,9 @@
 
 package com.moneat.events.repositories
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.ProjectKeyResponse
@@ -228,7 +231,16 @@ class ProjectRepositoryImpl(
             obj["total"]?.jsonPrimitive?.long ?: 0
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to get issue count for project $projectId" }
+            0
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to get issue count for project $projectId" }
+            0
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to get issue count for project $projectId" }
+            0
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to get issue count for project $projectId" }
             0
         }

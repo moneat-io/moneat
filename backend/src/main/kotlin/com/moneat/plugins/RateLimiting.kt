@@ -16,6 +16,9 @@
 
 package com.moneat.plugins
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.EnvConfig
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.events.routes.extractPublicKey
@@ -75,7 +78,13 @@ private object TrustedProxies {
                 if (addrBits != networkBits) return false
             }
             true
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            false
+        } catch (_: IOException) {
+            false
+        } catch (_: IllegalStateException) {
+            false
+        } catch (_: IllegalArgumentException) {
             false
         }
     }

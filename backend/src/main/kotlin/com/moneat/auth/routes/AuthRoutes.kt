@@ -16,6 +16,9 @@
 
 package com.moneat.auth.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.auth.services.AuthService
 import com.moneat.auth.services.OAuthService
 import com.moneat.auth.services.SignupRequestContext
@@ -226,7 +229,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLogout(authServi
             if (userId != null) {
                 authService.logout(userId)
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            // Token invalid or expired, continue with logout
+        } catch (e: IOException) {
+            // Token invalid or expired, continue with logout
+        } catch (e: IllegalStateException) {
+            // Token invalid or expired, continue with logout
+        } catch (e: IllegalArgumentException) {
             // Token invalid or expired, continue with logout
         }
     }
@@ -299,7 +308,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGitHubOAuth(oaut
         )
         val authUrl = oauthService.generateGitHubAuthUrl(state)
         call.respondRedirect(authUrl)
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "GitHub OAuth init failed" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IOException) {
+        logger.error(e) { "GitHub OAuth init failed" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "GitHub OAuth init failed" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "GitHub OAuth init failed" }
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
@@ -339,7 +360,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGitHubCallback(o
         logger.error(e) { "GitHub OAuth callback failed: ${e.message}" }
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "GitHub OAuth callback error" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IOException) {
+        logger.error(e) { "GitHub OAuth callback error" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "GitHub OAuth callback error" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "GitHub OAuth callback error" }
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
@@ -370,7 +403,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAppleOAuth(oauth
         )
         val authUrl = oauthService.generateAppleAuthUrl(state)
         call.respondRedirect(authUrl)
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Apple OAuth init failed" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IOException) {
+        logger.error(e) { "Apple OAuth init failed" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Apple OAuth init failed" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Apple OAuth init failed" }
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
@@ -407,7 +452,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAppleCallback(oa
         logger.error(e) { "Apple OAuth callback failed: ${e.message}" }
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Apple OAuth callback error" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IOException) {
+        logger.error(e) { "Apple OAuth callback error" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Apple OAuth callback error" }
+        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
+        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Apple OAuth callback error" }
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")

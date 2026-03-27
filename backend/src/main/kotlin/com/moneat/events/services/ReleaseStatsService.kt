@@ -16,6 +16,9 @@
 
 package com.moneat.events.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.ReleaseDetailStats
 import com.moneat.events.models.ReleaseListResponse
@@ -83,7 +86,16 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                         userCount = r.userCount
                     )
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to fetch releases for project $projectId" }
+                emptyList()
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to fetch releases for project $projectId" }
+                emptyList()
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to fetch releases for project $projectId" }
+                emptyList()
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to fetch releases for project $projectId" }
                 emptyList()
             }
@@ -175,7 +187,16 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 eventsByLevel = queryHelper.executeMapQuery(eventsByLevelQuery, "level"),
                 topIssues = queryHelper.executeTopIssuesQuery(topIssuesQuery)
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch release stats for $version" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch release stats for $version" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch release stats for $version" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch release stats for $version" }
             null
         }
@@ -302,7 +323,13 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: return null
             if (rate.isNaN() || rate.isInfinite()) null else rate
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            null
+        } catch (e: IOException) {
+            null
+        } catch (e: IllegalStateException) {
+            null
+        } catch (e: IllegalArgumentException) {
             null
         }
     }

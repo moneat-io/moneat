@@ -16,6 +16,9 @@
 
 package com.moneat.enterprise
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.license.LicenseInfo
 import com.moneat.enterprise.license.LicenseValidator
@@ -116,7 +119,16 @@ object FeatureRegistry {
             try {
                 module.registerRoutes(route)
                 logger.info { "Routes registered for enterprise module: ${module.name}" }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to register routes for enterprise module: ${module.name}" }
+                throw e
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to register routes for enterprise module: ${module.name}" }
+                throw e
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to register routes for enterprise module: ${module.name}" }
+                throw e
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to register routes for enterprise module: ${module.name}" }
                 throw e
             }

@@ -16,6 +16,9 @@
 
 package com.moneat.ai
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.utils.SentryUtils
 import mu.KotlinLogging
 
@@ -50,7 +53,25 @@ class AiActionExecutor {
                         message = "Action submitted successfully. The operation will be performed using your existing permissions."
                     )
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to execute action $actionId" }
+                ActionResult(
+                    success = false,
+                    message = "Failed to execute action: ${e.message}"
+                )
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to execute action $actionId" }
+                ActionResult(
+                    success = false,
+                    message = "Failed to execute action: ${e.message}"
+                )
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to execute action $actionId" }
+                ActionResult(
+                    success = false,
+                    message = "Failed to execute action: ${e.message}"
+                )
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to execute action $actionId" }
                 ActionResult(
                     success = false,

@@ -16,6 +16,9 @@
 
 package com.moneat.config
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import io.ktor.events.*
 import io.ktor.server.application.*
 import io.lettuce.core.RedisClient
@@ -115,7 +118,16 @@ fun Application.configureRedis() {
     val redisUrl =
         try {
             environment.config.property("redis.url").getString()
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
+            return
+        } catch (e: IOException) {
+            log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
+            return
+        } catch (e: IllegalStateException) {
+            log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
+            return
+        } catch (e: IllegalArgumentException) {
             log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
             return
         }
@@ -126,7 +138,16 @@ fun Application.configureRedis() {
         log.info("Redis connection established")
         // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering
         // (workers must stop before Redis connection is closed)
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
+        throw e
+    } catch (e: IOException) {
+        log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
+        throw e
+    } catch (e: IllegalStateException) {
+        log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
+        throw e
+    } catch (e: IllegalArgumentException) {
         log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
         throw e
     }

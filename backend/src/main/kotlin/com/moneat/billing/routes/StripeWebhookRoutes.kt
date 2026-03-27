@@ -16,6 +16,9 @@
 
 package com.moneat.billing.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.billing.services.StripeService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
@@ -53,7 +56,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleStripeWebhook(st
     val event =
         try {
             stripeService.verifyAndParseEvent(payload, signature)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.debug { "Stripe webhook signature verification failed: ${e.message}" }
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid webhook signature"))
+            return
+        } catch (e: IOException) {
+            logger.debug { "Stripe webhook signature verification failed: ${e.message}" }
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid webhook signature"))
+            return
+        } catch (e: IllegalStateException) {
+            logger.debug { "Stripe webhook signature verification failed: ${e.message}" }
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid webhook signature"))
+            return
+        } catch (e: IllegalArgumentException) {
             logger.debug { "Stripe webhook signature verification failed: ${e.message}" }
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid webhook signature"))
             return
@@ -70,7 +85,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleStripeWebhook(st
         dispatchStripeEvent(stripeService, event)
         stripeService.markEventProcessed(event, "processed")
         call.respond(HttpStatusCode.OK, mapOf("received" to true))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed handling Stripe webhook ${event.id} (${event.type})" }
+        stripeService.markEventProcessed(event, "failed", e.message)
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Webhook handling failed"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed handling Stripe webhook ${event.id} (${event.type})" }
+        stripeService.markEventProcessed(event, "failed", e.message)
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Webhook handling failed"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed handling Stripe webhook ${event.id} (${event.type})" }
+        stripeService.markEventProcessed(event, "failed", e.message)
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Webhook handling failed"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed handling Stripe webhook ${event.id} (${event.type})" }
         stripeService.markEventProcessed(event, "failed", e.message)
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Webhook handling failed"))

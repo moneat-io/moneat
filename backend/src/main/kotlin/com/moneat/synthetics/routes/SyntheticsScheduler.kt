@@ -16,6 +16,9 @@
 
 package com.moneat.synthetics.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.shared.services.TaskLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -71,7 +74,16 @@ class SyntheticsScheduler(
     private suspend fun checkTests(schedulerScope: CoroutineScope) {
         val tests = try {
             service.getTestsDueForRun()
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to fetch synthetic tests due for run: ${e.message}" }
+            return
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fetch synthetic tests due for run: ${e.message}" }
+            return
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fetch synthetic tests due for run: ${e.message}" }
+            return
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to fetch synthetic tests due for run: ${e.message}" }
             return
         }
@@ -84,7 +96,13 @@ class SyntheticsScheduler(
             schedulerScope.launch {
                 try {
                     performCheck(test)
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to perform synthetic test ${test.id}: ${e.message}" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to perform synthetic test ${test.id}: ${e.message}" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to perform synthetic test ${test.id}: ${e.message}" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to perform synthetic test ${test.id}: ${e.message}" }
                 } finally {
                     runningTests.remove(test.id)

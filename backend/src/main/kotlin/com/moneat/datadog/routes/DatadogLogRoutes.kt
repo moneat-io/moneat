@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DatadogLogEntry
@@ -88,7 +91,16 @@ private fun parseLogEntries(bodyStr: String): List<DatadogLogEntry>? {
         } else {
             listOf(json.decodeFromString<DatadogLogEntry>(trimmed))
         }
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.warn(e) { "Failed to parse DD log payload" }
+        null
+    } catch (e: IOException) {
+        logger.warn(e) { "Failed to parse DD log payload" }
+        null
+    } catch (e: IllegalStateException) {
+        logger.warn(e) { "Failed to parse DD log payload" }
+        null
+    } catch (e: IllegalArgumentException) {
         logger.warn(e) { "Failed to parse DD log payload" }
         null
     }

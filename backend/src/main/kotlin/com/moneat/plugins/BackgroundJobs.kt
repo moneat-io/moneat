@@ -16,6 +16,9 @@
 
 package com.moneat.plugins
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.auth.services.RefreshTokenCleanupService
 import com.moneat.billing.services.BillingBackgroundService
 import com.moneat.config.ClickHouseClient
@@ -168,7 +171,13 @@ fun Application.configureBackgroundJobs() {
         try {
             UsageTrackingService.instance.flushBuffer()
             logger.info { "Flushed usage tracking buffer on shutdown" }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
         }
         monitorAlertService.stop()

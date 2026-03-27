@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.models.DdProfileEvent
 import com.moneat.datadog.models.DdProfileListResponse
@@ -472,7 +475,13 @@ object ProfileIngestionService {
             element.jsonObject.mapValues {
                 it.value.jsonPrimitive.content
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            emptyMap()
+        } catch (e: IOException) {
+            emptyMap()
+        } catch (e: IllegalStateException) {
+            emptyMap()
+        } catch (e: IllegalArgumentException) {
             emptyMap()
         }
     }

@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.CreateCustomDataSourceRequest
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.CustomDataSourceType
@@ -113,7 +116,25 @@ class CustomDataSourceService {
                 val existingCreds = try {
                     val dec = CredentialEncryption.decrypt(existing[CustomDataSources.encryptedCredentials])
                     json.decodeFromString<DataSourceCredentials>(dec)
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    throw IllegalStateException(
+                        "Failed to decrypt existing credentials for data source $id; " +
+                            "cannot safely merge new credentials",
+                        e
+                    )
+                } catch (e: IOException) {
+                    throw IllegalStateException(
+                        "Failed to decrypt existing credentials for data source $id; " +
+                            "cannot safely merge new credentials",
+                        e
+                    )
+                } catch (e: IllegalStateException) {
+                    throw IllegalStateException(
+                        "Failed to decrypt existing credentials for data source $id; " +
+                            "cannot safely merge new credentials",
+                        e
+                    )
+                } catch (e: IllegalArgumentException) {
                     throw IllegalStateException(
                         "Failed to decrypt existing credentials for data source $id; " +
                             "cannot safely merge new credentials",
@@ -176,7 +197,16 @@ class CustomDataSourceService {
         try {
             val decrypted = CredentialEncryption.decrypt(row[CustomDataSources.encryptedCredentials])
             json.decodeFromString<DataSourceCredentials>(decrypted)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to decrypt credentials for data source $id" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to decrypt credentials for data source $id" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to decrypt credentials for data source $id" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to decrypt credentials for data source $id" }
             null
         }
@@ -198,7 +228,15 @@ class CustomDataSourceService {
         databaseName = this[CustomDataSources.databaseName],
         extraConfig = try {
             json.decodeFromString<Map<String, String>>(this[CustomDataSources.extraConfig])
-        } catch (_: Exception) { emptyMap() },
+        } catch (_: SerializationException) {
+            emptyMap()
+        } catch (_: IOException) {
+            emptyMap()
+        } catch (_: IllegalStateException) {
+            emptyMap()
+        } catch (_: IllegalArgumentException) {
+            emptyMap()
+        },
         enabled = this[CustomDataSources.enabled],
         createdBy = this[CustomDataSources.createdBy],
         createdAt = this[CustomDataSources.createdAt].toString(),

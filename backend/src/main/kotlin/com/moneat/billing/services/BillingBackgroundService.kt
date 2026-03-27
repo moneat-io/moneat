@@ -16,6 +16,9 @@
 
 package com.moneat.billing.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.QuotaNotificationsSent
 import com.moneat.billing.repositories.SubscriptionRepositoryImpl
@@ -225,7 +228,13 @@ class BillingBackgroundService(
                     textBody = body,
                     emailType = "quota_notification"
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send quota notification to $email" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send quota notification to $email" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send quota notification to $email" }
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to send quota notification to $email" }
             }
         }

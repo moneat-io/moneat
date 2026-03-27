@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.ProcessAgentPayloadDecoder
 import com.moneat.datadog.services.DatadogInfraService
@@ -80,7 +83,19 @@ private suspend fun handleProcessAgentPayload(
 
     val proto = try {
         ProcessAgentPayloadDecoder.decompressBody(rawBody, header.encoding)
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.warn(e) { "Failed to decompress DD infra payload (type=${header.type}) for org $orgId" }
+        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+        return
+    } catch (e: IOException) {
+        logger.warn(e) { "Failed to decompress DD infra payload (type=${header.type}) for org $orgId" }
+        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+        return
+    } catch (e: IllegalStateException) {
+        logger.warn(e) { "Failed to decompress DD infra payload (type=${header.type}) for org $orgId" }
+        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+        return
+    } catch (e: IllegalArgumentException) {
         logger.warn(e) { "Failed to decompress DD infra payload (type=${header.type}) for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
         return
@@ -90,7 +105,16 @@ private suspend fun handleProcessAgentPayload(
         ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONTAINER -> {
             val payload = try {
                 ProcessAgentPayloadDecoder.decodeCollectorContainer(proto)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn(e) { "Failed to decode CollectorContainer for org $orgId" }
+                return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+            } catch (e: IOException) {
+                logger.warn(e) { "Failed to decode CollectorContainer for org $orgId" }
+                return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+            } catch (e: IllegalStateException) {
+                logger.warn(e) { "Failed to decode CollectorContainer for org $orgId" }
+                return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+            } catch (e: IllegalArgumentException) {
                 logger.warn(e) { "Failed to decode CollectorContainer for org $orgId" }
                 return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             }
@@ -102,7 +126,16 @@ private suspend fun handleProcessAgentPayload(
         ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC_DISCOVERY -> {
             val payload = try {
                 ProcessAgentPayloadDecoder.decodeCollectorProc(proto)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn(e) { "Failed to decode CollectorProc for org $orgId" }
+                return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+            } catch (e: IOException) {
+                logger.warn(e) { "Failed to decode CollectorProc for org $orgId" }
+                return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+            } catch (e: IllegalStateException) {
+                logger.warn(e) { "Failed to decode CollectorProc for org $orgId" }
+                return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+            } catch (e: IllegalArgumentException) {
                 logger.warn(e) { "Failed to decode CollectorProc for org $orgId" }
                 return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             }

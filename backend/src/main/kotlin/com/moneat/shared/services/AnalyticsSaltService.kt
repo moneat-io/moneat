@@ -16,6 +16,9 @@
 
 package com.moneat.shared.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.RedisConfig
 import io.lettuce.core.SetArgs
 import mu.KotlinLogging
@@ -57,7 +60,16 @@ object AnalyticsSaltService {
                 redis.set(key, candidate, SetArgs.Builder.nx().ex(SALT_TTL_SECONDS))
                 redis.get(key) ?: candidate
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn { "Redis unavailable for analytics salt, falling back to date: ${e.message}" }
+            date
+        } catch (e: IOException) {
+            logger.warn { "Redis unavailable for analytics salt, falling back to date: ${e.message}" }
+            date
+        } catch (e: IllegalStateException) {
+            logger.warn { "Redis unavailable for analytics salt, falling back to date: ${e.message}" }
+            date
+        } catch (e: IllegalArgumentException) {
             logger.warn { "Redis unavailable for analytics salt, falling back to date: ${e.message}" }
             date
         }

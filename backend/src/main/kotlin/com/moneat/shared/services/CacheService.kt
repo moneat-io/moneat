@@ -16,6 +16,9 @@
 
 package com.moneat.shared.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.RedisConfig
 import com.moneat.utils.SentryUtils
 import io.sentry.ISpan
@@ -68,7 +71,19 @@ object CacheService {
                         null
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                cacheLogger.warn(e) { "Cache GET failed for key=$key" }
+                SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
+                null
+            } catch (e: IOException) {
+                cacheLogger.warn(e) { "Cache GET failed for key=$key" }
+                SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
+                null
+            } catch (e: IllegalStateException) {
+                cacheLogger.warn(e) { "Cache GET failed for key=$key" }
+                SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
+                null
+            } catch (e: IllegalArgumentException) {
                 cacheLogger.warn(e) { "Cache GET failed for key=$key" }
                 SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
                 null
@@ -78,7 +93,16 @@ object CacheService {
             SentryUtils.breadcrumb("cache", "Cache HIT", mapOf("key" to key))
             return try {
                 cacheJson.decodeFromString(serializer, cached)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                cacheLogger.warn(e) { "Cache deserialize failed for key=$key" }
+                loader()
+            } catch (e: IOException) {
+                cacheLogger.warn(e) { "Cache deserialize failed for key=$key" }
+                loader()
+            } catch (e: IllegalStateException) {
+                cacheLogger.warn(e) { "Cache deserialize failed for key=$key" }
+                loader()
+            } catch (e: IllegalArgumentException) {
                 cacheLogger.warn(e) { "Cache deserialize failed for key=$key" }
                 loader()
             }
@@ -102,7 +126,16 @@ object CacheService {
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            cacheLogger.warn(e) { "Cache SETEX failed for key=$key" }
+            SentryUtils.breadcrumb("cache", "Cache SET failed", mapOf("key" to key, "error" to (e.message ?: "")))
+        } catch (e: IOException) {
+            cacheLogger.warn(e) { "Cache SETEX failed for key=$key" }
+            SentryUtils.breadcrumb("cache", "Cache SET failed", mapOf("key" to key, "error" to (e.message ?: "")))
+        } catch (e: IllegalStateException) {
+            cacheLogger.warn(e) { "Cache SETEX failed for key=$key" }
+            SentryUtils.breadcrumb("cache", "Cache SET failed", mapOf("key" to key, "error" to (e.message ?: "")))
+        } catch (e: IllegalArgumentException) {
             cacheLogger.warn(e) { "Cache SETEX failed for key=$key" }
             SentryUtils.breadcrumb("cache", "Cache SET failed", mapOf("key" to key, "error" to (e.message ?: "")))
         }
@@ -114,7 +147,13 @@ object CacheService {
             if (RedisConfig.isConnected()) {
                 RedisConfig.sync().del(key)
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            cacheLogger.warn(e) { "Cache DEL failed for key=$key" }
+        } catch (e: IOException) {
+            cacheLogger.warn(e) { "Cache DEL failed for key=$key" }
+        } catch (e: IllegalStateException) {
+            cacheLogger.warn(e) { "Cache DEL failed for key=$key" }
+        } catch (e: IllegalArgumentException) {
             cacheLogger.warn(e) { "Cache DEL failed for key=$key" }
         }
     }
@@ -127,7 +166,13 @@ object CacheService {
                     RedisConfig.sync().del(*keys.toTypedArray())
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            cacheLogger.warn(e) { "Cache DEL (pattern) failed for pattern=$pattern" }
+        } catch (e: IOException) {
+            cacheLogger.warn(e) { "Cache DEL (pattern) failed for pattern=$pattern" }
+        } catch (e: IllegalStateException) {
+            cacheLogger.warn(e) { "Cache DEL (pattern) failed for pattern=$pattern" }
+        } catch (e: IllegalArgumentException) {
             cacheLogger.warn(e) { "Cache DEL (pattern) failed for pattern=$pattern" }
         }
     }

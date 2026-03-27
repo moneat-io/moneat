@@ -16,6 +16,9 @@
 
 package com.moneat.logs.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
@@ -483,12 +486,21 @@ fun Route.logRoutes(
                         write("data: $next\n\n")
                         flush()
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+                } catch (e: IOException) {
+                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+                } catch (e: IllegalStateException) {
+                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+                } catch (e: IllegalArgumentException) {
                     logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
                 } finally {
                     try {
                         connection.sync().unsubscribe(channel)
-                    } catch (_: Exception) {
+                    } catch (_: SerializationException) {
+                    } catch (_: IOException) {
+                    } catch (_: IllegalStateException) {
+                    } catch (_: IllegalArgumentException) {
                     }
                     connection.removeListener(listener)
                     connection.close()
@@ -567,7 +579,13 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
         val userId = decoded.getClaim("userId").asInt()
         val orgId = decoded.getClaim("orgId").asInt().toLong()
         Pair(userId, orgId)
-    } catch (_: Exception) {
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IOException) {
+        null
+    } catch (_: IllegalStateException) {
+        null
+    } catch (_: IllegalArgumentException) {
         null
     }
 }
@@ -599,7 +617,16 @@ fun Route.logIngestRoutes(
             val encoding = call.request.header(HttpHeaders.ContentEncoding)
             val payloadBytes = try {
                 DecompressionService.decompress(bodyBytes, encoding)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
+                return@post
+            } catch (e: IOException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
+                return@post
+            } catch (e: IllegalStateException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
+                return@post
+            } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
                 return@post
             }
@@ -609,7 +636,16 @@ fun Route.logIngestRoutes(
                     json.decodeFromString<List<com.moneat.logs.models.LogIngestEntry>>(
                         payloadBytes.decodeToString()
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
+                    return@post
+                } catch (e: IOException) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
+                    return@post
+                } catch (e: IllegalStateException) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
+                    return@post
+                } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
                     return@post
                 }
@@ -684,7 +720,16 @@ private suspend fun handleOtlpLogIngest(
     val encoding = call.request.header(HttpHeaders.ContentEncoding)
     val payloadBytes = try {
         DecompressionService.decompress(bodyBytes, encoding)
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
+        return
+    } catch (e: IOException) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
+        return
+    } catch (e: IllegalStateException) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
+        return
+    } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
         return
     }

@@ -16,6 +16,8 @@
 
 package com.moneat.events.services
 
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.EnvelopeItem
@@ -312,7 +314,13 @@ class EventService(
                     transaction = transaction,
                     childSpans = spans
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn(e) { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
+            } catch (e: IOException) {
+                logger.warn(e) { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
+            } catch (e: IllegalStateException) {
+                logger.warn(e) { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
+            } catch (e: IllegalArgumentException) {
                 logger.warn(e) { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
             }
 
@@ -327,12 +335,27 @@ class EventService(
             transaction.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
                 try {
                     releaseService.upsertReleaseFromEvent(projectId, releaseVersion, endTimestampMs)
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
+                } catch (e: IOException) {
+                    logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
+                } catch (e: IllegalStateException) {
+                    logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
+                } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                 }
             }
             return true
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error storing transaction in ClickHouse" }
+            return false
+        } catch (e: IOException) {
+            logger.error(e) { "Error storing transaction in ClickHouse" }
+            return false
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error storing transaction in ClickHouse" }
+            return false
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error storing transaction in ClickHouse" }
             return false
         }
@@ -424,7 +447,13 @@ class EventService(
             event.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
                 try {
                     releaseService.upsertReleaseFromEvent(projectId, releaseVersion, timestamp)
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
+                } catch (e: IOException) {
+                    logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
+                } catch (e: IllegalStateException) {
+                    logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
+                } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                 }
             }
@@ -436,12 +465,27 @@ class EventService(
                         logger.info { "New issue detected: $issueId for project $projectId" }
                         notificationService?.onNewIssue(projectId, issueId, event)
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Error checking for new issue notifications" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Error checking for new issue notifications" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Error checking for new issue notifications" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Error checking for new issue notifications" }
                 }
             }
             return true
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error storing event in ClickHouse" }
+            return false
+        } catch (e: IOException) {
+            logger.error(e) { "Error storing event in ClickHouse" }
+            return false
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error storing event in ClickHouse" }
+            return false
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error storing event in ClickHouse" }
             return false
         }
@@ -464,7 +508,16 @@ class EventService(
                     java.time.Instant
                         .parse(it)
                         .toEpochMilli()
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
+                    System.currentTimeMillis()
+                } catch (e: IOException) {
+                    logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
+                    System.currentTimeMillis()
+                } catch (e: IllegalStateException) {
+                    logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
+                    System.currentTimeMillis()
+                } catch (e: IllegalArgumentException) {
                     logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
                     System.currentTimeMillis()
                 }
@@ -510,7 +563,16 @@ class EventService(
             if (!success) return false
             logger.info { "Feedback stored: $feedbackId for project $projectId" }
             return true
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error storing feedback in ClickHouse" }
+            return false
+        } catch (e: IOException) {
+            logger.error(e) { "Error storing feedback in ClickHouse" }
+            return false
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error storing feedback in ClickHouse" }
+            return false
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error storing feedback in ClickHouse" }
             return false
         }
@@ -587,7 +649,16 @@ class EventService(
             if (!success) return false
             logger.trace { "Replay event stored: $replayId segment $segmentId for project $projectId" }
             return true
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error storing replay event in ClickHouse" }
+            return false
+        } catch (e: IOException) {
+            logger.error(e) { "Error storing replay event in ClickHouse" }
+            return false
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error storing replay event in ClickHouse" }
+            return false
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error storing replay event in ClickHouse" }
             return false
         }
@@ -610,7 +681,13 @@ class EventService(
                 )
             )
             logger.trace { "Replay recording stored: $replayId segment $segmentId for project $projectId" }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error storing replay recording in ClickHouse" }
+        } catch (e: IOException) {
+            logger.error(e) { "Error storing replay recording in ClickHouse" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error storing replay recording in ClickHouse" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error storing replay recording in ClickHouse" }
         }
     }
@@ -666,7 +743,13 @@ class EventService(
                 )
             )
             logger.trace { "Synthetic replay event stored: $replayId for project $projectId" }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
+        } catch (e: IOException) {
+            logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
         }
     }
@@ -891,7 +974,13 @@ class EventService(
             } else {
                 logger.info { "Cross-inserted ${generations.size} ai.* spans as LLM generations for project $projectId" }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Failed to cross-insert ai.* spans as LLM generations" }
+        } catch (e: IOException) {
+            logger.warn(e) { "Failed to cross-insert ai.* spans as LLM generations" }
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Failed to cross-insert ai.* spans as LLM generations" }
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Failed to cross-insert ai.* spans as LLM generations" }
         }
     }
@@ -1078,7 +1167,13 @@ class EventService(
                 try {
                     val numericValue = value.jsonObject["value"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
                     if (numericValue != null) metrics["measurement.$key"] = numericValue
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.debug(e) { "Skipping malformed measurement '$key'" }
+                } catch (e: IOException) {
+                    logger.debug(e) { "Skipping malformed measurement '$key'" }
+                } catch (e: IllegalStateException) {
+                    logger.debug(e) { "Skipping malformed measurement '$key'" }
+                } catch (e: IllegalArgumentException) {
                     logger.debug(e) { "Skipping malformed measurement '$key'" }
                 }
             }
@@ -1102,7 +1197,13 @@ class EventService(
                 try {
                     val str = value.jsonPrimitive.contentOrNull
                     if (str != null) meta["data.$key"] = str
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.debug(e) { "Skipping malformed span data key '$key'" }
+                } catch (e: IOException) {
+                    logger.debug(e) { "Skipping malformed span data key '$key'" }
+                } catch (e: IllegalStateException) {
+                    logger.debug(e) { "Skipping malformed span data key '$key'" }
+                } catch (e: IllegalArgumentException) {
                     logger.debug(e) { "Skipping malformed span data key '$key'" }
                 }
             }
@@ -1117,7 +1218,13 @@ class EventService(
                 try {
                     val num = value.jsonPrimitive.contentOrNull?.toDoubleOrNull()
                     if (num != null) metrics["data.$key"] = num
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.debug(e) { "Skipping non-numeric span data key '$key'" }
+                } catch (e: IOException) {
+                    logger.debug(e) { "Skipping non-numeric span data key '$key'" }
+                } catch (e: IllegalStateException) {
+                    logger.debug(e) { "Skipping non-numeric span data key '$key'" }
+                } catch (e: IllegalArgumentException) {
                     logger.debug(e) { "Skipping non-numeric span data key '$key'" }
                 }
             }
@@ -1228,7 +1335,16 @@ class EventService(
                 return false
             }
             return true
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to store Sentry profile" }
+            return false
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to store Sentry profile" }
+            return false
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to store Sentry profile" }
+            return false
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to store Sentry profile" }
             return false
         }
@@ -1243,7 +1359,16 @@ class EventService(
 
         val count = try {
             eventRepository.getEventCountForIssue(projectId, issueId)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            knownIssueIds.remove(cacheKey)
+            throw e
+        } catch (e: IOException) {
+            knownIssueIds.remove(cacheKey)
+            throw e
+        } catch (e: IllegalStateException) {
+            knownIssueIds.remove(cacheKey)
+            throw e
+        } catch (e: IllegalArgumentException) {
             knownIssueIds.remove(cacheKey)
             throw e
         }

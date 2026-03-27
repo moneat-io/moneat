@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.datadog.models.DatadogHostMeta
 import com.moneat.datadog.models.DatadogHostMetadata
 import com.moneat.datadog.models.DatadogIntakePayload
@@ -51,7 +54,13 @@ private fun parseCpuCoresFromGohai(gohai: String): Int {
         cpu["cpu_logical_processors"]?.jsonPrimitive?.content?.toIntOrNull()
             ?: cpu["cpu_cores"]?.jsonPrimitive?.content?.toIntOrNull()
             ?: 0
-    } catch (_: Exception) {
+    } catch (_: SerializationException) {
+        0
+    } catch (_: IOException) {
+        0
+    } catch (_: IllegalStateException) {
+        0
+    } catch (_: IllegalArgumentException) {
         0
     }
 }
@@ -64,7 +73,13 @@ private fun parseMemoryKbFromGohai(gohai: String): Long {
         val memory = root["memory"]?.jsonObject ?: return 0L
         val totalBytes = memory["total"]?.jsonPrimitive?.content?.toLongOrNull() ?: return 0L
         totalBytes / BYTES_PER_KB
-    } catch (_: Exception) {
+    } catch (_: SerializationException) {
+        0L
+    } catch (_: IOException) {
+        0L
+    } catch (_: IllegalStateException) {
+        0L
+    } catch (_: IllegalArgumentException) {
         0L
     }
 }
@@ -77,7 +92,13 @@ private fun parseProcessorFromGohai(gohai: String): String {
         cpu["model_name"]?.jsonPrimitive?.content
             ?: cpu["cpu_brand"]?.jsonPrimitive?.content
             ?: ""
-    } catch (_: Exception) {
+    } catch (_: SerializationException) {
+        ""
+    } catch (_: IOException) {
+        ""
+    } catch (_: IllegalStateException) {
+        ""
+    } catch (_: IllegalArgumentException) {
         ""
     }
 }
@@ -398,7 +419,13 @@ object DatadogHostService {
         val tagsStr = row[DdHostsTable.tags]
         val tags = try {
             json.decodeFromString<Map<String, String>>(tagsStr)
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            emptyMap()
+        } catch (_: IOException) {
+            emptyMap()
+        } catch (_: IllegalStateException) {
+            emptyMap()
+        } catch (_: IllegalArgumentException) {
             emptyMap()
         }
         val lastSeenAt = row[DdHostsTable.lastSeenAt]

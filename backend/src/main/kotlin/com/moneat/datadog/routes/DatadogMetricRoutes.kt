@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.decompression.MetricPayloadDecoder
@@ -62,7 +65,43 @@ fun Route.datadogMetricRoutes() {
                     json.decodeFromString<DatadogMetricSeriesV1>(
                         bodyStr
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.warn(e) {
+                        "Failed to parse DD V1 series payload"
+                    }
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf(
+                            "errors" to listOf(
+                                "Invalid payload"
+                            )
+                        )
+                    )
+                } catch (e: IOException) {
+                    logger.warn(e) {
+                        "Failed to parse DD V1 series payload"
+                    }
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf(
+                            "errors" to listOf(
+                                "Invalid payload"
+                            )
+                        )
+                    )
+                } catch (e: IllegalStateException) {
+                    logger.warn(e) {
+                        "Failed to parse DD V1 series payload"
+                    }
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf(
+                            "errors" to listOf(
+                                "Invalid payload"
+                            )
+                        )
+                    )
+                } catch (e: IllegalArgumentException) {
                     logger.warn(e) {
                         "Failed to parse DD V1 series payload"
                     }
@@ -124,7 +163,25 @@ fun Route.datadogMetricRoutes() {
                     } else {
                         MetricPayloadDecoder.decode(body)
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.warn(e) { "Failed to parse DD V3 series payload" }
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("errors" to listOf("Invalid payload"))
+                    )
+                } catch (e: IOException) {
+                    logger.warn(e) { "Failed to parse DD V3 series payload" }
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("errors" to listOf("Invalid payload"))
+                    )
+                } catch (e: IllegalStateException) {
+                    logger.warn(e) { "Failed to parse DD V3 series payload" }
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("errors" to listOf("Invalid payload"))
+                    )
+                } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Failed to parse DD V3 series payload" }
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
@@ -168,7 +225,25 @@ fun Route.datadogMetricRoutes() {
                     } else {
                         MetricPayloadDecoder.decode(body)
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.warn(e) { "Failed to parse DD V2 series payload" }
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("errors" to listOf("Invalid payload"))
+                    )
+                } catch (e: IOException) {
+                    logger.warn(e) { "Failed to parse DD V2 series payload" }
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("errors" to listOf("Invalid payload"))
+                    )
+                } catch (e: IllegalStateException) {
+                    logger.warn(e) { "Failed to parse DD V2 series payload" }
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("errors" to listOf("Invalid payload"))
+                    )
+                } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Failed to parse DD V2 series payload" }
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
@@ -214,7 +289,28 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches() {
             val bodyStr = body.decodeToString()
             json.decodeFromString<DatadogSketchPayload>(bodyStr)
         }
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.warn(e) { "Failed to parse DD sketches" }
+        call.respond(
+            HttpStatusCode.BadRequest,
+            mapOf("errors" to listOf("Invalid payload"))
+        )
+        return
+    } catch (e: IOException) {
+        logger.warn(e) { "Failed to parse DD sketches" }
+        call.respond(
+            HttpStatusCode.BadRequest,
+            mapOf("errors" to listOf("Invalid payload"))
+        )
+        return
+    } catch (e: IllegalStateException) {
+        logger.warn(e) { "Failed to parse DD sketches" }
+        call.respond(
+            HttpStatusCode.BadRequest,
+            mapOf("errors" to listOf("Invalid payload"))
+        )
+        return
+    } catch (e: IllegalArgumentException) {
         logger.warn(e) { "Failed to parse DD sketches" }
         call.respond(
             HttpStatusCode.BadRequest,

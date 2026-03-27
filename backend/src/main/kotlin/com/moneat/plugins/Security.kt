@@ -16,6 +16,9 @@
 
 package com.moneat.plugins
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.auth.services.AuthTokenService
@@ -65,7 +68,16 @@ private fun parseBearerHeaderSafely(rawHeader: String?): HttpAuthHeader? {
 
     return try {
         HttpAuthHeader.Single("Bearer", token)
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.warn(e) { "Invalid Bearer auth header format (tokenLength=${token.length})" }
+        null
+    } catch (e: IOException) {
+        logger.warn(e) { "Invalid Bearer auth header format (tokenLength=${token.length})" }
+        null
+    } catch (e: IllegalStateException) {
+        logger.warn(e) { "Invalid Bearer auth header format (tokenLength=${token.length})" }
+        null
+    } catch (e: IllegalArgumentException) {
         logger.warn(e) { "Invalid Bearer auth header format (tokenLength=${token.length})" }
         null
     }
@@ -77,7 +89,16 @@ private fun parseBearerHeaderForKtor(rawHeader: String?): HttpAuthHeader? {
 
     return try {
         HttpAuthHeader.Single("Bearer", encodedToken)
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.warn(e) { "Failed to build token68-compatible bearer header (tokenLength=${token.length})" }
+        null
+    } catch (e: IOException) {
+        logger.warn(e) { "Failed to build token68-compatible bearer header (tokenLength=${token.length})" }
+        null
+    } catch (e: IllegalStateException) {
+        logger.warn(e) { "Failed to build token68-compatible bearer header (tokenLength=${token.length})" }
+        null
+    } catch (e: IllegalArgumentException) {
         logger.warn(e) { "Failed to build token68-compatible bearer header (tokenLength=${token.length})" }
         null
     }
@@ -134,7 +155,13 @@ fun Application.configureSecurity() {
                         try {
                             io.ktor.http.auth.HttpAuthHeader
                                 .Single("Bearer", cookieToken)
-                        } catch (e: Exception) {
+                        } catch (e: SerializationException) {
+                            null
+                        } catch (e: IOException) {
+                            null
+                        } catch (e: IllegalStateException) {
+                            null
+                        } catch (e: IllegalArgumentException) {
                             null
                         }
                     } else {
@@ -216,7 +243,13 @@ fun Application.configureSecurity() {
                             tokenId = -1 // Not applicable for JWT
                         )
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    // Not a valid JWT either
+                } catch (e: IOException) {
+                    // Not a valid JWT either
+                } catch (e: IllegalStateException) {
+                    // Not a valid JWT either
+                } catch (e: IllegalArgumentException) {
                     // Not a valid JWT either
                 }
 

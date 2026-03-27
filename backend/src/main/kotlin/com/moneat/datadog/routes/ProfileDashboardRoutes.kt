@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.services.DatadogJfrFlamegraphService
 import com.moneat.datadog.services.DatadogPprofFlamegraphService
@@ -320,7 +323,13 @@ private fun parseSentryProfileToFrames(
                 }
             )
         }
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        buildJsonObject { put("frames", buildJsonArray {}) }
+    } catch (e: IOException) {
+        buildJsonObject { put("frames", buildJsonArray {}) }
+    } catch (e: IllegalStateException) {
+        buildJsonObject { put("frames", buildJsonArray {}) }
+    } catch (e: IllegalArgumentException) {
         buildJsonObject { put("frames", buildJsonArray {}) }
     }
 }

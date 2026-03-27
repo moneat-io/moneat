@@ -16,6 +16,9 @@
 
 package com.moneat.events.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.auth.routes.accountDeletionRoutes
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.routes.publicBillingRoutes
@@ -1378,7 +1381,16 @@ fun Route.apiRoutes() {
                     val request =
                         try {
                             call.receive<UpdateAlertNotificationPreferenceRequest>()
-                        } catch (e: Exception) {
+                        } catch (e: SerializationException) {
+                            call.respond(HttpStatusCode.BadRequest, "Invalid request body")
+                            return@put
+                        } catch (e: IOException) {
+                            call.respond(HttpStatusCode.BadRequest, "Invalid request body")
+                            return@put
+                        } catch (e: IllegalStateException) {
+                            call.respond(HttpStatusCode.BadRequest, "Invalid request body")
+                            return@put
+                        } catch (e: IllegalArgumentException) {
                             call.respond(HttpStatusCode.BadRequest, "Invalid request body")
                             return@put
                         }

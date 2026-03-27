@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdContainerImagePayload
@@ -90,7 +93,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb() {
         MiscIngestionService.enqueueSymbolDb(orgId, payload)
         logger.debug { "Accepted DD symbol_db for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process symbol_db" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process symbol_db" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process symbol_db" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process symbol_db" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -105,7 +117,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats() 
         val count = MiscIngestionService.enqueuePipelineStats(orgId, payload)
         logger.debug { "Accepted $count DD pipeline_stats for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process pipeline_stats" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process pipeline_stats" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process pipeline_stats" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process pipeline_stats" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -120,7 +141,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage() {
         MiscIngestionService.enqueueDataLineage(orgId, payload)
         logger.debug { "Accepted DD data_lineage for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process data_lineage" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process data_lineage" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process data_lineage" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process data_lineage" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -135,7 +165,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams() {
         val count = MiscIngestionService.enqueueDataStreams(orgId, payload)
         logger.debug { "Accepted $count DD data_streams for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process data_streams" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process data_streams" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process data_streams" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process data_streams" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -150,7 +189,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics() {
         val count = MiscIngestionService.enqueueSynthetics(orgId, payload)
         logger.debug { "Accepted $count DD synthetics for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process synthetics" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process synthetics" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process synthetics" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process synthetics" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -172,7 +220,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage()
         MiscIngestionService.enqueueContainerImage(orgId, payload)
         logger.debug { "Accepted DD contimage for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process contimage" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process contimage" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process contimage" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process contimage" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -194,7 +251,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSbom() {
         val count = MiscIngestionService.enqueueSbom(orgId, payload)
         logger.debug { "Accepted $count DD sbom packages for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process sbom" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process sbom" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process sbom" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process sbom" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

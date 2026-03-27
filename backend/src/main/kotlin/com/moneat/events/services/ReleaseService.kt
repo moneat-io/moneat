@@ -16,6 +16,9 @@
 
 package com.moneat.events.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.StorageConfig
 import com.moneat.events.models.ReleaseResponse
 import com.moneat.events.models.SourceMapFileResponse
@@ -543,7 +546,22 @@ class ReleaseService {
                     "cache:project_stats:$projectId:*"
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) {
+                "Failed to auto-resolve issues for project " +
+                    "$projectId on release $newVersion"
+            }
+        } catch (e: IOException) {
+            logger.error(e) {
+                "Failed to auto-resolve issues for project " +
+                    "$projectId on release $newVersion"
+            }
+        } catch (e: IllegalStateException) {
+            logger.error(e) {
+                "Failed to auto-resolve issues for project " +
+                    "$projectId on release $newVersion"
+            }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) {
                 "Failed to auto-resolve issues for project " +
                     "$projectId on release $newVersion"

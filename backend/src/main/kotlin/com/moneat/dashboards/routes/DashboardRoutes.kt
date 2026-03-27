@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.BatchQueryResult
 import com.moneat.dashboards.models.CreateCustomDataSourceRequest
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
@@ -452,7 +455,16 @@ fun Route.customDashboardRoutes(
                                 retentionDays
                             )
                         }
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.warn(e) { "Batch query $refId failed" }
+                        results[refId] = emptyList()
+                    } catch (e: IOException) {
+                        logger.warn(e) { "Batch query $refId failed" }
+                        results[refId] = emptyList()
+                    } catch (e: IllegalStateException) {
+                        logger.warn(e) { "Batch query $refId failed" }
+                        results[refId] = emptyList()
+                    } catch (e: IllegalArgumentException) {
                         logger.warn(e) { "Batch query $refId failed" }
                         results[refId] = emptyList()
                     }
@@ -525,7 +537,13 @@ fun Route.customDashboardRoutes(
                 val request = call.receive<ImportDashboardRequest>()
                 val jsonObj = try {
                     json.parseToJsonElement(request.json) as JsonObject
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid JSON"))
+                } catch (e: IOException) {
+                    return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid JSON"))
+                } catch (e: IllegalStateException) {
+                    return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid JSON"))
+                } catch (e: IllegalArgumentException) {
                     return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid JSON"))
                 }
 
@@ -564,7 +582,16 @@ fun Route.customDashboardRoutes(
                         HttpStatusCode.Created,
                         DashboardImportResult(created, importResult.warnings, importResult.variables)
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to import dashboard" }
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to import: ${e.message}"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to import dashboard" }
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to import: ${e.message}"))
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to import dashboard" }
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to import: ${e.message}"))
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to import dashboard" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to import: ${e.message}"))
                 }
@@ -738,7 +765,13 @@ fun Route.customDashboardRoutes(
                     try {
                         val result = dataSourceExecutor.testConnection(request)
                         call.respond(result)
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        call.respond(TestConnectionResult(false, "Test failed: ${e.message}"))
+                    } catch (e: IOException) {
+                        call.respond(TestConnectionResult(false, "Test failed: ${e.message}"))
+                    } catch (e: IllegalStateException) {
+                        call.respond(TestConnectionResult(false, "Test failed: ${e.message}"))
+                    } catch (e: IllegalArgumentException) {
                         call.respond(TestConnectionResult(false, "Test failed: ${e.message}"))
                     }
                 }

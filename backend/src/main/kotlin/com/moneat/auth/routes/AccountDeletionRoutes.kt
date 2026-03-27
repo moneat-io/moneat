@@ -16,6 +16,9 @@
 
 package com.moneat.auth.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.auth.services.AccountDeletionService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
@@ -125,7 +128,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAccount(
     val request =
         try {
             call.receive<DeleteAccountRequest>()
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            return
+        } catch (e: IOException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            return
+        } catch (e: IllegalStateException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            return
+        } catch (e: IllegalArgumentException) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             return
         }
@@ -185,7 +197,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteOrganizati
     val request =
         try {
             call.receive<DeleteOrganizationRequest>()
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            return
+        } catch (e: IOException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            return
+        } catch (e: IllegalStateException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            return
+        } catch (e: IllegalArgumentException) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             return
         }

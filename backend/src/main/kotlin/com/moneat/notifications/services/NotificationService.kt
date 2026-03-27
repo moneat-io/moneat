@@ -16,6 +16,9 @@
 
 package com.moneat.notifications.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.SentryEvent
 import com.moneat.shared.models.Memberships
@@ -201,7 +204,13 @@ class NotificationService(
                     try {
                         emailService.sendErrorAlertEmail(email, emailData)
                         logger.info { "Sent issue alert to $email for issue $issueId" }
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Failed to send issue alert to $email" }
+                    } catch (e: IOException) {
+                        logger.error(e) { "Failed to send issue alert to $email" }
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Failed to send issue alert to $email" }
+                    } catch (e: IllegalArgumentException) {
                         logger.error(e) { "Failed to send issue alert to $email" }
                     }
                 }
@@ -237,7 +246,13 @@ class NotificationService(
                         timestamp = emailData.timestamp,
                         stackTrace = stackTrace
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to send Slack notification for new issue" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to send Slack notification for new issue" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to send Slack notification for new issue" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to send Slack notification for new issue" }
                 }
             }
@@ -269,11 +284,23 @@ class NotificationService(
                         userCount = 0,
                         issueUrl = discordIssueUrl
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to send Discord notification for new issue" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to send Discord notification for new issue" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to send Discord notification for new issue" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to send Discord notification for new issue" }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error in onNewIssue handler" }
+        } catch (e: IOException) {
+            logger.error(e) { "Error in onNewIssue handler" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error in onNewIssue handler" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error in onNewIssue handler" }
         }
     }
@@ -308,12 +335,24 @@ class NotificationService(
                 scope.launch {
                     try {
                         sendUserWeeklySummary(userId, email, userName, startDate, endDate, priorStartDate)
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Failed to send weekly summary to $email" }
+                    } catch (e: IOException) {
+                        logger.error(e) { "Failed to send weekly summary to $email" }
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Failed to send weekly summary to $email" }
+                    } catch (e: IllegalArgumentException) {
                         logger.error(e) { "Failed to send weekly summary to $email" }
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Error in sendWeeklySummary" }
+        } catch (e: IOException) {
+            logger.error(e) { "Error in sendWeeklySummary" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Error in sendWeeklySummary" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Error in sendWeeklySummary" }
         }
     }
@@ -473,7 +512,16 @@ class NotificationService(
             val data = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
             val rate = data?.get("rate")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
             if (rate == null || rate.isNaN() || rate.isInfinite()) null else rate
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
+            null
+        } catch (e: IOException) {
+            logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
             null
         }
@@ -616,7 +664,13 @@ class NotificationService(
                 runBlocking {
                     try {
                         sendWeeklySummary()
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Error in scheduled weekly summary" }
+                    } catch (e: IOException) {
+                        logger.error(e) { "Error in scheduled weekly summary" }
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Error in scheduled weekly summary" }
+                    } catch (e: IllegalArgumentException) {
                         logger.error(e) { "Error in scheduled weekly summary" }
                     }
                 }
@@ -648,7 +702,13 @@ class NotificationService(
             val instant = Instant.parse(timestamp)
             val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm 'UTC'")
             formatter.format(instant.atZone(ZoneId.of("UTC")))
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            timestamp
+        } catch (e: IOException) {
+            timestamp
+        } catch (e: IllegalStateException) {
+            timestamp
+        } catch (e: IllegalArgumentException) {
             timestamp
         }
     }

@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
 import com.moneat.dashboards.models.CustomDataSourceResponse
@@ -359,7 +362,16 @@ class DashboardQueryEngine {
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line -> json.parseToJsonElement(line).jsonObject.toMap() }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to execute dashboard query" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to execute dashboard query" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to execute dashboard query" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to execute dashboard query" }
             emptyList()
         }

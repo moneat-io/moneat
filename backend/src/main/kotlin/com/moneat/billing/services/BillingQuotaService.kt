@@ -16,6 +16,9 @@
 
 package com.moneat.billing.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.OrgUsageCounters
 import com.moneat.billing.models.PricingTier
@@ -1216,7 +1219,13 @@ class BillingQuotaService(
             method.invoke(instance, organizationId) as? Int ?: 0
         } catch (_: ClassNotFoundException) {
             0
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            0
+        } catch (_: IOException) {
+            0
+        } catch (_: IllegalStateException) {
+            0
+        } catch (_: IllegalArgumentException) {
             0
         }
     }

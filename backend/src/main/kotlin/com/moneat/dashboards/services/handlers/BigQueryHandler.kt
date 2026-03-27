@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.google.cloud.bigquery.BigQuery
 import com.google.cloud.bigquery.BigQueryOptions
 import com.google.cloud.bigquery.FieldValueList
@@ -50,7 +53,16 @@ class BigQueryHandler : DataSourceHandler {
             val queryConfig = QueryJobConfiguration.newBuilder("SELECT 1 AS test").build()
             bigQuery.query(queryConfig)
             TestConnectionResult(true, "Connected successfully")
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "BigQuery connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IOException) {
+            logger.warn(e) { "BigQuery connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "BigQuery connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "BigQuery connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -82,7 +94,16 @@ class BigQueryHandler : DataSourceHandler {
             val schema = results.schema ?: return emptyList()
             val columns = schema.fields.map { it.name }
             results.values.toList().map { row -> rowToMap(row, columns) }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "BigQuery query failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "BigQuery query failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "BigQuery query failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "BigQuery query failed" }
             emptyList()
         }
@@ -120,7 +141,16 @@ class BigQueryHandler : DataSourceHandler {
                     description = ""
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "BigQuery schema fetch failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "BigQuery schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "BigQuery schema fetch failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "BigQuery schema fetch failed" }
             emptyList()
         }

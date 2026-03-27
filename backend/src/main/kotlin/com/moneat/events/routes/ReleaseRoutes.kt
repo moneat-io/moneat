@@ -16,6 +16,9 @@
 
 package com.moneat.events.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.auth.services.AuthTokenService
 import com.moneat.events.models.AssembleArtifactBundleRequest
 import com.moneat.events.models.AssembleResponse
@@ -387,7 +390,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
         call.respond(HttpStatusCode.Created, fileResponse)
     } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to upload source map" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to upload source map" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to upload source map" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to upload source map" }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
     }
@@ -508,7 +520,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
                         val bos = ByteArrayOutputStream()
                         GZIPInputStream(rawBytes.inputStream()).use { it.copyTo(bos) }
                         bos.toByteArray()
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        rawBytes
+                    } catch (e: IOException) {
+                        rawBytes
+                    } catch (e: IllegalStateException) {
+                        rawBytes
+                    } catch (e: IllegalArgumentException) {
                         rawBytes
                     }
                 } else {
@@ -600,7 +618,34 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifact
                 missingChunks = emptyList()
             )
         )
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to assemble artifact bundle" }
+        call.respond(
+            AssembleResponse(
+                state = "error",
+                detail = e.message,
+                missingChunks = emptyList()
+            )
+        )
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to assemble artifact bundle" }
+        call.respond(
+            AssembleResponse(
+                state = "error",
+                detail = e.message,
+                missingChunks = emptyList()
+            )
+        )
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to assemble artifact bundle" }
+        call.respond(
+            AssembleResponse(
+                state = "error",
+                detail = e.message,
+                missingChunks = emptyList()
+            )
+        )
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to assemble artifact bundle" }
         call.respond(
             AssembleResponse(

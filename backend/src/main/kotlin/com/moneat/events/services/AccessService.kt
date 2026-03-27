@@ -16,6 +16,9 @@
 
 package com.moneat.events.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
@@ -101,7 +104,16 @@ class AccessService(
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.longOrNull?.takeIf { it != 0L }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to get project ID for event $eventId" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to get project ID for event $eventId" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to get project ID for event $eventId" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to get project ID for event $eventId" }
             null
         }
@@ -124,7 +136,16 @@ class AccessService(
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["issue_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to get issue ID for event $eventId" }
+            null
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to get issue ID for event $eventId" }
+            null
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to get issue ID for event $eventId" }
+            null
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to get issue ID for event $eventId" }
             null
         }

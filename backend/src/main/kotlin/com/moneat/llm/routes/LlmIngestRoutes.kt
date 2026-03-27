@@ -16,6 +16,9 @@
 
 package com.moneat.llm.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.decompression.DecompressionService
@@ -109,7 +112,16 @@ fun Route.llmIngestRoutes() {
                 RedisConfig.sync().lpush(queueKey, message)
 
                 call.respond(HttpStatusCode.Accepted, mapOf("accepted" to payload.generations.size))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to process LLM ingest payload: ${e.message}" }
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid LLM payload"))
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to process LLM ingest payload: ${e.message}" }
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid LLM payload"))
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to process LLM ingest payload: ${e.message}" }
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid LLM payload"))
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to process LLM ingest payload: ${e.message}" }
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid LLM payload"))
             }

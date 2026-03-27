@@ -16,6 +16,9 @@
 
 package com.moneat.events.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Projects
 import io.ktor.client.statement.bodyAsText
@@ -95,7 +98,13 @@ object SentrySpanBackfill {
             val bodySnippet =
                 try {
                     response.bodyAsText().take(500)
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    (e.message ?: "").take(500)
+                } catch (e: IOException) {
+                    (e.message ?: "").take(500)
+                } catch (e: IllegalStateException) {
+                    (e.message ?: "").take(500)
+                } catch (e: IllegalArgumentException) {
                     (e.message ?: "").take(500)
                 }
             logger.error { "Spans backfill failed: HTTP ${response.status}, body: $bodySnippet" }

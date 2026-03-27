@@ -16,6 +16,9 @@
 
 package com.moneat.logs.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
 import com.moneat.logs.models.CreateLogIndexRequest
@@ -200,7 +203,22 @@ class LogIndexService {
                 if (matchesFilter(index.filterQuery, logEntry)) {
                     return index.name
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn(e) {
+                    "Filter evaluation failed for index '${index.name}' " +
+                        "query='${index.filterQuery}'; skipping"
+                }
+            } catch (e: IOException) {
+                logger.warn(e) {
+                    "Filter evaluation failed for index '${index.name}' " +
+                        "query='${index.filterQuery}'; skipping"
+                }
+            } catch (e: IllegalStateException) {
+                logger.warn(e) {
+                    "Filter evaluation failed for index '${index.name}' " +
+                        "query='${index.filterQuery}'; skipping"
+                }
+            } catch (e: IllegalArgumentException) {
                 logger.warn(e) {
                     "Filter evaluation failed for index '${index.name}' " +
                         "query='${index.filterQuery}'; skipping"
@@ -254,7 +272,22 @@ class LogIndexService {
                     """.trimIndent()
                     executeCountQuery(matchSql)
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn(e) {
+                    "Failed to test filter query: $filterQuery"
+                }
+                0L
+            } catch (e: IOException) {
+                logger.warn(e) {
+                    "Failed to test filter query: $filterQuery"
+                }
+                0L
+            } catch (e: IllegalStateException) {
+                logger.warn(e) {
+                    "Failed to test filter query: $filterQuery"
+                }
+                0L
+            } catch (e: IllegalArgumentException) {
                 logger.warn(e) {
                     "Failed to test filter query: $filterQuery"
                 }
@@ -291,7 +324,13 @@ class LogIndexService {
                         .replace("\\?", ".")
                     try {
                         value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
-                    } catch (_: Exception) {
+                    } catch (_: SerializationException) {
+                        false
+                    } catch (_: IOException) {
+                        false
+                    } catch (_: IllegalStateException) {
+                        false
+                    } catch (_: IllegalArgumentException) {
                         false
                     }
                 } else {
@@ -367,7 +406,16 @@ class LogIndexService {
                     ?.jsonPrimitive
                     ?.longOrNull ?: 0L
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Count query failed: $sql" }
+            0L
+        } catch (e: IOException) {
+            logger.warn(e) { "Count query failed: $sql" }
+            0L
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Count query failed: $sql" }
+            0L
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Count query failed: $sql" }
             0L
         }

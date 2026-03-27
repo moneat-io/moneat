@@ -16,6 +16,9 @@
 
 package com.moneat.ai
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import mu.KotlinLogging
 import java.util.concurrent.ConcurrentHashMap
 
@@ -68,7 +71,16 @@ object AiContextResolver {
                     logger.warn { "AI context doc not found: $path" }
                     return null
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn { "Failed to load AI context doc $path: ${e.message}" }
+                return null
+            } catch (e: IOException) {
+                logger.warn { "Failed to load AI context doc $path: ${e.message}" }
+                return null
+            } catch (e: IllegalStateException) {
+                logger.warn { "Failed to load AI context doc $path: ${e.message}" }
+                return null
+            } catch (e: IllegalArgumentException) {
                 logger.warn { "Failed to load AI context doc $path: ${e.message}" }
                 return null
             }

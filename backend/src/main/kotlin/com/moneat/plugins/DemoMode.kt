@@ -16,6 +16,9 @@
 
 package com.moneat.plugins
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.config.EnvConfig
@@ -77,7 +80,13 @@ private fun isDemoToken(token: String?): Boolean {
 
         val email = decoded.getClaim("email")?.asString()
         email != null && email.equals(demoUserEmail, ignoreCase = true)
-    } catch (_: Exception) {
+    } catch (_: SerializationException) {
+        false
+    } catch (_: IOException) {
+        false
+    } catch (_: IllegalStateException) {
+        false
+    } catch (_: IllegalArgumentException) {
         false
     }
 }
@@ -130,7 +139,13 @@ fun ApplicationCall.isDemoUser(): Boolean {
             if (userId == demoUserId) return true
             val email = jwtPrincipal.payload.getClaim("email")?.asString()
             if (email != null && email.equals(demoUserEmail, ignoreCase = true)) return true
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
+            // Fall through and try other principal types.
+        } catch (_: IOException) {
+            // Fall through and try other principal types.
+        } catch (_: IllegalStateException) {
+            // Fall through and try other principal types.
+        } catch (_: IllegalArgumentException) {
             // Fall through and try other principal types.
         }
     }
@@ -155,7 +170,13 @@ fun ApplicationCall.getDemoEpochMs(): Long? {
     return try {
         principal.payload.getClaim("demoEpochMs")?.asLong()
             ?: if (isDemoUser()) EnvConfig.Demo.epochMs else null
-    } catch (_: Exception) {
+    } catch (_: SerializationException) {
+        if (isDemoUser()) EnvConfig.Demo.epochMs else null
+    } catch (_: IOException) {
+        if (isDemoUser()) EnvConfig.Demo.epochMs else null
+    } catch (_: IllegalStateException) {
+        if (isDemoUser()) EnvConfig.Demo.epochMs else null
+    } catch (_: IllegalArgumentException) {
         if (isDemoUser()) EnvConfig.Demo.epochMs else null
     }
 }

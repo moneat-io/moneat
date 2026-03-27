@@ -31,6 +31,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -38,6 +39,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
+import java.io.IOException
 
 /**
  * incident.io provider implementation using Alert Events V2 API.
@@ -118,7 +120,16 @@ class IncidentIoProvider : IncidentProvider {
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error sending alert to incident.io", e)
+            Result.failure(e)
+        } catch (e: IOException) {
+            logger.error("Error sending alert to incident.io", e)
+            Result.failure(e)
+        } catch (e: IllegalStateException) {
+            logger.error("Error sending alert to incident.io", e)
+            Result.failure(e)
+        } catch (e: IllegalArgumentException) {
             logger.error("Error sending alert to incident.io", e)
             Result.failure(e)
         }
@@ -158,7 +169,16 @@ class IncidentIoProvider : IncidentProvider {
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error resolving alert with incident.io", e)
+            Result.failure(e)
+        } catch (e: IOException) {
+            logger.error("Error resolving alert with incident.io", e)
+            Result.failure(e)
+        } catch (e: IllegalStateException) {
+            logger.error("Error resolving alert with incident.io", e)
+            Result.failure(e)
+        } catch (e: IllegalArgumentException) {
             logger.error("Error resolving alert with incident.io", e)
             Result.failure(e)
         }
@@ -198,7 +218,16 @@ class IncidentIoProvider : IncidentProvider {
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error testing incident.io connection", e)
+            Result.failure(e)
+        } catch (e: IOException) {
+            logger.error("Error testing incident.io connection", e)
+            Result.failure(e)
+        } catch (e: IllegalStateException) {
+            logger.error("Error testing incident.io connection", e)
+            Result.failure(e)
+        } catch (e: IllegalArgumentException) {
             logger.error("Error testing incident.io connection", e)
             Result.failure(e)
         }

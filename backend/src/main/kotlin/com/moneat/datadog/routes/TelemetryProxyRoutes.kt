@@ -16,6 +16,9 @@
 
 package com.moneat.datadog.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.TelemetryProxyService
 import io.ktor.http.HttpStatusCode
@@ -45,7 +48,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTelemetryProxy()
 
         TelemetryProxyService.acknowledge(organizationId, path, rawBytes.size)
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    } catch (e: SerializationException) {
+        logger.error(e) { "Failed to process telemetry proxy request" }
+        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+    } catch (e: IOException) {
+        logger.error(e) { "Failed to process telemetry proxy request" }
+        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "Failed to process telemetry proxy request" }
+        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+    } catch (e: IllegalArgumentException) {
         logger.error(e) { "Failed to process telemetry proxy request" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }

@@ -16,6 +16,9 @@
 
 package com.moneat.logs.repositories
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
 import io.ktor.client.statement.bodyAsText
@@ -30,7 +33,16 @@ class LogRepositoryImpl : LogRepository {
             val response = ClickHouseClient.execute(sql)
             val body = response.bodyAsText()
             !response.isClickHouseError(body)
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "ClickHouse log insert failed" }
+            false
+        } catch (e: IOException) {
+            logger.error(e) { "ClickHouse log insert failed" }
+            false
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "ClickHouse log insert failed" }
+            false
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "ClickHouse log insert failed" }
             false
         }
@@ -39,7 +51,16 @@ class LogRepositoryImpl : LogRepository {
         try {
             val response = ClickHouseClient.execute(sql)
             response.bodyAsText()
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "ClickHouse log query failed" }
+            ""
+        } catch (e: IOException) {
+            logger.error(e) { "ClickHouse log query failed" }
+            ""
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "ClickHouse log query failed" }
+            ""
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "ClickHouse log query failed" }
             ""
         }

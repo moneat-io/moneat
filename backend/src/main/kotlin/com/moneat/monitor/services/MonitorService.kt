@@ -16,6 +16,9 @@
 
 package com.moneat.monitor.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.billing.models.PricingTier
 import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.services.PricingTierService
@@ -236,7 +239,16 @@ class MonitorService(
                 gpu_percent = gpuPercent,
                 battery_percent = batteryPercent
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Failed to parse latest metrics response" }
+            return null
+        } catch (e: IOException) {
+            logger.warn(e) { "Failed to parse latest metrics response" }
+            return null
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Failed to parse latest metrics response" }
+            return null
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Failed to parse latest metrics response" }
             return null
         }
@@ -316,7 +328,16 @@ class MonitorService(
                 )
             }
             hostIds.associateWith { result[it] }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "Failed to parse batch latest metrics response" }
+            hostIds.associateWith { null }
+        } catch (e: IOException) {
+            logger.warn(e) { "Failed to parse batch latest metrics response" }
+            hostIds.associateWith { null }
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "Failed to parse batch latest metrics response" }
+            hostIds.associateWith { null }
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "Failed to parse batch latest metrics response" }
             hostIds.associateWith { null }
         }
@@ -436,7 +457,16 @@ class MonitorService(
                             battery_percent = arr.getOrNull(11)?.toString()?.toFloatOrNull()
                         )
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to parse historical metrics" }
+                    emptyList()
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to parse historical metrics" }
+                    emptyList()
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to parse historical metrics" }
+                    emptyList()
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to parse historical metrics" }
                     emptyList()
                 }
@@ -503,7 +533,16 @@ class MonitorService(
                     mem_percent = if (memLimit > 0) (memUsed.toFloat() / memLimit * 100) else 0f
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to parse container stats" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to parse container stats" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to parse container stats" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to parse container stats" }
             emptyList()
         }
@@ -590,7 +629,13 @@ class MonitorService(
                             .entries
                             .associate { (k, v) -> k to v.toString().trim('"') }
                     } ?: emptyMap<String, String>()
-                } catch (_: Exception) {
+                } catch (_: SerializationException) {
+                    emptyMap<String, String>()
+                } catch (_: IOException) {
+                    emptyMap<String, String>()
+                } catch (_: IllegalStateException) {
+                    emptyMap<String, String>()
+                } catch (_: IllegalArgumentException) {
                     emptyMap<String, String>()
                 }
                 val ts = arr.getOrNull(11)?.toString()?.replace("\"", "") ?: ""
@@ -617,7 +662,16 @@ class MonitorService(
                     "id" to arr.getOrNull(1)?.toString()?.replace("\"", "")
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to parse infra container stats" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to parse infra container stats" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to parse infra container stats" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Failed to parse infra container stats" }
             emptyList()
         }
@@ -728,7 +782,16 @@ class MonitorService(
                             ?.toLongOrNull()
                     )
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to parse container historical metrics" }
+                emptyList()
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to parse container historical metrics" }
+                emptyList()
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to parse container historical metrics" }
+                emptyList()
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to parse container historical metrics" }
                 emptyList()
             }

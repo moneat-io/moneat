@@ -16,6 +16,9 @@
 
 package com.moneat.incident.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.incident.models.AlertSource
@@ -98,12 +101,27 @@ class IncidentService {
                             logEvent(config, event, success = false, errorMessage = error.message ?: "Unknown error")
                         }
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error("Error processing alert for provider ${config.name}", e)
+                    logEvent(config, event, success = false, errorMessage = e.message ?: "Unknown error")
+                } catch (e: IOException) {
+                    logger.error("Error processing alert for provider ${config.name}", e)
+                    logEvent(config, event, success = false, errorMessage = e.message ?: "Unknown error")
+                } catch (e: IllegalStateException) {
+                    logger.error("Error processing alert for provider ${config.name}", e)
+                    logEvent(config, event, success = false, errorMessage = e.message ?: "Unknown error")
+                } catch (e: IllegalArgumentException) {
                     logger.error("Error processing alert for provider ${config.name}", e)
                     logEvent(config, event, success = false, errorMessage = e.message ?: "Unknown error")
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error firing alert", e)
+        } catch (e: IOException) {
+            logger.error("Error firing alert", e)
+        } catch (e: IllegalStateException) {
+            logger.error("Error firing alert", e)
+        } catch (e: IllegalArgumentException) {
             logger.error("Error firing alert", e)
         }
     }
@@ -163,7 +181,37 @@ class IncidentService {
                             )
                         }
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error("Error resolving alert for provider ${config.name}", e)
+                    logResolveEvent(
+                        config,
+                        organizationId,
+                        source,
+                        deduplicationKey,
+                        success = false,
+                        errorMessage = e.message
+                    )
+                } catch (e: IOException) {
+                    logger.error("Error resolving alert for provider ${config.name}", e)
+                    logResolveEvent(
+                        config,
+                        organizationId,
+                        source,
+                        deduplicationKey,
+                        success = false,
+                        errorMessage = e.message
+                    )
+                } catch (e: IllegalStateException) {
+                    logger.error("Error resolving alert for provider ${config.name}", e)
+                    logResolveEvent(
+                        config,
+                        organizationId,
+                        source,
+                        deduplicationKey,
+                        success = false,
+                        errorMessage = e.message
+                    )
+                } catch (e: IllegalArgumentException) {
                     logger.error("Error resolving alert for provider ${config.name}", e)
                     logResolveEvent(
                         config,
@@ -175,7 +223,13 @@ class IncidentService {
                     )
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error resolving alert", e)
+        } catch (e: IOException) {
+            logger.error("Error resolving alert", e)
+        } catch (e: IllegalStateException) {
+            logger.error("Error resolving alert", e)
+        } catch (e: IllegalArgumentException) {
             logger.error("Error resolving alert", e)
         }
     }
@@ -227,7 +281,13 @@ class IncidentService {
                         try {
                             val jsonStr = row[IncidentProviderConfigs.configJson]
                             json.parseToJsonElement(jsonStr).jsonObject
-                        } catch (e: Exception) {
+                        } catch (e: SerializationException) {
+                            buildJsonObject {}
+                        } catch (e: IOException) {
+                            buildJsonObject {}
+                        } catch (e: IllegalStateException) {
+                            buildJsonObject {}
+                        } catch (e: IllegalArgumentException) {
                             buildJsonObject {}
                         },
                         enabled = row[IncidentProviderConfigs.enabled]
@@ -361,7 +421,13 @@ class IncidentService {
             if (incidentId != null) {
                 logger.info("Native escalation triggered for incident $incidentId")
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error("Error triggering native escalation", e)
+        } catch (e: IOException) {
+            logger.error("Error triggering native escalation", e)
+        } catch (e: IllegalStateException) {
+            logger.error("Error triggering native escalation", e)
+        } catch (e: IllegalArgumentException) {
             logger.error("Error triggering native escalation", e)
         }
     }

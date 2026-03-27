@@ -16,6 +16,9 @@
 
 package com.moneat.config
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.DashboardWidgets
 import com.moneat.dashboards.models.Dashboards
@@ -191,7 +194,13 @@ object DemoDataReseeder {
             logger.info { "Demo data reseed complete" }
             reseedUptimeHeartbeats()
             ensureDemoProfileFiles()
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Demo data reseed failed (non-fatal): ${e.message}" }
+        } catch (e: IOException) {
+            logger.error(e) { "Demo data reseed failed (non-fatal): ${e.message}" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Demo data reseed failed (non-fatal): ${e.message}" }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Demo data reseed failed (non-fatal): ${e.message}" }
         }
     }
@@ -3040,7 +3049,13 @@ object DemoDataReseeder {
                 seedWebAnalyticsDashboard()
             }
             logger.info { "Demo dashboards seeded successfully" }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn { "Demo dashboard seeding failed (non-fatal): ${e.message}" }
+        } catch (e: IOException) {
+            logger.warn { "Demo dashboard seeding failed (non-fatal): ${e.message}" }
+        } catch (e: IllegalStateException) {
+            logger.warn { "Demo dashboard seeding failed (non-fatal): ${e.message}" }
+        } catch (e: IllegalArgumentException) {
             logger.warn { "Demo dashboard seeding failed (non-fatal): ${e.message}" }
         }
     }

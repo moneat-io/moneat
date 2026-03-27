@@ -16,6 +16,9 @@
 
 package com.moneat.shared.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Projects
 import io.ktor.server.config.ApplicationConfig
@@ -65,7 +68,13 @@ class RetentionBackgroundService(
                 while (isActive) {
                     try {
                         runSweep()
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Retention sweep failed" }
+                    } catch (e: IOException) {
+                        logger.error(e) { "Retention sweep failed" }
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Retention sweep failed" }
+                    } catch (e: IllegalArgumentException) {
                         logger.error(e) { "Retention sweep failed" }
                     }
                     delay(sweepIntervalSeconds * 1000L)
@@ -289,7 +298,16 @@ class RetentionBackgroundService(
             } else {
                 true
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Retention mutation exception for $label" }
+            false
+        } catch (e: IOException) {
+            logger.error(e) { "Retention mutation exception for $label" }
+            false
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Retention mutation exception for $label" }
+            false
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Retention mutation exception for $label" }
             false
         }

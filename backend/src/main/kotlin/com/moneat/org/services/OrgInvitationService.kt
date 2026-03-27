@@ -16,6 +16,9 @@
 
 package com.moneat.org.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.events.models.BulkInviteFailure
 import com.moneat.events.models.BulkInviteResult
 import com.moneat.events.models.InvitationDetailsResponse
@@ -130,7 +133,16 @@ class OrgInvitationService(
             try {
                 inviteMember(orgId, email.trim(), role, invitedByUserId)
                 success.add(email)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn("Failed to invite $email: ${e.message}")
+                failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
+            } catch (e: IOException) {
+                logger.warn("Failed to invite $email: ${e.message}")
+                failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
+            } catch (e: IllegalStateException) {
+                logger.warn("Failed to invite $email: ${e.message}")
+                failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
+            } catch (e: IllegalArgumentException) {
                 logger.warn("Failed to invite $email: ${e.message}")
                 failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
             }

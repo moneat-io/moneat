@@ -16,6 +16,9 @@
 
 package com.moneat.billing.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.billing.models.BillingPlansListResponse
 import com.moneat.billing.models.CheckoutSessionRequest
 import com.moneat.billing.models.UpdateOnCallSeatsRequest
@@ -128,7 +131,16 @@ fun Route.billingRoutes(
                         usedCustomMetrics = maxOf(computedCustomMetrics, usage.usedCustomMetrics)
                     )
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
+                call.respond(usage)
+            } catch (e: IOException) {
+                logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
+                call.respond(usage)
+            } catch (e: IllegalStateException) {
+                logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
+                call.respond(usage)
+            } catch (e: IllegalArgumentException) {
                 logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
                 call.respond(usage)
             }
@@ -161,7 +173,22 @@ fun Route.billingRoutes(
                 call.respond(response)
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid checkout request")))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse((e.message ?: "Failed to create checkout session"))
+                )
+            } catch (e: IOException) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse((e.message ?: "Failed to create checkout session"))
+                )
+            } catch (e: IllegalStateException) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse((e.message ?: "Failed to create checkout session"))
+                )
+            } catch (e: IllegalArgumentException) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
                     ErrorResponse((e.message ?: "Failed to create checkout session"))
@@ -184,7 +211,13 @@ fun Route.billingRoutes(
 
             try {
                 call.respond(stripeService.listInvoices(orgId))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load invoices")))
+            } catch (e: IOException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load invoices")))
+            } catch (e: IllegalStateException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load invoices")))
+            } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load invoices")))
             }
         }
@@ -204,7 +237,13 @@ fun Route.billingRoutes(
 
             try {
                 call.respond(stripeService.getPaymentMethod(orgId))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load payment method")))
+            } catch (e: IOException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load payment method")))
+            } catch (e: IllegalStateException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load payment method")))
+            } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load payment method")))
             }
         }
@@ -224,7 +263,13 @@ fun Route.billingRoutes(
 
             try {
                 call.respond(stripeService.createSetupIntent(orgId))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to create setup intent")))
+            } catch (e: IOException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to create setup intent")))
+            } catch (e: IllegalStateException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to create setup intent")))
+            } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to create setup intent")))
             }
         }
@@ -247,7 +292,13 @@ fun Route.billingRoutes(
                 val setupIntentId = request["setupIntentId"] ?: throw IllegalArgumentException("setupIntentId required")
                 stripeService.confirmSetupIntentAndUpdatePaymentMethod(orgId, setupIntentId)
                 call.respond(HttpStatusCode.OK, BooleanResponse(true))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to confirm setup intent")))
+            } catch (e: IOException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to confirm setup intent")))
+            } catch (e: IllegalStateException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to confirm setup intent")))
+            } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to confirm setup intent")))
             }
         }
@@ -272,7 +323,22 @@ fun Route.billingRoutes(
                     HttpStatusCode.BadRequest,
                     ErrorResponse((e.message ?: "No cancelable subscription found"))
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse((e.message ?: "Failed to cancel subscription"))
+                )
+            } catch (e: IOException) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse((e.message ?: "Failed to cancel subscription"))
+                )
+            } catch (e: IllegalStateException) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse((e.message ?: "Failed to cancel subscription"))
+                )
+            } catch (e: IllegalArgumentException) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
                     ErrorResponse((e.message ?: "Failed to cancel subscription"))
@@ -357,7 +423,13 @@ fun Route.billingRoutes(
                     val instance = clazz.getDeclaredConstructor().newInstance()
                     val method = clazz.getMethod("getOnCallUsedSeats", Int::class.java)
                     method.invoke(instance, orgId) as? Int ?: 0
-                } catch (_: Exception) {
+                } catch (_: SerializationException) {
+                    0
+                } catch (_: IOException) {
+                    0
+                } catch (_: IllegalStateException) {
+                    0
+                } catch (_: IllegalArgumentException) {
                     0
                 }
             if (request.seats < usedSeats) {
@@ -373,7 +445,16 @@ fun Route.billingRoutes(
                 call.respond(response)
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to update on-call seats" }
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update seats"))
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to update on-call seats" }
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update seats"))
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to update on-call seats" }
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update seats"))
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to update on-call seats" }
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update seats"))
             }

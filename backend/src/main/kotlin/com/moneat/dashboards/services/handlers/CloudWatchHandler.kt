@@ -16,6 +16,9 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import aws.sdk.kotlin.runtime.auth.credentials.StaticCredentialsProvider
 import aws.sdk.kotlin.services.cloudwatch.CloudWatchClient
 import aws.sdk.kotlin.services.cloudwatch.model.Dimension
@@ -86,7 +89,16 @@ class CloudWatchHandler : DataSourceHandler {
                 client.getMetricData(request)
             }
             TestConnectionResult(true, "Connected successfully")
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.warn(e) { "CloudWatch connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IOException) {
+            logger.warn(e) { "CloudWatch connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalStateException) {
+            logger.warn(e) { "CloudWatch connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
+        } catch (e: IllegalArgumentException) {
             logger.warn(e) { "CloudWatch connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -108,7 +120,16 @@ class CloudWatchHandler : DataSourceHandler {
 
         val metricSpec = try {
             json.parseToJsonElement(query).jsonObject
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "Invalid CloudWatch query JSON" }
+            return emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "Invalid CloudWatch query JSON" }
+            return emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Invalid CloudWatch query JSON" }
+            return emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "Invalid CloudWatch query JSON" }
             return emptyList()
         }
@@ -181,7 +202,16 @@ class CloudWatchHandler : DataSourceHandler {
                 }
                 rows
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            logger.error(e) { "CloudWatch query failed" }
+            emptyList()
+        } catch (e: IOException) {
+            logger.error(e) { "CloudWatch query failed" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "CloudWatch query failed" }
+            emptyList()
+        } catch (e: IllegalArgumentException) {
             logger.error(e) { "CloudWatch query failed" }
             emptyList()
         }

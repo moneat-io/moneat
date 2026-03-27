@@ -33,7 +33,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
@@ -99,7 +101,16 @@ class IngestionWorker(
                     }
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Worker $workerId error in BRPOP loop" }
+                    delay(1000)
+                } catch (e: IOException) {
+                    logger.error(e) { "Worker $workerId error in BRPOP loop" }
+                    delay(1000)
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Worker $workerId error in BRPOP loop" }
+                    delay(1000)
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Worker $workerId error in BRPOP loop" }
                     delay(1000)
                 }
@@ -130,10 +141,33 @@ class IngestionWorker(
             eventService.processEnvelope(projectId, envelope)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
             logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
             onDlq(value)
-
+            Sentry.captureException(e) { scope ->
+                scope.setTag("worker.operation", "process_message")
+                scope.setTag("worker.id", workerId.toString())
+                scope.setExtra("queue", queueKey)
+            }
+        } catch (e: IOException) {
+            logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
+            onDlq(value)
+            Sentry.captureException(e) { scope ->
+                scope.setTag("worker.operation", "process_message")
+                scope.setTag("worker.id", workerId.toString())
+                scope.setExtra("queue", queueKey)
+            }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
+            onDlq(value)
+            Sentry.captureException(e) { scope ->
+                scope.setTag("worker.operation", "process_message")
+                scope.setTag("worker.id", workerId.toString())
+                scope.setExtra("queue", queueKey)
+            }
+        } catch (e: IllegalArgumentException) {
+            logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
+            onDlq(value)
             Sentry.captureException(e) { scope ->
                 scope.setTag("worker.operation", "process_message")
                 scope.setTag("worker.id", workerId.toString())
