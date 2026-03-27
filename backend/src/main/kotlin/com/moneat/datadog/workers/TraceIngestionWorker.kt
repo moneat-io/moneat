@@ -111,8 +111,9 @@ class TraceIngestionWorker(
     ) {
         try {
             val wrapper = json.parseToJsonElement(payload).jsonObject
-            val organizationId = wrapper["organization_id"]!!
-                .jsonPrimitive.int
+            val organizationId = requireNotNull(wrapper["organization_id"]) {
+                "Missing organization_id"
+            }.jsonPrimitive.int
             val hostname = wrapper["hostname"]
                 ?.jsonPrimitive?.content ?: ""
             val env = wrapper["env"]?.jsonPrimitive?.content ?: ""
@@ -122,14 +123,20 @@ class TraceIngestionWorker(
                 ?.jsonPrimitive?.content ?: "msgpack"
 
             val traces = if (format == "json") {
-                val tracesJson = wrapper["traces"]!!.jsonArray.toString()
+                val tracesJson = requireNotNull(wrapper["traces"]) {
+                    "Missing traces"
+                }.jsonArray.toString()
                 TraceIngestionService.parseJsonTraces(tracesJson)
             } else if (format == "protobuf") {
-                val b64 = wrapper["data"]!!.jsonPrimitive.content
+                val b64 = requireNotNull(wrapper["data"]) {
+                    "Missing data"
+                }.jsonPrimitive.content
                 val bytes = Base64.getDecoder().decode(b64)
                 TraceIngestionService.parseProtobufAgentPayload(bytes)
             } else {
-                val b64 = wrapper["data"]!!.jsonPrimitive.content
+                val b64 = requireNotNull(wrapper["data"]) {
+                    "Missing data"
+                }.jsonPrimitive.content
                 val bytes = Base64.getDecoder().decode(b64)
                 TraceIngestionService.parseMsgpackTraces(bytes)
             }

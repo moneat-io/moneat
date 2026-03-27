@@ -165,7 +165,7 @@ class AnalyticsIngestionWorker(
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
         if (response.isClickHouseError(body)) {
-            throw IOException("ClickHouse insert failed: $body")
+            throw IOException("ClickHouse insert failed: ${body.take(500)}")
         }
     }
 

@@ -134,6 +134,12 @@ class DbmIngestionWorker(
         logger.error(e) {
             "DBM worker $workerId failed, pushing to DLQ"
         }
-        RedisConfig.sync().rpush(dlqKey, payload)
+        try {
+            RedisConfig.sync().rpush(dlqKey, payload)
+        } catch (dlqErr: Exception) {
+            logger.error(dlqErr) {
+                "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
+            }
+        }
     }
 }
