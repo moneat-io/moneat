@@ -50,6 +50,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -640,8 +641,8 @@ class NotificationService(
 
     private fun formatNumber(num: Long): String {
         return when {
-            num >= 1_000_000 -> String.format("%.1fM", num / 1_000_000.0)
-            num >= 1_000 -> String.format("%.1fK", num / 1_000.0)
+            num >= 1_000_000 -> String.format(Locale.US, "%.1fM", num / 1_000_000.0)
+            num >= 1_000 -> String.format(Locale.US, "%.1fK", num / 1_000.0)
             else -> num.toString()
         }
     }
