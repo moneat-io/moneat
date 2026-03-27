@@ -28,6 +28,7 @@ import io.ktor.client.statement.*
 import io.ktor.events.*
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.config.ApplicationConfigurationException
 import io.sentry.ISpan
 import io.sentry.Sentry
 
@@ -181,6 +182,9 @@ fun Application.configureClickHouse() {
     val url =
         try {
             environment.config.property("database.clickhouse.url").getString()
+        } catch (e: ApplicationConfigurationException) {
+            log.warn("ClickHouse URL not configured, skipping ClickHouse initialization (test environment)")
+            return
         } catch (e: SerializationException) {
             log.warn("ClickHouse URL not configured, skipping ClickHouse initialization (test environment)")
             return

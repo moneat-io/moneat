@@ -454,9 +454,6 @@ fun Route.billingRoutes(
             } catch (e: IllegalStateException) {
                 logger.error(e) { "Failed to update on-call seats" }
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update seats"))
-            } catch (e: IllegalArgumentException) {
-                logger.error(e) { "Failed to update on-call seats" }
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update seats"))
             }
         }
     }

@@ -90,6 +90,220 @@ jobs:
           name: backend-coverage-report
           path: backend/build/reports/jacoco/test/
 
+      - name: Upload detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-detekt-report
+          path: backend/build/reports/detekt/
+
+  # SonarQube: reuse backend-unit artifacts (JaCoCo + detekt); compile only, then scan
+  sonarqube:
+    name: SonarQube Analysis
+    if: github.event_name != 'schedule'
+    needs: [backend-unit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Download backend coverage (JaCoCo)
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-coverage-report
+          path: backend/build/reports/jacoco/test/
+
+      - name: Download detekt report
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-detekt-report
+          path: backend/build/reports/detekt/
+
+      - name: Compile Kotlin (bytecode for Sonar)
+        working-directory: backend
+        run: ./gradlew testClasses integrationTestClasses --no-daemon
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        with:
+          projectBaseDir: backend
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonar.moneat.io
+
+      - name: SonarQube Quality Gate check
+        id: sonarqube-quality-gate-check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        with:
+          pollingTimeoutSec: 600
+          scanMetadataReportFile: backend/.scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonar.moneat.io
+
+      - name: Post Quality Gate to PR
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          SONAR_HOST="https://sonar.moneat.io"
+          PROJECT_KEY="moneat"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          REPORT_FILE="backend/.scannerwork/report-task.txt"
+
+          if [[ ! -f "$REPORT_FILE" ]]; then
+            echo "::warning::$REPORT_FILE not found — skipping PR comment"
+            exit 0
+          fi
+
+          CE_TASK_ID=$(grep '^ceTaskId=' "$REPORT_FILE" | cut -d= -f2)
+          if [[ -z "$CE_TASK_ID" ]]; then
+            echo "::warning::ceTaskId not found in report — skipping PR comment"
+            exit 0
+          fi
+
+          # ── Resolve analysisId from Compute Engine task ──
+          ANALYSIS_ID=""
+          for _ in $(seq 1 30); do
+            TASK_RESP=$(curl -sf -u "${SONAR_TOKEN}:" \
+              "${SONAR_HOST}/api/ce/task?id=${CE_TASK_ID}" 2>/dev/null || true)
+            [[ -z "$TASK_RESP" ]] && { sleep 5; continue; }
+
+            TASK_STATUS=$(echo "$TASK_RESP" | jq -r '.task.status // empty')
+            case "$TASK_STATUS" in
+              SUCCESS)
+                ANALYSIS_ID=$(echo "$TASK_RESP" | jq -r '.task.analysisId // empty')
+                break ;;
+              FAILED|CANCELED)
+                echo "::warning::CE task ${TASK_STATUS} — skipping PR comment"
+                exit 0 ;;
+            esac
+            sleep 5
+          done
+
+          if [[ -z "$ANALYSIS_ID" ]]; then
+            echo "::warning::Timed out resolving analysisId — skipping PR comment"
+            exit 0
+          fi
+
+          # ── Quality gate status & conditions ──
+          QG_JSON=$(curl -sf -u "${SONAR_TOKEN}:" \
+            "${SONAR_HOST}/api/qualitygates/project_status?analysisId=${ANALYSIS_ID}")
+          QG_STATUS=$(echo "$QG_JSON" | jq -r '.projectStatus.status')
+
+          # ── Measures for display values ──
+          METRICS="new_violations,accepted_issues,new_security_hotspots,new_coverage,new_duplicated_lines_density"
+          MEASURES_JSON=$(curl -sf -u "${SONAR_TOKEN}:" \
+            "${SONAR_HOST}/api/measures/component?component=${PROJECT_KEY}&pullRequest=${PR_NUMBER}&metricKeys=${METRICS}" \
+            2>/dev/null || echo '{}')
+
+          measure_val() {
+            local val
+            val=$(echo "$MEASURES_JSON" | jq -r --arg m "$1" \
+              '([.component.measures[]? | select(.metric == $m) | (.period.value // .value)] | .[0]) // empty')
+            echo "${val:-$2}"
+          }
+
+          NEW_ISSUES=$(measure_val "new_violations" "0")
+          ACCEPTED=$(measure_val "accepted_issues" "0")
+          HOTSPOTS=$(measure_val "new_security_hotspots" "0")
+          COVERAGE=$(measure_val "new_coverage" "0.0")
+          DUPLICATION=$(measure_val "new_duplicated_lines_density" "0.0")
+
+          NEW_ISSUES=$(printf "%.0f" "$NEW_ISSUES" 2>/dev/null || echo "$NEW_ISSUES")
+          ACCEPTED=$(printf "%.0f" "$ACCEPTED" 2>/dev/null || echo "$ACCEPTED")
+          HOTSPOTS=$(printf "%.0f" "$HOTSPOTS" 2>/dev/null || echo "$HOTSPOTS")
+          COVERAGE=$(printf "%.1f" "$COVERAGE" 2>/dev/null || echo "$COVERAGE")
+          DUPLICATION=$(printf "%.1f" "$DUPLICATION" 2>/dev/null || echo "$DUPLICATION")
+
+          # ── Condition icons from quality gate ──
+          cond_icon() {
+            local status
+            status=$(echo "$QG_JSON" | jq -r --arg m "$1" \
+              '([.projectStatus.conditions[]? | select(.metricKey == $m) | .status] | .[0]) // "OK"')
+            [[ "$status" == "ERROR" ]] && echo ":x:" || echo ":white_check_mark:"
+          }
+
+          ISSUES_ERRORS=$(echo "$QG_JSON" | jq \
+            '[.projectStatus.conditions[]? | select(.metricKey | test("^new_(violations|reliability_rating|security_rating|maintainability_rating)$")) | select(.status == "ERROR")] | length')
+          [[ "$ISSUES_ERRORS" -gt 0 ]] && ISSUES_ICON=":x:" || ISSUES_ICON=":white_check_mark:"
+
+          HOTSPOTS_ICON=$(cond_icon "new_security_hotspots_reviewed")
+          COVERAGE_ICON=$(cond_icon "new_coverage")
+          DUPLICATION_ICON=$(cond_icon "new_duplicated_lines_density")
+
+          if [[ "$QG_STATUS" == "OK" ]]; then
+            HEADER=":ballot_box_with_check: **Quality Gate passed**"
+          else
+            HEADER=":x: **Quality Gate failed**"
+          fi
+
+          # ── Build comment body ──
+          DASH="${SONAR_HOST}/dashboard?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER}"
+          ISS="${SONAR_HOST}/project/issues?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER}"
+
+          BODY="<!-- sonarqube-quality-gate -->
+          ${HEADER}
+
+          ---
+
+          **Issues**
+          ${ISSUES_ICON} [${NEW_ISSUES} New issues](${ISS}&resolved=false)
+          :information_source: [${ACCEPTED} Accepted issues](${ISS}&issueStatuses=ACCEPTED)
+
+          **Measures**
+          ${HOTSPOTS_ICON} [${HOTSPOTS} Security Hotspots](${SONAR_HOST}/security_hotspots?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER})
+          ${COVERAGE_ICON} [${COVERAGE}% Coverage on New Code](${SONAR_HOST}/component_measures?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER}&metric=new_coverage)
+          ${DUPLICATION_ICON} [${DUPLICATION}% Duplication on New Code](${SONAR_HOST}/component_measures?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER}&metric=new_duplicated_lines_density)
+
+          [See analysis details on SonarQube](${DASH})"
+
+          # ── Post or update existing comment ──
+          EXISTING_ID=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '.[] | select(.body | contains("<!-- sonarqube-quality-gate -->")) | .id' \
+            | head -1 || true)
+
+          if [[ -n "$EXISTING_ID" ]]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${EXISTING_ID}" \
+              -X PATCH -f body="$BODY"
+          else
+            gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              -f body="$BODY"
+          fi
+
   # PR-Required: Frontend unit tests
   frontend-unit:
     runs-on: ubuntu-latest

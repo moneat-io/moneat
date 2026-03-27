@@ -399,9 +399,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
     } catch (e: IllegalStateException) {
         logger.error(e) { "Failed to upload source map" }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
-    } catch (e: IllegalArgumentException) {
-        logger.error(e) { "Failed to upload source map" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
     }
 }
 

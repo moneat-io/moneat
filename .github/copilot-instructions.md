@@ -137,6 +137,15 @@ To avoid Sonar/ESLint code smells in `dashboard/`:
 
 ## Key Conventions
 
+### Warnings and lint fixes (no suppressions)
+
+**CRITICAL:** When asked to fix a compiler warning, linter finding, or static analysis issue (Detekt, ESLint, Sonar, Kotlin compiler, etc.):
+
+- ❌ **NEVER suppress** the finding — do not use `@Suppress`, `eslint-disable`, `// NOSONAR`, `SuppressWarnings`, file- or line-level ignores, or similar to silence the tool without fixing the underlying problem.
+- ✅ **Fix the root cause** — refactor, correct types, satisfy the rule, or extract helpers so the violation is resolved properly.
+
+If a rule is wrong for the whole project, **adjust the tool configuration** (e.g. `detekt.yml`, ESLint config) deliberately — do not mask individual violations with suppressions.
+
 ### Detekt Code Style Guidelines
 **CRITICAL:** Follow detekt rules to maintain code quality. The project enforces these via CI:
 
@@ -156,7 +165,7 @@ To avoid Sonar/ESLint code smells in `dashboard/`:
   ./gradlew detektFormat    # Auto-fix formatting
   ```
 
-- **SonarQube** runs in CI (`.github/workflows/sonar.yml`). Follow the "Kotlin: Validation & Control Flow" and "Dashboard: TypeScript & ESLint" guidelines below to avoid common Sonar code smells.
+- **SonarQube** runs in CI as the `sonarqube` job in `.github/workflows/test.yml` (after `backend-unit`). Follow the "Kotlin: Validation & Control Flow" and "Dashboard: TypeScript & ESLint" guidelines below to avoid common Sonar code smells.
 
 While some rules are currently disabled in `detekt.yml`, always follow best practices for new code:
 - Use explicit imports (no wildcards)

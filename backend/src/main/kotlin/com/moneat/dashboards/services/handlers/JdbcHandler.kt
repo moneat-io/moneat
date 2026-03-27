@@ -16,6 +16,7 @@
 
 package com.moneat.dashboards.services.handlers
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
 import java.io.IOException
 
@@ -31,6 +32,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
 import java.sql.ResultSet
+import java.sql.SQLException
 import java.util.concurrent.ConcurrentHashMap
 
 private val logger = KotlinLogging.logger {}
@@ -66,6 +68,11 @@ abstract class JdbcHandler(
             } finally {
                 ds.close()
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SQLException) {
+            logger.warn(e) { "JDBC connection test failed" }
+            TestConnectionResult(false, "Connection failed: ${e.message}")
         } catch (e: SerializationException) {
             logger.warn(e) { "JDBC connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")

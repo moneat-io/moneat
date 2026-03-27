@@ -16,6 +16,7 @@
 
 package com.moneat.events.routes
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
 import java.io.IOException
 
@@ -78,6 +79,8 @@ fun Route.telemetryIngestRoutes(
                 logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
                 return@post
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: IllegalStateException) {
                 logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
@@ -103,6 +106,8 @@ fun Route.telemetryIngestRoutes(
             } catch (e: IOException) {
                 logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: IllegalStateException) {
                 logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))

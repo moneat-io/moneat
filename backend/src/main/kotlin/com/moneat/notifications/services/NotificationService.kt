@@ -28,6 +28,7 @@ import com.moneat.shared.models.Users
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.server.config.ApplicationConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,6 +53,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -418,7 +420,7 @@ class NotificationService(
                     name = projectName,
                     events = formatNumber(stats.totalEvents),
                     issues = formatNumber(stats.uniqueIssues),
-                    crashFree = crashFreeRate?.let { "%.1f%%".format(it) } ?: "N/A"
+                    crashFree = crashFreeRate?.let { String.format(Locale.US, "%.1f%%", it) } ?: "N/A"
                 )
             }
 
@@ -512,6 +514,8 @@ class NotificationService(
             val data = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
             val rate = data?.get("rate")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
             if (rate == null || rate.isNaN() || rate.isInfinite()) null else rate
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: SerializationException) {
             logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
             null
@@ -691,8 +695,8 @@ class NotificationService(
 
     private fun formatNumber(num: Long): String {
         return when {
-            num >= 1_000_000 -> String.format("%.1fM", num / 1_000_000.0)
-            num >= 1_000 -> String.format("%.1fK", num / 1_000.0)
+            num >= 1_000_000 -> String.format(Locale.US, "%.1fM", num / 1_000_000.0)
+            num >= 1_000 -> String.format(Locale.US, "%.1fK", num / 1_000.0)
             else -> num.toString()
         }
     }
@@ -700,7 +704,7 @@ class NotificationService(
     private fun formatTimestamp(timestamp: String): String {
         return try {
             val instant = Instant.parse(timestamp)
-            val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm 'UTC'")
+            val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm 'UTC'", Locale.US)
             formatter.format(instant.atZone(ZoneId.of("UTC")))
         } catch (e: SerializationException) {
             timestamp
@@ -714,7 +718,7 @@ class NotificationService(
     }
 
     private fun formatDate(instant: Instant): String {
-        val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy")
+        val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US)
         return formatter.format(instant.atZone(ZoneId.of("UTC")))
     }
 

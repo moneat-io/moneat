@@ -16,6 +16,7 @@
 
 package com.moneat.shared.services
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
 import java.io.IOException
 
@@ -68,6 +69,8 @@ class RetentionBackgroundService(
                 while (isActive) {
                     try {
                         runSweep()
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: SerializationException) {
                         logger.error(e) { "Retention sweep failed" }
                     } catch (e: IOException) {
@@ -298,6 +301,8 @@ class RetentionBackgroundService(
             } else {
                 true
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: SerializationException) {
             logger.error(e) { "Retention mutation exception for $label" }
             false
