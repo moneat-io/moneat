@@ -25,7 +25,6 @@ import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.utils.suspendRunCatching
-import jakarta.mail.MessagingException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

@@ -17,11 +17,7 @@
 package com.moneat.otlp.services
 
 import com.moneat.utils.suspendRunCatching
-import io.lettuce.core.RedisException
-import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
-import java.io.IOException
-import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 
@@ -45,12 +41,9 @@ class OtlpTraceIngestionWorker(
                 logTraceDecodeFailure(workerId, payload, e)
                 return
             }
-        suspendRunCatching {
-            traceService.insertBatch(batch)
-        }.onFailure { e ->
-            logTraceInsertFailure(workerId, payload, e)
-            return
-        }
+        val insertResult = suspendRunCatching { traceService.insertBatch(batch) }
+        insertResult.onFailure { e -> logTraceInsertFailure(workerId, payload, e) }
+        if (insertResult.isFailure) return
         suspendRunCatching {
             // Tracked: https://github.com/moneat-io/moneat/issues/275 — org→project resolution + project-scoped error tracking for extracted span exceptions.
             val exceptions = OtlpErrorExtractor.extractExceptions(batch.spans)

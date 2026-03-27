@@ -17,9 +17,6 @@
 package com.moneat.dashboards.services.handlers
 
 import com.moneat.utils.suspendRunCatching
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -32,7 +29,6 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
 import java.sql.ResultSet
-import java.sql.SQLException
 import java.util.concurrent.ConcurrentHashMap
 
 private val logger = KotlinLogging.logger {}

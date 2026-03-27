@@ -17,8 +17,6 @@
 package com.moneat.events.repositories
 
 import com.moneat.utils.suspendRunCatching
-import kotlinx.serialization.SerializationException
-import java.io.IOException
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.ProjectKeyResponse

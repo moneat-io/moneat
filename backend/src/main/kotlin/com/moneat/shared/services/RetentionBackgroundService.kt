@@ -17,9 +17,6 @@
 package com.moneat.shared.services
 
 import com.moneat.utils.suspendRunCatching
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Projects
 import io.ktor.server.config.ApplicationConfig

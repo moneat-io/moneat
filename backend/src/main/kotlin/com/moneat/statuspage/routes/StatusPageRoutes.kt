@@ -157,7 +157,10 @@ fun Route.statusPageRoutes(
                         }
                         else -> {
                             logger.error(e) { "Failed to create status page" }
-                            call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create status page"))
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                ErrorResponse("Failed to create status page")
+                            )
                         }
                     }
                 }
@@ -242,7 +245,10 @@ fun Route.statusPageRoutes(
                         }
                         else -> {
                             logger.error(e) { "Failed to update status page" }
-                            call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update status page"))
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                ErrorResponse("Failed to update status page")
+                            )
                         }
                     }
                 }
@@ -532,7 +538,10 @@ fun Route.statusPageRoutes(
                         }
                         else -> {
                             logger.error(e) { "Failed to create incident update" }
-                            call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident update"))
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                ErrorResponse("Failed to create incident update")
+                            )
                         }
                     }
                 }
@@ -571,7 +580,10 @@ fun Route.statusPageRoutes(
                         }
                         else -> {
                             logger.error(e) { "Failed to add custom domain" }
-                            call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add custom domain"))
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                ErrorResponse("Failed to add custom domain")
+                            )
                         }
                     }
                 }
