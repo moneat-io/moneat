@@ -16,9 +16,6 @@
 
 package com.moneat.datadog.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DatadogEventPayload
@@ -34,6 +31,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -59,41 +57,11 @@ fun Route.datadogEventRoutes() {
                 )
                 val bodyStr = body.decodeToString()
 
-                val checks = try {
+                val checks = suspendRunCatching {
                     json.decodeFromString<List<DatadogServiceCheck>>(
                         bodyStr
                     )
-                } catch (e: SerializationException) {
-                    logger.warn(e) {
-                        "Failed to parse DD V1 check_run payload"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf("Invalid payload")
-                        )
-                    )
-                } catch (e: IOException) {
-                    logger.warn(e) {
-                        "Failed to parse DD V1 check_run payload"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf("Invalid payload")
-                        )
-                    )
-                } catch (e: IllegalStateException) {
-                    logger.warn(e) {
-                        "Failed to parse DD V1 check_run payload"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf("Invalid payload")
-                        )
-                    )
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.warn(e) {
                         "Failed to parse DD V1 check_run payload"
                     }
@@ -150,41 +118,11 @@ fun Route.datadogEventRoutes() {
                 )
                 val bodyStr = body.decodeToString()
 
-                val payload = try {
+                val payload = suspendRunCatching {
                     json.decodeFromString<DatadogEventPayload>(
                         bodyStr
                     )
-                } catch (e: SerializationException) {
-                    logger.warn(e) {
-                        "Failed to parse DD events payload"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf("Invalid payload")
-                        )
-                    )
-                } catch (e: IOException) {
-                    logger.warn(e) {
-                        "Failed to parse DD events payload"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf("Invalid payload")
-                        )
-                    )
-                } catch (e: IllegalStateException) {
-                    logger.warn(e) {
-                        "Failed to parse DD events payload"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf("Invalid payload")
-                        )
-                    )
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.warn(e) {
                         "Failed to parse DD events payload"
                     }
@@ -226,41 +164,11 @@ fun Route.datadogEventRoutes() {
                 )
                 val bodyStr = body.decodeToString()
 
-                val payload = try {
+                val payload = suspendRunCatching {
                     json.decodeFromString<DatadogServiceCheckPayload>(
                         bodyStr
                     )
-                } catch (e: SerializationException) {
-                    logger.warn(e) {
-                        "Failed to parse DD service checks"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf("Invalid payload")
-                        )
-                    )
-                } catch (e: IOException) {
-                    logger.warn(e) {
-                        "Failed to parse DD service checks"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf("Invalid payload")
-                        )
-                    )
-                } catch (e: IllegalStateException) {
-                    logger.warn(e) {
-                        "Failed to parse DD service checks"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf("Invalid payload")
-                        )
-                    )
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.warn(e) {
                         "Failed to parse DD service checks"
                     }

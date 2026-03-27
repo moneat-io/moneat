@@ -41,6 +41,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.*
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -296,7 +297,7 @@ class EmailService {
         emailType: String,
         success: Boolean
     ) {
-        try {
+        suspendRunCatching {
             val normalizedEmail = recipient.lowercase().trim()
             transaction {
                 // Try to find organization for the recipient
@@ -321,13 +322,7 @@ class EmailService {
                     it[EmailsSent.success] = success
                 }
             }
-        } catch (e: SerializationException) {
-            logger.warn(e) { "Failed to track email sent to $recipient" }
-        } catch (e: IOException) {
-            logger.warn(e) { "Failed to track email sent to $recipient" }
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "Failed to track email sent to $recipient" }
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to track email sent to $recipient" }
         }
     }

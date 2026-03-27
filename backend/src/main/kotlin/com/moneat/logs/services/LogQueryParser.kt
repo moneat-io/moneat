@@ -16,10 +16,8 @@
 
 package com.moneat.logs.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.suspendRunCatching
 
 /**
  * Datadog-compatible log search query parser.
@@ -117,7 +115,7 @@ class LogQueryParser {
 
         val errors = mutableListOf<String>()
 
-        try {
+        suspendRunCatching {
             val tokens = tokenize(query)
 
             // Debug logging (remove after testing)
@@ -132,28 +130,7 @@ class LogQueryParser {
 
             val node = parseExpression(tokens)
             return ParsedQuery(node, errors)
-        } catch (e: SerializationException) {
-            errors.add("Parse error: ${e.message}")
-            // Fallback to simple full-text search
-            return ParsedQuery(
-                QueryNode.FullTextNode(query.trim(), false),
-                errors
-            )
-        } catch (e: IOException) {
-            errors.add("Parse error: ${e.message}")
-            // Fallback to simple full-text search
-            return ParsedQuery(
-                QueryNode.FullTextNode(query.trim(), false),
-                errors
-            )
-        } catch (e: IllegalStateException) {
-            errors.add("Parse error: ${e.message}")
-            // Fallback to simple full-text search
-            return ParsedQuery(
-                QueryNode.FullTextNode(query.trim(), false),
-                errors
-            )
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             errors.add("Parse error: ${e.message}")
             // Fallback to simple full-text search
             return ParsedQuery(

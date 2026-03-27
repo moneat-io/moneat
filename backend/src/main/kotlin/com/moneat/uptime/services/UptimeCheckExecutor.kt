@@ -17,7 +17,6 @@
 package com.moneat.uptime.services
 
 import com.jayway.jsonpath.JsonPath
-import com.jayway.jsonpath.JsonPathException
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.utils.UrlValidator
@@ -40,15 +39,14 @@ import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.net.URISyntaxException
 import java.security.cert.X509Certificate
 import java.sql.DriverManager
-import java.sql.SQLException
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import javax.naming.NamingException
 import javax.naming.directory.InitialDirContext
 import javax.net.ssl.HttpsURLConnection
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -111,7 +109,7 @@ class UptimeCheckExecutor {
 
         val startTime = System.currentTimeMillis()
 
-        try {
+        suspendRunCatching {
             val response =
                 httpClient.request(url) {
                     method =
@@ -182,10 +180,7 @@ class UptimeCheckExecutor {
                 statusCode = statusCode,
                 message = if (isSuccess) "OK" else "Unexpected status code: $statusCode"
             )
-        } catch (e: IOException) {
-            val responseTime = (System.currentTimeMillis() - startTime).toInt()
-            return CheckResult(0, responseTime, 0, "HTTP error: ${e.message}")
-        } catch (e: IllegalStateException) {
+        }.getOrElse { e ->
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
             return CheckResult(0, responseTime, 0, "HTTP error: ${e.message}")
         }
@@ -200,7 +195,7 @@ class UptimeCheckExecutor {
 
         val keyword = monitor.keyword ?: return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "No keyword configured")
 
-        try {
+        suspendRunCatching {
             val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
             val response = httpClient.get(url)
             val body = response.bodyAsText()
@@ -216,9 +211,7 @@ class UptimeCheckExecutor {
                 statusCode = httpResult.statusCode,
                 message = if (success) "Keyword check passed" else "Keyword '$keyword' ${if (shouldContain) "not found" else "found (inverted check)"}"
             )
-        } catch (e: IOException) {
-            return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "Keyword check error: ${e.message}")
-        } catch (e: IllegalStateException) {
+        }.getOrElse { e ->
             return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "Keyword check error: ${e.message}")
         }
     }
@@ -232,7 +225,7 @@ class UptimeCheckExecutor {
 
         val jsonPath = monitor.jsonPath ?: return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "No JSON path configured")
 
-        try {
+        suspendRunCatching {
             val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
             val response = httpClient.get(url)
             val body = response.bodyAsText()
@@ -253,11 +246,7 @@ class UptimeCheckExecutor {
                 statusCode = httpResult.statusCode,
                 message = if (success) "JSON query passed" else "JSON value mismatch: got '$value', expected '$expectedValue'"
             )
-        } catch (e: IOException) {
-            return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "JSON query error: ${e.message}")
-        } catch (e: IllegalStateException) {
-            return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "JSON query error: ${e.message}")
-        } catch (e: JsonPathException) {
+        }.getOrElse { e ->
             return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "JSON query error: ${e.message}")
         }
     }
@@ -356,7 +345,7 @@ class UptimeCheckExecutor {
     private suspend fun checkWebSocket(monitor: UptimeMonitorData): CheckResult {
         val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
 
-        val httpUrl = try {
+        val httpUrl = suspendRunCatching {
             val uri = java.net.URI(url)
             val httpScheme = when (uri.scheme?.lowercase()) {
                 "ws" -> "http"
@@ -372,9 +361,7 @@ class UptimeCheckExecutor {
                 uri.query,
                 uri.fragment
             ).toString()
-        } catch (_: IllegalArgumentException) {
-            return CheckResult(0, -1, 0, "Invalid URL: $url")
-        } catch (_: URISyntaxException) {
+        }.getOrElse { _ ->
             return CheckResult(0, -1, 0, "Invalid URL: $url")
         }
         try {
@@ -384,7 +371,7 @@ class UptimeCheckExecutor {
         }
 
         // Basic WebSocket connection test via HTTP upgrade
-        return try {
+        return suspendRunCatching {
             val startTime = System.currentTimeMillis()
 
             val response = httpClient.get(httpUrl)
@@ -397,9 +384,7 @@ class UptimeCheckExecutor {
                 statusCode = response.status.value,
                 message = "WebSocket endpoint reachable"
             )
-        } catch (e: IOException) {
-            CheckResult(0, -1, 0, "WebSocket check failed: ${e.message}")
-        } catch (e: IllegalStateException) {
+        }.getOrElse { e ->
             CheckResult(0, -1, 0, "WebSocket check failed: ${e.message}")
         }
     }
@@ -412,7 +397,7 @@ class UptimeCheckExecutor {
         val dockerHost = monitor.dockerHost ?: "unix:///var/run/docker.sock"
 
         // Docker API check
-        return try {
+        return suspendRunCatching {
             val startTime = System.currentTimeMillis()
 
             // For HTTP-based Docker API
@@ -443,9 +428,7 @@ class UptimeCheckExecutor {
                 // Unix socket not easily supported here
                 CheckResult(0, -1, 0, "Docker Unix socket not supported. Use HTTP Docker API.")
             }
-        } catch (e: IOException) {
-            CheckResult(0, -1, 0, "Docker check failed: ${e.message}")
-        } catch (e: IllegalStateException) {
+        }.getOrElse { e ->
             CheckResult(0, -1, 0, "Docker check failed: ${e.message}")
         }
     }
@@ -458,7 +441,7 @@ class UptimeCheckExecutor {
 
         val startTime = System.currentTimeMillis()
 
-        return try {
+        return suspendRunCatching {
             DriverManager.getConnection(connectionString).use { conn ->
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
 
@@ -477,10 +460,7 @@ class UptimeCheckExecutor {
 
                 CheckResult(1, responseTime, 0, "Database connection successful")
             }
-        } catch (e: SQLException) {
-            val responseTime = (System.currentTimeMillis() - startTime).toInt()
-            CheckResult(0, responseTime, 0, "Database check failed: ${e.message}")
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
             CheckResult(0, responseTime, 0, "Database check failed: ${e.message}")
         }

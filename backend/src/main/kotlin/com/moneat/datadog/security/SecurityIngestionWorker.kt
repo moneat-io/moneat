@@ -27,10 +27,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
-import java.sql.SQLException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -100,24 +99,14 @@ class SecurityIngestionWorker(
         workerId: Int,
         payload: String,
     ) {
-        try {
+        suspendRunCatching {
             val batch = SecurityIngestionService.decodeBatch(payload)
             SecurityIngestionService.insertBatch(batch)
             logger.debug {
                 "Security worker $workerId processed batch: " +
                     "type=${batch.batchType}"
             }
-        } catch (e: SerializationException) {
-            handleSecurityDlq(workerId, payload, e)
-        } catch (e: IOException) {
-            handleSecurityDlq(workerId, payload, e)
-        } catch (e: SQLException) {
-            handleSecurityDlq(workerId, payload, e)
-        } catch (e: RedisException) {
-            handleSecurityDlq(workerId, payload, e)
-        } catch (e: IllegalStateException) {
-            handleSecurityDlq(workerId, payload, e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             handleSecurityDlq(workerId, payload, e)
         }
     }

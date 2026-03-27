@@ -16,9 +16,6 @@
 
 package com.moneat.logging
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.AppenderBase
 import ch.qos.logback.core.spi.DeferredProcessingAware
@@ -27,6 +24,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionHandler
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import com.moneat.utils.suspendRunCatching
 
 class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     var endpoint: String = "https://api.moneat.io/v1/logs/otlp"
@@ -82,18 +80,9 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
         (event as? DeferredProcessingAware)?.prepareForDeferredProcessing()
 
         executor.submit {
-            try {
+            suspendRunCatching {
                 sendLog(event)
-            } catch (e: SerializationException) {
-                // Use stderr to avoid log loops
-                System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
-            } catch (e: IOException) {
-                // Use stderr to avoid log loops
-                System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
-            } catch (e: IllegalStateException) {
-                // Use stderr to avoid log loops
-                System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 // Use stderr to avoid log loops
                 System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
             }

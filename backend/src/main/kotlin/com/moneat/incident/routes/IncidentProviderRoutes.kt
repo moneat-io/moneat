@@ -16,9 +16,6 @@
 
 package com.moneat.incident.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
@@ -57,6 +54,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 fun Route.incidentProviderRoutes() {
     val json =
@@ -93,18 +91,12 @@ fun Route.incidentProviderRoutes() {
                                     providerType = row[IncidentProviderConfigs.providerType],
                                     name = row[IncidentProviderConfigs.name],
                                     configJson =
-                                    try {
+                                    suspendRunCatching {
                                         val jsonStr = row[IncidentProviderConfigs.configJson]
                                         json.parseToJsonElement(jsonStr).jsonObject.toMap().mapValues {
                                             it.value.toString().trim('"')
                                         }
-                                    } catch (e: SerializationException) {
-                                        emptyMap()
-                                    } catch (e: IOException) {
-                                        emptyMap()
-                                    } catch (e: IllegalStateException) {
-                                        emptyMap()
-                                    } catch (e: IllegalArgumentException) {
+                                    }.getOrElse { e ->
                                         emptyMap()
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled],
@@ -314,16 +306,10 @@ fun Route.incidentProviderRoutes() {
                                     name = row[IncidentProviderConfigs.name],
                                     apiKey = row[IncidentProviderConfigs.apiKey],
                                     configJson =
-                                    try {
+                                    suspendRunCatching {
                                         val jsonStr = row[IncidentProviderConfigs.configJson]
                                         json.parseToJsonElement(jsonStr).jsonObject
-                                    } catch (e: SerializationException) {
-                                        buildJsonObject {}
-                                    } catch (e: IOException) {
-                                        buildJsonObject {}
-                                    } catch (e: IllegalStateException) {
-                                        buildJsonObject {}
-                                    } catch (e: IllegalArgumentException) {
+                                    }.getOrElse { e ->
                                         buildJsonObject {}
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled]

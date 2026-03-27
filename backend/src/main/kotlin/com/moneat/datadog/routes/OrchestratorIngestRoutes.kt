@@ -16,9 +16,6 @@
 
 package com.moneat.datadog.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdManifestPayload
@@ -33,6 +30,7 @@ import io.ktor.server.routing.route
 import io.ktor.utils.io.toByteArray
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json {
@@ -52,7 +50,7 @@ fun Route.orchestratorIngestRoutes() {
 private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorResources() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    try {
+    suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val bytes = decompressIfNeeded(rawBytes, call.request)
         val body = bytes.decodeToString()
@@ -62,16 +60,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorReso
 
         logger.debug { "Enqueued $count K8s resources for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process orchestrator resources" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process orchestrator resources" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process orchestrator resources" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process orchestrator resources" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -79,7 +68,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorReso
 private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorManifests() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    try {
+    suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val bytes = decompressIfNeeded(rawBytes, call.request)
         val body = bytes.decodeToString()
@@ -89,16 +78,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorMani
 
         logger.debug { "Enqueued $count K8s manifests for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process orchestrator manifests" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process orchestrator manifests" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process orchestrator manifests" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process orchestrator manifests" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

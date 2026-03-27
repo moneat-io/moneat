@@ -16,9 +16,6 @@
 
 package com.moneat.dashboards.services.handlers
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -36,6 +33,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -47,7 +45,7 @@ private val logger = KotlinLogging.logger {}
 class LokiHandler : HttpApiHandler() {
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        return try {
+        return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port ?: 3100)
             val response = httpClient.get("$baseUrl/ready") {
                 request.apiKey?.let { header("X-Scope-OrgID", it) }
@@ -57,16 +55,7 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Loki returned ${response.status}")
             }
-        } catch (e: SerializationException) {
-            logger.warn(e) { "Loki connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IOException) {
-            logger.warn(e) { "Loki connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "Loki connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "Loki connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -87,7 +76,7 @@ class LokiHandler : HttpApiHandler() {
         val fromSec = timeRange?.from?.let { resolveRelativeTimeSec(it, nowSec) } ?: nowSec - 3600
         val toSec = timeRange?.to?.let { resolveRelativeTimeSec(it, nowSec) } ?: nowSec
 
-        return try {
+        return suspendRunCatching {
             val boundedLimit = limit.coerceIn(1, 5000)
             val response = httpClient.get("$baseUrl/loki/api/v1/query_range") {
                 parameter("query", query)
@@ -101,16 +90,7 @@ class LokiHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseLokiResponse(response.bodyAsText(), boundedLimit)
-        } catch (e: SerializationException) {
-            logger.error(e) { "Loki query failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "Loki query failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Loki query failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Loki query failed" }
             emptyList()
         }
@@ -123,7 +103,7 @@ class LokiHandler : HttpApiHandler() {
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val baseUrl = buildUrl(host, port ?: 3100)
-        return try {
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/loki/api/v1/labels") {
                 credentials.apiKey?.let { header("X-Scope-OrgID", it) }
             }
@@ -135,16 +115,7 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Loki schema fetch failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "Loki schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Loki schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Loki schema fetch failed" }
             emptyList()
         }
@@ -161,7 +132,7 @@ class LokiHandler : HttpApiHandler() {
         val matcher = labelMatch.groupValues[1].trim()
         val labelName = labelMatch.groupValues[2].trim()
         val baseUrl = buildUrl(host, port ?: 3100)
-        return try {
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/loki/api/v1/label/$labelName/values") {
                 if (matcher.isNotBlank()) parameter("query", matcher)
                 credentials.apiKey?.let { header("X-Scope-OrgID", it) }
@@ -172,16 +143,7 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: SerializationException) {
-            logger.warn(e) { "Loki label_values failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.warn(e) { "Loki label_values failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "Loki label_values failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "Loki label_values failed" }
             emptyList()
         }

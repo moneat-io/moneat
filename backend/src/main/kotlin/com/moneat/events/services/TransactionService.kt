@@ -16,9 +16,6 @@
 
 package com.moneat.events.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.EventResponse
 import com.moneat.events.models.PerformanceStatsResponse
@@ -41,6 +38,7 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -210,7 +208,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val totalResponse = ClickHouseClient.execute(totalQuery)
             val totalBody = totalResponse.bodyAsText()
             val totalCount: Long
@@ -246,34 +244,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 totalTransactions = totalCount,
                 avgDuration = avgDuration
             )
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to fetch performance stats for project $projectId" }
-            PerformanceStatsResponse(
-                apdex = 0.0,
-                throughput = emptyList(),
-                slowestTransactions = emptyList(),
-                totalTransactions = 0,
-                avgDuration = 0.0
-            )
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to fetch performance stats for project $projectId" }
-            PerformanceStatsResponse(
-                apdex = 0.0,
-                throughput = emptyList(),
-                slowestTransactions = emptyList(),
-                totalTransactions = 0,
-                avgDuration = 0.0
-            )
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to fetch performance stats for project $projectId" }
-            PerformanceStatsResponse(
-                apdex = 0.0,
-                throughput = emptyList(),
-                slowestTransactions = emptyList(),
-                totalTransactions = 0,
-                avgDuration = 0.0
-            )
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch performance stats for project $projectId" }
             PerformanceStatsResponse(
                 apdex = 0.0,
@@ -396,7 +367,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
         val spans = rows.map { mapSpanRowFromApm(it) }
         if (spans.isEmpty()) return null
 
-        return try {
+        return suspendRunCatching {
             val startTs = spans.minOf { it.startTimestamp }
             val endTs = spans.maxOf { it.endTimestamp }
             val duration = endTs - startTs
@@ -409,16 +380,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 endTimestamp = endTs,
                 duration = duration * 1000.0
             )
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to fetch trace $traceId" }
-            null
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to fetch trace $traceId" }
-            null
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to fetch trace $traceId" }
-            null
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch trace $traceId" }
             null
         }

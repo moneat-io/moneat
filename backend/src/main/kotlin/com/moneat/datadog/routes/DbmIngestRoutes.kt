@@ -16,9 +16,6 @@
 
 package com.moneat.datadog.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdDbmActivityPayload
@@ -36,6 +33,7 @@ import io.ktor.server.routing.route
 import io.ktor.utils.io.toByteArray
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json {
@@ -73,7 +71,7 @@ fun Route.dbmIngestRoutes() {
 private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    try {
+    suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
@@ -83,16 +81,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries() {
 
         logger.debug { "Enqueued $count DBM queries for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process DBM queries" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process DBM queries" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process DBM queries" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process DBM queries" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -100,7 +89,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries() {
 private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    try {
+    suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
@@ -110,16 +99,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics() {
 
         logger.debug { "Enqueued $count DBM metrics for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process DBM metrics" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process DBM metrics" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process DBM metrics" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process DBM metrics" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -127,7 +107,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics() {
 private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    try {
+    suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
@@ -137,16 +117,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity() {
 
         logger.debug { "Enqueued $count DBM activity for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process DBM activity" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process DBM activity" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process DBM activity" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process DBM activity" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -154,7 +125,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity() {
 private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    try {
+    suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
@@ -164,16 +135,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata() {
 
         logger.debug { "Enqueued $count DBM metadata for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process DBM metadata" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process DBM metadata" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process DBM metadata" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process DBM metadata" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -181,7 +143,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata() {
 private suspend fun io.ktor.server.routing.RoutingContext.handleDbmHealth() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    try {
+    suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
@@ -191,16 +153,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmHealth() {
 
         logger.debug { "Enqueued $count DBM health for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process DBM health" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process DBM health" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process DBM health" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process DBM health" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

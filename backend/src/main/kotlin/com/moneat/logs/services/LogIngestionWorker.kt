@@ -33,6 +33,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import kotlin.random.Random
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private const val FULL_SAMPLING_RATE = 1.0f
@@ -98,7 +99,7 @@ class LogIngestionWorker(
         payload: String,
         onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
-        try {
+        suspendRunCatching {
             val batch = logService.decodeQueueMessage(payload)
             val orgId = batch.effectiveOrganizationId
             val indexes = if (orgId in Int.MIN_VALUE..Int.MAX_VALUE) {
@@ -120,16 +121,7 @@ class LogIngestionWorker(
             val taggedBatch = batch.copy(logs = taggedLogs)
             val inserted = logService.insertBatch(taggedBatch)
             logService.publishLiveLogs(orgId, inserted)
-        } catch (e: SerializationException) {
-            logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
-            onDlq(payload)
-        } catch (e: IOException) {
-            logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
-            onDlq(payload)
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
-            onDlq(payload)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
             onDlq(payload)
         }
@@ -163,7 +155,7 @@ class LogIngestionWorker(
             val matches = if (index.filterQuery.isBlank()) {
                 true
             } else {
-                try {
+                suspendRunCatching {
                     val parsed = parser.parse(index.filterQuery)
                     if (parsed.rootNode == null) {
                         logger.debug {
@@ -174,13 +166,7 @@ class LogIngestionWorker(
                     } else {
                         evaluateFilter(parsed.rootNode, entryMap)
                     }
-                } catch (_: SerializationException) {
-                    false
-                } catch (_: IOException) {
-                    false
-                } catch (_: IllegalStateException) {
-                    false
-                } catch (_: IllegalArgumentException) {
+                }.getOrElse { _ ->
                     false
                 }
             }
@@ -209,15 +195,9 @@ class LogIngestionWorker(
                     val pattern = escaped
                         .replace("\\*", ".*")
                         .replace("\\?", ".")
-                    try {
+                    suspendRunCatching {
                         value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
-                    } catch (_: SerializationException) {
-                        false
-                    } catch (_: IOException) {
-                        false
-                    } catch (_: IllegalStateException) {
-                        false
-                    } catch (_: IllegalArgumentException) {
+                    }.getOrElse { _ ->
                         false
                     }
                 } else {

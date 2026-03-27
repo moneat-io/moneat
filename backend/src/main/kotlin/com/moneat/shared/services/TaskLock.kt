@@ -16,9 +16,6 @@
 
 package com.moneat.shared.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 import net.javacrumbs.shedlock.core.LockConfiguration
@@ -48,18 +45,9 @@ object TaskLock {
             lockAtMostFor.toJavaDuration(),
             lockAtLeastFor.toJavaDuration()
         )
-        val lock = try {
+        val lock = suspendRunCatching {
             lockProvider.lock(config)
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to acquire lock '$name'" }
-            return null
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to acquire lock '$name'" }
-            return null
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to acquire lock '$name'" }
-            return null
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to acquire lock '$name'" }
             return null
         }
@@ -75,15 +63,9 @@ object TaskLock {
                 null
             }
         } finally {
-            try {
+            suspendRunCatching {
                 lock.get().unlock()
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to unlock '$name'" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to unlock '$name'" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to unlock '$name'" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to unlock '$name'" }
             }
         }

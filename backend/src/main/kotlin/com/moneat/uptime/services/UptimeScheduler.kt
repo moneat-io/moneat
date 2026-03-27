@@ -35,7 +35,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
 import java.io.IOException
@@ -104,12 +103,9 @@ class UptimeScheduler(
      */
     private suspend fun checkMonitors() {
         val monitors =
-            try {
+            suspendRunCatching {
                 uptimeService.getMonitorsDueForCheck()
-            } catch (e: SQLException) {
-                logger.error(e) { "Failed to fetch monitors due for check: ${e.message}" }
-                return
-            } catch (e: IllegalStateException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to fetch monitors due for check: ${e.message}" }
                 return
             }
@@ -146,12 +142,9 @@ class UptimeScheduler(
     private suspend fun performCheck(monitorId: UUID) {
         // Get latest monitor data from the list we already fetched
         val monitor =
-            try {
+            suspendRunCatching {
                 uptimeService.getMonitorsDueForCheck().find { it.id == monitorId }
-            } catch (e: SQLException) {
-                logger.error(e) { "Failed to fetch monitor $monitorId: ${e.message}" }
-                return
-            } catch (e: IllegalStateException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to fetch monitor $monitorId: ${e.message}" }
                 return
             }
@@ -197,13 +190,9 @@ class UptimeScheduler(
             }
 
         // Record heartbeat
-        try {
+        suspendRunCatching {
             uptimeService.recordHeartbeat(monitor.id, finalResult)
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to record heartbeat for monitor ${monitor.id}: ${e.message}" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to record heartbeat for monitor ${monitor.id}: ${e.message}" }
-        } catch (e: SerializationException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to record heartbeat for monitor ${monitor.id}: ${e.message}" }
         }
 
@@ -326,17 +315,14 @@ class UptimeScheduler(
 
         // Send Slack notification
         val slackEnabled =
-            try {
+            suspendRunCatching {
                 prefsService
                     .getUsersWithChannelEnabled(
                         organizationId = monitor.organizationId,
                         alertSource = "UPTIME_MONITOR",
                         channel = "slack"
                     ).isNotEmpty()
-            } catch (e: SQLException) {
-                logger.error(e) { "Failed to evaluate Slack notification preferences for uptime monitor" }
-                false
-            } catch (e: IllegalStateException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to evaluate Slack notification preferences for uptime monitor" }
                 false
             }
@@ -358,17 +344,14 @@ class UptimeScheduler(
 
         // Send Discord notification
         val discordEnabled =
-            try {
+            suspendRunCatching {
                 prefsService
                     .getUsersWithChannelEnabled(
                         organizationId = monitor.organizationId,
                         alertSource = "UPTIME_MONITOR",
                         channel = "discord"
                     ).isNotEmpty()
-            } catch (e: SQLException) {
-                logger.error(e) { "Failed to evaluate Discord notification preferences for uptime monitor" }
-                false
-            } catch (e: IllegalStateException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to evaluate Discord notification preferences for uptime monitor" }
                 false
             }

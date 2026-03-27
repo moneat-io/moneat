@@ -41,6 +41,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
+import com.moneat.utils.suspendRunCatching
 import java.util.*
 
 class SlackService {
@@ -161,7 +162,7 @@ class SlackService {
         accessToken: String,
         channel: String
     ): Pair<Boolean, String?> {
-        return try {
+        return suspendRunCatching {
             val response: HttpResponse =
                 httpClient.post("https://slack.com/api/conversations.join") {
                     contentType(ContentType.Application.Json)
@@ -186,16 +187,7 @@ class SlackService {
                     false to "Could not join channel: ${result.error}"
                 }
             }
-        } catch (e: SerializationException) {
-            logger.warn("Error joining Slack channel", e)
-            false to "Error joining channel: ${e.message}"
-        } catch (e: IOException) {
-            logger.warn("Error joining Slack channel", e)
-            false to "Error joining channel: ${e.message}"
-        } catch (e: IllegalStateException) {
-            logger.warn("Error joining Slack channel", e)
-            false to "Error joining channel: ${e.message}"
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn("Error joining Slack channel", e)
             false to "Error joining channel: ${e.message}"
         }
@@ -208,7 +200,7 @@ class SlackService {
         attachments: List<SlackAttachment>? = null,
         fallbackText: String
     ): Pair<Boolean, String?> {
-        return try {
+        return suspendRunCatching {
             // Attempt to join the channel first (if not already in it)
             val (joinSuccess, joinError) = joinChannel(accessToken, channel)
             if (!joinSuccess && joinError != null) {
@@ -251,16 +243,7 @@ class SlackService {
                 logger.error("Failed to send to Slack: ${response.status} - ${response.bodyAsText()}")
                 false to errorMsg
             }
-        } catch (e: SerializationException) {
-            logger.error("Error sending to Slack", e)
-            false to "Error: ${e.message}"
-        } catch (e: IOException) {
-            logger.error("Error sending to Slack", e)
-            false to "Error: ${e.message}"
-        } catch (e: IllegalStateException) {
-            logger.error("Error sending to Slack", e)
-            false to "Error: ${e.message}"
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error("Error sending to Slack", e)
             false to "Error: ${e.message}"
         }
@@ -789,7 +772,7 @@ class SlackService {
                 )
             )
 
-        return try {
+        return suspendRunCatching {
             val (success, error) =
                 sendMessage(
                     accessToken = config.accessToken,
@@ -802,16 +785,7 @@ class SlackService {
             } else {
                 false to (error ?: "Failed to send test message")
             }
-        } catch (e: SerializationException) {
-            logger.error("Error testing Slack connection", e)
-            false to "Error: ${e.message}"
-        } catch (e: IOException) {
-            logger.error("Error testing Slack connection", e)
-            false to "Error: ${e.message}"
-        } catch (e: IllegalStateException) {
-            logger.error("Error testing Slack connection", e)
-            false to "Error: ${e.message}"
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error("Error testing Slack connection", e)
             false to "Error: ${e.message}"
         }
@@ -823,7 +797,7 @@ class SlackService {
         clientSecret: String,
         redirectUri: String
     ): SlackOAuthResponse {
-        return try {
+        return suspendRunCatching {
             val response: HttpResponse =
                 httpClient.post("https://slack.com/api/oauth.v2.access") {
                     contentType(ContentType.Application.FormUrlEncoded)
@@ -833,16 +807,7 @@ class SlackService {
                 }
 
             json.decodeFromString<SlackOAuthResponse>(response.bodyAsText())
-        } catch (e: SerializationException) {
-            logger.error("Error exchanging OAuth code", e)
-            SlackOAuthResponse(ok = false, error = e.message)
-        } catch (e: IOException) {
-            logger.error("Error exchanging OAuth code", e)
-            SlackOAuthResponse(ok = false, error = e.message)
-        } catch (e: IllegalStateException) {
-            logger.error("Error exchanging OAuth code", e)
-            SlackOAuthResponse(ok = false, error = e.message)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error("Error exchanging OAuth code", e)
             SlackOAuthResponse(ok = false, error = e.message)
         }
@@ -863,7 +828,7 @@ class SlackService {
     )
 
     suspend fun listChannels(accessToken: String): List<SlackChannel> {
-        return try {
+        return suspendRunCatching {
             val response: HttpResponse =
                 httpClient.get("https://slack.com/api/conversations.list") {
                     header("Authorization", "Bearer $accessToken")
@@ -878,16 +843,7 @@ class SlackService {
                 logger.error("Failed to list Slack channels: ${result.error}")
                 emptyList()
             }
-        } catch (e: SerializationException) {
-            logger.error("Error listing Slack channels", e)
-            emptyList()
-        } catch (e: IOException) {
-            logger.error("Error listing Slack channels", e)
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error("Error listing Slack channels", e)
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error("Error listing Slack channels", e)
             emptyList()
         }
@@ -917,7 +873,7 @@ class SlackService {
     )
 
     suspend fun listUsergroups(accessToken: String): List<SlackUsergroup> {
-        return try {
+        return suspendRunCatching {
             val response: HttpResponse =
                 httpClient.get("https://slack.com/api/usergroups.list") {
                     header("Authorization", "Bearer $accessToken")
@@ -930,16 +886,7 @@ class SlackService {
                 logger.error("Failed to list Slack usergroups: ${result.error}")
                 emptyList()
             }
-        } catch (e: SerializationException) {
-            logger.error("Error listing Slack usergroups", e)
-            emptyList()
-        } catch (e: IOException) {
-            logger.error("Error listing Slack usergroups", e)
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error("Error listing Slack usergroups", e)
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error("Error listing Slack usergroups", e)
             emptyList()
         }
@@ -950,7 +897,7 @@ class SlackService {
         usergroupId: String,
         userIds: List<String>
     ): Boolean {
-        return try {
+        return suspendRunCatching {
             val response: HttpResponse =
                 httpClient.post("https://slack.com/api/usergroups.users.update") {
                     contentType(ContentType.Application.FormUrlEncoded)
@@ -966,16 +913,7 @@ class SlackService {
                 logger.error("Failed to update Slack usergroup: ${result.error}")
                 false
             }
-        } catch (e: SerializationException) {
-            logger.error("Error updating Slack usergroup members", e)
-            false
-        } catch (e: IOException) {
-            logger.error("Error updating Slack usergroup members", e)
-            false
-        } catch (e: IllegalStateException) {
-            logger.error("Error updating Slack usergroup members", e)
-            false
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error("Error updating Slack usergroup members", e)
             false
         }

@@ -16,9 +16,6 @@
 
 package com.moneat.dashboards.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
 import com.moneat.dashboards.models.CustomDataSourceResponse
@@ -38,6 +35,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import kotlin.collections.filter
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -348,7 +346,7 @@ class DashboardQueryEngine {
         val sql = buildQuery(dsl, projectId, demoEpochMs, retentionDays)
         logger.debug { "Executing dashboard query: ${sql.take(500)}" }
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(sql)
             val body = response.bodyAsText()
 
@@ -362,16 +360,7 @@ class DashboardQueryEngine {
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line -> json.parseToJsonElement(line).jsonObject.toMap() }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to execute dashboard query" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to execute dashboard query" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to execute dashboard query" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to execute dashboard query" }
             emptyList()
         }

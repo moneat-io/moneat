@@ -16,9 +16,6 @@
 
 package com.moneat.datadog.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.decompression.MetricPayloadDecoder
@@ -36,6 +33,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -61,47 +59,11 @@ fun Route.datadogMetricRoutes() {
                 )
                 val bodyStr = body.decodeToString()
 
-                val payload = try {
+                val payload = suspendRunCatching {
                     json.decodeFromString<DatadogMetricSeriesV1>(
                         bodyStr
                     )
-                } catch (e: SerializationException) {
-                    logger.warn(e) {
-                        "Failed to parse DD V1 series payload"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf(
-                                "Invalid payload"
-                            )
-                        )
-                    )
-                } catch (e: IOException) {
-                    logger.warn(e) {
-                        "Failed to parse DD V1 series payload"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf(
-                                "Invalid payload"
-                            )
-                        )
-                    )
-                } catch (e: IllegalStateException) {
-                    logger.warn(e) {
-                        "Failed to parse DD V1 series payload"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf(
-                                "Invalid payload"
-                            )
-                        )
-                    )
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.warn(e) {
                         "Failed to parse DD V1 series payload"
                     }
@@ -157,31 +119,13 @@ fun Route.datadogMetricRoutes() {
                 val rawBody = call.receive<ByteArray>()
                 val body = DecompressionService.decompress(rawBody, contentEncoding)
 
-                val payload = try {
+                val payload = suspendRunCatching {
                     if (contentType.contains("application/json")) {
                         json.decodeFromString<DatadogMetricSeriesV1>(body.decodeToString())
                     } else {
                         MetricPayloadDecoder.decode(body)
                     }
-                } catch (e: SerializationException) {
-                    logger.warn(e) { "Failed to parse DD V3 series payload" }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("errors" to listOf("Invalid payload"))
-                    )
-                } catch (e: IOException) {
-                    logger.warn(e) { "Failed to parse DD V3 series payload" }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("errors" to listOf("Invalid payload"))
-                    )
-                } catch (e: IllegalStateException) {
-                    logger.warn(e) { "Failed to parse DD V3 series payload" }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("errors" to listOf("Invalid payload"))
-                    )
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.warn(e) { "Failed to parse DD V3 series payload" }
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
@@ -219,31 +163,13 @@ fun Route.datadogMetricRoutes() {
                 val rawBody = call.receive<ByteArray>()
                 val body = DecompressionService.decompress(rawBody, contentEncoding)
 
-                val payload = try {
+                val payload = suspendRunCatching {
                     if (contentType.contains("application/json")) {
                         json.decodeFromString<DatadogMetricSeriesV1>(body.decodeToString())
                     } else {
                         MetricPayloadDecoder.decode(body)
                     }
-                } catch (e: SerializationException) {
-                    logger.warn(e) { "Failed to parse DD V2 series payload" }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("errors" to listOf("Invalid payload"))
-                    )
-                } catch (e: IOException) {
-                    logger.warn(e) { "Failed to parse DD V2 series payload" }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("errors" to listOf("Invalid payload"))
-                    )
-                } catch (e: IllegalStateException) {
-                    logger.warn(e) { "Failed to parse DD V2 series payload" }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("errors" to listOf("Invalid payload"))
-                    )
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.warn(e) { "Failed to parse DD V2 series payload" }
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
@@ -282,35 +208,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches() {
         return
     }
 
-    val payload = try {
+    val payload = suspendRunCatching {
         if (contentType.contains("application/x-protobuf")) {
             SketchPayloadDecoder.decode(body)
         } else {
             val bodyStr = body.decodeToString()
             json.decodeFromString<DatadogSketchPayload>(bodyStr)
         }
-    } catch (e: SerializationException) {
-        logger.warn(e) { "Failed to parse DD sketches" }
-        call.respond(
-            HttpStatusCode.BadRequest,
-            mapOf("errors" to listOf("Invalid payload"))
-        )
-        return
-    } catch (e: IOException) {
-        logger.warn(e) { "Failed to parse DD sketches" }
-        call.respond(
-            HttpStatusCode.BadRequest,
-            mapOf("errors" to listOf("Invalid payload"))
-        )
-        return
-    } catch (e: IllegalStateException) {
-        logger.warn(e) { "Failed to parse DD sketches" }
-        call.respond(
-            HttpStatusCode.BadRequest,
-            mapOf("errors" to listOf("Invalid payload"))
-        )
-        return
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.warn(e) { "Failed to parse DD sketches" }
         call.respond(
             HttpStatusCode.BadRequest,

@@ -16,9 +16,6 @@
 
 package com.moneat.org.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.events.models.BulkInviteFailure
 import com.moneat.events.models.BulkInviteResult
 import com.moneat.events.models.InvitationDetailsResponse
@@ -32,6 +29,7 @@ import java.security.SecureRandom
 import java.util.Base64
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import com.moneat.utils.suspendRunCatching
 
 class OrgInvitationService(
     private val membershipService: OrgMembershipService,
@@ -130,19 +128,10 @@ class OrgInvitationService(
         val failed = mutableListOf<BulkInviteFailure>()
 
         for (email in emails) {
-            try {
+            suspendRunCatching {
                 inviteMember(orgId, email.trim(), role, invitedByUserId)
                 success.add(email)
-            } catch (e: SerializationException) {
-                logger.warn("Failed to invite $email: ${e.message}")
-                failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
-            } catch (e: IOException) {
-                logger.warn("Failed to invite $email: ${e.message}")
-                failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
-            } catch (e: IllegalStateException) {
-                logger.warn("Failed to invite $email: ${e.message}")
-                failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.warn("Failed to invite $email: ${e.message}")
                 failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
             }

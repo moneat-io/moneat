@@ -51,6 +51,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -98,7 +99,7 @@ fun Route.billingRoutes(
             val usage = quotaService.getUsageForOrganization(orgId)
 
             // Compute accurate counts from usage_records
-            try {
+            suspendRunCatching {
                 val startDate = LocalDate.parse(usage.periodStart)
                 val endDate = LocalDate.parse(usage.periodEnd)
                 val computedBytes = usageTrackingService.getTotalBytesForOrg(orgId, startDate, endDate)
@@ -131,16 +132,7 @@ fun Route.billingRoutes(
                         usedCustomMetrics = maxOf(computedCustomMetrics, usage.usedCustomMetrics)
                     )
                 )
-            } catch (e: SerializationException) {
-                logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
-                call.respond(usage)
-            } catch (e: IOException) {
-                logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
-                call.respond(usage)
-            } catch (e: IllegalStateException) {
-                logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
-                call.respond(usage)
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
                 call.respond(usage)
             }
@@ -209,15 +201,9 @@ fun Route.billingRoutes(
                     return@get
                 }
 
-            try {
+            suspendRunCatching {
                 call.respond(stripeService.listInvoices(orgId))
-            } catch (e: SerializationException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load invoices")))
-            } catch (e: IOException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load invoices")))
-            } catch (e: IllegalStateException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load invoices")))
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load invoices")))
             }
         }
@@ -235,15 +221,9 @@ fun Route.billingRoutes(
                     return@get
                 }
 
-            try {
+            suspendRunCatching {
                 call.respond(stripeService.getPaymentMethod(orgId))
-            } catch (e: SerializationException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load payment method")))
-            } catch (e: IOException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load payment method")))
-            } catch (e: IllegalStateException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load payment method")))
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to load payment method")))
             }
         }
@@ -261,15 +241,9 @@ fun Route.billingRoutes(
                     return@post
                 }
 
-            try {
+            suspendRunCatching {
                 call.respond(stripeService.createSetupIntent(orgId))
-            } catch (e: SerializationException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to create setup intent")))
-            } catch (e: IOException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to create setup intent")))
-            } catch (e: IllegalStateException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to create setup intent")))
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to create setup intent")))
             }
         }
@@ -287,18 +261,12 @@ fun Route.billingRoutes(
                     return@post
                 }
 
-            try {
+            suspendRunCatching {
                 val request = call.receive<Map<String, String>>()
                 val setupIntentId = request["setupIntentId"] ?: throw IllegalArgumentException("setupIntentId required")
                 stripeService.confirmSetupIntentAndUpdatePaymentMethod(orgId, setupIntentId)
                 call.respond(HttpStatusCode.OK, BooleanResponse(true))
-            } catch (e: SerializationException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to confirm setup intent")))
-            } catch (e: IOException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to confirm setup intent")))
-            } catch (e: IllegalStateException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to confirm setup intent")))
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Failed to confirm setup intent")))
             }
         }
@@ -418,18 +386,12 @@ fun Route.billingRoutes(
 
             // Check if seats >= currently used
             val usedSeats =
-                try {
+                suspendRunCatching {
                     val clazz = Class.forName("com.moneat.enterprise.services.oncall.OnCallScheduleService")
                     val instance = clazz.getDeclaredConstructor().newInstance()
                     val method = clazz.getMethod("getOnCallUsedSeats", Int::class.java)
                     method.invoke(instance, orgId) as? Int ?: 0
-                } catch (_: SerializationException) {
-                    0
-                } catch (_: IOException) {
-                    0
-                } catch (_: IllegalStateException) {
-                    0
-                } catch (_: IllegalArgumentException) {
+                }.getOrElse { _ ->
                     0
                 }
             if (request.seats < usedSeats) {

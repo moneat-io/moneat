@@ -16,9 +16,6 @@
 
 package com.moneat.datadog.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.models.DdProfileEvent
 import com.moneat.datadog.models.DdProfileListResponse
@@ -39,6 +36,7 @@ import java.time.format.DateTimeParseException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -471,17 +469,11 @@ object ProfileIngestionService {
         element: kotlinx.serialization.json.JsonElement?,
     ): Map<String, String> {
         if (element == null) return emptyMap()
-        return try {
+        return suspendRunCatching {
             element.jsonObject.mapValues {
                 it.value.jsonPrimitive.content
             }
-        } catch (e: SerializationException) {
-            emptyMap()
-        } catch (e: IOException) {
-            emptyMap()
-        } catch (e: IllegalStateException) {
-            emptyMap()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             emptyMap()
         }
     }

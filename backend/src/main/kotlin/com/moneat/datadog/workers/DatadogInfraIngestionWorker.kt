@@ -28,10 +28,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
-import java.sql.SQLException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -109,21 +108,11 @@ class DatadogInfraIngestionWorker(
             RedisConfig.sync().rpush(dlqKey, message)
         }
     ) {
-        try {
+        suspendRunCatching {
             val batch =
                 DatadogInfraService.decodeInfraBatch(payload)
             DatadogInfraService.insertInfraBatch(batch)
-        } catch (e: SerializationException) {
-            handleInfraDlq(workerId, payload, e, onDlq)
-        } catch (e: IOException) {
-            handleInfraDlq(workerId, payload, e, onDlq)
-        } catch (e: SQLException) {
-            handleInfraDlq(workerId, payload, e, onDlq)
-        } catch (e: RedisException) {
-            handleInfraDlq(workerId, payload, e, onDlq)
-        } catch (e: IllegalStateException) {
-            handleInfraDlq(workerId, payload, e, onDlq)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             handleInfraDlq(workerId, payload, e, onDlq)
         }
     }

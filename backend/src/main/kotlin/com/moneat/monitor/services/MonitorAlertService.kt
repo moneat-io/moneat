@@ -16,9 +16,6 @@
 
 package com.moneat.monitor.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.incident.services.IncidentService
@@ -65,6 +62,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -291,15 +289,9 @@ class MonitorAlertService(
         logger.debug { "Evaluating ${alerts.size} alerts" }
 
         for ((alert, hostName, orgId) in alerts) {
-            try {
+            suspendRunCatching {
                 evaluateAlert(alert, hostName, orgId)
-            } catch (e: SerializationException) {
-                logger.error(e) { "Error evaluating alert ${alert.id}" }
-            } catch (e: IOException) {
-                logger.error(e) { "Error evaluating alert ${alert.id}" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Error evaluating alert ${alert.id}" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Error evaluating alert ${alert.id}" }
             }
         }
@@ -326,35 +318,23 @@ class MonitorAlertService(
         if (!triggered) {
             // Check if it was previously triggered
             val wasTriggered =
-                try {
+                suspendRunCatching {
                     if (RedisConfig.isConnected()) {
                         RedisConfig.sync().get(alertKey) == "TRIGGERED"
                     } else {
                         false // Fallback if Redis is down
                     }
-                } catch (e: SerializationException) {
-                    false
-                } catch (e: IOException) {
-                    false
-                } catch (e: IllegalStateException) {
-                    false
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     false
                 }
 
             if (wasTriggered) {
                 // Clear state
-                try {
+                suspendRunCatching {
                     if (RedisConfig.isConnected()) {
                         RedisConfig.sync().del(alertKey)
                     }
-                } catch (e: SerializationException) {
-                    logger.error(e) { "Failed to clear alert state in Redis" }
-                } catch (e: IOException) {
-                    logger.error(e) { "Failed to clear alert state in Redis" }
-                } catch (e: IllegalStateException) {
-                    logger.error(e) { "Failed to clear alert state in Redis" }
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to clear alert state in Redis" }
                 }
 
@@ -363,19 +343,13 @@ class MonitorAlertService(
                 // Resolve incident for metric alerts (same dedup key used when firing)
                 val dedupKey =
                     "moneat-host-alert-${alert.hostId}-$idPart"
-                try {
+                suspendRunCatching {
                     incidentService.resolveAlert(
                         organizationId = organizationId,
                         source = com.moneat.incident.models.AlertSource.HOST_ALERT,
                         deduplicationKey = dedupKey
                     )
-                } catch (e: SerializationException) {
-                    logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
-                } catch (e: IOException) {
-                    logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
-                } catch (e: IllegalStateException) {
-                    logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
                 }
                 logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
@@ -395,17 +369,11 @@ class MonitorAlertService(
         val now = Clock.System.now()
         if (isThrottledByInterval(alert.lastTriggeredAt, now)) {
             // Update Redis state even if throttled to ensure consistency
-            try {
+            suspendRunCatching {
                 if (RedisConfig.isConnected()) {
                     RedisConfig.sync().set(alertKey, "TRIGGERED")
                 }
-            } catch (e: SerializationException) {
-                logger.debug(e) { "Failed to update throttled alert state in Redis" }
-            } catch (e: IOException) {
-                logger.debug(e) { "Failed to update throttled alert state in Redis" }
-            } catch (e: IllegalStateException) {
-                logger.debug(e) { "Failed to update throttled alert state in Redis" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.debug(e) { "Failed to update throttled alert state in Redis" }
             }
             return // Don't spam alerts
@@ -423,17 +391,11 @@ class MonitorAlertService(
         }
 
         // Update Redis state
-        try {
+        suspendRunCatching {
             if (RedisConfig.isConnected()) {
                 RedisConfig.sync().set(alertKey, "TRIGGERED")
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to set alert state in Redis" }
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to set alert state in Redis" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to set alert state in Redis" }
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to set alert state in Redis" }
         }
 
@@ -513,7 +475,7 @@ class MonitorAlertService(
             FORMAT JSONCompact
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
 
             if (!response.status.isSuccess()) {
@@ -529,16 +491,7 @@ class MonitorAlertService(
             val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return null
 
             data[0].toString().replace("\"", "").toDoubleOrNull()
-        } catch (e: SerializationException) {
-            logger.error(e) { "Error fetching metric value" }
-            null
-        } catch (e: IOException) {
-            logger.error(e) { "Error fetching metric value" }
-            null
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Error fetching metric value" }
-            null
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Error fetching metric value" }
             null
         }
@@ -625,7 +578,7 @@ class MonitorAlertService(
                 }
             }
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
 
             if (!response.status.isSuccess()) {
@@ -649,16 +602,7 @@ class MonitorAlertService(
                 kotlin.math.ceil(alert.durationSeconds.toDouble() / POLL_INTERVAL_SECONDS).toInt()
             }
             count >= expectedDataPoints * MIN_DATA_POINT_RATIO
-        } catch (e: SerializationException) {
-            logger.error(e) { "Error checking sustained condition" }
-            false
-        } catch (e: IOException) {
-            logger.error(e) { "Error checking sustained condition" }
-            false
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Error checking sustained condition" }
-            false
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Error checking sustained condition" }
             false
         }
@@ -693,7 +637,7 @@ class MonitorAlertService(
 
         // Send email notifications
         for ((_, email) in emailRecipients) {
-            try {
+            suspendRunCatching {
                 val htmlBody =
                     loadHostAlertTemplate(
                         hostName = hostName,
@@ -722,13 +666,7 @@ class MonitorAlertService(
                     """.trimIndent()
 
                 emailService.sendEmail(email, subject, htmlBody, textBody, "monitor_alert")
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send alert notification to $email" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send alert notification to $email" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send alert notification to $email" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send alert notification to $email" }
             }
         }
@@ -743,7 +681,7 @@ class MonitorAlertService(
                 ).isNotEmpty()
 
         if (slackEnabled) {
-            try {
+            suspendRunCatching {
                 val baseUrl = config.property("email.frontendUrl").getString()
                 slackService.sendHostAlert(
                     organizationId = organizationId,
@@ -755,13 +693,7 @@ class MonitorAlertService(
                     hostId = alert.hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send Slack notification for host alert" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send Slack notification for host alert" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send Slack notification for host alert" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send Slack notification for host alert" }
             }
         }
@@ -776,7 +708,7 @@ class MonitorAlertService(
                 ).isNotEmpty()
 
         if (discordEnabled) {
-            try {
+            suspendRunCatching {
                 val baseUrl = config.property("email.frontendUrl").getString()
                 discordService.sendHostAlert(
                     organizationId = organizationId,
@@ -788,19 +720,13 @@ class MonitorAlertService(
                     hostId = alert.hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send Discord notification for host alert" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send Discord notification for host alert" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send Discord notification for host alert" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send Discord notification for host alert" }
             }
         }
 
         // Fire incident alert
-        try {
+        suspendRunCatching {
             val incidentSeverity =
                 if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
                     transaction {
@@ -858,13 +784,7 @@ class MonitorAlertService(
                     )
                 incidentService.fireAlert(incidentEvent)
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to fire incident alert" }
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to fire incident alert" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to fire incident alert" }
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fire incident alert" }
         }
     }
@@ -960,15 +880,9 @@ class MonitorAlertService(
 
         // Send email notifications
         for ((_, email) in emailRecipients) {
-            try {
+            suspendRunCatching {
                 emailService.sendHostDownEmail(email, hostName, lastSeenText, hostUrl)
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send host down notification to $email" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send host down notification to $email" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send host down notification to $email" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send host down notification to $email" }
             }
         }
@@ -983,7 +897,7 @@ class MonitorAlertService(
                 ).isNotEmpty()
 
         if (slackEnabled) {
-            try {
+            suspendRunCatching {
                 val baseUrl = config.property("email.frontendUrl").getString()
                 slackService.sendHostDown(
                     organizationId = organizationId,
@@ -992,13 +906,7 @@ class MonitorAlertService(
                     hostId = hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send Slack notification for host down" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send Slack notification for host down" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send Slack notification for host down" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send Slack notification for host down" }
             }
         }
@@ -1013,7 +921,7 @@ class MonitorAlertService(
                 ).isNotEmpty()
 
         if (discordEnabled) {
-            try {
+            suspendRunCatching {
                 val baseUrl = config.property("email.frontendUrl").getString()
                 discordService.sendHostDown(
                     organizationId = organizationId,
@@ -1022,19 +930,13 @@ class MonitorAlertService(
                     hostId = hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send Discord notification for host down" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send Discord notification for host down" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send Discord notification for host down" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send Discord notification for host down" }
             }
         }
 
         // Fire incident alert for host down
-        try {
+        suspendRunCatching {
             val frontendUrl = config.property("email.frontendUrl").getString()
             val incidentEvent =
                 com.moneat.incident.models.IncidentEvent(
@@ -1054,13 +956,7 @@ class MonitorAlertService(
                     moneatUrl = "$frontendUrl/monitoring/hosts/$hostId"
                 )
             incidentService.fireAlert(incidentEvent)
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to fire incident alert for host down" }
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to fire incident alert for host down" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to fire incident alert for host down" }
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fire incident alert for host down" }
         }
     }
@@ -1086,15 +982,9 @@ class MonitorAlertService(
             )
 
         for ((_, email) in emailRecipients) {
-            try {
+            suspendRunCatching {
                 emailService.sendHostUpEmail(email, hostName, hostUrl)
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send host up notification to $email" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send host up notification to $email" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send host up notification to $email" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send host up notification to $email" }
             }
         }
@@ -1109,7 +999,7 @@ class MonitorAlertService(
                 ).isNotEmpty()
 
         if (slackEnabled) {
-            try {
+            suspendRunCatching {
                 val baseUrl = config.property("email.frontendUrl").getString()
                 slackService.sendHostUp(
                     organizationId = organizationId,
@@ -1117,13 +1007,7 @@ class MonitorAlertService(
                     hostId = hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send Slack notification for host up" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send Slack notification for host up" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send Slack notification for host up" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send Slack notification for host up" }
             }
         }
@@ -1138,7 +1022,7 @@ class MonitorAlertService(
                 ).isNotEmpty()
 
         if (discordEnabled) {
-            try {
+            suspendRunCatching {
                 val baseUrl = config.property("email.frontendUrl").getString()
                 discordService.sendHostUp(
                     organizationId = organizationId,
@@ -1146,31 +1030,19 @@ class MonitorAlertService(
                     hostId = hostId,
                     baseUrl = baseUrl
                 )
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send Discord notification for host up" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send Discord notification for host up" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send Discord notification for host up" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send Discord notification for host up" }
             }
         }
 
         // Resolve incident alert for host up
-        try {
+        suspendRunCatching {
             incidentService.resolveAlert(
                 organizationId = organizationId,
                 source = com.moneat.incident.models.AlertSource.HOST_DOWN,
                 deduplicationKey = "moneat-host-down-$hostId"
             )
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to resolve incident alert for host up" }
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to resolve incident alert for host up" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to resolve incident alert for host up" }
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to resolve incident alert for host up" }
         }
     }
@@ -1295,7 +1167,7 @@ class MonitorAlertService(
         val durationText = if (alert.durationSeconds > 0) "${alert.durationSeconds}s setting" else "N/A"
 
         for ((_, email) in emailRecipients) {
-            try {
+            suspendRunCatching {
                 val htmlBody =
                     loadHostRecoveredTemplate(
                         hostName = hostName,
@@ -1316,13 +1188,7 @@ class MonitorAlertService(
                     """.trimIndent()
 
                 emailService.sendEmail(email, subject, htmlBody, textBody, "monitor_recovery")
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send recovery notification to $email" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send recovery notification to $email" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send recovery notification to $email" }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send recovery notification to $email" }
             }
         }

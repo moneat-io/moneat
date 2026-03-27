@@ -16,9 +16,6 @@
 
 package com.moneat.events.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.ProjectStatsResponse
 import com.moneat.events.models.ReleaseMarker
@@ -37,6 +34,7 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -228,7 +226,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
                 """.trimIndent()
 
-            try {
+            suspendRunCatching {
                 coroutineScope {
                     val totalEventsDeferred = async { queryHelper.executeScalarQuery(totalEventsQuery, parentSpan) }
                     val totalIssuesDeferred = async { queryHelper.executeScalarQuery(totalIssuesQuery, parentSpan) }
@@ -276,58 +274,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
                         releaseMarkers = releaseMarkersDeferred.await()
                     )
                 }
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to fetch project stats" }
-                ProjectStatsResponse(
-                    totalEvents = 0,
-                    totalIssues = 0,
-                    unresolvedIssues = 0,
-                    affectedUsers = 0,
-                    eventsTimeline = emptyList(),
-                    eventsByLevel = emptyMap(),
-                    eventsByPlatform = emptyMap(),
-                    eventsByBrowser = emptyMap(),
-                    eventsByEnvironment = emptyMap(),
-                    issuesByStatus = emptyMap(),
-                    topIssues = emptyList(),
-                    usersTimeline = emptyList(),
-                    releaseMarkers = emptyList()
-                )
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to fetch project stats" }
-                ProjectStatsResponse(
-                    totalEvents = 0,
-                    totalIssues = 0,
-                    unresolvedIssues = 0,
-                    affectedUsers = 0,
-                    eventsTimeline = emptyList(),
-                    eventsByLevel = emptyMap(),
-                    eventsByPlatform = emptyMap(),
-                    eventsByBrowser = emptyMap(),
-                    eventsByEnvironment = emptyMap(),
-                    issuesByStatus = emptyMap(),
-                    topIssues = emptyList(),
-                    usersTimeline = emptyList(),
-                    releaseMarkers = emptyList()
-                )
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to fetch project stats" }
-                ProjectStatsResponse(
-                    totalEvents = 0,
-                    totalIssues = 0,
-                    unresolvedIssues = 0,
-                    affectedUsers = 0,
-                    eventsTimeline = emptyList(),
-                    eventsByLevel = emptyMap(),
-                    eventsByPlatform = emptyMap(),
-                    eventsByBrowser = emptyMap(),
-                    eventsByEnvironment = emptyMap(),
-                    issuesByStatus = emptyMap(),
-                    topIssues = emptyList(),
-                    usersTimeline = emptyList(),
-                    releaseMarkers = emptyList()
-                )
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to fetch project stats" }
                 ProjectStatsResponse(
                     totalEvents = 0,
@@ -368,7 +315,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
@@ -385,16 +332,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
                         timestamp = obj["timestamp"]?.jsonPrimitive?.contentOrNull ?: ""
                     )
                 }
-        } catch (e: SerializationException) {
-            logger.warn(e) { "Failed to fetch release markers" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.warn(e) { "Failed to fetch release markers" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "Failed to fetch release markers" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to fetch release markers" }
             emptyList()
         }

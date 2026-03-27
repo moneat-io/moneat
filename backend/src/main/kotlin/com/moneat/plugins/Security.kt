@@ -16,9 +16,6 @@
 
 package com.moneat.plugins
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.auth.services.AuthTokenService
@@ -32,6 +29,7 @@ import io.ktor.server.auth.bearer
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
@@ -66,18 +64,9 @@ private fun extractBearerToken(rawHeader: String?): String? {
 private fun parseBearerHeaderSafely(rawHeader: String?): HttpAuthHeader? {
     val token = extractBearerToken(rawHeader) ?: return null
 
-    return try {
+    return suspendRunCatching {
         HttpAuthHeader.Single("Bearer", token)
-    } catch (e: SerializationException) {
-        logger.warn(e) { "Invalid Bearer auth header format (tokenLength=${token.length})" }
-        null
-    } catch (e: IOException) {
-        logger.warn(e) { "Invalid Bearer auth header format (tokenLength=${token.length})" }
-        null
-    } catch (e: IllegalStateException) {
-        logger.warn(e) { "Invalid Bearer auth header format (tokenLength=${token.length})" }
-        null
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.warn(e) { "Invalid Bearer auth header format (tokenLength=${token.length})" }
         null
     }
@@ -87,18 +76,9 @@ private fun parseBearerHeaderForKtor(rawHeader: String?): HttpAuthHeader? {
     val token = extractBearerToken(rawHeader) ?: return null
     val encodedToken = Base64.getUrlEncoder().withoutPadding().encodeToString(token.toByteArray())
 
-    return try {
+    return suspendRunCatching {
         HttpAuthHeader.Single("Bearer", encodedToken)
-    } catch (e: SerializationException) {
-        logger.warn(e) { "Failed to build token68-compatible bearer header (tokenLength=${token.length})" }
-        null
-    } catch (e: IOException) {
-        logger.warn(e) { "Failed to build token68-compatible bearer header (tokenLength=${token.length})" }
-        null
-    } catch (e: IllegalStateException) {
-        logger.warn(e) { "Failed to build token68-compatible bearer header (tokenLength=${token.length})" }
-        null
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.warn(e) { "Failed to build token68-compatible bearer header (tokenLength=${token.length})" }
         null
     }
@@ -152,16 +132,10 @@ fun Application.configureSecurity() {
                 parseBearerHeaderSafely(authHeader) ?: run {
                     val cookieToken = call.request.cookies["auth_token"]
                     if (cookieToken != null) {
-                        try {
+                        suspendRunCatching {
                             io.ktor.http.auth.HttpAuthHeader
                                 .Single("Bearer", cookieToken)
-                        } catch (e: SerializationException) {
-                            null
-                        } catch (e: IOException) {
-                            null
-                        } catch (e: IllegalStateException) {
-                            null
-                        } catch (e: IllegalArgumentException) {
+                        }.getOrElse { e ->
                             null
                         }
                     } else {
@@ -226,7 +200,7 @@ fun Application.configureSecurity() {
                 }
 
                 // If not an auth token, try as JWT
-                try {
+                suspendRunCatching {
                     val decodedJWT = jwtVerifier.verify(token)
                     val userId = decodedJWT.getClaim("userId").asInt()
 
@@ -243,13 +217,7 @@ fun Application.configureSecurity() {
                             tokenId = -1 // Not applicable for JWT
                         )
                     }
-                } catch (e: SerializationException) {
-                    // Not a valid JWT either
-                } catch (e: IOException) {
-                    // Not a valid JWT either
-                } catch (e: IllegalStateException) {
-                    // Not a valid JWT either
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     // Not a valid JWT either
                 }
 

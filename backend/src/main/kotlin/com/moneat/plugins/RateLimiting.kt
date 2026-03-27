@@ -16,9 +16,6 @@
 
 package com.moneat.plugins
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.EnvConfig
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.events.routes.extractPublicKey
@@ -36,6 +33,7 @@ import io.ktor.server.request.ApplicationRequest
 import org.koin.core.context.GlobalContext
 import java.net.InetAddress
 import kotlin.time.Duration.Companion.seconds
+import com.moneat.utils.suspendRunCatching
 
 /**
  * Trusted upstream proxies consulted before accepting forwarded-IP headers.
@@ -60,7 +58,7 @@ private object TrustedProxies {
 
     private fun matchesEntry(ip: String, entry: String): Boolean {
         if (!entry.contains('/')) return ip == entry
-        return try {
+        return suspendRunCatching {
             val (networkStr, prefixStr) = entry.split('/', limit = 2)
             val prefixLen = prefixStr.toInt()
             val addr = InetAddress.getByName(ip).address
@@ -78,13 +76,7 @@ private object TrustedProxies {
                 if (addrBits != networkBits) return false
             }
             true
-        } catch (_: SerializationException) {
-            false
-        } catch (_: IOException) {
-            false
-        } catch (_: IllegalStateException) {
-            false
-        } catch (_: IllegalArgumentException) {
+        }.getOrElse { _ ->
             false
         }
     }

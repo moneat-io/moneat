@@ -51,6 +51,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPInputStream
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -513,17 +514,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
             // Handle gzip-compressed chunks
             val bytes =
                 if (part.name == "file_gzip") {
-                    try {
+                    suspendRunCatching {
                         val bos = ByteArrayOutputStream()
                         GZIPInputStream(rawBytes.inputStream()).use { it.copyTo(bos) }
                         bos.toByteArray()
-                    } catch (e: SerializationException) {
-                        rawBytes
-                    } catch (e: IOException) {
-                        rawBytes
-                    } catch (e: IllegalStateException) {
-                        rawBytes
-                    } catch (e: IllegalArgumentException) {
+                    }.getOrElse { e ->
                         rawBytes
                     }
                 } else {
@@ -597,7 +592,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifact
     }
 
     // Assemble the bundle
-    try {
+    suspendRunCatching {
         releaseService.assembleArtifactBundle(
             orgId = orgId,
             checksum = request.checksum,
@@ -615,34 +610,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifact
                 missingChunks = emptyList()
             )
         )
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to assemble artifact bundle" }
-        call.respond(
-            AssembleResponse(
-                state = "error",
-                detail = e.message,
-                missingChunks = emptyList()
-            )
-        )
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to assemble artifact bundle" }
-        call.respond(
-            AssembleResponse(
-                state = "error",
-                detail = e.message,
-                missingChunks = emptyList()
-            )
-        )
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to assemble artifact bundle" }
-        call.respond(
-            AssembleResponse(
-                state = "error",
-                detail = e.message,
-                missingChunks = emptyList()
-            )
-        )
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to assemble artifact bundle" }
         call.respond(
             AssembleResponse(

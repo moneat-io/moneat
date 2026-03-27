@@ -16,9 +16,6 @@
 
 package com.moneat.dashboards.services.handlers
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -33,6 +30,7 @@ import mu.KotlinLogging
 import org.bson.BsonDocument
 import org.bson.Document
 import org.bson.conversions.Bson
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -47,21 +45,12 @@ class MongoDBHandler : DataSourceHandler {
             request.host, request.port ?: 27017, request.databaseName, request.username, request.password
         )
 
-        return try {
+        return suspendRunCatching {
             MongoClients.create(connStr).use { client ->
                 val databases = client.listDatabaseNames().toList()
                 TestConnectionResult(true, "Connected successfully", databases = databases.take(20))
             }
-        } catch (e: SerializationException) {
-            logger.warn(e) { "MongoDB connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IOException) {
-            logger.warn(e) { "MongoDB connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "MongoDB connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "MongoDB connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -81,7 +70,7 @@ class MongoDBHandler : DataSourceHandler {
             ?: buildConnectionString(host, port ?: 27017, databaseName, credentials.username, credentials.password)
         val dbName = databaseName ?: "test"
 
-        return try {
+        return suspendRunCatching {
             MongoClients.create(connStr).use { client ->
                 val db = client.getDatabase(dbName)
                 val parsed = parseQuery(query)
@@ -96,16 +85,7 @@ class MongoDBHandler : DataSourceHandler {
                 }
                 docs.map { docToMap(it) }
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "MongoDB query failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "MongoDB query failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "MongoDB query failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "MongoDB query failed" }
             emptyList()
         }
@@ -121,22 +101,13 @@ class MongoDBHandler : DataSourceHandler {
             ?: buildConnectionString(host, port ?: 27017, databaseName, credentials.username, credentials.password)
         val dbName = databaseName ?: "test"
 
-        return try {
+        return suspendRunCatching {
             MongoClients.create(connStr).use { client ->
                 val db = client.getDatabase(dbName)
                 val collections = db.listCollectionNames().toList()
                 collections.map { DataSourceField(it, "collection", "MongoDB collection") }
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "MongoDB schema fetch failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "MongoDB schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "MongoDB schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "MongoDB schema fetch failed" }
             emptyList()
         }
@@ -155,7 +126,7 @@ class MongoDBHandler : DataSourceHandler {
     }
 
     private fun parseQuery(query: String): Triple<String, Bson, List<Bson>?> {
-        return try {
+        return suspendRunCatching {
             val doc = Document.parse(query)
             val collection = doc.getString("collection") ?: doc.getString("coll") ?: "test"
             val filter = when (val f = doc.get("filter")) {
@@ -167,13 +138,7 @@ class MongoDBHandler : DataSourceHandler {
                 org.bson.BsonDocument.parse(it.toJson())
             }
             Triple(collection, filter, pipeline)
-        } catch (_: SerializationException) {
-            Triple("test", BsonDocument(), null)
-        } catch (_: IOException) {
-            Triple("test", BsonDocument(), null)
-        } catch (_: IllegalStateException) {
-            Triple("test", BsonDocument(), null)
-        } catch (_: IllegalArgumentException) {
+        }.getOrElse { _ ->
             Triple("test", BsonDocument(), null)
         }
     }

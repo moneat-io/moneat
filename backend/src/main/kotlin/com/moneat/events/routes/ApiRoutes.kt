@@ -16,9 +16,6 @@
 
 package com.moneat.events.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.auth.routes.accountDeletionRoutes
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.routes.publicBillingRoutes
@@ -80,6 +77,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 fun Route.apiRoutes() {
     val koin = GlobalContext.get()
@@ -1379,18 +1377,9 @@ fun Route.apiRoutes() {
                     }
 
                     val request =
-                        try {
+                        suspendRunCatching {
                             call.receive<UpdateAlertNotificationPreferenceRequest>()
-                        } catch (e: SerializationException) {
-                            call.respond(HttpStatusCode.BadRequest, "Invalid request body")
-                            return@put
-                        } catch (e: IOException) {
-                            call.respond(HttpStatusCode.BadRequest, "Invalid request body")
-                            return@put
-                        } catch (e: IllegalStateException) {
-                            call.respond(HttpStatusCode.BadRequest, "Invalid request body")
-                            return@put
-                        } catch (e: IllegalArgumentException) {
+                        }.getOrElse { e ->
                             call.respond(HttpStatusCode.BadRequest, "Invalid request body")
                             return@put
                         }

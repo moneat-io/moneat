@@ -32,10 +32,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import java.io.IOException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -92,18 +92,10 @@ class AnalyticsIngestionWorker(
         }
     }
     internal suspend fun processMessage(workerId: Int, value: String) {
-        try {
+        suspendRunCatching {
             val event = json.decodeFromString<EnrichedAnalyticsEvent>(value)
             insertEvent(event)
-        } catch (e: SerializationException) {
-            logProcessFailureAndDlq(workerId, value, e)
-        } catch (e: IOException) {
-            logProcessFailureAndDlq(workerId, value, e)
-        } catch (e: RedisException) {
-            logProcessFailureAndDlq(workerId, value, e)
-        } catch (e: IllegalStateException) {
-            logProcessFailureAndDlq(workerId, value, e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logProcessFailureAndDlq(workerId, value, e)
         }
     }

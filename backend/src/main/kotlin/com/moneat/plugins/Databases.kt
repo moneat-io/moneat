@@ -16,9 +16,6 @@
 
 package com.moneat.plugins
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.configureClickHouseMigrations
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
@@ -31,6 +28,7 @@ import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.sql.Connection
+import com.moneat.utils.suspendRunCatching
 
 private const val CLICKHOUSE_MIGRATION_LOCK_KEY = 8675309L
 
@@ -102,7 +100,7 @@ private fun verifyCriticalColumnsPresent(dataSource: HikariDataSource) {
 fun Application.configureDatabases() {
     val config = environment.config
 
-    try {
+    suspendRunCatching {
         // PostgreSQL connection pool
         val hikariConfig =
             HikariConfig().apply {
@@ -170,32 +168,17 @@ fun Application.configureDatabases() {
                 if (tryAcquireAdvisoryLock(conn, CLICKHOUSE_MIGRATION_LOCK_KEY)) {
                     try {
                         runBlocking {
-                            try {
+                            suspendRunCatching {
                                 configureClickHouseMigrations()
-                            } catch (e: SerializationException) {
-                                log.error("Failed to run ClickHouse migrations.", e)
-                                throw e
-                            } catch (e: IOException) {
-                                log.error("Failed to run ClickHouse migrations.", e)
-                                throw e
-                            } catch (e: IllegalStateException) {
-                                log.error("Failed to run ClickHouse migrations.", e)
-                                throw e
-                            } catch (e: IllegalArgumentException) {
+                            }.getOrElse { e ->
                                 log.error("Failed to run ClickHouse migrations.", e)
                                 throw e
                             }
                             // Reseed demo data if stale (prevents ClickHouse TTL from deleting demo rows)
-                            try {
+                            suspendRunCatching {
                                 com.moneat.config.DemoDataReseeder
                                     .reseedIfNeeded()
-                            } catch (e: SerializationException) {
-                                log.warn("Demo data reseed failed (non-fatal)", e)
-                            } catch (e: IOException) {
-                                log.warn("Demo data reseed failed (non-fatal)", e)
-                            } catch (e: IllegalStateException) {
-                                log.warn("Demo data reseed failed (non-fatal)", e)
-                            } catch (e: IllegalArgumentException) {
+                            }.getOrElse { e ->
                                 log.warn("Demo data reseed failed (non-fatal)", e)
                             }
                         }
@@ -220,28 +203,7 @@ fun Application.configureDatabases() {
         monitor.subscribe(ApplicationStopping) {
             log.info("Stopping background services...")
         }
-    } catch (e: SerializationException) {
-        if (e.message?.contains("ClickHouse") == true) {
-            // Already logged above
-            throw e
-        }
-        log.error("Failed to configure databases. Make sure PostgreSQL is running and accessible.", e)
-        throw e
-    } catch (e: IOException) {
-        if (e.message?.contains("ClickHouse") == true) {
-            // Already logged above
-            throw e
-        }
-        log.error("Failed to configure databases. Make sure PostgreSQL is running and accessible.", e)
-        throw e
-    } catch (e: IllegalStateException) {
-        if (e.message?.contains("ClickHouse") == true) {
-            // Already logged above
-            throw e
-        }
-        log.error("Failed to configure databases. Make sure PostgreSQL is running and accessible.", e)
-        throw e
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         if (e.message?.contains("ClickHouse") == true) {
             // Already logged above
             throw e

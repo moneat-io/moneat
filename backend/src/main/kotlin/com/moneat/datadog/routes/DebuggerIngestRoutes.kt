@@ -16,9 +16,6 @@
 
 package com.moneat.datadog.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdDebuggerDiagnostic
@@ -33,6 +30,7 @@ import io.ktor.server.routing.route
 import io.ktor.utils.io.toByteArray
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json {
@@ -57,7 +55,7 @@ fun Route.debuggerIngestRoutes() {
 private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerInput() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    try {
+    suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
@@ -67,16 +65,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerInput() 
 
         logger.debug { "Enqueued $count debugger entries for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process debugger input" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process debugger input" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process debugger input" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process debugger input" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -84,7 +73,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerInput() 
 private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerDiagnostics() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    try {
+    suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
@@ -94,16 +83,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerDiagnost
 
         logger.debug { "Enqueued $count debugger diagnostics for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process debugger diagnostics" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process debugger diagnostics" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process debugger diagnostics" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process debugger diagnostics" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

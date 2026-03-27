@@ -16,9 +16,6 @@
 
 package com.moneat.dashboards.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.dashboards.models.CreateCustomDataSourceRequest
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.CustomDataSourceType
@@ -35,6 +32,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -113,28 +111,10 @@ class CustomDataSourceService {
                 request.accountIdentifier != null || request.connectionString != null || request.projectId != null ||
                 request.region != null
             val newEncryptedCreds = if (hasNewCreds) {
-                val existingCreds = try {
+                val existingCreds = suspendRunCatching {
                     val dec = CredentialEncryption.decrypt(existing[CustomDataSources.encryptedCredentials])
                     json.decodeFromString<DataSourceCredentials>(dec)
-                } catch (e: SerializationException) {
-                    throw IllegalStateException(
-                        "Failed to decrypt existing credentials for data source $id; " +
-                            "cannot safely merge new credentials",
-                        e
-                    )
-                } catch (e: IOException) {
-                    throw IllegalStateException(
-                        "Failed to decrypt existing credentials for data source $id; " +
-                            "cannot safely merge new credentials",
-                        e
-                    )
-                } catch (e: IllegalStateException) {
-                    throw IllegalStateException(
-                        "Failed to decrypt existing credentials for data source $id; " +
-                            "cannot safely merge new credentials",
-                        e
-                    )
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     throw IllegalStateException(
                         "Failed to decrypt existing credentials for data source $id; " +
                             "cannot safely merge new credentials",
@@ -194,19 +174,10 @@ class CustomDataSourceService {
             .where { (CustomDataSources.id eq id) and (CustomDataSources.orgId eq orgId) }
             .firstOrNull() ?: return@transaction null
 
-        try {
+        suspendRunCatching {
             val decrypted = CredentialEncryption.decrypt(row[CustomDataSources.encryptedCredentials])
             json.decodeFromString<DataSourceCredentials>(decrypted)
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to decrypt credentials for data source $id" }
-            null
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to decrypt credentials for data source $id" }
-            null
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to decrypt credentials for data source $id" }
-            null
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to decrypt credentials for data source $id" }
             null
         }
@@ -226,15 +197,9 @@ class CustomDataSourceService {
         host = this[CustomDataSources.host],
         port = this[CustomDataSources.port],
         databaseName = this[CustomDataSources.databaseName],
-        extraConfig = try {
+        extraConfig = suspendRunCatching {
             json.decodeFromString<Map<String, String>>(this[CustomDataSources.extraConfig])
-        } catch (_: SerializationException) {
-            emptyMap()
-        } catch (_: IOException) {
-            emptyMap()
-        } catch (_: IllegalStateException) {
-            emptyMap()
-        } catch (_: IllegalArgumentException) {
+        }.getOrElse { _ ->
             emptyMap()
         },
         enabled = this[CustomDataSources.enabled],

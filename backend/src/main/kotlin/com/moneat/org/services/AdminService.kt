@@ -16,9 +16,6 @@
 
 package com.moneat.org.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.ai.AiConversations
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
@@ -75,6 +72,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -590,7 +588,7 @@ class AdminService(
         var totalBytes = 0L
         var totalRows = 0L
 
-        try {
+        suspendRunCatching {
             val query =
                 """
                 SELECT database, table, sum(rows) as rows, sum(bytes_on_disk) as bytes
@@ -624,13 +622,7 @@ class AdminService(
                     }
                 }
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to query ClickHouse system.parts" }
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to query ClickHouse system.parts" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to query ClickHouse system.parts" }
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to query ClickHouse system.parts" }
         }
 
@@ -795,7 +787,7 @@ class AdminService(
         @Suppress("UNUSED_PARAMETER") startDate: kotlinx.datetime.LocalDate,
         @Suppress("UNUSED_PARAMETER") endDate: kotlinx.datetime.LocalDate
     ): Triple<Long, Long, List<AdminTimelinePoint>> {
-        return try {
+        return suspendRunCatching {
             val totalQuery = "SELECT count() as c FROM `$clickhouseDb`.events"
             val totalResp = ClickHouseClient.execute(totalQuery)
             val allTime = totalResp.bodyAsText().trim().toLongOrNull() ?: 0L
@@ -833,16 +825,7 @@ class AdminService(
                 }
 
             Triple(allTime, last30Count, timeline)
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to query ClickHouse for events" }
-            Triple(0L, 0L, emptyList<AdminTimelinePoint>())
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to query ClickHouse for events" }
-            Triple(0L, 0L, emptyList<AdminTimelinePoint>())
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to query ClickHouse for events" }
-            Triple(0L, 0L, emptyList<AdminTimelinePoint>())
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to query ClickHouse for events" }
             Triple(0L, 0L, emptyList<AdminTimelinePoint>())
         }
@@ -933,7 +916,7 @@ class AdminService(
 
         transaction {
             userIds.forEach { userId ->
-                try {
+                suspendRunCatching {
                     val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
                     if (user == null) {
                         errors.add("User $userId not found")
@@ -980,16 +963,7 @@ class AdminService(
                     Users.deleteWhere { Users.id eq userId }
 
                     deletedCount++
-                } catch (e: SerializationException) {
-                    logger.error(e) { "Failed to delete user $userId" }
-                    errors.add("Failed to delete user $userId: ${e.message}")
-                } catch (e: IOException) {
-                    logger.error(e) { "Failed to delete user $userId" }
-                    errors.add("Failed to delete user $userId: ${e.message}")
-                } catch (e: IllegalStateException) {
-                    logger.error(e) { "Failed to delete user $userId" }
-                    errors.add("Failed to delete user $userId: ${e.message}")
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to delete user $userId" }
                     errors.add("Failed to delete user $userId: ${e.message}")
                 }
@@ -1004,7 +978,7 @@ class AdminService(
     }
 
     private fun deleteOrganizationData(orgId: Int) {
-        try {
+        suspendRunCatching {
             // Get all projects for this organization
             val projectIds =
                 Projects
@@ -1087,16 +1061,7 @@ class AdminService(
             Organizations.deleteWhere { Organizations.id eq orgId }
 
             logger.info { "Deleted organization $orgId and all related data" }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to delete organization data for org $orgId" }
-            throw e
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to delete organization data for org $orgId" }
-            throw e
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to delete organization data for org $orgId" }
-            throw e
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to delete organization data for org $orgId" }
             throw e
         }

@@ -32,6 +32,7 @@ import java.util.Collections
 import java.util.UUID
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -72,18 +73,9 @@ class SyntheticsScheduler(
     }
 
     private suspend fun checkTests(schedulerScope: CoroutineScope) {
-        val tests = try {
+        val tests = suspendRunCatching {
             service.getTestsDueForRun()
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to fetch synthetic tests due for run: ${e.message}" }
-            return
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to fetch synthetic tests due for run: ${e.message}" }
-            return
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to fetch synthetic tests due for run: ${e.message}" }
-            return
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch synthetic tests due for run: ${e.message}" }
             return
         }

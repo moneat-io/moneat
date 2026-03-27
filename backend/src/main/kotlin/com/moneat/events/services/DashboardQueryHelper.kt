@@ -16,9 +16,6 @@
 
 package com.moneat.events.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.billing.models.PricingTier
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
@@ -43,6 +40,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -80,7 +78,7 @@ class DashboardQueryHelper(
         context: String,
         entityId: String
     ): Long? {
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
@@ -90,16 +88,7 @@ class DashboardQueryHelper(
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.longOrNull
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to get project ID for $context" }
-            null
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to get project ID for $context" }
-            null
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to get project ID for $context" }
-            null
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to get project ID for $context" }
             null
         }
@@ -113,7 +102,7 @@ class DashboardQueryHelper(
         errorContext: String = "Query",
         parentSpan: ISpan? = null
     ): List<JsonObject>? {
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
@@ -126,16 +115,7 @@ class DashboardQueryHelper(
                 .mapNotNull { line ->
                     runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull()
                 }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to execute $errorContext" }
-            null
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to execute $errorContext" }
-            null
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to execute $errorContext" }
-            null
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to execute $errorContext" }
             null
         }
@@ -213,16 +193,10 @@ class DashboardQueryHelper(
     }
 
     fun parseTraceContext(contexts: String): JsonObject? {
-        return try {
+        return suspendRunCatching {
             val contextsJson = json.parseToJsonElement(contexts) as? JsonObject ?: return null
             contextsJson["trace"] as? JsonObject
-        } catch (_: SerializationException) {
-            null
-        } catch (_: IOException) {
-            null
-        } catch (_: IllegalStateException) {
-            null
-        } catch (_: IllegalArgumentException) {
+        }.getOrElse { _ ->
             null
         }
     }
@@ -288,7 +262,7 @@ class DashboardQueryHelper(
         query: String,
         parentSpan: ISpan? = null
     ): Long {
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
@@ -298,16 +272,7 @@ class DashboardQueryHelper(
             if (body.isBlank()) return 0
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["total"]?.jsonPrimitive?.long ?: 0
-        } catch (e: SerializationException) {
-            logger.error(e) { "Scalar query failed (transport/parse): query=${query.take(200)}, returning 0" }
-            0
-        } catch (e: IOException) {
-            logger.error(e) { "Scalar query failed (transport/parse): query=${query.take(200)}, returning 0" }
-            0
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Scalar query failed (transport/parse): query=${query.take(200)}, returning 0" }
-            0
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Scalar query failed (transport/parse): query=${query.take(200)}, returning 0" }
             0
         }
@@ -317,7 +282,7 @@ class DashboardQueryHelper(
         query: String,
         parentSpan: ISpan? = null
     ): List<TimelinePoint> {
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
@@ -328,42 +293,18 @@ class DashboardQueryHelper(
                 .lines()
                 .filter { it.isNotBlank() }
                 .mapNotNull { line ->
-                    try {
+                    suspendRunCatching {
                         val obj = json.parseToJsonElement(line).jsonObject
                         TimelinePoint(
                             timestamp = obj["time"]?.jsonPrimitive?.content ?: "",
                             count = obj["count"]?.jsonPrimitive?.long ?: 0
                         )
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Failed to parse line: $line" }
-                        null
-                    } catch (e: IOException) {
-                        logger.error(e) { "Failed to parse line: $line" }
-                        null
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Failed to parse line: $line" }
-                        null
-                    } catch (e: IllegalArgumentException) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to parse line: $line" }
                         null
                     }
                 }
-        } catch (e: SerializationException) {
-            logger.error(
-                e
-            ) { "executeTimelineQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(
-                e
-            ) { "executeTimelineQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(
-                e
-            ) { "executeTimelineQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(
                 e
             ) { "executeTimelineQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
@@ -375,7 +316,7 @@ class DashboardQueryHelper(
         query: String,
         parentSpan: ISpan? = null
     ): List<SlowTransactionResponse> {
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
@@ -386,7 +327,7 @@ class DashboardQueryHelper(
                 .lines()
                 .filter { it.isNotBlank() }
                 .mapNotNull { line ->
-                    try {
+                    suspendRunCatching {
                         val obj = json.parseToJsonElement(line).jsonObject
                         SlowTransactionResponse(
                             eventId = obj["event_id"]?.jsonPrimitive?.content ?: "",
@@ -398,42 +339,12 @@ class DashboardQueryHelper(
                                 ?: obj["timestamp"]?.jsonPrimitive?.content
                                 ?: ""
                         )
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Failed to parse line: $line" }
-                        null
-                    } catch (e: IOException) {
-                        logger.error(e) { "Failed to parse line: $line" }
-                        null
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Failed to parse line: $line" }
-                        null
-                    } catch (e: IllegalArgumentException) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to parse line: $line" }
                         null
                     }
                 }
-        } catch (e: SerializationException) {
-            logger.error(e) {
-                "executeSlowestTransactionsQuery failed (transport/parse): query=${query.take(
-                    200
-                )}, returning emptyList"
-            }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) {
-                "executeSlowestTransactionsQuery failed (transport/parse): query=${query.take(
-                    200
-                )}, returning emptyList"
-            }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) {
-                "executeSlowestTransactionsQuery failed (transport/parse): query=${query.take(
-                    200
-                )}, returning emptyList"
-            }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) {
                 "executeSlowestTransactionsQuery failed (transport/parse): query=${query.take(
                     200
@@ -448,7 +359,7 @@ class DashboardQueryHelper(
         keyField: String,
         parentSpan: ISpan? = null
     ): Map<String, Long> {
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
@@ -459,36 +370,18 @@ class DashboardQueryHelper(
                 .lines()
                 .filter { it.isNotBlank() }
                 .mapNotNull { line ->
-                    try {
+                    suspendRunCatching {
                         val obj = json.parseToJsonElement(line).jsonObject
                         val key = obj[keyField]?.jsonPrimitive?.content ?: "unknown"
                         val count = obj["count"]?.jsonPrimitive?.long ?: 0
                         key to count
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
-                        null
-                    } catch (e: IOException) {
-                        logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
-                        null
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
-                        null
-                    } catch (e: IllegalArgumentException) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
                         null
                     }
                 }
                 .toMap()
-        } catch (e: SerializationException) {
-            logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
-            emptyMap()
-        } catch (e: IOException) {
-            logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
-            emptyMap()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
-            emptyMap()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
             emptyMap()
         }
@@ -504,7 +397,7 @@ class DashboardQueryHelper(
         parentSpan: ISpan? = null,
         transform: (JsonObject) -> Pair<K, V>?
     ): Map<K, V> {
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.isBlank() ||
@@ -523,16 +416,7 @@ class DashboardQueryHelper(
                         ?.let(transform)
                 }
                 .toMap()
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to execute $errorContext" }
-            emptyMap()
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to execute $errorContext" }
-            emptyMap()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to execute $errorContext" }
-            emptyMap()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to execute $errorContext" }
             emptyMap()
         }
@@ -546,18 +430,9 @@ class DashboardQueryHelper(
         query: String,
         errorContext: String
     ) {
-        val response = try {
+        val response = suspendRunCatching {
             ClickHouseClient.execute(query)
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to execute $errorContext" }
-            throw e
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to execute $errorContext" }
-            throw e
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to execute $errorContext" }
-            throw e
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to execute $errorContext" }
             throw e
         }
@@ -577,7 +452,7 @@ class DashboardQueryHelper(
         query: String,
         parentSpan: ISpan? = null
     ): List<TopIssue> {
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
@@ -588,43 +463,19 @@ class DashboardQueryHelper(
                 .lines()
                 .filter { it.isNotBlank() }
                 .mapNotNull { line ->
-                    try {
+                    suspendRunCatching {
                         val obj = json.parseToJsonElement(line).jsonObject
                         TopIssue(
                             issueId = obj["issue_id"]?.jsonPrimitive?.content ?: "",
                             title = obj["title"]?.jsonPrimitive?.content ?: "",
                             count = obj["count"]?.jsonPrimitive?.long ?: 0
                         )
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
-                        null
-                    } catch (e: IOException) {
-                        logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
-                        null
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
-                        null
-                    } catch (e: IllegalArgumentException) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
                         null
                     }
                 }
-        } catch (e: SerializationException) {
-            logger.error(
-                e
-            ) { "executeTopIssuesQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(
-                e
-            ) { "executeTopIssuesQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(
-                e
-            ) { "executeTopIssuesQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(
                 e
             ) { "executeTopIssuesQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }

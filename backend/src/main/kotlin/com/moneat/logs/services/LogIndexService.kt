@@ -16,9 +16,6 @@
 
 package com.moneat.logs.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
 import com.moneat.logs.models.CreateLogIndexRequest
@@ -43,6 +40,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -199,26 +197,11 @@ class LogIndexService {
         val indexes = getActiveIndexesCached(organizationId)
         for (index in indexes) {
             if (index.filterQuery.isBlank()) return index.name
-            try {
+            suspendRunCatching {
                 if (matchesFilter(index.filterQuery, logEntry)) {
                     return index.name
                 }
-            } catch (e: SerializationException) {
-                logger.warn(e) {
-                    "Filter evaluation failed for index '${index.name}' " +
-                        "query='${index.filterQuery}'; skipping"
-                }
-            } catch (e: IOException) {
-                logger.warn(e) {
-                    "Filter evaluation failed for index '${index.name}' " +
-                        "query='${index.filterQuery}'; skipping"
-                }
-            } catch (e: IllegalStateException) {
-                logger.warn(e) {
-                    "Filter evaluation failed for index '${index.name}' " +
-                        "query='${index.filterQuery}'; skipping"
-                }
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.warn(e) {
                     "Filter evaluation failed for index '${index.name}' " +
                         "query='${index.filterQuery}'; skipping"
@@ -254,7 +237,7 @@ class LogIndexService {
         val matchCount = if (filterQuery.isBlank()) {
             totalCount
         } else {
-            try {
+            suspendRunCatching {
                 val parsed = queryParser.parse(filterQuery)
                 if (parsed.rootNode == null) {
                     totalCount
@@ -272,22 +255,7 @@ class LogIndexService {
                     """.trimIndent()
                     executeCountQuery(matchSql)
                 }
-            } catch (e: SerializationException) {
-                logger.warn(e) {
-                    "Failed to test filter query: $filterQuery"
-                }
-                0L
-            } catch (e: IOException) {
-                logger.warn(e) {
-                    "Failed to test filter query: $filterQuery"
-                }
-                0L
-            } catch (e: IllegalStateException) {
-                logger.warn(e) {
-                    "Failed to test filter query: $filterQuery"
-                }
-                0L
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.warn(e) {
                     "Failed to test filter query: $filterQuery"
                 }
@@ -322,15 +290,9 @@ class LogIndexService {
                     val pattern = escaped
                         .replace("\\*", ".*")
                         .replace("\\?", ".")
-                    try {
+                    suspendRunCatching {
                         value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
-                    } catch (_: SerializationException) {
-                        false
-                    } catch (_: IOException) {
-                        false
-                    } catch (_: IllegalStateException) {
-                        false
-                    } catch (_: IllegalArgumentException) {
+                    }.getOrElse { _ ->
                         false
                     }
                 } else {
@@ -395,7 +357,7 @@ class LogIndexService {
     }
 
     private suspend fun executeCountQuery(sql: String): Long {
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(sql)
             val body = response.bodyAsText()
             if (response.isClickHouseError(body)) {
@@ -406,16 +368,7 @@ class LogIndexService {
                     ?.jsonPrimitive
                     ?.longOrNull ?: 0L
             }
-        } catch (e: SerializationException) {
-            logger.warn(e) { "Count query failed: $sql" }
-            0L
-        } catch (e: IOException) {
-            logger.warn(e) { "Count query failed: $sql" }
-            0L
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "Count query failed: $sql" }
-            0L
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "Count query failed: $sql" }
             0L
         }

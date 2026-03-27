@@ -34,6 +34,7 @@ import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
 import java.sql.SQLException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private const val ERROR_RETRY_DELAY_MS = 1000L
@@ -138,11 +139,9 @@ abstract class OtlpIngestionWorkerBase(
     }
 
     private fun disposeRedisConnection(workerId: Int, c: StatefulRedisConnection<String, String>) {
-        try {
+        suspendRunCatching {
             RedisConfig.closeBlockingConnection(c)
-        } catch (e: IOException) {
-            logger.warn(e) { "Failed to close Redis connection for OTLP worker $workerId" }
-        } catch (e: RedisException) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to close Redis connection for OTLP worker $workerId" }
         }
     }

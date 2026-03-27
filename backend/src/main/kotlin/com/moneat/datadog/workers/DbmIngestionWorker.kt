@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
-import java.sql.SQLException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -101,7 +101,7 @@ class DbmIngestionWorker(
         workerId: Int,
         payload: String,
     ) {
-        try {
+        suspendRunCatching {
             val batch = DbmIngestionService.decodeBatch(payload)
             DbmIngestionService.insertBatch(batch)
             logger.debug {
@@ -111,17 +111,7 @@ class DbmIngestionWorker(
                     "metrics=${batch.metrics.size} " +
                     "activity=${batch.activity.size}"
             }
-        } catch (e: SerializationException) {
-            handleDbmDlq(workerId, payload, e)
-        } catch (e: IOException) {
-            handleDbmDlq(workerId, payload, e)
-        } catch (e: SQLException) {
-            handleDbmDlq(workerId, payload, e)
-        } catch (e: RedisException) {
-            handleDbmDlq(workerId, payload, e)
-        } catch (e: IllegalStateException) {
-            handleDbmDlq(workerId, payload, e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             handleDbmDlq(workerId, payload, e)
         }
     }

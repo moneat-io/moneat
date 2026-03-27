@@ -16,9 +16,6 @@
 
 package com.moneat.events.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.events.models.EventResponse
 import com.moneat.events.models.IssueDetailResponse
 import com.moneat.events.models.IssueResponse
@@ -28,6 +25,7 @@ import com.moneat.events.repositories.IssueRepository
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.server.plugins.BadRequestException
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -64,7 +62,7 @@ class IssueService(
             projectIdClause = projectIdClause
         )
 
-        return try {
+        return suspendRunCatching {
             var skipped = 0
             val result = mutableListOf<IssueResponse>()
             for (row in rows) {
@@ -96,16 +94,7 @@ class IssueService(
                 if (result.size >= limit) break
             }
             result
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to fetch issues for project $projectId" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to fetch issues for project $projectId" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to fetch issues for project $projectId" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch issues for project $projectId" }
             emptyList()
         }

@@ -16,11 +16,8 @@
 
 package com.moneat.otlp.services
 
-import io.lettuce.core.RedisException
-import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
-import java.io.IOException
-import java.sql.SQLException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -37,24 +34,14 @@ class OtlpMetricsIngestionWorker(
     "metrics",
 ) {
     override suspend fun processMessage(workerId: Int, payload: String) {
-        try {
+        suspendRunCatching {
             val batch = metricsService.decodeBatch(payload)
             metricsService.insertBatch(batch)
             logger.debug {
                 "OTLP metrics worker $workerId inserted ${batch.metrics.size} metrics " +
                     "for org ${batch.organizationId}"
             }
-        } catch (e: SerializationException) {
-            handleOtlpMetricsDlq(workerId, payload, e)
-        } catch (e: IOException) {
-            handleOtlpMetricsDlq(workerId, payload, e)
-        } catch (e: SQLException) {
-            handleOtlpMetricsDlq(workerId, payload, e)
-        } catch (e: RedisException) {
-            handleOtlpMetricsDlq(workerId, payload, e)
-        } catch (e: IllegalStateException) {
-            handleOtlpMetricsDlq(workerId, payload, e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             handleOtlpMetricsDlq(workerId, payload, e)
         }
     }

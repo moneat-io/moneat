@@ -16,9 +16,6 @@
 
 package com.moneat.config
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.server.application.Application
@@ -35,6 +32,7 @@ import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
 import kotlin.io.path.nameWithoutExtension
 import kotlin.io.path.readText
+import com.moneat.utils.suspendRunCatching
 
 /**
  * ClickHouse migration system similar to Flyway for PostgreSQL.
@@ -63,7 +61,7 @@ object ClickHouseMigrations {
      * Runs all pending migrations on application startup.
      */
     suspend fun migrate(logger: org.slf4j.Logger) {
-        try {
+        suspendRunCatching {
             // Create migrations tracking table if it doesn't exist
             createMigrationsTable()
 
@@ -96,16 +94,7 @@ object ClickHouseMigrations {
             }
 
             logger.info("ClickHouse migrations complete (${migrations.size} total migrations)")
-        } catch (e: SerializationException) {
-            logger.error("ClickHouse migration failed: ${e.message}", e)
-            throw RuntimeException("ClickHouse migration failed", e)
-        } catch (e: IOException) {
-            logger.error("ClickHouse migration failed: ${e.message}", e)
-            throw RuntimeException("ClickHouse migration failed", e)
-        } catch (e: IllegalStateException) {
-            logger.error("ClickHouse migration failed: ${e.message}", e)
-            throw RuntimeException("ClickHouse migration failed", e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error("ClickHouse migration failed: ${e.message}", e)
             throw RuntimeException("ClickHouse migration failed", e)
         }

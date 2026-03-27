@@ -28,10 +28,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
-import java.sql.SQLException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -101,7 +100,7 @@ class DebuggerIngestionWorker(
         workerId: Int,
         payload: String,
     ) {
-        try {
+        suspendRunCatching {
             val batch = DebuggerIngestionService.decodeBatch(payload)
             DebuggerIngestionService.insertBatch(batch)
             logger.debug {
@@ -110,17 +109,7 @@ class DebuggerIngestionWorker(
                     "logs=${batch.logs.size} " +
                     "diagnostics=${batch.diagnostics.size}"
             }
-        } catch (e: SerializationException) {
-            handleDebuggerDlq(workerId, payload, e)
-        } catch (e: IOException) {
-            handleDebuggerDlq(workerId, payload, e)
-        } catch (e: SQLException) {
-            handleDebuggerDlq(workerId, payload, e)
-        } catch (e: RedisException) {
-            handleDebuggerDlq(workerId, payload, e)
-        } catch (e: IllegalStateException) {
-            handleDebuggerDlq(workerId, payload, e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             handleDebuggerDlq(workerId, payload, e)
         }
     }

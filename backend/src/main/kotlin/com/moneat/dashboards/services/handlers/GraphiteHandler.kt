@@ -16,9 +16,6 @@
 
 package com.moneat.dashboards.services.handlers
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -35,6 +32,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -46,7 +44,7 @@ private val logger = KotlinLogging.logger {}
 class GraphiteHandler : HttpApiHandler() {
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        return try {
+        return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port ?: 80)
             val response = httpClient.get("$baseUrl/render") {
                 parameter("target", "constantLine(1)")
@@ -59,16 +57,7 @@ class GraphiteHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Graphite returned ${response.status}")
             }
-        } catch (e: SerializationException) {
-            logger.warn(e) { "Graphite connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IOException) {
-            logger.warn(e) { "Graphite connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "Graphite connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "Graphite connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -90,7 +79,7 @@ class GraphiteHandler : HttpApiHandler() {
         val targets = query.split(",").map { it.trim() }.filter { it.isNotBlank() }
             .ifEmpty { listOf("*") }
 
-        return try {
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/render") {
                 targets.forEach { parameter("target", it) }
                 parameter("format", "json")
@@ -103,16 +92,7 @@ class GraphiteHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseGraphiteResponse(response.bodyAsText(), limit)
-        } catch (e: SerializationException) {
-            logger.error(e) { "Graphite query failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "Graphite query failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Graphite query failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Graphite query failed" }
             emptyList()
         }
@@ -125,7 +105,7 @@ class GraphiteHandler : HttpApiHandler() {
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val baseUrl = buildUrl(host, port ?: 80)
-        return try {
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/metrics/index.json") {
                 credentials.apiKey?.let { header("Authorization", "Bearer $it") }
             }
@@ -135,16 +115,7 @@ class GraphiteHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Graphite schema fetch failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "Graphite schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Graphite schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Graphite schema fetch failed" }
             emptyList()
         }

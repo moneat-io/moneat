@@ -16,9 +16,6 @@
 
 package com.moneat.datadog.security
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdActivityDumpPayload
@@ -32,6 +29,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -50,7 +48,7 @@ fun Route.securityIngestRoutes() {
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleSecurityEvents() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    try {
+    suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
@@ -58,23 +56,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSecurityEvents()
         val count = SecurityIngestionService.enqueueSecurityEvents(orgId, payload)
         logger.debug { "Accepted $count security events for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process security events" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process security events" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process security events" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process security events" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleActivityDumps() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    try {
+    suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
@@ -82,23 +71,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleActivityDumps() 
         val count = SecurityIngestionService.enqueueActivityDumps(orgId, payload)
         logger.debug { "Accepted $count activity dumps for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process activity dumps" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process activity dumps" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process activity dumps" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process activity dumps" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceFindings() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    try {
+    suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
@@ -106,16 +86,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceFindin
         val count = SecurityIngestionService.enqueueCompliance(orgId, payload)
         logger.debug { "Accepted $count compliance findings for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process compliance findings" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process compliance findings" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process compliance findings" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process compliance findings" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

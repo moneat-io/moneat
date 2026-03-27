@@ -16,11 +16,9 @@
 
 package com.moneat.ai
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.utils.SentryUtils
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -42,7 +40,7 @@ class AiActionExecutor {
                 )
             )
 
-            try {
+            suspendRunCatching {
                 // Actions are executed by the frontend calling the real API endpoints
                 // with the user's existing JWT auth. This executor is a placeholder for
                 // any future server-side-only action orchestration.
@@ -53,25 +51,7 @@ class AiActionExecutor {
                         message = "Action submitted successfully. The operation will be performed using your existing permissions."
                     )
                 }
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to execute action $actionId" }
-                ActionResult(
-                    success = false,
-                    message = "Failed to execute action: ${e.message}"
-                )
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to execute action $actionId" }
-                ActionResult(
-                    success = false,
-                    message = "Failed to execute action: ${e.message}"
-                )
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to execute action $actionId" }
-                ActionResult(
-                    success = false,
-                    message = "Failed to execute action: ${e.message}"
-                )
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to execute action $actionId" }
                 ActionResult(
                     success = false,

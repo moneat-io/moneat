@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
-import java.sql.SQLException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -101,7 +101,7 @@ class OrchestratorIngestionWorker(
         workerId: Int,
         payload: String,
     ) {
-        try {
+        suspendRunCatching {
             val batch = OrchestratorIngestionService.decodeBatch(payload)
             OrchestratorIngestionService.insertBatch(batch)
             logger.debug {
@@ -110,17 +110,7 @@ class OrchestratorIngestionWorker(
                     "resources=${batch.resources.size} " +
                     "manifests=${batch.manifests.size}"
             }
-        } catch (e: SerializationException) {
-            handleOrchestratorDlq(workerId, payload, e)
-        } catch (e: IOException) {
-            handleOrchestratorDlq(workerId, payload, e)
-        } catch (e: SQLException) {
-            handleOrchestratorDlq(workerId, payload, e)
-        } catch (e: RedisException) {
-            handleOrchestratorDlq(workerId, payload, e)
-        } catch (e: IllegalStateException) {
-            handleOrchestratorDlq(workerId, payload, e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             handleOrchestratorDlq(workerId, payload, e)
         }
     }

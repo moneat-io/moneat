@@ -16,9 +16,6 @@
 
 package com.moneat.shared.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.RedisConfig
 import com.moneat.utils.SentryUtils
 import io.sentry.ISpan
@@ -28,6 +25,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val cacheLogger = KotlinLogging.logger {}
 private val cacheJson = Json { ignoreUnknownKeys = true }
@@ -53,7 +51,7 @@ object CacheService {
         loader: suspend () -> T
     ): T {
         val cached =
-            try {
+            suspendRunCatching {
                 withContext(Dispatchers.IO) {
                     if (RedisConfig.isConnected()) {
                         val value =
@@ -71,19 +69,7 @@ object CacheService {
                         null
                     }
                 }
-            } catch (e: SerializationException) {
-                cacheLogger.warn(e) { "Cache GET failed for key=$key" }
-                SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
-                null
-            } catch (e: IOException) {
-                cacheLogger.warn(e) { "Cache GET failed for key=$key" }
-                SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
-                null
-            } catch (e: IllegalStateException) {
-                cacheLogger.warn(e) { "Cache GET failed for key=$key" }
-                SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
-                null
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 cacheLogger.warn(e) { "Cache GET failed for key=$key" }
                 SentryUtils.breadcrumb("cache", "Cache GET failed", mapOf("key" to key, "error" to (e.message ?: "")))
                 null
@@ -91,18 +77,9 @@ object CacheService {
 
         if (cached != null) {
             SentryUtils.breadcrumb("cache", "Cache HIT", mapOf("key" to key))
-            return try {
+            return suspendRunCatching {
                 cacheJson.decodeFromString(serializer, cached)
-            } catch (e: SerializationException) {
-                cacheLogger.warn(e) { "Cache deserialize failed for key=$key" }
-                loader()
-            } catch (e: IOException) {
-                cacheLogger.warn(e) { "Cache deserialize failed for key=$key" }
-                loader()
-            } catch (e: IllegalStateException) {
-                cacheLogger.warn(e) { "Cache deserialize failed for key=$key" }
-                loader()
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 cacheLogger.warn(e) { "Cache deserialize failed for key=$key" }
                 loader()
             }
@@ -111,7 +88,7 @@ object CacheService {
         SentryUtils.breadcrumb("cache", "Cache MISS", mapOf("key" to key))
         val value = loader()
 
-        try {
+        suspendRunCatching {
             withContext(Dispatchers.IO) {
                 if (RedisConfig.isConnected()) {
                     val encoded = cacheJson.encodeToString(serializer, value)
@@ -126,16 +103,7 @@ object CacheService {
                     }
                 }
             }
-        } catch (e: SerializationException) {
-            cacheLogger.warn(e) { "Cache SETEX failed for key=$key" }
-            SentryUtils.breadcrumb("cache", "Cache SET failed", mapOf("key" to key, "error" to (e.message ?: "")))
-        } catch (e: IOException) {
-            cacheLogger.warn(e) { "Cache SETEX failed for key=$key" }
-            SentryUtils.breadcrumb("cache", "Cache SET failed", mapOf("key" to key, "error" to (e.message ?: "")))
-        } catch (e: IllegalStateException) {
-            cacheLogger.warn(e) { "Cache SETEX failed for key=$key" }
-            SentryUtils.breadcrumb("cache", "Cache SET failed", mapOf("key" to key, "error" to (e.message ?: "")))
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             cacheLogger.warn(e) { "Cache SETEX failed for key=$key" }
             SentryUtils.breadcrumb("cache", "Cache SET failed", mapOf("key" to key, "error" to (e.message ?: "")))
         }
@@ -143,36 +111,24 @@ object CacheService {
     }
 
     fun invalidate(key: String) {
-        try {
+        suspendRunCatching {
             if (RedisConfig.isConnected()) {
                 RedisConfig.sync().del(key)
             }
-        } catch (e: SerializationException) {
-            cacheLogger.warn(e) { "Cache DEL failed for key=$key" }
-        } catch (e: IOException) {
-            cacheLogger.warn(e) { "Cache DEL failed for key=$key" }
-        } catch (e: IllegalStateException) {
-            cacheLogger.warn(e) { "Cache DEL failed for key=$key" }
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             cacheLogger.warn(e) { "Cache DEL failed for key=$key" }
         }
     }
 
     fun invalidatePattern(pattern: String) {
-        try {
+        suspendRunCatching {
             if (RedisConfig.isConnected()) {
                 val keys = RedisConfig.sync().keys(pattern)
                 if (keys.isNotEmpty()) {
                     RedisConfig.sync().del(*keys.toTypedArray())
                 }
             }
-        } catch (e: SerializationException) {
-            cacheLogger.warn(e) { "Cache DEL (pattern) failed for pattern=$pattern" }
-        } catch (e: IOException) {
-            cacheLogger.warn(e) { "Cache DEL (pattern) failed for pattern=$pattern" }
-        } catch (e: IllegalStateException) {
-            cacheLogger.warn(e) { "Cache DEL (pattern) failed for pattern=$pattern" }
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             cacheLogger.warn(e) { "Cache DEL (pattern) failed for pattern=$pattern" }
         }
     }

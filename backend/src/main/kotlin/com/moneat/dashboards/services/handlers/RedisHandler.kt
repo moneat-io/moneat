@@ -16,9 +16,6 @@
 
 package com.moneat.dashboards.services.handlers
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -31,6 +28,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -44,7 +42,7 @@ class RedisHandler : DataSourceHandler {
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val uri = buildRedisUri(request.host, request.port ?: 6379, request.password ?: request.apiKey)
 
-        return try {
+        return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     conn.sync().ping()
@@ -52,16 +50,7 @@ class RedisHandler : DataSourceHandler {
                     TestConnectionResult(true, "Connected successfully", keys = keys)
                 }
             }
-        } catch (e: SerializationException) {
-            logger.warn(e) { "Redis connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IOException) {
-            logger.warn(e) { "Redis connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "Redis connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "Redis connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -80,7 +69,7 @@ class RedisHandler : DataSourceHandler {
         val uri = buildRedisUri(host, port ?: 6379, credentials.password ?: credentials.apiKey)
         val db = databaseName?.toIntOrNull() ?: 0
 
-        return try {
+        return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     if (db != 0) conn.sync().select(db)
@@ -196,16 +185,7 @@ class RedisHandler : DataSourceHandler {
                     result.take(limit)
                 }
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Redis query failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "Redis query failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Redis query failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Redis query failed" }
             emptyList()
         }
@@ -219,7 +199,7 @@ class RedisHandler : DataSourceHandler {
     ): List<DataSourceField> {
         val uri = buildRedisUri(host, port ?: 6379, credentials.password ?: credentials.apiKey)
         val dbIndex = databaseName?.toIntOrNull() ?: 0
-        return try {
+        return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     if (dbIndex != 0) conn.sync().select(dbIndex)
@@ -227,16 +207,7 @@ class RedisHandler : DataSourceHandler {
                     keys.map { DataSourceField(it, "key", "Redis key") }
                 }
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Redis schema fetch failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "Redis schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Redis schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Redis schema fetch failed" }
             emptyList()
         }
@@ -342,7 +313,7 @@ class RedisHandler : DataSourceHandler {
         @Suppress("UNCHECKED_CAST")
         internal fun parseSlowlog(entries: List<Any>): List<Map<String, JsonElement>> {
             return entries.mapNotNull { entry ->
-                try {
+                suspendRunCatching {
                     val fields = entry as? List<*> ?: return@mapNotNull null
                     val id = (fields.getOrNull(0) as? Number)?.toLong() ?: 0L
                     val ts = (fields.getOrNull(1) as? Number)?.toLong() ?: 0L
@@ -355,13 +326,7 @@ class RedisHandler : DataSourceHandler {
                         "Duration" to JsonPrimitive(duration),
                         "Command" to JsonPrimitive(args)
                     )
-                } catch (e: SerializationException) {
-                    null
-                } catch (e: IOException) {
-                    null
-                } catch (e: IllegalStateException) {
-                    null
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     null
                 }
             }

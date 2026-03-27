@@ -16,9 +16,6 @@
 
 package com.moneat.config
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import io.ktor.events.*
 import io.ktor.server.application.*
 import io.lettuce.core.RedisClient
@@ -30,6 +27,7 @@ import io.lettuce.core.api.sync.RedisCommands
 import io.lettuce.core.resource.ClientResources
 import io.netty.resolver.DefaultAddressResolverGroup
 import java.time.Duration
+import com.moneat.utils.suspendRunCatching
 
 const val BRPOP_TIMEOUT_SECONDS = 5L
 
@@ -116,38 +114,20 @@ object RedisConfig {
 fun Application.configureRedis() {
     // Skip Redis in test environment if REDIS_URL is not set
     val redisUrl =
-        try {
+        suspendRunCatching {
             environment.config.property("redis.url").getString()
-        } catch (e: SerializationException) {
-            log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
-            return
-        } catch (e: IOException) {
-            log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
-            return
-        } catch (e: IllegalStateException) {
-            log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
-            return
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
             return
         }
 
-    try {
+    suspendRunCatching {
         log.info("Connecting to Redis at $redisUrl...")
         RedisConfig.init(redisUrl)
         log.info("Redis connection established")
         // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering
         // (workers must stop before Redis connection is closed)
-    } catch (e: SerializationException) {
-        log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
-        throw e
-    } catch (e: IOException) {
-        log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
-        throw e
-    } catch (e: IllegalStateException) {
-        log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
-        throw e
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
         throw e
     }

@@ -16,9 +16,6 @@
 
 package com.moneat.shared.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import io.ktor.client.HttpClient
@@ -140,7 +137,7 @@ class PulseService(
 
     private suspend fun collectUsageCounts(): UsageCounts {
         // PostgreSQL counts
-        val (projectCount, userCount) = try {
+        val (projectCount, userCount) = suspendRunCatching {
             transaction {
                 val projects = exec("SELECT COUNT(*) FROM projects") { rs: java.sql.ResultSet ->
                     if (rs.next()) rs.getLong(1) else 0L
@@ -152,44 +149,23 @@ class PulseService(
 
                 Pair(projects, users)
             }
-        } catch (e: SerializationException) {
-            logger.debug(e) { "Failed to collect PostgreSQL counts" }
-            Pair(0L, 0L)
-        } catch (e: IOException) {
-            logger.debug(e) { "Failed to collect PostgreSQL counts" }
-            Pair(0L, 0L)
-        } catch (e: IllegalStateException) {
-            logger.debug(e) { "Failed to collect PostgreSQL counts" }
-            Pair(0L, 0L)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.debug(e) { "Failed to collect PostgreSQL counts" }
             Pair(0L, 0L)
         }
 
         // ClickHouse counts are best-effort; failures don't block the pulse
-        val eventCount = try {
+        val eventCount = suspendRunCatching {
             ClickHouseClient.execute("SELECT COUNT(*) FROM events")
                 .bodyAsText().trim().toLongOrNull() ?: 0L
-        } catch (_: SerializationException) {
-            0L
-        } catch (_: IOException) {
-            0L
-        } catch (_: IllegalStateException) {
-            0L
-        } catch (_: IllegalArgumentException) {
+        }.getOrElse { _ ->
             0L
         }
 
-        val issueCount = try {
+        val issueCount = suspendRunCatching {
             ClickHouseClient.execute("SELECT COUNT(*) FROM issues")
                 .bodyAsText().trim().toLongOrNull() ?: 0L
-        } catch (_: SerializationException) {
-            0L
-        } catch (_: IOException) {
-            0L
-        } catch (_: IllegalStateException) {
-            0L
-        } catch (_: IllegalArgumentException) {
+        }.getOrElse { _ ->
             0L
         }
 
@@ -202,7 +178,7 @@ class PulseService(
     }
 
     private fun getOrCreateDeploymentId(): String {
-        return try {
+        return suspendRunCatching {
             transaction {
                 val existing = exec(
                     "SELECT value FROM deployment_settings WHERE key = 'deployment_id'"
@@ -221,16 +197,7 @@ class PulseService(
                     newId
                 }
             }
-        } catch (_: SerializationException) {
-            // Table may not exist yet — generate a transient ID
-            "transient-${UUID.randomUUID()}"
-        } catch (_: IOException) {
-            // Table may not exist yet — generate a transient ID
-            "transient-${UUID.randomUUID()}"
-        } catch (_: IllegalStateException) {
-            // Table may not exist yet — generate a transient ID
-            "transient-${UUID.randomUUID()}"
-        } catch (_: IllegalArgumentException) {
+        }.getOrElse { _ ->
             // Table may not exist yet — generate a transient ID
             "transient-${UUID.randomUUID()}"
         }
@@ -260,15 +227,9 @@ class PulseService(
             val endpoint = EnvConfig.get("TELEMETRY_ENDPOINT", "https://telemetry.moneat.io/v1/pulse")
 
             val snapshot = if (enabled) {
-                try {
+                suspendRunCatching {
                     PulseService().collectMetrics()
-                } catch (_: SerializationException) {
-                    null
-                } catch (_: IOException) {
-                    null
-                } catch (_: IllegalStateException) {
-                    null
-                } catch (_: IllegalArgumentException) {
+                }.getOrElse { _ ->
                     null
                 }
             } else {

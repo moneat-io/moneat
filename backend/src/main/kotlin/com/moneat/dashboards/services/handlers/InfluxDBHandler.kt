@@ -16,9 +16,6 @@
 
 package com.moneat.dashboards.services.handlers
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -36,6 +33,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -46,7 +44,7 @@ private val logger = KotlinLogging.logger {}
 class InfluxDBHandler : HttpApiHandler() {
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        return try {
+        return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port ?: 8086)
             val org = request.databaseName ?: "moneat"
             val query = "buckets()"
@@ -61,16 +59,7 @@ class InfluxDBHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "InfluxDB returned ${response.status}")
             }
-        } catch (e: SerializationException) {
-            logger.warn(e) { "InfluxDB connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IOException) {
-            logger.warn(e) { "InfluxDB connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "InfluxDB connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "InfluxDB connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -97,7 +86,7 @@ class InfluxDBHandler : HttpApiHandler() {
             "$query |> limit(n: $limit)"
         }
 
-        return try {
+        return suspendRunCatching {
             val body = "org=$org&query=${java.net.URLEncoder.encode(fluxQuery, "UTF-8")}"
             val response = httpClient.post("$baseUrl/api/v2/query") {
                 contentType(ContentType.Application.FormUrlEncoded)
@@ -109,16 +98,7 @@ class InfluxDBHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseFluxCsv(response.bodyAsText(), limit)
-        } catch (e: SerializationException) {
-            logger.error(e) { "InfluxDB query failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "InfluxDB query failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "InfluxDB query failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "InfluxDB query failed" }
             emptyList()
         }
@@ -132,7 +112,7 @@ class InfluxDBHandler : HttpApiHandler() {
     ): List<DataSourceField> {
         val baseUrl = buildUrl(host, port ?: 8086)
         val org = databaseName ?: "moneat"
-        return try {
+        return suspendRunCatching {
             val bucket = databaseName ?: "moneat"
             val query = "import \"influxdata/influxdb/schema\" schema.measurements(bucket: \"$bucket\")"
             val body = "org=$org&query=${java.net.URLEncoder.encode(query, "UTF-8")}"
@@ -156,16 +136,7 @@ class InfluxDBHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "InfluxDB schema fetch failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "InfluxDB schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "InfluxDB schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "InfluxDB schema fetch failed" }
             emptyList()
         }

@@ -16,14 +16,12 @@
 
 package com.moneat.shared.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.RedisConfig
 import io.lettuce.core.SetArgs
 import mu.KotlinLogging
 import java.security.SecureRandom
 import java.time.LocalDate
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -48,7 +46,7 @@ object AnalyticsSaltService {
         val date = LocalDate.now().toString()
         val key = "analytics:daily_salt:$date"
 
-        return try {
+        return suspendRunCatching {
             val redis = RedisConfig.sync()
 
             // Fast path: salt already exists for today.
@@ -60,16 +58,7 @@ object AnalyticsSaltService {
                 redis.set(key, candidate, SetArgs.Builder.nx().ex(SALT_TTL_SECONDS))
                 redis.get(key) ?: candidate
             }
-        } catch (e: SerializationException) {
-            logger.warn { "Redis unavailable for analytics salt, falling back to date: ${e.message}" }
-            date
-        } catch (e: IOException) {
-            logger.warn { "Redis unavailable for analytics salt, falling back to date: ${e.message}" }
-            date
-        } catch (e: IllegalStateException) {
-            logger.warn { "Redis unavailable for analytics salt, falling back to date: ${e.message}" }
-            date
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn { "Redis unavailable for analytics salt, falling back to date: ${e.message}" }
             date
         }

@@ -16,9 +16,6 @@
 
 package com.moneat.datadog.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.services.DatadogJfrFlamegraphService
 import com.moneat.datadog.services.DatadogPprofFlamegraphService
@@ -45,6 +42,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import com.moneat.utils.suspendRunCatching
 
 private const val DEFAULT_LIMIT = 50
 private const val MAX_LIMIT = 200
@@ -238,7 +236,7 @@ private fun isGzip(data: ByteArray): Boolean {
 private fun parseSentryProfileToFrames(
     data: ByteArray,
 ): Map<String, Any> {
-    return try {
+    return suspendRunCatching {
         val root = profileJson.parseToJsonElement(
             String(data)
         ).jsonObject
@@ -323,13 +321,7 @@ private fun parseSentryProfileToFrames(
                 }
             )
         }
-    } catch (e: SerializationException) {
-        buildJsonObject { put("frames", buildJsonArray {}) }
-    } catch (e: IOException) {
-        buildJsonObject { put("frames", buildJsonArray {}) }
-    } catch (e: IllegalStateException) {
-        buildJsonObject { put("frames", buildJsonArray {}) }
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         buildJsonObject { put("frames", buildJsonArray {}) }
     }
 }

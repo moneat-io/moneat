@@ -63,6 +63,7 @@ import org.koin.core.context.GlobalContext
 import java.time.Instant
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -562,7 +563,7 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
 
     if (token.isNullOrBlank()) return null
 
-    return try {
+    return suspendRunCatching {
         val config = call.application.environment.config
         val secret = config.property("jwt.secret").getString()
         val issuer = config.property("jwt.issuer").getString()
@@ -579,13 +580,7 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
         val userId = decoded.getClaim("userId").asInt()
         val orgId = decoded.getClaim("orgId").asInt().toLong()
         Pair(userId, orgId)
-    } catch (_: SerializationException) {
-        null
-    } catch (_: IOException) {
-        null
-    } catch (_: IllegalStateException) {
-        null
-    } catch (_: IllegalArgumentException) {
+    }.getOrElse { _ ->
         null
     }
 }
@@ -615,37 +610,19 @@ fun Route.logIngestRoutes(
 
             val bodyBytes = call.receive<ByteArray>()
             val encoding = call.request.header(HttpHeaders.ContentEncoding)
-            val payloadBytes = try {
+            val payloadBytes = suspendRunCatching {
                 DecompressionService.decompress(bodyBytes, encoding)
-            } catch (e: SerializationException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
-                return@post
-            } catch (e: IOException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
-                return@post
-            } catch (e: IllegalStateException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
-                return@post
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
                 return@post
             }
 
             val entries =
-                try {
+                suspendRunCatching {
                     json.decodeFromString<List<com.moneat.logs.models.LogIngestEntry>>(
                         payloadBytes.decodeToString()
                     )
-                } catch (e: SerializationException) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
-                    return@post
-                } catch (e: IOException) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
-                    return@post
-                } catch (e: IllegalStateException) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
-                    return@post
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
                     return@post
                 }
@@ -718,18 +695,9 @@ private suspend fun handleOtlpLogIngest(
 
     val bodyBytes = call.receive<ByteArray>()
     val encoding = call.request.header(HttpHeaders.ContentEncoding)
-    val payloadBytes = try {
+    val payloadBytes = suspendRunCatching {
         DecompressionService.decompress(bodyBytes, encoding)
-    } catch (e: SerializationException) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
-        return
-    } catch (e: IOException) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
-        return
-    } catch (e: IllegalStateException) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
-        return
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
         return
     }

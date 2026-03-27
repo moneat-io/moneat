@@ -35,15 +35,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import java.io.IOException
-import java.sql.SQLException
 import java.time.Instant
 import java.time.format.DateTimeParseException
 import java.util.Base64
 import java.util.UUID
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -99,22 +98,12 @@ class LlmIngestionWorker(
         value: String,
         onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
-        try {
+        suspendRunCatching {
             val (projectId, payloadBytes) = decodeMessage(value)
             val payload = json.decodeFromString<LlmIngestPayload>(payloadBytes.decodeToString())
             insertGenerations(projectId, payload.generations)
             usageTracker.recordUsage(projectId, "llm", payloadBytes.size)
-        } catch (e: SerializationException) {
-            handleLlmDlq(workerId, value, e, onDlq)
-        } catch (e: IOException) {
-            handleLlmDlq(workerId, value, e, onDlq)
-        } catch (e: SQLException) {
-            handleLlmDlq(workerId, value, e, onDlq)
-        } catch (e: RedisException) {
-            handleLlmDlq(workerId, value, e, onDlq)
-        } catch (e: IllegalStateException) {
-            handleLlmDlq(workerId, value, e, onDlq)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             handleLlmDlq(workerId, value, e, onDlq)
         }
     }

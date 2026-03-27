@@ -60,12 +60,12 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import java.io.IOException
 import java.security.SecureRandom
 import java.util.*
 import javax.naming.NamingException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -742,7 +742,7 @@ class StatusPageService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
 
@@ -756,13 +756,7 @@ class StatusPageService(
                 0 -> "down"
                 else -> "unknown"
             }
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to get monitor status for $monitorId" }
-            "unknown"
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to get monitor status for $monitorId" }
-            "unknown"
-        } catch (e: SerializationException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to get monitor status for $monitorId" }
             "unknown"
         }
@@ -790,7 +784,7 @@ class StatusPageService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
 
@@ -811,13 +805,7 @@ class StatusPageService(
                     null
                 }
             }
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to get uptime history for monitor $monitorId" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to get uptime history for monitor $monitorId" }
-            emptyList()
-        } catch (e: SerializationException) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to get uptime history for monitor $monitorId" }
             emptyList()
         }

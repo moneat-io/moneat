@@ -16,9 +16,6 @@
 
 package com.moneat.ai
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.EnvConfig
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -30,6 +27,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -80,19 +78,13 @@ object OpenAiClient {
             )
 
         val response =
-            try {
+            suspendRunCatching {
                 client.post("https://api.openai.com/v1/chat/completions") {
                     contentType(ContentType.Application.Json)
                     header("Authorization", "Bearer $apiKey")
                     setBody(request)
                 }
-            } catch (e: SerializationException) {
-                throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
-            } catch (e: IOException) {
-                throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
-            } catch (e: IllegalStateException) {
-                throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
             }
 

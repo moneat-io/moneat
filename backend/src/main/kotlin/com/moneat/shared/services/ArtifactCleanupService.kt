@@ -16,9 +16,6 @@
 
 package com.moneat.shared.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.auth.services.AuthTokenService
 import com.moneat.org.services.OrgInvitationService
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +25,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import kotlin.time.Duration.Companion.hours
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -48,7 +46,7 @@ class ArtifactCleanupService(
         cleanupJob =
             scope.launch {
                 while (isActive) {
-                    try {
+                    suspendRunCatching {
                         val authDeleted = authTokenService.cleanupExpiredTokens()
                         if (authDeleted > 0) {
                             logger.info { "Cleaned up $authDeleted expired auth tokens" }
@@ -57,13 +55,7 @@ class ArtifactCleanupService(
                         if (inviteDeleted > 0) {
                             logger.info { "Purged $inviteDeleted old invitations" }
                         }
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Error during artifact cleanup" }
-                    } catch (e: IOException) {
-                        logger.error(e) { "Error during artifact cleanup" }
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Error during artifact cleanup" }
-                    } catch (e: IllegalArgumentException) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Error during artifact cleanup" }
                     }
                     delay(cleanupInterval)

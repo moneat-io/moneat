@@ -16,9 +16,6 @@
 
 package com.moneat.auth.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,6 +24,7 @@ import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -49,18 +47,12 @@ class RefreshTokenCleanupService(
         cleanupJob =
             scope.launch {
                 while (isActive) {
-                    try {
+                    suspendRunCatching {
                         val deletedCount = refreshTokenCleaner.cleanupExpiredTokens()
                         if (deletedCount > 0) {
                             logger.info { "Cleaned up $deletedCount expired/revoked refresh tokens" }
                         }
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Error during refresh token cleanup" }
-                    } catch (e: IOException) {
-                        logger.error(e) { "Error during refresh token cleanup" }
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Error during refresh token cleanup" }
-                    } catch (e: IllegalArgumentException) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Error during refresh token cleanup" }
                     }
 

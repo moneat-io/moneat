@@ -16,9 +16,6 @@
 
 package com.moneat.billing.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.OrgUsageCounters
 import com.moneat.billing.models.PricingTier
@@ -46,6 +43,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.math.max
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -1212,20 +1210,12 @@ class BillingQuotaService(
      * Returns on-call used seats from the enterprise module if available, otherwise 0.
      */
     private fun getOnCallUsedSeatsIfAvailable(organizationId: Int): Int {
-        return try {
+        return suspendRunCatching {
             val clazz = Class.forName("com.moneat.enterprise.services.oncall.OnCallScheduleService")
             val instance = clazz.getDeclaredConstructor().newInstance()
             val method = clazz.getMethod("getOnCallUsedSeats", Int::class.java)
             method.invoke(instance, organizationId) as? Int ?: 0
-        } catch (_: ClassNotFoundException) {
-            0
-        } catch (_: SerializationException) {
-            0
-        } catch (_: IOException) {
-            0
-        } catch (_: IllegalStateException) {
-            0
-        } catch (_: IllegalArgumentException) {
+        }.getOrElse { _ ->
             0
         }
     }

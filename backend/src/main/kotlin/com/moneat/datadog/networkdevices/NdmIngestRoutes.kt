@@ -16,9 +16,6 @@
 
 package com.moneat.datadog.networkdevices
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdNdmPayload
@@ -30,6 +27,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -55,7 +53,7 @@ fun Route.ndmIngestRoutes() {
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    try {
+    suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
@@ -64,16 +62,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload() {
         val count = NdmIngestionService.enqueue(orgId, payload)
         logger.debug { "Accepted $count NDM entries (type=${payload.type}) for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: SerializationException) {
-        logger.error(e) { "Failed to process NDM payload" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IOException) {
-        logger.error(e) { "Failed to process NDM payload" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to process NDM payload" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-    } catch (e: IllegalArgumentException) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process NDM payload" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

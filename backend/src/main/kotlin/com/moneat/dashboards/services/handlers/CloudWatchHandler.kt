@@ -16,9 +16,6 @@
 
 package com.moneat.dashboards.services.handlers
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import aws.sdk.kotlin.runtime.auth.credentials.StaticCredentialsProvider
 import aws.sdk.kotlin.services.cloudwatch.CloudWatchClient
 import aws.sdk.kotlin.services.cloudwatch.model.Dimension
@@ -43,6 +40,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -63,7 +61,7 @@ class CloudWatchHandler : DataSourceHandler {
             return TestConnectionResult(false, "AWS access key and secret key are required")
         }
 
-        return try {
+        return suspendRunCatching {
             createClient(region, accessKey, secretKey).use { client ->
                 val now = Clock.System.now()
                 val startJava = java.time.Instant.ofEpochMilli(now.minus(1.hours).toEpochMilliseconds())
@@ -89,16 +87,7 @@ class CloudWatchHandler : DataSourceHandler {
                 client.getMetricData(request)
             }
             TestConnectionResult(true, "Connected successfully")
-        } catch (e: SerializationException) {
-            logger.warn(e) { "CloudWatch connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IOException) {
-            logger.warn(e) { "CloudWatch connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "CloudWatch connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "CloudWatch connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -118,18 +107,9 @@ class CloudWatchHandler : DataSourceHandler {
         val accessKey = credentials.accessKeyId ?: return emptyList()
         val secretKey = credentials.secretAccessKey ?: return emptyList()
 
-        val metricSpec = try {
+        val metricSpec = suspendRunCatching {
             json.parseToJsonElement(query).jsonObject
-        } catch (e: SerializationException) {
-            logger.error(e) { "Invalid CloudWatch query JSON" }
-            return emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "Invalid CloudWatch query JSON" }
-            return emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Invalid CloudWatch query JSON" }
-            return emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Invalid CloudWatch query JSON" }
             return emptyList()
         }
@@ -155,7 +135,7 @@ class CloudWatchHandler : DataSourceHandler {
         val startTime = resolveTime(timeRange?.from ?: "now-1h", now)
         val endTime = resolveTime(timeRange?.to ?: "now", now)
 
-        return try {
+        return suspendRunCatching {
             val normalizedLimit = limit.coerceIn(1, 100800)
             createClient(region, accessKey, secretKey).use { client ->
                 val startJava = java.time.Instant.ofEpochMilli(startTime.toEpochMilliseconds())
@@ -202,16 +182,7 @@ class CloudWatchHandler : DataSourceHandler {
                 }
                 rows
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "CloudWatch query failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "CloudWatch query failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "CloudWatch query failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "CloudWatch query failed" }
             emptyList()
         }

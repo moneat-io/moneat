@@ -27,10 +27,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
-import java.sql.SQLException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -100,24 +99,14 @@ class NdmIngestionWorker(
         workerId: Int,
         payload: String,
     ) {
-        try {
+        suspendRunCatching {
             val batch = NdmIngestionService.decodeBatch(payload)
             NdmIngestionService.insertBatch(batch)
             logger.debug {
                 "NDM worker $workerId processed batch: " +
                     "type=${batch.batchType}"
             }
-        } catch (e: SerializationException) {
-            handleNdmDlq(workerId, payload, e)
-        } catch (e: IOException) {
-            handleNdmDlq(workerId, payload, e)
-        } catch (e: SQLException) {
-            handleNdmDlq(workerId, payload, e)
-        } catch (e: RedisException) {
-            handleNdmDlq(workerId, payload, e)
-        } catch (e: IllegalStateException) {
-            handleNdmDlq(workerId, payload, e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             handleNdmDlq(workerId, payload, e)
         }
     }

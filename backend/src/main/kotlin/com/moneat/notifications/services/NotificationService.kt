@@ -16,9 +16,6 @@
 
 package com.moneat.notifications.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.SentryEvent
 import com.moneat.shared.models.Memberships
@@ -86,7 +83,7 @@ class NotificationService(
         issueId: String,
         event: SentryEvent
     ) {
-        try {
+        suspendRunCatching {
             logger.info { "Processing new issue alert for issue=$issueId project=$projectId" }
 
             // Get project details
@@ -203,16 +200,10 @@ class NotificationService(
             // Send emails asynchronously
             usersToNotify.forEach { (email, _) ->
                 scope.launch {
-                    try {
+                    suspendRunCatching {
                         emailService.sendErrorAlertEmail(email, emailData)
                         logger.info { "Sent issue alert to $email for issue $issueId" }
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Failed to send issue alert to $email" }
-                    } catch (e: IOException) {
-                        logger.error(e) { "Failed to send issue alert to $email" }
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Failed to send issue alert to $email" }
-                    } catch (e: IllegalArgumentException) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to send issue alert to $email" }
                     }
                 }
@@ -234,7 +225,7 @@ class NotificationService(
                 }
 
             if (slackEnabled) {
-                try {
+                suspendRunCatching {
                     slackService.sendErrorAlert(
                         organizationId = orgId,
                         projectName = projectName,
@@ -248,13 +239,7 @@ class NotificationService(
                         timestamp = emailData.timestamp,
                         stackTrace = stackTrace
                     )
-                } catch (e: SerializationException) {
-                    logger.error(e) { "Failed to send Slack notification for new issue" }
-                } catch (e: IOException) {
-                    logger.error(e) { "Failed to send Slack notification for new issue" }
-                } catch (e: IllegalStateException) {
-                    logger.error(e) { "Failed to send Slack notification for new issue" }
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to send Slack notification for new issue" }
                 }
             }
@@ -274,7 +259,7 @@ class NotificationService(
                 }
 
             if (discordEnabled) {
-                try {
+                suspendRunCatching {
                     val discordIssueUrl = "$frontendUrl/issues/$issueId"
                     discordService.sendErrorAlert(
                         organizationId = orgId,
@@ -286,29 +271,17 @@ class NotificationService(
                         userCount = 0,
                         issueUrl = discordIssueUrl
                     )
-                } catch (e: SerializationException) {
-                    logger.error(e) { "Failed to send Discord notification for new issue" }
-                } catch (e: IOException) {
-                    logger.error(e) { "Failed to send Discord notification for new issue" }
-                } catch (e: IllegalStateException) {
-                    logger.error(e) { "Failed to send Discord notification for new issue" }
-                } catch (e: IllegalArgumentException) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to send Discord notification for new issue" }
                 }
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Error in onNewIssue handler" }
-        } catch (e: IOException) {
-            logger.error(e) { "Error in onNewIssue handler" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Error in onNewIssue handler" }
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Error in onNewIssue handler" }
         }
     }
 
     suspend fun sendWeeklySummary() {
-        try {
+        suspendRunCatching {
             logger.info { "Starting weekly summary generation" }
 
             val now = Instant.now()
@@ -335,26 +308,14 @@ class NotificationService(
 
             usersToNotify.forEach { (userId, email, userName) ->
                 scope.launch {
-                    try {
+                    suspendRunCatching {
                         sendUserWeeklySummary(userId, email, userName, startDate, endDate, priorStartDate)
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Failed to send weekly summary to $email" }
-                    } catch (e: IOException) {
-                        logger.error(e) { "Failed to send weekly summary to $email" }
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Failed to send weekly summary to $email" }
-                    } catch (e: IllegalArgumentException) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to send weekly summary to $email" }
                     }
                 }
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Error in sendWeeklySummary" }
-        } catch (e: IOException) {
-            logger.error(e) { "Error in sendWeeklySummary" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Error in sendWeeklySummary" }
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Error in sendWeeklySummary" }
         }
     }
@@ -655,15 +616,9 @@ class NotificationService(
         scheduler.scheduleAtFixedRate(
             {
                 runBlocking {
-                    try {
+                    suspendRunCatching {
                         sendWeeklySummary()
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Error in scheduled weekly summary" }
-                    } catch (e: IOException) {
-                        logger.error(e) { "Error in scheduled weekly summary" }
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Error in scheduled weekly summary" }
-                    } catch (e: IllegalArgumentException) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Error in scheduled weekly summary" }
                     }
                 }
@@ -691,17 +646,11 @@ class NotificationService(
     }
 
     private fun formatTimestamp(timestamp: String): String {
-        return try {
+        return suspendRunCatching {
             val instant = Instant.parse(timestamp)
             val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm 'UTC'", Locale.US)
             formatter.format(instant.atZone(ZoneId.of("UTC")))
-        } catch (e: SerializationException) {
-            timestamp
-        } catch (e: IOException) {
-            timestamp
-        } catch (e: IllegalStateException) {
-            timestamp
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             timestamp
         }
     }

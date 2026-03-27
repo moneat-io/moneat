@@ -29,7 +29,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -37,8 +36,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import java.io.IOException
-import java.sql.SQLException
 import java.util.Base64
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -109,7 +108,7 @@ class TraceIngestionWorker(
         workerId: Int,
         payload: String,
     ) {
-        try {
+        suspendRunCatching {
             val wrapper = json.parseToJsonElement(payload).jsonObject
             val organizationId = requireNotNull(wrapper["organization_id"]) {
                 "Missing organization_id"
@@ -148,17 +147,7 @@ class TraceIngestionWorker(
                 env,
                 version
             )
-        } catch (e: SerializationException) {
-            handleTraceDlq(workerId, payload, e)
-        } catch (e: IOException) {
-            handleTraceDlq(workerId, payload, e)
-        } catch (e: SQLException) {
-            handleTraceDlq(workerId, payload, e)
-        } catch (e: RedisException) {
-            handleTraceDlq(workerId, payload, e)
-        } catch (e: IllegalStateException) {
-            handleTraceDlq(workerId, payload, e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             handleTraceDlq(workerId, payload, e)
         }
     }

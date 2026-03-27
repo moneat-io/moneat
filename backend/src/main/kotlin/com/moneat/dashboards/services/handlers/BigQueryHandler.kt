@@ -16,9 +16,6 @@
 
 package com.moneat.dashboards.services.handlers
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.google.cloud.bigquery.BigQuery
 import com.google.cloud.bigquery.BigQueryOptions
 import com.google.cloud.bigquery.FieldValueList
@@ -32,6 +29,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -48,21 +46,12 @@ class BigQueryHandler : DataSourceHandler {
         val serviceAccountJson = request.serviceAccountJson
             ?: return TestConnectionResult(false, "Service account JSON is required")
 
-        return try {
+        return suspendRunCatching {
             val bigQuery = createBigQueryClient(projectId, serviceAccountJson)
             val queryConfig = QueryJobConfiguration.newBuilder("SELECT 1 AS test").build()
             bigQuery.query(queryConfig)
             TestConnectionResult(true, "Connected successfully")
-        } catch (e: SerializationException) {
-            logger.warn(e) { "BigQuery connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IOException) {
-            logger.warn(e) { "BigQuery connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "BigQuery connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "BigQuery connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -85,7 +74,7 @@ class BigQueryHandler : DataSourceHandler {
 
         validateSqlQuery(query)
 
-        return try {
+        return suspendRunCatching {
             val bigQuery = createBigQueryClient(projectId, serviceAccountJson)
             val config = QueryJobConfiguration.newBuilder(query)
                 .setMaxResults(limit.toLong().coerceIn(1, 10000))
@@ -94,16 +83,7 @@ class BigQueryHandler : DataSourceHandler {
             val schema = results.schema ?: return emptyList()
             val columns = schema.fields.map { it.name }
             results.values.toList().map { row -> rowToMap(row, columns) }
-        } catch (e: SerializationException) {
-            logger.error(e) { "BigQuery query failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "BigQuery query failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "BigQuery query failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "BigQuery query failed" }
             emptyList()
         }
@@ -121,7 +101,7 @@ class BigQueryHandler : DataSourceHandler {
             ?: return emptyList()
         val dataset = databaseName ?: "INFORMATION_SCHEMA"
 
-        return try {
+        return suspendRunCatching {
             val bigQuery = createBigQueryClient(projectId, serviceAccountJson)
             val datasetId = validateBigQueryIdentifier(dataset.ifBlank { "INFORMATION_SCHEMA" })
             val validatedProjectId = validateBigQueryIdentifier(projectId)
@@ -141,16 +121,7 @@ class BigQueryHandler : DataSourceHandler {
                     description = ""
                 )
             }
-        } catch (e: SerializationException) {
-            logger.error(e) { "BigQuery schema fetch failed" }
-            emptyList()
-        } catch (e: IOException) {
-            logger.error(e) { "BigQuery schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "BigQuery schema fetch failed" }
-            emptyList()
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "BigQuery schema fetch failed" }
             emptyList()
         }

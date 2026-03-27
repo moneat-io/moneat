@@ -16,11 +16,9 @@
 
 package com.moneat.ai
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import mu.KotlinLogging
 import java.util.concurrent.ConcurrentHashMap
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -58,7 +56,7 @@ object AiContextResolver {
     fun loadDoc(name: String): String? {
         return docCache.getOrPut(name) {
             val path = "docs/api/$name.md"
-            try {
+            suspendRunCatching {
                 val content =
                     javaClass.classLoader
                         .getResourceAsStream(path)
@@ -71,16 +69,7 @@ object AiContextResolver {
                     logger.warn { "AI context doc not found: $path" }
                     return null
                 }
-            } catch (e: SerializationException) {
-                logger.warn { "Failed to load AI context doc $path: ${e.message}" }
-                return null
-            } catch (e: IOException) {
-                logger.warn { "Failed to load AI context doc $path: ${e.message}" }
-                return null
-            } catch (e: IllegalStateException) {
-                logger.warn { "Failed to load AI context doc $path: ${e.message}" }
-                return null
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.warn { "Failed to load AI context doc $path: ${e.message}" }
                 return null
             }

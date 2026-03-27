@@ -16,9 +16,6 @@
 
 package com.moneat.dashboards.translation
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.DashboardImportResult
 import com.moneat.dashboards.models.DashboardResponse
@@ -45,6 +42,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
 import kotlin.math.roundToInt
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -111,18 +109,9 @@ class GrafanaTranslator : DashboardTranslator {
         }
 
         val widgets = allPanels.mapIndexedNotNull { index, panel ->
-            try {
+            suspendRunCatching {
                 importPanel(panel, index, warnings, inputsMap)
-            } catch (e: SerializationException) {
-                warnings.add("Panel $index: failed to import - ${e.message}")
-                null
-            } catch (e: IOException) {
-                warnings.add("Panel $index: failed to import - ${e.message}")
-                null
-            } catch (e: IllegalStateException) {
-                warnings.add("Panel $index: failed to import - ${e.message}")
-                null
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 warnings.add("Panel $index: failed to import - ${e.message}")
                 null
             }
@@ -920,7 +909,7 @@ class GrafanaTranslator : DashboardTranslator {
         val list = templating["list"]?.jsonArray ?: return emptyList()
 
         return list.mapNotNull { element ->
-            try {
+            suspendRunCatching {
                 val varObj = element.jsonObject
                 val name = varObj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
                 val type = varObj["type"]?.jsonPrimitive?.contentOrNull ?: "custom"
@@ -961,16 +950,7 @@ class GrafanaTranslator : DashboardTranslator {
                     options = options.filter { it != "\$__all" },
                     datasource = datasource
                 )
-            } catch (e: SerializationException) {
-                logger.warn { "Failed to parse Grafana variable: ${e.message}" }
-                null
-            } catch (e: IOException) {
-                logger.warn { "Failed to parse Grafana variable: ${e.message}" }
-                null
-            } catch (e: IllegalStateException) {
-                logger.warn { "Failed to parse Grafana variable: ${e.message}" }
-                null
-            } catch (e: IllegalArgumentException) {
+            }.getOrElse { e ->
                 logger.warn { "Failed to parse Grafana variable: ${e.message}" }
                 null
             }
