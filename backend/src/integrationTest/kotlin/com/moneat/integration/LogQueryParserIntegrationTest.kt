@@ -105,7 +105,9 @@ class LogQueryParserIntegrationTest {
                     }
                     return
                 }
-            } catch (_: Exception) { }
+            } catch (_: Exception) {
+                // intentionally ignored
+            }
             kotlinx.coroutines.delay(1000)
         }
         throw RuntimeException("ClickHouse did not start in time")

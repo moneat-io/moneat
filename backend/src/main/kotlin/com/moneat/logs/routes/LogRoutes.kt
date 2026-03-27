@@ -489,6 +489,7 @@ fun Route.logRoutes(
                     try {
                         connection.sync().unsubscribe(channel)
                     } catch (_: Exception) {
+                        // intentionally ignored
                     }
                     connection.removeListener(listener)
                     connection.close()

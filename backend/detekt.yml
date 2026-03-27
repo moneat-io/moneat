@@ -80,7 +80,7 @@ performance:
 
 empty-blocks:
   EmptyCatchBlock:
-    active: false
+    active: true
 
 potential-bugs:
   ImplicitDefaultLocale:
