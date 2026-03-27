@@ -24,7 +24,6 @@ import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.otlp.services.OtlpMetricsService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpHeaders
-import java.io.IOException
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
@@ -34,6 +33,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
+import java.io.IOException
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_QUEUE_KEY = "moneat:otlp-metrics:queue"

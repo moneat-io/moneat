@@ -33,8 +33,8 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import mu.KotlinLogging
-import java.io.IOException
 import org.koin.core.context.GlobalContext
+import java.io.IOException
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_QUEUE_KEY = "moneat:otlp-traces:queue"
