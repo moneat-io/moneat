@@ -16,9 +16,6 @@
 
 package com.moneat.config
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.utils.SentryUtils
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -31,6 +28,8 @@ import io.ktor.server.application.*
 import io.ktor.server.config.ApplicationConfigurationException
 import io.sentry.ISpan
 import io.sentry.Sentry
+import kotlinx.serialization.SerializationException
+import java.io.IOException
 
 object ClickHouseClient {
     private const val MIGRATION_TIMEOUT_MS = 600_000L

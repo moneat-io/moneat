@@ -16,10 +16,6 @@
 
 package com.moneat.events.routes
 
-import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.services.PulsePayload
 import com.moneat.utils.ClickHouseSqlUtils
@@ -29,7 +25,10 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
 
 private val logger = KotlinLogging.logger {}
 
@@ -69,27 +68,28 @@ fun Route.telemetryIngestRoutes(
 ) {
     route("/v1/pulse") {
         post {
-            val payload = try {
-                call.receive<PulsePayload>()
-            } catch (e: SerializationException) {
-                logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-                return@post
-            } catch (e: IOException) {
-                logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-                return@post
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: IllegalStateException) {
-                logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-                return@post
-            } catch (e: IllegalArgumentException) {
-                logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-                return@post
-            }
+            val payload =
+                try {
+                    call.receive<PulsePayload>()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SerializationException) {
+                    logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+                    return@post
+                } catch (e: IOException) {
+                    logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+                    return@post
+                } catch (e: IllegalStateException) {
+                    logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+                    return@post
+                } catch (e: IllegalArgumentException) {
+                    logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+                    return@post
+                }
 
             if (payload.deploymentId.isBlank()) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "deploymentId is required"))
@@ -100,14 +100,14 @@ fun Route.telemetryIngestRoutes(
                 insertPulse(payload)
                 logger.debug { "Telemetry pulse stored for deployment=${payload.deploymentId}" }
                 call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: SerializationException) {
                 logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))
             } catch (e: IOException) {
                 logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))
-            } catch (e: CancellationException) {
-                throw e
             } catch (e: IllegalStateException) {
                 logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))
