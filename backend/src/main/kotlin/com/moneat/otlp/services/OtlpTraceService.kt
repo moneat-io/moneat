@@ -171,6 +171,9 @@ class OtlpTraceService(
             } catch (e: SerializationException) {
                 logger.warn(e) { "Invalid OTLP traces JSON payload" }
                 return null
+            } catch (e: IllegalArgumentException) {
+                logger.warn(e) { "Invalid OTLP traces JSON payload" }
+                return null
             }
 
         val resourceSpans = parsed["resourceSpans"]?.jsonArray ?: return null

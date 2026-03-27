@@ -299,6 +299,9 @@ class OtlpMetricsService(
             } catch (e: SerializationException) {
                 logger.warn(e) { "Invalid OTLP metrics JSON payload" }
                 return null
+            } catch (e: IllegalArgumentException) {
+                logger.warn(e) { "Invalid OTLP metrics JSON payload" }
+                return null
             }
 
         val resourceMetrics = parsed["resourceMetrics"]?.jsonArray ?: return null
