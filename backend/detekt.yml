@@ -84,7 +84,7 @@ empty-blocks:
 
 potential-bugs:
   ImplicitDefaultLocale:
-    active: false
+    active: true
 
 formatting:
   ImportOrdering:

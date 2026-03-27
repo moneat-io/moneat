@@ -57,6 +57,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import java.util.Locale
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -1213,15 +1214,15 @@ class MonitorAlertService(
     ): String {
         return when (metric) {
             "cpu_percent", "mem_percent", "disk_percent", "gpu_percent", "battery_percent" -> {
-                String.format("%.1f%%", value)
+                String.format(Locale.US, "%.1f%%", value)
             }
 
             "temp_max" -> {
-                String.format("%.1f°C", value)
+                String.format(Locale.US, "%.1f°C", value)
             }
 
             "load_1", "load_5", "load_15" -> {
-                String.format("%.2f", value)
+                String.format(Locale.US, "%.2f", value)
             }
 
             else -> {
