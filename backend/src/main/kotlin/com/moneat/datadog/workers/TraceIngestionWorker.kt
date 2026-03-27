@@ -19,8 +19,8 @@ package com.moneat.datadog.workers
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
-import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -148,20 +148,7 @@ class TraceIngestionWorker(
                 version
             )
         }.getOrElse { e ->
-            handleTraceDlq(workerId, payload, e)
+            pushToDlq(logger, dlqKey, payload, workerId, "Trace", e)
         }
-    }
-
-    private fun handleTraceDlq(
-        workerId: Int,
-        payload: String,
-        e: Throwable,
-    ) {
-        logger.error(e) {
-            "Trace worker $workerId failed to process, " +
-                "pushing to DLQ"
-        }
-        Sentry.captureException(e)
-        RedisConfig.sync().rpush(dlqKey, payload)
     }
 }

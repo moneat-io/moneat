@@ -19,6 +19,7 @@ package com.moneat.datadog.workers
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DebuggerIngestionService
 import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -110,18 +111,7 @@ class DebuggerIngestionWorker(
                     "diagnostics=${batch.diagnostics.size}"
             }
         }.getOrElse { e ->
-            handleDebuggerDlq(workerId, payload, e)
+            pushToDlq(logger, dlqKey, payload, workerId, "Debugger", e)
         }
-    }
-
-    private fun handleDebuggerDlq(
-        workerId: Int,
-        payload: String,
-        e: Throwable,
-    ) {
-        logger.error(e) {
-            "Debugger worker $workerId failed, pushing to DLQ"
-        }
-        RedisConfig.sync().rpush(dlqKey, payload)
     }
 }

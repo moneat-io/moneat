@@ -16,6 +16,7 @@
 
 package com.moneat.utils
 
+import com.moneat.config.RedisConfig
 import kotlinx.coroutines.delay
 import mu.KLogger
 
@@ -32,4 +33,29 @@ suspend fun brpopLoopBackoff(
 ) {
     logger.error(e) { "$scopeLabel worker $workerId error in BRPOP loop" }
     delay(errorDelayMs)
+}
+
+/**
+ * Logs a processing failure and pushes the payload to a Redis dead-letter
+ * queue. DLQ write errors are caught and logged so they never propagate.
+ */
+@Suppress("TooGenericExceptionCaught")
+fun pushToDlq(
+    logger: KLogger,
+    dlqKey: String,
+    payload: String,
+    workerId: Int,
+    workerName: String,
+    cause: Throwable,
+) {
+    logger.error(cause) {
+        "$workerName worker $workerId failed, pushing to DLQ"
+    }
+    runCatching {
+        RedisConfig.sync().rpush(dlqKey, payload)
+    }.onFailure { dlqErr ->
+        logger.error(dlqErr) {
+            "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
+        }
+    }
 }

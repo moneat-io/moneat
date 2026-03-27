@@ -19,6 +19,7 @@ package com.moneat.datadog.workers
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DbmIngestionService
 import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -28,7 +29,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
 import com.moneat.utils.suspendRunCatching
@@ -112,40 +112,7 @@ class DbmIngestionWorker(
                     "activity=${batch.activity.size}"
             }
         }.getOrElse { e ->
-            handleDbmDlq(workerId, payload, e)
-        }
-    }
-
-    private fun handleDbmDlq(
-        workerId: Int,
-        payload: String,
-        e: Throwable,
-    ) {
-        logger.error(e) {
-            "DBM worker $workerId failed, pushing to DLQ"
-        }
-        try {
-            RedisConfig.sync().rpush(dlqKey, payload)
-        } catch (dlqErr: RedisException) {
-            logger.error(dlqErr) {
-                "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
-            }
-        } catch (dlqErr: IOException) {
-            logger.error(dlqErr) {
-                "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
-            }
-        } catch (dlqErr: SerializationException) {
-            logger.error(dlqErr) {
-                "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
-            }
-        } catch (dlqErr: IllegalStateException) {
-            logger.error(dlqErr) {
-                "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
-            }
-        } catch (dlqErr: IllegalArgumentException) {
-            logger.error(dlqErr) {
-                "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
-            }
+            pushToDlq(logger, dlqKey, payload, workerId, "DBM", e)
         }
     }
 }

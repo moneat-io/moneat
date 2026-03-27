@@ -19,6 +19,7 @@ package com.moneat.datadog.workers
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogMetricService
 import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -104,29 +105,13 @@ class DatadogMetricIngestionWorker(
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
-        onDlq: (String) -> Unit = { message ->
-            RedisConfig.sync().rpush(dlqKey, message)
-        }
     ) {
         suspendRunCatching {
             val batch =
                 DatadogMetricService.decodeMetricBatch(payload)
             DatadogMetricService.insertMetricBatch(batch)
         }.getOrElse { e ->
-            handleMetricDlq(workerId, payload, e, onDlq)
+            pushToDlq(logger, dlqKey, payload, workerId, "DD metric", e)
         }
-    }
-
-    private fun handleMetricDlq(
-        workerId: Int,
-        payload: String,
-        e: Throwable,
-        onDlq: (String) -> Unit,
-    ) {
-        logger.error(e) {
-            "DD metric worker $workerId failed, " +
-                "pushing to DLQ"
-        }
-        onDlq(payload)
     }
 }

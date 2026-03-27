@@ -19,6 +19,7 @@ package com.moneat.datadog.workers
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogInfraService
 import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -104,29 +105,13 @@ class DatadogInfraIngestionWorker(
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
-        onDlq: (String) -> Unit = { message ->
-            RedisConfig.sync().rpush(dlqKey, message)
-        }
     ) {
         suspendRunCatching {
             val batch =
                 DatadogInfraService.decodeInfraBatch(payload)
             DatadogInfraService.insertInfraBatch(batch)
         }.getOrElse { e ->
-            handleInfraDlq(workerId, payload, e, onDlq)
+            pushToDlq(logger, dlqKey, payload, workerId, "DD infra", e)
         }
-    }
-
-    private fun handleInfraDlq(
-        workerId: Int,
-        payload: String,
-        e: Throwable,
-        onDlq: (String) -> Unit,
-    ) {
-        logger.error(e) {
-            "DD infra worker $workerId failed, " +
-                "pushing to DLQ"
-        }
-        onDlq(payload)
     }
 }

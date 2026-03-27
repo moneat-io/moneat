@@ -19,6 +19,7 @@ package com.moneat.datadog.workers
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.MiscIngestionService
 import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -108,18 +109,7 @@ class MiscIngestionWorker(
                     "type=${batch.batchType}"
             }
         }.getOrElse { e ->
-            handleMiscDlq(workerId, payload, e)
+            pushToDlq(logger, dlqKey, payload, workerId, "Misc", e)
         }
-    }
-
-    private fun handleMiscDlq(
-        workerId: Int,
-        payload: String,
-        e: Throwable,
-    ) {
-        logger.error(e) {
-            "Misc worker $workerId failed, pushing to DLQ"
-        }
-        RedisConfig.sync().rpush(dlqKey, payload)
     }
 }

@@ -19,6 +19,7 @@ package com.moneat.datadog.workers
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogEventService
 import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -104,29 +105,13 @@ class DatadogEventIngestionWorker(
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
-        onDlq: (String) -> Unit = { message ->
-            RedisConfig.sync().rpush(dlqKey, message)
-        }
     ) {
         suspendRunCatching {
             val batch =
                 DatadogEventService.decodeEventBatch(payload)
             DatadogEventService.insertEventBatch(batch)
         }.getOrElse { e ->
-            handleEventDlq(workerId, payload, e, onDlq)
+            pushToDlq(logger, dlqKey, payload, workerId, "DD event", e)
         }
-    }
-
-    private fun handleEventDlq(
-        workerId: Int,
-        payload: String,
-        e: Throwable,
-        onDlq: (String) -> Unit,
-    ) {
-        logger.error(e) {
-            "DD event worker $workerId failed, " +
-                "pushing to DLQ"
-        }
-        onDlq(payload)
     }
 }

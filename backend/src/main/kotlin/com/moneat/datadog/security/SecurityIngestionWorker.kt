@@ -18,6 +18,7 @@ package com.moneat.datadog.security
 
 import com.moneat.config.RedisConfig
 import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -107,18 +108,7 @@ class SecurityIngestionWorker(
                     "type=${batch.batchType}"
             }
         }.getOrElse { e ->
-            handleSecurityDlq(workerId, payload, e)
+            pushToDlq(logger, dlqKey, payload, workerId, "Security", e)
         }
-    }
-
-    private fun handleSecurityDlq(
-        workerId: Int,
-        payload: String,
-        e: Throwable,
-    ) {
-        logger.error(e) {
-            "Security worker $workerId failed, pushing to DLQ"
-        }
-        RedisConfig.sync().rpush(dlqKey, payload)
     }
 }
