@@ -165,7 +165,7 @@ If a rule is wrong for the whole project, **adjust the tool configuration** (e.g
   ./gradlew detektFormat    # Auto-fix formatting
   ```
 
-- **SonarQube** runs in CI (`.github/workflows/sonar.yml`). Follow the "Kotlin: Validation & Control Flow" and "Dashboard: TypeScript & ESLint" guidelines below to avoid common Sonar code smells.
+- **SonarQube** runs in CI as the `sonarqube` job in `.github/workflows/test.yml` (after `backend-unit`). Follow the "Kotlin: Validation & Control Flow" and "Dashboard: TypeScript & ESLint" guidelines below to avoid common Sonar code smells.
 
 While some rules are currently disabled in `detekt.yml`, always follow best practices for new code:
 - Use explicit imports (no wildcards)
