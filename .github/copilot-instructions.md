@@ -197,7 +197,7 @@ To avoid Sonar code smells and keep code consistent:
 - **Remove unused local variables** – delete any variable that is never read.
 
 - **Keep cognitive complexity low (≤15)** – extract helper functions when logic gets nested:
-  - Use `runCatching { }.getOrNull()` only in non-suspending, synchronous helpers (e.g., parsing/mapping functions). **Avoid in suspending/coroutine contexts**: `runCatching` swallows all `Throwable`s including `CancellationException`, which can break coroutine cancellation. In suspend functions, use try/catch that rethrows `CancellationException`, or avoid `runCatching` entirely.
+  - Use `runCatching { }.getOrNull()` only in non-suspending, synchronous helpers (e.g., parsing/mapping functions). **Avoid in suspending/coroutine contexts**: `runCatching` swallows all `Throwable`s including `CancellationException`, which can break coroutine cancellation. In suspend functions, use `suspendRunCatching` from `com.moneat.utils` instead — it rethrows `CancellationException` automatically and composes with the `Result` API (`getOrElse`, `getOrNull`, `getOrDefault`, `onFailure`). Keep the manual `catch (e: CancellationException) { throw e }` pattern only when `Result` doesn't compose cleanly (e.g. the catch block mutates state and then rethrows).
   - Extract complex parsing or mapping into private functions
   - Prefer early returns over nested conditionals
 

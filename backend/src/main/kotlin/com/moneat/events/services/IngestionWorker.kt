@@ -23,6 +23,7 @@ import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.utils.SentryUtils
+import com.moneat.utils.suspendRunCatching
 import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -125,7 +126,7 @@ class IngestionWorker(
         value: String,
         onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
-        try {
+        suspendRunCatching {
             val (projectId, envelopeBytes) = decodeMessage(value)
 
             SentryUtils.breadcrumb(
@@ -139,33 +140,7 @@ class IngestionWorker(
 
             val envelope = SentryEnvelope.parse(envelopeBytes)
             eventService.processEnvelope(projectId, envelope)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SerializationException) {
-            logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
-            onDlq(value)
-            Sentry.captureException(e) { scope ->
-                scope.setTag("worker.operation", "process_message")
-                scope.setTag("worker.id", workerId.toString())
-                scope.setExtra("queue", queueKey)
-            }
-        } catch (e: IOException) {
-            logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
-            onDlq(value)
-            Sentry.captureException(e) { scope ->
-                scope.setTag("worker.operation", "process_message")
-                scope.setTag("worker.id", workerId.toString())
-                scope.setExtra("queue", queueKey)
-            }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
-            onDlq(value)
-            Sentry.captureException(e) { scope ->
-                scope.setTag("worker.operation", "process_message")
-                scope.setTag("worker.id", workerId.toString())
-                scope.setExtra("queue", queueKey)
-            }
-        } catch (e: IllegalArgumentException) {
+        }.onFailure { e ->
             logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
             onDlq(value)
             Sentry.captureException(e) { scope ->

@@ -28,15 +28,12 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
-import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.SerializationException
+import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
-import java.io.IOException
-import java.sql.SQLException
 import java.time.DateTimeException
 import java.time.ZoneId
 
@@ -63,23 +60,9 @@ private suspend fun runSummaryServiceCall(
     userMessage: String,
     block: suspend () -> Unit,
 ) {
-    try {
+    suspendRunCatching {
         block()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: SQLException) {
-        logger.error(e) { "$logMessage: ${e.message}" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
-    } catch (e: IOException) {
-        logger.error(e) { "$logMessage: ${e.message}" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
-    } catch (e: SerializationException) {
-        logger.error(e) { "$logMessage: ${e.message}" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "$logMessage: ${e.message}" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
-    } catch (e: IllegalArgumentException) {
+    }.onFailure { e ->
         logger.error(e) { "$logMessage: ${e.message}" }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
     }

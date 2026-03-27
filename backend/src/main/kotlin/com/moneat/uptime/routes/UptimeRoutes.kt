@@ -36,7 +36,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import kotlinx.coroutines.CancellationException
+import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -47,8 +47,6 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
-import java.io.IOException
-import java.sql.SQLException
 import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
@@ -62,23 +60,9 @@ private suspend fun runUptimeRoute(
     userMessage: String,
     block: suspend () -> Unit,
 ) {
-    try {
+    suspendRunCatching {
         block()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: SQLException) {
-        logger.error(e) { "$logMessage: ${e.message}" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
-    } catch (e: IOException) {
-        logger.error(e) { "$logMessage: ${e.message}" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
-    } catch (e: SerializationException) {
-        logger.error(e) { "$logMessage: ${e.message}" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { "$logMessage: ${e.message}" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
-    } catch (e: IllegalArgumentException) {
+    }.onFailure { e ->
         logger.error(e) { "$logMessage: ${e.message}" }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
     }
@@ -183,7 +167,7 @@ fun Route.uptimeRoutes(
              * Create a new monitor.
              */
             post("/monitors") {
-                try {
+                suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
 
@@ -217,21 +201,7 @@ fun Route.uptimeRoutes(
                         }
 
                     call.respond(HttpStatusCode.Created, monitor)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: SQLException) {
-                    logger.error(e) { "Create monitor error: ${e.message}" }
-                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create monitor"))
-                } catch (e: IOException) {
-                    logger.error(e) { "Create monitor error: ${e.message}" }
-                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create monitor"))
-                } catch (e: SerializationException) {
-                    logger.error(e) { "Create monitor error: ${e.message}" }
-                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create monitor"))
-                } catch (e: IllegalStateException) {
-                    logger.error(e) { "Create monitor error: ${e.message}" }
-                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create monitor"))
-                } catch (e: IllegalArgumentException) {
+                }.onFailure { e ->
                     logger.error(e) { "Create monitor error: ${e.message}" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create monitor"))
                 }

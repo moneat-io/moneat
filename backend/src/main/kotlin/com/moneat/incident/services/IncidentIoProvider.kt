@@ -25,12 +25,12 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -70,7 +70,7 @@ class IncidentIoProvider : IncidentProvider {
         event: IncidentEvent,
         config: ProviderConfig
     ): Result<String> {
-        return try {
+        return suspendRunCatching {
             val alertSourceConfigId =
                 config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
                     ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
@@ -118,18 +118,7 @@ class IncidentIoProvider : IncidentProvider {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SerializationException) {
-            logger.error("Error sending alert to incident.io", e)
-            Result.failure(e)
-        } catch (e: IOException) {
-            logger.error("Error sending alert to incident.io", e)
-            Result.failure(e)
-        } catch (e: IllegalStateException) {
-            logger.error("Error sending alert to incident.io", e)
-            Result.failure(e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error("Error sending alert to incident.io", e)
             Result.failure(e)
         }
@@ -139,7 +128,7 @@ class IncidentIoProvider : IncidentProvider {
         deduplicationKey: String,
         config: ProviderConfig
     ): Result<String> {
-        return try {
+        return suspendRunCatching {
             val alertSourceConfigId =
                 config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
                     ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
@@ -167,25 +156,14 @@ class IncidentIoProvider : IncidentProvider {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SerializationException) {
-            logger.error("Error resolving alert with incident.io", e)
-            Result.failure(e)
-        } catch (e: IOException) {
-            logger.error("Error resolving alert with incident.io", e)
-            Result.failure(e)
-        } catch (e: IllegalStateException) {
-            logger.error("Error resolving alert with incident.io", e)
-            Result.failure(e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error("Error resolving alert with incident.io", e)
             Result.failure(e)
         }
     }
 
     override suspend fun testConnection(config: ProviderConfig): Result<Boolean> {
-        return try {
+        return suspendRunCatching {
             val alertSourceConfigId =
                 config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
                     ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
@@ -216,18 +194,7 @@ class IncidentIoProvider : IncidentProvider {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SerializationException) {
-            logger.error("Error testing incident.io connection", e)
-            Result.failure(e)
-        } catch (e: IOException) {
-            logger.error("Error testing incident.io connection", e)
-            Result.failure(e)
-        } catch (e: IllegalStateException) {
-            logger.error("Error testing incident.io connection", e)
-            Result.failure(e)
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error("Error testing incident.io connection", e)
             Result.failure(e)
         }

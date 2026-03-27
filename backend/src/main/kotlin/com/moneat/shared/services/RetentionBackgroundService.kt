@@ -16,7 +16,7 @@
 
 package com.moneat.shared.services
 
-import kotlinx.coroutines.CancellationException
+import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.SerializationException
 import java.io.IOException
 
@@ -67,17 +67,9 @@ class RetentionBackgroundService(
         sweepJob =
             scope.launch(Dispatchers.IO) {
                 while (isActive) {
-                    try {
+                    suspendRunCatching {
                         runSweep()
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Retention sweep failed" }
-                    } catch (e: IOException) {
-                        logger.error(e) { "Retention sweep failed" }
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Retention sweep failed" }
-                    } catch (e: IllegalArgumentException) {
+                    }.onFailure { e ->
                         logger.error(e) { "Retention sweep failed" }
                     }
                     delay(sweepIntervalSeconds * 1000L)
@@ -293,7 +285,7 @@ class RetentionBackgroundService(
             logger.debug { "Retention mutation skipped for $label: ClickHouse is not initialized" }
             return false
         }
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             if (response.status.value !in 200..299) {
                 logger.error { "Retention mutation failed for $label (status=${response.status})" }
@@ -301,18 +293,7 @@ class RetentionBackgroundService(
             } else {
                 true
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SerializationException) {
-            logger.error(e) { "Retention mutation exception for $label" }
-            false
-        } catch (e: IOException) {
-            logger.error(e) { "Retention mutation exception for $label" }
-            false
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Retention mutation exception for $label" }
-            false
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.error(e) { "Retention mutation exception for $label" }
             false
         }

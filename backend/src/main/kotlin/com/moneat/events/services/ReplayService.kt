@@ -28,8 +28,8 @@ import com.moneat.events.models.ReplayTimelineResponse
 import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -742,7 +742,7 @@ class ReplayService(
         items: MutableList<ReplayTimelineItem>,
         addedIds: MutableSet<String>
     ) {
-        try {
+        suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (isClickHouseError(response.status.value, body, errorContext)) return
@@ -756,15 +756,7 @@ class ReplayService(
                     if (!addedIds.add(item.id)) return@forEach
                     items.add(item)
                 }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to fetch $failureMessage" }
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to fetch $failureMessage" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to fetch $failureMessage" }
-        } catch (e: IllegalArgumentException) {
+        }.onFailure { e ->
             logger.error(e) { "Failed to fetch $failureMessage" }
         }
     }

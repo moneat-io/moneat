@@ -25,11 +25,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -80,18 +80,10 @@ class PulseService(
             delay(60_000)
 
             while (true) {
-                try {
+                suspendRunCatching {
                     val metrics = collectMetrics()
                     sendPulse(metrics)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: SerializationException) {
-                    logger.debug(e) { "Telemetry pulse failed — will retry next interval" }
-                } catch (e: IOException) {
-                    logger.debug(e) { "Telemetry pulse failed — will retry next interval" }
-                } catch (e: IllegalStateException) {
-                    logger.debug(e) { "Telemetry pulse failed — will retry next interval" }
-                } catch (e: IllegalArgumentException) {
+                }.onFailure { e ->
                     logger.debug(e) { "Telemetry pulse failed — will retry next interval" }
                 }
                 delay(interval)

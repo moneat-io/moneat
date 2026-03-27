@@ -16,7 +16,7 @@
 
 package com.moneat.dashboards.services.handlers
 
-import kotlinx.coroutines.CancellationException
+import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.SerializationException
 import java.io.IOException
 
@@ -53,7 +53,7 @@ abstract class JdbcHandler(
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val port = request.port ?: defaultPort()
         val database = request.databaseName ?: defaultDatabase()
-        return try {
+        return suspendRunCatching {
             val ds = createTempDataSource(request.host, port, database, request.username, request.password)
             try {
                 ds.connection.use { conn ->
@@ -68,21 +68,7 @@ abstract class JdbcHandler(
             } finally {
                 ds.close()
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SQLException) {
-            logger.warn(e) { "JDBC connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: SerializationException) {
-            logger.warn(e) { "JDBC connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IOException) {
-            logger.warn(e) { "JDBC connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "JDBC connection test failed" }
-            TestConnectionResult(false, "Connection failed: ${e.message}")
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "JDBC connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }

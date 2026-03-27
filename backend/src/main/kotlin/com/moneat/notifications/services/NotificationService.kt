@@ -25,10 +25,10 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.server.config.ApplicationConfig
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -506,7 +506,7 @@ class NotificationService(
             FORMAT JSON
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val responseBody = response.bodyAsText()
             if (!response.status.isSuccess()) return null
@@ -514,18 +514,7 @@ class NotificationService(
             val data = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
             val rate = data?.get("rate")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
             if (rate == null || rate.isNaN() || rate.isInfinite()) null else rate
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SerializationException) {
-            logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
-            null
-        } catch (e: IOException) {
-            logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
-            null
-        } catch (e: IllegalStateException) {
-            logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
-            null
-        } catch (e: IllegalArgumentException) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
             null
         }

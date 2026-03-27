@@ -19,7 +19,7 @@ package com.moneat.shared.services
 import kotlinx.serialization.SerializationException
 import java.io.IOException
 
-import kotlinx.coroutines.CancellationException
+import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 import net.javacrumbs.shedlock.core.LockConfiguration
 import net.javacrumbs.shedlock.core.LockProvider
@@ -68,21 +68,12 @@ object TaskLock {
             return null
         }
         return try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SerializationException) {
-            logger.error(e) { "Error in locked task '$name'" }
-            null
-        } catch (e: IOException) {
-            logger.error(e) { "Error in locked task '$name'" }
-            null
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Error in locked task '$name'" }
-            null
-        } catch (e: IllegalArgumentException) {
-            logger.error(e) { "Error in locked task '$name'" }
-            null
+            suspendRunCatching {
+                block()
+            }.getOrElse { e ->
+                logger.error(e) { "Error in locked task '$name'" }
+                null
+            }
         } finally {
             try {
                 lock.get().unlock()

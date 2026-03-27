@@ -24,6 +24,7 @@ import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
+import com.moneat.utils.suspendRunCatching
 import jakarta.mail.MessagingException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -128,19 +129,11 @@ class UptimeScheduler(
 
             scope.launch {
                 try {
-                    performCheck(monitor.id)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: SQLException) {
-                    logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
-                } catch (e: IOException) {
-                    logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
-                } catch (e: IllegalStateException) {
-                    logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
-                } catch (e: SerializationException) {
-                    logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
-                } catch (e: MessagingException) {
-                    logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
+                    suspendRunCatching {
+                        performCheck(monitor.id)
+                    }.onFailure { e ->
+                        logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
+                    }
                 } finally {
                     runningChecks.remove(monitor.id)
                 }
@@ -232,19 +225,9 @@ class UptimeScheduler(
 
             // TODO: Trigger alert via MonitorAlertService or notification service
             // This would integrate with the existing alert system
-            try {
+            suspendRunCatching {
                 notifyStatusChange(monitor, oldStatus, newStatus, finalResult)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: SQLException) {
-                logger.error(e) { "Failed to send status change notification: ${e.message}" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send status change notification: ${e.message}" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send status change notification: ${e.message}" }
-            } catch (e: SerializationException) {
-                logger.error(e) { "Failed to send status change notification: ${e.message}" }
-            } catch (e: MessagingException) {
+            }.onFailure { e ->
                 logger.error(e) { "Failed to send status change notification: ${e.message}" }
             }
         }
@@ -315,7 +298,7 @@ class UptimeScheduler(
         val baseUrl = config.property("email.frontendUrl").getString()
         val monitorUrl = "$baseUrl/uptime/${monitor.id}"
         // Send email notifications
-        try {
+        suspendRunCatching {
             val emailRecipients =
                 prefsService.getUsersWithChannelEnabled(
                     organizationId = monitor.organizationId,
@@ -325,7 +308,7 @@ class UptimeScheduler(
 
             emailRecipients.forEach { (_, email) ->
                 scope.launch {
-                    try {
+                    suspendRunCatching {
                         emailService.sendUptimeAlertEmail(
                             to = email,
                             monitorName = monitor.name,
@@ -333,32 +316,12 @@ class UptimeScheduler(
                             message = result.message,
                             monitorUrl = monitorUrl
                         )
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: SQLException) {
-                        logger.error(e) { "Failed to send uptime alert email to $email" }
-                    } catch (e: IOException) {
-                        logger.error(e) { "Failed to send uptime alert email to $email" }
-                    } catch (e: IllegalStateException) {
-                        logger.error(e) { "Failed to send uptime alert email to $email" }
-                    } catch (e: SerializationException) {
-                        logger.error(e) { "Failed to send uptime alert email to $email" }
-                    } catch (e: MessagingException) {
+                    }.onFailure { e ->
                         logger.error(e) { "Failed to send uptime alert email to $email" }
                     }
                 }
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SQLException) {
-            logger.error(e) { "Failed to send uptime alert emails" }
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to send uptime alert emails" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to send uptime alert emails" }
-        } catch (e: SerializationException) {
-            logger.error(e) { "Failed to send uptime alert emails" }
-        } catch (e: MessagingException) {
+        }.onFailure { e ->
             logger.error(e) { "Failed to send uptime alert emails" }
         }
 
@@ -379,7 +342,7 @@ class UptimeScheduler(
                 false
             }
         if (slackEnabled) {
-            try {
+            suspendRunCatching {
                 slackService.sendUptimeAlert(
                     organizationId = monitor.organizationId,
                     monitorName = monitor.name,
@@ -389,15 +352,7 @@ class UptimeScheduler(
                     monitorId = monitor.id,
                     baseUrl = baseUrl
                 )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: SQLException) {
-                logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
-            } catch (e: SerializationException) {
+            }.onFailure { e ->
                 logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
             }
         }
@@ -419,7 +374,7 @@ class UptimeScheduler(
                 false
             }
         if (discordEnabled) {
-            try {
+            suspendRunCatching {
                 discordService.sendUptimeAlert(
                     organizationId = monitor.organizationId,
                     monitorUrl = monitor.url ?: "N/A",
@@ -430,21 +385,13 @@ class UptimeScheduler(
                     monitorId = monitor.id,
                     baseUrl = baseUrl
                 )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: SQLException) {
-                logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
-            } catch (e: IOException) {
-                logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
-            } catch (e: SerializationException) {
+            }.onFailure { e ->
                 logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
             }
         }
 
         // Fire or resolve incident alert
-        try {
+        suspendRunCatching {
             if (newStatus == "down") {
                 // Get severity from monitor override or fall back to routing rules
                 // We always fire the incident; IncidentService will check routing rules
@@ -486,15 +433,7 @@ class UptimeScheduler(
                     deduplicationKey = "moneat-uptime-${monitor.id}"
                 )
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SQLException) {
-            logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
-        } catch (e: IOException) {
-            logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
-        } catch (e: IllegalStateException) {
-            logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
-        } catch (e: SerializationException) {
+        }.onFailure { e ->
             logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
         }
     }
