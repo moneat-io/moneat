@@ -180,7 +180,7 @@ open class SyntheticsCheckExecutor {
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = durationMs,
-                errorMessage = e.message ?: "Request failed"
+                errorMessage = e.message ?: REQUEST_FAILED
             )
         } catch (e: IOException) {
             val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
@@ -188,7 +188,7 @@ open class SyntheticsCheckExecutor {
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = durationMs,
-                errorMessage = e.message ?: "Request failed"
+                errorMessage = e.message ?: REQUEST_FAILED
             )
         } catch (e: IllegalStateException) {
             val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
@@ -196,7 +196,7 @@ open class SyntheticsCheckExecutor {
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = durationMs,
-                errorMessage = e.message ?: "Request failed"
+                errorMessage = e.message ?: REQUEST_FAILED
             )
         } catch (e: IllegalArgumentException) {
             val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
@@ -204,7 +204,7 @@ open class SyntheticsCheckExecutor {
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = durationMs,
-                errorMessage = e.message ?: "Request failed"
+                errorMessage = e.message ?: REQUEST_FAILED
             )
         } finally {
             client.close()
@@ -846,5 +846,6 @@ open class SyntheticsCheckExecutor {
 
     companion object {
         private const val NS_PER_MS = 1_000_000L
+        private const val REQUEST_FAILED = "Request failed"
     }
 }

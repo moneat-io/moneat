@@ -54,6 +54,8 @@ import java.util.zip.GZIPInputStream
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+private const val FAILED_TO_UPLOAD_SOURCE_MAP = "Failed to upload source map"
+private const val UPLOAD_FAILED = "Upload failed"
 
 fun Route.releaseRoutes(
     releaseService: ReleaseService = GlobalContext.get().get(),
@@ -392,14 +394,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
     } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
     } catch (e: SerializationException) {
-        logger.error(e) { "Failed to upload source map" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
+        logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
     } catch (e: IOException) {
-        logger.error(e) { "Failed to upload source map" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
+        logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
     } catch (e: IllegalStateException) {
-        logger.error(e) { "Failed to upload source map" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
+        logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
     }
 }
 
@@ -518,7 +520,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
                         val bos = ByteArrayOutputStream()
                         GZIPInputStream(rawBytes.inputStream()).use { it.copyTo(bos) }
                         bos.toByteArray()
-                    }.getOrElse { e ->
+                    }.getOrElse { _ ->
                         rawBytes
                     }
                 } else {

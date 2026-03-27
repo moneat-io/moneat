@@ -40,6 +40,8 @@ import java.time.ZoneId
 private val logger = KotlinLogging.logger {}
 
 private val validPeriods = setOf("24h", "7d", "30d")
+private const val INVALID_TOKEN = "Invalid token"
+private const val NO_ORGANIZATION_MEMBERSHIP = "No organization membership"
 
 private fun getOrganizationIdsForUser(userId: Int): List<Int> {
     return transaction {
@@ -85,7 +87,7 @@ fun Route.summaryRoutes(
                     if (userId == null) {
                         call.respond(
                             HttpStatusCode.Unauthorized,
-                            ErrorResponse("Invalid token"),
+                            ErrorResponse(INVALID_TOKEN),
                         )
                         return@runSummaryServiceCall
                     }
@@ -94,7 +96,7 @@ fun Route.summaryRoutes(
                     if (orgIds.isEmpty()) {
                         call.respond(
                             HttpStatusCode.Forbidden,
-                            ErrorResponse("No organization membership"),
+                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
                         )
                         return@runSummaryServiceCall
                     }
@@ -132,7 +134,7 @@ fun Route.summaryRoutes(
                     if (userId == null) {
                         call.respond(
                             HttpStatusCode.Unauthorized,
-                            ErrorResponse("Invalid token"),
+                            ErrorResponse(INVALID_TOKEN),
                         )
                         return@runSummaryServiceCall
                     }
@@ -141,7 +143,7 @@ fun Route.summaryRoutes(
                     if (orgIds.isEmpty()) {
                         call.respond(
                             HttpStatusCode.Forbidden,
-                            ErrorResponse("No organization membership"),
+                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
                         )
                         return@runSummaryServiceCall
                     }
@@ -178,7 +180,7 @@ fun Route.summaryRoutes(
                     if (userId == null) {
                         call.respond(
                             HttpStatusCode.Unauthorized,
-                            ErrorResponse("Invalid token"),
+                            ErrorResponse(INVALID_TOKEN),
                         )
                         return@runSummaryServiceCall
                     }
@@ -187,7 +189,7 @@ fun Route.summaryRoutes(
                     if (orgIds.isEmpty()) {
                         call.respond(
                             HttpStatusCode.Forbidden,
-                            ErrorResponse("No organization membership"),
+                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
                         )
                         return@runSummaryServiceCall
                     }
@@ -210,7 +212,7 @@ fun Route.summaryRoutes(
                     if (userId == null) {
                         call.respond(
                             HttpStatusCode.Unauthorized,
-                            ErrorResponse("Invalid token"),
+                            ErrorResponse(INVALID_TOKEN),
                         )
                         return@runSummaryServiceCall
                     }
@@ -219,7 +221,7 @@ fun Route.summaryRoutes(
                     if (orgIds.isEmpty()) {
                         call.respond(
                             HttpStatusCode.Forbidden,
-                            ErrorResponse("No organization membership"),
+                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
                         )
                         return@runSummaryServiceCall
                     }

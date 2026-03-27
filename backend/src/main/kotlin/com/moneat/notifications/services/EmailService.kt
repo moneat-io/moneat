@@ -254,37 +254,37 @@ class EmailService {
         } catch (e: SerializationException) {
             logger.error("Failed to send email to $to", e)
             Sentry.captureException(e) { scope ->
-                scope.setTag("email.operation", "send")
-                scope.setExtra("email.to", to)
-                scope.setExtra("email.subject", subject)
-                scope.setExtra("email.type", emailType)
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
             }
             throw e
         } catch (e: IOException) {
             logger.error("Failed to send email to $to", e)
             Sentry.captureException(e) { scope ->
-                scope.setTag("email.operation", "send")
-                scope.setExtra("email.to", to)
-                scope.setExtra("email.subject", subject)
-                scope.setExtra("email.type", emailType)
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
             }
             throw e
         } catch (e: IllegalStateException) {
             logger.error("Failed to send email to $to", e)
             Sentry.captureException(e) { scope ->
-                scope.setTag("email.operation", "send")
-                scope.setExtra("email.to", to)
-                scope.setExtra("email.subject", subject)
-                scope.setExtra("email.type", emailType)
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
             }
             throw e
         } catch (e: IllegalArgumentException) {
             logger.error("Failed to send email to $to", e)
             Sentry.captureException(e) { scope ->
-                scope.setTag("email.operation", "send")
-                scope.setExtra("email.to", to)
-                scope.setExtra("email.subject", subject)
-                scope.setExtra("email.type", emailType)
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
             }
             throw e
         } finally {
@@ -948,5 +948,12 @@ class EmailService {
             """.trimIndent()
 
         sendEmail(email, subject, htmlBody, textBody, "organization_deletion")
+    }
+
+    companion object {
+        private const val EMAIL_OPERATION_TAG = "email.operation"
+        private const val EMAIL_TO_TAG = "email.to"
+        private const val EMAIL_SUBJECT_TAG = "email.subject"
+        private const val EMAIL_TYPE_TAG = "email.type"
     }
 }

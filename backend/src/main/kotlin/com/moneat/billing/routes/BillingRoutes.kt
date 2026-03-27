@@ -54,6 +54,10 @@ import org.koin.core.context.GlobalContext
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+private const val FAILED_TO_CREATE_CHECKOUT_SESSION = "Failed to create checkout session"
+private const val FAILED_TO_CANCEL_SUBSCRIPTION = "Failed to cancel subscription"
+private const val FAILED_TO_UPDATE_ON_CALL_SEATS = "Failed to update on-call seats"
+private const val FAILED_TO_UPDATE_SEATS = "Failed to update seats"
 
 // Public billing endpoints (no auth required)
 fun Route.publicBillingRoutes(
@@ -168,22 +172,22 @@ fun Route.billingRoutes(
             } catch (e: SerializationException) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: "Failed to create checkout session"))
+                    ErrorResponse((e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION))
                 )
             } catch (e: IOException) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: "Failed to create checkout session"))
+                    ErrorResponse((e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION))
                 )
             } catch (e: IllegalStateException) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: "Failed to create checkout session"))
+                    ErrorResponse((e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION))
                 )
             } catch (e: IllegalArgumentException) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: "Failed to create checkout session"))
+                    ErrorResponse((e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION))
                 )
             }
         }
@@ -294,22 +298,22 @@ fun Route.billingRoutes(
             } catch (e: SerializationException) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: "Failed to cancel subscription"))
+                    ErrorResponse((e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION))
                 )
             } catch (e: IOException) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: "Failed to cancel subscription"))
+                    ErrorResponse((e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION))
                 )
             } catch (e: IllegalStateException) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: "Failed to cancel subscription"))
+                    ErrorResponse((e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION))
                 )
             } catch (e: IllegalArgumentException) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: "Failed to cancel subscription"))
+                    ErrorResponse((e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION))
                 )
             }
         }
@@ -408,14 +412,14 @@ fun Route.billingRoutes(
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
             } catch (e: SerializationException) {
-                logger.error(e) { "Failed to update on-call seats" }
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update seats"))
+                logger.error(e) { FAILED_TO_UPDATE_ON_CALL_SEATS }
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse(FAILED_TO_UPDATE_SEATS))
             } catch (e: IOException) {
-                logger.error(e) { "Failed to update on-call seats" }
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update seats"))
+                logger.error(e) { FAILED_TO_UPDATE_ON_CALL_SEATS }
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse(FAILED_TO_UPDATE_SEATS))
             } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to update on-call seats" }
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update seats"))
+                logger.error(e) { FAILED_TO_UPDATE_ON_CALL_SEATS }
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse(FAILED_TO_UPDATE_SEATS))
             }
         }
     }

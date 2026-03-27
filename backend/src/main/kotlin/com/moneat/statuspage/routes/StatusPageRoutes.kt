@@ -49,6 +49,7 @@ import org.koin.core.context.GlobalContext
 import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
+private const val FAILED_TO_GET_STATUS_PAGE = "Failed to get status page"
 
 private suspend fun runStatusPageRoute(
     call: ApplicationCall,
@@ -170,7 +171,7 @@ fun Route.statusPageRoutes(
              * Get status page details.
              */
             get("/{pageId}") {
-                runStatusPageRoute(call, "Failed to get status page", "Failed to get status page") {
+                runStatusPageRoute(call, FAILED_TO_GET_STATUS_PAGE, FAILED_TO_GET_STATUS_PAGE) {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
@@ -668,7 +669,7 @@ fun Route.statusPageRoutes(
          * Get public status page by slug.
          */
         get("/{slug}") {
-            runStatusPageRoute(call, "Failed to get public status page", "Failed to get status page") {
+            runStatusPageRoute(call, "Failed to get public status page", FAILED_TO_GET_STATUS_PAGE) {
                 val slug = call.parameters["slug"]
 
                 if (slug == null) {
@@ -690,7 +691,7 @@ fun Route.statusPageRoutes(
          * Get public status page by custom domain.
          */
         get("/domain/{domain}") {
-            runStatusPageRoute(call, "Failed to get public status page by domain", "Failed to get status page") {
+            runStatusPageRoute(call, "Failed to get public status page by domain", FAILED_TO_GET_STATUS_PAGE) {
                 val domain = call.parameters["domain"]
 
                 if (domain == null) {

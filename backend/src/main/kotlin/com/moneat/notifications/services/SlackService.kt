@@ -992,13 +992,13 @@ class SlackService {
                 logger.error("Failed to send on-call Slack DM: ${result.error}")
             }
         } catch (e: SerializationException) {
-            logger.error("Error sending on-call Slack alert", e)
+            logger.error(ERROR_SENDING_ON_CALL_SLACK_ALERT, e)
         } catch (e: IOException) {
-            logger.error("Error sending on-call Slack alert", e)
+            logger.error(ERROR_SENDING_ON_CALL_SLACK_ALERT, e)
         } catch (e: IllegalStateException) {
-            logger.error("Error sending on-call Slack alert", e)
+            logger.error(ERROR_SENDING_ON_CALL_SLACK_ALERT, e)
         } catch (e: IllegalArgumentException) {
-            logger.error("Error sending on-call Slack alert", e)
+            logger.error(ERROR_SENDING_ON_CALL_SLACK_ALERT, e)
         }
     }
 
@@ -1033,4 +1033,8 @@ class SlackService {
                 .singleOrNull()
                 ?.get(Memberships.organization_id)
         }
+
+    companion object {
+        private const val ERROR_SENDING_ON_CALL_SLACK_ALERT = "Error sending on-call Slack alert"
+    }
 }
