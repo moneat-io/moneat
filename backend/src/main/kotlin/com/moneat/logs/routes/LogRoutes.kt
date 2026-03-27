@@ -499,9 +499,13 @@ fun Route.logRoutes(
                     try {
                         connection.sync().unsubscribe(channel)
                     } catch (_: SerializationException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
                     } catch (_: IOException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
                     } catch (_: IllegalStateException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
                     } catch (_: IllegalArgumentException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
                     }
                     connection.removeListener(listener)
                     connection.close()
@@ -612,7 +616,7 @@ fun Route.logIngestRoutes(
             val encoding = call.request.header(HttpHeaders.ContentEncoding)
             val payloadBytes = suspendRunCatching {
                 DecompressionService.decompress(bodyBytes, encoding)
-            }.getOrElse { e ->
+            }.getOrElse { _ ->
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
                 return@post
             }
@@ -622,7 +626,7 @@ fun Route.logIngestRoutes(
                     json.decodeFromString<List<com.moneat.logs.models.LogIngestEntry>>(
                         payloadBytes.decodeToString()
                     )
-                }.getOrElse { e ->
+                }.getOrElse { _ ->
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
                     return@post
                 }
@@ -697,7 +701,7 @@ private suspend fun handleOtlpLogIngest(
     val encoding = call.request.header(HttpHeaders.ContentEncoding)
     val payloadBytes = suspendRunCatching {
         DecompressionService.decompress(bodyBytes, encoding)
-    }.getOrElse { e ->
+    }.getOrElse { _ ->
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
         return
     }

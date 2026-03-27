@@ -593,7 +593,15 @@ class LogService(private val logRepository: LogRepository) {
                 } else {
                     groups["_total"] = (groups["_total"] ?: 0L) + cnt
                 }
-            } catch (_: SerializationException) {} catch (_: IOException) {} catch (_: IllegalStateException) {} catch (_: IllegalArgumentException) {}
+            } catch (_: SerializationException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IOException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalStateException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalArgumentException) {
+                // Ignored: skip malformed JSON line
+            }
         }
 
         val buckets =
@@ -715,7 +723,15 @@ class LogService(private val logRepository: LogRepository) {
                 val value = obj["field_value"]?.jsonPrimitive?.content ?: return@forEach
                 val cnt = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
                 values += LogTopValue(value = value, count = cnt)
-            } catch (_: SerializationException) {} catch (_: IOException) {} catch (_: IllegalStateException) {} catch (_: IllegalArgumentException) {}
+            } catch (_: SerializationException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IOException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalStateException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalArgumentException) {
+                // Ignored: skip malformed JSON line
+            }
         }
 
         // Get total count for percentage calculation
@@ -941,7 +957,15 @@ class LogService(private val logRepository: LogRepository) {
                 val value = obj["val"]?.jsonPrimitive?.content ?: return@forEach
                 val count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
                 results += LogFilterOptionWithCount(value = value, count = count)
-            } catch (_: SerializationException) {} catch (_: IOException) {} catch (_: IllegalStateException) {} catch (_: IllegalArgumentException) {}
+            } catch (_: SerializationException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IOException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalStateException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalArgumentException) {
+                // Ignored: skip malformed JSON line
+            }
         }
         return results
     }

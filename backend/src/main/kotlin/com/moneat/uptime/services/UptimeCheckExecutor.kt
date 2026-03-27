@@ -133,7 +133,9 @@ class UptimeCheckExecutor {
                             headers.forEach { (key, value) ->
                                 header(key, value)
                             }
-                        } catch (_: SerializationException) {}
+                        } catch (_: SerializationException) {
+                            // Ignored: malformed headers JSON should not block the check
+                        }
                     }
 
                     // Authentication

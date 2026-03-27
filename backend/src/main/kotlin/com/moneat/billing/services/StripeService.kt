@@ -492,25 +492,7 @@ class StripeService(
             }
         }
 
-        // Fetch upcoming invoice to estimate proration cost if any
-        // NOTE: Commented out due to compilation issues with Invoice.upcoming in current SDK setup
         val upcomingInvoice: com.stripe.model.Invoice? = null
-        /* try {
-            com.stripe.model.Invoice.upcoming(
-                com.stripe.param.InvoiceUpcomingParams.builder()
-                    .setCustomer(subRow.stripeCustomerId)
-                    .setSubscription(stripeSubId)
-                    .build()
-            )
-        } catch (e: SerializationException) {
-            null
-        } catch (e: IOException) {
-            null
-        } catch (e: IllegalStateException) {
-            null
-        } catch (e: IllegalArgumentException) {
-            null
-        } */
 
         // We trigger a sync to update DB state immediately
         val updatedSub = Subscription.retrieve(stripeSubId)
