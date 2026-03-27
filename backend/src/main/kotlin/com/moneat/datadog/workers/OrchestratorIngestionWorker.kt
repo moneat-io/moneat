@@ -133,6 +133,12 @@ class OrchestratorIngestionWorker(
         logger.error(e) {
             "Orchestrator worker $workerId failed, pushing to DLQ"
         }
-        RedisConfig.sync().rpush(dlqKey, payload)
+        try {
+            RedisConfig.sync().rpush(dlqKey, payload)
+        } catch (dlqErr: Exception) {
+            logger.error(dlqErr) {
+                "Failed pushing to DLQ for worker $workerId, dlqKey=$dlqKey"
+            }
+        }
     }
 }
