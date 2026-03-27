@@ -76,7 +76,7 @@ coroutines:
 
 performance:
   SpreadOperator:
-    active: false
+    active: true
 
 empty-blocks:
   EmptyCatchBlock:
