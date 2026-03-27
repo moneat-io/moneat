@@ -381,7 +381,7 @@ class NotificationService(
                     name = projectName,
                     events = formatNumber(stats.totalEvents),
                     issues = formatNumber(stats.uniqueIssues),
-                    crashFree = crashFreeRate?.let { "%.1f%%".format(it) } ?: "N/A"
+                    crashFree = crashFreeRate?.let { String.format(Locale.US, "%.1f%%", it) } ?: "N/A"
                 )
             }
 
@@ -650,7 +650,7 @@ class NotificationService(
     private fun formatTimestamp(timestamp: String): String {
         return try {
             val instant = Instant.parse(timestamp)
-            val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm 'UTC'")
+            val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm 'UTC'", Locale.US)
             formatter.format(instant.atZone(ZoneId.of("UTC")))
         } catch (e: Exception) {
             timestamp
@@ -658,7 +658,7 @@ class NotificationService(
     }
 
     private fun formatDate(instant: Instant): String {
-        val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy")
+        val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US)
         return formatter.format(instant.atZone(ZoneId.of("UTC")))
     }
 
