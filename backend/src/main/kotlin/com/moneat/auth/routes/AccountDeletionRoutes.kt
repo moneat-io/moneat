@@ -125,7 +125,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAccount(
     val request =
         try {
             call.receive<DeleteAccountRequest>()
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             return
         }
@@ -185,7 +185,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteOrganizati
     val request =
         try {
             call.receive<DeleteOrganizationRequest>()
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             return
         }

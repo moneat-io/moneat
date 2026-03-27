@@ -16,7 +16,11 @@
 
 package com.moneat.otlp.services
 
+import io.lettuce.core.RedisException
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 
@@ -40,11 +44,29 @@ class OtlpMetricsIngestionWorker(
                 "OTLP metrics worker $workerId inserted ${batch.metrics.size} metrics " +
                     "for org ${batch.organizationId}"
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) {
-                "OTLP metrics worker $workerId failed to process batch, sending to DLQ"
-            }
-            pushToDlq(workerId, payload)
+        } catch (e: SerializationException) {
+            handleOtlpMetricsDlq(workerId, payload, e)
+        } catch (e: IOException) {
+            handleOtlpMetricsDlq(workerId, payload, e)
+        } catch (e: SQLException) {
+            handleOtlpMetricsDlq(workerId, payload, e)
+        } catch (e: RedisException) {
+            handleOtlpMetricsDlq(workerId, payload, e)
+        } catch (e: IllegalStateException) {
+            handleOtlpMetricsDlq(workerId, payload, e)
+        } catch (e: IllegalArgumentException) {
+            handleOtlpMetricsDlq(workerId, payload, e)
         }
+    }
+
+    private fun handleOtlpMetricsDlq(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+    ) {
+        logger.error(e) {
+            "OTLP metrics worker $workerId failed to process batch, sending to DLQ"
+        }
+        pushToDlq(workerId, payload)
     }
 }

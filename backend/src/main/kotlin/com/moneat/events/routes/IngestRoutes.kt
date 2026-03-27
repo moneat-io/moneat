@@ -137,7 +137,7 @@ fun Route.ingestRoutes(
                 enqueueEnvelope(queueKey, message)
 
                 call.respond(HttpStatusCode.Accepted, mapOf("id" to envelope.eventId))
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.error(e) { "Failed to process envelope: ${e.message}" }
                 e.printStackTrace()
                 call.respond(
@@ -193,7 +193,7 @@ fun Route.ingestRoutes(
             val entries =
                 try {
                     json.decodeFromString<List<LogIngestEntry>>(payloadBytes.decodeToString())
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     logger.warn(e) { "Invalid log payload for project $projectId" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
                     return@post
@@ -270,7 +270,7 @@ fun Route.ingestRoutes(
 
                 eventService.processStoreEvent(projectId, body)
                 call.respond(HttpStatusCode.OK)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.error(e) { "Failed to process store event" }
                 call.respond(HttpStatusCode.BadRequest, "Invalid event format")
             }

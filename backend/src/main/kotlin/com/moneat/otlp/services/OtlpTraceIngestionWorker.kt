@@ -16,8 +16,12 @@
 
 package com.moneat.otlp.services
 
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 
@@ -39,22 +43,37 @@ class OtlpTraceIngestionWorker(
                 traceService.decodeBatch(payload)
             } catch (e: CancellationException) {
                 throw e
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                logger.error(e) {
-                    "OTLP trace worker $workerId failed to decode batch, sending to DLQ"
-                }
-                pushToDlq(workerId, payload)
+            } catch (e: SerializationException) {
+                logTraceDecodeFailure(workerId, payload, e)
+                return
+            } catch (e: IOException) {
+                logTraceDecodeFailure(workerId, payload, e)
+                return
+            } catch (e: IllegalStateException) {
+                logTraceDecodeFailure(workerId, payload, e)
+                return
+            } catch (e: IllegalArgumentException) {
+                logTraceDecodeFailure(workerId, payload, e)
                 return
             }
         try {
             traceService.insertBatch(batch)
         } catch (e: CancellationException) {
             throw e
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) {
-                "OTLP trace worker $workerId failed to insert batch, sending to DLQ"
-            }
-            pushToDlq(workerId, payload)
+        } catch (e: IOException) {
+            logTraceInsertFailure(workerId, payload, e)
+            return
+        } catch (e: SQLException) {
+            logTraceInsertFailure(workerId, payload, e)
+            return
+        } catch (e: RedisException) {
+            logTraceInsertFailure(workerId, payload, e)
+            return
+        } catch (e: IllegalStateException) {
+            logTraceInsertFailure(workerId, payload, e)
+            return
+        } catch (e: IllegalArgumentException) {
+            logTraceInsertFailure(workerId, payload, e)
             return
         }
         try {
@@ -68,7 +87,11 @@ class OtlpTraceIngestionWorker(
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: IllegalStateException) {
+            logger.error(e) {
+                "OTLP trace worker $workerId failed after insert (exception extraction)"
+            }
+        } catch (e: IllegalArgumentException) {
             logger.error(e) {
                 "OTLP trace worker $workerId failed after insert (exception extraction)"
             }
@@ -77,5 +100,27 @@ class OtlpTraceIngestionWorker(
             "OTLP trace worker $workerId inserted ${batch.spans.size} spans " +
                 "for org ${batch.organizationId}"
         }
+    }
+
+    private fun logTraceDecodeFailure(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+    ) {
+        logger.error(e) {
+            "OTLP trace worker $workerId failed to decode batch, sending to DLQ"
+        }
+        pushToDlq(workerId, payload)
+    }
+
+    private fun logTraceInsertFailure(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+    ) {
+        logger.error(e) {
+            "OTLP trace worker $workerId failed to insert batch, sending to DLQ"
+        }
+        pushToDlq(workerId, payload)
     }
 }

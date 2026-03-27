@@ -74,7 +74,7 @@ fun Route.datadogHostIngestRoutes() {
                     json.decodeFromString<DatadogHostMetadata>(
                         bodyStr
                     )
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     logger.warn(e) {
                         "Failed to parse DD host metadata"
                     }
@@ -122,7 +122,7 @@ fun Route.datadogHostIngestRoutes() {
                     json.decodeFromString<DatadogHostMetadata>(
                         bodyStr
                     )
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     logger.warn(e) {
                         "Failed to parse DD V2 host metadata"
                     }
@@ -163,7 +163,7 @@ fun Route.datadogHostIngestRoutes() {
                 json.decodeFromString<DatadogIntakePayload>(
                     bodyStr
                 )
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.warn(e) {
                     "Failed to parse DD intake payload"
                 }

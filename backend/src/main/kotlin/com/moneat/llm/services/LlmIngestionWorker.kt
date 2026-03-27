@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-@file:Suppress("TooGenericExceptionCaught")
-
 package com.moneat.llm.services
 
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
@@ -25,21 +23,27 @@ import com.moneat.llm.models.LlmGenerationIngest
 import com.moneat.llm.models.LlmIngestPayload
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.brpopLoopBackoff
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 import java.time.Instant
-import java.util.*
+import java.time.format.DateTimeParseException
+import java.util.Base64
+import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
 
@@ -79,9 +83,10 @@ class LlmIngestionWorker(
                     processMessageForTest(workerId, value)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
-                    logger.error(e) { "LLM worker $workerId error in BRPOP loop" }
-                    delay(1000)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(logger, workerId, "LLM", 1000L, e)
+                } catch (e: IOException) {
+                    brpopLoopBackoff(logger, workerId, "LLM", 1000L, e)
                 }
             }
         } finally {
@@ -99,10 +104,29 @@ class LlmIngestionWorker(
             val payload = json.decodeFromString<LlmIngestPayload>(payloadBytes.decodeToString())
             insertGenerations(projectId, payload.generations)
             usageTracker.recordUsage(projectId, "llm", payloadBytes.size)
-        } catch (e: Exception) {
-            logger.error(e) { "LLM worker $workerId failed to process message, sending to DLQ" }
-            onDlq(value)
+        } catch (e: SerializationException) {
+            handleLlmDlq(workerId, value, e, onDlq)
+        } catch (e: IOException) {
+            handleLlmDlq(workerId, value, e, onDlq)
+        } catch (e: SQLException) {
+            handleLlmDlq(workerId, value, e, onDlq)
+        } catch (e: RedisException) {
+            handleLlmDlq(workerId, value, e, onDlq)
+        } catch (e: IllegalStateException) {
+            handleLlmDlq(workerId, value, e, onDlq)
+        } catch (e: IllegalArgumentException) {
+            handleLlmDlq(workerId, value, e, onDlq)
         }
+    }
+
+    private fun handleLlmDlq(
+        workerId: Int,
+        value: String,
+        e: Throwable,
+        onDlq: (String) -> Unit,
+    ) {
+        logger.error(e) { "LLM worker $workerId failed to process message, sending to DLQ" }
+        onDlq(value)
     }
 
     suspend fun insertGenerations(
@@ -113,7 +137,7 @@ class LlmIngestionWorker(
 
         val rows =
             generations.mapNotNull { gen ->
-                try {
+                runCatching {
                     val generationId = UUID.randomUUID().toString()
                     val timestampMs = parseTimestampMs(gen.timestamp)
                     val totalTokens = gen.inputTokens + gen.outputTokens
@@ -156,10 +180,13 @@ class LlmIngestionWorker(
                     '${esc(metadataStr)}'
                 )
                     """.trimIndent()
-                } catch (e: Exception) {
-                    logger.warn(e) { "Failed to build row for LLM generation" }
-                    null
-                }
+                }.fold(
+                    onSuccess = { it },
+                    onFailure = { e ->
+                        logger.warn(e) { "Failed to build row for LLM generation" }
+                        null
+                    },
+                )
             }
 
         if (rows.isEmpty()) return
@@ -189,10 +216,10 @@ class LlmIngestionWorker(
         if (timestamp.isNullOrBlank()) return System.currentTimeMillis()
         return try {
             Instant.parse(timestamp).toEpochMilli()
-        } catch (e: Exception) {
+        } catch (_: DateTimeParseException) {
             try {
                 timestamp.toLong()
-            } catch (e2: Exception) {
+            } catch (_: NumberFormatException) {
                 System.currentTimeMillis()
             }
         }

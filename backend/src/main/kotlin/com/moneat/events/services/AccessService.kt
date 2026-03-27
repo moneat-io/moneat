@@ -101,7 +101,7 @@ class AccessService(
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.longOrNull?.takeIf { it != 0L }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Failed to get project ID for event $eventId" }
             null
         }
@@ -124,7 +124,7 @@ class AccessService(
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["issue_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Failed to get issue ID for event $eventId" }
             null
         }

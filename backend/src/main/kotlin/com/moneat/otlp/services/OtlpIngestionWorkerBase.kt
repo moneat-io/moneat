@@ -18,6 +18,7 @@ package com.moneat.otlp.services
 
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
+import io.lettuce.core.RedisException
 import io.lettuce.core.api.StatefulRedisConnection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -29,7 +30,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 private const val ERROR_RETRY_DELAY_MS = 1000L
@@ -80,21 +84,31 @@ abstract class OtlpIngestionWorkerBase(
                         processMessage(workerId, payload)
                     } catch (proc: CancellationException) {
                         throw proc
-                    } catch (@Suppress("TooGenericExceptionCaught") proc: Exception) {
-                        logger.error(proc) {
-                            "OTLP $workerLabel worker $workerId failed processing message"
-                        }
-                        delay(ERROR_RETRY_DELAY_MS)
+                    } catch (proc: SerializationException) {
+                        onOtlpProcessMessageFailure(workerId, proc)
+                    } catch (proc: IOException) {
+                        onOtlpProcessMessageFailure(workerId, proc)
+                    } catch (proc: SQLException) {
+                        onOtlpProcessMessageFailure(workerId, proc)
+                    } catch (proc: RedisException) {
+                        onOtlpProcessMessageFailure(workerId, proc)
+                    } catch (proc: IllegalStateException) {
+                        onOtlpProcessMessageFailure(workerId, proc)
+                    } catch (proc: IllegalArgumentException) {
+                        onOtlpProcessMessageFailure(workerId, proc)
                     }
                 } catch (e: CancellationException) {
                     break
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                    logger.error(e) { "OTLP $workerLabel worker $workerId error in BRPOP loop" }
-                    conn?.let {
-                        disposeRedisConnection(workerId, it)
+                } catch (e: RedisException) {
+                    onOtlpBrpopLoopFailure(workerId, e, conn) { c ->
+                        disposeRedisConnection(workerId, c)
                         conn = null
                     }
-                    delay(ERROR_RETRY_DELAY_MS)
+                } catch (e: IOException) {
+                    onOtlpBrpopLoopFailure(workerId, e, conn) { c ->
+                        disposeRedisConnection(workerId, c)
+                        conn = null
+                    }
                 }
             }
         } finally {
@@ -102,10 +116,33 @@ abstract class OtlpIngestionWorkerBase(
         }
     }
 
+    private suspend fun onOtlpProcessMessageFailure(
+        workerId: Int,
+        proc: Throwable,
+    ) {
+        logger.error(proc) {
+            "OTLP $workerLabel worker $workerId failed processing message"
+        }
+        delay(ERROR_RETRY_DELAY_MS)
+    }
+
+    private suspend fun onOtlpBrpopLoopFailure(
+        workerId: Int,
+        e: Throwable,
+        connection: StatefulRedisConnection<String, String>?,
+        resetConnection: (StatefulRedisConnection<String, String>) -> Unit,
+    ) {
+        logger.error(e) { "OTLP $workerLabel worker $workerId error in BRPOP loop" }
+        connection?.let(resetConnection)
+        delay(ERROR_RETRY_DELAY_MS)
+    }
+
     private fun disposeRedisConnection(workerId: Int, c: StatefulRedisConnection<String, String>) {
         try {
             RedisConfig.closeBlockingConnection(c)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: IOException) {
+            logger.warn(e) { "Failed to close Redis connection for OTLP worker $workerId" }
+        } catch (e: RedisException) {
             logger.warn(e) { "Failed to close Redis connection for OTLP worker $workerId" }
         }
     }
@@ -115,7 +152,7 @@ abstract class OtlpIngestionWorkerBase(
     protected fun pushToDlq(workerId: Int, payload: String) {
         try {
             RedisConfig.sync().rpush(dlqKey, payload)
-        } catch (@Suppress("TooGenericExceptionCaught") dlqErr: Exception) {
+        } catch (dlqErr: RedisException) {
             logger.error(dlqErr) { "Failed to push to DLQ $dlqKey for worker=$workerId" }
         }
     }

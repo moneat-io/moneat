@@ -186,7 +186,7 @@ object SdkVersionService {
                 httpClient.get("$GITHUB_API_BASE/repos/$repository/releases/latest") {
                     applyGitHubHeaders()
                 }
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 sdkVersionLogger.warn(e) { "Failed to fetch latest release for $repository" }
                 return null
             }
@@ -204,7 +204,7 @@ object SdkVersionService {
         val release =
             try {
                 sdkVersionJson.decodeFromString(GitHubLatestReleaseResponse.serializer(), payload)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 sdkVersionLogger.warn(e) { "Failed to decode latest release payload for $repository" }
                 return null
             }
@@ -223,7 +223,7 @@ object SdkVersionService {
                     applyGitHubHeaders()
                     parameter("per_page", 20)
                 }
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 sdkVersionLogger.warn(e) { "Failed to fetch tags for $repository" }
                 return null
             }
@@ -237,7 +237,7 @@ object SdkVersionService {
         val tags =
             try {
                 sdkVersionJson.decodeFromString(ListSerializer(GitHubTagResponse.serializer()), payload)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 sdkVersionLogger.warn(e) { "Failed to decode tags payload for $repository" }
                 return null
             }

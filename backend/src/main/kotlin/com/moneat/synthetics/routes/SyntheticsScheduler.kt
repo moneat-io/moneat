@@ -71,7 +71,7 @@ class SyntheticsScheduler(
     private suspend fun checkTests(schedulerScope: CoroutineScope) {
         val tests = try {
             service.getTestsDueForRun()
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Failed to fetch synthetic tests due for run: ${e.message}" }
             return
         }
@@ -84,7 +84,7 @@ class SyntheticsScheduler(
             schedulerScope.launch {
                 try {
                     performCheck(test)
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     logger.error(e) { "Failed to perform synthetic test ${test.id}: ${e.message}" }
                 } finally {
                     runningTests.remove(test.id)

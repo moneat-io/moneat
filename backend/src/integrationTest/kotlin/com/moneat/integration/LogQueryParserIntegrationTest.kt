@@ -105,7 +105,7 @@ class LogQueryParserIntegrationTest {
                     }
                     return
                 }
-            } catch (@Suppress("TooGenericExceptionCaught") _: Exception) { }
+            } catch (_: Exception) { }
             kotlinx.coroutines.delay(1000)
         }
         throw RuntimeException("ClickHouse did not start in time")

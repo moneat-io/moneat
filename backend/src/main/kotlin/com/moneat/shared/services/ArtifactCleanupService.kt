@@ -54,7 +54,7 @@ class ArtifactCleanupService(
                         if (inviteDeleted > 0) {
                             logger.info { "Purged $inviteDeleted old invitations" }
                         }
-                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                    } catch (e: Exception) {
                         logger.error(e) { "Error during artifact cleanup" }
                     }
                     delay(cleanupInterval)

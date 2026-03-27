@@ -99,7 +99,7 @@ class IngestionWorker(
                     }
                 } catch (e: CancellationException) {
                     break
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     logger.error(e) { "Worker $workerId error in BRPOP loop" }
                     delay(1000)
                 }
@@ -130,7 +130,7 @@ class IngestionWorker(
             eventService.processEnvelope(projectId, envelope)
         } catch (e: CancellationException) {
             throw e
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
             onDlq(value)
 

@@ -54,7 +54,7 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Loki returned ${response.status}")
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.warn(e) { "Loki connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -89,7 +89,7 @@ class LokiHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseLokiResponse(response.bodyAsText(), boundedLimit)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Loki query failed" }
             emptyList()
         }
@@ -114,7 +114,7 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Loki schema fetch failed" }
             emptyList()
         }
@@ -142,7 +142,7 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.warn(e) { "Loki label_values failed" }
             emptyList()
         }

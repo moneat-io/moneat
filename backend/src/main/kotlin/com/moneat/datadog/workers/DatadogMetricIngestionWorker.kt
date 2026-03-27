@@ -18,16 +18,20 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogMetricService
+import com.moneat.utils.brpopLoopBackoff
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 
@@ -75,11 +79,22 @@ class DatadogMetricIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                    logger.error(e) {
-                        "DD metric worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DD metric",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DD metric",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
             }
         } finally {
@@ -98,12 +113,31 @@ class DatadogMetricIngestionWorker(
             val batch =
                 DatadogMetricService.decodeMetricBatch(payload)
             DatadogMetricService.insertMetricBatch(batch)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) {
-                "DD metric worker $workerId failed, " +
-                    "pushing to DLQ"
-            }
-            onDlq(payload)
+        } catch (e: SerializationException) {
+            handleMetricDlq(workerId, payload, e, onDlq)
+        } catch (e: IOException) {
+            handleMetricDlq(workerId, payload, e, onDlq)
+        } catch (e: SQLException) {
+            handleMetricDlq(workerId, payload, e, onDlq)
+        } catch (e: RedisException) {
+            handleMetricDlq(workerId, payload, e, onDlq)
+        } catch (e: IllegalStateException) {
+            handleMetricDlq(workerId, payload, e, onDlq)
+        } catch (e: IllegalArgumentException) {
+            handleMetricDlq(workerId, payload, e, onDlq)
         }
+    }
+
+    private fun handleMetricDlq(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+        onDlq: (String) -> Unit,
+    ) {
+        logger.error(e) {
+            "DD metric worker $workerId failed, " +
+                "pushing to DLQ"
+        }
+        onDlq(payload)
     }
 }

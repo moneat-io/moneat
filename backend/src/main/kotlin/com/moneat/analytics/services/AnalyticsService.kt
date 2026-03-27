@@ -26,6 +26,7 @@ import com.moneat.analytics.models.RealtimeResponse
 import com.moneat.analytics.models.TimeseriesPoint
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -216,12 +217,11 @@ class AnalyticsService {
 
     fun getRealtime(projectId: Long): RealtimeResponse {
         val key = "${AnalyticsIngestionWorker.REALTIME_KEY_PREFIX}$projectId"
-        val count = try {
-            RedisConfig.sync().pfcount(key)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.debug { "Failed to read realtime counter: ${e.message}" }
-            0L
-        }
+        val count = runCatching { RedisConfig.sync().pfcount(key) }
+            .onFailure { e ->
+                logger.debug { "Failed to read realtime counter: ${e.message}" }
+            }
+            .getOrDefault(0L)
         return RealtimeResponse(count)
     }
 
@@ -416,7 +416,7 @@ class AnalyticsService {
             try {
                 val row = jsonParser.parseToJsonElement(line).jsonObject
                 mapper(row)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: SerializationException) {
                 logger.debug { "Failed to parse row: ${e.message}" }
                 null
             }

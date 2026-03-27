@@ -62,7 +62,7 @@ fun Route.datadogMetricRoutes() {
                     json.decodeFromString<DatadogMetricSeriesV1>(
                         bodyStr
                     )
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     logger.warn(e) {
                         "Failed to parse DD V1 series payload"
                     }
@@ -124,7 +124,7 @@ fun Route.datadogMetricRoutes() {
                     } else {
                         MetricPayloadDecoder.decode(body)
                     }
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     logger.warn(e) { "Failed to parse DD V3 series payload" }
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
@@ -168,7 +168,7 @@ fun Route.datadogMetricRoutes() {
                     } else {
                         MetricPayloadDecoder.decode(body)
                     }
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     logger.warn(e) { "Failed to parse DD V2 series payload" }
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
@@ -214,7 +214,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches() {
             val bodyStr = body.decodeToString()
             json.decodeFromString<DatadogSketchPayload>(bodyStr)
         }
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: Exception) {
         logger.warn(e) { "Failed to parse DD sketches" }
         call.respond(
             HttpStatusCode.BadRequest,

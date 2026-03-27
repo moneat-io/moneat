@@ -95,7 +95,7 @@ object SentrySpanBackfill {
             val bodySnippet =
                 try {
                     response.bodyAsText().take(500)
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     (e.message ?: "").take(500)
                 }
             logger.error { "Spans backfill failed: HTTP ${response.status}, body: $bodySnippet" }

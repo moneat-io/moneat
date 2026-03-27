@@ -218,7 +218,7 @@ class StripeService(
                 sessionId = session.id,
                 url = session.url ?: ""
             )
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Failed to create Stripe checkout session" }
             Sentry.captureException(e) { scope ->
                 scope.setTag("stripe.operation", "create_checkout_session")
@@ -501,7 +501,7 @@ class StripeService(
                     .setSubscription(stripeSubId)
                     .build()
             )
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             null
         } */
 
@@ -739,7 +739,7 @@ class StripeService(
             )
 
             logger.info { "Updated default payment method for customer $customerId" }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Failed to update default payment method for customer $customerId" }
             Sentry.captureException(e) { scope ->
                 scope.setTag("stripe.operation", "update_default_payment_method")
@@ -886,7 +886,7 @@ class StripeService(
                     }
                 }
                 flushed++
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.error(e) {
                     "Failed to report metered usage for subscription ${batch.subscriptionId} (batchUnits=${batch.batchUnits})"
                 }
@@ -999,7 +999,7 @@ class StripeService(
                     }
                 }
                 flushed++
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.error(e) {
                     "Failed to report $meterEventName metered usage for subscription ${batch.subscriptionId} " +
                         "(batchUnits=${batch.batchUnits})"

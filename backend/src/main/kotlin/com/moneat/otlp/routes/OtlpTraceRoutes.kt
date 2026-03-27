@@ -33,6 +33,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import mu.KotlinLogging
+import java.io.IOException
 import org.koin.core.context.GlobalContext
 
 private val logger = KotlinLogging.logger {}
@@ -88,7 +89,9 @@ private suspend fun handleOtlpTraceIngest(
     val encoding = call.request.header(HttpHeaders.ContentEncoding)
     val payloadBytes = try {
         DecompressionService.decompress(bodyBytes, encoding)
-    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+    } catch (_: IOException) {
+        throw BadRequestException("Failed to decompress request body")
+    } catch (_: IllegalStateException) {
         throw BadRequestException("Failed to decompress request body")
     }
 

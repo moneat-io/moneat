@@ -57,7 +57,7 @@ object AnalyticsSaltService {
                 redis.set(key, candidate, SetArgs.Builder.nx().ex(SALT_TTL_SECONDS))
                 redis.get(key) ?: candidate
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.warn { "Redis unavailable for analytics salt, falling back to date: ${e.message}" }
             date
         }

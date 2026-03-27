@@ -50,7 +50,7 @@ class AiActionExecutor {
                         message = "Action submitted successfully. The operation will be performed using your existing permissions."
                     )
                 }
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.error(e) { "Failed to execute action $actionId" }
                 ActionResult(
                     success = false,

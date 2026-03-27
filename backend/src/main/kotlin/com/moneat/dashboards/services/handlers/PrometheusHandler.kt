@@ -56,7 +56,7 @@ class PrometheusHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Prometheus returned ${response.status}")
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.warn(e) { "Prometheus connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -100,7 +100,7 @@ class PrometheusHandler : HttpApiHandler() {
                 logger.warn { "Prometheus label_values query failed: ${response.status}" }
                 emptyList()
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.warn(e) { "Failed to execute label_values query" }
             emptyList()
         }
@@ -145,7 +145,7 @@ class PrometheusHandler : HttpApiHandler() {
                 return emptyList()
             }
             parsePrometheusResponse(response.bodyAsText(), promLimit)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Failed to execute Prometheus query" }
             emptyList()
         }
@@ -170,7 +170,7 @@ class PrometheusHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Failed to fetch Prometheus metrics" }
             emptyList()
         }

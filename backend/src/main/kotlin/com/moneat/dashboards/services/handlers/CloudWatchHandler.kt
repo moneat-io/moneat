@@ -86,7 +86,7 @@ class CloudWatchHandler : DataSourceHandler {
                 client.getMetricData(request)
             }
             TestConnectionResult(true, "Connected successfully")
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.warn(e) { "CloudWatch connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -108,7 +108,7 @@ class CloudWatchHandler : DataSourceHandler {
 
         val metricSpec = try {
             json.parseToJsonElement(query).jsonObject
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Invalid CloudWatch query JSON" }
             return emptyList()
         }
@@ -181,7 +181,7 @@ class CloudWatchHandler : DataSourceHandler {
                 }
                 rows
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "CloudWatch query failed" }
             emptyList()
         }

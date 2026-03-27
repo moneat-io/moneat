@@ -18,16 +18,20 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogInfraService
+import com.moneat.utils.brpopLoopBackoff
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 
@@ -75,11 +79,22 @@ class DatadogInfraIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                    logger.error(e) {
-                        "DD infra worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DD infra",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DD infra",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
             }
         } finally {
@@ -98,12 +113,31 @@ class DatadogInfraIngestionWorker(
             val batch =
                 DatadogInfraService.decodeInfraBatch(payload)
             DatadogInfraService.insertInfraBatch(batch)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) {
-                "DD infra worker $workerId failed, " +
-                    "pushing to DLQ"
-            }
-            onDlq(payload)
+        } catch (e: SerializationException) {
+            handleInfraDlq(workerId, payload, e, onDlq)
+        } catch (e: IOException) {
+            handleInfraDlq(workerId, payload, e, onDlq)
+        } catch (e: SQLException) {
+            handleInfraDlq(workerId, payload, e, onDlq)
+        } catch (e: RedisException) {
+            handleInfraDlq(workerId, payload, e, onDlq)
+        } catch (e: IllegalStateException) {
+            handleInfraDlq(workerId, payload, e, onDlq)
+        } catch (e: IllegalArgumentException) {
+            handleInfraDlq(workerId, payload, e, onDlq)
         }
+    }
+
+    private fun handleInfraDlq(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+        onDlq: (String) -> Unit,
+    ) {
+        logger.error(e) {
+            "DD infra worker $workerId failed, " +
+                "pushing to DLQ"
+        }
+        onDlq(payload)
     }
 }

@@ -247,7 +247,7 @@ class EmailService {
                     "type" to emailType
                 )
             )
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error("Failed to send email to $to", e)
             Sentry.captureException(e) { scope ->
                 scope.setTag("email.operation", "send")
@@ -291,7 +291,7 @@ class EmailService {
                     it[EmailsSent.success] = success
                 }
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.warn(e) { "Failed to track email sent to $recipient" }
         }
     }

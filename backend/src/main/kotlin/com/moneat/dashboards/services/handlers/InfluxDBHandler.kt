@@ -58,7 +58,7 @@ class InfluxDBHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "InfluxDB returned ${response.status}")
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.warn(e) { "InfluxDB connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -97,7 +97,7 @@ class InfluxDBHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseFluxCsv(response.bodyAsText(), limit)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "InfluxDB query failed" }
             emptyList()
         }
@@ -135,7 +135,7 @@ class InfluxDBHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "InfluxDB schema fetch failed" }
             emptyList()
         }

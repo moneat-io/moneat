@@ -88,7 +88,7 @@ private fun parseLogEntries(bodyStr: String): List<DatadogLogEntry>? {
         } else {
             listOf(json.decodeFromString<DatadogLogEntry>(trimmed))
         }
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: Exception) {
         logger.warn(e) { "Failed to parse DD log payload" }
         null
     }

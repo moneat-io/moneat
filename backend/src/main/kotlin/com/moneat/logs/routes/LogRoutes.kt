@@ -483,12 +483,12 @@ fun Route.logRoutes(
                         write("data: $next\n\n")
                         flush()
                     }
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
                 } finally {
                     try {
                         connection.sync().unsubscribe(channel)
-                    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+                    } catch (_: Exception) {
                     }
                     connection.removeListener(listener)
                     connection.close()
@@ -567,7 +567,7 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
         val userId = decoded.getClaim("userId").asInt()
         val orgId = decoded.getClaim("orgId").asInt().toLong()
         Pair(userId, orgId)
-    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+    } catch (_: Exception) {
         null
     }
 }
@@ -599,7 +599,7 @@ fun Route.logIngestRoutes(
             val encoding = call.request.header(HttpHeaders.ContentEncoding)
             val payloadBytes = try {
                 DecompressionService.decompress(bodyBytes, encoding)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
                 return@post
             }
@@ -609,7 +609,7 @@ fun Route.logIngestRoutes(
                     json.decodeFromString<List<com.moneat.logs.models.LogIngestEntry>>(
                         payloadBytes.decodeToString()
                     )
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
                     return@post
                 }
@@ -684,7 +684,7 @@ private suspend fun handleOtlpLogIngest(
     val encoding = call.request.header(HttpHeaders.ContentEncoding)
     val payloadBytes = try {
         DecompressionService.decompress(bodyBytes, encoding)
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: Exception) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
         return
     }

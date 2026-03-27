@@ -109,7 +109,7 @@ fun Route.llmIngestRoutes() {
                 RedisConfig.sync().lpush(queueKey, message)
 
                 call.respond(HttpStatusCode.Accepted, mapOf("accepted" to payload.generations.size))
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.error(e) { "Failed to process LLM ingest payload: ${e.message}" }
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid LLM payload"))
             }

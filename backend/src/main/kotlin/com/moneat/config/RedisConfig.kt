@@ -115,7 +115,7 @@ fun Application.configureRedis() {
     val redisUrl =
         try {
             environment.config.property("redis.url").getString()
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
             return
         }
@@ -126,7 +126,7 @@ fun Application.configureRedis() {
         log.info("Redis connection established")
         // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering
         // (workers must stop before Redis connection is closed)
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: Exception) {
         log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
         throw e
     }

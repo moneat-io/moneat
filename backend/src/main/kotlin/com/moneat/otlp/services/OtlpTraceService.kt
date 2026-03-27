@@ -31,6 +31,7 @@ import io.opentelemetry.proto.common.v1.AnyValue
 import io.opentelemetry.proto.common.v1.KeyValue
 import io.opentelemetry.proto.trace.v1.Span
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -167,7 +168,7 @@ class OtlpTraceService(
         val parsed =
             try {
                 json.parseToJsonElement(payload).jsonObject
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: SerializationException) {
                 logger.warn(e) { "Invalid OTLP traces JSON payload" }
                 return null
             }

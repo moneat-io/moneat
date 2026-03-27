@@ -65,7 +65,7 @@ private fun parseBearerHeaderSafely(rawHeader: String?): HttpAuthHeader? {
 
     return try {
         HttpAuthHeader.Single("Bearer", token)
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: Exception) {
         logger.warn(e) { "Invalid Bearer auth header format (tokenLength=${token.length})" }
         null
     }
@@ -77,7 +77,7 @@ private fun parseBearerHeaderForKtor(rawHeader: String?): HttpAuthHeader? {
 
     return try {
         HttpAuthHeader.Single("Bearer", encodedToken)
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: Exception) {
         logger.warn(e) { "Failed to build token68-compatible bearer header (tokenLength=${token.length})" }
         null
     }
@@ -134,7 +134,7 @@ fun Application.configureSecurity() {
                         try {
                             io.ktor.http.auth.HttpAuthHeader
                                 .Single("Bearer", cookieToken)
-                        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                        } catch (e: Exception) {
                             null
                         }
                     } else {
@@ -216,7 +216,7 @@ fun Application.configureSecurity() {
                             tokenId = -1 // Not applicable for JWT
                         )
                     }
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     // Not a valid JWT either
                 }
 

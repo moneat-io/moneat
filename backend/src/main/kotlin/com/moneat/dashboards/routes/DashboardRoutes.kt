@@ -452,7 +452,7 @@ fun Route.customDashboardRoutes(
                                 retentionDays
                             )
                         }
-                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                    } catch (e: Exception) {
                         logger.warn(e) { "Batch query $refId failed" }
                         results[refId] = emptyList()
                     }
@@ -525,7 +525,7 @@ fun Route.customDashboardRoutes(
                 val request = call.receive<ImportDashboardRequest>()
                 val jsonObj = try {
                     json.parseToJsonElement(request.json) as JsonObject
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid JSON"))
                 }
 
@@ -564,7 +564,7 @@ fun Route.customDashboardRoutes(
                         HttpStatusCode.Created,
                         DashboardImportResult(created, importResult.warnings, importResult.variables)
                     )
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     logger.error(e) { "Failed to import dashboard" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to import: ${e.message}"))
                 }
@@ -738,7 +738,7 @@ fun Route.customDashboardRoutes(
                     try {
                         val result = dataSourceExecutor.testConnection(request)
                         call.respond(result)
-                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                    } catch (e: Exception) {
                         call.respond(TestConnectionResult(false, "Test failed: ${e.message}"))
                     }
                 }

@@ -67,8 +67,6 @@ fun Route.dbmIngestRoutes() {
         post("/dbmhealth") { handleDbmHealth() }
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
@@ -87,8 +85,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
@@ -107,8 +103,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
@@ -127,8 +121,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
@@ -147,8 +139,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleDbmHealth() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 

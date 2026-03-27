@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-@file:Suppress("TooGenericExceptionCaught")
-
 package com.moneat.uptime.services
 
 import com.moneat.billing.services.BillingQuotaService
@@ -29,11 +27,13 @@ import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.models.UptimeMonitorResponse
 import com.moneat.uptime.repositories.UptimeMonitorRepository
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
+import java.io.IOException
 import java.security.SecureRandom
 import java.util.UUID
 import kotlin.math.roundToInt
@@ -180,7 +180,9 @@ class UptimeService(
 
         try {
             uptimeMonitorRepository.executeClickHouseInsert(sql)
-        } catch (e: Exception) {
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to record heartbeat for monitor $monitorId" }
+        } catch (e: IllegalStateException) {
             logger.error(e) { "Failed to record heartbeat for monitor $monitorId" }
         }
     }
@@ -237,12 +239,18 @@ class UptimeService(
                         message = json["message"]?.jsonPrimitive?.content ?: "",
                         pingMs = json["ping_ms"]?.jsonPrimitive?.content?.toFloatOrNull()
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
                     logger.warn(e) { "Failed to parse heartbeat: $line" }
                     null
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to query heartbeats for monitor $monitorId" }
+            emptyList()
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to query heartbeats for monitor $monitorId" }
+            emptyList()
+        } catch (e: SerializationException) {
             logger.error(e) { "Failed to query heartbeats for monitor $monitorId" }
             emptyList()
         }
@@ -280,7 +288,13 @@ class UptimeService(
             val totalCount = json["total_count"]?.jsonPrimitive?.long ?: 0L
 
             if (totalCount == 0L) 0f else (upCount.toFloat() / totalCount.toFloat() * 100f)
-        } catch (e: Exception) {
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to calculate uptime for monitor $monitorId" }
+            0f
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to calculate uptime for monitor $monitorId" }
+            0f
+        } catch (e: SerializationException) {
             logger.error(e) { "Failed to calculate uptime for monitor $monitorId" }
             0f
         }
@@ -317,7 +331,13 @@ class UptimeService(
                 ?.content
                 ?.toDoubleOrNull()
                 ?.roundToInt() ?: 0
-        } catch (e: Exception) {
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to calculate avg response time for monitor $monitorId" }
+            0
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to calculate avg response time for monitor $monitorId" }
+            0
+        } catch (e: SerializationException) {
             logger.error(e) { "Failed to calculate avg response time for monitor $monitorId" }
             0
         }
@@ -394,7 +414,11 @@ class UptimeService(
             method = monitor.method,
             headers =
             monitor.headers?.let {
-                try { Json.decodeFromString<Map<String, String>>(it) } catch (e: Exception) { null }
+                try {
+                    Json.decodeFromString<Map<String, String>>(it)
+                } catch (e: SerializationException) {
+                    null
+                }
             },
             body = monitor.body,
             authMethod = monitor.authMethod,

@@ -83,7 +83,7 @@ object OpenAiClient {
                     header("Authorization", "Bearer $apiKey")
                     setBody(request)
                 }
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
             }
 

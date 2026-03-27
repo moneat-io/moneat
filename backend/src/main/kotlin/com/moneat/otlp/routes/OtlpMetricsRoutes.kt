@@ -24,6 +24,7 @@ import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.otlp.services.OtlpMetricsService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpHeaders
+import java.io.IOException
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
@@ -85,7 +86,13 @@ private suspend fun handleOtlpMetricsIngest(
     val encoding = call.request.header(HttpHeaders.ContentEncoding)
     val payloadBytes = try {
         DecompressionService.decompress(bodyBytes, encoding)
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: IOException) {
+        call.respond(
+            HttpStatusCode.BadRequest,
+            ErrorResponse("Failed to decompress request body")
+        )
+        return
+    } catch (e: IllegalStateException) {
         call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse("Failed to decompress request body")

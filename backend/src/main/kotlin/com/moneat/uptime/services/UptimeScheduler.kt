@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-@file:Suppress("TooGenericExceptionCaught")
-
 package com.moneat.uptime.services
 
 import com.moneat.billing.services.BillingQuotaService
@@ -26,16 +24,22 @@ import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
+import jakarta.mail.MessagingException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 import java.util.*
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -102,7 +106,10 @@ class UptimeScheduler(
         val monitors =
             try {
                 uptimeService.getMonitorsDueForCheck()
-            } catch (e: Exception) {
+            } catch (e: SQLException) {
+                logger.error(e) { "Failed to fetch monitors due for check: ${e.message}" }
+                return
+            } catch (e: IllegalStateException) {
                 logger.error(e) { "Failed to fetch monitors due for check: ${e.message}" }
                 return
             }
@@ -122,7 +129,17 @@ class UptimeScheduler(
             scope.launch {
                 try {
                     performCheck(monitor.id)
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
+                } catch (e: MessagingException) {
                     logger.error(e) { "Failed to perform check for monitor ${monitor.id}: ${e.message}" }
                 } finally {
                     runningChecks.remove(monitor.id)
@@ -139,7 +156,10 @@ class UptimeScheduler(
         val monitor =
             try {
                 uptimeService.getMonitorsDueForCheck().find { it.id == monitorId }
-            } catch (e: Exception) {
+            } catch (e: SQLException) {
+                logger.error(e) { "Failed to fetch monitor $monitorId: ${e.message}" }
+                return
+            } catch (e: IllegalStateException) {
                 logger.error(e) { "Failed to fetch monitor $monitorId: ${e.message}" }
                 return
             }
@@ -160,7 +180,18 @@ class UptimeScheduler(
                 withTimeout(monitor.timeoutSeconds * 1000L + 5000) { // Add 5s buffer
                     checkExecutor.executeCheck(monitor)
                 }
-            } catch (e: Exception) {
+            } catch (e: TimeoutCancellationException) {
+                logger.error(e) { "Check execution failed for monitor ${monitor.id}: ${e.message}" }
+                com.moneat.uptime.models.CheckResult(0, -1, 0, "Check execution failed: ${e.message}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                logger.error(e) { "Check execution failed for monitor ${monitor.id}: ${e.message}" }
+                com.moneat.uptime.models.CheckResult(0, -1, 0, "Check execution failed: ${e.message}")
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Check execution failed for monitor ${monitor.id}: ${e.message}" }
+                com.moneat.uptime.models.CheckResult(0, -1, 0, "Check execution failed: ${e.message}")
+            } catch (e: SQLException) {
                 logger.error(e) { "Check execution failed for monitor ${monitor.id}: ${e.message}" }
                 com.moneat.uptime.models.CheckResult(0, -1, 0, "Check execution failed: ${e.message}")
             }
@@ -176,7 +207,11 @@ class UptimeScheduler(
         // Record heartbeat
         try {
             uptimeService.recordHeartbeat(monitor.id, finalResult)
-        } catch (e: Exception) {
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to record heartbeat for monitor ${monitor.id}: ${e.message}" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to record heartbeat for monitor ${monitor.id}: ${e.message}" }
+        } catch (e: SerializationException) {
             logger.error(e) { "Failed to record heartbeat for monitor ${monitor.id}: ${e.message}" }
         }
 
@@ -199,7 +234,17 @@ class UptimeScheduler(
             // This would integrate with the existing alert system
             try {
                 notifyStatusChange(monitor, oldStatus, newStatus, finalResult)
-            } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SQLException) {
+                logger.error(e) { "Failed to send status change notification: ${e.message}" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send status change notification: ${e.message}" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send status change notification: ${e.message}" }
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to send status change notification: ${e.message}" }
+            } catch (e: MessagingException) {
                 logger.error(e) { "Failed to send status change notification: ${e.message}" }
             }
         }
@@ -222,7 +267,18 @@ class UptimeScheduler(
                     withTimeout(monitor.timeoutSeconds * 1000L + 5000) {
                         checkExecutor.executeCheck(monitor)
                     }
-                } catch (e: Exception) {
+                } catch (e: TimeoutCancellationException) {
+                    logger.error(e) { "Retry $retry failed for monitor ${monitor.id}: ${e.message}" }
+                    com.moneat.uptime.models.CheckResult(0, -1, 0, "Retry failed: ${e.message}")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: IOException) {
+                    logger.error(e) { "Retry $retry failed for monitor ${monitor.id}: ${e.message}" }
+                    com.moneat.uptime.models.CheckResult(0, -1, 0, "Retry failed: ${e.message}")
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Retry $retry failed for monitor ${monitor.id}: ${e.message}" }
+                    com.moneat.uptime.models.CheckResult(0, -1, 0, "Retry failed: ${e.message}")
+                } catch (e: SQLException) {
                     logger.error(e) { "Retry $retry failed for monitor ${monitor.id}: ${e.message}" }
                     com.moneat.uptime.models.CheckResult(0, -1, 0, "Retry failed: ${e.message}")
                 }
@@ -277,12 +333,32 @@ class UptimeScheduler(
                             message = result.message,
                             monitorUrl = monitorUrl
                         )
-                    } catch (e: Exception) {
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: SQLException) {
+                        logger.error(e) { "Failed to send uptime alert email to $email" }
+                    } catch (e: IOException) {
+                        logger.error(e) { "Failed to send uptime alert email to $email" }
+                    } catch (e: IllegalStateException) {
+                        logger.error(e) { "Failed to send uptime alert email to $email" }
+                    } catch (e: SerializationException) {
+                        logger.error(e) { "Failed to send uptime alert email to $email" }
+                    } catch (e: MessagingException) {
                         logger.error(e) { "Failed to send uptime alert email to $email" }
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SQLException) {
+            logger.error(e) { "Failed to send uptime alert emails" }
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to send uptime alert emails" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to send uptime alert emails" }
+        } catch (e: SerializationException) {
+            logger.error(e) { "Failed to send uptime alert emails" }
+        } catch (e: MessagingException) {
             logger.error(e) { "Failed to send uptime alert emails" }
         }
 
@@ -295,7 +371,10 @@ class UptimeScheduler(
                         alertSource = "UPTIME_MONITOR",
                         channel = "slack"
                     ).isNotEmpty()
-            } catch (e: Exception) {
+            } catch (e: SQLException) {
+                logger.error(e) { "Failed to evaluate Slack notification preferences for uptime monitor" }
+                false
+            } catch (e: IllegalStateException) {
                 logger.error(e) { "Failed to evaluate Slack notification preferences for uptime monitor" }
                 false
             }
@@ -310,7 +389,15 @@ class UptimeScheduler(
                     monitorId = monitor.id,
                     baseUrl = baseUrl
                 )
-            } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SQLException) {
+                logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
+            } catch (e: SerializationException) {
                 logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
             }
         }
@@ -324,7 +411,10 @@ class UptimeScheduler(
                         alertSource = "UPTIME_MONITOR",
                         channel = "discord"
                     ).isNotEmpty()
-            } catch (e: Exception) {
+            } catch (e: SQLException) {
+                logger.error(e) { "Failed to evaluate Discord notification preferences for uptime monitor" }
+                false
+            } catch (e: IllegalStateException) {
                 logger.error(e) { "Failed to evaluate Discord notification preferences for uptime monitor" }
                 false
             }
@@ -340,7 +430,15 @@ class UptimeScheduler(
                     monitorId = monitor.id,
                     baseUrl = baseUrl
                 )
-            } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SQLException) {
+                logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
+            } catch (e: SerializationException) {
                 logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
             }
         }
@@ -388,7 +486,15 @@ class UptimeScheduler(
                     deduplicationKey = "moneat-uptime-${monitor.id}"
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SQLException) {
+            logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
+        } catch (e: IOException) {
+            logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
+        } catch (e: SerializationException) {
             logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
         }
     }

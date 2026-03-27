@@ -373,7 +373,7 @@ class DiscordService(
                 logger.error("Failed to send to Discord: ${response.status} - ${response.bodyAsText()}")
                 false to errorMsg
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error("Error sending to Discord", e)
             false to "Error: ${e.message}"
         }
@@ -554,7 +554,7 @@ class DiscordService(
                 )
 
             json.decodeFromString<DiscordOAuthResponse>(response.bodyAsText())
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error("Error exchanging Discord OAuth code", e)
             DiscordOAuthResponse(error = e.message)
         }
@@ -580,7 +580,7 @@ class DiscordService(
                 logger.error("Failed to list Discord channels: ${response.status}")
                 emptyList()
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error("Error listing Discord channels", e)
             emptyList()
         }

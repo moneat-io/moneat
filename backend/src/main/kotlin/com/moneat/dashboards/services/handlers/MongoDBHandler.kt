@@ -49,7 +49,7 @@ class MongoDBHandler : DataSourceHandler {
                 val databases = client.listDatabaseNames().toList()
                 TestConnectionResult(true, "Connected successfully", databases = databases.take(20))
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.warn(e) { "MongoDB connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -84,7 +84,7 @@ class MongoDBHandler : DataSourceHandler {
                 }
                 docs.map { docToMap(it) }
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "MongoDB query failed" }
             emptyList()
         }
@@ -106,7 +106,7 @@ class MongoDBHandler : DataSourceHandler {
                 val collections = db.listCollectionNames().toList()
                 collections.map { DataSourceField(it, "collection", "MongoDB collection") }
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "MongoDB schema fetch failed" }
             emptyList()
         }
@@ -137,7 +137,7 @@ class MongoDBHandler : DataSourceHandler {
                 org.bson.BsonDocument.parse(it.toJson())
             }
             Triple(collection, filter, pipeline)
-        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+        } catch (_: Exception) {
             Triple("test", BsonDocument(), null)
         }
     }

@@ -92,7 +92,7 @@ class EventRepositoryImpl : EventRepository {
                 ?.get("cnt")
                 ?.jsonPrimitive
                 ?.longOrNull ?: 0
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Error checking event count for issue $issueId" }
             0
         }
@@ -387,7 +387,7 @@ class EventRepositoryImpl : EventRepository {
         return try {
             val response = ClickHouseClient.execute(sql)
             response.status.isSuccess()
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "ClickHouse insert failed" }
             false
         }
@@ -400,7 +400,7 @@ class EventRepositoryImpl : EventRepository {
                 val errorBody = response.bodyAsText()
                 logger.error { "ClickHouse insert failed: $errorBody" }
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "ClickHouse insert failed" }
         }
     }

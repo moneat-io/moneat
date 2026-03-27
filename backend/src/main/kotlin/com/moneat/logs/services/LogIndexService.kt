@@ -200,7 +200,7 @@ class LogIndexService {
                 if (matchesFilter(index.filterQuery, logEntry)) {
                     return index.name
                 }
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.warn(e) {
                     "Filter evaluation failed for index '${index.name}' " +
                         "query='${index.filterQuery}'; skipping"
@@ -254,7 +254,7 @@ class LogIndexService {
                     """.trimIndent()
                     executeCountQuery(matchSql)
                 }
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.warn(e) {
                     "Failed to test filter query: $filterQuery"
                 }
@@ -291,7 +291,7 @@ class LogIndexService {
                         .replace("\\?", ".")
                     try {
                         value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
-                    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+                    } catch (_: Exception) {
                         false
                     }
                 } else {
@@ -367,7 +367,7 @@ class LogIndexService {
                     ?.jsonPrimitive
                     ?.longOrNull ?: 0L
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.warn(e) { "Count query failed: $sql" }
             0L
         }

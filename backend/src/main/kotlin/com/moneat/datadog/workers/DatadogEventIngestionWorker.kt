@@ -18,16 +18,20 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogEventService
+import com.moneat.utils.brpopLoopBackoff
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 
@@ -75,11 +79,22 @@ class DatadogEventIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                    logger.error(e) {
-                        "DD event worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DD event",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DD event",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
             }
         } finally {
@@ -98,12 +113,31 @@ class DatadogEventIngestionWorker(
             val batch =
                 DatadogEventService.decodeEventBatch(payload)
             DatadogEventService.insertEventBatch(batch)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) {
-                "DD event worker $workerId failed, " +
-                    "pushing to DLQ"
-            }
-            onDlq(payload)
+        } catch (e: SerializationException) {
+            handleEventDlq(workerId, payload, e, onDlq)
+        } catch (e: IOException) {
+            handleEventDlq(workerId, payload, e, onDlq)
+        } catch (e: SQLException) {
+            handleEventDlq(workerId, payload, e, onDlq)
+        } catch (e: RedisException) {
+            handleEventDlq(workerId, payload, e, onDlq)
+        } catch (e: IllegalStateException) {
+            handleEventDlq(workerId, payload, e, onDlq)
+        } catch (e: IllegalArgumentException) {
+            handleEventDlq(workerId, payload, e, onDlq)
         }
+    }
+
+    private fun handleEventDlq(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+        onDlq: (String) -> Unit,
+    ) {
+        logger.error(e) {
+            "DD event worker $workerId failed, " +
+                "pushing to DLQ"
+        }
+        onDlq(payload)
     }
 }

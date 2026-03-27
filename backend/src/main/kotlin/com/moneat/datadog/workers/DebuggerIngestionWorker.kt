@@ -18,16 +18,20 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DebuggerIngestionService
+import com.moneat.utils.brpopLoopBackoff
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 
@@ -57,8 +61,6 @@ class DebuggerIngestionWorker(
         scope.cancel()
         logger.info { "DebuggerIngestionWorker stopped" }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun runWorker(workerId: Int) {
         val conn = RedisConfig.newBlockingConnection()
         try {
@@ -73,19 +75,28 @@ class DebuggerIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
-                    logger.error(e) {
-                        "Debugger worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "Debugger",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "Debugger",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
             }
         } finally {
             RedisConfig.closeBlockingConnection(conn)
         }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
@@ -99,11 +110,29 @@ class DebuggerIngestionWorker(
                     "logs=${batch.logs.size} " +
                     "diagnostics=${batch.diagnostics.size}"
             }
-        } catch (e: Exception) {
-            logger.error(e) {
-                "Debugger worker $workerId failed, pushing to DLQ"
-            }
-            RedisConfig.sync().rpush(dlqKey, payload)
+        } catch (e: SerializationException) {
+            handleDebuggerDlq(workerId, payload, e)
+        } catch (e: IOException) {
+            handleDebuggerDlq(workerId, payload, e)
+        } catch (e: SQLException) {
+            handleDebuggerDlq(workerId, payload, e)
+        } catch (e: RedisException) {
+            handleDebuggerDlq(workerId, payload, e)
+        } catch (e: IllegalStateException) {
+            handleDebuggerDlq(workerId, payload, e)
+        } catch (e: IllegalArgumentException) {
+            handleDebuggerDlq(workerId, payload, e)
         }
+    }
+
+    private fun handleDebuggerDlq(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+    ) {
+        logger.error(e) {
+            "Debugger worker $workerId failed, pushing to DLQ"
+        }
+        RedisConfig.sync().rpush(dlqKey, payload)
     }
 }

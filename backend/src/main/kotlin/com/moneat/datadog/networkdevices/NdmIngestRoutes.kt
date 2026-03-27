@@ -50,8 +50,6 @@ fun Route.ndmIngestRoutes() {
         post("/netpath") { handleNdmPayload() }
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     try {

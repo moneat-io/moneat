@@ -17,16 +17,20 @@
 package com.moneat.datadog.networkdevices
 
 import com.moneat.config.RedisConfig
+import com.moneat.utils.brpopLoopBackoff
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 
@@ -56,8 +60,6 @@ class NdmIngestionWorker(
         scope.cancel()
         logger.info { "NdmIngestionWorker stopped" }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun runWorker(workerId: Int) {
         val conn = RedisConfig.newBlockingConnection()
         try {
@@ -72,19 +74,28 @@ class NdmIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
-                    logger.error(e) {
-                        "NDM worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "NDM",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "NDM",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
             }
         } finally {
             RedisConfig.closeBlockingConnection(conn)
         }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
@@ -96,11 +107,29 @@ class NdmIngestionWorker(
                 "NDM worker $workerId processed batch: " +
                     "type=${batch.batchType}"
             }
-        } catch (e: Exception) {
-            logger.error(e) {
-                "NDM worker $workerId failed, pushing to DLQ"
-            }
-            RedisConfig.sync().rpush(dlqKey, payload)
+        } catch (e: SerializationException) {
+            handleNdmDlq(workerId, payload, e)
+        } catch (e: IOException) {
+            handleNdmDlq(workerId, payload, e)
+        } catch (e: SQLException) {
+            handleNdmDlq(workerId, payload, e)
+        } catch (e: RedisException) {
+            handleNdmDlq(workerId, payload, e)
+        } catch (e: IllegalStateException) {
+            handleNdmDlq(workerId, payload, e)
+        } catch (e: IllegalArgumentException) {
+            handleNdmDlq(workerId, payload, e)
         }
+    }
+
+    private fun handleNdmDlq(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+    ) {
+        logger.error(e) {
+            "NDM worker $workerId failed, pushing to DLQ"
+        }
+        RedisConfig.sync().rpush(dlqKey, payload)
     }
 }

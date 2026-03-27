@@ -66,7 +66,7 @@ class UptimeSchedulerTest {
         scheduler.stop()
         try {
             unmockkObject(TaskLock)
-        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+        } catch (_: Exception) {
             // TaskLock may not have been mocked in every test
         }
     }

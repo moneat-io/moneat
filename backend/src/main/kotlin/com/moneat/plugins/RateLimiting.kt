@@ -75,7 +75,7 @@ private object TrustedProxies {
                 if (addrBits != networkBits) return false
             }
             true
-        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+        } catch (_: Exception) {
             false
         }
     }

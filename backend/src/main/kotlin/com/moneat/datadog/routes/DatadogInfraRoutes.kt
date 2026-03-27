@@ -80,7 +80,7 @@ private suspend fun handleProcessAgentPayload(
 
     val proto = try {
         ProcessAgentPayloadDecoder.decompressBody(rawBody, header.encoding)
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: Exception) {
         logger.warn(e) { "Failed to decompress DD infra payload (type=${header.type}) for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
         return
@@ -90,7 +90,7 @@ private suspend fun handleProcessAgentPayload(
         ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONTAINER -> {
             val payload = try {
                 ProcessAgentPayloadDecoder.decodeCollectorContainer(proto)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.warn(e) { "Failed to decode CollectorContainer for org $orgId" }
                 return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             }
@@ -102,7 +102,7 @@ private suspend fun handleProcessAgentPayload(
         ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC_DISCOVERY -> {
             val payload = try {
                 ProcessAgentPayloadDecoder.decodeCollectorProc(proto)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.warn(e) { "Failed to decode CollectorProc for org $orgId" }
                 return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             }

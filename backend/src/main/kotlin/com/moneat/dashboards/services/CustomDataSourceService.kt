@@ -113,7 +113,7 @@ class CustomDataSourceService {
                 val existingCreds = try {
                     val dec = CredentialEncryption.decrypt(existing[CustomDataSources.encryptedCredentials])
                     json.decodeFromString<DataSourceCredentials>(dec)
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                } catch (e: Exception) {
                     throw IllegalStateException(
                         "Failed to decrypt existing credentials for data source $id; " +
                             "cannot safely merge new credentials",
@@ -176,7 +176,7 @@ class CustomDataSourceService {
         try {
             val decrypted = CredentialEncryption.decrypt(row[CustomDataSources.encryptedCredentials])
             json.decodeFromString<DataSourceCredentials>(decrypted)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Failed to decrypt credentials for data source $id" }
             null
         }
@@ -198,7 +198,7 @@ class CustomDataSourceService {
         databaseName = this[CustomDataSources.databaseName],
         extraConfig = try {
             json.decodeFromString<Map<String, String>>(this[CustomDataSources.extraConfig])
-        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) { emptyMap() },
+        } catch (_: Exception) { emptyMap() },
         enabled = this[CustomDataSources.enabled],
         createdBy = this[CustomDataSources.createdBy],
         createdAt = this[CustomDataSources.createdAt].toString(),

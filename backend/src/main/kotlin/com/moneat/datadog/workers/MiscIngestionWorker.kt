@@ -18,16 +18,20 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.MiscIngestionService
+import com.moneat.utils.brpopLoopBackoff
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 
@@ -57,8 +61,6 @@ class MiscIngestionWorker(
         scope.cancel()
         logger.info { "MiscIngestionWorker stopped" }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun runWorker(workerId: Int) {
         val conn = RedisConfig.newBlockingConnection()
         try {
@@ -73,19 +75,28 @@ class MiscIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
-                    logger.error(e) {
-                        "Misc worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "Misc",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "Misc",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
             }
         } finally {
             RedisConfig.closeBlockingConnection(conn)
         }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
@@ -97,11 +108,29 @@ class MiscIngestionWorker(
                 "Misc worker $workerId processed batch: " +
                     "type=${batch.batchType}"
             }
-        } catch (e: Exception) {
-            logger.error(e) {
-                "Misc worker $workerId failed, pushing to DLQ"
-            }
-            RedisConfig.sync().rpush(dlqKey, payload)
+        } catch (e: SerializationException) {
+            handleMiscDlq(workerId, payload, e)
+        } catch (e: IOException) {
+            handleMiscDlq(workerId, payload, e)
+        } catch (e: SQLException) {
+            handleMiscDlq(workerId, payload, e)
+        } catch (e: RedisException) {
+            handleMiscDlq(workerId, payload, e)
+        } catch (e: IllegalStateException) {
+            handleMiscDlq(workerId, payload, e)
+        } catch (e: IllegalArgumentException) {
+            handleMiscDlq(workerId, payload, e)
         }
+    }
+
+    private fun handleMiscDlq(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+    ) {
+        logger.error(e) {
+            "Misc worker $workerId failed, pushing to DLQ"
+        }
+        RedisConfig.sync().rpush(dlqKey, payload)
     }
 }

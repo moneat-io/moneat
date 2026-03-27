@@ -17,6 +17,7 @@
 package com.moneat.analytics.services
 
 import com.moneat.config.RedisConfig
+import io.lettuce.core.RedisException
 import mu.KotlinLogging
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -61,7 +62,7 @@ class SessionHashService {
 
         val existing = try {
             RedisConfig.sync().get(key)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: RedisException) {
             logger.warn(e) { "Failed to read daily salt from Redis, generating ephemeral salt" }
             null
         }
@@ -82,7 +83,7 @@ class SessionHashService {
             }
             // Another worker won the race — read their salt
             return RedisConfig.sync().get(key) ?: salt
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: RedisException) {
             logger.warn(e) { "Failed to store daily salt in Redis, using ephemeral salt" }
             return salt
         }

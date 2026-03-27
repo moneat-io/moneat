@@ -80,8 +80,6 @@ fun Route.miscIngestRoutes() {
         post("/events") { handleEventManagement() }
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     try {
@@ -97,8 +95,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     try {
@@ -114,8 +110,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats() 
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     try {
@@ -131,8 +125,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     try {
@@ -148,8 +140,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     try {
@@ -165,8 +155,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     try {
@@ -189,8 +177,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage()
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleSbom() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     try {

@@ -320,7 +320,7 @@ private fun parseSentryProfileToFrames(
                 }
             )
         }
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: Exception) {
         buildJsonObject { put("frames", buildJsonArray {}) }
     }
 }

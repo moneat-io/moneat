@@ -35,8 +35,6 @@ fun Route.telemetryProxyRoutes() {
         post("/proxy/{path...}") { handleTelemetryProxy() }
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleTelemetryProxy() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 

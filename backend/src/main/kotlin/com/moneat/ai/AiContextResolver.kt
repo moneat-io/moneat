@@ -68,7 +68,7 @@ object AiContextResolver {
                     logger.warn { "AI context doc not found: $path" }
                     return null
                 }
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.warn { "Failed to load AI context doc $path: ${e.message}" }
                 return null
             }

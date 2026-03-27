@@ -54,8 +54,6 @@ fun Route.securityQueryRoutes() {
         }
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
     val orgId = extractOrgId() ?: return
     val limit = paramLimit()
@@ -111,8 +109,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
         }
     )
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
     val orgId = extractOrgId() ?: return
     val eventId = call.parameters["eventId"] ?: return call.respond(
@@ -153,8 +149,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
         call.respond(rows.first())
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
     val orgId = extractOrgId() ?: return
     val limit = paramLimit()
@@ -204,8 +198,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
         }
     )
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummary() {
     val orgId = extractOrgId() ?: return
     val db = ClickHouseClient.getDatabase()

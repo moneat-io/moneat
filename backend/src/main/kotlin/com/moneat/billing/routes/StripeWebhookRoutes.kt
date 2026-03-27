@@ -53,7 +53,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleStripeWebhook(st
     val event =
         try {
             stripeService.verifyAndParseEvent(payload, signature)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.debug { "Stripe webhook signature verification failed: ${e.message}" }
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid webhook signature"))
             return
@@ -70,7 +70,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleStripeWebhook(st
         dispatchStripeEvent(stripeService, event)
         stripeService.markEventProcessed(event, "processed")
         call.respond(HttpStatusCode.OK, mapOf("received" to true))
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: Exception) {
         logger.error(e) { "Failed handling Stripe webhook ${event.id} (${event.type})" }
         stripeService.markEventProcessed(event, "failed", e.message)
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Webhook handling failed"))

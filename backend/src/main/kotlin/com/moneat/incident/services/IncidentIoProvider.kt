@@ -118,7 +118,7 @@ class IncidentIoProvider : IncidentProvider {
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error("Error sending alert to incident.io", e)
             Result.failure(e)
         }
@@ -158,7 +158,7 @@ class IncidentIoProvider : IncidentProvider {
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error("Error resolving alert with incident.io", e)
             Result.failure(e)
         }
@@ -198,7 +198,7 @@ class IncidentIoProvider : IncidentProvider {
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error("Error testing incident.io connection", e)
             Result.failure(e)
         }

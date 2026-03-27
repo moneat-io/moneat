@@ -65,7 +65,7 @@ class RetentionBackgroundService(
                 while (isActive) {
                     try {
                         runSweep()
-                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                    } catch (e: Exception) {
                         logger.error(e) { "Retention sweep failed" }
                     }
                     delay(sweepIntervalSeconds * 1000L)
@@ -289,7 +289,7 @@ class RetentionBackgroundService(
             } else {
                 true
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Retention mutation exception for $label" }
             false
         }

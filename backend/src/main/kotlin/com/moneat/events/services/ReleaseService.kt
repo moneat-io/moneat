@@ -543,7 +543,7 @@ class ReleaseService {
                     "cache:project_stats:$projectId:*"
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) {
                 "Failed to auto-resolve issues for project " +
                     "$projectId on release $newVersion"

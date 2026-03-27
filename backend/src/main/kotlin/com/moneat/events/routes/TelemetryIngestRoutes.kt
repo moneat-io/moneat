@@ -67,7 +67,7 @@ fun Route.telemetryIngestRoutes(
         post {
             val payload = try {
                 call.receive<PulsePayload>()
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
                 return@post
@@ -82,7 +82,7 @@ fun Route.telemetryIngestRoutes(
                 insertPulse(payload)
                 logger.debug { "Telemetry pulse stored for deployment=${payload.deploymentId}" }
                 call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))
             }

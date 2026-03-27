@@ -46,8 +46,6 @@ fun Route.orchestratorIngestRoutes() {
         post("/orchmanif") { handleOrchestratorManifests() }
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorResources() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
@@ -66,8 +64,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorReso
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorManifests() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 

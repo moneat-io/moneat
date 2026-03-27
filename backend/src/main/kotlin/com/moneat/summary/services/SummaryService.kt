@@ -49,6 +49,7 @@ import com.moneat.summary.models.UptimeMonitorSummary
 import com.moneat.summary.models.WeeklyReportResponse
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
+import com.moneat.utils.recoverOnExpectedFailures
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -779,28 +780,25 @@ class SummaryService(
     // --- Query execution helpers ---
 
     private suspend fun executeScalar(query: String): Long {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary scalar query", 0) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return 0
+            if (body.isBlank()) return@recoverOnExpectedFailures 0
             val obj = json.parseToJsonElement(body.lines().first())
                 .jsonObject
             obj["total"]?.jsonPrimitive?.long ?: 0
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary scalar query failed" }
-            0
         }
     }
 
     private suspend fun executeIssueQuery(
         query: String
     ): List<IssueSummaryItem> {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary issue query", emptyList()) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+            if (body.isBlank()) return@recoverOnExpectedFailures emptyList()
             val root = json.parseToJsonElement(body).jsonObject
-            val data = root["data"]?.jsonArray ?: return emptyList()
+            val data = root["data"]?.jsonArray ?: return@recoverOnExpectedFailures emptyList()
             data.map { row ->
                 val obj = row.jsonObject
                 IssueSummaryItem(
@@ -813,21 +811,18 @@ class SummaryService(
                         ?.jsonPrimitive?.long ?: 0
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary issue query failed" }
-            emptyList()
         }
     }
 
     private suspend fun executeDailyErrorQuery(
         query: String
     ): List<DailyErrorCount> {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary daily error query", emptyList()) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+            if (body.isBlank()) return@recoverOnExpectedFailures emptyList()
             val root = json.parseToJsonElement(body).jsonObject
-            val data = root["data"]?.jsonArray ?: return emptyList()
+            val data = root["data"]?.jsonArray ?: return@recoverOnExpectedFailures emptyList()
             data.map { row ->
                 val obj = row.jsonObject
                 DailyErrorCount(
@@ -835,21 +830,18 @@ class SummaryService(
                     count = obj["count"]?.jsonPrimitive?.long ?: 0
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary daily error query failed" }
-            emptyList()
         }
     }
 
     private suspend fun executeLatencyQuery(
         query: String
     ): List<TransactionLatencySummary> {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary latency query", emptyList()) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+            if (body.isBlank()) return@recoverOnExpectedFailures emptyList()
             val root = json.parseToJsonElement(body).jsonObject
-            val data = root["data"]?.jsonArray ?: return emptyList()
+            val data = root["data"]?.jsonArray ?: return@recoverOnExpectedFailures emptyList()
             data.map { row ->
                 val obj = row.jsonObject
                 TransactionLatencySummary(
@@ -859,21 +851,18 @@ class SummaryService(
                     count = obj["cnt"]?.jsonPrimitive?.long ?: 0
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary latency query failed" }
-            emptyList()
         }
     }
 
     private suspend fun executeLogQuery(
         query: String
     ): List<RelatedLogEntry> {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary log query", emptyList()) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+            if (body.isBlank()) return@recoverOnExpectedFailures emptyList()
             val root = json.parseToJsonElement(body).jsonObject
-            val data = root["data"]?.jsonArray ?: return emptyList()
+            val data = root["data"]?.jsonArray ?: return@recoverOnExpectedFailures emptyList()
             data.map { row ->
                 val obj = row.jsonObject
                 RelatedLogEntry(
@@ -885,21 +874,18 @@ class SummaryService(
                     service = obj["service"]?.jsonPrimitive?.content
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary log query failed" }
-            emptyList()
         }
     }
 
     private suspend fun executeErrorSpikeQuery(
         query: String
     ): List<ErrorSpikeEntry> {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary error spike query", emptyList()) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+            if (body.isBlank()) return@recoverOnExpectedFailures emptyList()
             val root = json.parseToJsonElement(body).jsonObject
-            val data = root["data"]?.jsonArray ?: return emptyList()
+            val data = root["data"]?.jsonArray ?: return@recoverOnExpectedFailures emptyList()
             data.map { row ->
                 val obj = row.jsonObject
                 ErrorSpikeEntry(
@@ -911,9 +897,6 @@ class SummaryService(
                         ?.jsonPrimitive?.content ?: ""
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary error spike query failed" }
-            emptyList()
         }
     }
 

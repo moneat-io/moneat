@@ -130,7 +130,7 @@ class OrgInvitationService(
             try {
                 inviteMember(orgId, email.trim(), role, invitedByUserId)
                 success.add(email)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.warn("Failed to invite $email: ${e.message}")
                 failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
             }

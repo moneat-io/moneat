@@ -110,7 +110,7 @@ class GrafanaTranslator : DashboardTranslator {
         val widgets = allPanels.mapIndexedNotNull { index, panel ->
             try {
                 importPanel(panel, index, warnings, inputsMap)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 warnings.add("Panel $index: failed to import - ${e.message}")
                 null
             }
@@ -949,7 +949,7 @@ class GrafanaTranslator : DashboardTranslator {
                     options = options.filter { it != "\$__all" },
                     datasource = datasource
                 )
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.warn { "Failed to parse Grafana variable: ${e.message}" }
                 null
             }

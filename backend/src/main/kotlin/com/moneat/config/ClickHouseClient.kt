@@ -144,7 +144,7 @@ object ClickHouseClient {
         return try {
             val response = httpClient!!.get("$baseUrl/ping")
             response.status == HttpStatusCode.OK
-        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
@@ -172,7 +172,7 @@ fun Application.configureClickHouse() {
     val url =
         try {
             environment.config.property("database.clickhouse.url").getString()
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             log.warn("ClickHouse URL not configured, skipping ClickHouse initialization (test environment)")
             return
         }
@@ -187,7 +187,7 @@ fun Application.configureClickHouse() {
         log.info("ClickHouse client initialized")
         // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering
         // (workers must stop before ClickHouse client is closed)
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    } catch (e: Exception) {
         log.error("Failed to initialize ClickHouse client. Make sure ClickHouse is running and accessible.", e)
         throw e
     }

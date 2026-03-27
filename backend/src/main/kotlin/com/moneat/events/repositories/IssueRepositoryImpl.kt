@@ -119,7 +119,7 @@ class IssueRepositoryImpl(
                     status = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved",
                     fingerprint = null
                 )
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.error(e) { "Failed to parse issue row" }
                 null
             }

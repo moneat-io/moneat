@@ -299,7 +299,7 @@ class AuthService(
         if (!emailVerified && verificationToken != null) {
             try {
                 emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 // Log but don't fail signup if email fails
                 println("Failed to send verification email: ${e.message}")
             }
@@ -336,7 +336,7 @@ class AuthService(
             emailService.sendVerificationEmail(normalizedEmail, verificationToken, user.name)
             userRepository.updateVerificationToken(user.id, verificationToken, expiresAt)
             true
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             println("Failed to send verification email: ${e.message}")
             false
         }
@@ -458,7 +458,7 @@ class AuthService(
             emailService.sendPasswordResetEmail(normalizedEmail, resetToken, user.name)
             userRepository.updatePasswordResetToken(user.id, resetToken, expiresAt)
             true
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             println("Failed to send password reset email: ${e.message}")
             false
         }

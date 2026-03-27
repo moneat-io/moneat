@@ -18,16 +18,20 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DbmIngestionService
+import com.moneat.utils.brpopLoopBackoff
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 
@@ -57,8 +61,6 @@ class DbmIngestionWorker(
         scope.cancel()
         logger.info { "DbmIngestionWorker stopped" }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun runWorker(workerId: Int) {
         val conn = RedisConfig.newBlockingConnection()
         try {
@@ -73,19 +75,28 @@ class DbmIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
-                    logger.error(e) {
-                        "DBM worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DBM",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DBM",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
             }
         } finally {
             RedisConfig.closeBlockingConnection(conn)
         }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
@@ -100,11 +111,29 @@ class DbmIngestionWorker(
                     "metrics=${batch.metrics.size} " +
                     "activity=${batch.activity.size}"
             }
-        } catch (e: Exception) {
-            logger.error(e) {
-                "DBM worker $workerId failed, pushing to DLQ"
-            }
-            RedisConfig.sync().rpush(dlqKey, payload)
+        } catch (e: SerializationException) {
+            handleDbmDlq(workerId, payload, e)
+        } catch (e: IOException) {
+            handleDbmDlq(workerId, payload, e)
+        } catch (e: SQLException) {
+            handleDbmDlq(workerId, payload, e)
+        } catch (e: RedisException) {
+            handleDbmDlq(workerId, payload, e)
+        } catch (e: IllegalStateException) {
+            handleDbmDlq(workerId, payload, e)
+        } catch (e: IllegalArgumentException) {
+            handleDbmDlq(workerId, payload, e)
         }
+    }
+
+    private fun handleDbmDlq(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+    ) {
+        logger.error(e) {
+            "DBM worker $workerId failed, pushing to DLQ"
+        }
+        RedisConfig.sync().rpush(dlqKey, payload)
     }
 }

@@ -47,7 +47,7 @@ object TaskLock {
         )
         val lock = try {
             lockProvider.lock(config)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Failed to acquire lock '$name'" }
             return null
         }
@@ -59,13 +59,13 @@ object TaskLock {
             block()
         } catch (e: CancellationException) {
             throw e
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (e: Exception) {
             logger.error(e) { "Error in locked task '$name'" }
             null
         } finally {
             try {
                 lock.get().unlock()
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            } catch (e: Exception) {
                 logger.error(e) { "Failed to unlock '$name'" }
             }
         }

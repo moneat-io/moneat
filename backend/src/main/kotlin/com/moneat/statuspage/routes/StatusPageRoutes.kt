@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-@file:Suppress("TooGenericExceptionCaught")
-
 package com.moneat.statuspage.routes
 
 import com.moneat.shared.models.Memberships
@@ -30,6 +28,7 @@ import com.moneat.statuspage.models.UpdateStatusPageRequest
 import com.moneat.statuspage.services.StatusPageService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -41,14 +40,46 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
+import java.io.IOException
+import java.sql.SQLException
 import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
+
+private suspend fun runStatusPageRoute(
+    call: ApplicationCall,
+    logMessage: String,
+    userMessage: String,
+    block: suspend () -> Unit,
+) {
+    try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: SQLException) {
+        logger.error(e) { "$logMessage: ${e.message}" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
+    } catch (e: IOException) {
+        logger.error(e) { "$logMessage: ${e.message}" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
+    } catch (e: SerializationException) {
+        logger.error(e) { "$logMessage: ${e.message}" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { "$logMessage: ${e.message}" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
+    } catch (e: IllegalArgumentException) {
+        logger.error(e) { "$logMessage: ${e.message}" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
+    }
+}
 
 /**
  * Helper to safely parse UUID from path parameter.
@@ -88,19 +119,19 @@ fun Route.statusPageRoutes(
              * List all status pages for organization.
              */
             get {
-                try {
+                runStatusPageRoute(call, "Failed to list status pages", "Failed to list status pages") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
 
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                        return@get
+                        return@runStatusPageRoute
                     }
 
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.OK, emptyList<StatusPageResponse>())
-                        return@get
+                        return@runStatusPageRoute
                     }
 
                     // For simplicity, use the first organization
@@ -108,9 +139,6 @@ fun Route.statusPageRoutes(
                     val statusPages = statusPageService.listStatusPages(organizationId)
 
                     call.respond(HttpStatusCode.OK, statusPages)
-                } catch (e: Exception) {
-                    logger.error(e) { "Failed to list status pages" }
-                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to list status pages"))
                 }
             }
 
@@ -141,7 +169,18 @@ fun Route.statusPageRoutes(
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid status page creation request" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to create status page" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create status page"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to create status page" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create status page"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to create status page" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create status page"))
+                } catch (e: IllegalStateException) {
                     logger.error(e) { "Failed to create status page" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create status page"))
                 }
@@ -151,25 +190,25 @@ fun Route.statusPageRoutes(
              * Get status page details.
              */
             get("/{pageId}") {
-                try {
+                runStatusPageRoute(call, "Failed to get status page", "Failed to get status page") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
 
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                        return@get
+                        return@runStatusPageRoute
                     }
 
                     if (pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid page ID format"))
-                        return@get
+                        return@runStatusPageRoute
                     }
 
                     val organizationIds = getOrganizationIdsForUser(userId)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@get
+                        return@runStatusPageRoute
                     }
 
                     val organizationId = organizationIds.first()
@@ -180,9 +219,6 @@ fun Route.statusPageRoutes(
                     } else {
                         call.respond(HttpStatusCode.OK, statusPage)
                     }
-                } catch (e: Exception) {
-                    logger.error(e) { "Failed to get status page" }
-                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to get status page"))
                 }
             }
 
@@ -224,7 +260,18 @@ fun Route.statusPageRoutes(
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid status page update request" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to update status page" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update status page"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to update status page" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update status page"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to update status page" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update status page"))
+                } catch (e: IllegalStateException) {
                     logger.error(e) { "Failed to update status page" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update status page"))
                 }
@@ -263,7 +310,21 @@ fun Route.statusPageRoutes(
                     } else {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Status page not found"))
                     }
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to delete status page" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to delete status page"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to delete status page" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to delete status page"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to delete status page" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to delete status page"))
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to delete status page" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to delete status page"))
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to delete status page" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to delete status page"))
                 }
@@ -297,7 +358,18 @@ fun Route.statusPageRoutes(
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid monitor assignment request" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to add monitors" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add monitors"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to add monitors" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add monitors"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to add monitors" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add monitors"))
+                } catch (e: IllegalStateException) {
                     logger.error(e) { "Failed to add monitors" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add monitors"))
                 }
@@ -337,7 +409,21 @@ fun Route.statusPageRoutes(
                     } else {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Monitor not found on status page"))
                     }
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to remove monitor" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove monitor"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to remove monitor" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove monitor"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to remove monitor" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove monitor"))
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to remove monitor" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove monitor"))
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to remove monitor" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove monitor"))
                 }
@@ -370,7 +456,18 @@ fun Route.statusPageRoutes(
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid incident list request" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to list incidents" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to list incidents"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to list incidents" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to list incidents"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to list incidents" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to list incidents"))
+                } catch (e: IllegalStateException) {
                     logger.error(e) { "Failed to list incidents" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to list incidents"))
                 }
@@ -404,7 +501,18 @@ fun Route.statusPageRoutes(
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid incident creation request" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to create incident" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to create incident" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to create incident" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident"))
+                } catch (e: IllegalStateException) {
                     logger.error(e) { "Failed to create incident" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident"))
                 }
@@ -449,7 +557,18 @@ fun Route.statusPageRoutes(
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid incident update request" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to update incident" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update incident"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to update incident" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update incident"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to update incident" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update incident"))
+                } catch (e: IllegalStateException) {
                     logger.error(e) { "Failed to update incident" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update incident"))
                 }
@@ -489,7 +608,18 @@ fun Route.statusPageRoutes(
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid incident update request" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to create incident update" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident update"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to create incident update" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident update"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to create incident update" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident update"))
+                } catch (e: IllegalStateException) {
                     logger.error(e) { "Failed to create incident update" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to create incident update"))
                 }
@@ -523,7 +653,18 @@ fun Route.statusPageRoutes(
                 } catch (e: IllegalArgumentException) {
                     logger.warn(e) { "Invalid custom domain request" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to add custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add custom domain"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to add custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add custom domain"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to add custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add custom domain"))
+                } catch (e: IllegalStateException) {
                     logger.error(e) { "Failed to add custom domain" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to add custom domain"))
                 }
@@ -558,7 +699,21 @@ fun Route.statusPageRoutes(
                     } else {
                         call.respond(HttpStatusCode.OK, domain)
                     }
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to verify custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to verify custom domain"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to verify custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to verify custom domain"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to verify custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to verify custom domain"))
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to verify custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to verify custom domain"))
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to verify custom domain" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to verify custom domain"))
                 }
@@ -593,7 +748,21 @@ fun Route.statusPageRoutes(
                     } else {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("Domain not found"))
                     }
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SQLException) {
+                    logger.error(e) { "Failed to remove custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove custom domain"))
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to remove custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove custom domain"))
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to remove custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove custom domain"))
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to remove custom domain" }
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove custom domain"))
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to remove custom domain" }
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to remove custom domain"))
                 }
@@ -608,12 +777,12 @@ fun Route.statusPageRoutes(
          * Get public status page by slug.
          */
         get("/{slug}") {
-            try {
+            runStatusPageRoute(call, "Failed to get public status page", "Failed to get status page") {
                 val slug = call.parameters["slug"]
 
                 if (slug == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing slug"))
-                    return@get
+                    return@runStatusPageRoute
                 }
 
                 val statusPage = statusPageService.getPublicStatusPage(slug)
@@ -623,9 +792,6 @@ fun Route.statusPageRoutes(
                 } else {
                     call.respond(HttpStatusCode.OK, statusPage)
                 }
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to get public status page" }
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to get status page"))
             }
         }
 
@@ -633,12 +799,12 @@ fun Route.statusPageRoutes(
          * Get public status page by custom domain.
          */
         get("/domain/{domain}") {
-            try {
+            runStatusPageRoute(call, "Failed to get public status page by domain", "Failed to get status page") {
                 val domain = call.parameters["domain"]
 
                 if (domain == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing domain"))
-                    return@get
+                    return@runStatusPageRoute
                 }
 
                 val statusPage = statusPageService.getPublicStatusPageByDomain(domain)
@@ -648,9 +814,6 @@ fun Route.statusPageRoutes(
                 } else {
                     call.respond(HttpStatusCode.OK, statusPage)
                 }
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to get public status page by domain" }
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to get status page"))
             }
         }
     }

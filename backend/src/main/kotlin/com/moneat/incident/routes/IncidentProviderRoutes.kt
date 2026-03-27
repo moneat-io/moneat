@@ -95,7 +95,7 @@ fun Route.incidentProviderRoutes() {
                                         json.parseToJsonElement(jsonStr).jsonObject.toMap().mapValues {
                                             it.value.toString().trim('"')
                                         }
-                                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                                    } catch (e: Exception) {
                                         emptyMap()
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled],
@@ -308,7 +308,7 @@ fun Route.incidentProviderRoutes() {
                                     try {
                                         val jsonStr = row[IncidentProviderConfigs.configJson]
                                         json.parseToJsonElement(jsonStr).jsonObject
-                                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                                    } catch (e: Exception) {
                                         buildJsonObject {}
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled]

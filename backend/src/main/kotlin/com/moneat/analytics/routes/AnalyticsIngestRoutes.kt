@@ -47,6 +47,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.net.URI
+import java.net.URISyntaxException
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -126,7 +127,7 @@ private suspend fun processAndEnqueueEvent(
     geoIpService: GeoIpService,
     enqueueEvent: (String) -> Unit,
 ) {
-    val payload = try {
+    val payload = runCatching {
         // Accept both application/json (API clients) and text/plain (browser tracking
         // script / sendBeacon). text/plain avoids a CORS preflight, which means the
         // request succeeds even when the browser can't verify the preflight first.
@@ -137,11 +138,10 @@ private suspend fun processAndEnqueueEvent(
         } else {
             call.receive<AnalyticsEventPayload>()
         }
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    }.onFailure { e ->
         logger.debug { "Invalid analytics payload: ${e.message}" }
         call.respond(HttpStatusCode.BadRequest, "Invalid payload")
-        return
-    }
+    }.getOrNull() ?: return
     val ip = call.request.header("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
         ?: call.request.header("X-Real-IP")
         ?: "0.0.0.0"
@@ -183,11 +183,11 @@ private suspend fun processAndEnqueueEvent(
 }
 
 private fun updateRealtimeCounter(projectId: Long, sessionId: String) {
-    try {
+    runCatching {
         val key = "${AnalyticsIngestionWorker.REALTIME_KEY_PREFIX}$projectId"
         RedisConfig.sync().pfadd(key, sessionId)
         RedisConfig.sync().expire(key, REALTIME_TTL_SECONDS)
-    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    }.onFailure { e ->
         logger.debug { "Failed to update realtime counter: ${e.message}" }
     }
 }
@@ -205,7 +205,7 @@ internal fun extractAnalyticsPublicKey(authHeader: String?, sentryKeyParam: Stri
 internal fun extractPathname(url: String): String {
     return try {
         URI(url).path ?: "/"
-    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+    } catch (_: URISyntaxException) {
         "/"
     }
 }
@@ -223,7 +223,7 @@ internal fun extractUtmParams(url: String): Map<String, String> {
                 }
             }
             .toMap()
-    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+    } catch (_: URISyntaxException) {
         emptyMap()
     }
 }
