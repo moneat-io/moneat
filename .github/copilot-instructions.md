@@ -137,6 +137,15 @@ To avoid Sonar/ESLint code smells in `dashboard/`:
 
 ## Key Conventions
 
+### Warnings and lint fixes (no suppressions)
+
+**CRITICAL:** When asked to fix a compiler warning, linter finding, or static analysis issue (Detekt, ESLint, Sonar, Kotlin compiler, etc.):
+
+- ❌ **NEVER suppress** the finding — do not use `@Suppress`, `eslint-disable`, `// NOSONAR`, `SuppressWarnings`, file- or line-level ignores, or similar to silence the tool without fixing the underlying problem.
+- ✅ **Fix the root cause** — refactor, correct types, satisfy the rule, or extract helpers so the violation is resolved properly.
+
+If a rule is wrong for the whole project, **adjust the tool configuration** (e.g. `detekt.yml`, ESLint config) deliberately — do not mask individual violations with suppressions.
+
 ### Detekt Code Style Guidelines
 **CRITICAL:** Follow detekt rules to maintain code quality. The project enforces these via CI:
 
