@@ -73,8 +73,10 @@ data class SentryEnvelope(
                 // Skip blank lines
                 while (
                     bytePos < bodyBytes.size &&
-                    (bodyBytes[bytePos] == '\n'.code.toByte() ||
-                        bodyBytes[bytePos] == '\r'.code.toByte())
+                    (
+                        bodyBytes[bytePos] == '\n'.code.toByte() ||
+                            bodyBytes[bytePos] == '\r'.code.toByte()
+                        )
                 ) {
                     bytePos++
                 }
@@ -160,8 +162,10 @@ data class SentryEnvelope(
                         var trimmedEnd = payloadEnd
                         while (
                             trimmedEnd > payloadStart &&
-                            (bodyBytes[trimmedEnd - 1] == '\n'.code.toByte() ||
-                                bodyBytes[trimmedEnd - 1] == '\r'.code.toByte())
+                            (
+                                bodyBytes[trimmedEnd - 1] == '\n'.code.toByte() ||
+                                    bodyBytes[trimmedEnd - 1] == '\r'.code.toByte()
+                                )
                         ) {
                             trimmedEnd--
                         }

@@ -1,1 +1,0 @@
-                {"model":"claude-3","provider":"anthropic","call_count":50,"total_tokens":10000,"total_cost":2.5,"avg_duration_ms":300.0,"error_rate":0.0}

@@ -1,1 +1,0 @@
-                        """{"event_id":"01234567-89ab-cdef-0123-456789abcdef","name":"GET /","op":"http","start_ts_ms":"500","duration":"2000.0","trace_id":"t1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{},"contexts":"{}","breadcrumbs":"[]","request":"{}"}

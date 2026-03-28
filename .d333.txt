@@ -1,1 +1,0 @@
-                    "SELECT count() FROM `$db`.user_feedback WHERE project_id IN (${projects.values.map { it.first }.joinToString(

@@ -1,1 +1,0 @@
-                {"model":"$GPT_4O","provider":"openai","call_count":100,"total_tokens":20000,"total_cost":5.0,"avg_duration_ms":400.0,"error_rate":2.0}

@@ -1,1 +1,0 @@
-                    '${if (template.platform == "android") "Android" else if (template.platform == "cocoa") "iOS" else "JavaScript"}',

@@ -1,1 +1,0 @@
-{"event_id":"$eventId","name":"GET /api","op":"http.server","start_ts_ms":"1000","duration":"250.0","trace_id":"$TRACE_1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{"env":"prod"},"contexts":"{}","breadcrumbs":"[]","request":"{}"}
