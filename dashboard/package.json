@@ -94,7 +94,7 @@
     "eslint-plugin-react-hooks": "^7.0.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "globals": "^17.0.0",
-    "jsdom": "^28.0.0",
+    "jsdom": "^29.0.0",
     "msw": "^2.12.10",
     "postcss": "^8.4.33",
     "remark-directive": "^4.0.0",
