@@ -321,7 +321,7 @@ private fun parseSentryProfileToFrames(
                 }
             )
         }
-    }.getOrElse { e ->
+    }.getOrElse { _ ->
         buildJsonObject { put("frames", buildJsonArray {}) }
     }
 }

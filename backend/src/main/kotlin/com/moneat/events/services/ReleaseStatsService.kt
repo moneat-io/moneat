@@ -303,7 +303,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: return null
             if (rate.isNaN() || rate.isInfinite()) null else rate
-        }.getOrElse { e ->
+        }.getOrElse { _ ->
             null
         }
     }

@@ -96,7 +96,7 @@ fun Route.incidentProviderRoutes() {
                                         json.parseToJsonElement(jsonStr).jsonObject.toMap().mapValues {
                                             it.value.toString().trim('"')
                                         }
-                                    }.getOrElse { e ->
+                                    }.getOrElse { _ ->
                                         emptyMap()
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled],
@@ -309,7 +309,7 @@ fun Route.incidentProviderRoutes() {
                                     suspendRunCatching {
                                         val jsonStr = row[IncidentProviderConfigs.configJson]
                                         json.parseToJsonElement(jsonStr).jsonObject
-                                    }.getOrElse { e ->
+                                    }.getOrElse { _ ->
                                         buildJsonObject {}
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled]

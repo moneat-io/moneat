@@ -173,7 +173,7 @@ fun Application.configureClickHouse() {
     val url =
         suspendRunCatching {
             environment.config.property("database.clickhouse.url").getString()
-        }.getOrElse { e ->
+        }.getOrElse { _ ->
             log.warn("ClickHouse URL not configured, skipping ClickHouse initialization (test environment)")
             return
         }

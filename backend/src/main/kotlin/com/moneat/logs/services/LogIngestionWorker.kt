@@ -16,27 +16,27 @@
 
 package com.moneat.logs.services
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import com.moneat.logs.repositories.LogRepositoryImpl
+import com.moneat.utils.brpopLoopBackoff
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
 import kotlin.random.Random
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private const val FULL_SAMPLING_RATE = 1.0f
+private const val ERROR_DELAY_MS = 1000L
 
 class LogIngestionWorker(
     private val queueKey: String,
@@ -76,17 +76,13 @@ class LogIngestionWorker(
                 } catch (e: CancellationException) {
                     break
                 } catch (e: SerializationException) {
-                    logger.error(e) { "Log worker $workerId error in BRPOP loop" }
-                    delay(1000)
+                    brpopLoopBackoff(logger, workerId, "Log", ERROR_DELAY_MS, e)
                 } catch (e: IOException) {
-                    logger.error(e) { "Log worker $workerId error in BRPOP loop" }
-                    delay(1000)
+                    brpopLoopBackoff(logger, workerId, "Log", ERROR_DELAY_MS, e)
                 } catch (e: IllegalStateException) {
-                    logger.error(e) { "Log worker $workerId error in BRPOP loop" }
-                    delay(1000)
+                    brpopLoopBackoff(logger, workerId, "Log", ERROR_DELAY_MS, e)
                 } catch (e: IllegalArgumentException) {
-                    logger.error(e) { "Log worker $workerId error in BRPOP loop" }
-                    delay(1000)
+                    brpopLoopBackoff(logger, workerId, "Log", ERROR_DELAY_MS, e)
                 }
             }
         } finally {

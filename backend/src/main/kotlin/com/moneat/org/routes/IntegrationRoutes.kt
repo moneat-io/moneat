@@ -212,7 +212,7 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
         }
 
         return Pair(userId, organizationId)
-    }.getOrElse { e ->
+    }.getOrElse { _ ->
         return null
     }
 }

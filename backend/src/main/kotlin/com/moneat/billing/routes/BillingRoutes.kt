@@ -156,7 +156,7 @@ fun Route.billingRoutes(
                 }
 
             val request = call.receive<CheckoutSessionRequest>()
-            try {
+            suspendRunCatching {
                 val response =
                     stripeService.createCheckoutSession(
                         organizationId = orgId,
@@ -167,28 +167,17 @@ fun Route.billingRoutes(
                         oncallSeats = request.oncallSeats
                     )
                 call.respond(response)
-            } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid checkout request")))
-            } catch (e: SerializationException) {
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION))
-                )
-            } catch (e: IOException) {
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION))
-                )
-            } catch (e: IllegalStateException) {
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION))
-                )
-            } catch (e: IllegalArgumentException) {
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION))
-                )
+            }.onFailure { e ->
+                when (e) {
+                    is IllegalArgumentException -> call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse(e.message ?: "Invalid checkout request")
+                    )
+                    else -> call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION)
+                    )
+                }
             }
         }
 
@@ -288,33 +277,19 @@ fun Route.billingRoutes(
                     return@post
                 }
 
-            try {
+            suspendRunCatching {
                 call.respond(stripeService.cancelSubscription(orgId))
-            } catch (e: IllegalStateException) {
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    ErrorResponse((e.message ?: "No cancelable subscription found"))
-                )
-            } catch (e: SerializationException) {
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION))
-                )
-            } catch (e: IOException) {
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION))
-                )
-            } catch (e: IllegalStateException) {
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION))
-                )
-            } catch (e: IllegalArgumentException) {
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    ErrorResponse((e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION))
-                )
+            }.onFailure { e ->
+                when (e) {
+                    is IllegalStateException -> call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse(e.message ?: "No cancelable subscription found")
+                    )
+                    else -> call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse(e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION)
+                    )
+                }
             }
         }
 

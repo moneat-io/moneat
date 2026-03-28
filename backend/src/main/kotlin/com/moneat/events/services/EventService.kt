@@ -465,7 +465,7 @@ class EventService(
                     java.time.Instant
                         .parse(it)
                         .toEpochMilli()
-                }.getOrElse { e ->
+                }.getOrElse { _ ->
                     logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
                     System.currentTimeMillis()
                 }

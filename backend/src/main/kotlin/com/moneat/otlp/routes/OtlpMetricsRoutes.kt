@@ -86,7 +86,7 @@ private suspend fun handleOtlpMetricsIngest(
     val encoding = call.request.header(HttpHeaders.ContentEncoding)
     val payloadBytes = suspendRunCatching {
         DecompressionService.decompress(bodyBytes, encoding)
-    }.getOrElse { e ->
+    }.getOrElse { _ ->
         call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse("Failed to decompress request body")

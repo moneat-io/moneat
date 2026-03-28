@@ -326,7 +326,7 @@ class RedisHandler : DataSourceHandler {
                         "Duration" to JsonPrimitive(duration),
                         "Command" to JsonPrimitive(args)
                     )
-                }.getOrElse { e ->
+                }.getOrElse { _ ->
                     null
                 }
             }

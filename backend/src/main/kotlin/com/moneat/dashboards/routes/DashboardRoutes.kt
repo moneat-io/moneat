@@ -526,7 +526,7 @@ fun Route.customDashboardRoutes(
                 val request = call.receive<ImportDashboardRequest>()
                 val jsonObj = suspendRunCatching {
                     json.parseToJsonElement(request.json) as JsonObject
-                }.getOrElse { e ->
+                }.getOrElse { _ ->
                     return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid JSON"))
                 }
 

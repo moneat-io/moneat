@@ -116,7 +116,7 @@ fun Application.configureRedis() {
     val redisUrl =
         suspendRunCatching {
             environment.config.property("redis.url").getString()
-        }.getOrElse { e ->
+        }.getOrElse { _ ->
             log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
             return
         }

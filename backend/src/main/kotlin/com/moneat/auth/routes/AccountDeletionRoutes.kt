@@ -126,7 +126,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAccount(
     val request =
         suspendRunCatching {
             call.receive<DeleteAccountRequest>()
-        }.getOrElse { e ->
+        }.getOrElse { _ ->
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             return
         }
@@ -186,7 +186,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteOrganizati
     val request =
         suspendRunCatching {
             call.receive<DeleteOrganizationRequest>()
-        }.getOrElse { e ->
+        }.getOrElse { _ ->
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             return
         }

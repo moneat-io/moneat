@@ -650,7 +650,7 @@ class NotificationService(
             val instant = Instant.parse(timestamp)
             val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm 'UTC'", Locale.US)
             formatter.format(instant.atZone(ZoneId.of("UTC")))
-        }.getOrElse { e ->
+        }.getOrElse { _ ->
             timestamp
         }
     }

@@ -324,7 +324,7 @@ class MonitorAlertService(
                     } else {
                         false // Fallback if Redis is down
                     }
-                }.getOrElse { e ->
+                }.getOrElse { _ ->
                     false
                 }
 

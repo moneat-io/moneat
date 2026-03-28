@@ -1379,7 +1379,7 @@ fun Route.apiRoutes() {
                     val request =
                         suspendRunCatching {
                             call.receive<UpdateAlertNotificationPreferenceRequest>()
-                        }.getOrElse { e ->
+                        }.getOrElse { _ ->
                             call.respond(HttpStatusCode.BadRequest, "Invalid request body")
                             return@put
                         }

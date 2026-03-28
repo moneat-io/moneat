@@ -23,6 +23,7 @@ import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.utils.SentryUtils
+import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.suspendRunCatching
 import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
@@ -31,7 +32,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
@@ -40,6 +40,7 @@ import java.io.IOException
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
+private const val ERROR_DELAY_MS = 1000L
 
 /**
  * Background worker that drains the ingestion queue (Redis list),
@@ -103,17 +104,13 @@ class IngestionWorker(
                 } catch (e: CancellationException) {
                     break
                 } catch (e: SerializationException) {
-                    logger.error(e) { "Worker $workerId error in BRPOP loop" }
-                    delay(1000)
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
                 } catch (e: IOException) {
-                    logger.error(e) { "Worker $workerId error in BRPOP loop" }
-                    delay(1000)
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
                 } catch (e: IllegalStateException) {
-                    logger.error(e) { "Worker $workerId error in BRPOP loop" }
-                    delay(1000)
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
                 } catch (e: IllegalArgumentException) {
-                    logger.error(e) { "Worker $workerId error in BRPOP loop" }
-                    delay(1000)
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
                 }
             }
         } finally {

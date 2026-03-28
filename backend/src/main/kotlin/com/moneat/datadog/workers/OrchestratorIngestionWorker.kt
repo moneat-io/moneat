@@ -112,7 +112,12 @@ class OrchestratorIngestionWorker(
             }
         }.getOrElse { e ->
             pushToDlq(
-                logger, dlqKey, payload, workerId, "Orchestrator", e
+                logger,
+                dlqKey,
+                payload,
+                workerId,
+                "Orchestrator",
+                e,
             )
         }
     }

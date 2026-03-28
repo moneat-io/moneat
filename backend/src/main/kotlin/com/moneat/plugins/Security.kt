@@ -135,7 +135,7 @@ fun Application.configureSecurity() {
                         suspendRunCatching {
                             io.ktor.http.auth.HttpAuthHeader
                                 .Single("Bearer", cookieToken)
-                        }.getOrElse { e ->
+                        }.getOrElse { _ ->
                             null
                         }
                     } else {
@@ -217,7 +217,7 @@ fun Application.configureSecurity() {
                             tokenId = -1 // Not applicable for JWT
                         )
                     }
-                }.getOrElse { e ->
+                }.getOrElse { _ ->
                     // Not a valid JWT either
                 }
 

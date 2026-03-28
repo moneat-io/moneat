@@ -473,7 +473,7 @@ object ProfileIngestionService {
             element.jsonObject.mapValues {
                 it.value.jsonPrimitive.content
             }
-        }.getOrElse { e ->
+        }.getOrElse { _ ->
             emptyMap()
         }
     }
