@@ -338,7 +338,7 @@ class EventServiceTest {
                 platform = "javascript"
             )
 
-        assertNotNull(event.event_id, "Event ID should be present")
+        assertNotNull(event.eventId, "Event ID should be present")
         assertNotNull(event.exception, "Exception should be present")
         assertEquals("error", event.level, "Level should be error")
         assertEquals("javascript", event.platform, "Platform should be set")
@@ -365,7 +365,7 @@ class EventServiceTest {
                 id = "user-123",
                 email = "test@example.com",
                 username = "testuser",
-                ip_address = TestIpConstants.IP_1
+                ipAddress = TestIpConstants.IP_1
             )
 
         val tags =
@@ -486,7 +486,7 @@ class EventServiceTest {
                 id = userId,
                 email = userEmail,
                 username = username,
-                ip_address = ipAddress
+                ipAddress = ipAddress
             )
 
         val event = createSentryEvent(user = userInfo)
@@ -494,7 +494,7 @@ class EventServiceTest {
         assertEquals(userId, event.user?.id, "User ID should be extracted")
         assertEquals(userEmail, event.user?.email, "User email should be extracted")
         assertEquals(username, event.user?.username, "Username should be extracted")
-        assertEquals(ipAddress, event.user?.ip_address, "IP address should be extracted")
+        assertEquals(ipAddress, event.user?.ipAddress, "IP address should be extracted")
     }
 
     @Test
@@ -694,7 +694,7 @@ class EventServiceTest {
                 .stacktrace
                 ?.frames
                 ?.get(0)
-                ?.in_app
+                ?.inApp
         )
         assertEquals(
             false,
@@ -702,7 +702,7 @@ class EventServiceTest {
                 .stacktrace
                 ?.frames
                 ?.get(2)
-                ?.in_app
+                ?.inApp
         )
     }
 
@@ -744,7 +744,7 @@ class EventServiceTest {
             }
 
         return SentryEvent(
-            event_id = eventId ?: UUID.randomUUID().toString(),
+            eventId = eventId ?: UUID.randomUUID().toString(),
             timestamp = timestamp,
             level = level,
             message = message,
@@ -772,8 +772,8 @@ class EventServiceTest {
             filename = filename,
             function = function,
             lineno = lineno,
-            in_app = inApp,
-            abs_path = "/app/$filename"
+            inApp = inApp,
+            absPath = "/app/$filename"
         )
     }
 }

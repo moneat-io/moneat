@@ -802,7 +802,7 @@ fun Route.integrationCallbackRoutes() {
 
             val oauthResponse = slackService.exchangeOAuthCode(code, clientId, clientSecret, redirectUri)
 
-            if (oauthResponse.ok && oauthResponse.access_token != null) {
+            if (oauthResponse.ok && oauthResponse.accessToken != null) {
                 val now = Clock.System.now()
 
                 transaction {
@@ -820,8 +820,8 @@ fun Route.integrationCallbackRoutes() {
                             (OrganizationIntegrations.organization_id eq organizationId) and
                                 (OrganizationIntegrations.integration_type eq "slack")
                         }) {
-                            it[access_token] = oauthResponse.access_token
-                            it[bot_user_id] = oauthResponse.bot_user_id
+                            it[access_token] = oauthResponse.accessToken
+                            it[bot_user_id] = oauthResponse.botUserId
                             it[team_id] = oauthResponse.team?.id
                             it[team_name] = oauthResponse.team?.name
                             it[enabled] = true
@@ -832,8 +832,8 @@ fun Route.integrationCallbackRoutes() {
                         OrganizationIntegrations.insert {
                             it[organization_id] = organizationId
                             it[integration_type] = "slack"
-                            it[access_token] = oauthResponse.access_token
-                            it[bot_user_id] = oauthResponse.bot_user_id
+                            it[access_token] = oauthResponse.accessToken
+                            it[bot_user_id] = oauthResponse.botUserId
                             it[team_id] = oauthResponse.team?.id
                             it[team_name] = oauthResponse.team?.name
                             it[enabled] = true
@@ -913,7 +913,7 @@ fun Route.integrationCallbackRoutes() {
             // Exchange code for access token
             val oauthResponse = discordService.exchangeOAuthCode(code, clientId, clientSecret, redirectUri)
 
-            if (oauthResponse.access_token != null && oauthResponse.guild != null) {
+            if (oauthResponse.accessToken != null && oauthResponse.guild != null) {
                 val now = Clock.System.now()
 
                 transaction {
@@ -930,7 +930,7 @@ fun Route.integrationCallbackRoutes() {
                             (OrganizationIntegrations.organization_id eq organizationId) and
                                 (OrganizationIntegrations.integration_type eq "discord")
                         }) {
-                            it[access_token] = oauthResponse.access_token
+                            it[access_token] = oauthResponse.accessToken
                             it[team_id] = oauthResponse.guild.id
                             it[team_name] = oauthResponse.guild.name
                             it[enabled] = true
@@ -940,7 +940,7 @@ fun Route.integrationCallbackRoutes() {
                         OrganizationIntegrations.insert {
                             it[organization_id] = organizationId
                             it[integration_type] = "discord"
-                            it[access_token] = oauthResponse.access_token
+                            it[access_token] = oauthResponse.accessToken
                             it[team_id] = oauthResponse.guild.id
                             it[team_name] = oauthResponse.guild.name
                             it[enabled] = true

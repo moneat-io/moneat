@@ -33,6 +33,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Parameters
 import io.ktor.http.contentType
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.and
@@ -94,8 +95,8 @@ class DiscordService(
 
     @Serializable
     data class DiscordOAuthResponse(
-        val access_token: String? = null,
-        val token_type: String? = null,
+        @SerialName("access_token") val accessToken: String? = null,
+        @SerialName("token_type") val tokenType: String? = null,
         val scope: String? = null,
         val guild: DiscordGuild? = null,
         val error: String? = null

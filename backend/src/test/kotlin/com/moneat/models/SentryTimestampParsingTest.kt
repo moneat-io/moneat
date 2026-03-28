@@ -51,12 +51,12 @@ class SentryTimestampParsingTest {
 
         val transaction = json.decodeFromString<SentryTransaction>(payload)
 
-        val startTs = transaction.start_timestamp
+        val startTs = transaction.startTimestamp
         val endTs = transaction.timestamp
         assertNotNull(startTs)
         assertNotNull(endTs)
-        assertTrue(endTs >= startTs)
-        assertNotNull(transaction.spans?.firstOrNull()?.start_timestamp)
+        assertTrue(endTs!! >= startTs!!)
+        assertNotNull(transaction.spans?.firstOrNull()?.startTimestamp)
         assertNotNull(transaction.spans?.firstOrNull()?.timestamp)
     }
 
@@ -75,9 +75,9 @@ class SentryTimestampParsingTest {
         val replayEvent = json.decodeFromString<SentryReplayEvent>(payload)
 
         val replayTs = replayEvent.timestamp
-        val replayStartTs = replayEvent.replay_start_timestamp
+        val replayStartTs = replayEvent.replayStartTimestamp
         assertNotNull(replayTs)
         assertNotNull(replayStartTs)
-        assertTrue(replayTs >= replayStartTs)
+        assertTrue(replayTs!! >= replayStartTs!!)
     }
 }

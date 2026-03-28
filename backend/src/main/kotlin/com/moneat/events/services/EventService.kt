@@ -173,8 +173,8 @@ class EventService(
 
                 "replay_event" -> {
                     val replayEvent = parseReplayEventPayload(item.payload)
-                    lastReplayId = replayEvent.replay_id
-                    lastSegmentId = replayEvent.segment_id ?: 0
+                    lastReplayId = replayEvent.replayId
+                    lastSegmentId = replayEvent.segmentId ?: 0
                     if (storeReplayEvent(projectId, replayEvent)) {
                         recordUsage(projectId, "replay", item)
                     }
@@ -284,7 +284,7 @@ class EventService(
         projectId: Long,
         transaction: SentryTransaction
     ): Boolean {
-        val rawEventId = transaction.event_id ?: UUID.randomUUID().toString()
+        val rawEventId = transaction.eventId ?: UUID.randomUUID().toString()
         val eventId = normalizeUuid(rawEventId)
         val traceContext = transaction.contexts?.get("trace") as? JsonObject
         val traceId = traceContext?.get("trace_id")?.jsonPrimitive?.contentOrNull ?: ""
@@ -293,7 +293,7 @@ class EventService(
         val transactionLevel = if (traceStatus == null || traceStatus == "ok") "info" else "error"
 
         val endTimestampMs = unixSecondsToMillis(transaction.timestamp ?: (System.currentTimeMillis() / MS_PER_SECOND))
-        val durationMs = durationMs(transaction.start_timestamp, transaction.timestamp)
+        val durationMs = durationMs(transaction.startTimestamp, transaction.timestamp)
 
         val contexts = transaction.contexts?.toString() ?: "{}"
         val breadcrumbs = transaction.breadcrumbs?.toString() ?: "[]"
@@ -310,11 +310,11 @@ class EventService(
             environment = transaction.environment ?: "production",
             release = transaction.release ?: "",
             dist = transaction.dist ?: "",
-            serverName = transaction.server_name ?: "",
+            serverName = transaction.serverName ?: "",
             userId = transaction.user?.id ?: "",
             userEmail = transaction.user?.email ?: "",
             userUsername = transaction.user?.username ?: "",
-            userIpAddress = transaction.user?.ip_address ?: "",
+            userIpAddress = transaction.user?.ipAddress ?: "",
             transactionName = transaction.transaction ?: "",
             transactionOp = transactionOp,
             durationMs = durationMs,
@@ -373,7 +373,7 @@ class EventService(
         projectId: Long,
         event: SentryEvent
     ): Boolean {
-        val eventId = event.event_id ?: UUID.randomUUID().toString()
+        val eventId = event.eventId ?: UUID.randomUUID().toString()
 
         logger.debug {
             "Full event structure - exception: ${event.exception}, message: ${event.message}, " +
@@ -430,11 +430,11 @@ class EventService(
             environment = event.environment ?: "production",
             release = event.release ?: "",
             dist = event.dist ?: "",
-            serverName = event.server_name ?: "",
+            serverName = event.serverName ?: "",
             userId = event.user?.id ?: "",
             userEmail = event.user?.email ?: "",
             userUsername = event.user?.username ?: "",
-            userIpAddress = event.user?.ip_address ?: "",
+            userIpAddress = event.user?.ipAddress ?: "",
             exceptionType = exceptionType,
             exceptionValue = exceptionValue,
             stackTrace = stackTrace,
@@ -489,7 +489,7 @@ class EventService(
             return false
         }
 
-        val feedbackId = feedback.event_id ?: UUID.randomUUID().toString()
+        val feedbackId = feedback.eventId ?: UUID.randomUUID().toString()
         val timestamp =
             feedback.timestamp?.let {
                 suspendRunCatching {
@@ -513,7 +513,7 @@ class EventService(
         val userId = feedback.user?.id ?: ""
         val userEmail = feedback.user?.email ?: contactEmail
         val userUsername = feedback.user?.username ?: ""
-        val userIpAddress = feedback.user?.ip_address ?: ""
+        val userIpAddress = feedback.user?.ipAddress ?: ""
 
         val feedbackData = FeedbackInsertData(
             feedbackId = normalizeUuid(feedbackId),
@@ -558,14 +558,14 @@ class EventService(
             return false
         }
 
-        val replayId = replayEvent.replay_id ?: UUID.randomUUID().toString()
-        val segmentId = replayEvent.segment_id ?: 0
+        val replayId = replayEvent.replayId ?: UUID.randomUUID().toString()
+        val segmentId = replayEvent.segmentId ?: 0
         val ts = replayEvent.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
-        val startTs = replayEvent.replay_start_timestamp?.let { unixSecondsToMillis(it) } ?: ts
+        val startTs = replayEvent.replayStartTimestamp?.let { unixSecondsToMillis(it) } ?: ts
 
         val urls = replayEvent.urls?.take(MAX_REPLAY_URLS) ?: emptyList()
-        val errorIds = replayEvent.error_ids ?: emptyList()
-        val traceIds = replayEvent.trace_ids ?: emptyList()
+        val errorIds = replayEvent.errorIds ?: emptyList()
+        val traceIds = replayEvent.traceIds ?: emptyList()
         val tags = replayEvent.tags?.let { JsonObject(it.mapValues { (_, v) -> JsonPrimitive(v) }).toString() } ?: "{}"
 
         val contexts = replayEvent.contexts
@@ -601,7 +601,7 @@ class EventService(
             userId = replayEvent.user?.id ?: "",
             userEmail = replayEvent.user?.email ?: "",
             userUsername = replayEvent.user?.username ?: "",
-            userIpAddress = replayEvent.user?.ip_address ?: "",
+            userIpAddress = replayEvent.user?.ipAddress ?: "",
             sdkName = replayEvent.sdk?.name ?: "",
             sdkVersion = replayEvent.sdk?.version ?: "",
             browserName = browserName,
@@ -812,13 +812,13 @@ class EventService(
 
         // Find the last in_app frame (innermost/actual error location), or fall back to the last frame
         val relevantFrame =
-            firstException?.stacktrace?.frames?.findLast { it.in_app == true }
+            firstException?.stacktrace?.frames?.findLast { it.inApp == true }
                 ?: firstException?.stacktrace?.frames?.lastOrNull()
 
         val function = relevantFrame?.function
         val filename = relevantFrame?.filename
 
-        logger.trace { "Selected frame: filename=$filename, function=$function, in_app=${relevantFrame?.in_app}" }
+        logger.trace { "Selected frame: filename=$filename, function=$function, in_app=${relevantFrame?.inApp}" }
 
         val fingerprint =
             buildList {
@@ -862,7 +862,7 @@ class EventService(
     ) {
         suspendRunCatching {
             val generations = aiSpans.mapNotNull { span ->
-                val spanStart = span.start_timestamp ?: return@mapNotNull null
+                val spanStart = span.startTimestamp ?: return@mapNotNull null
                 val spanEnd = span.timestamp ?: return@mapNotNull null
                 val op = span.op ?: ""
                 val data = span.data
@@ -890,8 +890,8 @@ class EventService(
                     generationId = UUID.randomUUID().toString(),
                     projectId = projectId,
                     traceId = traceId,
-                    spanId = span.span_id ?: "",
-                    parentSpanId = span.parent_span_id ?: "",
+                    spanId = span.spanId ?: "",
+                    parentSpanId = span.parentSpanId ?: "",
                     timestampMs = unixSecondsToMillis(spanEnd),
                     durationMs = durationMs(spanStart, spanEnd),
                     name = span.description ?: op,
@@ -993,10 +993,10 @@ class EventService(
         val ctx = ApmSpanContext(
             orgId = orgId,
             clickhouseDb = ClickHouseClient.getDatabase(),
-            service = transaction.server_name?.takeIf { it.isNotBlank() }
+            service = transaction.serverName?.takeIf { it.isNotBlank() }
                 ?: transaction.sdk?.name?.takeIf { it.isNotBlank() }
                 ?: "sentry",
-            host = transaction.server_name ?: "",
+            host = transaction.serverName ?: "",
             env = transaction.environment ?: "production",
             version = transaction.release ?: "",
             transactionName = transaction.transaction ?: transactionOp.ifBlank { "transaction" },
@@ -1025,7 +1025,7 @@ class EventService(
             ?.get("span_id")?.jsonPrimitive?.contentOrNull ?: ""
         if (rootSpanId.isBlank()) return null
 
-        val startTs = transaction.start_timestamp ?: (System.currentTimeMillis() / MS_PER_SECOND)
+        val startTs = transaction.startTimestamp ?: (System.currentTimeMillis() / MS_PER_SECOND)
         val (traceIdHigh, traceIdLow) = hexToULongPair(traceId)
         val (spanIdHigh, spanIdLow) = hexToULongPair(rootSpanId)
         val rootMetrics = extractMeasurementMetrics(transaction)
@@ -1041,7 +1041,7 @@ class EventService(
             '${escapeSql(ctx.transactionName)}',
             '${escapeSql(transactionOp)}',
             fromUnixTimestamp64Nano(${unixSecondsToNanos(startTs)}),
-            ${durationNanos(transaction.start_timestamp, transaction.timestamp)},
+            ${durationNanos(transaction.startTimestamp, transaction.timestamp)},
             ${sentryStatusToError(traceStatus)},
             ${mapToSqlMap(ctx.baseMeta)},
             ${doubleMapToSqlMap(rootMetrics)},
@@ -1062,14 +1062,14 @@ class EventService(
         fallbackTraceId: String,
         transaction: SentryTransaction
     ): String? {
-        val spanStart = span.start_timestamp ?: transaction.start_timestamp ?: return null
+        val spanStart = span.startTimestamp ?: transaction.startTimestamp ?: return null
         val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
-        val spanId = span.span_id?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
-        val spanTraceId = span.trace_id ?: fallbackTraceId
+        val spanId = span.spanId?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
+        val spanTraceId = span.traceId ?: fallbackTraceId
 
         val (traceIdHigh, traceIdLow) = hexToULongPair(spanTraceId)
         val (spanIdHigh, spanIdLow) = hexToULongPair(spanId)
-        val parentHex = span.parent_span_id ?: ""
+        val parentHex = span.parentSpanId ?: ""
         val (parentIdHigh, parentIdLow) = hexToULongPair(parentHex)
 
         val spanMeta = extractSpanMeta(span, ctx.baseMeta)

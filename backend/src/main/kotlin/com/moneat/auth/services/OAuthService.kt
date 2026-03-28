@@ -37,6 +37,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.encodeURLParameter
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.config.ApplicationConfig
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
@@ -57,8 +58,8 @@ private val logger = KotlinLogging.logger {}
 
 @Serializable
 data class GitHubAccessTokenResponse(
-    val access_token: String,
-    val token_type: String,
+    @SerialName("access_token") val accessToken: String,
+    @SerialName("token_type") val tokenType: String,
     val scope: String
 )
 
@@ -181,7 +182,7 @@ class OAuthService {
         }
 
         val tokenData: GitHubAccessTokenResponse = tokenResponse.body()
-        val accessToken = tokenData.access_token
+        val accessToken = tokenData.accessToken
 
         // Fetch user info
         val userResponse: HttpResponse =

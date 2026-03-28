@@ -77,9 +77,9 @@ object OpenAiClient {
             OpenAiChatRequest(
                 model = model,
                 messages = messages,
-                max_tokens = maxTokens,
+                maxTokens = maxTokens,
                 temperature = 0.3,
-                response_format = OpenAiResponseFormat(type = "json_object")
+                responseFormat = OpenAiResponseFormat(type = "json_object")
             )
 
         val response =

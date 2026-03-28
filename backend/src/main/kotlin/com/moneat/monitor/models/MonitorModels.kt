@@ -61,62 +61,62 @@ data class HostResponse(
     val name: String,
     val hostname: String,
     val status: String,
-    val last_seen_at: Long?,
+    @SerialName("last_seen_at") val lastSeenAt: Long?,
     @SerialName("first_seen_at") val firstSeenAt: Long? = null,
-    val agent_version: String?,
+    @SerialName("agent_version") val agentVersion: String?,
     val os: String?,
     val arch: String?,
     val platform: String? = null,
     val processor: String? = null,
     @SerialName("cpu_cores") val cpuCores: Int? = null,
     @SerialName("memory_total_kb") val memoryTotalKb: Long? = null,
-    val created_at: Long,
-    val latest_metrics: LatestMetrics?
+    @SerialName("created_at") val createdAt: Long,
+    @SerialName("latest_metrics") val latestMetrics: LatestMetrics?
 )
 
 @Serializable
 data class LatestMetrics(
-    val cpu_percent: Float,
-    val mem_total: Long,
-    val mem_used: Long,
-    val mem_percent: Float,
-    val disk_total: Long,
-    val disk_used: Long,
-    val disk_percent: Float,
-    val net_recv_bytes: Long,
-    val net_sent_bytes: Long,
-    val net_recv_mbps: Float?,
-    val net_sent_mbps: Float?,
-    val load_1: Float,
-    val temp_max: Float?,
-    val gpu_percent: Float?,
-    val battery_percent: Float?
+    @SerialName("cpu_percent") val cpuPercent: Float,
+    @SerialName("mem_total") val memTotal: Long,
+    @SerialName("mem_used") val memUsed: Long,
+    @SerialName("mem_percent") val memPercent: Float,
+    @SerialName("disk_total") val diskTotal: Long,
+    @SerialName("disk_used") val diskUsed: Long,
+    @SerialName("disk_percent") val diskPercent: Float,
+    @SerialName("net_recv_bytes") val netRecvBytes: Long,
+    @SerialName("net_sent_bytes") val netSentBytes: Long,
+    @SerialName("net_recv_mbps") val netRecvMbps: Float?,
+    @SerialName("net_sent_mbps") val netSentMbps: Float?,
+    @SerialName("load_1") val load1: Float,
+    @SerialName("temp_max") val tempMax: Float?,
+    @SerialName("gpu_percent") val gpuPercent: Float?,
+    @SerialName("battery_percent") val batteryPercent: Float?
 )
 
 @Serializable
 data class HistoricalMetricsResponse(
-    val system_id: String,
-    val host_id: Int? = null,
+    @SerialName("system_id") val systemId: String,
+    @SerialName("host_id") val hostId: Int? = null,
     val from: Long,
     val to: Long,
-    val interval_seconds: Int,
-    val data_points: List<MetricDataPoint>
+    @SerialName("interval_seconds") val intervalSeconds: Int,
+    @SerialName("data_points") val dataPoints: List<MetricDataPoint>
 )
 
 @Serializable
 data class MetricDataPoint(
     val timestamp: Long,
-    val cpu_percent: Float?,
-    val mem_percent: Float?,
-    val disk_percent: Float?,
-    val net_recv_bytes: Long?,
-    val net_sent_bytes: Long?,
-    val load_1: Float?,
-    val load_5: Float?,
-    val load_15: Float?,
-    val temp_max: Float?,
-    val gpu_percent: Float?,
-    val battery_percent: Float?
+    @SerialName("cpu_percent") val cpuPercent: Float?,
+    @SerialName("mem_percent") val memPercent: Float?,
+    @SerialName("disk_percent") val diskPercent: Float?,
+    @SerialName("net_recv_bytes") val netRecvBytes: Long?,
+    @SerialName("net_sent_bytes") val netSentBytes: Long?,
+    @SerialName("load_1") val load1: Float?,
+    @SerialName("load_5") val load5: Float?,
+    @SerialName("load_15") val load15: Float?,
+    @SerialName("temp_max") val tempMax: Float?,
+    @SerialName("gpu_percent") val gpuPercent: Float?,
+    @SerialName("battery_percent") val batteryPercent: Float?
 )
 
 @Serializable
@@ -152,31 +152,31 @@ data class ContainerStats(
     val id: String,
     val image: String,
     val status: String,
-    val cpu_percent: Float,
-    val mem_used: Long,
-    val mem_limit: Long,
-    val net_recv_bytes: Long,
-    val net_sent_bytes: Long,
-    val mem_percent: Float
+    @SerialName("cpu_percent") val cpuPercent: Float,
+    @SerialName("mem_used") val memUsed: Long,
+    @SerialName("mem_limit") val memLimit: Long,
+    @SerialName("net_recv_bytes") val netRecvBytes: Long,
+    @SerialName("net_sent_bytes") val netSentBytes: Long,
+    @SerialName("mem_percent") val memPercent: Float
 )
 
 @Serializable
 data class ContainerMetricsResponse(
-    val container_name: String,
+    @SerialName("container_name") val containerName: String,
     val from: Long,
     val to: Long,
-    val interval_seconds: Int,
-    val data_points: List<ContainerMetricDataPoint>
+    @SerialName("interval_seconds") val intervalSeconds: Int,
+    @SerialName("data_points") val dataPoints: List<ContainerMetricDataPoint>
 )
 
 @Serializable
 data class ContainerMetricDataPoint(
     val timestamp: Long,
-    val cpu_percent: Float?,
-    val mem_used: Long?,
-    val mem_limit: Long?,
-    val net_recv_bytes: Long?,
-    val net_sent_bytes: Long?
+    @SerialName("cpu_percent") val cpuPercent: Float?,
+    @SerialName("mem_used") val memUsed: Long?,
+    @SerialName("mem_limit") val memLimit: Long?,
+    @SerialName("net_recv_bytes") val netRecvBytes: Long?,
+    @SerialName("net_sent_bytes") val netSentBytes: Long?
 )
 
 @Serializable

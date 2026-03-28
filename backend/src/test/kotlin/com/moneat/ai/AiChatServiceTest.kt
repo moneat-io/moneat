@@ -64,10 +64,10 @@ class AiChatServiceTest {
         val parsed =
             service.parseAiResponse("""{"message":"hello","context_needed":["logs"]}""")
         assertEquals("hello", parsed.message)
-        assertEquals(listOf("logs"), parsed.context_needed)
+        assertEquals(listOf("logs"), parsed.contextNeeded)
 
         val fallback = service.parseAiResponse("not-json")
         assertEquals("not-json", fallback.message)
-        assertTrue(fallback.context_needed.isEmpty())
+        assertTrue(fallback.contextNeeded.isEmpty())
     }
 }
