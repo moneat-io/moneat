@@ -1037,7 +1037,8 @@ class BillingQuotaService(
             maxAnalyticsSites = row[PricingTierConfigs.max_analytics_sites],
             analyticsRetentionDays = row[PricingTierConfigs.analytics_retention_days],
             monthlyAnalyticsPageviewLimit = row[PricingTierConfigs.monthly_analytics_pageview_limit],
-            analyticsPageviewOverageRateCentsPer100k = row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
+            analyticsPageviewOverageRateCentsPer100k =
+            row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
             monthlyApmSpanLimit = row[PricingTierConfigs.monthly_apm_span_limit],
             apmSpanOverageRateCentsPer1m = row[PricingTierConfigs.apm_span_overage_rate_cents_per_1m],
             monthlyCustomMetricLimit = row[PricingTierConfigs.monthly_custom_metric_limit],

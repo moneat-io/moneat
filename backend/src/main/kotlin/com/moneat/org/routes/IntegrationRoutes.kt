@@ -308,7 +308,9 @@ fun Route.integrationRoutes() {
                     )
                 }
 
-                val scopes = "chat:write,channels:read,channels:join,groups:read,groups:write,usergroups:read,usergroups:write"
+                val scopes = 
+                    "chat:write,channels:read,channels:join,groups:read,groups:write,usergroups:read,usergroups:wri" +
+                    "te"
 
                 // Generate secure state parameter bound to user and org
                 val state = generateSecureState(userId, organizationId)
@@ -528,13 +530,20 @@ fun Route.integrationRoutes() {
 
                 val clientId =
                     EnvConfig.get("DISCORD_CLIENT_ID")
-                        ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord client ID not configured"))
+                        ?: return@get call.respond(
+                            HttpStatusCode.InternalServerError,
+                            MessageResponse("Discord client ID not configured")
+                        )
 
                 val redirectUri =
                     EnvConfig.get("DISCORD_REDIRECT_URI")
-                        ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord redirect URI not configured"))
+                        ?: return@get call.respond(
+                            HttpStatusCode.InternalServerError,
+                            MessageResponse("Discord redirect URI not configured")
+                        )
 
-                // Discord permissions: Send Messages (0x800), Embed Links (0x4000), Read Message History (0x10000), View Channels (0x400)
+                // Discord permissions: Send Messages (0x800), Embed Links (0x4000),
+                // Read Message History (0x10000), View Channels (0x400)
                 val permissions = 85504 // 0x14C00
                 val scopes = "bot+guilds"
 
@@ -744,7 +753,10 @@ fun Route.integrationCallbackRoutes() {
             // Validate and decode the signed state
             val (userId, organizationId) =
                 validateAndDecodeState(state)
-                    ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse("Invalid or expired state parameter"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        MessageResponse("Invalid or expired state parameter")
+                    )
 
             // Verify user still has access to the organization
             val hasAccess =
@@ -763,13 +775,22 @@ fun Route.integrationCallbackRoutes() {
 
             val clientId =
                 EnvConfig.get("SLACK_CLIENT_ID")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Slack client ID not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Slack client ID not configured")
+                    )
             val clientSecret =
                 EnvConfig.get("SLACK_CLIENT_SECRET")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Slack client secret not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Slack client secret not configured")
+                    )
             val redirectUri =
                 EnvConfig.get("SLACK_REDIRECT_URI")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Slack redirect URI not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Slack redirect URI not configured")
+                    )
 
             val oauthResponse = slackService.exchangeOAuthCode(code, clientId, clientSecret, redirectUri)
 
@@ -843,7 +864,10 @@ fun Route.integrationCallbackRoutes() {
 
             val (userId, organizationId) =
                 validateAndDecodeState(state)
-                    ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse("Invalid or expired state parameter"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        MessageResponse("Invalid or expired state parameter")
+                    )
 
             val hasAccess =
                 transaction {
@@ -861,13 +885,22 @@ fun Route.integrationCallbackRoutes() {
 
             val clientId =
                 EnvConfig.get("DISCORD_CLIENT_ID")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord client ID not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Discord client ID not configured")
+                    )
             val clientSecret =
                 EnvConfig.get("DISCORD_CLIENT_SECRET")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord client secret not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Discord client secret not configured")
+                    )
             val redirectUri =
                 EnvConfig.get("DISCORD_REDIRECT_URI")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord redirect URI not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Discord redirect URI not configured")
+                    )
 
             // Exchange code for access token
             val oauthResponse = discordService.exchangeOAuthCode(code, clientId, clientSecret, redirectUri)
@@ -1000,7 +1033,10 @@ fun Route.integrationCallbackRoutes() {
                                                     ?.get(Memberships.organization_id)
                                             }
 
-                                        if (incident == null || userOrgId == null || incident.organizationId != userOrgId) {
+                                        if (incident == null ||
+                                            userOrgId == null ||
+                                            incident.organizationId != userOrgId
+                                        ) {
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "ephemeral",

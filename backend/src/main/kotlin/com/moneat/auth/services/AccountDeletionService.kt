@@ -89,7 +89,8 @@ class AccountDeletionService(
             if (ownedOrgs.isNotEmpty()) {
                 DeletionValidationResult(
                     canDelete = false,
-                    errorMessage = "You are the last owner of ${ownedOrgs.size} organization(s). You must delete these organizations or transfer ownership before deleting your account.",
+                    errorMessage = "You are the last owner of ${ownedOrgs.size} organization(s). " +
+                        "You must delete these organizations or transfer ownership before deleting your account.",
                     organizationsAsLastOwner = ownedOrgs
                 )
             } else {
@@ -256,7 +257,9 @@ class AccountDeletionService(
                         .map { it[Users.email] }
                 }
 
-            logger.info { "Starting deletion of organization $organizationId ($orgName) with ${projectIds.size} projects" }
+            logger.info { 
+                "Starting deletion of organization $organizationId ($orgName) with ${projectIds.size} projects"
+            }
 
             // Delete ClickHouse data for all projects
             if (projectIds.isNotEmpty()) {

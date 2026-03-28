@@ -48,7 +48,8 @@ class AiActionExecutor {
                     logger.info { "Action $actionId executed by user $userId in org $orgId" }
                     ActionResult(
                         success = true,
-                        message = "Action submitted successfully. The operation will be performed using your existing permissions."
+                        message = "Action submitted successfully. The operation will be performed using " +
+                            "your existing permissions."
                     )
                 }
             }.getOrElse { e ->

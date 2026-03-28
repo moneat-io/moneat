@@ -45,7 +45,8 @@ class OtlpTraceIngestionWorker(
         insertResult.onFailure { e -> logTraceInsertFailure(workerId, payload, e) }
         if (insertResult.isFailure) return
         suspendRunCatching {
-            // Tracked: https://github.com/moneat-io/moneat/issues/275 — org→project resolution + project-scoped error tracking for extracted span exceptions.
+            // Tracked: https://github.com/moneat-io/moneat/issues/275 — org→project resolution +
+            // project-scoped error tracking for extracted span exceptions.
             val exceptions = OtlpErrorExtractor.extractExceptions(batch.spans)
             if (exceptions.isNotEmpty()) {
                 logger.debug {

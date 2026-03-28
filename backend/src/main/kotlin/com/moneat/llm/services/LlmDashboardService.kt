@@ -407,7 +407,10 @@ class LlmDashboardService {
             lines.map { line ->
                 val obj = json.parseToJsonElement(line).jsonObject
                 val tagsObj = obj["tags"]?.jsonObject
-                val tagsMap = tagsObj?.entries?.associate { (k, v) -> k to (v.jsonPrimitive.contentOrNull ?: "") } ?: emptyMap()
+                val tagsMap =
+                    tagsObj?.entries?.associate { (k, v) ->
+                        k to (v.jsonPrimitive.contentOrNull ?: "")
+                    } ?: emptyMap()
 
                 LlmGenerationDetailResponse(
                     generationId = obj["generation_id"]?.jsonPrimitive?.content ?: "",

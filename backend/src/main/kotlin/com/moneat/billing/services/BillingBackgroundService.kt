@@ -58,7 +58,8 @@ class BillingBackgroundService(
     private val pricingTierService: PricingTierService = PricingTierService()
 ) {
     private val config = ApplicationConfig("application.conf")
-    private val billingEnabled = config.propertyOrNull("billing.backgroundJobsEnabled")?.getString()?.toBooleanStrictOrNull() ?: true
+    private val billingEnabled =
+        config.propertyOrNull("billing.backgroundJobsEnabled")?.getString()?.toBooleanStrictOrNull() ?: true
 
     private var meteredUsageJob: Job? = null
     private var dunningDowngradeJob: Job? = null
@@ -73,7 +74,11 @@ class BillingBackgroundService(
         meteredUsageJob =
             scope.launch(Dispatchers.IO) {
                 while (isActive) {
-                    TaskLock.tryWithLock("billing-metered-flush", lockAtMostFor = 5.minutes, lockAtLeastFor = 55.seconds) {
+                    TaskLock.tryWithLock(
+                        "billing-metered-flush",
+                        lockAtMostFor = 5.minutes,
+                        lockAtLeastFor = 55.seconds
+                    ) {
                         val flushed = stripeService.flushPendingMeteredUsage()
                         if (flushed > 0) logger.info { "Flushed pending metered usage for $flushed subscription(s)" }
                     }
@@ -84,7 +89,11 @@ class BillingBackgroundService(
         dunningDowngradeJob =
             scope.launch(Dispatchers.IO) {
                 while (isActive) {
-                    TaskLock.tryWithLock("billing-dunning-downgrade", lockAtMostFor = 5.minutes, lockAtLeastFor = 55.seconds) {
+                    TaskLock.tryWithLock(
+                        "billing-dunning-downgrade",
+                        lockAtMostFor = 5.minutes,
+                        lockAtLeastFor = 55.seconds
+                    ) {
                         stripeService.applyDunningDowngrade()
                     }
                     delay(60_000L)
@@ -128,7 +137,12 @@ class BillingBackgroundService(
         for (orgId in orgIds) {
             val usage = quotaService.getUsageForOrganization(orgId)
             val periodStart = usage.periodStart
-            val basePct = if (usage.baseLimitUnits > 0) (usage.usedUnits.toDouble() / usage.baseLimitUnits.toDouble()) else 0.0
+            val basePct =
+                if (usage.baseLimitUnits > 0) {
+                    usage.usedUnits.toDouble() / usage.baseLimitUnits.toDouble()
+                } else {
+                    0.0
+                }
             val paygPct =
                 if (usage.paygLimitUnits > 0) {
                     val paygUsed = kotlin.math.max(0L, usage.usedUnits - usage.baseLimitUnits)
@@ -179,7 +193,10 @@ class BillingBackgroundService(
                     if (ownerIds.isNotEmpty()) {
                         ownerIds
                     } else {
-                        Memberships.selectAll().where { Memberships.organization_id eq organizationId }.map { it[Memberships.user_id] }
+                        Memberships
+                            .selectAll()
+                            .where { Memberships.organization_id eq organizationId }
+                            .map { it[Memberships.user_id] }
                     }
                 Users
                     .selectAll()

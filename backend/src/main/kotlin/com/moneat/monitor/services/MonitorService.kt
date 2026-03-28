@@ -280,7 +280,8 @@ class MonitorService(
 
         return suspendRunCatching {
             val json = Json { ignoreUnknownKeys = true }
-            val rows = json.parseToJsonElement(body).jsonObject["data"]?.jsonArray ?: return hostIds.associateWith { null }
+            val rows = json.parseToJsonElement(body).jsonObject["data"]?.jsonArray
+                ?: return hostIds.associateWith { null }
             val result = mutableMapOf<Int, LatestMetrics?>()
             for (row in rows) {
                 val arr = row.jsonArray

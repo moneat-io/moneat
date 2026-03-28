@@ -86,7 +86,8 @@ class StripeService(
     private val allowMeteringWhenStripeDisabled: Boolean = false
 ) {
     private val config = ApplicationConfig("application.conf")
-    private val stripeEnabled = config.propertyOrNull("billing.stripeEnabled")?.getString()?.toBooleanStrictOrNull() ?: false
+    private val stripeEnabled =
+        config.propertyOrNull("billing.stripeEnabled")?.getString()?.toBooleanStrictOrNull() ?: false
     private val secretKey = config.propertyOrNull("stripe.secretKey")?.getString()
     private val webhookSecret = config.propertyOrNull("stripe.webhookSecret")?.getString()
 
@@ -302,7 +303,9 @@ class StripeService(
                     .putMetadata("organization_id", organizationId.toString())
                     .build()
             )
-        val clientSecret = intent.clientSecret ?: throw IllegalStateException("Stripe setup intent missing client secret")
+        val clientSecret =
+            intent.clientSecret
+                ?: throw IllegalStateException("Stripe setup intent missing client secret")
         return SetupIntentResponse(clientSecret = clientSecret)
     }
 
@@ -319,7 +322,9 @@ class StripeService(
         // Retrieve the setup intent to get the payment method and customer
         val setupIntent = SetupIntent.retrieve(setupIntentId)
         val customerId = setupIntent.customer ?: throw IllegalStateException("Setup intent has no customer")
-        val paymentMethodId = setupIntent.paymentMethod ?: throw IllegalStateException("Setup intent has no payment method")
+        val paymentMethodId =
+            setupIntent.paymentMethod
+                ?: throw IllegalStateException("Setup intent has no payment method")
 
         // Verify this customer belongs to the organization
         val expectedCustomerId = getOrCreateCustomer(organizationId)
@@ -500,20 +505,24 @@ class StripeService(
 
         return UpdateOnCallSeatsResponse(
             seats = seats,
-            proratedAmountCents = upcomingInvoice?.amountDue?.toInt() // This is a rough estimate, usually user sees next invoice
+            // Rough estimate; user usually sees actual amount on next invoice
+            proratedAmountCents = upcomingInvoice?.amountDue?.toInt()
         )
     }
 
     fun syncSubscriptionFromStripe(subscription: Subscription) {
         val metadataOrgId = subscription.metadata?.get("organization_id")
         logger.info {
-            "syncSubscriptionFromStripe: subscription=${subscription.id}, customer=${subscription.customer}, metadata_org_id='$metadataOrgId'"
+            "syncSubscriptionFromStripe: subscription=${subscription.id}, customer=${subscription.customer}," +
+                "metadata_org_id='$metadataOrgId'"
         }
 
         val organizationId = resolveOrganizationId(metadataOrgId, subscription.customer)
         if (organizationId == null) {
             logger.error {
-                "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}. metadata_org_id='$metadataOrgId', customer=${subscription.customer}, full_metadata=${subscription.metadata}"
+                "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}." +
+                    "metadata_org_id='$metadataOrgId', customer=${subscription.customer}," +
+                        "full_metadata=${subscription.metadata}"
             }
             return
         }
@@ -603,7 +612,9 @@ class StripeService(
             logger.info { "Updating existing subscription row ${existing.id} for org $organizationId" }
             subscriptionRepository.updateFromStripe(existing.id, stripeData)
         } else {
-            logger.info { "Creating new subscription row for org $organizationId, plan=$planName, status=${subscription.status}" }
+            logger.info { 
+                "Creating new subscription row for org $organizationId, plan=$planName, status=${subscription.status}"
+            }
             subscriptionRepository.insertFromStripe(organizationId, subscription.id, stripeData)
         }
     }
@@ -658,7 +669,8 @@ class StripeService(
 
     fun handleCheckoutCompleted(session: com.stripe.model.checkout.Session) {
         logger.info {
-            "handleCheckoutCompleted: session=${session.id}, customer=${session.customer}, subscription=${session.subscription}"
+            "handleCheckoutCompleted: session=${session.id}, customer=${session.customer}," +
+                "subscription=${session.subscription}"
         }
         val customerId = session.customer
         val subscriptionId = session.subscription
@@ -674,7 +686,8 @@ class StripeService(
         val organizationId = resolveOrganizationId(metadataOrgId, customerId)
         if (organizationId == null) {
             logger.error {
-                "CRITICAL: Could not resolve organization ID from checkout session ${session.id}. metadata_org_id='$metadataOrgId', customer=$customerId"
+                "CRITICAL: Could not resolve organization ID from checkout session ${session.id}." +
+                    "metadata_org_id='$metadataOrgId', customer=$customerId"
             }
             return
         }
@@ -740,7 +753,9 @@ class StripeService(
     }
 
     fun handleSubscriptionDeleted(subscription: Subscription) {
-        val organizationId = resolveOrganizationId(subscription.metadata["organization_id"], subscription.customer) ?: return
+        val organizationId =
+            resolveOrganizationId(subscription.metadata["organization_id"], subscription.customer)
+                ?: return
         val freeTier = pricingTierService.getCurrentTier("FREE")
         transaction {
             Subscriptions.update({
@@ -877,7 +892,8 @@ class StripeService(
                 flushed++
             }.getOrElse { e ->
                 logger.error(e) {
-                    "Failed to report metered usage for subscription ${batch.subscriptionId} (batchUnits=${batch.batchUnits})"
+                    "Failed to report metered usage for subscription ${batch.subscriptionId}" +
+                        "(batchUnits=${batch.batchUnits})"
                 }
             }
         }

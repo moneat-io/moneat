@@ -133,7 +133,11 @@ class OAuthService {
 
     fun isGitHubEnabled(): Boolean = githubClientId != null && githubClientSecret != null
 
-    fun isAppleEnabled(): Boolean = appleClientId != null && appleTeamId != null && appleKeyId != null && applePrivateKey != null
+    fun isAppleEnabled(): Boolean =
+        appleClientId != null &&
+            appleTeamId != null &&
+            appleKeyId != null &&
+            applePrivateKey != null
 
     fun generateGitHubAuthUrl(state: String): String {
         if (!isGitHubEnabled()) {
@@ -415,7 +419,8 @@ class OAuthService {
                 } else if (existingProvider != userData.provider) {
                     // Different OAuth provider
                     throw IllegalArgumentException(
-                        "This email is already registered with $existingProvider. Please sign in with $existingProvider."
+                        "This email is already registered with $existingProvider. Please sign in with" +
+                            "$existingProvider."
                     )
                 } else {
                     // Same provider but different ID? Shouldn't happen, but log them in

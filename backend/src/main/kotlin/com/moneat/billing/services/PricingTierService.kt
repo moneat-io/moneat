@@ -200,7 +200,8 @@ class PricingTierService {
     ): PricingTierConfigResponse {
         val canonicalName = tierName.uppercase()
         validateCreateTierRequest(request)
-        val monthlyErrorLimit = if (request.monthlyErrorLimit > 0) request.monthlyErrorLimit else request.monthlyUnitLimit
+        val monthlyErrorLimit =
+            if (request.monthlyErrorLimit > 0) request.monthlyErrorLimit else request.monthlyUnitLimit
         val monthlyTransactionLimit = request.monthlyTransactionLimit
         val monthlyReplayLimit = request.monthlyReplayLimit
         val monthlyFeedbackLimit = request.monthlyFeedbackLimit
@@ -217,22 +218,36 @@ class PricingTierService {
             val nextVersion = (current?.get(PricingTierConfigs.version) ?: 0) + 1
 
             val resolvedMonthlyGbLimit = request.monthlyGbLimit ?: currentConfig?.monthlyGbLimit ?: 0
-            val resolvedLogRetentionDays = request.logRetentionDays ?: currentConfig?.logRetentionDays ?: request.retentionDays
+            val resolvedLogRetentionDays =
+                request.logRetentionDays ?: currentConfig?.logRetentionDays ?: request.retentionDays
             val resolvedYearlyPriceCents = request.yearlyPriceCents ?: currentConfig?.yearlyPriceCents ?: 0
-            val resolvedTrialDays = request.trialDays ?: currentConfig?.trialDays ?: defaultTrialDaysForTier(canonicalName)
-            val resolvedOverageRateCentsPerGb = request.overageRateCentsPerGb ?: currentConfig?.overageRateCentsPerGb ?: 0
-            val resolvedReplayRetentionDays = request.replayRetentionDays ?: currentConfig?.replayRetentionDays ?: request.retentionDays
-            val resolvedLlmRetentionDays = request.llmRetentionDays ?: currentConfig?.llmRetentionDays ?: request.retentionDays
-            val resolvedErrorOverageRateCentsPer1k = request.errorOverageRateCentsPer1k ?: currentConfig?.errorOverageRateCentsPer1k ?: 0
-            val resolvedReplayOverageRateCentsPerGb = request.replayOverageRateCentsPerGb ?: currentConfig?.replayOverageRateCentsPerGb ?: 0
-            val resolvedLlmOverageRateCentsPer1k = request.llmOverageRateCentsPer1k ?: currentConfig?.llmOverageRateCentsPer1k ?: 0
-            val resolvedOncallPerUserMonthlyCents = request.oncallPerUserMonthlyCents ?: currentConfig?.oncallPerUserMonthlyCents ?: 0
-            val resolvedOncallPerUserYearlyCents = request.oncallPerUserYearlyCents ?: currentConfig?.oncallPerUserYearlyCents ?: 0
+            val resolvedTrialDays =
+                request.trialDays ?: currentConfig?.trialDays ?: defaultTrialDaysForTier(canonicalName)
+            val resolvedOverageRateCentsPerGb =
+                request.overageRateCentsPerGb ?: currentConfig?.overageRateCentsPerGb ?: 0
+            val resolvedReplayRetentionDays =
+                request.replayRetentionDays ?: currentConfig?.replayRetentionDays ?: request.retentionDays
+            val resolvedLlmRetentionDays =
+                request.llmRetentionDays ?: currentConfig?.llmRetentionDays ?: request.retentionDays
+            val resolvedErrorOverageRateCentsPer1k =
+                request.errorOverageRateCentsPer1k ?: currentConfig?.errorOverageRateCentsPer1k ?: 0
+            val resolvedReplayOverageRateCentsPerGb =
+                request.replayOverageRateCentsPerGb ?: currentConfig?.replayOverageRateCentsPerGb ?: 0
+            val resolvedLlmOverageRateCentsPer1k =
+                request.llmOverageRateCentsPer1k ?: currentConfig?.llmOverageRateCentsPer1k ?: 0
+            val resolvedOncallPerUserMonthlyCents =
+                request.oncallPerUserMonthlyCents ?: currentConfig?.oncallPerUserMonthlyCents ?: 0
+            val resolvedOncallPerUserYearlyCents =
+                request.oncallPerUserYearlyCents ?: currentConfig?.oncallPerUserYearlyCents ?: 0
             val resolvedOncallEnabled = request.oncallEnabled ?: currentConfig?.oncallEnabled ?: false
             val resolvedMaxAnalyticsSites = request.maxAnalyticsSites
-            val resolvedAnalyticsRetentionDays = request.analyticsRetentionDays ?: currentConfig?.analyticsRetentionDays ?: 1095
-            val resolvedMonthlyAnalyticsPageviewLimit = request.monthlyAnalyticsPageviewLimit ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
-            val resolvedAnalyticsPageviewOverageRateCentsPer100k = request.analyticsPageviewOverageRateCentsPer100k ?: currentConfig?.analyticsPageviewOverageRateCentsPer100k ?: 0
+            val resolvedAnalyticsRetentionDays =
+                request.analyticsRetentionDays ?: currentConfig?.analyticsRetentionDays ?: 1095
+            val resolvedMonthlyAnalyticsPageviewLimit =
+                request.monthlyAnalyticsPageviewLimit ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
+            val resolvedAnalyticsPageviewOverageRateCentsPer100k =
+                request.analyticsPageviewOverageRateCentsPer100k
+                    ?: currentConfig?.analyticsPageviewOverageRateCentsPer100k ?: 0
             val resolvedMonthlyApmSpanLimit = request.monthlyApmSpanLimit
                 ?: currentConfig?.monthlyApmSpanLimit ?: 0
             val resolvedApmSpanOverageRateCentsPer1m = request.apmSpanOverageRateCentsPer1m
@@ -353,7 +368,8 @@ class PricingTierService {
                     it[max_analytics_sites] = resolvedMaxAnalyticsSites
                     it[analytics_retention_days] = resolvedAnalyticsRetentionDays
                     it[monthly_analytics_pageview_limit] = resolvedMonthlyAnalyticsPageviewLimit
-                    it[analytics_pageview_overage_rate_cents_per_100k] = resolvedAnalyticsPageviewOverageRateCentsPer100k
+                    it[analytics_pageview_overage_rate_cents_per_100k] =
+                        resolvedAnalyticsPageviewOverageRateCentsPer100k
                     it[monthly_apm_span_limit] = resolvedMonthlyApmSpanLimit
                     it[apm_span_overage_rate_cents_per_1m] = resolvedApmSpanOverageRateCentsPer1m
                     it[monthly_custom_metric_limit] = resolvedMonthlyCustomMetricLimit
@@ -671,7 +687,8 @@ class PricingTierService {
             maxAnalyticsSites = row[PricingTierConfigs.max_analytics_sites],
             analyticsRetentionDays = row[PricingTierConfigs.analytics_retention_days],
             monthlyAnalyticsPageviewLimit = row[PricingTierConfigs.monthly_analytics_pageview_limit],
-            analyticsPageviewOverageRateCentsPer100k = row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
+            analyticsPageviewOverageRateCentsPer100k =
+            row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
             monthlyApmSpanLimit = row[PricingTierConfigs.monthly_apm_span_limit],
             apmSpanOverageRateCentsPer1m = row[PricingTierConfigs.apm_span_overage_rate_cents_per_1m],
             monthlyCustomMetricLimit = row[PricingTierConfigs.monthly_custom_metric_limit],

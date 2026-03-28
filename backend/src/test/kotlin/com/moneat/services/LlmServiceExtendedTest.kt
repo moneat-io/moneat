@@ -141,8 +141,14 @@ class LlmServiceExtendedTest {
     @Test
     fun `getGenerationDetail parses full detail response`() =
         runBlocking {
-            @Suppress("MaximumLineLength")
-            val detailJson = """{"generation_id":"gen-99","trace_id":"t1","span_id":"s1","parent_span_id":"ps1","ts":"2026-03-01T12:00:00.000Z","duration_ms":200.0,"name":"summarize","model":"claude-3","provider":"anthropic","type":"chat","input":"hello","output":"world","input_tokens":5,"output_tokens":10,"total_tokens":15,"cost_usd":0.005,"temperature":0.7,"max_tokens":512,"top_p":0.9,"status":"success","error_message":"","status_code":200,"user_id":"user-1","session_id":"sess-1","environment":"production","release":"v2.0","tags":{"env":"prod","team":"ml"},"metadata":"{}"}"""
+            val detailJson =
+                """{"generation_id":"gen-99","trace_id":"t1","span_id":"s1","parent_span_id":"ps1",""" +
+                    """"ts":"2026-03-01T12:00:00.000Z","duration_ms":200.0,"name":"summarize","model":"claude-3",""" +
+                    """"provider":"anthropic","type":"chat","input":"hello","output":"world",""" +
+                    """"input_tokens":5,"output_tokens":10,"total_tokens":15,"cost_usd":0.005,""" +
+                    """"temperature":0.7,"max_tokens":512,"top_p":0.9,"status":"success",""" +
+                    """"error_message":"","status_code":200,"user_id":"user-1","session_id":"sess-1",""" +
+                    """"environment":"production","release":"v2.0","tags":{"env":"prod","team":"ml"},"metadata":"{}"}"""
             withClickHouseMockServer(
                 queryBasedClickHouseHandler(defaultBody = detailJson)
             ) { _ ->
@@ -234,7 +240,6 @@ class LlmServiceExtendedTest {
     @Test
     fun `getModels returns model stats list`() =
         runBlocking {
-            @Suppress("MaximumLineLength")
             val modelsJson = """
                 {"model":"$GPT_4O","provider":"openai","call_count":100,"total_tokens":20000,"total_cost":5.0,"avg_duration_ms":400.0,"error_rate":2.0}
                 {"model":"claude-3","provider":"anthropic","call_count":50,"total_tokens":10000,"total_cost":2.5,"avg_duration_ms":300.0,"error_rate":0.0}

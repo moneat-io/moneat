@@ -145,10 +145,22 @@ class PricingTierServiceFeatureFlagsTest {
     fun `getCurrentPlans returns retention and feature flag matrix`() {
         val tiers =
             listOf(
-                SeedTier("FREE", 0, 3, 3, saml = false, oidc = false, priority = false, sla = false, customRetention = false),
-                SeedTier("PRO", 2900, 30, 30, saml = false, oidc = false, priority = false, sla = false, customRetention = false),
-                SeedTier("TEAM", 7900, 30, 30, saml = true, oidc = true, priority = false, sla = false, customRetention = false),
-                SeedTier("BUSINESS", 19900, 90, 90, saml = true, oidc = true, priority = true, sla = true, customRetention = true)
+                SeedTier(
+                    "FREE", 0, 3, 3,
+                    saml = false, oidc = false, priority = false, sla = false, customRetention = false
+                ),
+                SeedTier(
+                    "PRO", 2900, 30, 30,
+                    saml = false, oidc = false, priority = false, sla = false, customRetention = false
+                ),
+                SeedTier(
+                    "TEAM", 7900, 30, 30,
+                    saml = true, oidc = true, priority = false, sla = false, customRetention = false
+                ),
+                SeedTier(
+                    "BUSINESS", 19900, 90, 90,
+                    saml = true, oidc = true, priority = true, sla = true, customRetention = true
+                )
             )
 
         transaction {

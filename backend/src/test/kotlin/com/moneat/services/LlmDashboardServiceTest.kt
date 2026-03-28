@@ -34,11 +34,13 @@ class LlmDashboardServiceTest {
     companion object {
         @Suppress("MaximumLineLength")
         private const val STATS_JSON =
-            """{"total_generations":12,"total_tokens":2400,"total_cost":1.2,"avg_duration_ms":350.5,"error_rate":8.33}"""
+            """{"total_generations":12,"total_tokens":2400,"total_cost":1.2,"avg_duration_ms":350.5,""" +
+                """"error_rate":8.33}"""
 
         @Suppress("MaximumLineLength")
         private const val MODEL_STATS_JSON =
-            """{"model":"gpt-4o-mini","provider":"openai","call_count":12,"total_tokens":2400,"total_cost":1.2,"avg_duration_ms":350.5,"error_rate":8.33}"""
+            """{"model":"gpt-4o-mini","provider":"openai","call_count":12,"total_tokens":2400,""" +
+                """"total_cost":1.2,"avg_duration_ms":350.5,"error_rate":8.33}"""
     }
 
     @BeforeTest

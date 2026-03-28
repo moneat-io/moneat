@@ -195,7 +195,14 @@ class UptimeCheckExecutor {
         val httpResult = checkHttp(monitor)
         if (httpResult.status == 0) return httpResult
 
-        val keyword = monitor.keyword ?: return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "No keyword configured")
+        val keyword =
+            monitor.keyword
+                ?: return CheckResult(
+                    0,
+                    httpResult.responseTimeMs,
+                    httpResult.statusCode,
+                    "No keyword configured"
+                )
 
         suspendRunCatching {
             val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
@@ -207,14 +214,26 @@ class UptimeCheckExecutor {
 
             val success = containsKeyword == shouldContain
 
+            val keywordMessage =
+                if (success) {
+                    "Keyword check passed"
+                } else {
+                    "Keyword '$keyword' " +
+                        if (shouldContain) "not found" else "found (inverted check)"
+                }
             return CheckResult(
                 status = if (success) 1 else 0,
                 responseTimeMs = httpResult.responseTimeMs,
                 statusCode = httpResult.statusCode,
-                message = if (success) "Keyword check passed" else "Keyword '$keyword' ${if (shouldContain) "not found" else "found (inverted check)"}"
+                message = keywordMessage
             )
         }.getOrElse { e ->
-            return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "Keyword check error: ${e.message}")
+            return CheckResult(
+                0,
+                httpResult.responseTimeMs,
+                httpResult.statusCode,
+                "Keyword check error: ${e.message}"
+            )
         }
     }
 
@@ -225,7 +244,14 @@ class UptimeCheckExecutor {
         val httpResult = checkHttp(monitor)
         if (httpResult.status == 0) return httpResult
 
-        val jsonPath = monitor.jsonPath ?: return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "No JSON path configured")
+        val jsonPath =
+            monitor.jsonPath
+                ?: return CheckResult(
+                    0,
+                    httpResult.responseTimeMs,
+                    httpResult.statusCode,
+                    "No JSON path configured"
+                )
 
         suspendRunCatching {
             val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
@@ -242,14 +268,25 @@ class UptimeCheckExecutor {
                     true // Just check that path exists
                 }
 
+            val jsonMessage =
+                if (success) {
+                    "JSON query passed"
+                } else {
+                    "JSON value mismatch: got '$value', expected '$expectedValue'"
+                }
             return CheckResult(
                 status = if (success) 1 else 0,
                 responseTimeMs = httpResult.responseTimeMs,
                 statusCode = httpResult.statusCode,
-                message = if (success) "JSON query passed" else "JSON value mismatch: got '$value', expected '$expectedValue'"
+                message = jsonMessage
             )
         }.getOrElse { e ->
-            return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "JSON query error: ${e.message}")
+            return CheckResult(
+                0,
+                httpResult.responseTimeMs,
+                httpResult.statusCode,
+                "JSON query error: ${e.message}"
+            )
         }
     }
 
@@ -326,11 +363,17 @@ class UptimeCheckExecutor {
 
                 val success = expectedValue == null || value == expectedValue
 
+                val dnsMessage =
+                    if (success) {
+                        "DNS record found: $value"
+                    } else {
+                        "DNS value mismatch: got '$value', expected '$expectedValue'"
+                    }
                 CheckResult(
                     status = if (success) 1 else 0,
                     responseTimeMs = responseTime,
                     statusCode = 0,
-                    message = if (success) "DNS record found: $value" else "DNS value mismatch: got '$value', expected '$expectedValue'"
+                    message = dnsMessage
                 )
             } else {
                 CheckResult(0, responseTime, 0, "DNS record not found")
@@ -439,7 +482,9 @@ class UptimeCheckExecutor {
      * Database connection check
      */
     private suspend fun checkDatabase(monitor: UptimeMonitorData): CheckResult {
-        val connectionString = monitor.dbConnectionString ?: return CheckResult(0, -1, 0, "No connection string configured")
+        val connectionString =
+            monitor.dbConnectionString
+                ?: return CheckResult(0, -1, 0, "No connection string configured")
 
         val startTime = System.currentTimeMillis()
 

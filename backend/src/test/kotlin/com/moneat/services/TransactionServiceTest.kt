@@ -237,8 +237,16 @@ class TransactionServiceTest {
     // ──── Trace and Span Tests ────
     @Test
     fun `getTraceDetails assembles spans into trace`() = runBlocking {
-        val body = """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_1","meta":{"sentry.transaction_id":"tx-1","sentry.project_id":"1"},"op":"http.server","description":"GET /","start_ns":"1000000000","duration_ns":"1500000000","error":0}
-{"span_id":"s2","parent_span_id":"s1","trace_id":"$TRACE_1","meta":{"sentry.transaction_id":"tx-1","sentry.project_id":"1"},"op":"db","description":"SELECT","start_ns":"1200000000","duration_ns":"600000000","error":0}"""
+        val body =
+            """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_1","meta":""" +
+                """{"sentry.transaction_id":"tx-1","sentry.project_id":"1"},""" +
+                """"op":"http.server","description":"GET /","start_ns":"1000000000",""" +
+                """"duration_ns":"1500000000","error":0}""" +
+                "\n" +
+                """{"span_id":"s2","parent_span_id":"s1","trace_id":"$TRACE_1","meta":""" +
+                """{"sentry.transaction_id":"tx-1","sentry.project_id":"1"},""" +
+                """"op":"db","description":"SELECT","start_ns":"1200000000",""" +
+                """"duration_ns":"600000000","error":0}"""
         withClickHouseMockServer({ exchange ->
             exchange.respond(200, body, CONTENT_TYPE_TEXT_PLAIN)
         }) {

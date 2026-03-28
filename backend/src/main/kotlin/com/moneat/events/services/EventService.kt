@@ -346,7 +346,8 @@ class EventService(
         val eventId = event.event_id ?: UUID.randomUUID().toString()
 
         logger.debug {
-            "Full event structure - exception: ${event.exception}, message: ${event.message}, platform: ${event.platform}"
+            "Full event structure - exception: ${event.exception}, message: ${event.message}," +
+                "platform: ${event.platform}"
         }
 
         // Convert Unix timestamp (seconds with fractional part) to milliseconds
@@ -890,7 +891,9 @@ class EventService(
             if (!success) {
                 logger.error { "Failed to insert ai.* spans as LLM generations" }
             } else {
-                logger.info { "Cross-inserted ${generations.size} ai.* spans as LLM generations for project $projectId" }
+                logger.info { 
+                    "Cross-inserted ${generations.size} ai.* spans as LLM generations for project $projectId"
+                }
             }
         }.getOrElse { e ->
             logger.warn(e) { "Failed to cross-insert ai.* spans as LLM generations" }

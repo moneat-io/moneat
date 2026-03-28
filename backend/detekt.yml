@@ -10,6 +10,9 @@ comments:
 # Disable rules that have widespread pre-existing violations.
 # These can be enabled incrementally as the codebase is cleaned up.
 style:
+  MaxLineLength:
+    active: true
+    maxLineLength: 120
   MagicNumber:
     active: false
   WildcardImport:
@@ -17,8 +20,6 @@ style:
   ReturnCount:
     active: false
   ThrowsCount:
-    active: false
-  MaxLineLength:
     active: false
   UseRequire:
     active: false
