@@ -300,16 +300,16 @@ class NotificationService(
                             val prefs = getPreferences(userId, null)
                             if (!prefs.weeklySummary) return@mapNotNull null
 
-                            Triple(userId, user[Users.email], user[Users.name])
+                            Pair(userId, user[Users.email])
                         }
                 }
 
             logger.info { "Sending weekly summaries to ${usersToNotify.size} users" }
 
-            usersToNotify.forEach { (userId, email, userName) ->
+            usersToNotify.forEach { (userId, email) ->
                 scope.launch {
                     suspendRunCatching {
-                        sendUserWeeklySummary(userId, email, userName, startDate, endDate, priorStartDate)
+                        sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
                     }.getOrElse { e ->
                         logger.error(e) { "Failed to send weekly summary to $email" }
                     }
@@ -325,13 +325,12 @@ class NotificationService(
         val endDate = now
         val startDate = now.minus(Duration.ofDays(7))
         val priorStartDate = startDate.minus(Duration.ofDays(7))
-        sendUserWeeklySummary(userId, email, null, startDate, endDate, priorStartDate)
+        sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
     }
 
     private suspend fun sendUserWeeklySummary(
         userId: Int,
         email: String,
-        @Suppress("UNUSED_PARAMETER") userName: String?,
         startDate: Instant,
         endDate: Instant,
         priorStartDate: Instant
@@ -642,16 +641,6 @@ class NotificationService(
             num >= 1_000_000 -> String.format(Locale.US, "%.1fM", num / 1_000_000.0)
             num >= 1_000 -> String.format(Locale.US, "%.1fK", num / 1_000.0)
             else -> num.toString()
-        }
-    }
-
-    private fun formatTimestamp(timestamp: String): String {
-        return suspendRunCatching {
-            val instant = Instant.parse(timestamp)
-            val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm 'UTC'", Locale.US)
-            formatter.format(instant.atZone(ZoneId.of("UTC")))
-        }.getOrElse { _ ->
-            timestamp
         }
     }
 

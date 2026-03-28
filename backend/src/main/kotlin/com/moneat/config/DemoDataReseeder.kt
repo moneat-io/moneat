@@ -27,7 +27,6 @@ import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.OrderByDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TimeRangeDef
-import com.moneat.shared.models.Organizations
 import com.moneat.uptime.models.UptimeMonitors
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
@@ -1823,13 +1822,6 @@ object DemoDataReseeder {
             }
         }.onFailure { logger.warn { "Purge hosts failed (non-fatal): ${it.message}" } }
         cleanDemoProfileFiles()
-    }
-
-    private fun getAllOrgIds(): List<Int> {
-        return transaction {
-            Organizations.selectAll()
-                .map { it[Organizations.id] }
-        }
     }
 
     private val infraDemoTables =

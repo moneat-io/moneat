@@ -1175,10 +1175,6 @@ class BillingQuotaService(
         }
     }
 
-    private fun isStripeMeteredUnitType(eventType: String): Boolean {
-        return eventType == "error" || eventType == "transaction" || eventType == "replay" || eventType == "feedback"
-    }
-
     private fun usedUnitsForType(state: QuotaState, eventType: String): Long {
         return when (eventType) {
             "error" -> state.usedErrors

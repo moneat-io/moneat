@@ -30,7 +30,6 @@ import com.moneat.monitor.models.UpdateAlertScopeRequest
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.models.Memberships
-import com.moneat.shared.models.Projects
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -45,15 +44,11 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.SortOrder
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 
-private val logger = KotlinLogging.logger {}
 private const val DEFAULT_PROJECT_ID = 0L
 
 /**
@@ -67,31 +62,6 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
             .where { Memberships.user_id eq userId }
             .map { it[Memberships.organization_id] }
             .distinct()
-    }
-}
-
-private fun resolveProjectForOrganization(
-    organizationId: Int,
-    requestedProjectId: Long?
-): Long? {
-    return transaction {
-        if (requestedProjectId != null) {
-            val exists =
-                Projects
-                    .selectAll()
-                    .where { (Projects.id eq requestedProjectId) and (Projects.organization_id eq organizationId) }
-                    .count() > 0
-            if (exists) {
-                return@transaction requestedProjectId
-            }
-        }
-
-        Projects
-            .selectAll()
-            .where { Projects.organization_id eq organizationId }
-            .orderBy(Projects.id to SortOrder.ASC)
-            .firstOrNull()
-            ?.get(Projects.id)
     }
 }
 

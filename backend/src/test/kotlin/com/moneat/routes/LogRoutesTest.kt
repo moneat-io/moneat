@@ -58,9 +58,6 @@ class LogRoutesTest {
             .withClaim("orgId", orgId)
             .sign(Algorithm.HMAC256(jwtSecret))
 
-    private fun setupApp(block: io.ktor.server.application.Application.() -> Unit) =
-        block.also { }
-
     @BeforeTest
     fun setupKoin() {
         startTestKoin()
