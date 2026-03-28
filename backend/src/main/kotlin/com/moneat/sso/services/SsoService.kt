@@ -45,6 +45,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import io.lettuce.core.RedisException
 import io.ktor.server.config.ApplicationConfig
 import io.ktor.server.plugins.BadRequestException
 import kotlinx.serialization.Serializable
@@ -61,6 +62,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.net.URI
+import java.security.GeneralSecurityException
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.Date
@@ -112,7 +114,7 @@ open class SsoService {
     private fun deriveAesKeyFromJwtSecret(secret: String): ByteArray {
         val salt = "moneat-sso-encryption-v1".toByteArray(Charsets.UTF_8)
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val spec = PBEKeySpec(secret.toCharArray(), salt, 100_000, AES_KEY_LENGTH * 8)
+        val spec = PBEKeySpec(secret.toCharArray(), salt, PBKDF2_ITERATIONS, AES_KEY_LENGTH * BITS_PER_BYTE)
         val key = factory.generateSecret(spec)
         val encoded = key.encoded
         require(encoded.size >= AES_KEY_LENGTH) {
@@ -571,7 +573,7 @@ open class SsoService {
                     SSO_NONCE_TTL_SECONDS,
                     orgId.toString()
                 )
-            } catch (e: Exception) {
+            } catch (e: RedisException) {
                 throw IllegalStateException("Failed to store SSO nonce in Redis", e)
             }
         }
@@ -597,8 +599,10 @@ open class SsoService {
             return SsoStateData(nonceB64, orgId, timestamp)
         } catch (e: IllegalArgumentException) {
             throw e
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Invalid state parameter")
+        } catch (e: IllegalStateException) {
+            throw IllegalArgumentException("Invalid state parameter", e)
+        } catch (e: GeneralSecurityException) {
+            throw IllegalArgumentException("Invalid state parameter", e)
         }
     }
 
@@ -621,6 +625,10 @@ open class SsoService {
 
         try {
             val combined = Base64.getDecoder().decode(encrypted)
+            if (combined.size <= IV_LENGTH) {
+                logger.error { "Failed to decrypt SSO secret: ciphertext too short" }
+                return null
+            }
             val iv = combined.copyOfRange(0, IV_LENGTH)
             val ciphertext = combined.copyOfRange(IV_LENGTH, combined.size)
 
@@ -630,9 +638,11 @@ open class SsoService {
             cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec)
 
             return String(cipher.doFinal(ciphertext))
-        } catch (e: Exception) {
-            val err = e.stackTraceToString().take(500)
-            logger.error { "Failed to decrypt SSO secret: $err" }
+        } catch (e: IllegalArgumentException) {
+            logger.error { "Failed to decrypt SSO secret: ${e.message}" }
+            return null
+        } catch (e: GeneralSecurityException) {
+            logger.error { "Failed to decrypt SSO secret: ${e.message}" }
             return null
         }
     }
@@ -823,7 +833,7 @@ open class SsoService {
             RedisConfig.sync().del(redisKey)
         } catch (e: IllegalArgumentException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: RedisException) {
             throw IllegalStateException(
                 "Failed to verify SSO nonce ($SSO_NONCE_PREFIX$nonceB64)",
                 e
@@ -863,6 +873,8 @@ open class SsoService {
         private const val STATE_SIGNATURE_INDEX = 3
         private const val TOKEN_TTL_MS = 3_600_000L
         private const val MILLIS_PER_SECOND = 1000L
+        private const val PBKDF2_ITERATIONS = 100_000
+        private const val BITS_PER_BYTE = 8
 
         fun normalizeDomain(domain: String): String = domain.trim().lowercase()
     }

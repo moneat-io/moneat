@@ -26,6 +26,7 @@ import com.moneat.sso.services.SsoService
 import com.moneat.utils.AuthCookieUtils
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
@@ -86,30 +87,35 @@ fun Route.ssoRoutes() {
     route("/auth/sso") {
         // Public OIDC SSO flow endpoints
         post("/init") {
-            try {
+            suspendRunCatching {
                 val request = call.receive<SsoInitRequest>()
                 val response = ssoService.initSso(
                     request.email,
                     request.orgSlug,
                 )
                 call.respond(response)
-            } catch (e: IllegalArgumentException) {
-                logger.error(e) { "SSO init failed: ${e.message}" }
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    ErrorResponse(e.message),
-                )
-            } catch (e: Exception) {
-                logger.error(e) { "SSO init error" }
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    ErrorResponse("SSO initialization failed")
-                )
+            }.onFailure { e ->
+                when (e) {
+                    is IllegalArgumentException -> {
+                        logger.error(e) { "SSO init failed: ${e.message}" }
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ErrorResponse(e.message),
+                        )
+                    }
+                    else -> {
+                        logger.error(e) { "SSO init error" }
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ErrorResponse("SSO initialization failed")
+                        )
+                    }
+                }
             }
         }
 
         get("/oidc/callback") {
-            try {
+            suspendRunCatching {
                 val code = call.parameters["code"]
                     ?: throw IllegalArgumentException(
                         "Missing authorization code"
@@ -124,11 +130,8 @@ fun Route.ssoRoutes() {
 
                 AuthCookieUtils.setAuthCookie(call, callbackData.token)
                 call.respondRedirect("$frontendUrl/auth/sso/callback")
-            } catch (e: IllegalArgumentException) {
-                logger.error(e) { "OIDC callback failed: ${e.message}" }
-                call.respondRedirect("$frontendUrl/login?error=sso_failed")
-            } catch (e: Exception) {
-                logger.error(e) { "OIDC callback error" }
+            }.onFailure { e ->
+                logger.error(e) { "OIDC callback error: ${e.message}" }
                 call.respondRedirect("$frontendUrl/login?error=sso_failed")
             }
         }
@@ -139,7 +142,7 @@ fun Route.ssoRoutes() {
         authenticate("auth-jwt") {
             get(SSO_CONFIG_PATH) {
                 val ctx = call.requireSsoAuth() ?: return@get
-                try {
+                suspendRunCatching {
                     val config = ssoService.getSsoConfig(ctx.orgId)
                     when (config) {
                         null -> call.respond(
@@ -148,7 +151,7 @@ fun Route.ssoRoutes() {
                         )
                         else -> call.respond(config)
                     }
-                } catch (e: Exception) {
+                }.onFailure { e ->
                     logger.error(e) { "Get SSO config error" }
                     call.respond(
                         HttpStatusCode.InternalServerError,
@@ -195,7 +198,7 @@ fun Route.ssoRoutes() {
             }
 
             post("/check-required") {
-                try {
+                suspendRunCatching {
                     val request = call.receive<Map<String, String>>()
                     val email =
                         request["email"]
@@ -206,7 +209,7 @@ fun Route.ssoRoutes() {
 
                     val required = ssoService.checkSsoRequired(email)
                     call.respond(mapOf("required" to required))
-                } catch (e: Exception) {
+                }.onFailure { e ->
                     logger.error(e) { "Check SSO required error" }
                     call.respond(
                         HttpStatusCode.InternalServerError,
