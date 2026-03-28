@@ -85,7 +85,7 @@ naming:
   MatchingDeclarationName:
     active: false
   ConstructorParameterNaming:
-    active: false
+    active: true
   FunctionNaming:
     active: false
   VariableNaming:

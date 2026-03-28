@@ -47,7 +47,7 @@ class AnthropicProvider : LlmProvider {
 
         val request = AnthropicRequest(
             model = modelName,
-            max_tokens = minOf(config.maxTokens, maxTokensCfg),
+            maxTokens = minOf(config.maxTokens, maxTokensCfg),
             system = systemText.ifBlank { null },
             messages = conversationMessages,
         )
@@ -70,8 +70,8 @@ class AnthropicProvider : LlmProvider {
 
         return LlmResponse(
             content = textContent,
-            inputTokens = parsed.usage?.input_tokens ?: 0,
-            outputTokens = parsed.usage?.output_tokens ?: 0,
+            inputTokens = parsed.usage?.inputTokens ?: 0,
+            outputTokens = parsed.usage?.outputTokens ?: 0,
             model = modelName,
             provider = "anthropic",
         )
@@ -82,14 +82,17 @@ class AnthropicProvider : LlmProvider {
 
     @Serializable data class AnthropicRequest(
         val model: String,
-        val max_tokens: Int,
+        @SerialName("max_tokens") val maxTokens: Int,
         val system: String? = null,
         val messages: List<AnthropicMsg>,
     )
 
     @Serializable data class AnthropicContentBlock(val type: String, val text: String = "")
 
-    @Serializable data class AnthropicUsage(val input_tokens: Int = 0, val output_tokens: Int = 0)
+    @Serializable data class AnthropicUsage(
+        @SerialName("input_tokens") val inputTokens: Int = 0,
+        @SerialName("output_tokens") val outputTokens: Int = 0,
+    )
 
     @Serializable data class AnthropicResponse(
         val id: String = "",

@@ -16,6 +16,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
@@ -41,9 +42,9 @@ class OpenAiProvider : LlmProvider {
         val request = OpenAiRequest(
             model = modelName,
             messages = messages.map { OpenAiMsg(it.role, it.content) },
-            max_tokens = config.maxTokens,
+            maxTokens = config.maxTokens,
             temperature = config.temperature,
-            response_format = if (config.jsonMode) OpenAiFormat("json_object") else null,
+            responseFormat = if (config.jsonMode) OpenAiFormat("json_object") else null,
         )
 
         val response = client.post("https://api.openai.com/v1/chat/completions") {
@@ -62,8 +63,8 @@ class OpenAiProvider : LlmProvider {
         val choice = parsed.choices.firstOrNull()
         return LlmResponse(
             content = choice?.message?.content ?: "",
-            inputTokens = parsed.usage?.prompt_tokens ?: 0,
-            outputTokens = parsed.usage?.completion_tokens ?: 0,
+            inputTokens = parsed.usage?.promptTokens ?: 0,
+            outputTokens = parsed.usage?.completionTokens ?: 0,
             model = modelName,
             provider = "openai",
         )
@@ -77,18 +78,21 @@ class OpenAiProvider : LlmProvider {
     @Serializable data class OpenAiRequest(
         val model: String,
         val messages: List<OpenAiMsg>,
-        val max_tokens: Int = 4096,
+        @SerialName("max_tokens") val maxTokens: Int = 4096,
         val temperature: Double = 0.3,
-        val response_format: OpenAiFormat? = null,
+        @SerialName("response_format") val responseFormat: OpenAiFormat? = null,
     )
 
-    @Serializable data class OpenAiChoice(val message: OpenAiMsg, val finish_reason: String? = null)
+    @Serializable data class OpenAiChoice(
+        val message: OpenAiMsg,
+        @SerialName("finish_reason") val finishReason: String? = null,
+    )
 
     @Serializable
     data class OpenAiUsage(
-        val prompt_tokens: Int = 0,
-        val completion_tokens: Int = 0,
-        val total_tokens: Int = 0,
+        @SerialName("prompt_tokens") val promptTokens: Int = 0,
+        @SerialName("completion_tokens") val completionTokens: Int = 0,
+        @SerialName("total_tokens") val totalTokens: Int = 0,
     )
 
     @Serializable

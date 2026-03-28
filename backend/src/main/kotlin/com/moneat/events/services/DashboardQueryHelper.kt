@@ -230,7 +230,7 @@ class DashboardQueryHelper(
     }
 
     fun parseTraceContext(contexts: String): JsonObject? {
-        return suspendRunCatching {
+        return runCatching {
             val contextsJson = json.parseToJsonElement(contexts) as? JsonObject ?: return null
             contextsJson["trace"] as? JsonObject
         }.getOrElse { _ ->

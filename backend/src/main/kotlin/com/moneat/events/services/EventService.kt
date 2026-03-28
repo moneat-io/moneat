@@ -647,11 +647,64 @@ class EventService(
         }
     }
 
+    private data class SyntheticReplayMetadata(
+        val sdkName: String,
+        val sdkVersion: String,
+        val platform: String,
+        val environment: String,
+        val release: String,
+    )
+
+    private fun syntheticReplayMetadataFromEnvelope(envelope: SentryEnvelope): SyntheticReplayMetadata {
+        val fallback = SyntheticReplayMetadata(
+            sdkName = "sentry.java.android",
+            sdkVersion = "",
+            platform = "android",
+            environment = "e2e-testing",
+            release = "",
+        )
+        for (item in envelope.items) {
+            when (item.type) {
+                "replay_event" -> {
+                    val re = runCatching { parseReplayEventPayload(item.payload) }.getOrNull() ?: continue
+                    return SyntheticReplayMetadata(
+                        sdkName = re.sdk?.name ?: fallback.sdkName,
+                        sdkVersion = re.sdk?.version ?: "",
+                        platform = re.platform ?: fallback.platform,
+                        environment = re.environment ?: fallback.environment,
+                        release = re.release ?: "",
+                    )
+                }
+                "event" -> {
+                    val ev = runCatching { json.decodeFromString<SentryEvent>(item.payload) }.getOrNull() ?: continue
+                    return SyntheticReplayMetadata(
+                        sdkName = ev.sdk?.name ?: fallback.sdkName,
+                        sdkVersion = ev.sdk?.version ?: "",
+                        platform = ev.platform ?: fallback.platform,
+                        environment = ev.environment ?: fallback.environment,
+                        release = ev.release ?: "",
+                    )
+                }
+                "transaction" -> {
+                    val tx = runCatching { parseTransactionPayload(item.payload) }.getOrNull() ?: continue
+                    return SyntheticReplayMetadata(
+                        sdkName = tx.sdk?.name ?: fallback.sdkName,
+                        sdkVersion = tx.sdk?.version ?: "",
+                        platform = tx.platform ?: fallback.platform,
+                        environment = tx.environment ?: fallback.environment,
+                        release = tx.release ?: "",
+                    )
+                }
+            }
+        }
+        return fallback
+    }
+
     private suspend fun storeSyntheticReplayEvent(
         projectId: Long,
         replayId: String,
         segmentId: Int,
-        @Suppress("UNUSED_PARAMETER") envelope: SentryEnvelope
+        envelope: SentryEnvelope
     ) {
         // Validate project ID — allow negative demo project IDs (-1, -2, -3)
         if (projectId == 0L) {
@@ -661,11 +714,7 @@ class EventService(
 
         val normalizedReplayId = normalizeUuid(replayId)
         val timestamp = System.currentTimeMillis()
-
-        // Extract SDK info from envelope header if available
-        val sdkName = "sentry.java.android"
-        val sdkVersion = ""
-        val platform = "android"
+        val meta = syntheticReplayMetadataFromEnvelope(envelope)
 
         suspendRunCatching {
             eventRepository.insertReplayEvent(
@@ -678,15 +727,15 @@ class EventService(
                     urls = emptyList(),
                     errorIds = emptyList(),
                     traceIds = emptyList(),
-                    environment = "e2e-testing",
-                    release = "",
-                    platform = platform,
+                    environment = meta.environment,
+                    release = meta.release,
+                    platform = meta.platform,
                     userId = "",
                     userEmail = "",
                     userUsername = "",
                     userIpAddress = "",
-                    sdkName = sdkName,
-                    sdkVersion = sdkVersion,
+                    sdkName = meta.sdkName,
+                    sdkVersion = meta.sdkVersion,
                     browserName = "",
                     browserVersion = "",
                     osName = "",
@@ -1105,7 +1154,7 @@ class EventService(
         val metrics = mutableMapOf<String, Double>()
         transaction.measurements?.let { measurements ->
             for ((key, value) in measurements) {
-                suspendRunCatching {
+                runCatching {
                     val numericValue = value.jsonObject["value"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
                     if (numericValue != null) metrics["measurement.$key"] = numericValue
                 }.getOrElse { e ->
@@ -1129,7 +1178,7 @@ class EventService(
         span.tags?.let { mergeNonReservedTags(meta, it) }
         span.data?.let { data ->
             for ((key, value) in data) {
-                suspendRunCatching {
+                runCatching {
                     val str = value.jsonPrimitive.contentOrNull
                     if (str != null) meta["data.$key"] = str
                 }.getOrElse { e ->
@@ -1144,7 +1193,7 @@ class EventService(
         val metrics = mutableMapOf<String, Double>()
         span.data?.let { data ->
             for ((key, value) in data) {
-                suspendRunCatching {
+                runCatching {
                     val num = value.jsonPrimitive.contentOrNull?.toDoubleOrNull()
                     if (num != null) metrics["data.$key"] = num
                 }.getOrElse { e ->
