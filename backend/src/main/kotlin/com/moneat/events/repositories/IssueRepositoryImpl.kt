@@ -36,6 +36,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -104,7 +105,7 @@ class IssueRepositoryImpl(
 
         val rows = queryHelper.executeJsonEachRowQuery(query, "Issues") ?: return emptyList()
         return rows.mapNotNull { obj ->
-            try {
+            suspendRunCatching {
                 IssueRow(
                     issueId = obj["issue_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
                     projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
@@ -119,7 +120,7 @@ class IssueRepositoryImpl(
                     status = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved",
                     fingerprint = null
                 )
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to parse issue row" }
                 null
             }

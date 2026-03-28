@@ -22,6 +22,7 @@ import com.moneat.config.RedisConfig
 import com.moneat.config.isClickHouseError
 import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.bodyAsText
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import java.io.IOException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -76,7 +79,10 @@ class AnalyticsIngestionWorker(
                     processMessage(workerId, value)
                 } catch (_: CancellationException) {
                     break
-                } catch (e: Exception) {
+                } catch (e: RedisException) {
+                    logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
+                    delay(ERROR_BACKOFF_MS)
+                } catch (e: IOException) {
                     logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
                     delay(ERROR_BACKOFF_MS)
                 }
@@ -85,19 +91,25 @@ class AnalyticsIngestionWorker(
             RedisConfig.closeBlockingConnection(conn)
         }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     internal suspend fun processMessage(workerId: Int, value: String) {
-        try {
+        suspendRunCatching {
             val event = json.decodeFromString<EnrichedAnalyticsEvent>(value)
             insertEvent(event)
-        } catch (e: Exception) {
-            logger.error(e) { "Analytics worker $workerId failed to process message, sending to DLQ" }
-            try {
-                RedisConfig.sync().rpush(dlqKey, value)
-            } catch (dlqError: Exception) {
-                logger.error(dlqError) { "Failed to push to analytics DLQ" }
-            }
+        }.getOrElse { e ->
+            logProcessFailureAndDlq(workerId, value, e)
+        }
+    }
+
+    private fun logProcessFailureAndDlq(workerId: Int, value: String, e: Throwable) {
+        logger.error(e) { "Analytics worker $workerId failed to process message, sending to DLQ" }
+        pushToAnalyticsDlq(workerId, value)
+    }
+
+    private fun pushToAnalyticsDlq(workerId: Int, value: String) {
+        try {
+            RedisConfig.sync().rpush(dlqKey, value)
+        } catch (e: RedisException) {
+            logger.error(e) { "Failed to push to analytics DLQ (worker $workerId)" }
         }
     }
 
@@ -145,7 +157,7 @@ class AnalyticsIngestionWorker(
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
         if (response.isClickHouseError(body)) {
-            throw RuntimeException("ClickHouse insert failed: $body")
+            throw IOException("ClickHouse insert failed: ${body.take(500)}")
         }
     }
 

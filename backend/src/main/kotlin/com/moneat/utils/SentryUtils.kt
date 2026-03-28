@@ -16,6 +16,9 @@
 
 package com.moneat.utils
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import io.sentry.*
 import mu.KotlinLogging
 
@@ -40,7 +43,19 @@ object SentryUtils {
             block(span).also {
                 span.status = SpanStatus.OK
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            span.status = SpanStatus.INTERNAL_ERROR
+            span.throwable = e
+            throw e
+        } catch (e: IOException) {
+            span.status = SpanStatus.INTERNAL_ERROR
+            span.throwable = e
+            throw e
+        } catch (e: IllegalStateException) {
+            span.status = SpanStatus.INTERNAL_ERROR
+            span.throwable = e
+            throw e
+        } catch (e: IllegalArgumentException) {
             span.status = SpanStatus.INTERNAL_ERROR
             span.throwable = e
             throw e
@@ -66,7 +81,19 @@ object SentryUtils {
             block(transaction).also {
                 transaction.status = SpanStatus.OK
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            transaction.status = SpanStatus.INTERNAL_ERROR
+            transaction.throwable = e
+            throw e
+        } catch (e: IOException) {
+            transaction.status = SpanStatus.INTERNAL_ERROR
+            transaction.throwable = e
+            throw e
+        } catch (e: IllegalStateException) {
+            transaction.status = SpanStatus.INTERNAL_ERROR
+            transaction.throwable = e
+            throw e
+        } catch (e: IllegalArgumentException) {
             transaction.status = SpanStatus.INTERNAL_ERROR
             transaction.throwable = e
             throw e

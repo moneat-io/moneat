@@ -53,6 +53,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import com.moneat.utils.suspendRunCatching
 
 @Serializable
 data class HealthResponse(
@@ -72,34 +73,34 @@ data class FeaturesResponse(
 
 private suspend fun respondWithFullHealth(call: io.ktor.server.application.ApplicationCall) {
     val postgresStatus =
-        try {
+        suspendRunCatching {
             transaction {
                 exec("SELECT phone_number FROM users LIMIT 1")
                 exec("SELECT pending_meter_batch_id, pending_meter_batch_units FROM subscriptions LIMIT 1")
             }
             "ok"
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             "error"
         }
     val clickhouseStatus =
-        try {
+        suspendRunCatching {
             if (ClickHouseClient.ping()) "ok" else "error"
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             "error"
         }
     val redisStatus =
-        try {
+        suspendRunCatching {
             if (RedisConfig.isConnected()) {
                 RedisConfig.sync().ping()
                 "ok"
             } else {
                 "error"
             }
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             "error"
         }
     val ingestQueueDepth =
-        try {
+        suspendRunCatching {
             if (RedisConfig.isConnected()) {
                 val queueKey =
                     call.application.environment.config
@@ -109,7 +110,7 @@ private suspend fun respondWithFullHealth(call: io.ktor.server.application.Appli
             } else {
                 0L
             }
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             0L
         }
     val status = if (postgresStatus == "ok" && clickhouseStatus == "ok" && redisStatus == "ok") "ok" else "degraded"

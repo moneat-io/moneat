@@ -16,7 +16,7 @@
 
 package com.moneat.shared.services
 
-import kotlinx.coroutines.CancellationException
+import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 import net.javacrumbs.shedlock.core.LockConfiguration
 import net.javacrumbs.shedlock.core.LockProvider
@@ -45,9 +45,9 @@ object TaskLock {
             lockAtMostFor.toJavaDuration(),
             lockAtLeastFor.toJavaDuration()
         )
-        val lock = try {
+        val lock = suspendRunCatching {
             lockProvider.lock(config)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to acquire lock '$name'" }
             return null
         }
@@ -56,16 +56,16 @@ object TaskLock {
             return null
         }
         return try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            logger.error(e) { "Error in locked task '$name'" }
-            null
+            suspendRunCatching {
+                block()
+            }.getOrElse { e ->
+                logger.error(e) { "Error in locked task '$name'" }
+                null
+            }
         } finally {
-            try {
+            suspendRunCatching {
                 lock.get().unlock()
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to unlock '$name'" }
             }
         }

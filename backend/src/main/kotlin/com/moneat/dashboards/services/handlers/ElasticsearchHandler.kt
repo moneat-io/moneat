@@ -17,6 +17,7 @@
 package com.moneat.dashboards.services.handlers
 
 import com.moneat.dashboards.models.DataSourceField
+import com.moneat.utils.suspendRunCatching
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.TimeRangeDef
@@ -49,7 +50,7 @@ private val logger = KotlinLogging.logger {}
 class ElasticsearchHandler : HttpApiHandler() {
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        return try {
+        return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port ?: 9200)
             val response = httpClient.get("$baseUrl/_cluster/health") {
                 applyAuth(request.apiKey, request.username, request.password)
@@ -59,7 +60,7 @@ class ElasticsearchHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Elasticsearch returned ${response.status}")
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Elasticsearch connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -79,35 +80,27 @@ class ElasticsearchHandler : HttpApiHandler() {
         val index = databaseName?.ifBlank { null } ?: "_all"
         val path = if (index == "_all") "/_search" else "/$index/_search"
 
-        val queryBody = try {
+        val fallbackQueryBody = JsonObject(
+            mapOf(
+                "query" to JsonObject(
+                    mapOf("query_string" to JsonObject(mapOf("query" to JsonPrimitive(query))))
+                ),
+                "size" to JsonPrimitive(limit.coerceIn(1, 10000))
+            )
+        )
+        val queryBody = suspendRunCatching {
             val parsed = json.parseToJsonElement(query)
             if (parsed is JsonObject) {
                 parsed
             } else {
-                JsonObject(
-                    mapOf(
-                        "query" to parsed,
-                        "size" to JsonPrimitive(limit.coerceIn(1, 10000))
-                    )
-                )
+                JsonObject(mapOf("query" to parsed, "size" to JsonPrimitive(limit.coerceIn(1, 10000))))
             }
-        } catch (_: Exception) {
-            JsonObject(
-                mapOf(
-                    "query" to JsonObject(
-                        mapOf(
-                            "query_string" to JsonObject(mapOf("query" to JsonPrimitive(query)))
-                        )
-                    ),
-                    "size" to JsonPrimitive(limit.coerceIn(1, 10000))
-                )
-            )
-        }
+        }.getOrDefault(fallbackQueryBody)
 
         val bodyObj = queryBody.toMutableMap()
         if (!bodyObj.containsKey("size")) bodyObj["size"] = JsonPrimitive(limit.coerceIn(1, 10000))
 
-        return try {
+        return suspendRunCatching {
             val response = httpClient.post("$baseUrl$path") {
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(JsonObject(bodyObj)))
@@ -115,10 +108,10 @@ class ElasticsearchHandler : HttpApiHandler() {
             }
             if (!response.status.isSuccess()) {
                 logger.error { "Elasticsearch query failed: ${response.status}" }
-                return emptyList()
+                return@suspendRunCatching emptyList()
             }
             parseSearchResponse(response.bodyAsText(), limit)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Elasticsearch query failed" }
             emptyList()
         }
@@ -131,7 +124,7 @@ class ElasticsearchHandler : HttpApiHandler() {
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val baseUrl = buildUrl(host, port ?: 9200)
-        return try {
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/_cat/indices?v&format=json") {
                 applyAuth(credentials.apiKey, credentials.username, credentials.password)
             }
@@ -145,7 +138,7 @@ class ElasticsearchHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Elasticsearch schema fetch failed" }
             emptyList()
         }

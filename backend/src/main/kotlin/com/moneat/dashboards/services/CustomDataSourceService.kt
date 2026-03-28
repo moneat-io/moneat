@@ -32,6 +32,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -110,10 +111,10 @@ class CustomDataSourceService {
                 request.accountIdentifier != null || request.connectionString != null || request.projectId != null ||
                 request.region != null
             val newEncryptedCreds = if (hasNewCreds) {
-                val existingCreds = try {
+                val existingCreds = suspendRunCatching {
                     val dec = CredentialEncryption.decrypt(existing[CustomDataSources.encryptedCredentials])
                     json.decodeFromString<DataSourceCredentials>(dec)
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     throw IllegalStateException(
                         "Failed to decrypt existing credentials for data source $id; " +
                             "cannot safely merge new credentials",
@@ -173,10 +174,10 @@ class CustomDataSourceService {
             .where { (CustomDataSources.id eq id) and (CustomDataSources.orgId eq orgId) }
             .firstOrNull() ?: return@transaction null
 
-        try {
+        suspendRunCatching {
             val decrypted = CredentialEncryption.decrypt(row[CustomDataSources.encryptedCredentials])
             json.decodeFromString<DataSourceCredentials>(decrypted)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to decrypt credentials for data source $id" }
             null
         }
@@ -196,9 +197,11 @@ class CustomDataSourceService {
         host = this[CustomDataSources.host],
         port = this[CustomDataSources.port],
         databaseName = this[CustomDataSources.databaseName],
-        extraConfig = try {
+        extraConfig = suspendRunCatching {
             json.decodeFromString<Map<String, String>>(this[CustomDataSources.extraConfig])
-        } catch (_: Exception) { emptyMap() },
+        }.getOrElse { _ ->
+            emptyMap()
+        },
         enabled = this[CustomDataSources.enabled],
         createdBy = this[CustomDataSources.createdBy],
         createdAt = this[CustomDataSources.createdAt].toString(),

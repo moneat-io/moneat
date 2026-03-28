@@ -25,6 +25,7 @@ import com.moneat.events.repositories.IssueRepository
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.server.plugins.BadRequestException
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -61,7 +62,7 @@ class IssueService(
             projectIdClause = projectIdClause
         )
 
-        return try {
+        return suspendRunCatching {
             var skipped = 0
             val result = mutableListOf<IssueResponse>()
             for (row in rows) {
@@ -93,7 +94,7 @@ class IssueService(
                 if (result.size >= limit) break
             }
             result
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch issues for project $projectId" }
             emptyList()
         }

@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -46,12 +47,12 @@ class RefreshTokenCleanupService(
         cleanupJob =
             scope.launch {
                 while (isActive) {
-                    try {
+                    suspendRunCatching {
                         val deletedCount = refreshTokenCleaner.cleanupExpiredTokens()
                         if (deletedCount > 0) {
                             logger.info { "Cleaned up $deletedCount expired/revoked refresh tokens" }
                         }
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Error during refresh token cleanup" }
                     }
 

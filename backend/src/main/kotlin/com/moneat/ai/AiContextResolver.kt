@@ -18,6 +18,7 @@ package com.moneat.ai
 
 import mu.KotlinLogging
 import java.util.concurrent.ConcurrentHashMap
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -55,7 +56,7 @@ object AiContextResolver {
     fun loadDoc(name: String): String? {
         return docCache.getOrPut(name) {
             val path = "docs/api/$name.md"
-            try {
+            suspendRunCatching {
                 val content =
                     javaClass.classLoader
                         .getResourceAsStream(path)
@@ -68,7 +69,7 @@ object AiContextResolver {
                     logger.warn { "AI context doc not found: $path" }
                     return null
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn { "Failed to load AI context doc $path: ${e.message}" }
                 return null
             }

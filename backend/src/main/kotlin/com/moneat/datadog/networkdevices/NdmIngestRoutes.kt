@@ -27,6 +27,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -50,11 +51,9 @@ fun Route.ndmIngestRoutes() {
         post("/netpath") { handleNdmPayload() }
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload() {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    try {
+    suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
@@ -63,7 +62,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload() {
         val count = NdmIngestionService.enqueue(orgId, payload)
         logger.debug { "Accepted $count NDM entries (type=${payload.type}) for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process NDM payload" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

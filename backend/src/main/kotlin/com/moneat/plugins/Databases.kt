@@ -28,6 +28,7 @@ import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.sql.Connection
+import com.moneat.utils.suspendRunCatching
 
 private const val CLICKHOUSE_MIGRATION_LOCK_KEY = 8675309L
 
@@ -99,7 +100,7 @@ private fun verifyCriticalColumnsPresent(dataSource: HikariDataSource) {
 fun Application.configureDatabases() {
     val config = environment.config
 
-    try {
+    suspendRunCatching {
         // PostgreSQL connection pool
         val hikariConfig =
             HikariConfig().apply {
@@ -167,17 +168,17 @@ fun Application.configureDatabases() {
                 if (tryAcquireAdvisoryLock(conn, CLICKHOUSE_MIGRATION_LOCK_KEY)) {
                     try {
                         runBlocking {
-                            try {
+                            suspendRunCatching {
                                 configureClickHouseMigrations()
-                            } catch (e: Exception) {
+                            }.getOrElse { e ->
                                 log.error("Failed to run ClickHouse migrations.", e)
                                 throw e
                             }
                             // Reseed demo data if stale (prevents ClickHouse TTL from deleting demo rows)
-                            try {
+                            suspendRunCatching {
                                 com.moneat.config.DemoDataReseeder
                                     .reseedIfNeeded()
-                            } catch (e: Exception) {
+                            }.getOrElse { e ->
                                 log.warn("Demo data reseed failed (non-fatal)", e)
                             }
                         }
@@ -202,7 +203,7 @@ fun Application.configureDatabases() {
         monitor.subscribe(ApplicationStopping) {
             log.info("Stopping background services...")
         }
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         if (e.message?.contains("ClickHouse") == true) {
             // Already logged above
             throw e

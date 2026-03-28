@@ -49,6 +49,7 @@ import java.util.Base64
 import java.util.Date
 import java.util.UUID
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
@@ -297,9 +298,9 @@ class AuthService(
             }
 
         if (!emailVerified && verificationToken != null) {
-            try {
+            suspendRunCatching {
                 emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 // Log but don't fail signup if email fails
                 println("Failed to send verification email: ${e.message}")
             }
@@ -332,11 +333,11 @@ class AuthService(
         require(!user.emailVerified) { "Email already verified" }
         val verificationToken = generateVerificationToken()
         val expiresAt = System.currentTimeMillis() + VERIFICATION_TTL_MS
-        return try {
+        return suspendRunCatching {
             emailService.sendVerificationEmail(normalizedEmail, verificationToken, user.name)
             userRepository.updateVerificationToken(user.id, verificationToken, expiresAt)
             true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             println("Failed to send verification email: ${e.message}")
             false
         }
@@ -454,11 +455,11 @@ class AuthService(
         val user = userRepository.findByEmail(normalizedEmail) ?: return false
         val resetToken = generateVerificationToken()
         val expiresAt = System.currentTimeMillis() + PASSWORD_RESET_TTL_MS // 1 hour
-        return try {
+        return suspendRunCatching {
             emailService.sendPasswordResetEmail(normalizedEmail, resetToken, user.name)
             userRepository.updatePasswordResetToken(user.id, resetToken, expiresAt)
             true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             println("Failed to send password reset email: ${e.message}")
             false
         }

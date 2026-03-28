@@ -43,6 +43,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.math.max
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -1209,14 +1210,12 @@ class BillingQuotaService(
      * Returns on-call used seats from the enterprise module if available, otherwise 0.
      */
     private fun getOnCallUsedSeatsIfAvailable(organizationId: Int): Int {
-        return try {
+        return suspendRunCatching {
             val clazz = Class.forName("com.moneat.enterprise.services.oncall.OnCallScheduleService")
             val instance = clazz.getDeclaredConstructor().newInstance()
             val method = clazz.getMethod("getOnCallUsedSeats", Int::class.java)
             method.invoke(instance, organizationId) as? Int ?: 0
-        } catch (_: ClassNotFoundException) {
-            0
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             0
         }
     }

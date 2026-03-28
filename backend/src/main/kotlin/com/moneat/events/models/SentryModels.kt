@@ -18,6 +18,7 @@ package com.moneat.events.models
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -35,6 +36,7 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import java.time.format.DateTimeParseException
 import java.util.*
 
 @Serializable
@@ -81,7 +83,7 @@ data class SentryEnvelope(
                 val itemHeader =
                     try {
                         Json.parseToJsonElement(itemHeaderLine).jsonObject
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
                         bytePos = itemHeaderEnd + 1
                         continue
                     }
@@ -89,7 +91,7 @@ data class SentryEnvelope(
                 val explicitLength =
                     try {
                         itemHeader["length"]?.jsonPrimitive?.long?.toInt()
-                    } catch (e: Exception) {
+                    } catch (e: NumberFormatException) {
                         null
                     }
                 bytePos = itemHeaderEnd + 1
@@ -132,7 +134,7 @@ data class SentryEnvelope(
                                     payloadEnd = scanPos
                                     break
                                 }
-                            } catch (_: Exception) {
+                            } catch (_: SerializationException) {
                                 // Not valid JSON - still part of current payload
                             }
                         }
@@ -277,7 +279,7 @@ object FlexibleTimestampSerializer : KSerializer<Double?> {
                     try {
                         val instant = java.time.Instant.parse(isoString)
                         instant.epochSecond.toDouble() + instant.nano / 1_000_000_000.0
-                    } catch (_: Exception) {
+                    } catch (_: DateTimeParseException) {
                         null
                     }
                 }

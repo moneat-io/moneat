@@ -16,6 +16,7 @@
 
 package com.moneat.events.repositories
 
+import com.moneat.utils.suspendRunCatching
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.ProjectKeyResponse
@@ -26,7 +27,6 @@ import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.client.statement.bodyAsText
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -219,16 +219,14 @@ class ProjectRepositoryImpl(
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) return 0
             if (body.isBlank()) return 0
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["total"]?.jsonPrimitive?.long ?: 0
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to get issue count for project $projectId" }
             0
         }

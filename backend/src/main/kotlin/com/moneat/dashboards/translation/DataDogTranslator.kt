@@ -38,6 +38,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import com.moneat.utils.suspendRunCatching
 
 class DataDogTranslator : DashboardTranslator {
 
@@ -83,9 +84,9 @@ class DataDogTranslator : DashboardTranslator {
         val ddWidgets = json["widgets"]?.jsonArray ?: JsonArray(emptyList())
 
         val widgets = ddWidgets.mapIndexedNotNull { index, element ->
-            try {
+            suspendRunCatching {
                 importWidget(element.jsonObject, index, warnings)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 warnings.add("Widget $index: failed to import - ${e.message}")
                 null
             }
@@ -269,7 +270,7 @@ class DataDogTranslator : DashboardTranslator {
         val templateVars = json["template_variables"]?.jsonArray ?: return emptyList()
 
         return templateVars.mapNotNull { element ->
-            try {
+            suspendRunCatching {
                 val varObj = element.jsonObject
                 val name = varObj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
                 val defaultValue = varObj["default"]?.jsonPrimitive?.contentOrNull
@@ -287,7 +288,7 @@ class DataDogTranslator : DashboardTranslator {
                     options = availableValues,
                     datasource = null
                 )
-            } catch (_: Exception) {
+            }.getOrElse { _ ->
                 null
             }
         }

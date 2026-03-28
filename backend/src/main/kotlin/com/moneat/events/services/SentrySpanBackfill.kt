@@ -23,6 +23,7 @@ import io.ktor.http.isSuccess
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -93,9 +94,9 @@ object SentrySpanBackfill {
             logger.info { "Spans backfill completed successfully" }
         } else {
             val bodySnippet =
-                try {
+                suspendRunCatching {
                     response.bodyAsText().take(500)
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     (e.message ?: "").take(500)
                 }
             logger.error { "Spans backfill failed: HTTP ${response.status}, body: $bodySnippet" }

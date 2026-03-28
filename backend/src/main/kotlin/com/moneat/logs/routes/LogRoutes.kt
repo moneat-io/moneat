@@ -16,6 +16,9 @@
 
 package com.moneat.logs.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
@@ -60,6 +63,7 @@ import org.koin.core.context.GlobalContext
 import java.time.Instant
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -483,12 +487,25 @@ fun Route.logRoutes(
                         write("data: $next\n\n")
                         flush()
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+                } catch (e: IOException) {
+                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+                } catch (e: IllegalStateException) {
+                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+                } catch (e: IllegalArgumentException) {
                     logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
                 } finally {
                     try {
                         connection.sync().unsubscribe(channel)
-                    } catch (_: Exception) {
+                    } catch (_: SerializationException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
+                    } catch (_: IOException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
+                    } catch (_: IllegalStateException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
+                    } catch (_: IllegalArgumentException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
                     }
                     connection.removeListener(listener)
                     connection.close()
@@ -550,7 +567,7 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
 
     if (token.isNullOrBlank()) return null
 
-    return try {
+    return suspendRunCatching {
         val config = call.application.environment.config
         val secret = config.property("jwt.secret").getString()
         val issuer = config.property("jwt.issuer").getString()
@@ -567,7 +584,7 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
         val userId = decoded.getClaim("userId").asInt()
         val orgId = decoded.getClaim("orgId").asInt().toLong()
         Pair(userId, orgId)
-    } catch (_: Exception) {
+    }.getOrElse { _ ->
         null
     }
 }
@@ -597,19 +614,19 @@ fun Route.logIngestRoutes(
 
             val bodyBytes = call.receive<ByteArray>()
             val encoding = call.request.header(HttpHeaders.ContentEncoding)
-            val payloadBytes = try {
+            val payloadBytes = suspendRunCatching {
                 DecompressionService.decompress(bodyBytes, encoding)
-            } catch (e: Exception) {
+            }.getOrElse { _ ->
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
                 return@post
             }
 
             val entries =
-                try {
+                suspendRunCatching {
                     json.decodeFromString<List<com.moneat.logs.models.LogIngestEntry>>(
                         payloadBytes.decodeToString()
                     )
-                } catch (e: Exception) {
+                }.getOrElse { _ ->
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
                     return@post
                 }
@@ -682,9 +699,9 @@ private suspend fun handleOtlpLogIngest(
 
     val bodyBytes = call.receive<ByteArray>()
     val encoding = call.request.header(HttpHeaders.ContentEncoding)
-    val payloadBytes = try {
+    val payloadBytes = suspendRunCatching {
         DecompressionService.decompress(bodyBytes, encoding)
-    } catch (e: Exception) {
+    }.getOrElse { _ ->
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
         return
     }

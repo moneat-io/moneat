@@ -36,6 +36,7 @@ import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -123,9 +124,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAccount(
     val userId = principal!!.payload.getClaim("userId").asInt()
 
     val request =
-        try {
+        suspendRunCatching {
             call.receive<DeleteAccountRequest>()
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             return
         }
@@ -183,9 +184,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteOrganizati
     }
 
     val request =
-        try {
+        suspendRunCatching {
             call.receive<DeleteOrganizationRequest>()
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             return
         }

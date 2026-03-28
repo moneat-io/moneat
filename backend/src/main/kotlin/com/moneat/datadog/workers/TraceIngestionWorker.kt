@@ -18,14 +18,15 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.TraceIngestionService
-import io.sentry.Sentry
+import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -34,7 +35,9 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import java.io.IOException
 import java.util.Base64
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -65,8 +68,6 @@ class TraceIngestionWorker(
         scope.cancel()
         logger.info { "TraceIngestionWorker stopped" }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun runWorker(workerId: Int) {
         val conn = RedisConfig.newBlockingConnection()
         try {
@@ -81,27 +82,37 @@ class TraceIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
-                    logger.error(e) {
-                        "Trace worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "Trace",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "Trace",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
             }
         } finally {
             RedisConfig.closeBlockingConnection(conn)
         }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
     ) {
-        try {
+        suspendRunCatching {
             val wrapper = json.parseToJsonElement(payload).jsonObject
-            val organizationId = wrapper["organization_id"]!!
-                .jsonPrimitive.int
+            val organizationId = requireNotNull(wrapper["organization_id"]) {
+                "Missing organization_id"
+            }.jsonPrimitive.int
             val hostname = wrapper["hostname"]
                 ?.jsonPrimitive?.content ?: ""
             val env = wrapper["env"]?.jsonPrimitive?.content ?: ""
@@ -111,14 +122,20 @@ class TraceIngestionWorker(
                 ?.jsonPrimitive?.content ?: "msgpack"
 
             val traces = if (format == "json") {
-                val tracesJson = wrapper["traces"]!!.jsonArray.toString()
+                val tracesJson = requireNotNull(wrapper["traces"]) {
+                    "Missing traces"
+                }.jsonArray.toString()
                 TraceIngestionService.parseJsonTraces(tracesJson)
             } else if (format == "protobuf") {
-                val b64 = wrapper["data"]!!.jsonPrimitive.content
+                val b64 = requireNotNull(wrapper["data"]) {
+                    "Missing data"
+                }.jsonPrimitive.content
                 val bytes = Base64.getDecoder().decode(b64)
                 TraceIngestionService.parseProtobufAgentPayload(bytes)
             } else {
-                val b64 = wrapper["data"]!!.jsonPrimitive.content
+                val b64 = requireNotNull(wrapper["data"]) {
+                    "Missing data"
+                }.jsonPrimitive.content
                 val bytes = Base64.getDecoder().decode(b64)
                 TraceIngestionService.parseMsgpackTraces(bytes)
             }
@@ -130,13 +147,8 @@ class TraceIngestionWorker(
                 env,
                 version
             )
-        } catch (e: Exception) {
-            logger.error(e) {
-                "Trace worker $workerId failed to process, " +
-                    "pushing to DLQ"
-            }
-            Sentry.captureException(e)
-            RedisConfig.sync().rpush(dlqKey, payload)
+        }.getOrElse { e ->
+            pushToDlq(logger, dlqKey, payload, workerId, "Trace", e)
         }
     }
 }

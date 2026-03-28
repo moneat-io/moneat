@@ -26,6 +26,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.utils.io.toByteArray
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -35,19 +36,17 @@ fun Route.telemetryProxyRoutes() {
         post("/proxy/{path...}") { handleTelemetryProxy() }
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleTelemetryProxy() {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    try {
+    suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val path = call.parameters.getAll("path")
             ?.joinToString("/") ?: "unknown"
 
         TelemetryProxyService.acknowledge(organizationId, path, rawBytes.size)
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to process telemetry proxy request" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }

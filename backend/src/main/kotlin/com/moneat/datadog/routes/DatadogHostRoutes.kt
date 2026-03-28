@@ -44,6 +44,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -70,11 +71,11 @@ fun Route.datadogHostIngestRoutes() {
                 )
                 val bodyStr = body.decodeToString()
 
-                val metadata = try {
+                val metadata = suspendRunCatching {
                     json.decodeFromString<DatadogHostMetadata>(
                         bodyStr
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.warn(e) {
                         "Failed to parse DD host metadata"
                     }
@@ -118,11 +119,11 @@ fun Route.datadogHostIngestRoutes() {
                 )
                 val bodyStr = body.decodeToString()
 
-                val metadata = try {
+                val metadata = suspendRunCatching {
                     json.decodeFromString<DatadogHostMetadata>(
                         bodyStr
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.warn(e) {
                         "Failed to parse DD V2 host metadata"
                     }
@@ -159,11 +160,11 @@ fun Route.datadogHostIngestRoutes() {
             )
             val bodyStr = body.decodeToString()
 
-            val payload = try {
+            val payload = suspendRunCatching {
                 json.decodeFromString<DatadogIntakePayload>(
                     bodyStr
                 )
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn(e) {
                     "Failed to parse DD intake payload"
                 }

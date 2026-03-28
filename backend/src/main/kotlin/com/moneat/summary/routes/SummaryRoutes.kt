@@ -20,6 +20,7 @@ import com.moneat.shared.models.Memberships
 import com.moneat.summary.services.SummaryService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -27,6 +28,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
+import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -38,6 +40,8 @@ import java.time.ZoneId
 private val logger = KotlinLogging.logger {}
 
 private val validPeriods = setOf("24h", "7d", "30d")
+private const val INVALID_TOKEN = "Invalid token"
+private const val NO_ORGANIZATION_MEMBERSHIP = "No organization membership"
 
 private fun getOrganizationIdsForUser(userId: Int): List<Int> {
     return transaction {
@@ -48,31 +52,53 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
     }
 }
 
+/**
+ * Handles expected failure modes from JDBC/Exposed, ClickHouse HTTP, and JSON parsing.
+ * Other throwables propagate to the global StatusPages handler in [com.moneat.plugins.configureMonitoring].
+ */
+private suspend fun runSummaryServiceCall(
+    call: ApplicationCall,
+    logMessage: String,
+    userMessage: String,
+    block: suspend () -> Unit,
+) {
+    suspendRunCatching {
+        block()
+    }.onFailure { e ->
+        logger.error(e) { "$logMessage: ${e.message}" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
+    }
+}
+
 fun Route.summaryRoutes(
     summaryService: SummaryService = GlobalContext.get().get(),
 ) {
     route("/v1/summary") {
         authenticate("auth-jwt") {
             get("/infrastructure") {
-                try {
+                runSummaryServiceCall(
+                    call,
+                    "Infrastructure summary error",
+                    "Failed to get summary",
+                ) {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload
                         ?.getClaim("userId")?.asInt()
                     if (userId == null) {
                         call.respond(
                             HttpStatusCode.Unauthorized,
-                            ErrorResponse("Invalid token")
+                            ErrorResponse(INVALID_TOKEN),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(
                             HttpStatusCode.Forbidden,
-                            ErrorResponse("No organization membership")
+                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val period = call.parameters["period"] ?: "24h"
@@ -81,144 +107,123 @@ fun Route.summaryRoutes(
                             HttpStatusCode.BadRequest,
                             ErrorResponse(
                                 "Invalid period. Use: " +
-                                    validPeriods.joinToString(", ")
-                            )
+                                    validPeriods.joinToString(", "),
+                            ),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val result = summaryService
                         .getInfrastructureSummary(
                             orgIds.first(),
-                            period
+                            period,
                         )
                     call.respond(HttpStatusCode.OK, result)
-                } catch (
-                    @Suppress("TooGenericExceptionCaught") e: Exception
-                ) {
-                    logger.error(e) {
-                        "Infrastructure summary error: ${e.message}"
-                    }
-                    call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ErrorResponse("Failed to get summary")
-                    )
                 }
             }
 
             get("/overnight") {
-                try {
+                runSummaryServiceCall(
+                    call,
+                    "Overnight summary error",
+                    "Failed to get summary",
+                ) {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload
                         ?.getClaim("userId")?.asInt()
                     if (userId == null) {
                         call.respond(
                             HttpStatusCode.Unauthorized,
-                            ErrorResponse("Invalid token")
+                            ErrorResponse(INVALID_TOKEN),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(
                             HttpStatusCode.Forbidden,
-                            ErrorResponse("No organization membership")
+                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val timezone = call.parameters["timezone"]
                         ?: "America/New_York"
                     try {
                         ZoneId.of(timezone)
-                    } catch (
-                        @Suppress("SwallowedException")
-                        e: DateTimeException
-                    ) {
+                    } catch (e: DateTimeException) {
                         call.respond(
                             HttpStatusCode.BadRequest,
                             ErrorResponse(
-                                "Invalid timezone: $timezone"
-                            )
+                                "Invalid timezone: $timezone",
+                            ),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val result = summaryService
                         .getOvernightSummary(orgIds.first(), timezone)
                     call.respond(HttpStatusCode.OK, result)
-                } catch (
-                    @Suppress("TooGenericExceptionCaught") e: Exception
-                ) {
-                    logger.error(e) {
-                        "Overnight summary error: ${e.message}"
-                    }
-                    call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ErrorResponse("Failed to get summary")
-                    )
                 }
             }
 
             get("/weekly") {
-                try {
+                runSummaryServiceCall(
+                    call,
+                    "Weekly report error",
+                    "Failed to get report",
+                ) {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload
                         ?.getClaim("userId")?.asInt()
                     if (userId == null) {
                         call.respond(
                             HttpStatusCode.Unauthorized,
-                            ErrorResponse("Invalid token")
+                            ErrorResponse(INVALID_TOKEN),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(
                             HttpStatusCode.Forbidden,
-                            ErrorResponse("No organization membership")
+                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val result = summaryService
                         .getWeeklyReport(orgIds.first())
                     call.respond(HttpStatusCode.OK, result)
-                } catch (
-                    @Suppress("TooGenericExceptionCaught") e: Exception
-                ) {
-                    logger.error(e) {
-                        "Weekly report error: ${e.message}"
-                    }
-                    call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ErrorResponse("Failed to get report")
-                    )
                 }
             }
 
             get("/incident/{incident_id}") {
-                try {
+                runSummaryServiceCall(
+                    call,
+                    "Incident context error",
+                    "Failed to get context",
+                ) {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload
                         ?.getClaim("userId")?.asInt()
                     if (userId == null) {
                         call.respond(
                             HttpStatusCode.Unauthorized,
-                            ErrorResponse("Invalid token")
+                            ErrorResponse(INVALID_TOKEN),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val orgIds = getOrganizationIdsForUser(userId)
                     if (orgIds.isEmpty()) {
                         call.respond(
                             HttpStatusCode.Forbidden,
-                            ErrorResponse("No organization membership")
+                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val incidentId = call.parameters["incident_id"]
@@ -226,27 +231,17 @@ fun Route.summaryRoutes(
                     if (incidentId == null) {
                         call.respond(
                             HttpStatusCode.BadRequest,
-                            ErrorResponse("Invalid incident_id")
+                            ErrorResponse("Invalid incident_id"),
                         )
-                        return@get
+                        return@runSummaryServiceCall
                     }
 
                     val result = summaryService
                         .getIncidentContext(
                             orgIds.first(),
-                            incidentId
+                            incidentId,
                         )
                     call.respond(HttpStatusCode.OK, result)
-                } catch (
-                    @Suppress("TooGenericExceptionCaught") e: Exception
-                ) {
-                    logger.error(e) {
-                        "Incident context error: ${e.message}"
-                    }
-                    call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ErrorResponse("Failed to get context")
-                    )
                 }
             }
         }

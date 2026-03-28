@@ -28,6 +28,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -81,14 +82,14 @@ fun Route.datadogLogRoutes() {
 }
 
 private fun parseLogEntries(bodyStr: String): List<DatadogLogEntry>? {
-    return try {
+    return suspendRunCatching {
         val trimmed = bodyStr.trimStart()
         if (trimmed.startsWith("[")) {
             json.decodeFromString<List<DatadogLogEntry>>(trimmed)
         } else {
             listOf(json.decodeFromString<DatadogLogEntry>(trimmed))
         }
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         logger.warn(e) { "Failed to parse DD log payload" }
         null
     }

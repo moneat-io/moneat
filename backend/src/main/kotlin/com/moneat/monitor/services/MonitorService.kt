@@ -47,6 +47,7 @@ import mu.KotlinLogging
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -165,7 +166,7 @@ class MonitorService(
         val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return null
 
-        try {
+        suspendRunCatching {
             val json = Json { ignoreUnknownKeys = true }
             val result = json.parseToJsonElement(body).jsonObject
             val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return null
@@ -236,7 +237,7 @@ class MonitorService(
                 gpu_percent = gpuPercent,
                 battery_percent = batteryPercent
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to parse latest metrics response" }
             return null
         }
@@ -277,7 +278,7 @@ class MonitorService(
         val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return hostIds.associateWith { null }
 
-        return try {
+        return suspendRunCatching {
             val json = Json { ignoreUnknownKeys = true }
             val rows = json.parseToJsonElement(body).jsonObject["data"]?.jsonArray ?: return hostIds.associateWith { null }
             val result = mutableMapOf<Int, LatestMetrics?>()
@@ -316,7 +317,7 @@ class MonitorService(
                 )
             }
             hostIds.associateWith { result[it] }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to parse batch latest metrics response" }
             hostIds.associateWith { null }
         }
@@ -396,7 +397,7 @@ class MonitorService(
 
             val body = hostRepository.executeClickHouseQuery(query)
             val dataPoints =
-                try {
+                suspendRunCatching {
                     val json = Json { ignoreUnknownKeys = true }
                     val result = json.parseToJsonElement(body).jsonObject
                     val data =
@@ -436,7 +437,7 @@ class MonitorService(
                             battery_percent = arr.getOrNull(11)?.toString()?.toFloatOrNull()
                         )
                     }
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to parse historical metrics" }
                     emptyList()
                 }
@@ -478,7 +479,7 @@ class MonitorService(
         val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return emptyList()
 
-        return try {
+        return suspendRunCatching {
             val json = Json { ignoreUnknownKeys = true }
             val result = json.parseToJsonElement(body).jsonObject
             val data = result["data"]?.jsonArray ?: return emptyList()
@@ -503,7 +504,7 @@ class MonitorService(
                     mem_percent = if (memLimit > 0) (memUsed.toFloat() / memLimit * 100) else 0f
                 )
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to parse container stats" }
             emptyList()
         }
@@ -576,21 +577,21 @@ class MonitorService(
         val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return emptyList()
 
-        return try {
+        return suspendRunCatching {
             val json = Json { ignoreUnknownKeys = true }
             val result = json.parseToJsonElement(body).jsonObject
             val data = result["data"]?.jsonArray ?: return emptyList()
 
             data.map { row ->
                 val arr = row.jsonArray
-                val tagsObj = try {
+                val tagsObj = suspendRunCatching {
                     arr.getOrNull(10)?.toString()?.let { t ->
                         json.parseToJsonElement(t.replace("\\\"", "\""))
                             .jsonObject
                             .entries
                             .associate { (k, v) -> k to v.toString().trim('"') }
                     } ?: emptyMap<String, String>()
-                } catch (_: Exception) {
+                }.getOrElse { _ ->
                     emptyMap<String, String>()
                 }
                 val ts = arr.getOrNull(11)?.toString()?.replace("\"", "") ?: ""
@@ -617,7 +618,7 @@ class MonitorService(
                     "id" to arr.getOrNull(1)?.toString()?.replace("\"", "")
                 )
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to parse infra container stats" }
             emptyList()
         }
@@ -685,7 +686,7 @@ class MonitorService(
 
         val body = hostRepository.executeClickHouseQuery(query)
         val dataPoints =
-            try {
+            suspendRunCatching {
                 val json = Json { ignoreUnknownKeys = true }
                 val result = json.parseToJsonElement(body).jsonObject
                 val data =
@@ -728,7 +729,7 @@ class MonitorService(
                             ?.toLongOrNull()
                     )
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to parse container historical metrics" }
                 emptyList()
             }

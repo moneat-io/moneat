@@ -42,6 +42,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
 import java.util.*
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 class DiscordService(
     private val discordApiBaseUrl: String? = null
@@ -348,7 +349,7 @@ class DiscordService(
             return false to "Discord bot token not configured"
         }
 
-        return try {
+        return suspendRunCatching {
             val message =
                 DiscordMessage(
                     content = fallbackText,
@@ -373,7 +374,7 @@ class DiscordService(
                 logger.error("Failed to send to Discord: ${response.status} - ${response.bodyAsText()}")
                 false to errorMsg
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error("Error sending to Discord", e)
             false to "Error: ${e.message}"
         }
@@ -540,7 +541,7 @@ class DiscordService(
         clientSecret: String,
         redirectUri: String
     ): DiscordOAuthResponse {
-        return try {
+        return suspendRunCatching {
             val response: HttpResponse =
                 httpClient.submitForm(
                     url = "$apiBase/oauth2/token",
@@ -554,7 +555,7 @@ class DiscordService(
                 )
 
             json.decodeFromString<DiscordOAuthResponse>(response.bodyAsText())
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error("Error exchanging Discord OAuth code", e)
             DiscordOAuthResponse(error = e.message)
         }
@@ -566,7 +567,7 @@ class DiscordService(
             return emptyList()
         }
 
-        return try {
+        return suspendRunCatching {
             val response: HttpResponse =
                 httpClient.get("$apiBase/guilds/$guildId/channels") {
                     header(HttpHeaders.Authorization, "Bot $botToken")
@@ -580,7 +581,7 @@ class DiscordService(
                 logger.error("Failed to list Discord channels: ${response.status}")
                 emptyList()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error("Error listing Discord channels", e)
             emptyList()
         }

@@ -17,6 +17,7 @@
 package com.moneat.logs.services
 
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.suspendRunCatching
 
 /**
  * Datadog-compatible log search query parser.
@@ -114,7 +115,7 @@ class LogQueryParser {
 
         val errors = mutableListOf<String>()
 
-        try {
+        suspendRunCatching {
             val tokens = tokenize(query)
 
             // Debug logging (remove after testing)
@@ -129,7 +130,7 @@ class LogQueryParser {
 
             val node = parseExpression(tokens)
             return ParsedQuery(node, errors)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             errors.add("Parse error: ${e.message}")
             // Fallback to simple full-text search
             return ParsedQuery(

@@ -22,11 +22,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -77,12 +77,10 @@ class PulseService(
             delay(60_000)
 
             while (true) {
-                try {
+                suspendRunCatching {
                     val metrics = collectMetrics()
                     sendPulse(metrics)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
+                }.onFailure { e ->
                     logger.debug(e) { "Telemetry pulse failed — will retry next interval" }
                 }
                 delay(interval)
@@ -139,7 +137,7 @@ class PulseService(
 
     private suspend fun collectUsageCounts(): UsageCounts {
         // PostgreSQL counts
-        val (projectCount, userCount) = try {
+        val (projectCount, userCount) = suspendRunCatching {
             transaction {
                 val projects = exec("SELECT COUNT(*) FROM projects") { rs: java.sql.ResultSet ->
                     if (rs.next()) rs.getLong(1) else 0L
@@ -151,21 +149,25 @@ class PulseService(
 
                 Pair(projects, users)
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.debug(e) { "Failed to collect PostgreSQL counts" }
             Pair(0L, 0L)
         }
 
         // ClickHouse counts are best-effort; failures don't block the pulse
-        val eventCount = try {
+        val eventCount = suspendRunCatching {
             ClickHouseClient.execute("SELECT COUNT(*) FROM events")
                 .bodyAsText().trim().toLongOrNull() ?: 0L
-        } catch (_: Exception) { 0L }
+        }.getOrElse { _ ->
+            0L
+        }
 
-        val issueCount = try {
+        val issueCount = suspendRunCatching {
             ClickHouseClient.execute("SELECT COUNT(*) FROM issues")
                 .bodyAsText().trim().toLongOrNull() ?: 0L
-        } catch (_: Exception) { 0L }
+        }.getOrElse { _ ->
+            0L
+        }
 
         return UsageCounts(
             projectCount = projectCount,
@@ -176,7 +178,7 @@ class PulseService(
     }
 
     private fun getOrCreateDeploymentId(): String {
-        return try {
+        return suspendRunCatching {
             transaction {
                 val existing = exec(
                     "SELECT value FROM deployment_settings WHERE key = 'deployment_id'"
@@ -195,7 +197,7 @@ class PulseService(
                     newId
                 }
             }
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             // Table may not exist yet — generate a transient ID
             "transient-${UUID.randomUUID()}"
         }
@@ -225,9 +227,9 @@ class PulseService(
             val endpoint = EnvConfig.get("TELEMETRY_ENDPOINT", "https://telemetry.moneat.io/v1/pulse")
 
             val snapshot = if (enabled) {
-                try {
+                suspendRunCatching {
                     PulseService().collectMetrics()
-                } catch (_: Exception) {
+                }.getOrElse { _ ->
                     null
                 }
             } else {

@@ -16,6 +16,7 @@
 
 package com.moneat.shared.services
 
+import com.moneat.utils.suspendRunCatching
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Projects
 import io.ktor.server.config.ApplicationConfig
@@ -63,9 +64,9 @@ class RetentionBackgroundService(
         sweepJob =
             scope.launch(Dispatchers.IO) {
                 while (isActive) {
-                    try {
+                    suspendRunCatching {
                         runSweep()
-                    } catch (e: Exception) {
+                    }.onFailure { e ->
                         logger.error(e) { "Retention sweep failed" }
                     }
                     delay(sweepIntervalSeconds * 1000L)
@@ -281,7 +282,7 @@ class RetentionBackgroundService(
             logger.debug { "Retention mutation skipped for $label: ClickHouse is not initialized" }
             return false
         }
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             if (response.status.value !in 200..299) {
                 logger.error { "Retention mutation failed for $label (status=${response.status})" }
@@ -289,7 +290,7 @@ class RetentionBackgroundService(
             } else {
                 true
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Retention mutation exception for $label" }
             false
         }

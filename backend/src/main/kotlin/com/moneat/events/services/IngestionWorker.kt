@@ -23,6 +23,8 @@ import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.utils.SentryUtils
+import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.suspendRunCatching
 import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -30,13 +32,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
+private const val ERROR_DELAY_MS = 1000L
 
 /**
  * Background worker that drains the ingestion queue (Redis list),
@@ -99,9 +103,14 @@ class IngestionWorker(
                     }
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
-                    logger.error(e) { "Worker $workerId error in BRPOP loop" }
-                    delay(1000)
+                } catch (e: SerializationException) {
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
+                } catch (e: IOException) {
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
+                } catch (e: IllegalStateException) {
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
+                } catch (e: IllegalArgumentException) {
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
                 }
             }
         } finally {
@@ -114,7 +123,7 @@ class IngestionWorker(
         value: String,
         onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
-        try {
+        suspendRunCatching {
             val (projectId, envelopeBytes) = decodeMessage(value)
 
             SentryUtils.breadcrumb(
@@ -128,10 +137,9 @@ class IngestionWorker(
 
             val envelope = SentryEnvelope.parse(envelopeBytes)
             eventService.processEnvelope(projectId, envelope)
-        } catch (e: Exception) {
+        }.onFailure { e ->
             logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
             onDlq(value)
-
             Sentry.captureException(e) { scope ->
                 scope.setTag("worker.operation", "process_message")
                 scope.setTag("worker.id", workerId.toString())

@@ -27,6 +27,7 @@ import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.models.UptimeMonitorResponse
 import com.moneat.uptime.repositories.UptimeMonitorRepository
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -38,6 +39,7 @@ import kotlin.math.roundToInt
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -176,9 +178,9 @@ class UptimeService(
             )
             """.trimIndent()
 
-        try {
+        suspendRunCatching {
             uptimeMonitorRepository.executeClickHouseInsert(sql)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to record heartbeat for monitor $monitorId" }
         }
     }
@@ -219,7 +221,7 @@ class UptimeService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val body = uptimeMonitorRepository.executeClickHouseQuery(query)
 
             if (body.isBlank()) return emptyList()
@@ -235,12 +237,12 @@ class UptimeService(
                         message = json["message"]?.jsonPrimitive?.content ?: "",
                         pingMs = json["ping_ms"]?.jsonPrimitive?.content?.toFloatOrNull()
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
                     logger.warn(e) { "Failed to parse heartbeat: $line" }
                     null
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to query heartbeats for monitor $monitorId" }
             emptyList()
         }
@@ -268,7 +270,7 @@ class UptimeService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val body = uptimeMonitorRepository.executeClickHouseQuery(query)
 
             if (body.isBlank()) return 0f
@@ -278,7 +280,7 @@ class UptimeService(
             val totalCount = json["total_count"]?.jsonPrimitive?.long ?: 0L
 
             if (totalCount == 0L) 0f else (upCount.toFloat() / totalCount.toFloat() * 100f)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to calculate uptime for monitor $monitorId" }
             0f
         }
@@ -304,7 +306,7 @@ class UptimeService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val body = uptimeMonitorRepository.executeClickHouseQuery(query)
 
             if (body.isBlank()) return 0
@@ -315,7 +317,7 @@ class UptimeService(
                 ?.content
                 ?.toDoubleOrNull()
                 ?.roundToInt() ?: 0
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to calculate avg response time for monitor $monitorId" }
             0
         }
@@ -392,7 +394,11 @@ class UptimeService(
             method = monitor.method,
             headers =
             monitor.headers?.let {
-                try { Json.decodeFromString<Map<String, String>>(it) } catch (e: Exception) { null }
+                try {
+                    Json.decodeFromString<Map<String, String>>(it)
+                } catch (e: SerializationException) {
+                    null
+                }
             },
             body = monitor.body,
             authMethod = monitor.authMethod,

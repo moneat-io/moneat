@@ -33,6 +33,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_QUEUE_KEY = "moneat:otlp-metrics:queue"
@@ -83,9 +84,9 @@ private suspend fun handleOtlpMetricsIngest(
 
     val bodyBytes = call.receive<ByteArray>()
     val encoding = call.request.header(HttpHeaders.ContentEncoding)
-    val payloadBytes = try {
+    val payloadBytes = suspendRunCatching {
         DecompressionService.decompress(bodyBytes, encoding)
-    } catch (e: Exception) {
+    }.getOrElse { _ ->
         call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse("Failed to decompress request body")

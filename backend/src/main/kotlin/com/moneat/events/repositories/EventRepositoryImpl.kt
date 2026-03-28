@@ -41,6 +41,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -82,7 +83,7 @@ class EventRepositoryImpl : EventRepository {
             FORMAT JSON
         """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val jsonResponse = json.parseToJsonElement(response.bodyAsText()).jsonObject
             jsonResponse["data"]
@@ -92,7 +93,7 @@ class EventRepositoryImpl : EventRepository {
                 ?.get("cnt")
                 ?.jsonPrimitive
                 ?.longOrNull ?: 0
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error checking event count for issue $issueId" }
             0
         }
@@ -384,23 +385,23 @@ class EventRepositoryImpl : EventRepository {
     }
 
     private suspend fun executeInsert(sql: String): Boolean {
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(sql)
             response.status.isSuccess()
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "ClickHouse insert failed" }
             false
         }
     }
 
     private suspend fun executeInsertNoResult(sql: String) {
-        try {
+        suspendRunCatching {
             val response = ClickHouseClient.execute(sql)
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "ClickHouse insert failed: $errorBody" }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "ClickHouse insert failed" }
         }
     }

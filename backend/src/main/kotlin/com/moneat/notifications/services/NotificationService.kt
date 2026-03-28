@@ -22,10 +22,10 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.server.config.ApplicationConfig
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -83,7 +83,7 @@ class NotificationService(
         issueId: String,
         event: SentryEvent
     ) {
-        try {
+        suspendRunCatching {
             logger.info { "Processing new issue alert for issue=$issueId project=$projectId" }
 
             // Get project details
@@ -200,10 +200,10 @@ class NotificationService(
             // Send emails asynchronously
             usersToNotify.forEach { (email, _) ->
                 scope.launch {
-                    try {
+                    suspendRunCatching {
                         emailService.sendErrorAlertEmail(email, emailData)
                         logger.info { "Sent issue alert to $email for issue $issueId" }
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to send issue alert to $email" }
                     }
                 }
@@ -225,7 +225,7 @@ class NotificationService(
                 }
 
             if (slackEnabled) {
-                try {
+                suspendRunCatching {
                     slackService.sendErrorAlert(
                         organizationId = orgId,
                         projectName = projectName,
@@ -239,7 +239,7 @@ class NotificationService(
                         timestamp = emailData.timestamp,
                         stackTrace = stackTrace
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to send Slack notification for new issue" }
                 }
             }
@@ -259,7 +259,7 @@ class NotificationService(
                 }
 
             if (discordEnabled) {
-                try {
+                suspendRunCatching {
                     val discordIssueUrl = "$frontendUrl/issues/$issueId"
                     discordService.sendErrorAlert(
                         organizationId = orgId,
@@ -271,17 +271,17 @@ class NotificationService(
                         userCount = 0,
                         issueUrl = discordIssueUrl
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to send Discord notification for new issue" }
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error in onNewIssue handler" }
         }
     }
 
     suspend fun sendWeeklySummary() {
-        try {
+        suspendRunCatching {
             logger.info { "Starting weekly summary generation" }
 
             val now = Instant.now()
@@ -308,14 +308,14 @@ class NotificationService(
 
             usersToNotify.forEach { (userId, email, userName) ->
                 scope.launch {
-                    try {
+                    suspendRunCatching {
                         sendUserWeeklySummary(userId, email, userName, startDate, endDate, priorStartDate)
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to send weekly summary to $email" }
                     }
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error in sendWeeklySummary" }
         }
     }
@@ -467,7 +467,7 @@ class NotificationService(
             FORMAT JSON
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val responseBody = response.bodyAsText()
             if (!response.status.isSuccess()) return null
@@ -475,9 +475,7 @@ class NotificationService(
             val data = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
             val rate = data?.get("rate")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
             if (rate == null || rate.isNaN() || rate.isInfinite()) null else rate
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
             null
         }
@@ -618,9 +616,9 @@ class NotificationService(
         scheduler.scheduleAtFixedRate(
             {
                 runBlocking {
-                    try {
+                    suspendRunCatching {
                         sendWeeklySummary()
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Error in scheduled weekly summary" }
                     }
                 }
@@ -648,11 +646,11 @@ class NotificationService(
     }
 
     private fun formatTimestamp(timestamp: String): String {
-        return try {
+        return suspendRunCatching {
             val instant = Instant.parse(timestamp)
             val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm 'UTC'", Locale.US)
             formatter.format(instant.atZone(ZoneId.of("UTC")))
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             timestamp
         }
     }

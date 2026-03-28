@@ -16,6 +16,7 @@
 
 package com.moneat.ai
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 /**
@@ -66,7 +67,7 @@ class AiChatService {
     private fun parseAiResponse(jsonStr: String): AiResponse {
         return try {
             json.decodeFromString<AiResponse>(jsonStr)
-        } catch (_: Exception) {
+        } catch (_: SerializationException) {
             AiResponse(message = jsonStr)
         }
     }

@@ -29,6 +29,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -94,14 +95,14 @@ class AccessService(
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) return null
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.longOrNull?.takeIf { it != 0L }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to get project ID for event $eventId" }
             null
         }
@@ -117,14 +118,14 @@ class AccessService(
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) return null
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["issue_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to get issue ID for event $eventId" }
             null
         }

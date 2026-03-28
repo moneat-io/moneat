@@ -18,16 +18,20 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.OrchestratorIngestionService
+import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
+import java.io.IOException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -57,8 +61,6 @@ class OrchestratorIngestionWorker(
         scope.cancel()
         logger.info { "OrchestratorIngestionWorker stopped" }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun runWorker(workerId: Int) {
         val conn = RedisConfig.newBlockingConnection()
         try {
@@ -73,24 +75,33 @@ class OrchestratorIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
-                    logger.error(e) {
-                        "Orchestrator worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "Orchestrator",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "Orchestrator",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
             }
         } finally {
             RedisConfig.closeBlockingConnection(conn)
         }
     }
-
-    @Suppress("TooGenericExceptionCaught")
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
     ) {
-        try {
+        suspendRunCatching {
             val batch = OrchestratorIngestionService.decodeBatch(payload)
             OrchestratorIngestionService.insertBatch(batch)
             logger.debug {
@@ -99,11 +110,15 @@ class OrchestratorIngestionWorker(
                     "resources=${batch.resources.size} " +
                     "manifests=${batch.manifests.size}"
             }
-        } catch (e: Exception) {
-            logger.error(e) {
-                "Orchestrator worker $workerId failed, pushing to DLQ"
-            }
-            RedisConfig.sync().rpush(dlqKey, payload)
+        }.getOrElse { e ->
+            pushToDlq(
+                logger,
+                dlqKey,
+                payload,
+                workerId,
+                "Orchestrator",
+                e,
+            )
         }
     }
 }

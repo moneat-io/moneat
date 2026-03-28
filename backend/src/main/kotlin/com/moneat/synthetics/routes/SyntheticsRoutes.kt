@@ -219,7 +219,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -255,7 +255,7 @@ fun Route.syntheticsRoutes() {
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                         .toString()
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -321,7 +321,7 @@ fun Route.syntheticsRoutes() {
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                         .toString()
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -384,7 +384,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -421,7 +421,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -456,7 +456,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")

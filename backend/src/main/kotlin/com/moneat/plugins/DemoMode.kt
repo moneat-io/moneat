@@ -27,6 +27,7 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.path
 import io.ktor.server.response.*
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val demoUserId = EnvConfig.Demo.USER_ID
@@ -66,7 +67,7 @@ private fun ApplicationCall.extractAuthToken(): String? {
 private fun isDemoToken(token: String?): Boolean {
     if (token.isNullOrBlank()) return false
 
-    return try {
+    return suspendRunCatching {
         val decoded = JWT.require(Algorithm.HMAC256(jwtSecret)).build().verify(token)
         if (decoded.getClaim("isDemo")?.asBoolean() == true) return true
 
@@ -77,7 +78,7 @@ private fun isDemoToken(token: String?): Boolean {
 
         val email = decoded.getClaim("email")?.asString()
         email != null && email.equals(demoUserEmail, ignoreCase = true)
-    } catch (_: Exception) {
+    }.getOrElse { _ ->
         false
     }
 }
@@ -119,7 +120,7 @@ fun Application.configureDemoModeRestrictions() {
 fun ApplicationCall.isDemoUser(): Boolean {
     val jwtPrincipal = principal<JWTPrincipal>()
     if (jwtPrincipal != null) {
-        try {
+        suspendRunCatching {
             if (jwtPrincipal.payload.getClaim("isDemo")?.asBoolean() == true) return true
             val userId =
                 jwtPrincipal.payload.getClaim("userId")?.asLong()
@@ -130,7 +131,7 @@ fun ApplicationCall.isDemoUser(): Boolean {
             if (userId == demoUserId) return true
             val email = jwtPrincipal.payload.getClaim("email")?.asString()
             if (email != null && email.equals(demoUserEmail, ignoreCase = true)) return true
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             // Fall through and try other principal types.
         }
     }
@@ -152,10 +153,10 @@ fun ApplicationCall.getDemoEpochMs(): Long? {
     if (principal == null) {
         return if (isDemoUser()) EnvConfig.Demo.epochMs else null
     }
-    return try {
+    return suspendRunCatching {
         principal.payload.getClaim("demoEpochMs")?.asLong()
             ?: if (isDemoUser()) EnvConfig.Demo.epochMs else null
-    } catch (_: Exception) {
+    }.getOrElse { _ ->
         if (isDemoUser()) EnvConfig.Demo.epochMs else null
     }
 }

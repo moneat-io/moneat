@@ -31,6 +31,7 @@ import io.ktor.server.routing.route
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
 import java.time.LocalDate
+import java.time.format.DateTimeParseException
 
 private val logger = KotlinLogging.logger {}
 
@@ -263,7 +264,7 @@ private fun parseDateRange(call: io.ktor.server.application.ApplicationCall): Pa
             if (from == null || to == null) return null
             try {
                 LocalDate.parse(from) to LocalDate.parse(to)
-            } catch (_: Exception) {
+            } catch (_: DateTimeParseException) {
                 null
             }
         }

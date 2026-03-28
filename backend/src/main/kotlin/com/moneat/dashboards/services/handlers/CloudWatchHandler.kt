@@ -40,6 +40,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -60,7 +61,7 @@ class CloudWatchHandler : DataSourceHandler {
             return TestConnectionResult(false, "AWS access key and secret key are required")
         }
 
-        return try {
+        return suspendRunCatching {
             createClient(region, accessKey, secretKey).use { client ->
                 val now = Clock.System.now()
                 val startJava = java.time.Instant.ofEpochMilli(now.minus(1.hours).toEpochMilliseconds())
@@ -86,7 +87,7 @@ class CloudWatchHandler : DataSourceHandler {
                 client.getMetricData(request)
             }
             TestConnectionResult(true, "Connected successfully")
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "CloudWatch connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -106,9 +107,9 @@ class CloudWatchHandler : DataSourceHandler {
         val accessKey = credentials.accessKeyId ?: return emptyList()
         val secretKey = credentials.secretAccessKey ?: return emptyList()
 
-        val metricSpec = try {
+        val metricSpec = suspendRunCatching {
             json.parseToJsonElement(query).jsonObject
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Invalid CloudWatch query JSON" }
             return emptyList()
         }
@@ -134,7 +135,7 @@ class CloudWatchHandler : DataSourceHandler {
         val startTime = resolveTime(timeRange?.from ?: "now-1h", now)
         val endTime = resolveTime(timeRange?.to ?: "now", now)
 
-        return try {
+        return suspendRunCatching {
             val normalizedLimit = limit.coerceIn(1, 100800)
             createClient(region, accessKey, secretKey).use { client ->
                 val startJava = java.time.Instant.ofEpochMilli(startTime.toEpochMilliseconds())
@@ -181,7 +182,7 @@ class CloudWatchHandler : DataSourceHandler {
                 }
                 rows
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "CloudWatch query failed" }
             emptyList()
         }

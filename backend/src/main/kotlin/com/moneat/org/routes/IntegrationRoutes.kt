@@ -61,6 +61,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.abs
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = LoggerFactory.getLogger("IntegrationRoutes")
 
@@ -180,7 +181,7 @@ private fun generateSecureState(
 }
 
 private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
-    try {
+    suspendRunCatching {
         val decoded = String(Base64.getUrlDecoder().decode(state))
         val parts = decoded.split(":")
         if (parts.size != 5) return null
@@ -211,7 +212,7 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
         }
 
         return Pair(userId, organizationId)
-    } catch (e: Exception) {
+    }.getOrElse { _ ->
         return null
     }
 }
@@ -223,7 +224,7 @@ fun Route.integrationRoutes() {
     route("/integrations") {
         // List all integrations for the organization
         get {
-            try {
+            suspendRunCatching {
                 val principal = call.principal<JWTPrincipal>()
                 if (principal == null) {
                     logger.error("No JWT principal found")
@@ -266,7 +267,7 @@ fun Route.integrationRoutes() {
 
                 logger.info("Returning ${integrations.size} integrations")
                 call.respond(integrations)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error("Error fetching integrations", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -274,7 +275,7 @@ fun Route.integrationRoutes() {
 
         // Start Slack OAuth flow
         get("/slack/oauth/start") {
-            try {
+            suspendRunCatching {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
@@ -320,7 +321,7 @@ fun Route.integrationRoutes() {
                         "state=$state"
 
                 call.respond(SlackOAuthStartResponse(authUrl))
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error("Error starting Slack OAuth", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -508,7 +509,7 @@ fun Route.integrationRoutes() {
 
         // Discord OAuth Start
         get("/discord/oauth/start") {
-            try {
+            suspendRunCatching {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
@@ -549,7 +550,7 @@ fun Route.integrationRoutes() {
                         "state=$state"
 
                 call.respond(SlackOAuthStartResponse(authUrl))
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error("Error starting Discord OAuth", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -584,10 +585,10 @@ fun Route.integrationRoutes() {
                 return@get call.respond(HttpStatusCode.NotFound, MessageResponse("Discord not configured"))
             }
 
-            try {
+            suspendRunCatching {
                 val channels = discordService.listChannels(guildId).map { SlackChannel(it.id, it.name) }
                 call.respond(SlackChannelList(channels))
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error("Error fetching Discord channels", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -926,7 +927,7 @@ fun Route.integrationCallbackRoutes() {
 
         // Slack Interactivity Endpoint (for interactive message buttons)
         post("/slack/interactions") {
-            try {
+            suspendRunCatching {
                 val rawBody = call.receiveText()
                 if (!verifySlackRequestSignature(call.request.headers, rawBody)) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid Slack signature"))
@@ -1037,7 +1038,7 @@ fun Route.integrationCallbackRoutes() {
 
                 // Default response for unhandled actions
                 call.respond(HttpStatusCode.OK, mapOf("text" to "Action received"))
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error("Error processing Slack interaction", e)
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal error"))
             }
@@ -1059,7 +1060,7 @@ fun Route.integrationCallbackRoutes() {
 
                 val request = call.receive<LinkUserRequest>()
 
-                try {
+                suspendRunCatching {
                     transaction {
                         // Check if mapping exists
                         val existing =
@@ -1090,7 +1091,7 @@ fun Route.integrationCallbackRoutes() {
                     }
 
                     call.respond(HttpStatusCode.OK, MessageResponse("User linked successfully"))
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error("Error linking Slack user", e)
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to link user"))
                 }

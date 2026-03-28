@@ -27,6 +27,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -78,9 +79,9 @@ private suspend fun handleProcessAgentPayload(
         return
     }
 
-    val proto = try {
+    val proto = suspendRunCatching {
         ProcessAgentPayloadDecoder.decompressBody(rawBody, header.encoding)
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         logger.warn(e) { "Failed to decompress DD infra payload (type=${header.type}) for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
         return
@@ -88,9 +89,9 @@ private suspend fun handleProcessAgentPayload(
 
     when (header.type) {
         ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONTAINER -> {
-            val payload = try {
+            val payload = suspendRunCatching {
                 ProcessAgentPayloadDecoder.decodeCollectorContainer(proto)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn(e) { "Failed to decode CollectorContainer for org $orgId" }
                 return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             }
@@ -100,9 +101,9 @@ private suspend fun handleProcessAgentPayload(
         }
         ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC,
         ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC_DISCOVERY -> {
-            val payload = try {
+            val payload = suspendRunCatching {
                 ProcessAgentPayloadDecoder.decodeCollectorProc(proto)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn(e) { "Failed to decode CollectorProc for org $orgId" }
                 return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             }

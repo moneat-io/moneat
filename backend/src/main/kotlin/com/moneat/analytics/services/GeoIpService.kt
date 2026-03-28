@@ -39,8 +39,6 @@ class GeoIpService {
     // MaxMind reader, initialized lazily if database file is available
     private val reader: Any? by lazy { initReader() }
     private var readerAvailable = false
-
-    @Suppress("TooGenericExceptionCaught")
     private fun initReader(): Any? {
         val dbPath = System.getenv("GEOIP_DB_PATH")
             ?: "/usr/share/GeoIP/GeoLite2-City.mmdb"
@@ -49,7 +47,7 @@ class GeoIpService {
             logger.warn { "GeoIP database not found at $dbPath — location data will be empty" }
             return null
         }
-        return try {
+        return runCatching {
             // Use reflection to avoid hard compile-time dependency on MaxMind
             val dbReaderClass = Class.forName("com.maxmind.geoip2.DatabaseReader\$Builder")
             val builder = dbReaderClass.getConstructor(File::class.java).newInstance(dbFile)
@@ -58,20 +56,18 @@ class GeoIpService {
             readerAvailable = true
             logger.info { "GeoIP database loaded from $dbPath" }
             instance
-        } catch (e: Exception) {
+        }.onFailure { e ->
             logger.warn(e) { "Failed to initialize GeoIP reader — location data will be empty" }
-            null
-        }
+        }.getOrNull()
     }
 
     /**
      * Resolve an IP address to geographic location.
      * Returns empty GeoResult if GeoIP is unavailable or IP can't be resolved.
      */
-    @Suppress("TooGenericExceptionCaught")
     fun resolve(ip: String): GeoResult {
         if (!readerAvailable || reader == null) return GeoResult()
-        return try {
+        return runCatching {
             val address = InetAddress.getByName(ip)
             val cityMethod = reader!!.javaClass.getMethod("city", InetAddress::class.java)
             val response = cityMethod.invoke(reader, address)
@@ -86,9 +82,8 @@ class GeoIpService {
             val city = cityObj?.javaClass?.getMethod("getName")?.invoke(cityObj)?.toString() ?: ""
 
             GeoResult(countryCode, subdivision, city)
-        } catch (e: Exception) {
+        }.onFailure { e ->
             logger.debug { "GeoIP lookup failed for $ip: ${e.message}" }
-            GeoResult()
-        }
+        }.getOrElse { GeoResult() }
     }
 }

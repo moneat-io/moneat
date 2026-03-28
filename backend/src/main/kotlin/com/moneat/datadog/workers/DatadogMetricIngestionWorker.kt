@@ -18,16 +18,20 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogMetricService
+import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
+import java.io.IOException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -75,11 +79,22 @@ class DatadogMetricIngestionWorker(
                     processMessage(workerId, payload)
                 } catch (e: CancellationException) {
                     break
-                } catch (e: Exception) {
-                    logger.error(e) {
-                        "DD metric worker $workerId error in BRPOP loop"
-                    }
-                    delay(ERROR_DELAY_MS)
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DD metric",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DD metric",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
             }
         } finally {
@@ -90,20 +105,13 @@ class DatadogMetricIngestionWorker(
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
-        onDlq: (String) -> Unit = { message ->
-            RedisConfig.sync().rpush(dlqKey, message)
-        }
     ) {
-        try {
+        suspendRunCatching {
             val batch =
                 DatadogMetricService.decodeMetricBatch(payload)
             DatadogMetricService.insertMetricBatch(batch)
-        } catch (e: Exception) {
-            logger.error(e) {
-                "DD metric worker $workerId failed, " +
-                    "pushing to DLQ"
-            }
-            onDlq(payload)
+        }.getOrElse { e ->
+            pushToDlq(logger, dlqKey, payload, workerId, "DD metric", e)
         }
     }
 }

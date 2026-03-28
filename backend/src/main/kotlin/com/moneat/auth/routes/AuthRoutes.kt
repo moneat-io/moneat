@@ -55,8 +55,11 @@ import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+private const val GITHUB_OAUTH_CALLBACK_ERROR = "GitHub OAuth callback error"
+private const val APPLE_OAUTH_CALLBACK_ERROR = "Apple OAuth callback error"
 
 fun Route.authRoutes(
     authService: AuthService = GlobalContext.get().get(),
@@ -214,7 +217,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLogout(authServi
     val token = tokenFromHeader ?: tokenFromCookie
 
     if (token != null) {
-        try {
+        suspendRunCatching {
             val jwtVerifier =
                 com.auth0.jwt.JWT
                     .require(
@@ -226,7 +229,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLogout(authServi
             if (userId != null) {
                 authService.logout(userId)
             }
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             // Token invalid or expired, continue with logout
         }
     }
@@ -277,7 +280,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleRefreshToken(aut
 
 // GitHub OAuth
 private suspend fun io.ktor.server.routing.RoutingContext.handleGitHubOAuth(oauthService: OAuthService) {
-    try {
+    suspendRunCatching {
         if (!oauthService.isGitHubEnabled()) {
             call.respond(HttpStatusCode.NotImplemented, ErrorResponse("GitHub OAuth is not configured"))
             return
@@ -299,7 +302,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGitHubOAuth(oaut
         )
         val authUrl = oauthService.generateGitHubAuthUrl(state)
         call.respondRedirect(authUrl)
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         logger.error(e) { "GitHub OAuth init failed" }
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
@@ -307,7 +310,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGitHubOAuth(oaut
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleGitHubCallback(oauthService: OAuthService) {
-    try {
+    suspendRunCatching {
         val code = call.parameters["code"]
         val state = call.parameters["state"]
 
@@ -335,12 +338,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGitHubCallback(o
         AuthCookieUtils.setAuthCookie(call, authResponse.token)
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/auth/oauth/callback")
-    } catch (e: IllegalArgumentException) {
-        logger.error(e) { "GitHub OAuth callback failed: ${e.message}" }
-        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
-        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
-    } catch (e: Exception) {
-        logger.error(e) { "GitHub OAuth callback error" }
+    }.onFailure { e ->
+        logger.error(e) { GITHUB_OAUTH_CALLBACK_ERROR }
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
     }
@@ -348,7 +347,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGitHubCallback(o
 
 // Apple Sign In
 private suspend fun io.ktor.server.routing.RoutingContext.handleAppleOAuth(oauthService: OAuthService) {
-    try {
+    suspendRunCatching {
         if (!oauthService.isAppleEnabled()) {
             call.respond(HttpStatusCode.NotImplemented, ErrorResponse("Apple Sign In is not configured"))
             return
@@ -370,7 +369,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAppleOAuth(oauth
         )
         val authUrl = oauthService.generateAppleAuthUrl(state)
         call.respondRedirect(authUrl)
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         logger.error(e) { "Apple OAuth init failed" }
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
@@ -378,7 +377,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAppleOAuth(oauth
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleAppleCallback(oauthService: OAuthService) {
-    try {
+    suspendRunCatching {
         val params = call.receiveParameters()
         val idToken = params["id_token"] ?: throw IllegalArgumentException("Missing id_token")
         val state = params["state"] ?: throw IllegalArgumentException("Missing state")
@@ -403,12 +402,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAppleCallback(oa
         AuthCookieUtils.setAuthCookie(call, authResponse.token)
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/auth/oauth/callback")
-    } catch (e: IllegalArgumentException) {
-        logger.error(e) { "Apple OAuth callback failed: ${e.message}" }
-        val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
-        call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
-    } catch (e: Exception) {
-        logger.error(e) { "Apple OAuth callback error" }
+    }.onFailure { e ->
+        logger.error(e) { APPLE_OAUTH_CALLBACK_ERROR }
         val dashboardUrl = EnvConfig.get("FRONTEND_URL")!!
         call.respondRedirect("$dashboardUrl/login?error=oauth_failed")
     }

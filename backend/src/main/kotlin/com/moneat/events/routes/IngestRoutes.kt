@@ -40,6 +40,7 @@ import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -90,7 +91,7 @@ fun Route.ingestRoutes(
             }
 
             // Parse envelope - handle gzip compression (validates payload before enqueue)
-            try {
+            suspendRunCatching {
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
 
@@ -137,7 +138,7 @@ fun Route.ingestRoutes(
                 enqueueEnvelope(queueKey, message)
 
                 call.respond(HttpStatusCode.Accepted, mapOf("id" to envelope.eventId))
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to process envelope: ${e.message}" }
                 e.printStackTrace()
                 call.respond(
@@ -191,9 +192,9 @@ fun Route.ingestRoutes(
                 }
 
             val entries =
-                try {
+                suspendRunCatching {
                     json.decodeFromString<List<LogIngestEntry>>(payloadBytes.decodeToString())
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.warn(e) { "Invalid log payload for project $projectId" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
                     return@post
@@ -250,7 +251,7 @@ fun Route.ingestRoutes(
             val body = call.receiveText()
             logger.debug { "Received store event for project $projectId" }
 
-            try {
+            suspendRunCatching {
                 if (isQuotaEnforcementEnabled()) {
                     val orgId = eventService.getOrganizationIdForProject(projectId)
                     if (orgId == null) {
@@ -270,7 +271,7 @@ fun Route.ingestRoutes(
 
                 eventService.processStoreEvent(projectId, body)
                 call.respond(HttpStatusCode.OK)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to process store event" }
                 call.respond(HttpStatusCode.BadRequest, "Invalid event format")
             }

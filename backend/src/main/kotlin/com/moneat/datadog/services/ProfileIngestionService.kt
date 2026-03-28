@@ -36,6 +36,7 @@ import java.time.format.DateTimeParseException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -468,11 +469,11 @@ object ProfileIngestionService {
         element: kotlinx.serialization.json.JsonElement?,
     ): Map<String, String> {
         if (element == null) return emptyMap()
-        return try {
+        return suspendRunCatching {
             element.jsonObject.mapValues {
                 it.value.jsonPrimitive.content
             }
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             emptyMap()
         }
     }

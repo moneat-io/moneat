@@ -28,6 +28,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -41,7 +42,7 @@ class RedisHandler : DataSourceHandler {
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val uri = buildRedisUri(request.host, request.port ?: 6379, request.password ?: request.apiKey)
 
-        return try {
+        return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     conn.sync().ping()
@@ -49,7 +50,7 @@ class RedisHandler : DataSourceHandler {
                     TestConnectionResult(true, "Connected successfully", keys = keys)
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Redis connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -68,7 +69,7 @@ class RedisHandler : DataSourceHandler {
         val uri = buildRedisUri(host, port ?: 6379, credentials.password ?: credentials.apiKey)
         val db = databaseName?.toIntOrNull() ?: 0
 
-        return try {
+        return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     if (db != 0) conn.sync().select(db)
@@ -184,7 +185,7 @@ class RedisHandler : DataSourceHandler {
                     result.take(limit)
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Redis query failed" }
             emptyList()
         }
@@ -198,7 +199,7 @@ class RedisHandler : DataSourceHandler {
     ): List<DataSourceField> {
         val uri = buildRedisUri(host, port ?: 6379, credentials.password ?: credentials.apiKey)
         val dbIndex = databaseName?.toIntOrNull() ?: 0
-        return try {
+        return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     if (dbIndex != 0) conn.sync().select(dbIndex)
@@ -206,7 +207,7 @@ class RedisHandler : DataSourceHandler {
                     keys.map { DataSourceField(it, "key", "Redis key") }
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Redis schema fetch failed" }
             emptyList()
         }
@@ -312,7 +313,7 @@ class RedisHandler : DataSourceHandler {
         @Suppress("UNCHECKED_CAST")
         internal fun parseSlowlog(entries: List<Any>): List<Map<String, JsonElement>> {
             return entries.mapNotNull { entry ->
-                try {
+                suspendRunCatching {
                     val fields = entry as? List<*> ?: return@mapNotNull null
                     val id = (fields.getOrNull(0) as? Number)?.toLong() ?: 0L
                     val ts = (fields.getOrNull(1) as? Number)?.toLong() ?: 0L
@@ -325,7 +326,7 @@ class RedisHandler : DataSourceHandler {
                         "Duration" to JsonPrimitive(duration),
                         "Command" to JsonPrimitive(args)
                     )
-                } catch (e: Exception) {
+                }.getOrElse { _ ->
                     null
                 }
             }

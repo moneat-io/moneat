@@ -16,6 +16,9 @@
 
 package com.moneat.logs.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
@@ -55,6 +58,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
 import java.time.Instant
+import com.moneat.utils.suspendRunCatching
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
@@ -222,9 +226,9 @@ class LogService(private val logRepository: LogRepository) {
     }
 
     fun parseLiveLog(payload: String): LogEntryResponse? {
-        return try {
+        return suspendRunCatching {
             json.decodeFromString<LogEntryResponse>(payload)
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             null
         }
     }
@@ -304,7 +308,7 @@ class LogService(private val logRepository: LogRepository) {
 
         if (!request.query.isNullOrBlank()) {
             // Use Datadog-compatible query parser
-            try {
+            suspendRunCatching {
                 val parsed = queryParser.parse(request.query)
                 if (parsed.rootNode != null) {
                     val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
@@ -313,7 +317,7 @@ class LogService(private val logRepository: LogRepository) {
                         conditions += "($queryCondition)"
                     }
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to parse query '${request.query}', falling back to simple search" }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(request.query)
@@ -411,10 +415,10 @@ class LogService(private val logRepository: LogRepository) {
         val totalCountBody = logRepository.executeClickHouseQuery(totalCountQuery)
         val totalCount =
             if (!totalCountBody.isClickHouseError()) {
-                try {
+                suspendRunCatching {
                     val jsonElement = Json.parseToJsonElement(totalCountBody.trim())
                     jsonElement.jsonObject["count"]?.jsonPrimitive?.longOrNull ?: 0L
-                } catch (_: Exception) {
+                }.getOrElse { _ ->
                     0L
                 }
             } else {
@@ -502,7 +506,7 @@ class LogService(private val logRepository: LogRepository) {
         }
         if (!query.isNullOrBlank()) {
             // Use Datadog-compatible query parser
-            try {
+            suspendRunCatching {
                 val parsed = queryParser.parse(query)
                 if (parsed.rootNode != null) {
                     val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
@@ -510,7 +514,7 @@ class LogService(private val logRepository: LogRepository) {
                         conditions += "($queryCondition)"
                     }
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
@@ -589,7 +593,15 @@ class LogService(private val logRepository: LogRepository) {
                 } else {
                     groups["_total"] = (groups["_total"] ?: 0L) + cnt
                 }
-            } catch (_: Exception) {}
+            } catch (_: SerializationException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IOException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalStateException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalArgumentException) {
+                // Ignored: skip malformed JSON line
+            }
         }
 
         val buckets =
@@ -638,7 +650,7 @@ class LogService(private val logRepository: LogRepository) {
         }
         if (!query.isNullOrBlank()) {
             // Use Datadog-compatible query parser
-            try {
+            suspendRunCatching {
                 val parsed = queryParser.parse(query)
                 if (parsed.rootNode != null) {
                     val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
@@ -646,7 +658,7 @@ class LogService(private val logRepository: LogRepository) {
                         conditions += "($queryCondition)"
                     }
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
@@ -711,7 +723,15 @@ class LogService(private val logRepository: LogRepository) {
                 val value = obj["field_value"]?.jsonPrimitive?.content ?: return@forEach
                 val cnt = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
                 values += LogTopValue(value = value, count = cnt)
-            } catch (_: Exception) {}
+            } catch (_: SerializationException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IOException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalStateException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalArgumentException) {
+                // Ignored: skip malformed JSON line
+            }
         }
 
         // Get total count for percentage calculation
@@ -728,7 +748,7 @@ class LogService(private val logRepository: LogRepository) {
                     .jsonObject["cnt"]
                     ?.jsonPrimitive
                     ?.longOrNull ?: 0L
-            } catch (_: Exception) { 0L }
+            } catch (_: SerializationException) { 0L } catch (_: IOException) { 0L } catch (_: IllegalStateException) { 0L } catch (_: IllegalArgumentException) { 0L }
 
         return LogTopResponse(field = field, values = values, totalCount = totalCount)
     }
@@ -770,7 +790,19 @@ class LogService(private val logRepository: LogRepository) {
                         conditions += "($queryCondition)"
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IOException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IllegalStateException) {
+                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                // Fallback: treat as simple full-text search
+                conditions += buildSimpleSearchCondition(query)
+            } catch (e: IllegalArgumentException) {
                 logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
@@ -822,7 +854,7 @@ class LogService(private val logRepository: LogRepository) {
         sb.appendLine("timestamp,level,service,environment,host,message,container_name,trace_id,span_id,tags")
 
         body.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
-            try {
+            suspendRunCatching {
                 val obj = json.parseToJsonElement(line).jsonObject
                 val timestampStr = obj["timestamp"]?.jsonPrimitive?.content ?: ""
                 val csvRow =
@@ -839,7 +871,7 @@ class LogService(private val logRepository: LogRepository) {
                         obj["tags"]?.jsonPrimitive?.content ?: "{}"
                     ).joinToString(",") { csvEscape(it) }
                 sb.appendLine(csvRow)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn(e) { "Failed to parse log line for CSV: $line" }
             }
         }
@@ -925,7 +957,15 @@ class LogService(private val logRepository: LogRepository) {
                 val value = obj["val"]?.jsonPrimitive?.content ?: return@forEach
                 val count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
                 results += LogFilterOptionWithCount(value = value, count = count)
-            } catch (_: Exception) {}
+            } catch (_: SerializationException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IOException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalStateException) {
+                // Ignored: skip malformed JSON line
+            } catch (_: IllegalArgumentException) {
+                // Ignored: skip malformed JSON line
+            }
         }
         return results
     }
@@ -1079,7 +1119,7 @@ class LogService(private val logRepository: LogRepository) {
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .mapNotNull { line ->
-                try {
+                suspendRunCatching {
                     val obj = json.parseToJsonElement(line).jsonObject
                     val timestampMs = obj["timestamp_ms"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
                     val systemId =
@@ -1115,7 +1155,7 @@ class LogService(private val logRepository: LogRepository) {
                             hostId = hostIdFromTags
                         )
                     LogWithCursor(log = log, timestampMs = timestampMs)
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.warn(e) { "Failed to parse log row" }
                     null
                 }
@@ -1125,7 +1165,7 @@ class LogService(private val logRepository: LogRepository) {
     private fun parseMapField(element: JsonElement?): Map<String, String> {
         if (element == null) return emptyMap()
 
-        return try {
+        return suspendRunCatching {
             when (element) {
                 is JsonObject -> {
                     element.mapValues { (_, value) -> value.jsonPrimitive.content }
@@ -1141,7 +1181,7 @@ class LogService(private val logRepository: LogRepository) {
                     }
                 }
             }
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             emptyMap()
         }
     }
@@ -1311,9 +1351,9 @@ class LogService(private val logRepository: LogRepository) {
 
     fun parseOtlpJson(payload: String): List<LogIngestEntry> {
         val parsed =
-            try {
+            suspendRunCatching {
                 json.parseToJsonElement(payload).jsonObject
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn(e) { "Invalid OTLP JSON payload" }
                 return emptyList()
             }
@@ -1379,9 +1419,9 @@ class LogService(private val logRepository: LogRepository) {
             return if (numeric > 1_000_000_000_000L) numeric else numeric * 1000
         }
 
-        return try {
+        return suspendRunCatching {
             Instant.parse(trimmed).toEpochMilli()
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             null
         }
     }
@@ -1401,9 +1441,9 @@ class LogService(private val logRepository: LogRepository) {
         }
 
         val parsed =
-            try {
+            suspendRunCatching {
                 UUID.fromString(rawSystemId)
-            } catch (_: Exception) {
+            }.getOrElse { _ ->
                 return null
             }
 
@@ -1489,14 +1529,14 @@ class LogService(private val logRepository: LogRepository) {
 
     private fun decodeCursor(cursor: String?): Pair<Long, String>? {
         if (cursor.isNullOrBlank()) return null
-        return try {
+        return suspendRunCatching {
             val decoded = String(Base64.getUrlDecoder().decode(cursor))
             val parts = decoded.split("|", limit = 2)
             if (parts.size != 2) return null
             val ts = parts[0].toLongOrNull() ?: return null
             val logId = parts[1]
             ts to logId
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             null
         }
     }
@@ -1536,7 +1576,7 @@ class LogService(private val logRepository: LogRepository) {
         // mistakenly sent as a tag. Route it through the query parser instead of dropping it.
         if (isTagMalformed(key, value)) {
             logger.info { "Tag contains Boolean operators, parsing as query: $key:$value" }
-            return try {
+            return suspendRunCatching {
                 val parsed = queryParser.parse("$key:$value")
                 if (parsed.rootNode != null) {
                     val condition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
@@ -1544,7 +1584,7 @@ class LogService(private val logRepository: LogRepository) {
                 } else {
                     ""
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn(e) { "Failed to parse malformed tag as query: $key:$value" }
                 ""
             }

@@ -24,6 +24,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.UUID
 import java.util.zip.GZIPOutputStream
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -118,12 +119,12 @@ object ProfileStorageService {
             val legacyData = dir.readBytes()
             val legacyName = dir.name
             Files.move(dir.toPath(), backup.toPath(), StandardCopyOption.ATOMIC_MOVE)
-            try {
+            suspendRunCatching {
                 tempDir.mkdirs()
                 File(tempDir, legacyName).writeBytes(legacyData)
                 Files.move(tempDir.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)
                 backup.delete()
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 // Restore backup if migration fails
                 if (!dir.exists() && backup.exists()) {
                     Files.move(backup.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)

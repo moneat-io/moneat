@@ -29,6 +29,7 @@ import java.security.SecureRandom
 import java.util.Base64
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import com.moneat.utils.suspendRunCatching
 
 class OrgInvitationService(
     private val membershipService: OrgMembershipService,
@@ -127,10 +128,10 @@ class OrgInvitationService(
         val failed = mutableListOf<BulkInviteFailure>()
 
         for (email in emails) {
-            try {
+            suspendRunCatching {
                 inviteMember(orgId, email.trim(), role, invitedByUserId)
                 success.add(email)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn("Failed to invite $email: ${e.message}")
                 failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
             }

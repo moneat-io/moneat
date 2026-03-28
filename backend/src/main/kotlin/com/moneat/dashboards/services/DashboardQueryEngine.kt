@@ -35,6 +35,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import kotlin.collections.filter
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -345,7 +346,7 @@ class DashboardQueryEngine {
         val sql = buildQuery(dsl, projectId, demoEpochMs, retentionDays)
         logger.debug { "Executing dashboard query: ${sql.take(500)}" }
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(sql)
             val body = response.bodyAsText()
 
@@ -359,7 +360,7 @@ class DashboardQueryEngine {
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line -> json.parseToJsonElement(line).jsonObject.toMap() }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to execute dashboard query" }
             emptyList()
         }

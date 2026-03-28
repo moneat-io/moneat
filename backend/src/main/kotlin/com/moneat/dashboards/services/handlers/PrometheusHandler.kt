@@ -36,6 +36,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -43,7 +44,7 @@ class PrometheusHandler : HttpApiHandler() {
     override val defaultPort: Int = 9090
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        return try {
+        return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port)
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
                 request.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
@@ -56,7 +57,7 @@ class PrometheusHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Prometheus returned ${response.status}")
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Prometheus connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -88,7 +89,7 @@ class PrometheusHandler : HttpApiHandler() {
         }
 
         val baseUrl = buildUrl(host, port)
-        return try {
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/api/v1/label/$labelName/values") {
                 credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
                 if (!matcher.isNullOrEmpty()) parameter("match[]", matcher)
@@ -100,7 +101,7 @@ class PrometheusHandler : HttpApiHandler() {
                 logger.warn { "Prometheus label_values query failed: ${response.status}" }
                 emptyList()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to execute label_values query" }
             emptyList()
         }
@@ -119,7 +120,7 @@ class PrometheusHandler : HttpApiHandler() {
         val baseUrl = buildUrl(host, port)
         val promLimit = limit
 
-        return try {
+        return suspendRunCatching {
             val response = if (timeRange != null) {
                 val nowSec = System.currentTimeMillis() / 1000
                 val fromSec = resolveRelativeTimeSec(timeRange.from, nowSec)
@@ -145,7 +146,7 @@ class PrometheusHandler : HttpApiHandler() {
                 return emptyList()
             }
             parsePrometheusResponse(response.bodyAsText(), promLimit)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to execute Prometheus query" }
             emptyList()
         }
@@ -158,7 +159,7 @@ class PrometheusHandler : HttpApiHandler() {
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val baseUrl = buildUrl(host, port)
-        return try {
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
                 credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             }
@@ -170,7 +171,7 @@ class PrometheusHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch Prometheus metrics" }
             emptyList()
         }

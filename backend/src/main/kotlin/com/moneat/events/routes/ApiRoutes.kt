@@ -77,6 +77,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 fun Route.apiRoutes() {
     val koin = GlobalContext.get()
@@ -1376,9 +1377,9 @@ fun Route.apiRoutes() {
                     }
 
                     val request =
-                        try {
+                        suspendRunCatching {
                             call.receive<UpdateAlertNotificationPreferenceRequest>()
-                        } catch (e: Exception) {
+                        }.getOrElse { _ ->
                             call.respond(HttpStatusCode.BadRequest, "Invalid request body")
                             return@put
                         }

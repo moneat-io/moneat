@@ -41,6 +41,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.io.File
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -75,7 +76,7 @@ object DemoDataReseeder {
     suspend fun reseedIfNeeded() {
         if (!EnvConfig.Demo.enabled) return
 
-        try {
+        suspendRunCatching {
             val freshCoreCount = checkFreshDataCount()
             val freshLlmCount = checkFreshLlmDataCount()
             val freshAnalyticsCount = checkFreshAnalyticsDataCount()
@@ -191,7 +192,7 @@ object DemoDataReseeder {
             logger.info { "Demo data reseed complete" }
             reseedUptimeHeartbeats()
             ensureDemoProfileFiles()
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Demo data reseed failed (non-fatal): ${e.message}" }
         }
     }
@@ -3027,7 +3028,7 @@ object DemoDataReseeder {
     private const val DEMO_USER_ID = -1L
 
     private fun seedDemoDashboards() {
-        try {
+        suspendRunCatching {
             transaction {
                 // Purge existing demo dashboards (cascade deletes widgets)
                 Dashboards.deleteWhere {
@@ -3040,7 +3041,7 @@ object DemoDataReseeder {
                 seedWebAnalyticsDashboard()
             }
             logger.info { "Demo dashboards seeded successfully" }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn { "Demo dashboard seeding failed (non-fatal): ${e.message}" }
         }
     }

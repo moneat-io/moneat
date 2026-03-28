@@ -34,6 +34,7 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -225,7 +226,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
                 """.trimIndent()
 
-            try {
+            suspendRunCatching {
                 coroutineScope {
                     val totalEventsDeferred = async { queryHelper.executeScalarQuery(totalEventsQuery, parentSpan) }
                     val totalIssuesDeferred = async { queryHelper.executeScalarQuery(totalIssuesQuery, parentSpan) }
@@ -273,7 +274,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
                         releaseMarkers = releaseMarkersDeferred.await()
                     )
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to fetch project stats" }
                 ProjectStatsResponse(
                     totalEvents = 0,
@@ -314,7 +315,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
             if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
@@ -331,7 +332,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
                         timestamp = obj["timestamp"]?.jsonPrimitive?.contentOrNull ?: ""
                     )
                 }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to fetch release markers" }
             emptyList()
         }

@@ -16,6 +16,9 @@
 
 package com.moneat.plugins
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.SentryConfig
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.SentryUtils
@@ -102,7 +105,19 @@ fun Application.configureMonitoring() {
                         "description" to (status?.description ?: "")
                     )
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                transaction.status = SpanStatus.INTERNAL_ERROR
+                transaction.throwable = e
+                throw e
+            } catch (e: IOException) {
+                transaction.status = SpanStatus.INTERNAL_ERROR
+                transaction.throwable = e
+                throw e
+            } catch (e: IllegalStateException) {
+                transaction.status = SpanStatus.INTERNAL_ERROR
+                transaction.throwable = e
+                throw e
+            } catch (e: IllegalArgumentException) {
                 transaction.status = SpanStatus.INTERNAL_ERROR
                 transaction.throwable = e
                 throw e
@@ -128,29 +143,25 @@ fun Application.configureMonitoring() {
 
             // Send to Sentry if enabled
             if (SentryConfig.isEnabled()) {
-                try {
-                    Sentry.captureException(cause) { scope ->
-                        scope.setTag("http.method", call.request.httpMethod.value)
-                        scope.setTag("http.path", call.request.path())
-                        scope.setTag("http.status_code", "500")
+                Sentry.captureException(cause) { scope ->
+                    scope.setTag("http.method", call.request.httpMethod.value)
+                    scope.setTag("http.path", call.request.path())
+                    scope.setTag("http.status_code", "500")
 
-                        val userAgent = call.request.headers["User-Agent"] ?: "unknown"
-                        scope.setExtra("user_agent", userAgent)
-                        scope.setExtra("remote_host", call.request.local.remoteHost)
-                        scope.setExtra("query_string", call.request.queryString())
+                    val userAgent = call.request.headers["User-Agent"] ?: "unknown"
+                    scope.setExtra("user_agent", userAgent)
+                    scope.setExtra("remote_host", call.request.local.remoteHost)
+                    scope.setExtra("query_string", call.request.queryString())
 
-                        // Add request headers as extra context (excluding sensitive ones)
-                        val safeHeaders =
-                            call.request.headers
-                                .entries()
-                                .filter { (key, _) ->
-                                    !key.equals("Authorization", ignoreCase = true) &&
-                                        !key.equals("Cookie", ignoreCase = true)
-                                }.associate { (key, values) -> key to values.joinToString(", ") }
-                        scope.setExtra("request_headers", safeHeaders.toString())
-                    }
-                } catch (e: Throwable) {
-                    logger.error(e) { "Failed to capture exception to Sentry" }
+                    // Add request headers as extra context (excluding sensitive ones)
+                    val safeHeaders =
+                        call.request.headers
+                            .entries()
+                            .filter { (key, _) ->
+                                !key.equals("Authorization", ignoreCase = true) &&
+                                    !key.equals("Cookie", ignoreCase = true)
+                            }.associate { (key, values) -> key to values.joinToString(", ") }
+                    scope.setExtra("request_headers", safeHeaders.toString())
                 }
             }
 

@@ -44,6 +44,7 @@ import mu.KotlinLogging
 import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import org.koin.core.context.GlobalContext
 import kotlin.time.Duration.Companion.hours
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -165,10 +166,10 @@ fun Application.configureBackgroundJobs() {
     // Register shutdown hook
     monitor.subscribe(ApplicationStopping) {
         // Flush buffered usage data before stopping to prevent data loss
-        try {
+        suspendRunCatching {
             UsageTrackingService.instance.flushBuffer()
             logger.info { "Flushed usage tracking buffer on shutdown" }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
         }
         monitorAlertService.stop()

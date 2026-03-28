@@ -17,6 +17,7 @@
 package com.moneat.otlp.services
 
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -33,18 +34,26 @@ class OtlpMetricsIngestionWorker(
     "metrics",
 ) {
     override suspend fun processMessage(workerId: Int, payload: String) {
-        try {
+        suspendRunCatching {
             val batch = metricsService.decodeBatch(payload)
             metricsService.insertBatch(batch)
             logger.debug {
                 "OTLP metrics worker $workerId inserted ${batch.metrics.size} metrics " +
                     "for org ${batch.organizationId}"
             }
-        } catch (e: Exception) {
-            logger.error(e) {
-                "OTLP metrics worker $workerId failed to process batch, sending to DLQ"
-            }
-            pushToDlq(workerId, payload)
+        }.getOrElse { e ->
+            handleOtlpMetricsDlq(workerId, payload, e)
         }
+    }
+
+    private fun handleOtlpMetricsDlq(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+    ) {
+        logger.error(e) {
+            "OTLP metrics worker $workerId failed to process batch, sending to DLQ"
+        }
+        pushToDlq(workerId, payload)
     }
 }

@@ -29,6 +29,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -67,7 +68,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
                 """.trimIndent()
 
-            try {
+            suspendRunCatching {
                 val releases = executeReleasesListQuery(releasesQuery, parentSpan)
                 val versions = releases.map { it.version }
                 val newIssueCountByVersion = getNewIssueCountForReleases(projectId, versions, retentionDays, parentSpan)
@@ -83,7 +84,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                         userCount = r.userCount
                     )
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to fetch releases for project $projectId" }
                 emptyList()
             }
@@ -108,7 +109,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(releasesQuery)
             val body = response.bodyAsText()
             if (body.isBlank()) return null
@@ -175,7 +176,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 eventsByLevel = queryHelper.executeMapQuery(eventsByLevelQuery, "level"),
                 topIssues = queryHelper.executeTopIssuesQuery(topIssuesQuery)
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch release stats for $version" }
             null
         }
@@ -295,14 +296,14 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 AND ${queryHelper.timestampRetentionClause("started", retentionDays)}
             FORMAT JSONEachRow
             """.trimIndent()
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: return null
             if (rate.isNaN() || rate.isInfinite()) null else rate
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             null
         }
     }

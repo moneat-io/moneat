@@ -54,6 +54,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 fun Route.incidentProviderRoutes() {
     val json =
@@ -90,12 +91,12 @@ fun Route.incidentProviderRoutes() {
                                     providerType = row[IncidentProviderConfigs.providerType],
                                     name = row[IncidentProviderConfigs.name],
                                     configJson =
-                                    try {
+                                    suspendRunCatching {
                                         val jsonStr = row[IncidentProviderConfigs.configJson]
                                         json.parseToJsonElement(jsonStr).jsonObject.toMap().mapValues {
                                             it.value.toString().trim('"')
                                         }
-                                    } catch (e: Exception) {
+                                    }.getOrElse { _ ->
                                         emptyMap()
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled],
@@ -305,10 +306,10 @@ fun Route.incidentProviderRoutes() {
                                     name = row[IncidentProviderConfigs.name],
                                     apiKey = row[IncidentProviderConfigs.apiKey],
                                     configJson =
-                                    try {
+                                    suspendRunCatching {
                                         val jsonStr = row[IncidentProviderConfigs.configJson]
                                         json.parseToJsonElement(jsonStr).jsonObject
-                                    } catch (e: Exception) {
+                                    }.getOrElse { _ ->
                                         buildJsonObject {}
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled]

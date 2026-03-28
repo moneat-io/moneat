@@ -44,6 +44,7 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import com.moneat.utils.suspendRunCatching
 import java.util.*
 
 class ReleaseService {
@@ -515,7 +516,7 @@ class ReleaseService {
         projectId: Long,
         newVersion: String
     ) {
-        try {
+        suspendRunCatching {
             val now = kotlin.time.Clock.System.now()
             val count = IssueStatuses.update(
                 where = {
@@ -543,7 +544,7 @@ class ReleaseService {
                     "cache:project_stats:$projectId:*"
                 )
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) {
                 "Failed to auto-resolve issues for project " +
                     "$projectId on release $newVersion"

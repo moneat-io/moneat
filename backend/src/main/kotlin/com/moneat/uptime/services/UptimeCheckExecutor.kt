@@ -31,8 +31,11 @@ import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -40,8 +43,10 @@ import java.security.cert.X509Certificate
 import java.sql.DriverManager
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import javax.naming.NamingException
 import javax.naming.directory.InitialDirContext
 import javax.net.ssl.HttpsURLConnection
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -84,7 +89,7 @@ class UptimeCheckExecutor {
                     else -> CheckResult(0, -1, 0, "Unknown monitor type: ${monitor.type}")
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: TimeoutCancellationException) {
             logger.error(e) { "Check failed for monitor ${monitor.id}: ${e.message}" }
             CheckResult(0, -1, 0, "Check timeout or error: ${e.message}")
         }
@@ -104,7 +109,7 @@ class UptimeCheckExecutor {
 
         val startTime = System.currentTimeMillis()
 
-        try {
+        suspendRunCatching {
             val response =
                 httpClient.request(url) {
                     method =
@@ -128,7 +133,9 @@ class UptimeCheckExecutor {
                             headers.forEach { (key, value) ->
                                 header(key, value)
                             }
-                        } catch (_: Exception) {}
+                        } catch (_: SerializationException) {
+                            // Ignored: malformed headers JSON should not block the check
+                        }
                     }
 
                     // Authentication
@@ -175,7 +182,7 @@ class UptimeCheckExecutor {
                 statusCode = statusCode,
                 message = if (isSuccess) "OK" else "Unexpected status code: $statusCode"
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
             return CheckResult(0, responseTime, 0, "HTTP error: ${e.message}")
         }
@@ -190,7 +197,7 @@ class UptimeCheckExecutor {
 
         val keyword = monitor.keyword ?: return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "No keyword configured")
 
-        try {
+        suspendRunCatching {
             val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
             val response = httpClient.get(url)
             val body = response.bodyAsText()
@@ -206,7 +213,7 @@ class UptimeCheckExecutor {
                 statusCode = httpResult.statusCode,
                 message = if (success) "Keyword check passed" else "Keyword '$keyword' ${if (shouldContain) "not found" else "found (inverted check)"}"
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "Keyword check error: ${e.message}")
         }
     }
@@ -220,7 +227,7 @@ class UptimeCheckExecutor {
 
         val jsonPath = monitor.jsonPath ?: return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "No JSON path configured")
 
-        try {
+        suspendRunCatching {
             val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
             val response = httpClient.get(url)
             val body = response.bodyAsText()
@@ -241,7 +248,7 @@ class UptimeCheckExecutor {
                 statusCode = httpResult.statusCode,
                 message = if (success) "JSON query passed" else "JSON value mismatch: got '$value', expected '$expectedValue'"
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             return CheckResult(0, httpResult.responseTimeMs, httpResult.statusCode, "JSON query error: ${e.message}")
         }
     }
@@ -261,7 +268,7 @@ class UptimeCheckExecutor {
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
                 CheckResult(1, responseTime, 0, "TCP connection successful")
             }
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
             CheckResult(0, responseTime, 0, "TCP connection failed: ${e.message}")
         }
@@ -285,7 +292,7 @@ class UptimeCheckExecutor {
             } else {
                 CheckResult(0, responseTime, 0, "Host is unreachable")
             }
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
             CheckResult(0, responseTime, 0, "Ping failed: ${e.message}")
         }
@@ -328,7 +335,7 @@ class UptimeCheckExecutor {
             } else {
                 CheckResult(0, responseTime, 0, "DNS record not found")
             }
-        } catch (e: Exception) {
+        } catch (e: NamingException) {
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
             CheckResult(0, responseTime, 0, "DNS lookup failed: ${e.message}")
         }
@@ -340,7 +347,7 @@ class UptimeCheckExecutor {
     private suspend fun checkWebSocket(monitor: UptimeMonitorData): CheckResult {
         val url = monitor.url ?: return CheckResult(0, -1, 0, "No URL configured")
 
-        val httpUrl = try {
+        val httpUrl = suspendRunCatching {
             val uri = java.net.URI(url)
             val httpScheme = when (uri.scheme?.lowercase()) {
                 "ws" -> "http"
@@ -356,7 +363,7 @@ class UptimeCheckExecutor {
                 uri.query,
                 uri.fragment
             ).toString()
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             return CheckResult(0, -1, 0, "Invalid URL: $url")
         }
         try {
@@ -366,7 +373,7 @@ class UptimeCheckExecutor {
         }
 
         // Basic WebSocket connection test via HTTP upgrade
-        return try {
+        return suspendRunCatching {
             val startTime = System.currentTimeMillis()
 
             val response = httpClient.get(httpUrl)
@@ -379,7 +386,7 @@ class UptimeCheckExecutor {
                 statusCode = response.status.value,
                 message = "WebSocket endpoint reachable"
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             CheckResult(0, -1, 0, "WebSocket check failed: ${e.message}")
         }
     }
@@ -392,7 +399,7 @@ class UptimeCheckExecutor {
         val dockerHost = monitor.dockerHost ?: "unix:///var/run/docker.sock"
 
         // Docker API check
-        return try {
+        return suspendRunCatching {
             val startTime = System.currentTimeMillis()
 
             // For HTTP-based Docker API
@@ -423,7 +430,7 @@ class UptimeCheckExecutor {
                 // Unix socket not easily supported here
                 CheckResult(0, -1, 0, "Docker Unix socket not supported. Use HTTP Docker API.")
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             CheckResult(0, -1, 0, "Docker check failed: ${e.message}")
         }
     }
@@ -436,7 +443,7 @@ class UptimeCheckExecutor {
 
         val startTime = System.currentTimeMillis()
 
-        return try {
+        return suspendRunCatching {
             DriverManager.getConnection(connectionString).use { conn ->
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
 
@@ -455,7 +462,7 @@ class UptimeCheckExecutor {
 
                 CheckResult(1, responseTime, 0, "Database connection successful")
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
             CheckResult(0, responseTime, 0, "Database check failed: ${e.message}")
         }
@@ -502,7 +509,7 @@ class UptimeCheckExecutor {
             } else {
                 CheckResult(0, responseTime, 0, "No SSL certificate found")
             }
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
             CheckResult(0, responseTime, 0, "SSL check failed: ${e.message}")
         }

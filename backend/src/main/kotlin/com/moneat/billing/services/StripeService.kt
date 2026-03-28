@@ -73,6 +73,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import java.util.*
 import kotlin.time.Clock
 import kotlin.time.Instant
+import com.moneat.utils.suspendRunCatching
 import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
 
 private val logger = KotlinLogging.logger {}
@@ -202,7 +203,7 @@ class StripeService(
         }
         val params = paramsBuilder.build()
 
-        return try {
+        return suspendRunCatching {
             val session =
                 com.stripe.model.checkout.Session
                     .create(params)
@@ -218,7 +219,7 @@ class StripeService(
                 sessionId = session.id,
                 url = session.url ?: ""
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to create Stripe checkout session" }
             Sentry.captureException(e) { scope ->
                 scope.setTag("stripe.operation", "create_checkout_session")
@@ -491,19 +492,7 @@ class StripeService(
             }
         }
 
-        // Fetch upcoming invoice to estimate proration cost if any
-        // NOTE: Commented out due to compilation issues with Invoice.upcoming in current SDK setup
         val upcomingInvoice: com.stripe.model.Invoice? = null
-        /* try {
-            com.stripe.model.Invoice.upcoming(
-                com.stripe.param.InvoiceUpcomingParams.builder()
-                    .setCustomer(subRow.stripeCustomerId)
-                    .setSubscription(stripeSubId)
-                    .build()
-            )
-        } catch (e: Exception) {
-            null
-        } */
 
         // We trigger a sync to update DB state immediately
         val updatedSub = Subscription.retrieve(stripeSubId)
@@ -725,7 +714,7 @@ class StripeService(
             )
         )
 
-        try {
+        suspendRunCatching {
             // Update customer's default payment method
             Customer.retrieve(customerId).update(
                 CustomerUpdateParams
@@ -739,7 +728,7 @@ class StripeService(
             )
 
             logger.info { "Updated default payment method for customer $customerId" }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to update default payment method for customer $customerId" }
             Sentry.captureException(e) { scope ->
                 scope.setTag("stripe.operation", "update_default_payment_method")
@@ -858,7 +847,7 @@ class StripeService(
                 PendingMeterBatch(subscriptionId, customerId, batchId, batchUnits)
             } ?: continue
 
-            try {
+            suspendRunCatching {
                 val params = MeterEventCreateParams
                     .builder()
                     .setEventName(meterEventName)
@@ -886,7 +875,7 @@ class StripeService(
                     }
                 }
                 flushed++
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) {
                     "Failed to report metered usage for subscription ${batch.subscriptionId} (batchUnits=${batch.batchUnits})"
                 }
@@ -971,7 +960,7 @@ class StripeService(
                 PendingMeterBatch(subscriptionId, customerId, batchId, batchUnits)
             } ?: continue
 
-            try {
+            suspendRunCatching {
                 val params = MeterEventCreateParams
                     .builder()
                     .setEventName(meterEventName)
@@ -999,7 +988,7 @@ class StripeService(
                     }
                 }
                 flushed++
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) {
                     "Failed to report $meterEventName metered usage for subscription ${batch.subscriptionId} " +
                         "(batchUnits=${batch.batchUnits})"

@@ -69,6 +69,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -431,7 +432,7 @@ fun Route.customDashboardRoutes(
                         orgId
                     )
 
-                    try {
+                    suspendRunCatching {
                         if (queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
                             val sourceId = queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource)
                                 ?: continue
@@ -452,7 +453,7 @@ fun Route.customDashboardRoutes(
                                 retentionDays
                             )
                         }
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.warn(e) { "Batch query $refId failed" }
                         results[refId] = emptyList()
                     }
@@ -523,9 +524,9 @@ fun Route.customDashboardRoutes(
                     ?: return@post call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
 
                 val request = call.receive<ImportDashboardRequest>()
-                val jsonObj = try {
+                val jsonObj = suspendRunCatching {
                     json.parseToJsonElement(request.json) as JsonObject
-                } catch (e: Exception) {
+                }.getOrElse { _ ->
                     return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid JSON"))
                 }
 
@@ -538,7 +539,7 @@ fun Route.customDashboardRoutes(
                     )
                 }
 
-                try {
+                suspendRunCatching {
                     val importResult = translator.import(jsonObj)
                     val createRequest = CreateDashboardRequest(
                         title = importResult.dashboard.title,
@@ -564,7 +565,7 @@ fun Route.customDashboardRoutes(
                         HttpStatusCode.Created,
                         DashboardImportResult(created, importResult.warnings, importResult.variables)
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to import dashboard" }
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to import: ${e.message}"))
                 }
@@ -735,10 +736,10 @@ fun Route.customDashboardRoutes(
                 // Test connection (without saving) — must be before /{id} routes
                 post("/test") {
                     val request = call.receive<TestConnectionRequest>()
-                    try {
+                    suspendRunCatching {
                         val result = dataSourceExecutor.testConnection(request)
                         call.respond(result)
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         call.respond(TestConnectionResult(false, "Test failed: ${e.message}"))
                     }
                 }

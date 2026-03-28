@@ -27,6 +27,7 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.sentry.ISpan
 import io.sentry.Sentry
+import com.moneat.utils.suspendRunCatching
 
 object ClickHouseClient {
     private const val MIGRATION_TIMEOUT_MS = 600_000L
@@ -141,10 +142,10 @@ object ClickHouseClient {
     }
 
     suspend fun ping(): Boolean {
-        return try {
+        return suspendRunCatching {
             val response = httpClient!!.get("$baseUrl/ping")
             response.status == HttpStatusCode.OK
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             false
         }
     }
@@ -170,14 +171,14 @@ fun HttpResponse.isClickHouseError(body: String): Boolean = !status.isSuccess() 
 fun Application.configureClickHouse() {
     // Skip ClickHouse in test environment if not configured
     val url =
-        try {
+        suspendRunCatching {
             environment.config.property("database.clickhouse.url").getString()
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             log.warn("ClickHouse URL not configured, skipping ClickHouse initialization (test environment)")
             return
         }
 
-    try {
+    suspendRunCatching {
         val config = environment.config
         val database = config.property("database.clickhouse.database").getString()
         val user = config.property("database.clickhouse.user").getString()
@@ -187,7 +188,7 @@ fun Application.configureClickHouse() {
         log.info("ClickHouse client initialized")
         // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering
         // (workers must stop before ClickHouse client is closed)
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         log.error("Failed to initialize ClickHouse client. Make sure ClickHouse is running and accessible.", e)
         throw e
     }

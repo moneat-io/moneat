@@ -16,6 +16,7 @@
 
 package com.moneat.dashboards.services.handlers
 
+import com.moneat.utils.suspendRunCatching
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
@@ -48,7 +49,7 @@ abstract class JdbcHandler(
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val port = request.port ?: defaultPort()
         val database = request.databaseName ?: defaultDatabase()
-        return try {
+        return suspendRunCatching {
             val ds = createTempDataSource(request.host, port, database, request.username, request.password)
             try {
                 ds.connection.use { conn ->
@@ -63,7 +64,7 @@ abstract class JdbcHandler(
             } finally {
                 ds.close()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "JDBC connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }

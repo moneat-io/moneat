@@ -63,6 +63,7 @@ import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -295,14 +296,14 @@ class EventService(
             sdkVersion = transaction.sdk?.version ?: ""
         )
 
-        try {
+        suspendRunCatching {
             if (!eventRepository.insertTransaction(transactionData)) {
                 return false
             }
 
             val spans = transaction.spans.orEmpty()
 
-            try {
+            suspendRunCatching {
                 insertSentrySpansToApm(
                     projectId = projectId,
                     eventId = eventId,
@@ -312,7 +313,7 @@ class EventService(
                     transaction = transaction,
                     childSpans = spans
                 )
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn(e) { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
             }
 
@@ -325,14 +326,14 @@ class EventService(
             }
 
             transaction.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
-                try {
+                suspendRunCatching {
                     releaseService.upsertReleaseFromEvent(projectId, releaseVersion, endTimestampMs)
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                 }
             }
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error storing transaction in ClickHouse" }
             return false
         }
@@ -416,32 +417,32 @@ class EventService(
             sdkVersion = event.sdk?.version ?: ""
         )
 
-        try {
+        suspendRunCatching {
             val success = eventRepository.insertErrorEvent(eventData)
             if (!success) return false
             logger.trace { "Event stored: $eventId for project $projectId" }
             CacheService.invalidatePattern("cache:issues:$projectId:*")
             event.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
-                try {
+                suspendRunCatching {
                     releaseService.upsertReleaseFromEvent(projectId, releaseVersion, timestamp)
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                 }
             }
 
             // Check if this is a new issue and trigger notifications
             scope.launch {
-                try {
+                suspendRunCatching {
                     if (isNewIssue(projectId, issueId)) {
                         logger.info { "New issue detected: $issueId for project $projectId" }
                         notificationService?.onNewIssue(projectId, issueId, event)
                     }
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Error checking for new issue notifications" }
                 }
             }
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error storing event in ClickHouse" }
             return false
         }
@@ -460,11 +461,11 @@ class EventService(
         val feedbackId = feedback.event_id ?: UUID.randomUUID().toString()
         val timestamp =
             feedback.timestamp?.let {
-                try {
+                suspendRunCatching {
                     java.time.Instant
                         .parse(it)
                         .toEpochMilli()
-                } catch (e: Exception) {
+                }.getOrElse { _ ->
                     logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
                     System.currentTimeMillis()
                 }
@@ -505,12 +506,12 @@ class EventService(
             tags = feedback.tags
         )
 
-        try {
+        suspendRunCatching {
             val success = eventRepository.insertFeedback(feedbackData)
             if (!success) return false
             logger.info { "Feedback stored: $feedbackId for project $projectId" }
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error storing feedback in ClickHouse" }
             return false
         }
@@ -582,12 +583,12 @@ class EventService(
             tags = tags
         )
 
-        try {
+        suspendRunCatching {
             val success = eventRepository.insertReplayEvent(replayData)
             if (!success) return false
             logger.trace { "Replay event stored: $replayId segment $segmentId for project $projectId" }
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error storing replay event in ClickHouse" }
             return false
         }
@@ -599,7 +600,7 @@ class EventService(
         segmentId: Int,
         payload: String
     ) {
-        try {
+        suspendRunCatching {
             eventRepository.insertReplayRecording(
                 ReplayRecordingInsertData(
                     replayId = normalizeUuid(replayId),
@@ -610,7 +611,7 @@ class EventService(
                 )
             )
             logger.trace { "Replay recording stored: $replayId segment $segmentId for project $projectId" }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error storing replay recording in ClickHouse" }
         }
     }
@@ -635,7 +636,7 @@ class EventService(
         val sdkVersion = ""
         val platform = "android"
 
-        try {
+        suspendRunCatching {
             eventRepository.insertReplayEvent(
                 ReplayEventInsertData(
                     replayId = normalizedReplayId,
@@ -666,7 +667,7 @@ class EventService(
                 )
             )
             logger.trace { "Synthetic replay event stored: $replayId for project $projectId" }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
         }
     }
@@ -832,7 +833,7 @@ class EventService(
         transaction: SentryTransaction,
         aiSpans: List<SentrySpan>
     ) {
-        try {
+        suspendRunCatching {
             val generations = aiSpans.mapNotNull { span ->
                 val spanStart = span.start_timestamp ?: return@mapNotNull null
                 val spanEnd = span.timestamp ?: return@mapNotNull null
@@ -891,7 +892,7 @@ class EventService(
             } else {
                 logger.info { "Cross-inserted ${generations.size} ai.* spans as LLM generations for project $projectId" }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to cross-insert ai.* spans as LLM generations" }
         }
     }
@@ -1075,10 +1076,10 @@ class EventService(
         val metrics = mutableMapOf<String, Double>()
         transaction.measurements?.let { measurements ->
             for ((key, value) in measurements) {
-                try {
+                suspendRunCatching {
                     val numericValue = value.jsonObject["value"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
                     if (numericValue != null) metrics["measurement.$key"] = numericValue
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.debug(e) { "Skipping malformed measurement '$key'" }
                 }
             }
@@ -1099,10 +1100,10 @@ class EventService(
         span.tags?.let { mergeNonReservedTags(meta, it) }
         span.data?.let { data ->
             for ((key, value) in data) {
-                try {
+                suspendRunCatching {
                     val str = value.jsonPrimitive.contentOrNull
                     if (str != null) meta["data.$key"] = str
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.debug(e) { "Skipping malformed span data key '$key'" }
                 }
             }
@@ -1114,10 +1115,10 @@ class EventService(
         val metrics = mutableMapOf<String, Double>()
         span.data?.let { data ->
             for ((key, value) in data) {
-                try {
+                suspendRunCatching {
                     val num = value.jsonPrimitive.contentOrNull?.toDoubleOrNull()
                     if (num != null) metrics["data.$key"] = num
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.debug(e) { "Skipping non-numeric span data key '$key'" }
                 }
             }
@@ -1161,7 +1162,7 @@ class EventService(
             logger.error { "Missing organization for projectId $projectId, skipping profile insert" }
             return false
         }
-        try {
+        suspendRunCatching {
             val payloadBytes = payload.toByteArray(StandardCharsets.UTF_8)
             val payloadSize = payloadBytes.size
             if (payloadSize > maxProfilePayloadBytes) {
@@ -1228,7 +1229,7 @@ class EventService(
                 return false
             }
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to store Sentry profile" }
             return false
         }
@@ -1241,9 +1242,9 @@ class EventService(
         val cacheKey = "$projectId:$issueId"
         if (!knownIssueIds.add(cacheKey)) return false
 
-        val count = try {
+        val count = suspendRunCatching {
             eventRepository.getEventCountForIssue(projectId, issueId)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             knownIssueIds.remove(cacheKey)
             throw e
         }

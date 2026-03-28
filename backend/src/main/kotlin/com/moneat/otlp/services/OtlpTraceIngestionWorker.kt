@@ -16,7 +16,7 @@
 
 package com.moneat.otlp.services
 
-import kotlinx.coroutines.CancellationException
+import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -35,29 +35,16 @@ class OtlpTraceIngestionWorker(
 ) {
     override suspend fun processMessage(workerId: Int, payload: String) {
         val batch =
-            try {
+            suspendRunCatching {
                 traceService.decodeBatch(payload)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                logger.error(e) {
-                    "OTLP trace worker $workerId failed to decode batch, sending to DLQ"
-                }
-                pushToDlq(workerId, payload)
+            }.getOrElse { e ->
+                logTraceDecodeFailure(workerId, payload, e)
                 return
             }
-        try {
-            traceService.insertBatch(batch)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            logger.error(e) {
-                "OTLP trace worker $workerId failed to insert batch, sending to DLQ"
-            }
-            pushToDlq(workerId, payload)
-            return
-        }
-        try {
+        val insertResult = suspendRunCatching { traceService.insertBatch(batch) }
+        insertResult.onFailure { e -> logTraceInsertFailure(workerId, payload, e) }
+        if (insertResult.isFailure) return
+        suspendRunCatching {
             // Tracked: https://github.com/moneat-io/moneat/issues/275 — org→project resolution + project-scoped error tracking for extracted span exceptions.
             val exceptions = OtlpErrorExtractor.extractExceptions(batch.spans)
             if (exceptions.isNotEmpty()) {
@@ -66,9 +53,7 @@ class OtlpTraceIngestionWorker(
                         "from ${batch.spans.size} spans (org ${batch.organizationId})"
                 }
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.onFailure { e ->
             logger.error(e) {
                 "OTLP trace worker $workerId failed after insert (exception extraction)"
             }
@@ -77,5 +62,27 @@ class OtlpTraceIngestionWorker(
             "OTLP trace worker $workerId inserted ${batch.spans.size} spans " +
                 "for org ${batch.organizationId}"
         }
+    }
+
+    private fun logTraceDecodeFailure(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+    ) {
+        logger.error(e) {
+            "OTLP trace worker $workerId failed to decode batch, sending to DLQ"
+        }
+        pushToDlq(workerId, payload)
+    }
+
+    private fun logTraceInsertFailure(
+        workerId: Int,
+        payload: String,
+        e: Throwable,
+    ) {
+        logger.error(e) {
+            "OTLP trace worker $workerId failed to insert batch, sending to DLQ"
+        }
+        pushToDlq(workerId, payload)
     }
 }

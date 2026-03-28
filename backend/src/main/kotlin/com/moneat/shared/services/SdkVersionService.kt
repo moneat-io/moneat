@@ -36,6 +36,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val sdkVersionLogger = KotlinLogging.logger {}
 private val sdkVersionJson = Json { ignoreUnknownKeys = true }
@@ -182,11 +183,11 @@ object SdkVersionService {
 
     private suspend fun fetchFromLatestRelease(repository: String): String? {
         val response =
-            try {
+            suspendRunCatching {
                 httpClient.get("$GITHUB_API_BASE/repos/$repository/releases/latest") {
                     applyGitHubHeaders()
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 sdkVersionLogger.warn(e) { "Failed to fetch latest release for $repository" }
                 return null
             }
@@ -202,9 +203,9 @@ object SdkVersionService {
 
         val payload = response.bodyAsText()
         val release =
-            try {
+            suspendRunCatching {
                 sdkVersionJson.decodeFromString(GitHubLatestReleaseResponse.serializer(), payload)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 sdkVersionLogger.warn(e) { "Failed to decode latest release payload for $repository" }
                 return null
             }
@@ -218,12 +219,12 @@ object SdkVersionService {
 
     private suspend fun fetchFromTags(repository: String): String? {
         val response =
-            try {
+            suspendRunCatching {
                 httpClient.get("$GITHUB_API_BASE/repos/$repository/tags") {
                     applyGitHubHeaders()
                     parameter("per_page", 20)
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 sdkVersionLogger.warn(e) { "Failed to fetch tags for $repository" }
                 return null
             }
@@ -235,9 +236,9 @@ object SdkVersionService {
 
         val payload = response.bodyAsText()
         val tags =
-            try {
+            suspendRunCatching {
                 sdkVersionJson.decodeFromString(ListSerializer(GitHubTagResponse.serializer()), payload)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 sdkVersionLogger.warn(e) { "Failed to decode tags payload for $repository" }
                 return null
             }

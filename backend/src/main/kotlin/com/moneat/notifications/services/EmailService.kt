@@ -16,6 +16,9 @@
 
 package com.moneat.notifications.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.shared.models.EmailsSent
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
@@ -38,6 +41,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.*
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -247,13 +251,40 @@ class EmailService {
                     "type" to emailType
                 )
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
             logger.error("Failed to send email to $to", e)
             Sentry.captureException(e) { scope ->
-                scope.setTag("email.operation", "send")
-                scope.setExtra("email.to", to)
-                scope.setExtra("email.subject", subject)
-                scope.setExtra("email.type", emailType)
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
+            }
+            throw e
+        } catch (e: IOException) {
+            logger.error("Failed to send email to $to", e)
+            Sentry.captureException(e) { scope ->
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
+            }
+            throw e
+        } catch (e: IllegalStateException) {
+            logger.error("Failed to send email to $to", e)
+            Sentry.captureException(e) { scope ->
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
+            }
+            throw e
+        } catch (e: IllegalArgumentException) {
+            logger.error("Failed to send email to $to", e)
+            Sentry.captureException(e) { scope ->
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
             }
             throw e
         } finally {
@@ -266,7 +297,7 @@ class EmailService {
         emailType: String,
         success: Boolean
     ) {
-        try {
+        suspendRunCatching {
             val normalizedEmail = recipient.lowercase().trim()
             transaction {
                 // Try to find organization for the recipient
@@ -291,7 +322,7 @@ class EmailService {
                     it[EmailsSent.success] = success
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to track email sent to $recipient" }
         }
     }
@@ -917,5 +948,12 @@ class EmailService {
             """.trimIndent()
 
         sendEmail(email, subject, htmlBody, textBody, "organization_deletion")
+    }
+
+    companion object {
+        private const val EMAIL_OPERATION_TAG = "email.operation"
+        private const val EMAIL_TO_TAG = "email.to"
+        private const val EMAIL_SUBJECT_TAG = "email.subject"
+        private const val EMAIL_TYPE_TAG = "email.type"
     }
 }

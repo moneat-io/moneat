@@ -44,6 +44,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -217,7 +218,7 @@ class BillingBackgroundService(
             }
 
         for (email in recipients) {
-            try {
+            suspendRunCatching {
                 emailService.sendEmail(
                     to = email,
                     subject = subject,
@@ -225,7 +226,7 @@ class BillingBackgroundService(
                     textBody = body,
                     emailType = "quota_notification"
                 )
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send quota notification to $email" }
             }
         }

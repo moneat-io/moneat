@@ -23,6 +23,7 @@ import io.ktor.server.application.*
 import io.ktor.server.routing.*
 import mu.KotlinLogging
 import java.util.ServiceLoader
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -113,10 +114,10 @@ object FeatureRegistry {
     fun registerRoutes(route: Route) {
         for (module in modules) {
             logger.info { "Registering routes for enterprise module: ${module.name}" }
-            try {
+            suspendRunCatching {
                 module.registerRoutes(route)
                 logger.info { "Routes registered for enterprise module: ${module.name}" }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to register routes for enterprise module: ${module.name}" }
                 throw e
             }

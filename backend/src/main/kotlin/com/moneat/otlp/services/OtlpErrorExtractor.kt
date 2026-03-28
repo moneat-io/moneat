@@ -17,6 +17,7 @@
 package com.moneat.otlp.services
 
 import com.moneat.otlp.OtlpParsingUtils
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -126,7 +127,7 @@ object OtlpErrorExtractor {
         if (eventsJson == "[]" || eventsJson.isBlank()) return emptyList()
         return try {
             json.parseToJsonElement(eventsJson).jsonArray.map { it.jsonObject }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
             logger.debug(e) { "Failed to parse span events JSON" }
             emptyList()
         }

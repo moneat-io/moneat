@@ -29,6 +29,7 @@ import io.opentelemetry.proto.collector.metrics.v1.ExportMetricsServiceRequest
 import io.opentelemetry.proto.metrics.v1.Metric
 import io.opentelemetry.proto.metrics.v1.NumberDataPoint
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -295,7 +296,10 @@ class OtlpMetricsService(
         val parsed =
             try {
                 json.parseToJsonElement(payload).jsonObject
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                logger.warn(e) { "Invalid OTLP metrics JSON payload" }
+                return null
+            } catch (e: IllegalArgumentException) {
                 logger.warn(e) { "Invalid OTLP metrics JSON payload" }
                 return null
             }

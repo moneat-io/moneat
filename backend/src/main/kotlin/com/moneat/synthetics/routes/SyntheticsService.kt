@@ -46,6 +46,7 @@ import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import com.moneat.utils.suspendRunCatching
 class SyntheticsService(
     private val emailService: EmailService = EmailService(),
     private val slackService: SlackService = SlackService(),
@@ -280,23 +281,23 @@ class SyntheticsService(
         val resolvedTest = resolveGlobalVariables(test)
         val result = executeWithRetries(resolvedTest, executor)
 
-        try {
+        suspendRunCatching {
             recordResult(test, result)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) {
                 "Failed to record synthetic result for ${test.id}"
             }
         }
 
         val oldStatus = test.lastStatus
-        try {
+        suspendRunCatching {
             updateTestStatus(
                 test.id,
                 result.status,
                 result.status,
                 oldStatus
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) {
                 "Failed to update synthetic test status for ${test.id}"
             }
@@ -307,9 +308,9 @@ class SyntheticsService(
             result.status == "failed" &&
             oldStatus != "failed"
         ) {
-            try {
+            suspendRunCatching {
                 sendFailureAlert(test, result)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) {
                     "Failed to send alert for synthetic test ${test.id}"
                 }
@@ -325,11 +326,11 @@ class SyntheticsService(
         var lastResult: SyntheticCheckResult? = null
 
         for (attempt in 1..maxAttempts) {
-            lastResult = try {
+            lastResult = suspendRunCatching {
                 withTimeout(test.timeoutSeconds * 1000L + 5000) {
                     executor.executeTest(test)
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) {
                     "Synthetic test execution failed for ${test.id} " +
                         "(attempt $attempt): ${e.message}"
@@ -454,9 +455,9 @@ class SyntheticsService(
     private fun resolveGlobalVariables(
         test: SyntheticTestData
     ): SyntheticTestData {
-        val vars = try {
+        val vars = suspendRunCatching {
             getVariablesMap(test.organizationId)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) {
                 "Failed to load global variables for org ${test.organizationId}"
             }
@@ -531,14 +532,14 @@ class SyntheticsService(
     }
 
     private fun rowToData(row: ResultRow): SyntheticTestData {
-        val tagsList: List<String> = try {
-            Json.decodeFromString(row[SyntheticTests.tags])
-        } catch (_: Exception) {
+        val tagsList: List<String> = suspendRunCatching {
+            Json.decodeFromString<List<String>>(row[SyntheticTests.tags])
+        }.getOrElse { _ ->
             emptyList()
         }
-        val alertChannelsList: List<String> = try {
-            Json.decodeFromString(row[SyntheticTests.alertChannels])
-        } catch (_: Exception) {
+        val alertChannelsList: List<String> = suspendRunCatching {
+            Json.decodeFromString<List<String>>(row[SyntheticTests.alertChannels])
+        }.getOrElse { _ ->
             emptyList()
         }
         return SyntheticTestData(
@@ -574,40 +575,40 @@ class SyntheticsService(
     }
 
     private fun rowToResponse(row: ResultRow): SyntheticTestResponse {
-        val assertionsList: List<SyntheticAssertion> = try {
-            Json.decodeFromString(row[SyntheticTests.assertions])
-        } catch (_: Exception) {
+        val assertionsList: List<SyntheticAssertion> = suspendRunCatching {
+            Json.decodeFromString<List<SyntheticAssertion>>(row[SyntheticTests.assertions])
+        }.getOrElse { _ ->
             emptyList()
         }
-        val stepsList: List<SyntheticStep> = try {
+        val stepsList: List<SyntheticStep> = suspendRunCatching {
             row[SyntheticTests.steps]?.let {
-                Json.decodeFromString(it)
+                Json.decodeFromString<List<SyntheticStep>>(it)
             } ?: emptyList()
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             emptyList()
         }
-        val headersMap: Map<String, String>? = try {
+        val headersMap: Map<String, String>? = suspendRunCatching {
             row[SyntheticTests.headers]?.let {
-                Json.decodeFromString(it)
+                Json.decodeFromString<Map<String, String>>(it)
             }
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             null
         }
-        val tagsList: List<String> = try {
-            Json.decodeFromString(row[SyntheticTests.tags])
-        } catch (_: Exception) {
+        val tagsList: List<String> = suspendRunCatching {
+            Json.decodeFromString<List<String>>(row[SyntheticTests.tags])
+        }.getOrElse { _ ->
             emptyList()
         }
-        val alertChannelsList: List<String> = try {
-            Json.decodeFromString(row[SyntheticTests.alertChannels])
-        } catch (_: Exception) {
+        val alertChannelsList: List<String> = suspendRunCatching {
+            Json.decodeFromString<List<String>>(row[SyntheticTests.alertChannels])
+        }.getOrElse { _ ->
             emptyList()
         }
-        val testConfig: SyntheticTestConfig? = try {
+        val testConfig: SyntheticTestConfig? = suspendRunCatching {
             row[SyntheticTests.config]?.let {
-                Json.decodeFromString(it)
+                Json.decodeFromString<SyntheticTestConfig>(it)
             }
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             null
         }
 
