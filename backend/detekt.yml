@@ -67,7 +67,18 @@ naming:
   ConstructorParameterNaming:
     active: false
   FunctionNaming:
-    active: false
+    active: true
+    # Detekt default test excludes plus **/integrationTest/** (Gradle layout; not in upstream defaults).
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
+      - '**/integrationTest/**'
   VariableNaming:
     active: true
 
