@@ -63,7 +63,7 @@ exceptions:
 
 naming:
   MatchingDeclarationName:
-    active: false
+    active: true
   ConstructorParameterNaming:
     active: false
   FunctionNaming:
