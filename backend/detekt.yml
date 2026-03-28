@@ -69,7 +69,7 @@ naming:
   FunctionNaming:
     active: false
   VariableNaming:
-    active: false
+    active: true
 
 coroutines:
   active: true

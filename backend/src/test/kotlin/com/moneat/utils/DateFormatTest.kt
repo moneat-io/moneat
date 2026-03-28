@@ -40,7 +40,7 @@ class DateFormatTest {
      * Pattern: YYYY-MM-DDTHH:MM:SS.sssZ
      * Example: 2026-02-12T20:58:30.000Z
      */
-    private val ISO8601_PATTERN = DateTimeFormatter.ISO_INSTANT
+    private val iso8601Pattern = DateTimeFormatter.ISO_INSTANT
 
     @Test
     fun `valid ISO 8601 dates should parse correctly`() {
@@ -54,7 +54,7 @@ class DateFormatTest {
 
         validDates.forEach { dateStr ->
             try {
-                ISO8601_PATTERN.parse(dateStr)
+                iso8601Pattern.parse(dateStr)
                 // Success - date parsed correctly
             } catch (e: DateTimeParseException) {
                 fail("Date '$dateStr' should parse as ISO 8601 but failed: ${e.message}")
@@ -75,7 +75,7 @@ class DateFormatTest {
             assertFailsWith<DateTimeParseException>(
                 message = "ClickHouse format '$dateStr' should NOT parse as ISO 8601"
             ) {
-                ISO8601_PATTERN.parse(dateStr)
+                iso8601Pattern.parse(dateStr)
             }
         }
     }
@@ -101,8 +101,8 @@ class DateFormatTest {
 
         // Should parse without exceptions
         try {
-            ISO8601_PATTERN.parse(firstSeen)
-            ISO8601_PATTERN.parse(lastSeen)
+            iso8601Pattern.parse(firstSeen)
+            iso8601Pattern.parse(lastSeen)
             // Success - both dates parsed correctly
         } catch (e: DateTimeParseException) {
             fail("Date fields should be ISO 8601 compliant but failed: ${e.message}")
@@ -163,7 +163,7 @@ class DateFormatTest {
     private fun isValidIso8601(dateStr: String): Boolean {
         return try {
             if (dateStr.isBlank()) return false
-            ISO8601_PATTERN.parse(dateStr)
+            iso8601Pattern.parse(dateStr)
             // Additional check: must contain T separator and end with Z
             dateStr.contains("T") && dateStr.endsWith("Z")
         } catch (e: DateTimeParseException) {
