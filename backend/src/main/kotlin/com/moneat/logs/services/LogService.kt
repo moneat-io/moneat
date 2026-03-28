@@ -355,8 +355,8 @@ class LogService(private val logRepository: LogRepository) {
         decodeCursor(request.cursor)?.let { (cursorTs, cursorLogId) ->
             conditions +=
                 "(timestamp < fromUnixTimestamp64Milli($cursorTs) OR " +
-                    "(timestamp = fromUnixTimestamp64Milli($cursorTs) AND " +
-                    "toString(log_id) < '${escapeSql(cursorLogId)}'))"
+                "(timestamp = fromUnixTimestamp64Milli($cursorTs) AND " +
+                "toString(log_id) < '${escapeSql(cursorLogId)}'))"
         }
 
         val whereClause = conditions.joinToString(" AND ")
@@ -1160,10 +1160,10 @@ class LogService(private val logRepository: LogRepository) {
                             environment = obj["environment"]?.jsonPrimitive?.content ?: "",
                             host = obj["host"]?.jsonPrimitive?.content ?: "",
                             source =
-                                normalizeSource(
-                                    obj["source_text"]?.jsonPrimitive?.content
-                                        ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"
-                                ),
+                            normalizeSource(
+                                obj["source_text"]?.jsonPrimitive?.content
+                                    ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"
+                            ),
                             containerName = obj["container_name"]?.jsonPrimitive?.content ?: "",
                             containerId = obj["container_id"]?.jsonPrimitive?.content ?: "",
                             containerImage = obj["container_image"]?.jsonPrimitive?.content ?: "",

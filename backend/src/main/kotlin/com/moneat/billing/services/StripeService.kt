@@ -522,7 +522,7 @@ class StripeService(
             logger.error {
                 "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}. " +
                     "metadata_org_id='$metadataOrgId', customer=${subscription.customer}, " +
-                        "full_metadata=${subscription.metadata}"
+                    "full_metadata=${subscription.metadata}"
             }
             return
         }
@@ -612,7 +612,7 @@ class StripeService(
             logger.info { "Updating existing subscription row ${existing.id} for org $organizationId" }
             subscriptionRepository.updateFromStripe(existing.id, stripeData)
         } else {
-            logger.info { 
+            logger.info {
                 "Creating new subscription row for org $organizationId, plan=$planName, status=${subscription.status}"
             }
             subscriptionRepository.insertFromStripe(organizationId, subscription.id, stripeData)

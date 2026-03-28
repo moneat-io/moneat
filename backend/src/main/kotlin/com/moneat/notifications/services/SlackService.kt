@@ -768,8 +768,8 @@ class SlackService {
                     SlackText(
                         type = "mrkdwn",
                         text =
-                            "Your Slack integration is working correctly! " +
-                                "You'll receive notifications here when alerts are triggered."
+                        "Your Slack integration is working correctly! " +
+                            "You'll receive notifications here when alerts are triggered."
                     )
                 )
             )

@@ -422,7 +422,7 @@ object DemoDataReseeder {
                 P1, "demo-android-1", "android", "fatal",
                 "Attempt to invoke virtual method on a null object reference",
                 "java.lang.NullPointerException",
-                "Attempt to invoke virtual method 'void" +
+                "Attempt to invoke virtual method 'void " +
                     "android.widget.ImageView.setImageBitmap(android.graphics.Bitmap)' on a null object reference",
                 "at com.acme.shopping.ui.ProductDetailFragment.updateUI(ProductDetailFragment.kt:87)\\n" +
                     "at com.acme.shopping.ui.ProductDetailFragment.onViewCreated(ProductDetailFragment.kt:52)",
@@ -522,7 +522,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P1, "demo-android-11", "android", "error",
-                "org.json.JSONException: Value null at response of type org.json.JSONObject\$1 cannot be converted" +
+                "org.json.JSONException: Value null at response of type org.json.JSONObject\$1 cannot be converted " +
                     "to JSONObject",
                 "org.json.JSONException",
                 "Null response body from product API could not be parsed",
@@ -553,7 +553,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P1, "demo-android-14", "android", "error",
-                "android.content.ActivityNotFoundException: No Activity found to handle Intent {" +
+                "android.content.ActivityNotFoundException: No Activity found to handle Intent { " +
                     "act=com.acme.payment.CHECKOUT }",
                 "android.content.ActivityNotFoundException",
                 "Payment activity not found - payment module may not be installed",
@@ -564,7 +564,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P1, "demo-android-15", "android", "error",
-                "java.lang.ClassCastException: com.acme.shopping.model.SaleItem cannot be cast to" +
+                "java.lang.ClassCastException: com.acme.shopping.model.SaleItem cannot be cast to " +
                     "com.acme.shopping.model.ProductItem",
                 "java.lang.ClassCastException",
                 "Type mismatch in search results adapter — sale items mixed with regular products",
@@ -585,7 +585,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P1, "demo-android-17", "android", "error",
-                "java.io.FileNotFoundException: /data/user/0/com.acme.shopping/cache/profile_img_1234.jpg (No such" +
+                "java.io.FileNotFoundException: /data/user/0/com.acme.shopping/cache/profile_img_1234.jpg (No such " +
                     "file or directory)",
                 "java.io.FileNotFoundException",
                 "Cached profile image file deleted by system while still referenced",
@@ -628,7 +628,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P1, "demo-android-21", "android", "error",
-                "com.google.firebase.firestore.FirebaseFirestoreException: PERMISSION_DENIED: Missing or" +
+                "com.google.firebase.firestore.FirebaseFirestoreException: PERMISSION_DENIED: Missing or " +
                     "insufficient permissions",
                 "com.google.firebase.firestore.FirebaseFirestoreException",
                 "Firestore security rules blocking wishlist read for unauthenticated user",
@@ -680,7 +680,7 @@ object DemoDataReseeder {
             // iOS issues (project -2)
             issueInsert(
                 P2, "demo-ios-1", "ios", "error",
-                "NSInvalidArgumentException: -[UIViewController presentViewController:animated:completion:] called" +
+                "NSInvalidArgumentException: -[UIViewController presentViewController:animated:completion:] called " +
                     "on nil",
                 "NSInvalidArgumentException",
                 "Attempt to present view controller from a deallocated UIViewController",
@@ -693,7 +693,7 @@ object DemoDataReseeder {
                 P2, "demo-ios-2", "ios", "fatal",
                 "EXC_BAD_ACCESS (SIGSEGV) in ProductImageCache",
                 "EXC_BAD_ACCESS",
-                "SIGSEGV KERN_INVALID_ADDRESS at 0x0000000000000018 — dangling pointer to deallocated image cache" +
+                "SIGSEGV KERN_INVALID_ADDRESS at 0x0000000000000018 — dangling pointer to deallocated image cache " +
                     "entry",
                 "at AcmeProductImageCache.imageForURL(_:) + 156 (ProductImageCache.swift:89)\\n" +
                     "at AcmeProductCell.configure(with:) + 304 (ProductCell.swift:67)",
@@ -783,7 +783,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P2, "demo-ios-11", "ios", "error",
-                "NSCocoaErrorDomain 257: The file photo_library could not be opened because you don't have" +
+                "NSCocoaErrorDomain 257: The file photo_library could not be opened because you don't have " +
                     "permission to view it",
                 "NSFileReadNoPermissionError",
                 "Photo library access requested without NSPhotoLibraryUsageDescription in Info.plist",
@@ -794,7 +794,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P2, "demo-ios-12", "ios", "error",
-                "NSCocoaErrorDomain 4864: The model used to open the store is incompatible with the one used to" +
+                "NSCocoaErrorDomain 4864: The model used to open the store is incompatible with the one used to " +
                     "create the store",
                 "NSCocoaErrorDomain",
                 "CoreData model version mismatch after app update — migration required from V3 to V4",
@@ -805,7 +805,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P2, "demo-ios-13", "ios", "error",
-                "NSJSONSerialization error 3840: JSON text did not start with array or object and option to allow" +
+                "NSJSONSerialization error 3840: JSON text did not start with array or object and option to allow " +
                     "fragments not set",
                 "NSJSONSerialization",
                 "Empty HTTP 200 response body from product search API cannot be parsed as JSON",
@@ -826,7 +826,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P2, "demo-ios-15", "ios", "error",
-                "WKNavigationDelegate webView(_:didFailProvisionalNavigation:withError:): A server with the" +
+                "WKNavigationDelegate webView(_:didFailProvisionalNavigation:withError:): A server with the " +
                     "specified hostname could not be found",
                 "WKNavigationError",
                 "WebView failed to load order tracking page — DNS lookup failure for tracking subdomain",
@@ -838,7 +838,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P2, "demo-ios-16", "ios", "error",
-                "NSUnknownKeyException: setValue:forUndefinedKey: 'discountedPrice' this class is not key value" +
+                "NSUnknownKeyException: setValue:forUndefinedKey: 'discountedPrice' this class is not key value " +
                     "coding-compliant",
                 "NSUnknownKeyException",
                 "KVC access to discountedPrice property not found in ProductModel after model refactor",
@@ -869,7 +869,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P2, "demo-ios-19", "ios", "error",
-                "NSInvalidUnarchiveOperationException: Cannot decode object of class AcmeUserPreferences because no" +
+                "NSInvalidUnarchiveOperationException: Cannot decode object of class AcmeUserPreferences because no " +
                     "such class exists",
                 "NSKeyedUnarchiver",
                 "Class AcmeUserPreferences renamed to UserPreferences — archived data cannot be decoded",
@@ -890,7 +890,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P2, "demo-ios-21", "ios", "error",
-                "UIApplicationInvalidInterfaceOrientation: Supported orientations has no common orientation with" +
+                "UIApplicationInvalidInterfaceOrientation: Supported orientations has no common orientation with " +
                     "the application",
                 "UIApplicationInvalidInterfaceOrientation",
                 "Video player forced landscape-only but parent app requires portrait — orientation conflict",
@@ -921,7 +921,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P2, "demo-ios-24", "ios", "error",
-                "RLMException: Migration is required for object type 'Product' due to the following errors:" +
+                "RLMException: Migration is required for object type 'Product' due to the following errors: " +
                     "Property 'sku' has been added to latest object model",
                 "RLMException",
                 "Realm schema migration required from version 3 to 4 after adding Product.sku property",
@@ -1016,7 +1016,7 @@ object DemoDataReseeder {
 
             issueInsert(
                 P3, "demo-rn-8", "react-native", "warning",
-                "Warning: ViewPropTypes has been removed from React Native. Use ViewPropTypes from" +
+                "Warning: ViewPropTypes has been removed from React Native. Use ViewPropTypes from " +
                     "@react-native-community/art",
                 "DeprecationWarning",
                 "Third-party component react-native-camera still using deprecated ViewPropTypes",

@@ -456,7 +456,7 @@ object DemoDataSeeder {
                 IssueTemplate(
                     "NullPointerException in ProductDetailFragment",
                     "java.lang.NullPointerException",
-                    "Attempt to invoke virtual method 'java.lang.String com.acme.Product.getName()' on a null" +
+                    "Attempt to invoke virtual method 'java.lang.String com.acme.Product.getName()' on a null " +
                         "object reference",
                     "android",
                     listOf(
@@ -2213,14 +2213,14 @@ object DemoDataSeeder {
                         it[UptimeMonitors.retries] = 2
                         it[UptimeMonitors.method] = "GET"
                         it[UptimeMonitors.status] = if (random.nextFloat() < 0.9) "up" else "down"
-                        it[UptimeMonitors.lastCheckAt] = 
+                        it[UptimeMonitors.lastCheckAt] =
                             kotlin.time.Instant.fromEpochMilliseconds(lastCheckAt.toEpochMilli())
-                        it[UptimeMonitors.consecutiveFailures] = 
+                        it[UptimeMonitors.consecutiveFailures] =
                             if (random.nextFloat() < 0.9) 0 else random.nextInt(1, 5)
                         it[UptimeMonitors.pushToken] = pushToken
-                        it[UptimeMonitors.createdAt] = 
+                        it[UptimeMonitors.createdAt] =
                             kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
-                        it[UptimeMonitors.updatedAt] = 
+                        it[UptimeMonitors.updatedAt] =
                             kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
                     }
 
@@ -2664,7 +2664,7 @@ object DemoDataSeeder {
                     it[StatusPageMonitors.monitorId] = monitorId
                     it[StatusPageMonitors.displayName] = null // Use actual monitor name
                     it[StatusPageMonitors.sortOrder] = index
-                    it[StatusPageMonitors.createdAt] = 
+                    it[StatusPageMonitors.createdAt] =
                         kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
                 }
             }
@@ -2679,11 +2679,11 @@ object DemoDataSeeder {
                     (
                         "Our primary database experienced connection pool exhaustion " +
                             "causing degraded performance."
-                    ) to "investigating",
+                        ) to "investigating",
                     (
                         "Database team has identified the issue as a connection leak " +
                             "in the payment service."
-                    ) to "identified",
+                        ) to "identified",
                     "Fix deployed to production. Monitoring for stability." to "monitoring",
                     "All systems operating normally. Connection pool has stabilized." to "resolved"
                 ) to Pair("major", 2),
@@ -2702,12 +2702,12 @@ object DemoDataSeeder {
                     (
                         "We're seeing elevated error rates on the mobile API endpoint. " +
                             "Investigating the root cause."
-                    ) to "investigating",
+                        ) to "investigating",
                     "Issue identified as a cache invalidation problem. Applying fix now." to "identified",
                     (
                         "Fix applied. Monitoring error rates for the next hour " +
                             "to ensure stability."
-                    ) to "monitoring"
+                        ) to "monitoring"
                 ) to Pair("minor", 0),
 
                 // Scheduled maintenance (future)
@@ -2716,7 +2716,7 @@ object DemoDataSeeder {
                     (
                         "We will be performing routine database maintenance. " +
                             "Services may experience brief interruptions."
-                    ) to "scheduled"
+                        ) to "scheduled"
                 ) to Pair("none", -1)
             )
 
@@ -2779,7 +2779,7 @@ object DemoDataSeeder {
                         resolvedAt?.let { resolved ->
                             kotlin.time.Instant.fromEpochMilliseconds(resolved.toEpochMilli())
                         }
-                    it[StatusPageIncidents.createdAt] = 
+                    it[StatusPageIncidents.createdAt] =
                         kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
                     it[StatusPageIncidents.updatedAt] =
                         kotlin.time.Instant.fromEpochMilliseconds(
@@ -2796,7 +2796,7 @@ object DemoDataSeeder {
                         it[StatusPageIncidentUpdates.incidentId] = incidentId
                         it[StatusPageIncidentUpdates.status] = status
                         it[StatusPageIncidentUpdates.message] = message
-                        it[StatusPageIncidentUpdates.createdAt] = 
+                        it[StatusPageIncidentUpdates.createdAt] =
                             kotlin.time.Instant.fromEpochMilliseconds(updateTime.toEpochMilli())
                     }
                 }
@@ -2850,7 +2850,7 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"http","category":"http","message":"POST /api/auth/login","level":"info",""" +
                             """"data":{"status_code":401,"method":"POST",""" +
-                                """"url":"https://api.acmeshopping.com/v1/auth/login"},"timestamp":${now - 22000}}"""
+                            """"url":"https://api.acmeshopping.com/v1/auth/login"},"timestamp":${now - 22000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"debug","category":"auth","message":"Token refresh attempted",""" +
@@ -2863,7 +2863,7 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"error","category":"auth",""" +
                             """"message":"Authentication failed: invalid credentials","level":"error",""" +
-                                """"timestamp":${now - 12000}}"""
+                            """"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"debug","category":"lifecycle","message":"LoginActivity.onResume called",""" +
@@ -2873,17 +2873,17 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"MainActivity -> ProductListFragment","level":"info",""" +
-                                """"timestamp":${now - 40000}}"""
+                            """"timestamp":${now - 40000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"debug","category":"network",""" +
                             """"message":"Network connectivity: WIFI connected","level":"debug",""" +
-                                """"timestamp":${now - 35000}}"""
+                            """"timestamp":${now - 35000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"http","category":"http","message":"GET /api/products?page=1",""" +
                             """"level":"info","data":{"status_code":200,"method":"GET","duration_ms":134},""" +
-                                """"timestamp":${now - 30000}}"""
+                            """"timestamp":${now - 30000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"user","category":"ui.click","message":"User scrolled to bottom of list",""" +
@@ -2892,28 +2892,28 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"http","category":"http","message":"GET /api/products?page=2",""" +
                             """"level":"info","data":{"status_code":200,"method":"GET","duration_ms":156},""" +
-                                """"timestamp":${now - 18000}}"""
+                            """"timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"debug","category":"network",""" +
                             """"message":"Network connectivity: switching to cellular","level":"warning",""" +
-                                """"timestamp":${now - 12000}}"""
+                            """"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"http","category":"http","message":"GET /api/products?page=3",""" +
                             """"level":"error","data":{"status_code":0,"method":"GET",""" +
-                                """"reason":"Connection timed out"},"timestamp":${now - 8000}}"""
+                            """"reason":"Connection timed out"},"timestamp":${now - 8000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"error","category":"network",""" +
                             """"message":"Request failed: java.net.SocketTimeoutException","level":"error",""" +
-                                """"timestamp":${now - 5000}}"""
+                            """"timestamp":${now - 5000}}"""
                     )
                 } else if (isCheckoutError) {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"MainActivity -> ProductListFragment","level":"info",""" +
-                                """"timestamp":${now - 60000}}"""
+                            """"timestamp":${now - 60000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"user","category":"ui.click","message":"User tapped product #$productId",""" +
@@ -2922,12 +2922,12 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"ProductListFragment -> ProductDetailFragment","level":"info",""" +
-                                """"timestamp":${now - 50000}}"""
+                            """"timestamp":${now - 50000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"http","category":"http","message":"GET /api/products/$productId",""" +
                             """"level":"info","data":{"status_code":200,"method":"GET","duration_ms":89},""" +
-                                """"timestamp":${now - 48000}}"""
+                            """"timestamp":${now - 48000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"user","category":"ui.click","message":"User tapped Add to Cart",""" +
@@ -2940,7 +2940,7 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"ProductDetailFragment -> CartFragment","level":"info",""" +
-                                """"timestamp":${now - 28000}}"""
+                            """"timestamp":${now - 28000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"user","category":"ui.click","message":"User tapped Proceed to Checkout",""" +
@@ -2949,39 +2949,39 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"CartFragment -> CheckoutFragment","level":"info",""" +
-                                """"timestamp":${now - 16000}}"""
+                            """"timestamp":${now - 16000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"http","category":"http","message":"POST /api/orders/checkout",""" +
                             """"level":"error","data":{"status_code":500,"method":"POST",""" +
-                                """"url":"https://api.acmeshopping.com/v1/orders/checkout"},""" +
-                                    """"timestamp":${now - 8000}}"""
+                            """"url":"https://api.acmeshopping.com/v1/orders/checkout"},""" +
+                            """"timestamp":${now - 8000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"error","category":"payment",""" +
                             """"message":"Payment processing failed: gateway timeout","level":"error",""" +
-                                """"timestamp":${now - 5000}}"""
+                            """"timestamp":${now - 5000}}"""
                     )
                 } else {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"MainActivity -> ProductListFragment","level":"info",""" +
-                                """"timestamp":${now - 30000}}"""
+                            """"timestamp":${now - 30000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"user","category":"ui.click",""" +
                             """"message":"User tapped product item #$productId","level":"info",""" +
-                                """"timestamp":${now - 25000}}"""
+                            """"timestamp":${now - 25000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"ProductListFragment -> ProductDetailFragment","level":"info",""" +
-                                """"timestamp":${now - 20000}}"""
+                            """"timestamp":${now - 20000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"http","category":"http","message":"GET /api/products/$productId",""" +
                             """"level":"info","data":{"status_code":200,"method":"GET","duration_ms":112},""" +
-                                """"timestamp":${now - 18000}}"""
+                            """"timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"user","category":"ui.click","message":"User tapped add to cart button",""" +
@@ -2994,12 +2994,12 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"ProductDetailFragment -> CartFragment","level":"info",""" +
-                                """"timestamp":${now - 5000}}"""
+                            """"timestamp":${now - 5000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"debug","category":"lifecycle",""" +
                             """"message":"CartFragment.onViewCreated called","level":"debug",""" +
-                                """"timestamp":${now - 3000}}"""
+                            """"timestamp":${now - 3000}}"""
                     )
                 }
             }
@@ -3009,7 +3009,7 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"LaunchScreen -> LoginViewController","level":"info",""" +
-                                """"timestamp":${now - 42000}}"""
+                            """"timestamp":${now - 42000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"user","category":"touch","message":"User tapped email field",""" +
@@ -3022,31 +3022,31 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"http","category":"network","message":"POST /api/auth/login",""" +
                             """"level":"info","data":{"status_code":401,""" +
-                                """"url":"https://api.acmeshopping.com/v1/auth/login"},"timestamp":${now - 22000}}"""
+                            """"url":"https://api.acmeshopping.com/v1/auth/login"},"timestamp":${now - 22000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"debug","category":"app.lifecycle",""" +
                             """"message":"Keychain read failed: item not found","level":"warning",""" +
-                                """"timestamp":${now - 18000}}"""
+                            """"timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"http","category":"network","message":"POST /api/auth/refresh",""" +
                             """"level":"error","data":{"status_code":403},"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"error","category":"auth","message":"Token refresh failed,""" +
+                        """{"type":"error","category":"auth","message":"Token refresh failed, """ +
                             """user must re-authenticate","level":"error","timestamp":${now - 8000}}"""
                     )
                 } else if (isNetworkError) {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"HomeViewController -> ProductListViewController","level":"info",""" +
-                                """"timestamp":${now - 38000}}"""
+                            """"timestamp":${now - 38000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"debug","category":"network",""" +
                             """"message":"URLSession configuration: .default","level":"debug",""" +
-                                """"timestamp":${now - 33000}}"""
+                            """"timestamp":${now - 33000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"http","category":"network","message":"GET /api/products","level":"info",""" +
@@ -3059,18 +3059,18 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"http","category":"network","message":"GET /api/products/$productId",""" +
                             """"level":"error","data":{"status_code":0,""" +
-                                """"reason":"The network connection was lost"},"timestamp":${now - 12000}}"""
+                            """"reason":"The network connection was lost"},"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"debug","category":"app.lifecycle",""" +
                             """"message":"Reachability changed: notReachable","level":"warning",""" +
-                                """"timestamp":${now - 8000}}"""
+                            """"timestamp":${now - 8000}}"""
                     )
                 } else {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"HomeViewController -> ProductListViewController","level":"info",""" +
-                                """"timestamp":${now - 28000}}"""
+                            """"timestamp":${now - 28000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"user","category":"touch","message":"User tapped product cell",""" +
@@ -3083,7 +3083,7 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"ProductListViewController -> ProductDetailViewController",""" +
-                                """"level":"info","timestamp":${now - 15000}}"""
+                            """"level":"info","timestamp":${now - 15000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"user","category":"touch","message":"User tapped Add to Cart",""" +
@@ -3117,7 +3117,7 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"console","category":"console",""" +
                             """"message":"AuthService: token validation failed","level":"warn",""" +
-                                """"timestamp":${now - 18000}}"""
+                            """"timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"http","category":"fetch","message":"POST /api/auth/refresh",""" +
@@ -3126,7 +3126,7 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"console","category":"console",""" +
                             """"message":"Redirecting to login: session expired","level":"log",""" +
-                                """"timestamp":${now - 6000}}"""
+                            """"timestamp":${now - 6000}}"""
                     )
                 } else if (isNetworkError) {
                     breadcrumbs.add(
@@ -3144,12 +3144,12 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"http","category":"fetch","message":"GET /api/products/$productId",""" +
                             """"level":"error","data":{"status":0,"reason":"Failed to fetch"},""" +
-                                """"timestamp":${now - 12000}}"""
+                            """"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"console","category":"console",""" +
                             """"message":"Unhandled promise rejection: NetworkError","level":"error",""" +
-                                """"timestamp":${now - 8000}}"""
+                            """"timestamp":${now - 8000}}"""
                     )
                 } else {
                     breadcrumbs.add(
@@ -3167,7 +3167,7 @@ object DemoDataSeeder {
                     breadcrumbs.add(
                         """{"type":"navigation","category":"navigation",""" +
                             """"message":"Navigate to /products/$productId","level":"info",""" +
-                                """"timestamp":${now - 15000}}"""
+                            """"timestamp":${now - 15000}}"""
                     )
                     breadcrumbs.add(
                         """{"type":"http","category":"fetch","message":"GET /api/products/$productId",""" +
@@ -3513,7 +3513,7 @@ object DemoDataSeeder {
                     "($childSpanId, $traceId, $rootSpanId, $orgId, '$opName', '${svc.name}', " +
                         "'${resource.replace("'", "''")}', '${svc.type}', $childTs, $childDuration, $childError, " +
                         "map('component','${svc.name}'), map('_sample_rate', 1.0)," +
-                            "'${svc.host}', 'production', '1.3.0')",
+                        "'${svc.host}', 'production', '1.3.0')",
                 )
                 elapsed += childDuration + random.nextLong(500_000L, 2_000_000L)
             }

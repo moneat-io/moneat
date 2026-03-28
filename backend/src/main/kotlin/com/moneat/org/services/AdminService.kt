@@ -529,8 +529,8 @@ class AdminService(
                             date = dateStr,
                             error = byType["error"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
                             transaction =
-                                byType["transaction"]?.sumOf { r -> r[UsageRecords.event_count].toLong() }
-                                    ?: 0L,
+                            byType["transaction"]?.sumOf { r -> r[UsageRecords.event_count].toLong() }
+                                ?: 0L,
                             replay = byType["replay"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
                             feedback = byType["feedback"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
                             log =

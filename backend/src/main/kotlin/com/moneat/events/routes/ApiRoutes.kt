@@ -1210,7 +1210,7 @@ fun Route.apiRoutes() {
                                             errorAlerts = pref[NotificationPreferences.error_alerts],
                                             weeklySummary = pref[NotificationPreferences.weekly_summary],
                                             alertFrequencyMinutes =
-                                                pref[NotificationPreferences.alert_frequency_minutes]
+                                            pref[NotificationPreferences.alert_frequency_minutes]
                                         )
                                     }
 

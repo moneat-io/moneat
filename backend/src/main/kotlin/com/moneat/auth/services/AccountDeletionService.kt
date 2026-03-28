@@ -257,7 +257,7 @@ class AccountDeletionService(
                         .map { it[Users.email] }
                 }
 
-            logger.info { 
+            logger.info {
                 "Starting deletion of organization $organizationId ($orgName) with ${projectIds.size} projects"
             }
 

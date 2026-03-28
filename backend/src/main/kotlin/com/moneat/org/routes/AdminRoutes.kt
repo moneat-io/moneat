@@ -217,7 +217,7 @@ fun Route.adminRoutes() {
                                     ?.get(Users.is_admin) ?: false
                             }
                         if (!isAdmin) {
-                            logger.warn { 
+                            logger.warn {
                                 "Admin access denied: user $userId is not admin (path=${call.request.path()})"
                             }
                             call.respond(
@@ -460,9 +460,9 @@ fun Route.adminRoutes() {
                                                 .now()
                                                 .toString(),
                                             stackTrace =
-                                                "  at UserService.getUser (UserService.kt:45)\n" +
-                                                    "  at UserController.handleRequest (UserController.kt:23)\n" +
-                                                    "  at Router.dispatch (Router.kt:89)",
+                                            "  at UserService.getUser (UserService.kt:45)\n" +
+                                                "  at UserController.handleRequest (UserController.kt:23)\n" +
+                                                "  at Router.dispatch (Router.kt:89)",
                                             settingsUrl = "$frontendUrl/settings/notifications",
                                             unsubscribeUrl = "$frontendUrl/settings/notifications"
                                         )
@@ -543,9 +543,9 @@ fun Route.adminRoutes() {
                                                     .now()
                                                     .toString(),
                                                 stackTrace =
-                                                    "  at UserService.getUser (UserService.kt:45)\n" +
-                                                        "  at UserController.handleRequest (UserController.kt:23)\n" +
-                                                        "  at Router.dispatch (Router.kt:89)"
+                                                "  at UserService.getUser (UserService.kt:45)\n" +
+                                                    "  at UserController.handleRequest (UserController.kt:23)\n" +
+                                                    "  at Router.dispatch (Router.kt:89)"
                                             )
                                     }
 

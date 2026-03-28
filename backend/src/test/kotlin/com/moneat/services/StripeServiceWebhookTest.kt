@@ -601,7 +601,7 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.payg_used_units] = 500
                 it[Subscriptions.payg_used_micros] = 200000000
                 it[Subscriptions.status] = "past_due"
-                it[Subscriptions.billing_grace_until] = 
+                it[Subscriptions.billing_grace_until] =
                     Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
             }
         }
@@ -641,7 +641,7 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.payg_used_micros] = 200000000
                 it[Subscriptions.pending_meter_units] = 100
                 it[Subscriptions.status] = "past_due"
-                it[Subscriptions.billing_grace_until] = 
+                it[Subscriptions.billing_grace_until] =
                     Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
             }
         }

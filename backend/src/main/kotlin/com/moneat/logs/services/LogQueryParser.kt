@@ -270,10 +270,10 @@ class LogQueryParser {
         var tempI = i
         while (
             tempI < query.length &&
-                !query[tempI].isWhitespace() &&
-                query[tempI] != ')' &&
-                query[tempI] != ':' &&
-                query[tempI] != '"'
+            !query[tempI].isWhitespace() &&
+            query[tempI] != ')' &&
+            query[tempI] != ':' &&
+            query[tempI] != '"'
         ) {
             tempI++
         }
@@ -654,7 +654,7 @@ class LogQueryParser {
                 val escapedPattern = escapeFn(pattern)
                 "((has(tags, '$escapedField') AND tags['$escapedField'] ILIKE '$escapedPattern') OR " +
                     "(has(resource_attributes, " +
-                        "'$escapedField') AND resource_attributes['$escapedField'] ILIKE '$escapedPattern'))"
+                    "'$escapedField') AND resource_attributes['$escapedField'] ILIKE '$escapedPattern'))"
             } else {
                 "((has(tags, '$escapedField') AND tags['$escapedField'] = '$escaped') OR " +
                     "(has(resource_attributes, '$escapedField') AND resource_attributes['$escapedField'] = '$escaped'))"
@@ -690,8 +690,8 @@ class LogQueryParser {
             "(has(tags, '$escapedField') AND toInt32OrNull(tags['$escapedField']) >= $minVal AND " +
                 "toInt32OrNull(tags['$escapedField']) <= $maxVal) OR " +
                 "(has(resource_attributes, " +
-                    "'$escapedField') AND toInt32OrNull(resource_attributes['$escapedField']) >= $minVal AND " +
-                        "toInt32OrNull(resource_attributes['$escapedField']) <= $maxVal)"
+                "'$escapedField') AND toInt32OrNull(resource_attributes['$escapedField']) >= $minVal AND " +
+                "toInt32OrNull(resource_attributes['$escapedField']) <= $maxVal)"
         }
     }
 
@@ -730,12 +730,12 @@ class LogQueryParser {
             if (numVal != null) {
                 "(has(tags, '$escapedField') AND toFloat64OrNull(tags['$escapedField']) $operator $numVal) OR " +
                     "(has(resource_attributes, " +
-                        "'$escapedField') AND toFloat64OrNull(resource_attributes['$escapedField']) $operator $numVal)"
+                    "'$escapedField') AND toFloat64OrNull(resource_attributes['$escapedField']) $operator $numVal)"
             } else {
                 val escaped = escapeFn(value)
                 "(has(tags, '$escapedField') AND tags['$escapedField'] $operator '$escaped') OR " +
                     "(has(resource_attributes, " +
-                        "'$escapedField') AND resource_attributes['$escapedField'] $operator '$escaped')"
+                    "'$escapedField') AND resource_attributes['$escapedField'] $operator '$escaped')"
             }
         }
     }

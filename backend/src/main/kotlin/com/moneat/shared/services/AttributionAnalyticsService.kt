@@ -202,11 +202,11 @@ class AttributionAnalyticsService {
                     totalSignups = totalSignups,
                     totalPaidOrganizations = totalPaid,
                     overallConversionRate =
-                        if (totalSignups > 0) {
-                            (totalPaid.toDouble() / totalSignups.toDouble()) * 100
-                        } else {
-                            0.0
-                        },
+                    if (totalSignups > 0) {
+                        (totalPaid.toDouble() / totalSignups.toDouble()) * 100
+                    } else {
+                        0.0
+                    },
                     totalMrr = totalMrrValue.toString()
                 )
 

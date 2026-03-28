@@ -891,7 +891,7 @@ class EventService(
             if (!success) {
                 logger.error { "Failed to insert ai.* spans as LLM generations" }
             } else {
-                logger.info { 
+                logger.info {
                     "Cross-inserted ${generations.size} ai.* spans as LLM generations for project $projectId"
                 }
             }
