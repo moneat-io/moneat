@@ -29,7 +29,6 @@ import com.moneat.datadog.services.QueuedSyntheticEntry
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockkObject
-import io.mockk.slot
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -70,23 +69,6 @@ class MiscIngestionServiceCoverageTest {
 
     private fun mockClickHouseSuccess() {
         coEvery { ClickHouseClient.execute(any()) } coAnswers {
-            val response = io.mockk.mockk<io.ktor.client.statement.HttpResponse>()
-            every { response.status } returns io.ktor.http.HttpStatusCode.OK
-            response
-        }
-    }
-
-    private fun mockClickHouseSuccessCapture(captured: MutableList<String>) {
-        coEvery {
-            ClickHouseClient.execute(
-                capture(
-                    slot<String>().also {
-                        // Use a different capture mechanism
-                    }
-                )
-            )
-        } coAnswers {
-            captured.add(firstArg())
             val response = io.mockk.mockk<io.ktor.client.statement.HttpResponse>()
             every { response.status } returns io.ktor.http.HttpStatusCode.OK
             response

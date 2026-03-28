@@ -33,12 +33,7 @@ class AiChatServiceTest {
             ${"x".repeat(5000)}
             """.trimIndent()
 
-        val sanitized =
-            service.invokePrivate<String>(
-                methodName = "sanitizeUserInput",
-                parameterTypes = arrayOf(String::class.java),
-                args = arrayOf(input)
-            )
+        val sanitized = service.sanitizeUserInput(input)
 
         val lower = sanitized.lowercase()
         assertFalse(lower.contains("ignore previous instructions"))
@@ -52,12 +47,7 @@ class AiChatServiceTest {
         val service = AiChatService()
         val history = (0 until 25).map { idx -> OpenAiMessage(role = "user", content = "msg-$idx") }
 
-        val messages =
-            service.invokePrivate<List<OpenAiMessage>>(
-                methodName = "buildOpenAiMessages",
-                parameterTypes = arrayOf(String::class.java, String::class.java, List::class.java),
-                args = arrayOf("System prompt", "Doc block", history)
-            )
+        val messages = service.buildOpenAiMessages("System prompt", "Doc block", history)
 
         assertEquals(21, messages.size)
         assertEquals("system", messages.first().role)
@@ -72,32 +62,12 @@ class AiChatServiceTest {
         val service = AiChatService()
 
         val parsed =
-            service.invokePrivate<AiResponse>(
-                methodName = "parseAiResponse",
-                parameterTypes = arrayOf(String::class.java),
-                args = arrayOf("""{"message":"hello","context_needed":["logs"]}""")
-            )
+            service.parseAiResponse("""{"message":"hello","context_needed":["logs"]}""")
         assertEquals("hello", parsed.message)
         assertEquals(listOf("logs"), parsed.context_needed)
 
-        val fallback =
-            service.invokePrivate<AiResponse>(
-                methodName = "parseAiResponse",
-                parameterTypes = arrayOf(String::class.java),
-                args = arrayOf("not-json")
-            )
+        val fallback = service.parseAiResponse("not-json")
         assertEquals("not-json", fallback.message)
         assertTrue(fallback.context_needed.isEmpty())
-    }
-
-    private fun <T> Any.invokePrivate(
-        methodName: String,
-        parameterTypes: Array<Class<*>>,
-        args: Array<Any>
-    ): T {
-        val method = this::class.java.getDeclaredMethod(methodName, *parameterTypes)
-        method.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        return method.invoke(this, *args) as T
     }
 }

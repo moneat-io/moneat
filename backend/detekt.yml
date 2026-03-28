@@ -33,7 +33,7 @@ style:
   UnusedPrivateProperty:
     active: false
   UnusedPrivateMember:
-    active: false
+    active: true
 
 complexity:
   TooManyFunctions:

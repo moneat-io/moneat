@@ -18,13 +18,10 @@ package com.moneat.shared.services
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.shared.models.Projects
-import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
@@ -335,40 +332,5 @@ class UsageTrackingService {
             limit = usage.totalLimitUnits,
             plan = usage.plan
         )
-    }
-
-    private fun getPlanForOrg(orgId: Int): String {
-        return transaction {
-            Subscriptions
-                .selectAll()
-                .where { (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active") }
-                .orderBy(Subscriptions.id to SortOrder.DESC)
-                .firstOrNull()
-                ?.get(Subscriptions.plan)
-                ?.lowercase() ?: "free"
-        }
-    }
-
-    private fun getBillingPeriod(orgId: Int): Pair<kotlinx.datetime.LocalDate, kotlinx.datetime.LocalDate> {
-        return transaction {
-            val sub =
-                Subscriptions
-                    .selectAll()
-                    .where {
-                        (Subscriptions.organization_id eq orgId) and (Subscriptions.status eq "active")
-                    }.orderBy(Subscriptions.id to SortOrder.DESC)
-                    .firstOrNull()
-            val startTs = sub?.get(Subscriptions.current_period_start)
-            val endTs = sub?.get(Subscriptions.current_period_end)
-            if (startTs != null && endTs != null) {
-                val start = startTs.toLocalDateTime(TimeZone.UTC).date
-                val end = endTs.toLocalDateTime(TimeZone.UTC).date
-                Pair(start, end)
-            } else {
-                val today = Clock.System.todayIn(TimeZone.UTC)
-                val monthStart = kotlinx.datetime.LocalDate(today.year, today.month, 1)
-                Pair(monthStart, today)
-            }
-        }
     }
 }

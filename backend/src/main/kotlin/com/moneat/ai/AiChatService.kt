@@ -19,6 +19,8 @@ package com.moneat.ai
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
+private val aiChatResponseJson = Json { ignoreUnknownKeys = true }
+
 /**
  * Legacy core AI service stub.
  *
@@ -26,16 +28,17 @@ import kotlinx.serialization.json.Json
  */
 class AiChatService {
 
-    @Suppress("UnusedParameter")
     suspend fun chat(userId: Int, orgId: Int, request: ChatRequest): ChatApiResponse {
         return unavailable(
             operation = "chat",
             userId = userId,
             orgId = orgId,
+            context = "message=${request.message.take(50)}",
         )
     }
 
-    private fun sanitizeUserInput(input: String): String {
+    /** Shared helpers for AI message shaping; `internal` for unit tests and enterprise module reuse. */
+    internal fun sanitizeUserInput(input: String): String {
         val maxLength = 4000
         val injectionPatterns = listOf(
             Regex("ignore previous instructions", RegexOption.IGNORE_CASE),
@@ -49,7 +52,7 @@ class AiChatService {
         return sanitized.take(maxLength)
     }
 
-    private fun buildOpenAiMessages(
+    internal fun buildOpenAiMessages(
         systemPrompt: String,
         docBlock: String,
         history: List<OpenAiMessage>,
@@ -60,13 +63,9 @@ class AiChatService {
         return listOf(systemMessage) + recentHistory
     }
 
-    companion object {
-        private val json = Json { ignoreUnknownKeys = true }
-    }
-
-    private fun parseAiResponse(jsonStr: String): AiResponse {
+    internal fun parseAiResponse(jsonStr: String): AiResponse {
         return try {
-            json.decodeFromString<AiResponse>(jsonStr)
+            aiChatResponseJson.decodeFromString<AiResponse>(jsonStr)
         } catch (_: SerializationException) {
             AiResponse(message = jsonStr)
         }
