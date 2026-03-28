@@ -123,7 +123,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             val newIssues = getNewIssueCountForRelease(projectId, version, retentionDays)
             val resolvedIssues = 0L
             val crashFreeSessionRate = getCrashFreeRateForRelease(projectId, version, retentionDays)
-            // TODO: implement getCrashFreeUserRateForRelease when user-based query exists
+            // Crash-free user rate stays null until a user-based ClickHouse query is implemented.
             val crashFreeUserRate: Double? = null
 
             val intervalMinutes = 360

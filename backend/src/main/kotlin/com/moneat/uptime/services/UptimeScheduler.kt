@@ -211,8 +211,6 @@ class UptimeScheduler(
         if (oldStatus != newStatus && (oldStatus == "up" || oldStatus == "down") && (newStatus == "up" || newStatus == "down")) {
             logger.info { "Monitor ${monitor.name} status changed: $oldStatus -> $newStatus" }
 
-            // TODO: Trigger alert via MonitorAlertService or notification service
-            // This would integrate with the existing alert system
             suspendRunCatching {
                 notifyStatusChange(monitor, oldStatus, newStatus, finalResult)
             }.onFailure { e ->

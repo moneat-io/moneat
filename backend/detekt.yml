@@ -25,7 +25,7 @@ style:
   UseCheckOrError:
     active: false
   ForbiddenComment:
-    active: false
+    active: true
   LoopWithTooManyJumpStatements:
     active: false
   DestructuringDeclarationWithTooManyEntries:

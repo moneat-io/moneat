@@ -156,7 +156,7 @@ class EventService(
                 }
 
                 "session" -> {
-                    // TODO: Handle sessions
+                    // Session envelope items are accepted for usage accounting only; persistence not implemented.
                     logger.debug { "Received session (not yet implemented)" }
                 }
 
