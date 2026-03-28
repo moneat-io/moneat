@@ -350,67 +350,6 @@
     <ID>Indentation:StatusPageService.kt$StatusPageService$ </ID>
     <ID>Indentation:StripeService.kt$StripeService$ </ID>
     <ID>Indentation:UptimeScheduler.kt$UptimeScheduler$ </ID>
-    <ID>MaximumLineLength:AccountDeletionService.kt$AccountDeletionService$ </ID>
-    <ID>MaximumLineLength:AdminRoutes.kt$ </ID>
-    <ID>MaximumLineLength:AdminService.kt$AdminService$ </ID>
-    <ID>MaximumLineLength:AiActionExecutor.kt$AiActionExecutor$ </ID>
-    <ID>MaximumLineLength:AiChatRoutes.kt$ </ID>
-    <ID>MaximumLineLength:AiChatService.kt$AiChatService$ </ID>
-    <ID>MaximumLineLength:ApiModels.kt$TestNotificationRequest$ </ID>
-    <ID>MaximumLineLength:ApiRoutes.kt$ </ID>
-    <ID>MaximumLineLength:AttributionAnalyticsService.kt$AttributionAnalyticsService$ </ID>
-    <ID>MaximumLineLength:AuthCookieUtilsTest.kt$AuthCookieUtilsTest$ </ID>
-    <ID>MaximumLineLength:AuthService.kt$AuthService$ </ID>
-    <ID>MaximumLineLength:AuthServiceLegalConsentTest.kt$AuthServiceLegalConsentTest$ </ID>
-    <ID>MaximumLineLength:AuthServicePasswordResetTest.kt$AuthServicePasswordResetTest$ </ID>
-    <ID>MaximumLineLength:AuthServiceTest.kt$AuthServiceTest$ </ID>
-    <ID>MaximumLineLength:BillingBackgroundService.kt$BillingBackgroundService$ </ID>
-    <ID>MaximumLineLength:BillingQuotaService.kt$BillingQuotaService$ </ID>
-    <ID>MaximumLineLength:BillingRoutes.kt$ </ID>
-    <ID>MaximumLineLength:DashboardService.kt$DashboardService$ </ID>
-    <ID>MaximumLineLength:DatabaseModels.kt$Memberships$ </ID>
-    <ID>MaximumLineLength:DatabaseModels.kt$TextArrayColumnType$ </ID>
-    <ID>MaximumLineLength:DemoDataReseeder.kt$DemoDataReseeder$ </ID>
-    <ID>MaximumLineLength:DemoDataSeeder.kt$DemoDataSeeder$ </ID>
-    <ID>MaximumLineLength:DiscordService.kt$DiscordService$ </ID>
-    <ID>MaximumLineLength:EnvironmentValidator.kt$EnvironmentValidator$ </ID>
-    <ID>MaximumLineLength:EventService.kt$EventService$ </ID>
-    <ID>MaximumLineLength:EventServiceTest.kt$EventServiceTest$ </ID>
-    <ID>MaximumLineLength:HTTP.kt$ </ID>
-    <ID>MaximumLineLength:IncidentService.kt$IncidentService$ </ID>
-    <ID>MaximumLineLength:IngestRoutes.kt$ </ID>
-    <ID>MaximumLineLength:IntegrationRoutes.kt$ </ID>
-    <ID>MaximumLineLength:LlmDashboardService.kt$LlmDashboardService$ </ID>
-    <ID>MaximumLineLength:LlmRoutes.kt$ </ID>
-    <ID>MaximumLineLength:LogQueryParser.kt$LogQueryParser$ </ID>
-    <ID>MaximumLineLength:LogQueryParser.kt$LogQueryParser.QueryNode$ </ID>
-    <ID>MaximumLineLength:LogQueryParser.kt$LogQueryParser.Token$ </ID>
-    <ID>MaximumLineLength:LogQueryParserIntegrationTest.kt$LogQueryParserIntegrationTest$ </ID>
-    <ID>MaximumLineLength:LogQueryParserTest.kt$LogQueryParserTest$ </ID>
-    <ID>MaximumLineLength:LogRoutes.kt$ </ID>
-    <ID>MaximumLineLength:LogService.kt$LogService$ </ID>
-    <ID>MaximumLineLength:MoneatLogAppender.kt$MoneatLogAppender$ </ID>
-    <ID>MaximumLineLength:MonitorAlertService.kt$MonitorAlertService$ </ID>
-    <ID>MaximumLineLength:MonitorService.kt$MonitorService$ </ID>
-    <ID>MaximumLineLength:NotificationService.kt$NotificationService$ </ID>
-    <ID>MaximumLineLength:OAuthService.kt$OAuthService$ </ID>
-    <ID>MaximumLineLength:OrgMembershipService.kt$OrgMembershipService$ </ID>
-    <ID>MaximumLineLength:PricingTierService.kt$PricingTierService$ </ID>
-    <ID>MaximumLineLength:PricingTierServiceFeatureFlagsTest.kt$PricingTierServiceFeatureFlagsTest$ </ID>
-    <ID>MaximumLineLength:ReleaseServiceTest.kt$ReleaseServiceTest$ </ID>
-    <ID>MaximumLineLength:Routing.kt$ </ID>
-    <ID>MaximumLineLength:SdkVersionService.kt$SdkVersionService$ </ID>
-    <ID>MaximumLineLength:SentryConfig.kt$SentryConfig$ </ID>
-    <ID>MaximumLineLength:SentryModels.kt$SentryEnvelope.Companion$ </ID>
-    <ID>MaximumLineLength:SlackService.kt$SlackService$ </ID>
-    <ID>MaximumLineLength:StatusPageService.kt$StatusPageService$ </ID>
-    <ID>MaximumLineLength:StripeService.kt$StripeService$ </ID>
-    <ID>MaximumLineLength:StripeServiceWebhookTest.kt$StripeServiceWebhookTest$ </ID>
-    <ID>MaximumLineLength:StripeWebhookRoutes.kt$ </ID>
-    <ID>MaximumLineLength:UptimeCheckExecutor.kt$UptimeCheckExecutor$ </ID>
-    <ID>MaximumLineLength:UptimeScheduler.kt$UptimeScheduler$ </ID>
-    <ID>MaximumLineLength:UptimeService.kt$UptimeService$ </ID>
-    <ID>MaximumLineLength:UsageTrackingService.kt$UsageTrackingService$ </ID>
     <ID>MultiLineIfElse:AdminService.kt$AdminService$AdminTimelinePoint(parts[0], parts[1].toLongOrNull() ?: 0L)</ID>
     <ID>MultiLineIfElse:AdminService.kt$AdminService$emptyList()</ID>
     <ID>MultiLineIfElse:AdminService.kt$AdminService$null</ID>

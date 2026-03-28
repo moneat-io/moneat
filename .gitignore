@@ -125,3 +125,13 @@ deploy/certbot/
 # moneat-agent worktrees and runtime artifacts
 .moneat-worktrees/
 .moneat-agent/
+
+# Ephemeral root-level dumps from local line-length / agent tooling (not project source)
+.auto-agent/
+.d*.txt
+.l*.txt
+.line*.txt
+.t*.txt
+.run-git.sh
+.tmp_linecheck.py
+.line_len_report.py
