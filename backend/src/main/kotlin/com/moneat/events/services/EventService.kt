@@ -101,8 +101,8 @@ class EventService(
     private val projectKeyCache = ConcurrentHashMap<String, CachedEntry<ProjectKeyVerification>>()
     private val orgIdCache = ConcurrentHashMap<Long, CachedEntry<Int?>>()
     private val knownIssueIds = ConcurrentHashMap.newKeySet<String>()
-    private val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
-    private val MAX_KNOWN_ISSUES = 100_000
+    private val cacheTtlMs = 5 * 60 * 1000L // 5 minutes
+    private val maxKnownIssues = 100_000
 
     // Track replay segment counters for mobile replays that lack a separate replay_event item.
     // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
@@ -117,7 +117,7 @@ class EventService(
         projectKeyCache[cacheKey]?.let { if (it.expiresAt > now) return it.value }
 
         val result = eventRepository.verifyProjectKey(projectId, publicKey)
-        projectKeyCache[cacheKey] = CachedEntry(result, now + CACHE_TTL_MS)
+        projectKeyCache[cacheKey] = CachedEntry(result, now + cacheTtlMs)
         return result
     }
 
@@ -126,7 +126,7 @@ class EventService(
         orgIdCache[projectId]?.let { if (it.expiresAt > now) return it.value }
 
         val result = eventRepository.getOrganizationIdForProject(projectId)
-        orgIdCache[projectId] = CachedEntry(result, now + CACHE_TTL_MS)
+        orgIdCache[projectId] = CachedEntry(result, now + cacheTtlMs)
         return result
     }
 
@@ -1250,7 +1250,7 @@ class EventService(
         }
 
         return if (count > 1) {
-            if (knownIssueIds.size > MAX_KNOWN_ISSUES) {
+            if (knownIssueIds.size > maxKnownIssues) {
                 knownIssueIds.clear()
             }
             false
