@@ -100,7 +100,7 @@ object DemoDataReseeder {
                 hasFreshDatadog && hasFreshInfra && hasFreshSecurity && hasFreshSynthetics && hasEnoughDashboards
             ) {
                 logger.info {
-                    "Demo data looks fresh ($freshCoreCount recent core events," +
+                    "Demo data looks fresh ($freshCoreCount recent core events, " +
                         "$freshLlmCount recent LLM generations, " +
                         "$freshAnalyticsCount recent analytics events, $freshLogsCount recent logs, " +
                         "$freshDatadogCount recent Datadog spans, $freshInfraCount recent infra rows, " +

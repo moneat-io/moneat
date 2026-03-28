@@ -1,0 +1,1 @@
+                        """{"event_id":"err-1","timestamp":"2026-01-01T00:01:00.000Z","message":"NPE","platform":"jvm","level":"error","environment":"prod","release":"1.0","user_id":"","user_email":"","user_username":"","tags":{},"contexts":"{}","exception":"NullPointerException","breadcrumbs":"[]"}

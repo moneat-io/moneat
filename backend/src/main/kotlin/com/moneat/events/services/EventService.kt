@@ -346,7 +346,7 @@ class EventService(
         val eventId = event.event_id ?: UUID.randomUUID().toString()
 
         logger.debug {
-            "Full event structure - exception: ${event.exception}, message: ${event.message}," +
+            "Full event structure - exception: ${event.exception}, message: ${event.message}, " +
                 "platform: ${event.platform}"
         }
 

@@ -84,7 +84,7 @@ class EnvironmentValidator {
             errors.add("CRITICAL: $envVar environment variable is not set. This is required for production.")
         } else if (value.contains("localhost") || value.contains("127.0.0.1")) {
             warnings.add(
-                "WARNING: $envVar is set to '$value' which contains localhost. This should be a production URL in" +
+                "WARNING: $envVar is set to '$value' which contains localhost. This should be a production URL in " +
                     "production environments."
             )
         }

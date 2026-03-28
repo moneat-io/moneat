@@ -572,7 +572,7 @@ class LogService(private val logRepository: LogRepository) {
             }
 
         logger.debug {
-            "Aggregate logs SQL for org $organizationId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval," +
+            "Aggregate logs SQL for org $organizationId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, " +
                 "groupBy=$validGroupBy):\n$sql"
         }
         val body = logRepository.executeClickHouseQuery(sql)
@@ -621,7 +621,7 @@ class LogService(private val logRepository: LogRepository) {
             }
 
         logger.debug {
-            "Aggregate logs result for org $organizationId: ${buckets.size} buckets, totalCount=$totalCount," +
+            "Aggregate logs result for org $organizationId: ${buckets.size} buckets, totalCount=$totalCount, " +
                 "interval=$resolvedInterval"
         }
         return LogAggregateResponse(buckets = buckets, totalCount = totalCount, interval = resolvedInterval)

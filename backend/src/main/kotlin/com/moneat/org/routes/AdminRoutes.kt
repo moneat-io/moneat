@@ -664,7 +664,7 @@ fun Route.adminRoutes() {
                                 }
                                 if (!discordSent && errors.isEmpty()) {
                                     errors.add(
-                                        "Discord notification failed (no Discord integration configured or error" +
+                                        "Discord notification failed (no Discord integration configured or error " +
                                             "occurred)"
                                     )
                                 }
@@ -732,7 +732,7 @@ fun Route.adminRoutes() {
                         call.respond(
                             HttpStatusCode.BadRequest,
                             com.moneat.utils.ErrorResponse(
-                                "Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN," +
+                                "Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, " +
                                     "or TWILIO_FROM_NUMBER)"
                             )
                         )
@@ -751,7 +751,7 @@ fun Route.adminRoutes() {
                         call.respond(
                             HttpStatusCode.BadRequest,
                             com.moneat.utils.ErrorResponse(
-                                "No consented on-call phone number configured. Please set up your on-call contact" +
+                                "No consented on-call phone number configured. Please set up your on-call contact " +
                                     "in notification settings first."
                             )
                         )

@@ -653,7 +653,7 @@ class LogQueryParser {
                 val pattern = wildcardToLikePattern(value)
                 val escapedPattern = escapeFn(pattern)
                 "((has(tags, '$escapedField') AND tags['$escapedField'] ILIKE '$escapedPattern') OR " +
-                    "(has(resource_attributes," +
+                    "(has(resource_attributes, " +
                         "'$escapedField') AND resource_attributes['$escapedField'] ILIKE '$escapedPattern'))"
             } else {
                 "((has(tags, '$escapedField') AND tags['$escapedField'] = '$escaped') OR " +
@@ -687,10 +687,10 @@ class LogQueryParser {
             "($fieldRef >= $minVal AND $fieldRef <= $maxVal)"
         } else {
             val escapedField = escapeFn(actualField)
-            "(has(tags, '$escapedField') AND toInt32OrNull(tags['$escapedField']) >= $minVal AND" +
+            "(has(tags, '$escapedField') AND toInt32OrNull(tags['$escapedField']) >= $minVal AND " +
                 "toInt32OrNull(tags['$escapedField']) <= $maxVal) OR " +
-                "(has(resource_attributes," +
-                    "'$escapedField') AND toInt32OrNull(resource_attributes['$escapedField']) >= $minVal AND" +
+                "(has(resource_attributes, " +
+                    "'$escapedField') AND toInt32OrNull(resource_attributes['$escapedField']) >= $minVal AND " +
                         "toInt32OrNull(resource_attributes['$escapedField']) <= $maxVal)"
         }
     }
@@ -729,12 +729,12 @@ class LogQueryParser {
             val escapedField = escapeFn(actualField)
             if (numVal != null) {
                 "(has(tags, '$escapedField') AND toFloat64OrNull(tags['$escapedField']) $operator $numVal) OR " +
-                    "(has(resource_attributes," +
+                    "(has(resource_attributes, " +
                         "'$escapedField') AND toFloat64OrNull(resource_attributes['$escapedField']) $operator $numVal)"
             } else {
                 val escaped = escapeFn(value)
                 "(has(tags, '$escapedField') AND tags['$escapedField'] $operator '$escaped') OR " +
-                    "(has(resource_attributes," +
+                    "(has(resource_attributes, " +
                         "'$escapedField') AND resource_attributes['$escapedField'] $operator '$escaped')"
             }
         }

@@ -61,7 +61,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
         }
         if (environment == "development" && isProdEndpoint) {
             System.err.println(
-                "[MoneatLogAppender] SAFETY: endpoint points to production but environment=development - logs will" +
+                "[MoneatLogAppender] SAFETY: endpoint points to production but environment=development - logs will " +
                     "NOT be shipped. Set MONEAT_LOGS_ENDPOINT to your local instance."
             )
             return
@@ -70,7 +70,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             System.err.println("[MoneatLogAppender] WARNING: token is blank - logs will NOT be shipped to remote")
         } else {
             System.err.println(
-                "[MoneatLogAppender] Initialized: endpoint=$endpoint, serviceName=$serviceName," +
+                "[MoneatLogAppender] Initialized: endpoint=$endpoint, serviceName=$serviceName, " +
                     "environment=$environment, token=<set>"
             )
         }

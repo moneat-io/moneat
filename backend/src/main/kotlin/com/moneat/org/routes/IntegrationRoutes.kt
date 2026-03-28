@@ -308,9 +308,9 @@ fun Route.integrationRoutes() {
                     )
                 }
 
-                val scopes = 
-                    "chat:write,channels:read,channels:join,groups:read,groups:write,usergroups:read,usergroups:wri" +
-                    "te"
+                val scopes =
+                    "chat:write,channels:read,channels:join,groups:read,groups:write,usergroups:read," +
+                        "usergroups:write"
 
                 // Generate secure state parameter bound to user and org
                 val state = generateSecureState(userId, organizationId)

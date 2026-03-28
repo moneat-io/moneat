@@ -32,12 +32,10 @@ import kotlin.test.assertTrue
 
 class LlmDashboardServiceTest {
     companion object {
-        @Suppress("MaximumLineLength")
         private const val STATS_JSON =
             """{"total_generations":12,"total_tokens":2400,"total_cost":1.2,"avg_duration_ms":350.5,""" +
                 """"error_rate":8.33}"""
 
-        @Suppress("MaximumLineLength")
         private const val MODEL_STATS_JSON =
             """{"model":"gpt-4o-mini","provider":"openai","call_count":12,"total_tokens":2400,""" +
                 """"total_cost":1.2,"avg_duration_ms":350.5,"error_rate":8.33}"""
@@ -117,12 +115,27 @@ class LlmDashboardServiceTest {
             MockHttpServer { exchange ->
                 val query = exchange.requestBodyText()
                 if (query.contains("trace_id = 'trace-123'")) {
+                    val traceRow1 =
+                        """{"generation_id":"gen-1","trace_id":"trace-123","span_id":"span-1",""" +
+                            """"parent_span_id":"","ts":"2026-02-01T10:00:00.000Z","duration_ms":100.0,""" +
+                            """"name":"n1","model":"gpt-4o-mini","provider":"openai","type":"chat",""" +
+                            """"input":"in1","output":"out1","input_tokens":10,"output_tokens":20,""" +
+                            """"total_tokens":30,"cost_usd":0.01,"temperature":0.2,"max_tokens":100,""" +
+                            """"top_p":1.0,"status":"success","error_message":"","status_code":200,""" +
+                            """"user_id":"u1","session_id":"s1","environment":"prod","release":"r1",""" +
+                            """"tags":{"k":"v"},"metadata":"{}"}"""
+                    val traceRow2 =
+                        """{"generation_id":"gen-2","trace_id":"trace-123","span_id":"span-2",""" +
+                            """"parent_span_id":"span-1","ts":"2026-02-01T10:00:01.000Z",""" +
+                            """"duration_ms":250.5,"name":"n2","model":"gpt-4o-mini","provider":"openai",""" +
+                            """"type":"chat","input":"in2","output":"out2","input_tokens":5,""" +
+                            """"output_tokens":15,"total_tokens":20,"cost_usd":0.02,"temperature":0.2,""" +
+                            """"max_tokens":100,"top_p":1.0,"status":"error","error_message":"timeout",""" +
+                            """"status_code":500,"user_id":"u1","session_id":"s1","environment":"prod",""" +
+                            """"release":"r1","tags":{"k2":"v2"},"metadata":"{}"}"""
                     exchange.respond(
                         200,
-                        """
-                    {"generation_id":"gen-1","trace_id":"trace-123","span_id":"span-1","parent_span_id":"","ts":"2026-02-01T10:00:00.000Z","duration_ms":100.0,"name":"n1","model":"gpt-4o-mini","provider":"openai","type":"chat","input":"in1","output":"out1","input_tokens":10,"output_tokens":20,"total_tokens":30,"cost_usd":0.01,"temperature":0.2,"max_tokens":100,"top_p":1.0,"status":"success","error_message":"","status_code":200,"user_id":"u1","session_id":"s1","environment":"prod","release":"r1","tags":{"k":"v"},"metadata":"{}"}
-                    {"generation_id":"gen-2","trace_id":"trace-123","span_id":"span-2","parent_span_id":"span-1","ts":"2026-02-01T10:00:01.000Z","duration_ms":250.5,"name":"n2","model":"gpt-4o-mini","provider":"openai","type":"chat","input":"in2","output":"out2","input_tokens":5,"output_tokens":15,"total_tokens":20,"cost_usd":0.02,"temperature":0.2,"max_tokens":100,"top_p":1.0,"status":"error","error_message":"timeout","status_code":500,"user_id":"u1","session_id":"s1","environment":"prod","release":"r1","tags":{"k2":"v2"},"metadata":"{}"}
-                        """.trimIndent(),
+                        "$traceRow1\n$traceRow2",
                         contentType = "text/plain"
                     )
                 } else {

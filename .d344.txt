@@ -1,0 +1,1 @@
+                    "SELECT count() FROM `$db`.replay_events WHERE project_id IN (${projects.values.map { it.first }.joinToString(

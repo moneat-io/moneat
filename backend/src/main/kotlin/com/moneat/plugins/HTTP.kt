@@ -75,7 +75,7 @@ fun Application.configureHTTP() {
         setSecurityHeader(
             call,
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" +
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; " +
                 "font-src 'self' data:; connect-src 'self' $backendUrl"
         )
 

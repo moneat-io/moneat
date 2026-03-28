@@ -513,15 +513,15 @@ class StripeService(
     fun syncSubscriptionFromStripe(subscription: Subscription) {
         val metadataOrgId = subscription.metadata?.get("organization_id")
         logger.info {
-            "syncSubscriptionFromStripe: subscription=${subscription.id}, customer=${subscription.customer}," +
+            "syncSubscriptionFromStripe: subscription=${subscription.id}, customer=${subscription.customer}, " +
                 "metadata_org_id='$metadataOrgId'"
         }
 
         val organizationId = resolveOrganizationId(metadataOrgId, subscription.customer)
         if (organizationId == null) {
             logger.error {
-                "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}." +
-                    "metadata_org_id='$metadataOrgId', customer=${subscription.customer}," +
+                "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}. " +
+                    "metadata_org_id='$metadataOrgId', customer=${subscription.customer}, " +
                         "full_metadata=${subscription.metadata}"
             }
             return
@@ -669,7 +669,7 @@ class StripeService(
 
     fun handleCheckoutCompleted(session: com.stripe.model.checkout.Session) {
         logger.info {
-            "handleCheckoutCompleted: session=${session.id}, customer=${session.customer}," +
+            "handleCheckoutCompleted: session=${session.id}, customer=${session.customer}, " +
                 "subscription=${session.subscription}"
         }
         val customerId = session.customer
@@ -686,7 +686,7 @@ class StripeService(
         val organizationId = resolveOrganizationId(metadataOrgId, customerId)
         if (organizationId == null) {
             logger.error {
-                "CRITICAL: Could not resolve organization ID from checkout session ${session.id}." +
+                "CRITICAL: Could not resolve organization ID from checkout session ${session.id}. " +
                     "metadata_org_id='$metadataOrgId', customer=$customerId"
             }
             return
@@ -892,7 +892,7 @@ class StripeService(
                 flushed++
             }.getOrElse { e ->
                 logger.error(e) {
-                    "Failed to report metered usage for subscription ${batch.subscriptionId}" +
+                    "Failed to report metered usage for subscription ${batch.subscriptionId} " +
                         "(batchUnits=${batch.batchUnits})"
                 }
             }

@@ -340,8 +340,8 @@ fun Route.logRoutes(
                         groupBy = call.request.queryParameters["groupBy"]
                     )
                 logger.debug {
-                    "Aggregate logs response for org $orgId: ${result.buckets.size} buckets," +
-                        "totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom," +
+                    "Aggregate logs response for org $orgId: ${result.buckets.size} buckets, " +
+                        "totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom, " +
                         "to=$defaultTo, isDemo=$isDemo"
                 }
                 call.respond(HttpStatusCode.OK, result)

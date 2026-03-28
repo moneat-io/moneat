@@ -419,7 +419,7 @@ class OAuthService {
                 } else if (existingProvider != userData.provider) {
                     // Different OAuth provider
                     throw IllegalArgumentException(
-                        "This email is already registered with $existingProvider. Please sign in with" +
+                        "This email is already registered with $existingProvider. Please sign in with " +
                             "$existingProvider."
                     )
                 } else {
