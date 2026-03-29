@@ -61,7 +61,12 @@ class LlmServiceExtendedTest {
         runBlocking {
             val handler = queryBasedClickHouseHandler(
                 "count() as total" to """{"total":42}""",
-                "ORDER BY timestamp DESC" to buildGenerationRow("gen-1", "gpt-4o-mini", "openai")
+                "ORDER BY timestamp DESC" to
+                    """{"generation_id":"gen-1","trace_id":"t1","span_id":"s1","parent_span_id":"",""" +
+                    """"ts":"2026-03-01T10:00:00.000Z","duration_ms":100.0,"name":"test",""" +
+                    """"model":"gpt-4o-mini","provider":"openai","type":"chat","input_tokens":10,""" +
+                    """"output_tokens":20,"total_tokens":30,"cost_usd":0.01,"status":"success",""" +
+                    """"error_message":"","user_id":"u1","environment":"prod","release":"v1"}"""
             )
             withClickHouseMockServer(handler) { _ ->
                 val result = LlmDashboardService().getGenerations(
@@ -676,18 +681,4 @@ class LlmServiceExtendedTest {
                 assertTrue(queries.any { it.contains("toDateTime64(") })
             }
         }
-
-    // ──── Helper ────
-
-    private fun buildGenerationRow(
-        genId: String,
-        model: String,
-        provider: String
-    ): String {
-        return """{"generation_id":"$genId","trace_id":"t1","span_id":"s1","parent_span_id":"",""" +
-            """"ts":"2026-03-01T10:00:00.000Z","duration_ms":100.0,"name":"test",""" +
-            """"model":"$model","provider":"$provider","type":"chat","input_tokens":10,""" +
-            """"output_tokens":20,"total_tokens":30,"cost_usd":0.01,"status":"success",""" +
-            """"error_message":"","user_id":"u1","environment":"prod","release":"v1"}"""
-    }
 }
