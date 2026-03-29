@@ -239,7 +239,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(1)
-    fun `simple term search matches logs containing the term`() =
+    fun simpleTermSearchMatchesLogsContainingTheTerm() =
         runBlocking {
             // "timeout" appears in log 6 message
             val ids = queryLogIds("timeout")
@@ -248,7 +248,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(2)
-    fun `quoted phrase search matches exact phrase only`() =
+    fun quotedPhraseSearchMatchesExactPhraseOnly() =
         runBlocking {
             // "Connection refused" appears in log 1 message
             val ids = queryLogIds("\"Connection refused\"")
@@ -259,7 +259,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(3)
-    fun `full-text search with asterisk prefix searches all attributes`() =
+    fun fullTextSearchWithAsteriskPrefixSearchesAllAttributes() =
         runBlocking {
             // *:payment — should find log 12 (message: "Entering method processPayment")
             val ids = queryLogIds("*:payment")
@@ -272,7 +272,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(10)
-    fun `AND narrows results`() =
+    fun andNarrowsResults() =
         runBlocking {
             // level:error AND timeout — only log 6 has both (level=error + "timeout" in message)
             val ids = queryLogIds("level:error AND timeout")
@@ -285,7 +285,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(11)
-    fun `OR widens results`() =
+    fun orWidensResults() =
         runBlocking {
             // "Out of memory" OR "SSL certificate" — logs 8 and 19
             val ids = queryLogIds("\"Out of memory\" OR \"SSL certificate\"")
@@ -295,7 +295,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(12)
-    fun `NOT excludes results`() =
+    fun notExcludesResults() =
         runBlocking {
             // service:api-gateway AND -timeout — logs 1, 11, 16 are api-gateway; 6 has timeout
             val ids = queryLogIds("service:api-gateway AND -timeout")
@@ -305,7 +305,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(13)
-    fun `implicit AND with consecutive terms`() =
+    fun implicitAndWithConsecutiveTerms() =
         runBlocking {
             // "connection" "refused" — should match log 1 (both tokens in message)
             val ids = queryLogIds("connection refused")
@@ -314,7 +314,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(14)
-    fun `complex boolean expression`() =
+    fun complexBooleanExpression() =
         runBlocking {
             // (level:error OR level:fatal) AND service:worker
             // worker service has: log 8 (fatal), log 9 (info), log 14 (error)
@@ -330,7 +330,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(20)
-    fun `attribute search with @ prefix matches tags`() =
+    fun attributeSearchWithAtPrefixMatchesTags() =
         runBlocking {
             // @region:us-east-1 — log 1
             val ids = queryLogIds("@region:us-east-1")
@@ -340,7 +340,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(21)
-    fun `reserved attribute service without @ prefix`() =
+    fun reservedAttributeServiceWithoutAtPrefix() =
         runBlocking {
             val ids = queryLogIds("service:auth-service")
             assertTrue(ids.contains(logId(2)), "Should find auth-service log: $ids")
@@ -350,7 +350,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(22)
-    fun `status maps to level column`() =
+    fun statusMapsToLevelColumn() =
         runBlocking {
             val ids = queryLogIds("status:fatal")
             assertTrue(ids.contains(logId(8)), "status:fatal should find fatal log: $ids")
@@ -359,7 +359,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(23)
-    fun `host reserved attribute`() =
+    fun hostReservedAttribute() =
         runBlocking {
             val ids = queryLogIds("host:server4")
             assertTrue(ids.contains(logId(8)), "Should find server4 logs: $ids")
@@ -368,7 +368,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(24)
-    fun `source reserved attribute`() =
+    fun sourceReservedAttribute() =
         runBlocking {
             val ids = queryLogIds("source:otlp")
             assertTrue(ids.contains(logId(7)), "Should find otlp source logs: $ids")
@@ -378,7 +378,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(25)
-    fun `environment reserved attribute`() =
+    fun environmentReservedAttribute() =
         runBlocking {
             val ids = queryLogIds("environment:staging")
             assertTrue(ids.contains(logId(3)), "Should find staging logs: $ids")
@@ -388,7 +388,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(26)
-    fun `attribute search matches resource_attributes`() =
+    fun attributeSearchMatchesResourceAttributes() =
         runBlocking {
             val ids = queryLogIds("@sdk.name:sentry-python")
             assertTrue(ids.contains(logId(4)), "Should find log with resource_attribute sdk.name=sentry-python: $ids")
@@ -401,7 +401,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(30)
-    fun `wildcard prefix match on service`() =
+    fun wildcardPrefixMatchOnService() =
         runBlocking {
             // service:web* — matches web-app (logs 3,5,10,13,18,20) and web-server (logs 7,17,19)
             val ids = queryLogIds("service:web*")
@@ -412,7 +412,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(31)
-    fun `wildcard single character match`() =
+    fun wildcardSingleCharacterMatch() =
         runBlocking {
             // host:server? — matches server1, server2, server3, server4, serverA
             val ids = queryLogIds("host:server?")
@@ -421,7 +421,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(32)
-    fun `wildcard suffix match`() =
+    fun wildcardSuffixMatch() =
         runBlocking {
             // service:*service — matches auth-service, payment-service, notification-service
             val ids = queryLogIds("service:*service")
@@ -432,7 +432,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(33)
-    fun `full-text wildcard search`() =
+    fun fullTextWildcardSearch() =
         runBlocking {
             // *:certif* — should find log 19 (SSL certificate)
             val ids = queryLogIds("*:certif*")
@@ -441,7 +441,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(34)
-    fun `wildcards inside quotes treated as literals`() =
+    fun wildcardsInsideQuotesTreatedAsLiterals() =
         runBlocking {
             // "*test*" — should match log 20 which contains literal "*test*" in message
             val ids = queryLogIds("\"*test*\"")
@@ -454,7 +454,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(40)
-    fun `range query on tag value`() =
+    fun rangeQueryOnTagValue() =
         runBlocking {
             // @http.status_code:[400 TO 599] — logs with 401 (log2), 500 (log1), 504 (log6)
             val ids = queryLogIds("@http.status_code:[400 TO 599]")
@@ -466,7 +466,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(41)
-    fun `greater than operator`() =
+    fun greaterThanOperator() =
         runBlocking {
             // @http.response_time:>1000 — log 1 (1500), log 6 (30000)
             val ids = queryLogIds("@http.response_time:>1000")
@@ -478,7 +478,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(42)
-    fun `greater than or equal operator`() =
+    fun greaterThanOrEqualOperator() =
         runBlocking {
             // @http.response_time:>=1500 — log 1 (1500), log 6 (30000)
             val ids = queryLogIds("@http.response_time:>=1500")
@@ -488,7 +488,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(43)
-    fun `less than operator`() =
+    fun lessThanOperator() =
         runBlocking {
             // @http.response_time:<50 — log 7 (45), log 8 (0)
             val ids = queryLogIds("@http.response_time:<50")
@@ -499,7 +499,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(44)
-    fun `less than or equal operator`() =
+    fun lessThanOrEqualOperator() =
         runBlocking {
             // @http.response_time:<=45 — log 7 (45), log 8 (0)
             val ids = queryLogIds("@http.response_time:<=45")
@@ -514,7 +514,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(50)
-    fun `existence check for tag returns logs that have the attribute`() =
+    fun existenceCheckForTagReturnsLogsThatHaveTheAttribute() =
         runBlocking {
             // @http.method:* — only log 7 has http.method tag
             val ids = queryLogIds("@http.method:*")
@@ -524,7 +524,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(51)
-    fun `non-existence check returns logs without the attribute`() =
+    fun nonExistenceCheckReturnsLogsWithoutTheAttribute() =
         runBlocking {
             // -@http.method:* — all logs except log 7
             val ids = queryLogIds("-@http.method:*")
@@ -534,7 +534,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(52)
-    fun `existence check for top-level field`() =
+    fun existenceCheckForTopLevelField() =
         runBlocking {
             // trace_id:* — logs with non-empty trace_id
             val ids = queryLogIds("trace_id:*")
@@ -550,7 +550,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(60)
-    fun `tags colon checks tag key existence`() =
+    fun tagsColonChecksTagKeyExistence() =
         runBlocking {
             // tags:urgent — log 1 has 'urgent' tag key
             val ids = queryLogIds("tags:urgent")
@@ -560,7 +560,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(61)
-    fun `grouped field values with OR`() =
+    fun groupedFieldValuesWithOr() =
         runBlocking {
             // env:(prod OR staging) — should find logs where env tag is prod or staging
             val ids = queryLogIds("env:(prod OR staging)")
@@ -574,7 +574,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(62)
-    fun `grouped field values on top-level field`() =
+    fun groupedFieldValuesOnTopLevelField() =
         runBlocking {
             // service:(worker OR payment-service) — logs 8,9,14 (worker) and 12 (payment-service)
             val ids = queryLogIds("service:(worker OR payment-service)")
@@ -589,7 +589,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(70)
-    fun `escaped colon in attribute value`() =
+    fun escapedColonInAttributeValue() =
         runBlocking {
             // @special.attr:hello\:world — log 20 has special.attr=hello:world
             val ids = queryLogIds("@special.attr:hello\\:world")
@@ -598,7 +598,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(71)
-    fun `quoted value with special characters`() =
+    fun quotedValueWithSpecialCharacters() =
         runBlocking {
             // @special.attr:"hello:world" — log 20
             val ids = queryLogIds("@special.attr:\"hello:world\"")
@@ -607,7 +607,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(72)
-    fun `SQL injection attempt is safely escaped`() =
+    fun sqlInjectionAttemptIsSafelyEscaped() =
         runBlocking {
             // Should not throw or cause SQL errors
             val ids = queryLogIds("service:'; DROP TABLE logs; --")
@@ -616,7 +616,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(73)
-    fun `query with backslash in value`() =
+    fun queryWithBackslashInValue() =
         runBlocking {
             // Should not cause SQL errors
             queryLogIds("message:test\\\\value")
@@ -630,7 +630,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(80)
-    fun `empty query returns all logs`() =
+    fun emptyQueryReturnsAllLogs() =
         runBlocking {
             val ids = queryLogIds("")
             assertEquals(20, ids.size, "Empty query should return all 20 logs")
@@ -638,7 +638,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(81)
-    fun `whitespace-only query returns all logs`() =
+    fun whitespaceOnlyQueryReturnsAllLogs() =
         runBlocking {
             val ids = queryLogIds("   ")
             assertEquals(20, ids.size, "Whitespace query should return all 20 logs")
@@ -646,7 +646,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(82)
-    fun `unclosed quote handles gracefully`() =
+    fun unclosedQuoteHandlesGracefully() =
         runBlocking {
             // Should not throw — may return results or empty
             queryLogIds("\"unclosed quote")
@@ -655,7 +655,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(83)
-    fun `unclosed parenthesis handles gracefully`() =
+    fun unclosedParenthesisHandlesGracefully() =
         runBlocking {
             val ids = queryLogIds("(level:error AND timeout")
             // Should still work and find log 6
@@ -664,7 +664,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(84)
-    fun `deeply nested parentheses`() =
+    fun deeplyNestedParentheses() =
         runBlocking {
             val ids = queryLogIds("((service:worker OR service:api-gateway) AND (level:error OR level:fatal))")
             assertTrue(ids.contains(logId(1)), "Should find api-gateway error: $ids")
@@ -673,7 +673,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(85)
-    fun `very long query string`() =
+    fun veryLongQueryString() =
         runBlocking {
             // Build a long query with many OR clauses
             val longQuery = (1..20).joinToString(" OR ") { "service:service-$it" }
@@ -684,7 +684,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(86)
-    fun `unicode in search terms`() =
+    fun unicodeInSearchTerms() =
         runBlocking {
             // Should not throw
             queryLogIds("message:héllo")
@@ -697,7 +697,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(90)
-    fun `level field with toString cast works against real Enum8`() =
+    fun levelFieldWithToStringCastWorksAgainstRealEnum8() =
         runBlocking {
             val ids = queryLogIds("level:error")
             // error logs: 1, 2, 6, 11, 14, 19
@@ -710,7 +710,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(91)
-    fun `source field with toString cast works against real Enum8`() =
+    fun sourceFieldWithToStringCastWorksAgainstRealEnum8() =
         runBlocking {
             val ids = queryLogIds("source:agent_stdout")
             assertTrue(ids.contains(logId(3)), "source:agent_stdout should find agent logs: $ids")
@@ -719,7 +719,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(92)
-    fun `wildcard on enum field works`() =
+    fun wildcardOnEnumFieldWorks() =
         runBlocking {
             // level:err* should match 'error'
             val ids = queryLogIds("level:err*")
@@ -729,7 +729,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(93)
-    fun `status synonym maps to level and works with Enum8`() =
+    fun statusSynonymMapsToLevelAndWorksWithEnum8() =
         runBlocking {
             val ids = queryLogIds("status:warn")
             assertTrue(ids.contains(logId(3)), "status:warn should find warn logs: $ids")
@@ -743,7 +743,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(100)
-    fun `real-world query - error in production api`() =
+    fun realWorldQueryErrorInProductionApi() =
         runBlocking {
             val ids = queryLogIds("service:api-gateway AND level:error AND @env:prod")
             assertTrue(ids.contains(logId(1)), "Should find prod api-gateway error: $ids")
@@ -753,7 +753,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(101)
-    fun `real-world query - slow responses`() =
+    fun realWorldQuerySlowResponses() =
         runBlocking {
             val ids = queryLogIds("@http.response_time:>1000 AND @env:prod")
             assertTrue(ids.contains(logId(1)), "Should find slow response: $ids")
@@ -762,7 +762,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(102)
-    fun `real-world query - auth failures excluding test users`() =
+    fun realWorldQueryAuthFailuresExcludingTestUsers() =
         runBlocking {
             val ids = queryLogIds("service:auth-service AND (failed OR error) AND -@user.id:test*")
             assertTrue(ids.contains(logId(2)), "Should find auth failure: $ids")
@@ -770,7 +770,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(103)
-    fun `real-world query - non-200 status codes in production`() =
+    fun realWorldQueryNon200StatusCodesInProduction() =
         runBlocking {
             val ids = queryLogIds("@http.status_code:[400 TO 599] AND @env:prod")
             assertTrue(ids.contains(logId(1)), "Should find 500: $ids")
@@ -785,7 +785,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(110)
-    fun `SELECT toString(level) AS level_text does not conflict with WHERE clause on level`() =
+    fun selectToStringLevelAsLevelTextDoesNotConflictWithWhereClauseOnLevel() =
         runBlocking {
             // Uses the production alias pattern: toString(level) AS level_text
             // combined with a WHERE clause that references toString(level) via level:error
@@ -812,7 +812,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(111)
-    fun `SELECT toString(source) AS source_text does not conflict with WHERE clause on source`() =
+    fun selectToStringSourceAsSourceTextDoesNotConflictWithWhereClauseOnSource() =
         runBlocking {
             val parsed = parser.parse("source:sdk")
             val whereCondition = parser.toClickHouseSql(parsed.rootNode!!, ClickHouseSqlUtils::escapeSql)
@@ -839,7 +839,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(120)
-    fun `free text search with hyphenated term uses ILIKE fallback`() =
+    fun freeTextSearchWithHyphenatedTermUsesIlikeFallback() =
         runBlocking {
             // "api-gateway" contains a hyphen — hasTokenCaseInsensitive would reject it.
             // Should fall back to ILIKE and find logs with service=api-gateway in the message/body/service fields.
@@ -850,7 +850,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(121)
-    fun `free text search with dotted term uses ILIKE fallback`() =
+    fun freeTextSearchWithDottedTermUsesIlikeFallback() =
         runBlocking {
             // "config.yaml" contains a dot — another separator char
             val ids = queryLogIds("config.yaml")
@@ -859,7 +859,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(122)
-    fun `production-like SELECT with toString level and source aliases`() =
+    fun productionLikeSelectWithToStringLevelAndSourceAliases() =
         runBlocking {
             // Reproduce the exact production query shape — uses level_text/source_text aliases
             // to avoid Enum8 column name collision
@@ -893,7 +893,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(123)
-    fun `production-like SELECT with hyphenated free text search`() =
+    fun productionLikeSelectWithHyphenatedFreeTextSearch() =
         runBlocking {
             // Free text "api-gateway" with production SELECT shape
             val parsed = parser.parse("api-gateway")
@@ -922,7 +922,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(130)
-    fun `trailing colon in field does not crash`() =
+    fun trailingColonInFieldDoesNotCrash() =
         runBlocking {
             // "auth-service:" has empty value after colon — should parse as free text
             val ids = queryLogIds("service:api-gateway OR auth-service:")
@@ -932,7 +932,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(131)
-    fun `wildcard field search on host`() =
+    fun wildcardFieldSearchOnHost() =
         runBlocking {
             // host:server* should match all hosts starting with "server"
             val ids = queryLogIds("host:server*")
@@ -943,7 +943,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(132)
-    fun `negated field search excludes results`() =
+    fun negatedFieldSearchExcludesResults() =
         runBlocking {
             // -host:server1 should exclude logs from server1
             val ids = queryLogIds("-host:server1")
@@ -953,7 +953,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(133)
-    fun `message field wildcard search`() =
+    fun messageFieldWildcardSearch() =
         runBlocking {
             // message:Rate* should find "Rate limit approaching for client" (log 16)
             val ids = queryLogIds("message:Rate*")
@@ -962,7 +962,7 @@ class LogQueryParserIntegrationTest {
 
     @Test
     @Order(134)
-    fun `wildcard field search with production SELECT`() =
+    fun wildcardFieldSearchWithProductionSelect() =
         runBlocking {
             // Verify wildcard field search works with the production SELECT shape
             val parsed = parser.parse("host:server*")

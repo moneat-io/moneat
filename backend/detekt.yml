@@ -68,7 +68,7 @@ naming:
     active: false
   FunctionNaming:
     active: true
-    # Detekt default test excludes plus **/integrationTest/** (Gradle layout; not in upstream defaults).
+    # Detekt default test excludes.
     excludes:
       - '**/test/**'
       - '**/androidTest/**'
@@ -78,7 +78,6 @@ naming:
       - '**/androidInstrumentedTest/**'
       - '**/jsTest/**'
       - '**/iosTest/**'
-      - '**/integrationTest/**'
   VariableNaming:
     active: true
 

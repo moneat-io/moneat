@@ -97,13 +97,13 @@ class ContainerHarnessIntegrationTest {
     }
 
     @Test
-    fun `postgres_container_is_running_and_accessible`() {
+    fun postgresContainerIsRunningAndAccessible() {
         assertTrue(postgres.isRunning, "PostgreSQL container should be running")
         assertTrue(postgres.jdbcUrl.isNotEmpty(), "JDBC URL should be available")
     }
 
     @Test
-    fun `postgres_migrations_completed_successfully`() {
+    fun postgresMigrationsCompletedSuccessfully() {
         val flyway =
             Flyway
                 .configure()
@@ -122,7 +122,7 @@ class ContainerHarnessIntegrationTest {
     }
 
     @Test
-    fun `clickhouse_container_is_running`() {
+    fun clickhouseContainerIsRunning() {
         assertTrue(clickhouse.isRunning, "ClickHouse container should be running")
         assertTrue(clickhouse.getMappedPort(8123) > 0, "ClickHouse HTTP port should be mapped")
 
@@ -132,7 +132,7 @@ class ContainerHarnessIntegrationTest {
     }
 
     @Test
-    fun `redis_container_is_running_and_accessible`() {
+    fun redisContainerIsRunningAndAccessible() {
         assertTrue(redis.isRunning, "Redis container should be running")
         assertTrue(redis.getMappedPort(6379) > 0, "Redis port should be mapped")
     }
