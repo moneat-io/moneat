@@ -67,7 +67,17 @@ naming:
   ConstructorParameterNaming:
     active: false
   FunctionNaming:
-    active: false
+    active: true
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
   VariableNaming:
     active: true
 
