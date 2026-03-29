@@ -291,18 +291,21 @@ jobs:
 
           [See analysis details on SonarQube](${DASH})"
 
-          # ── Post or update existing comment ──
-          EXISTING_ID=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+          # ── Delete existing Sonar comment(s), then post a fresh one ──
+          EXISTING_IDS=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
             --paginate --jq '.[] | select(.body | contains("<!-- sonarqube-quality-gate -->")) | .id' \
-            | head -1 || true)
+            || true)
 
-          if [[ -n "$EXISTING_ID" ]]; then
-            gh api "repos/${{ github.repository }}/issues/comments/${EXISTING_ID}" \
-              -X PATCH -f body="$BODY"
-          else
-            gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-              -f body="$BODY"
+          if [[ -n "$EXISTING_IDS" ]]; then
+            while IFS= read -r COMMENT_ID; do
+              [[ -z "$COMMENT_ID" ]] && continue
+              gh api "repos/${{ github.repository }}/issues/comments/${COMMENT_ID}" \
+                -X DELETE >/dev/null || true
+            done <<< "$EXISTING_IDS"
           fi
+
+          gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            -f body="$BODY"
 
   # PR-Required: Frontend unit tests
   frontend-unit:
