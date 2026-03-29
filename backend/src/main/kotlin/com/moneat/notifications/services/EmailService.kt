@@ -215,29 +215,23 @@ class EmailService {
 
         var success = false
         try {
+            val textPart =
+                MimeBodyPart().apply {
+                    setText(textBody, "UTF-8")
+                }
+            val htmlPart =
+                MimeBodyPart().apply {
+                    setContent(htmlBody, "text/html; charset=UTF-8")
+                }
             val message =
                 MimeMessage(mailSession).apply {
                     setFrom(InternetAddress(fromEmail, "Moneat"))
                     setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
                     setSubject(subject)
 
-                    // Create multipart message with both HTML and text
                     val multipart = MimeMultipart("alternative")
-
-                    // Add text part
-                    val textPart =
-                        MimeBodyPart().apply {
-                            setText(textBody, "UTF-8")
-                        }
                     multipart.addBodyPart(textPart)
-
-                    // Add HTML part
-                    val htmlPart =
-                        MimeBodyPart().apply {
-                            setContent(htmlBody, "text/html; charset=UTF-8")
-                        }
                     multipart.addBodyPart(htmlPart)
-
                     setContent(multipart)
                 }
 

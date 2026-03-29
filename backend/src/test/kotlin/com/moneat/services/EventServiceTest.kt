@@ -150,46 +150,40 @@ class EventServiceTest {
             )
 
         val fingerprint1 =
-            event1.let {
-                it.exception?.let { exc ->
-                    val firstException = exc.values.firstOrNull()
-                    listOf(
-                        firstException?.type,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.function,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.filename
-                    )
-                        .filterNotNull()
-                } ?: emptyList()
-            }
+            event1.exception?.let { exc ->
+                val firstException = exc.values.firstOrNull()
+                listOf(
+                    firstException?.type,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.function,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.filename
+                ).filterNotNull()
+            } ?: emptyList()
 
         val fingerprint2 =
-            event2.let {
-                it.exception?.let { exc ->
-                    val firstException = exc.values.firstOrNull()
-                    listOf(
-                        firstException?.type,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.function,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.filename
-                    )
-                        .filterNotNull()
-                } ?: emptyList()
-            }
+            event2.exception?.let { exc ->
+                val firstException = exc.values.firstOrNull()
+                listOf(
+                    firstException?.type,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.function,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.filename
+                ).filterNotNull()
+            } ?: emptyList()
 
         assertEquals(fingerprint1, fingerprint2, "Same errors should generate identical fingerprints for deduplication")
     }

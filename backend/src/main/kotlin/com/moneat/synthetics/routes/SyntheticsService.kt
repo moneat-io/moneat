@@ -144,16 +144,13 @@ class SyntheticsService(
         organizationId: Int,
         request: UpdateSyntheticTestRequest
     ): SyntheticTestResponse? {
-        request.retryCount?.let { rc ->
-            request.retryIntervalMs?.let { ri ->
-                validateRetryParams(rc, ri)
-            } ?: validateRetryParams(rc, RETRY_INTERVAL_MS_DEFAULT)
+        val rc = request.retryCount
+        val ri = request.retryIntervalMs
+        if (rc != null) {
+            validateRetryParams(rc, ri ?: RETRY_INTERVAL_MS_DEFAULT)
         }
-        request.retryIntervalMs?.let { ri ->
-            validateRetryParams(
-                request.retryCount ?: RETRY_COUNT_DEFAULT,
-                ri
-            )
+        if (ri != null) {
+            validateRetryParams(rc ?: RETRY_COUNT_DEFAULT, ri)
         }
         val updated = transaction {
             SyntheticTests

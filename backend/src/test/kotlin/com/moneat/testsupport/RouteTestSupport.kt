@@ -87,7 +87,7 @@ object RouteTestSupport {
             .withIssuer(ISSUER)
             .withAudience(AUDIENCE)
             .withClaim("userId", userId)
-            .apply { orgId?.let { withClaim("orgId", it) } }
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .withClaim("email", email)
             .sign(Algorithm.HMAC256(secret))
     }

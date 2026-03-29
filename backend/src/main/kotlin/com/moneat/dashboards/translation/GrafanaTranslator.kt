@@ -268,15 +268,16 @@ class GrafanaTranslator : DashboardTranslator {
                     }
                     "value" -> {
                         val opts = mapObj["options"]?.jsonObject ?: return@mapNotNull null
-                        opts.entries.firstOrNull()?.let { (key, entry) ->
-                            val result = entry.jsonObject["result"]?.jsonObject ?: return@let null
-                            val text = result["text"]?.jsonPrimitive?.contentOrNull ?: return@let null
-                            val color = result["color"]?.jsonPrimitive?.contentOrNull
-                            buildJsonObject {
-                                put("value", key)
-                                put("text", text)
-                                color?.let { put("color", it) }
-                            }
+                        val firstEntry = opts.entries.firstOrNull() ?: return@mapNotNull null
+                        val key = firstEntry.key
+                        val entry = firstEntry.value
+                        val result = entry.jsonObject["result"]?.jsonObject ?: return@mapNotNull null
+                        val text = result["text"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                        val color = result["color"]?.jsonPrimitive?.contentOrNull
+                        buildJsonObject {
+                            put("value", key)
+                            put("text", text)
+                            color?.let { put("color", it) }
                         }
                     }
                     else -> null
@@ -306,7 +307,8 @@ class GrafanaTranslator : DashboardTranslator {
         )?.jsonObject?.get("type")?.jsonPrimitive?.contentOrNull?.let { config["scaleType"] = it }
 
         val options = panelJson["options"]?.jsonObject
-        options?.get("legend")?.jsonObject?.let { legend ->
+        val legend = options?.get("legend")?.jsonObject
+        if (legend != null) {
             legend["placement"]?.jsonPrimitive?.contentOrNull?.let { config["legendPlacement"] = it }
             legend["displayMode"]?.jsonPrimitive?.contentOrNull?.let { mode ->
                 config["legendMode"] = when (mode) {
