@@ -109,7 +109,7 @@ class LlmServiceExtendedTest {
                     pageSize = 10
                 )
                 val dataQuery = queries.find { it.contains("ORDER BY timestamp DESC") } ?: ""
-                assertTrue(dataQuery.contains("model = '$GPT_4O'"), "model filter missing")
+                assertTrue(dataQuery.contains("model = '${GPT_4O}'"), "model filter missing")
                 assertTrue(dataQuery.contains("provider = 'openai'"), "provider filter missing")
                 assertTrue(dataQuery.contains("type = 'chat'"), "type filter missing")
                 assertTrue(dataQuery.contains("status = 'error'"), "status filter missing")
