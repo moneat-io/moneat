@@ -272,13 +272,26 @@ jacoco {
     toolVersion = "0.8.14"
 }
 
-tasks.jacocoTestReport {
-    dependsOn(tasks.test)
+val jacocoBackendMainExcludes =
+    arrayOf(
+        "**/models/**", // data classes — no logic to test
+        "**/config/**", // infrastructure wiring (DB clients, Redis, Sentry, env)
+        "**/plugins/**", // Ktor plugin bootstrap — framework wiring, not business logic
+        "**/logging/**", // log appender setup
+        "**/enterprise/**", // on-call/feature-flag integration stubs in core
+        "**/Application*", // entry point
+    )
 
-    // Unit tests only — avoids implicit dependency on :integrationTest (Gradle 9 validates
-    // executionData inputs against tasks that produce them).
+tasks.jacocoTestReport {
+    val eeProject = project(":ee")
+    dependsOn(tasks.test, eeProject.tasks.named("test"))
+
+    // Unit tests only — merges core + enterprise SSO execution data. SSO sources live in :ee.
     executionData.setFrom(
-        fileTree(layout.buildDirectory.asFile).include("jacoco/test.exec")
+        files(
+            layout.buildDirectory.file("jacoco/test.exec"),
+            eeProject.layout.buildDirectory.file("jacoco/test.exec"),
+        )
     )
 
     reports {
@@ -287,20 +300,22 @@ tasks.jacocoTestReport {
         csv.required.set(false)
     }
 
-    classDirectories.setFrom(
-        files(
-            classDirectories.files.map {
-                fileTree(it) {
-                    exclude(
-                        "**/models/**",          // data classes — no logic to test
-                        "**/config/**",          // infrastructure wiring (DB clients, Redis, Sentry, env)
-                        "**/plugins/**",         // Ktor plugin bootstrap — framework wiring, not business logic
-                        "**/logging/**",         // log appender setup
-                        "**/enterprise/**",      // on-call/feature-flag integration stubs
-                        "**/Application*",       // entry point
-                    )
-                }
+    val backendFiltered =
+        sourceSets.main.get().output.classesDirs.map { dir ->
+            fileTree(dir) {
+                exclude(*jacocoBackendMainExcludes)
             }
+        }
+    val enterpriseSsoClasses =
+        fileTree(eeProject.layout.buildDirectory.dir("classes/kotlin/main")) {
+            include("**/com/moneat/enterprise/sso/**")
+        }
+    classDirectories.setFrom(files(backendFiltered, enterpriseSsoClasses))
+
+    sourceDirectories.setFrom(
+        files(
+            sourceSets.main.get().allSource.srcDirs.filter { it.exists() },
+            eeProject.file("src/main/kotlin/com/moneat/enterprise/sso"),
         )
     )
 }
@@ -327,7 +342,16 @@ tasks.jacocoTestCoverageVerification {
         }
     }
 
-    classDirectories.setFrom(tasks.jacocoTestReport.get().classDirectories)
+    // Gate matches historical scope: core main only (enterprise SSO is reported separately above).
+    classDirectories.setFrom(
+        files(
+            sourceSets.main.get().output.classesDirs.map { dir ->
+                fileTree(dir) {
+                    exclude(*jacocoBackendMainExcludes)
+                }
+            }
+        )
+    )
 }
 
 tasks.test {
