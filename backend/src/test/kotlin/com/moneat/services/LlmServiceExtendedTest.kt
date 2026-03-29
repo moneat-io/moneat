@@ -208,7 +208,7 @@ class LlmServiceExtendedTest {
                 when {
                     query.contains("GROUP BY model, provider") -> {
                         val costsRow1 =
-                            """{"model":"${GPT_4O}","provider":"openai","total_cost":1.5,""" +
+                            """{"model":"gpt-4o","provider":"openai","total_cost":1.5,""" +
                                 """"total_tokens":3000,"call_count":10}"""
                         val costsRow2 =
                             """{"model":"claude-3","provider":"anthropic","total_cost":0.8,""" +
@@ -243,7 +243,7 @@ class LlmServiceExtendedTest {
     fun `getModels returns model stats list`() =
         runBlocking {
             val modelsRow1 =
-                """{"model":"${GPT_4O}","provider":"openai","call_count":100,"total_tokens":20000,""" +
+                """{"model":"gpt-4o","provider":"openai","call_count":100,"total_tokens":20000,""" +
                     """"total_cost":5.0,"avg_duration_ms":400.0,"error_rate":2.0}"""
             val modelsRow2 =
                 """{"model":"claude-3","provider":"anthropic","call_count":50,"total_tokens":10000,""" +
