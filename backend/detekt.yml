@@ -68,9 +68,9 @@ naming:
     active: false
   FunctionNaming:
     active: true
-    # Detekt default test excludes.
     excludes:
       - '**/test/**'
+      - '**/integrationTest/**'
       - '**/androidTest/**'
       - '**/commonTest/**'
       - '**/jvmTest/**'
