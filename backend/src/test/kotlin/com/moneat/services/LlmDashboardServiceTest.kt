@@ -123,7 +123,7 @@ class LlmDashboardServiceTest {
                             """"total_tokens":30,"cost_usd":0.01,"temperature":0.2,"max_tokens":100,""" +
                             """"top_p":1.0,"status":"success","error_message":"","status_code":200,""" +
                             """"user_id":"u1","session_id":"s1","environment":"prod","release":"r1",""" +
-                            """"tags":{"k":"v"},"metadata":"{}"}"""
+                            """"tags":{"k":"v"},"metadata":{}}"""
                     val traceRow2 =
                         """{"generation_id":"gen-2","trace_id":"trace-123","span_id":"span-2",""" +
                             """"parent_span_id":"span-1","ts":"2026-02-01T10:00:01.000Z",""" +
@@ -132,7 +132,7 @@ class LlmDashboardServiceTest {
                             """"output_tokens":15,"total_tokens":20,"cost_usd":0.02,"temperature":0.2,""" +
                             """"max_tokens":100,"top_p":1.0,"status":"error","error_message":"timeout",""" +
                             """"status_code":500,"user_id":"u1","session_id":"s1","environment":"prod",""" +
-                            """"release":"r1","tags":{"k2":"v2"},"metadata":"{}"}"""
+                            """"release":"r1","tags":{"k2":"v2"},"metadata":{}}"""
                     exchange.respond(
                         200,
                         "$traceRow1\n$traceRow2",

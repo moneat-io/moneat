@@ -31,7 +31,10 @@ import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.floatOrNull
@@ -46,6 +49,13 @@ private val logger = KotlinLogging.logger {}
 class LlmDashboardService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
+
+    private fun metadataToString(element: JsonElement?): String =
+        when (element) {
+            null -> "{}"
+            is JsonPrimitive -> element.content
+            else -> json.encodeToString(JsonElement.serializer(), element)
+        }
 
     private fun projectIdClause(projectId: Long): String {
         return if (projectId < 0) {
@@ -368,7 +378,7 @@ class LlmDashboardService {
             environment = obj["environment"]?.jsonPrimitive?.content ?: "",
             release = obj["release"]?.jsonPrimitive?.content ?: "",
             tags = tagsMap,
-            metadata = obj["metadata"]?.jsonPrimitive?.content ?: "{}"
+            metadata = metadataToString(obj["metadata"])
         )
     }
 
@@ -440,7 +450,7 @@ class LlmDashboardService {
                     environment = obj["environment"]?.jsonPrimitive?.content ?: "",
                     release = obj["release"]?.jsonPrimitive?.content ?: "",
                     tags = tagsMap,
-                    metadata = obj["metadata"]?.jsonPrimitive?.content ?: "{}"
+                    metadata = metadataToString(obj["metadata"])
                 )
             }
 

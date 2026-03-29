@@ -147,7 +147,7 @@ class LlmServiceExtendedTest {
                     """"input_tokens":5,"output_tokens":10,"total_tokens":15,"cost_usd":0.005,""" +
                     """"temperature":0.7,"max_tokens":512,"top_p":0.9,"status":"success",""" +
                     """"error_message":"","status_code":200,"user_id":"user-1","session_id":"sess-1",""" +
-                    """"environment":"production","release":"v2.0","tags":{"env":"prod","team":"ml"},"metadata":"{}"}"""
+                    """"environment":"production","release":"v2.0","tags":{"env":"prod","team":"ml"},"metadata":{}}"""
             withClickHouseMockServer(
                 queryBasedClickHouseHandler(defaultBody = detailJson)
             ) { _ ->

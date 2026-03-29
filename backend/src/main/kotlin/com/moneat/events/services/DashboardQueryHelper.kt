@@ -31,9 +31,11 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.sentry.ISpan
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -68,6 +70,24 @@ class DashboardQueryHelper(
     val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     val backendUrl: String get() = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
     val json = Json { ignoreUnknownKeys = true }
+
+    /**
+     * Normalizes a JSONEachRow field to the string form stored in API models.
+     * ClickHouse may emit nested JSON for object/array columns; older rows use string primitives.
+     */
+    fun jsonFieldAsStoredString(obj: JsonObject, key: String, default: String = "{}"): String =
+        when (val el = obj[key]) {
+            null -> default
+            is JsonPrimitive -> el.content
+            else -> json.encodeToString(JsonElement.serializer(), el)
+        }
+
+    fun jsonFieldAsStoredStringOrNull(obj: JsonObject, key: String): String? =
+        when (val el = obj[key]) {
+            null -> null
+            is JsonPrimitive -> el.contentOrNull
+            else -> json.encodeToString(JsonElement.serializer(), el)
+        }
 
     /**
      * Executes a query that returns a single row with project_id, e.g. for entity lookup.
@@ -177,9 +197,9 @@ class DashboardQueryHelper(
             release = obj["release"]?.jsonPrimitive?.contentOrNull,
             user = extractUserInfo(obj),
             tags = HashMap(tagsMap),
-            contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
+            contexts = jsonFieldAsStoredString(obj, "contexts", "{}"),
             exception = obj["exception"]?.jsonPrimitive?.contentOrNull,
-            breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull
+            breadcrumbs = jsonFieldAsStoredStringOrNull(obj, "breadcrumbs")
         )
     }
 
