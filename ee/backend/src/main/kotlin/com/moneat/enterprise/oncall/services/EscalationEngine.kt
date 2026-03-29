@@ -221,7 +221,10 @@ class EscalationEngine(
                     "ON_CALL_SCHEDULE" -> {
                         val onCall = onCallScheduleService.getCurrentOnCall(target.targetId)
                         if (onCall != null) {
-                            logger.info("Notifying on-call user ${onCall.userId} from schedule ${target.targetId} for incident $incidentId")
+                            logger.info(
+                                "Notifying on-call user ${onCall.userId} from schedule ${target.targetId} " +
+                                    "for incident $incidentId",
+                            )
                             notifyUser(
                                 incidentId,
                                 onCall.userId,
@@ -242,7 +245,10 @@ class EscalationEngine(
                 incidentId,
                 "ESCALATED",
                 null,
-                mapOf("step" to JsonPrimitive(stepIndex.toString()), "iteration" to JsonPrimitive(iteration.toString())),
+                mapOf(
+                    "step" to JsonPrimitive(stepIndex.toString()),
+                    "iteration" to JsonPrimitive(iteration.toString()),
+                ),
             )
 
             // Schedule timeout
@@ -293,14 +299,22 @@ class EscalationEngine(
                     incidentId,
                     "NOTIFICATION_SENT",
                     userId,
-                    mapOf("channel" to JsonPrimitive(channelsSent), "toUserName" to JsonPrimitive(userName ?: "Unknown")),
+                    mapOf(
+                        "channel" to JsonPrimitive(channelsSent),
+                        "toUserName" to JsonPrimitive(userName ?: "Unknown"),
+                    ),
                 )
             } catch (e: Exception) {
                 logger.error("Failed to log timeline for incident $incidentId", e)
             }
 
             // SMS/call fallback: respect preference AND existing phone opt-in consent
-            if (prefs.isChannelEnabled("sms") && !phoneNumber.isNullOrBlank() && smsFallbackDelayMinutes > 0 && twilioService.isEnabled()) {
+            val smsEligible =
+                prefs.isChannelEnabled("sms") &&
+                    !phoneNumber.isNullOrBlank() &&
+                    smsFallbackDelayMinutes > 0 &&
+                    twilioService.isEnabled()
+            if (smsEligible) {
                 try {
                     if (phoneOptIn) {
                         scheduleSmsFallback(
@@ -392,7 +406,8 @@ class EscalationEngine(
                 "stepIndex" to stepIndex.toString(),
                 "iteration" to iteration.toString(),
             )
-        redisClient.zadd(SMS_FALLBACK_KEY, fireAt.epochSeconds.toDouble(), Json.encodeToString(kotlinx.serialization.serializer(), data))
+        val payload = Json.encodeToString(kotlinx.serialization.serializer(), data)
+        redisClient.zadd(SMS_FALLBACK_KEY, fireAt.epochSeconds.toDouble(), payload)
         logger.debug("Scheduled SMS/call fallback for incident $incidentId at $fireAt")
     }
 
@@ -498,7 +513,12 @@ class EscalationEngine(
 
                 logger.info("Timeout expired for incident $incidentId, advancing to step $nextStep")
 
-                logTimelineEvent(incidentId, "STEP_TIMEOUT", null, mapOf("step" to JsonPrimitive((nextStep - 1).toString())))
+                logTimelineEvent(
+                    incidentId,
+                    "STEP_TIMEOUT",
+                    null,
+                    mapOf("step" to JsonPrimitive((nextStep - 1).toString())),
+                )
                 processEscalationStep(incidentId, nextStep, iteration)
 
                 // Only remove from queue on success — transient failures leave item for retry

@@ -122,12 +122,18 @@ class PushNotificationService {
                 val result = Json.decodeFromString<ExpoResponse>(body)
                 result.data?.forEachIndexed { index, ticket ->
                     if (ticket.status == "error") {
-                        logger.error("Push failed for token ${tokens[index]}: ${ticket.message} (details: ${ticket.details})")
+                        logger.error(
+                            "Push failed for token ${tokens[index]}: ${ticket.message} " +
+                                "(details: ${ticket.details})",
+                        )
                         if (ticket.details?.get("error") == "DeviceNotRegistered") {
                             removeDeviceToken(tokens[index])
                         }
                     } else {
-                        logger.info("Push ticket ok for user $userId, ticketId=${ticket.id}, token prefix=${tokens[index].take(40)}")
+                        val prefix = tokens[index].take(40)
+                        logger.info(
+                            "Push ticket ok for user $userId, ticketId=${ticket.id}, token prefix=$prefix",
+                        )
                     }
                 }
             } else {

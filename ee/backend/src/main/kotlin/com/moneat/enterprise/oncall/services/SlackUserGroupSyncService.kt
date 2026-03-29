@@ -134,7 +134,8 @@ class SlackUserGroupSyncService(
                     add(onCallSlackId)
                 } else if (currentOnCall != null) {
                     logger.warn(
-                        "On-call user ${currentOnCall.userId} (${currentOnCall.userName}) has no Slack mapping for schedule ${schedule.scheduleName}",
+                        "On-call user ${currentOnCall.userId} (${currentOnCall.userName}) has no Slack " +
+                            "mapping for schedule ${schedule.scheduleName}",
                     )
                 } else {
                     logger.warn("Schedule ${schedule.scheduleName} has no current on-call user")
@@ -161,13 +162,16 @@ class SlackUserGroupSyncService(
 
         if (success) {
             logger.info(
-                "Synced Slack usergroup ${schedule.usergroupHandle} for schedule ${schedule.scheduleName} with ${targetMembers.size} member(s)",
+                "Synced Slack usergroup ${schedule.usergroupHandle} for schedule ${schedule.scheduleName} " +
+                    "with ${targetMembers.size} member(s)",
             )
             // Cache the new state
             redisClient.set(cacheKey, targetState)
             redisClient.expire(cacheKey, 3600) // Expire in 1 hour as a safety net
         } else {
-            logger.error("Failed to sync Slack usergroup ${schedule.usergroupHandle} for schedule ${schedule.scheduleName}")
+            logger.error(
+                "Failed to sync Slack usergroup ${schedule.usergroupHandle} for schedule ${schedule.scheduleName}",
+            )
         }
     }
 

@@ -740,7 +740,10 @@ class SsoService {
         // SP settings
         samlProperties.setProperty("onelogin.saml2.sp.entityid", spEntityId)
         samlProperties.setProperty("onelogin.saml2.sp.assertion_consumer_service.url", acsUrl)
-        samlProperties.setProperty("onelogin.saml2.sp.nameidformat", "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress")
+        samlProperties.setProperty(
+            "onelogin.saml2.sp.nameidformat",
+            "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+        )
 
         // IDP settings
         samlProperties.setProperty("onelogin.saml2.idp.entityid", idpEntityId)

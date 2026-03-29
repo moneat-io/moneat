@@ -121,7 +121,10 @@ fun Route.ssoRoutes() {
                     // Get user's primary organization
                     val orgId =
                         call.parameters["organizationId"]?.toIntOrNull()
-                            ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organizationId"))
+                            ?: return@get call.respond(
+                                HttpStatusCode.BadRequest,
+                                ErrorResponse("Missing organizationId"),
+                            )
 
                     // Verify user has access to this organization
                     val isMember =
@@ -146,7 +149,10 @@ fun Route.ssoRoutes() {
                     }
                 } catch (e: Exception) {
                     logger.error(e) { "Get SSO config error" }
-                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to retrieve SSO configuration"))
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse("Failed to retrieve SSO configuration"),
+                    )
                 }
             }
 
@@ -160,7 +166,10 @@ fun Route.ssoRoutes() {
                     val request = call.receive<SsoConfigRequest>()
                     val orgId =
                         call.parameters["organizationId"]?.toIntOrNull()
-                            ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organizationId"))
+                            ?: return@put call.respond(
+                                HttpStatusCode.BadRequest,
+                                ErrorResponse("Missing organizationId"),
+                            )
 
                     val config = ssoService.configureSso(orgId, userId, request)
                     call.respond(config)
@@ -182,7 +191,10 @@ fun Route.ssoRoutes() {
 
                     val orgId =
                         call.parameters["organizationId"]?.toIntOrNull()
-                            ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing organizationId"))
+                            ?: return@delete call.respond(
+                                HttpStatusCode.BadRequest,
+                                ErrorResponse("Missing organizationId"),
+                            )
 
                     val deleted = ssoService.deleteSsoConfig(orgId, userId)
                     if (deleted) {
@@ -195,7 +207,10 @@ fun Route.ssoRoutes() {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                 } catch (e: Exception) {
                     logger.error(e) { "Delete SSO config error" }
-                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to delete SSO configuration"))
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ErrorResponse("Failed to delete SSO configuration"),
+                    )
                 }
             }
 

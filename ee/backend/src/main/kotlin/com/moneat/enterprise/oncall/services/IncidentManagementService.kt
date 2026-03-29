@@ -89,7 +89,10 @@ class IncidentManagementService(
                 if (currentUserId != null) {
                     IncidentTimeline
                         .selectAll()
-                        .where { (IncidentTimeline.eventType eq "VIEWED") and (IncidentTimeline.actorUserId eq currentUserId) }
+                        .where {
+                            (IncidentTimeline.eventType eq "VIEWED") and
+                                (IncidentTimeline.actorUserId eq currentUserId)
+                        }
                         .map { it[IncidentTimeline.incidentId] }
                         .toSet()
                 } else {

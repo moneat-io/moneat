@@ -279,7 +279,10 @@ $contextStr"""
             .getResourceAsStream("ai_enterprise_system_prompt.txt")
             ?.bufferedReader()
             ?.readText()
-            ?: "You are Moneat AI, an observability analyst. Analyze the provided monitoring data and respond in markdown."
+            ?: (
+                "You are Moneat AI, an observability analyst. " +
+                    "Analyze the provided monitoring data and respond in markdown."
+            )
     }
 
     private fun loadHistory(conversationId: Int): List<LlmMessage> {
@@ -370,7 +373,8 @@ $contextStr"""
             "jun" to 6, "jul" to 7, "aug" to 8, "sep" to 9, "oct" to 10, "nov" to 11, "dec" to 12,
         )
         val pattern = Regex(
-            """(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?""",
+            """(january|february|march|april|may|june|july|august|september|october|november|december|""" +
+                """jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?""",
             RegexOption.IGNORE_CASE,
         )
         val match = pattern.find(message) ?: return null
