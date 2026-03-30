@@ -204,7 +204,7 @@ class TransactionServiceTest {
     fun `getTransaction returns detail for valid event`() = runBlocking {
         val eventId = TXN_UUID
         val row = """
-{"event_id":"$eventId","name":"GET /api","op":"http.server","start_ts_ms":"1000","duration":"250.0","trace_id":"$TRACE_1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{"env":"prod"},"contexts":"{}","breadcrumbs":"[]","request":"{}"}
+{"event_id":"$eventId","name":"GET /api","op":"http.server","start_ts_ms":1000,"duration":250.0,"trace_id":"$TRACE_1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{"env":"prod"},"contexts":{},"breadcrumbs":[],"request":{}}
         """.trimIndent()
         withClickHouseMockServer({ exchange ->
             exchange.respond(200, row, CONTENT_TYPE_TEXT_PLAIN)
@@ -237,8 +237,16 @@ class TransactionServiceTest {
     // ──── Trace and Span Tests ────
     @Test
     fun `getTraceDetails assembles spans into trace`() = runBlocking {
-        val body = """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_1","meta":{"sentry.transaction_id":"tx-1","sentry.project_id":"1"},"op":"http.server","description":"GET /","start_ns":"1000000000","duration_ns":"1500000000","error":0}
-{"span_id":"s2","parent_span_id":"s1","trace_id":"$TRACE_1","meta":{"sentry.transaction_id":"tx-1","sentry.project_id":"1"},"op":"db","description":"SELECT","start_ns":"1200000000","duration_ns":"600000000","error":0}"""
+        val body =
+            """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_1","meta":""" +
+                """{"sentry.transaction_id":"tx-1","sentry.project_id":"1"},""" +
+                """"op":"http.server","description":"GET /","start_ns":"1000000000",""" +
+                """"duration_ns":"1500000000","error":0}""" +
+                "\n" +
+                """{"span_id":"s2","parent_span_id":"s1","trace_id":"$TRACE_1","meta":""" +
+                """{"sentry.transaction_id":"tx-1","sentry.project_id":"1"},""" +
+                """"op":"db","description":"SELECT","start_ns":"1200000000",""" +
+                """"duration_ns":"600000000","error":0}"""
         withClickHouseMockServer({ exchange ->
             exchange.respond(200, body, CONTENT_TYPE_TEXT_PLAIN)
         }) {
@@ -280,7 +288,7 @@ class TransactionServiceTest {
                 query.contains("events") && query.contains("transaction") -> {
                     exchange.respond(
                         200,
-                        """{"event_id":"01234567-89ab-cdef-0123-456789abcdef","name":"GET /","op":"http","start_ts_ms":"500","duration":"2000.0","trace_id":"t1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{},"contexts":"{}","breadcrumbs":"[]","request":"{}"}
+                        """{"event_id":"01234567-89ab-cdef-0123-456789abcdef","name":"GET /","op":"http","start_ts_ms":500,"duration":2000.0,"trace_id":"t1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{},"contexts":{},"breadcrumbs":[],"request":{}}
                         """.trimIndent(),
                         CONTENT_TYPE_TEXT_PLAIN
                     )
@@ -309,7 +317,7 @@ class TransactionServiceTest {
                     query.contains("LIMIT 1") && !query.contains("project_id") -> {
                     exchange.respond(
                         200,
-                        """{"event_id":"01234567-89ab-cdef-0123-456789abcdef","name":"GET /","op":"http","start_ts_ms":"1000","duration":"500.0","trace_id":"trace-abc","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{},"contexts":"{}","breadcrumbs":"[]","request":"{}"}
+                        """{"event_id":"01234567-89ab-cdef-0123-456789abcdef","name":"GET /","op":"http","start_ts_ms":1000,"duration":500.0,"trace_id":"trace-abc","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{},"contexts":{},"breadcrumbs":[],"request":{}}
                         """.trimIndent(),
                         CONTENT_TYPE_TEXT_PLAIN
                     )
@@ -322,7 +330,7 @@ class TransactionServiceTest {
                 query.contains("event_type = 'error'") && query.contains("trace_id") -> {
                     exchange.respond(
                         200,
-                        """{"event_id":"err-1","timestamp":"2026-01-01T00:01:00.000Z","message":"NPE","platform":"jvm","level":"error","environment":"prod","release":"1.0","user_id":"","user_email":"","user_username":"","tags":{},"contexts":"{}","exception":"NullPointerException","breadcrumbs":"[]"}
+                        """{"event_id":"err-1","timestamp":"2026-01-01T00:01:00.000Z","message":"NPE","platform":"jvm","level":"error","environment":"prod","release":"1.0","user_id":"","user_email":"","user_username":"","tags":{},"contexts":{},"exception":"NullPointerException","breadcrumbs":[]}
                         """.trimIndent(),
                         CONTENT_TYPE_TEXT_PLAIN
                     )

@@ -296,9 +296,9 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             release = obj["release"]?.jsonPrimitive?.contentOrNull,
             status = obj["status"]?.jsonPrimitive?.contentOrNull,
             tags = tagsMap,
-            contexts = obj["contexts"]?.jsonPrimitive?.content ?: "{}",
-            breadcrumbs = obj["breadcrumbs"]?.jsonPrimitive?.contentOrNull,
-            request = obj["request"]?.jsonPrimitive?.contentOrNull
+            contexts = queryHelper.jsonFieldAsStoredString(obj, "contexts", "{}"),
+            breadcrumbs = queryHelper.jsonFieldAsStoredStringOrNull(obj, "breadcrumbs"),
+            request = queryHelper.jsonFieldAsStoredStringOrNull(obj, "request")
         )
     }
 

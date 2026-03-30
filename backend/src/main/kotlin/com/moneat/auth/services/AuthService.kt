@@ -179,7 +179,10 @@ class AuthService(
                 val isSelfHosted = EnvConfig.get("SELF_HOSTED", "false").trim().lowercase() == "true"
                 val skipVerification =
                     isFirstUser ||
-                        (isSelfHosted && EnvConfig.get("DISABLE_EMAIL_VERIFICATION", "false").trim().lowercase() == "true")
+                        (
+                            isSelfHosted &&
+                                EnvConfig.get("DISABLE_EMAIL_VERIFICATION", "false").trim().lowercase() == "true"
+                            )
 
                 // Generate verification token (only used if verification is required)
                 val verificationToken = if (!skipVerification) generateVerificationToken() else null

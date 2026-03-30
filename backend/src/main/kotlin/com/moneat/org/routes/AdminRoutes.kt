@@ -217,7 +217,9 @@ fun Route.adminRoutes() {
                                     ?.get(Users.is_admin) ?: false
                             }
                         if (!isAdmin) {
-                            logger.warn { "Admin access denied: user $userId is not admin (path=${call.request.path()})" }
+                            logger.warn {
+                                "Admin access denied: user $userId is not admin (path=${call.request.path()})"
+                            }
                             call.respond(
                                 HttpStatusCode.Forbidden,
                                 com.moneat.utils.ErrorResponse("Admin access required")
@@ -304,12 +306,18 @@ fun Route.adminRoutes() {
             post("/impersonate/{userId}") {
                 val targetUserId =
                     call.parameters["userId"]?.toIntOrNull()
-                        ?: return@post call.respond(HttpStatusCode.BadRequest, com.moneat.utils.ErrorResponse("Invalid user ID"))
+                        ?: return@post call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.utils.ErrorResponse("Invalid user ID")
+                        )
 
                 val targetUser =
                     transaction {
                         Users.selectAll().where { Users.id eq targetUserId }.firstOrNull()
-                    } ?: return@post call.respond(HttpStatusCode.NotFound, com.moneat.utils.ErrorResponse("User not found"))
+                    } ?: return@post call.respond(
+                        HttpStatusCode.NotFound,
+                        com.moneat.utils.ErrorResponse("User not found")
+                    )
 
                 val token =
                     authService.generateImpersonationToken(
@@ -336,7 +344,10 @@ fun Route.adminRoutes() {
                             .firstOrNull()
                             ?.get(com.moneat.shared.models.Memberships.organization_id)
                     } ?: run {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.utils.ErrorResponse("User has no organization"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.utils.ErrorResponse("User has no organization")
+                        )
                         return@post
                     }
 
@@ -448,7 +459,10 @@ fun Route.adminRoutes() {
                                             java.time.Instant
                                                 .now()
                                                 .toString(),
-                                            stackTrace = "  at UserService.getUser (UserService.kt:45)\n  at UserController.handleRequest (UserController.kt:23)\n  at Router.dispatch (Router.kt:89)",
+                                            stackTrace =
+                                            "  at UserService.getUser (UserService.kt:45)\n" +
+                                                "  at UserController.handleRequest (UserController.kt:23)\n" +
+                                                "  at Router.dispatch (Router.kt:89)",
                                             settingsUrl = "$frontendUrl/settings/notifications",
                                             unsubscribeUrl = "$frontendUrl/settings/notifications"
                                         )
@@ -528,7 +542,10 @@ fun Route.adminRoutes() {
                                                 java.time.Instant
                                                     .now()
                                                     .toString(),
-                                                stackTrace = "  at UserService.getUser (UserService.kt:45)\n  at UserController.handleRequest (UserController.kt:23)\n  at Router.dispatch (Router.kt:89)"
+                                                stackTrace =
+                                                "  at UserService.getUser (UserService.kt:45)\n" +
+                                                    "  at UserController.handleRequest (UserController.kt:23)\n" +
+                                                    "  at Router.dispatch (Router.kt:89)"
                                             )
                                     }
 
@@ -647,7 +664,8 @@ fun Route.adminRoutes() {
                                 }
                                 if (!discordSent && errors.isEmpty()) {
                                     errors.add(
-                                        "Discord notification failed (no Discord integration configured or error occurred)"
+                                        "Discord notification failed (no Discord integration configured or error " +
+                                            "occurred)"
                                     )
                                 }
                             }.getOrElse { e ->
@@ -714,7 +732,8 @@ fun Route.adminRoutes() {
                         call.respond(
                             HttpStatusCode.BadRequest,
                             com.moneat.utils.ErrorResponse(
-                                "Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM_NUMBER)"
+                                "Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, " +
+                                    "or TWILIO_FROM_NUMBER)"
                             )
                         )
                         return@post
@@ -732,7 +751,8 @@ fun Route.adminRoutes() {
                         call.respond(
                             HttpStatusCode.BadRequest,
                             com.moneat.utils.ErrorResponse(
-                                "No consented on-call phone number configured. Please set up your on-call contact in notification settings first."
+                                "No consented on-call phone number configured. Please set up your on-call contact " +
+                                    "in notification settings first."
                             )
                         )
                         return@post

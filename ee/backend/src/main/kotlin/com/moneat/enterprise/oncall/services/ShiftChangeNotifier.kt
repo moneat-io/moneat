@@ -110,10 +110,13 @@ class ShiftChangeNotifier(
                     Users.selectAll().where { Users.id eq upcomingUserId }.singleOrNull()?.get(Users.email)
                 }
                 if (userEmail != null) {
+                    val html =
+                        "<p>Hi,</p><p>Your on-call shift for <strong>$scheduleName</strong> starts in " +
+                            "$NOTIFY_BEFORE_MINUTES minutes.</p>"
                     emailService.sendEmail(
                         to = userEmail,
                         subject = "Your on-call shift starts in $NOTIFY_BEFORE_MINUTES minutes — $scheduleName",
-                        htmlBody = "<p>Hi,</p><p>Your on-call shift for <strong>$scheduleName</strong> starts in $NOTIFY_BEFORE_MINUTES minutes.</p>",
+                        htmlBody = html,
                         textBody = "Your on-call shift for $scheduleName starts in $NOTIFY_BEFORE_MINUTES minutes.",
                         emailType = "shift_change",
                     )

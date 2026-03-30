@@ -93,13 +93,18 @@ fun Route.twilioWebhookRoutes() {
                         val acknowledged = escalationEngine.acknowledgeIncidentByPhone(incidentId)
                         if (acknowledged) {
                             logger.info { "Incident $incidentId acknowledged via phone call" }
-                            """<Response><Say voice="alice">Incident acknowledged. Thank you. Goodbye.</Say></Response>"""
+                            """<Response><Say voice="alice">Incident acknowledged. """ +
+                                """Thank you. Goodbye.</Say></Response>"""
                         } else {
-                            """<Response><Say voice="alice">This incident has already been acknowledged or resolved. Goodbye.</Say></Response>"""
+                            """<Response><Say voice="alice">This incident has already been acknowledged """ +
+                                """or resolved. Goodbye.</Say></Response>"""
                         }
                     } else {
-                        logger.error { "EscalationEngine not available; cannot acknowledge incident $incidentId via phone" }
-                        """<Response><Say voice="alice">Acknowledgement is temporarily unavailable. Please try the app. Goodbye.</Say></Response>"""
+                        logger.error {
+                            "EscalationEngine not available; cannot acknowledge incident $incidentId via phone"
+                        }
+                        """<Response><Say voice="alice">Acknowledgement is temporarily unavailable. """ +
+                            """Please try the app. Goodbye.</Say></Response>"""
                     }
                 } else {
                     """<Response><Say voice="alice">Invalid input. Goodbye.</Say></Response>"""
@@ -148,15 +153,21 @@ fun Route.twilioWebhookRoutes() {
                                 logger.info { "User $userId opted out via SMS STOP keyword" }
                             }
                         }
-                        """<Response><Message>You have been unsubscribed from Moneat on-call alerts. You will not receive further SMS messages. To re-enable, update your notification settings in the Moneat app.</Message></Response>"""
+                        """<Response><Message>You have been unsubscribed from Moneat on-call alerts. """ +
+                            """You will not receive further SMS messages. To re-enable, update your """ +
+                            """notification settings in the Moneat app.</Message></Response>"""
                     }
 
                     body == "HELP" -> {
-                        """<Response><Message>Moneat on-call alerts: Reply STOP to unsubscribe. To manage settings, visit the Moneat app. For support, contact support@moneat.io</Message></Response>"""
+                        """<Response><Message>Moneat on-call alerts: Reply STOP to unsubscribe. """ +
+                            """To manage settings, visit the Moneat app. For support, contact """ +
+                            """support@moneat.io</Message></Response>"""
                     }
 
                     body == "START" || body == "YES" -> {
-                        """<Response><Message>To re-enable on-call SMS alerts, please open the Moneat app and update your notification settings. This ensures your consent is properly recorded.</Message></Response>"""
+                        """<Response><Message>To re-enable on-call SMS alerts, please open the Moneat app """ +
+                            """and update your notification settings. This ensures your consent is """ +
+                            """properly recorded.</Message></Response>"""
                     }
 
                     else -> {

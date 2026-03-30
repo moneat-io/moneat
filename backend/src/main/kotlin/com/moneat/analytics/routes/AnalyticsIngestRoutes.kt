@@ -234,7 +234,16 @@ private const val REALTIME_TTL_SECONDS = 300L
  * Minimal inline tracking script (~800 bytes minified).
  * Served at /js/m.js. Bundled inline to avoid needing the NPM build at runtime.
  */
-@Suppress("MaxLineLength")
-private val TRACKING_SCRIPT = """
-!function(){"use strict";var t=document.currentScript,a=t&&t.getAttribute("data-domain"),o=t&&(t.getAttribute("data-api")||new URL(t.src).origin);function e(e,n){if(!window._phantom&&!window.__nightmare&&!window.navigator.webdriver&&!window.__puppeteer&&("doNotTrack"in navigator&&"1"!==navigator.doNotTrack||!0)){var r={n:e,u:location.href,d:a,r:document.referrer,w:window.innerWidth};n&&(r.p=n);var i=new XMLHttpRequest;i.open("POST",o+"/api/"+a+"/analytics/event?sentry_key="+t.getAttribute("data-key"),!0),i.send(JSON.stringify(r))}}function n(){e("pageview")}var r=history.pushState;history.pushState=function(){r.apply(this,arguments),n()};var i=history.replaceState;history.replaceState=function(){i.apply(this,arguments),n()},window.addEventListener("popstate",n),"prerender"===document.visibilityState?document.addEventListener("visibilitychange",function(){r||"visible"!==document.visibilityState||(r=!0,n())}):n(),window.moneat={track:function(t,a){e(t,a)}}}();
-""".trimIndent()
+private const val TRACKING_SCRIPT =
+    "!function(){\"use strict\";var t=document.currentScript,a=t&&t.getAttribute(\"data-domai" +
+        "n\"),o=t&&(t.getAttribute(\"data-api\")||new URL(t.src).origin);function e(e,n){if(!wind" +
+        "ow._phantom&&!window.__nightmare&&!window.navigator.webdriver&&!window.__puppeteer&&(" +
+        "\"doNotTrack\"in navigator&&\"1\"!==navigator.doNotTrack||!0)){var r={n:e,u:location.href" +
+        ",d:a,r:document.referrer,w:window.innerWidth};n&&(r.p=n);var i=new XMLHttpRequest;i.o" +
+        "pen(\"POST\",o+\"/api/\"+a+\"/analytics/event?sentry_key=\"+t.getAttribute(\"data-key\"),!0)," +
+        "i.send(JSON.stringify(r))}}function n(){e(\"pageview\")}var r=history.pushState;history" +
+        ".pushState=function(){r.apply(this,arguments),n()};var i=history.replaceState;history" +
+        ".replaceState=function(){i.apply(this,arguments),n()},window.addEventListener(\"popsta" +
+        "te\",n),\"prerender\"===document.visibilityState?document.addEventListener(\"visibilitych" +
+        "ange\",function(){r||\"visible\"!==document.visibilityState||(r=!0,n())}):n(),window.mon" +
+        "eat={track:function(t,a){e(t,a)}}}();"

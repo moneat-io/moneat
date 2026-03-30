@@ -81,7 +81,10 @@ data class AlertPriority(
 // ===== Business Hours =====
 
 object BusinessHours : IntIdTable("business_hours") {
-    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE).uniqueIndex()
+    val organizationId =
+        integer("organization_id")
+            .references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+            .uniqueIndex()
     val timezone = varchar("timezone", 100)
     val enabled = bool("enabled")
     val createdAt = timestamp("created_at")
@@ -122,7 +125,9 @@ data class BusinessHoursConfig(
 // to allow core code to query escalation policies without enterprise dependency.
 
 object EscalationSteps : IntIdTable("escalation_steps") {
-    val escalationPolicyId = integer("escalation_policy_id").references(EscalationPolicies.id, onDelete = ReferenceOption.CASCADE)
+    val escalationPolicyId =
+        integer("escalation_policy_id")
+            .references(EscalationPolicies.id, onDelete = ReferenceOption.CASCADE)
     val stepOrder = integer("step_order")
     val timeoutMinutes = integer("timeout_minutes")
     val smsFallbackDelayMinutes = integer("sms_call_fallback_delay_minutes").default(2)
@@ -130,7 +135,9 @@ object EscalationSteps : IntIdTable("escalation_steps") {
 }
 
 object EscalationStepTargets : IntIdTable("escalation_step_targets") {
-    val escalationStepId = integer("escalation_step_id").references(EscalationSteps.id, onDelete = ReferenceOption.CASCADE)
+    val escalationStepId =
+        integer("escalation_step_id")
+            .references(EscalationSteps.id, onDelete = ReferenceOption.CASCADE)
     val targetType = varchar("target_type", 20)
     val targetId = integer("target_id")
     val createdAt = timestamp("created_at")
@@ -180,7 +187,10 @@ object OnCallOverrides : IntIdTable("on_call_overrides") {
 }
 
 object OnCallScheduleUsergroups : IntIdTable("on_call_schedule_usergroups") {
-    val scheduleId = integer("schedule_id").references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE).uniqueIndex()
+    val scheduleId =
+        integer("schedule_id")
+            .references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE)
+            .uniqueIndex()
     val slackUsergroupId = varchar("slack_usergroup_id", 100)
     val slackUsergroupHandle = varchar("slack_usergroup_handle", 100)
     val createdAt = timestamp("created_at")
@@ -274,7 +284,10 @@ object OnCallIncidentTimeline : IntIdTable("on_call_incident_timeline") {
 
 object Incidents : IntIdTable("incidents") {
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
-    val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val incidentId =
+        integer("incident_id")
+            .references(OnCallIncidents.id, onDelete = ReferenceOption.SET_NULL)
+            .nullable()
     val escalationPolicyId =
         integer(
             "escalation_policy_id",

@@ -767,7 +767,9 @@ class SlackService {
                     text =
                     SlackText(
                         type = "mrkdwn",
-                        text = "Your Slack integration is working correctly! You'll receive notifications here when alerts are triggered."
+                        text =
+                        "Your Slack integration is working correctly! " +
+                            "You'll receive notifications here when alerts are triggered."
                     )
                 )
             )

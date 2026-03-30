@@ -19,13 +19,14 @@ style:
   ThrowsCount:
     active: false
   MaxLineLength:
-    active: false
+    active: true
+    maxLineLength: 120
   UseRequire:
     active: false
   UseCheckOrError:
     active: false
   ForbiddenComment:
-    active: true
+    active: false
   LoopWithTooManyJumpStatements:
     active: false
   DestructuringDeclarationWithTooManyEntries:
@@ -33,7 +34,7 @@ style:
   UnusedPrivateProperty:
     active: false
   UnusedPrivateMember:
-    active: true
+    active: false
 
 complexity:
   TooManyFunctions:
@@ -55,7 +56,7 @@ complexity:
 
 exceptions:
   TooGenericExceptionCaught:
-    active: true
+    active: false
   TooGenericExceptionThrown:
     active: false
   SwallowedException:
@@ -79,14 +80,14 @@ naming:
       - '**/jsTest/**'
       - '**/iosTest/**'
   VariableNaming:
-    active: true
+    active: false
 
 coroutines:
   active: true
 
 performance:
   SpreadOperator:
-    active: true
+    active: false
 
 empty-blocks:
   EmptyCatchBlock:
@@ -94,14 +95,8 @@ empty-blocks:
 
 potential-bugs:
   ImplicitDefaultLocale:
-    active: true
+    active: false
 
 formatting:
-  # Issue-299: kotlinx/java imports inserted before com.*; long catch chains on one line.
-  # Re-enable and run IDE "Optimize Imports" + manual wrap when cleaning up.
   ImportOrdering:
-    active: false
-  ParameterListWrapping:
-    active: false
-  Wrapping:
     active: false

@@ -484,7 +484,17 @@ class DiscordService(
         val config = getDiscordConfig(organizationId) ?: return false
 
         val embed = buildDashboardAlertEmbed(
-            DashboardAlertParams(alertName, dashboardTitle, widgetTitle, condition, threshold, currentValue, severity, dashboardId, baseUrl)
+            DashboardAlertParams(
+                alertName,
+                dashboardTitle,
+                widgetTitle,
+                condition,
+                threshold,
+                currentValue,
+                severity,
+                dashboardId,
+                baseUrl
+            )
         )
 
         val (success, _) = sendMessage(

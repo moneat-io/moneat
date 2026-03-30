@@ -208,7 +208,10 @@ class UptimeScheduler(
                 else -> "pending"
             }
 
-        if (oldStatus != newStatus && (oldStatus == "up" || oldStatus == "down") && (newStatus == "up" || newStatus == "down")) {
+        if (oldStatus != newStatus &&
+            (oldStatus == "up" || oldStatus == "down") &&
+            (newStatus == "up" || newStatus == "down")
+        ) {
             logger.info { "Monitor ${monitor.name} status changed: $oldStatus -> $newStatus" }
 
             suspendRunCatching {

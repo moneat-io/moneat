@@ -281,7 +281,11 @@ fun Route.apiRoutes() {
                     }
                     call.respond(
                         com.moneat.utils.MessageResponse(
-                            if (request.consentAccepted) "On-call contact saved and opted in" else "On-call contact saved"
+                            if (request.consentAccepted) {
+                                "On-call contact saved and opted in"
+                            } else {
+                                "On-call contact saved"
+                            }
                         )
                     )
                 }
@@ -1205,7 +1209,8 @@ fun Route.apiRoutes() {
                                             issueAlerts = pref[NotificationPreferences.issue_alerts],
                                             errorAlerts = pref[NotificationPreferences.error_alerts],
                                             weeklySummary = pref[NotificationPreferences.weekly_summary],
-                                            alertFrequencyMinutes = pref[NotificationPreferences.alert_frequency_minutes]
+                                            alertFrequencyMinutes =
+                                            pref[NotificationPreferences.alert_frequency_minutes]
                                         )
                                     }
 
@@ -1233,10 +1238,18 @@ fun Route.apiRoutes() {
                                         (NotificationPreferences.project_id.isNull())
                                 }.firstOrNull()
 
-                        val issueAlerts = request["issueAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
-                        val errorAlerts = request["errorAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.error_alerts) ?: true
-                        val weeklySummary = request["weeklySummary"] as? Boolean ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
-                        val alertFrequency = (request["alertFrequencyMinutes"] as? Number)?.toInt() ?: existing?.get(NotificationPreferences.alert_frequency_minutes) ?: 30
+                        val issueAlerts =
+                            request["issueAlerts"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
+                        val errorAlerts =
+                            request["errorAlerts"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.error_alerts) ?: true
+                        val weeklySummary =
+                            request["weeklySummary"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
+                        val alertFrequency =
+                            (request["alertFrequencyMinutes"] as? Number)?.toInt()
+                                ?: existing?.get(NotificationPreferences.alert_frequency_minutes) ?: 30
 
                         if (existing != null) {
                             NotificationPreferences.update({
@@ -1292,10 +1305,18 @@ fun Route.apiRoutes() {
                                         (NotificationPreferences.project_id eq projectId)
                                 }.firstOrNull()
 
-                        val issueAlerts = request["issueAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
-                        val errorAlerts = request["errorAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.error_alerts) ?: true
-                        val weeklySummary = request["weeklySummary"] as? Boolean ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
-                        val alertFrequency = (request["alertFrequencyMinutes"] as? Number)?.toInt() ?: existing?.get(NotificationPreferences.alert_frequency_minutes) ?: 30
+                        val issueAlerts =
+                            request["issueAlerts"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
+                        val errorAlerts =
+                            request["errorAlerts"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.error_alerts) ?: true
+                        val weeklySummary =
+                            request["weeklySummary"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
+                        val alertFrequency =
+                            (request["alertFrequencyMinutes"] as? Number)?.toInt()
+                                ?: existing?.get(NotificationPreferences.alert_frequency_minutes) ?: 30
 
                         if (existing != null) {
                             NotificationPreferences.update({

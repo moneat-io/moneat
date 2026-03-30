@@ -130,7 +130,8 @@ class AttributionAnalyticsService {
                                             .where { PricingTierConfigs.id eq pricingTierId }
                                             .firstOrNull()
                                             ?.let { pricing ->
-                                                val interval = row.getOrNull(Subscriptions.billing_interval) ?: "monthly"
+                                                val interval =
+                                                    row.getOrNull(Subscriptions.billing_interval) ?: "monthly"
                                                 val basePriceCents =
                                                     if (interval == "yearly") {
                                                         pricing[PricingTierConfigs.yearly_price_cents]
@@ -200,7 +201,12 @@ class AttributionAnalyticsService {
                 AttributionSummary(
                     totalSignups = totalSignups,
                     totalPaidOrganizations = totalPaid,
-                    overallConversionRate = if (totalSignups > 0) (totalPaid.toDouble() / totalSignups.toDouble()) * 100 else 0.0,
+                    overallConversionRate =
+                    if (totalSignups > 0) {
+                        (totalPaid.toDouble() / totalSignups.toDouble()) * 100
+                    } else {
+                        0.0
+                    },
                     totalMrr = totalMrrValue.toString()
                 )
 

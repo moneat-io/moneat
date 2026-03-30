@@ -411,7 +411,9 @@ class AdminService(
         val monthStart = kotlinx.datetime.LocalDate(today.year, today.month, 1)
 
         return transaction {
-            val org = Organizations.selectAll().where { Organizations.id eq orgId }.firstOrNull() ?: return@transaction null
+            val org =
+                Organizations.selectAll().where { Organizations.id eq orgId }.firstOrNull()
+                    ?: return@transaction null
             val sub =
                 Subscriptions
                     .selectAll()
@@ -453,7 +455,9 @@ class AdminService(
                     .selectAll()
                     .where { Memberships.organization_id eq orgId }
                     .mapNotNull { mRow ->
-                        val u = Users.selectAll().where { Users.id eq mRow[Memberships.user_id] }.firstOrNull() ?: return@mapNotNull null
+                        val u =
+                            Users.selectAll().where { Users.id eq mRow[Memberships.user_id] }.firstOrNull()
+                                ?: return@mapNotNull null
                         AdminOrgMember(
                             userId = u[Users.id],
                             email = u[Users.email],
@@ -524,7 +528,9 @@ class AdminService(
                         DailyUsageByType(
                             date = dateStr,
                             error = byType["error"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
-                            transaction = byType["transaction"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
+                            transaction =
+                            byType["transaction"]?.sumOf { r -> r[UsageRecords.event_count].toLong() }
+                                ?: 0L,
                             replay = byType["replay"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
                             feedback = byType["feedback"]?.sumOf { r -> r[UsageRecords.event_count].toLong() } ?: 0L,
                             log =
@@ -626,7 +632,8 @@ class AdminService(
             logger.error(e) { "Failed to query ClickHouse system.parts" }
         }
 
-        val storageUsedPercent = if (USABLE_STORAGE_BYTES > 0) (totalBytes.toDouble() / USABLE_STORAGE_BYTES * 100) else 0.0
+        val storageUsedPercent =
+            if (USABLE_STORAGE_BYTES > 0) (totalBytes.toDouble() / USABLE_STORAGE_BYTES * 100) else 0.0
         val alerts = mutableListOf<String>()
         if (storageUsedPercent > 70) alerts.add("Storage > 70% (consider adding block storage)")
         if (storageUsedPercent > 80) alerts.add("Storage > 80% (scaling trigger)")
@@ -659,7 +666,8 @@ class AdminService(
                     }.toList()
                     .groupBy { it[UsageRecords.organization_id] }
                     .mapValues { (_, recs) ->
-                        recs.sumOf { it[UsageRecords.event_count].toLong() } to recs.sumOf { it[UsageRecords.bytes_ingested] }
+                        recs.sumOf { it[UsageRecords.event_count].toLong() } to
+                            recs.sumOf { it[UsageRecords.bytes_ingested] }
                     }
 
             usageByOrg.entries
@@ -667,7 +675,9 @@ class AdminService(
                 .take(limit)
                 .mapNotNull { (orgId, pair) ->
                     val (events, bytes) = pair
-                    val org = Organizations.selectAll().where { Organizations.id eq orgId }.firstOrNull() ?: return@mapNotNull null
+                    val org =
+                        Organizations.selectAll().where { Organizations.id eq orgId }.firstOrNull()
+                            ?: return@mapNotNull null
                     val plan =
                         Subscriptions
                             .selectAll()
@@ -792,7 +802,9 @@ class AdminService(
             val totalResp = ClickHouseClient.execute(totalQuery)
             val allTime = totalResp.bodyAsText().trim().toLongOrNull() ?: 0L
 
-            val last30Query = "SELECT count() as c FROM `$clickhouseDb`.events WHERE timestamp >= now() - INTERVAL 30 DAY"
+            val last30Query =
+                "SELECT count() as c FROM `$clickhouseDb`.events " +
+                    "WHERE timestamp >= now() - INTERVAL 30 DAY"
             val last30Resp = ClickHouseClient.execute(last30Query)
             val last30Count = last30Resp.bodyAsText().trim().toLongOrNull() ?: 0L
 

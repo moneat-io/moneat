@@ -100,7 +100,8 @@ object DemoDataReseeder {
                 hasFreshDatadog && hasFreshInfra && hasFreshSecurity && hasFreshSynthetics && hasEnoughDashboards
             ) {
                 logger.info {
-                    "Demo data looks fresh ($freshCoreCount recent core events, $freshLlmCount recent LLM generations, " +
+                    "Demo data looks fresh ($freshCoreCount recent core events, " +
+                        "$freshLlmCount recent LLM generations, " +
                         "$freshAnalyticsCount recent analytics events, $freshLogsCount recent logs, " +
                         "$freshDatadogCount recent Datadog spans, $freshInfraCount recent infra rows, " +
                         "$freshSecurityCount recent security events, $freshSyntheticsCount recent synthetics, " +
@@ -130,7 +131,9 @@ object DemoDataReseeder {
             }
 
             if (freshAnalyticsCount > 0) {
-                logger.info { "Analytics demo data is fresh ($freshAnalyticsCount recent events), skipping analytics reseed" }
+                logger.info {
+                    "Analytics demo data is fresh ($freshAnalyticsCount recent events), skipping analytics reseed"
+                }
             } else {
                 logger.info { "Analytics demo data is stale or missing, reseeding..." }
                 purgeAnalyticsDemoData()
@@ -173,7 +176,9 @@ object DemoDataReseeder {
             }
 
             if (hasFreshSecurity) {
-                logger.info { "Security demo data is fresh ($freshSecurityCount recent events), skipping security reseed" }
+                logger.info {
+                    "Security demo data is fresh ($freshSecurityCount recent events), skipping security reseed"
+                }
             } else {
                 logger.info { "Security demo data is stale or missing, reseeding..." }
                 purgeSecurityDemoData()
@@ -181,7 +186,9 @@ object DemoDataReseeder {
             }
 
             if (hasFreshSynthetics) {
-                logger.info { "Synthetics demo data is fresh ($freshSyntheticsCount recent results), skipping synthetics reseed" }
+                logger.info {
+                    "Synthetics demo data is fresh ($freshSyntheticsCount recent results), skipping synthetics reseed"
+                }
             } else {
                 logger.info { "Synthetics demo data is stale or missing, reseeding..." }
                 purgeSyntheticsDemoData()
@@ -212,7 +219,8 @@ object DemoDataReseeder {
                 )
                 ClickHouseClient.execute(
                     """
-                    INSERT INTO uptime_heartbeats (monitor_id, timestamp, status, response_time_ms, status_code, message, ping_ms)
+                    INSERT INTO uptime_heartbeats (
+                        monitor_id, timestamp, status, response_time_ms, status_code, message, ping_ms)
                     SELECT
                         toUUID('$monitorId'),
                         now() - INTERVAL (number * 5) MINUTE,
@@ -233,7 +241,11 @@ object DemoDataReseeder {
                     FROM numbers(8640)
                     """.trimIndent()
                 )
-            }.onFailure { logger.warn { "Failed to reseed uptime heartbeats for $monitorId (non-fatal): ${it.message}" } }
+            }.onFailure {
+                logger.warn {
+                    "Failed to reseed uptime heartbeats for $monitorId (non-fatal): ${it.message}"
+                }
+            }
         }
 
         // Update postgres monitor status to "up" with a recent last_check_at.
@@ -351,11 +363,15 @@ object DemoDataReseeder {
     }
 
     private suspend fun reseedEvents() {
-        val androidDevices = "arrayElement(['Samsung Galaxy S23', 'Google Pixel 8', 'OnePlus 11', 'Xiaomi 13 Pro'], number % 4 + 1)"
+        val androidDevices =
+            "arrayElement(['Samsung Galaxy S23', 'Google Pixel 8', 'OnePlus 11', 'Xiaomi 13 Pro'], " +
+                "number % 4 + 1)"
         val androidVersions = "arrayElement(['14', '13', '12', '11'], number % 4 + 1)"
         val iosDevices = "arrayElement(['iPhone 15 Pro', 'iPhone 14', 'iPhone 13', 'iPad Air 5'], number % 4 + 1)"
         val iosVersions = "arrayElement(['17.2', '17.0', '16.6', '16.0'], number % 4 + 1)"
-        val rnDevices = "arrayElement(['Samsung Galaxy S23', 'iPhone 15 Pro', 'Google Pixel 8', 'iPhone 14'], number % 4 + 1)"
+        val rnDevices =
+            "arrayElement(['Samsung Galaxy S23', 'iPhone 15 Pro', 'Google Pixel 8', 'iPhone 14'], " +
+                "number % 4 + 1)"
         val rnVersions = "arrayElement(['14', '17.2', '13', '17.0'], number % 4 + 1)"
         val envExpr = "if(number % 8 = 0, 'staging', 'production')"
 
@@ -401,13 +417,15 @@ object DemoDataReseeder {
         val rnRelease = "arrayElement(['3.0.1', '3.0.0', '2.9.0'], number % 3 + 1)"
 
         val statements = listOf(
-            // ── Android issues (project -1) ──────────────────────────────────────
+            // Android issues (project -1)
             issueInsert(
                 P1, "demo-android-1", "android", "fatal",
                 "Attempt to invoke virtual method on a null object reference",
                 "java.lang.NullPointerException",
-                "Attempt to invoke virtual method 'void android.widget.ImageView.setImageBitmap(android.graphics.Bitmap)' on a null object reference",
-                "at com.acme.shopping.ui.ProductDetailFragment.updateUI(ProductDetailFragment.kt:87)\\nat com.acme.shopping.ui.ProductDetailFragment.onViewCreated(ProductDetailFragment.kt:52)",
+                "Attempt to invoke virtual method 'void " +
+                    "android.widget.ImageView.setImageBitmap(android.graphics.Bitmap)' on a null object reference",
+                "at com.acme.shopping.ui.ProductDetailFragment.updateUI(ProductDetailFragment.kt:87)\\n" +
+                    "at com.acme.shopping.ui.ProductDetailFragment.onViewCreated(ProductDetailFragment.kt:52)",
                 androidRelease, 1000, 89, 150, 168, androidDevices, "Android", androidVersions
             ),
 
@@ -416,7 +434,8 @@ object DemoDataReseeder {
                 "android.os.NetworkOnMainThreadException",
                 "android.os.NetworkOnMainThreadException",
                 "Main thread network call in CheckoutRepository",
-                "at android.os.StrictMode\$AndroidBlockGuardPolicy.onNetwork(StrictMode.java:1605)\\nat com.acme.shopping.checkout.CheckoutRepository.validateCart(CheckoutRepository.kt:134)",
+                "at android.os.StrictMode\$AndroidBlockGuardPolicy.onNetwork(StrictMode.java:1605)\\n" +
+                    "at com.acme.shopping.checkout.CheckoutRepository.validateCart(CheckoutRepository.kt:134)",
                 androidRelease, 1100, 70, 80, 120, androidDevices, "Android", androidVersions
             ),
 
@@ -425,7 +444,8 @@ object DemoDataReseeder {
                 "java.lang.OutOfMemoryError: Failed to allocate a 48 MB allocation",
                 "java.lang.OutOfMemoryError",
                 "Failed to allocate a 48 MB allocation with 12 MB free bytes and 32 MB until OOM",
-                "at com.acme.shopping.image.ImageLoader.loadFullResImage(ImageLoader.kt:212)\\nat com.acme.shopping.ui.ProductGalleryFragment.onResume(ProductGalleryFragment.kt:78)",
+                "at com.acme.shopping.image.ImageLoader.loadFullResImage(ImageLoader.kt:212)\\n" +
+                    "at com.acme.shopping.ui.ProductGalleryFragment.onResume(ProductGalleryFragment.kt:78)",
                 androidRelease, 1200, 35, 40, 96, androidDevices, "Android", androidVersions
             ),
 
@@ -434,7 +454,8 @@ object DemoDataReseeder {
                 "java.lang.IllegalStateException: Fragment ProductDetailFragment not attached to a context",
                 "java.lang.IllegalStateException",
                 "Fragment ProductDetailFragment{1a2b3c4} (2b34c5d6) not attached to a context.",
-                "at androidx.fragment.app.Fragment.requireContext(Fragment.java:951)\\nat com.acme.shopping.ui.ProductDetailFragment.showAddedToCartToast(ProductDetailFragment.kt:203)",
+                "at androidx.fragment.app.Fragment.requireContext(Fragment.java:951)\\n" +
+                    "at com.acme.shopping.ui.ProductDetailFragment.showAddedToCartToast(ProductDetailFragment.kt:203)",
                 androidRelease, 1300, 45, 50, 144, androidDevices, "Android", androidVersions
             ),
 
@@ -443,7 +464,8 @@ object DemoDataReseeder {
                 "java.util.ConcurrentModificationException in CartManager",
                 "java.util.ConcurrentModificationException",
                 "Concurrent modification of cart items list during checkout",
-                "at java.util.ArrayList\$Itr.next(ArrayList.java:860)\\nat com.acme.shopping.cart.CartManager.calculateTotal(CartManager.kt:156)",
+                "at java.util.ArrayList\$Itr.next(ArrayList.java:860)\\n" +
+                    "at com.acme.shopping.cart.CartManager.calculateTotal(CartManager.kt:156)",
                 androidRelease, 1400, 28, 30, 72, androidDevices, "Android", androidVersions
             ),
 
@@ -452,7 +474,9 @@ object DemoDataReseeder {
                 "java.lang.ArrayIndexOutOfBoundsException: length=12; index=12",
                 "java.lang.ArrayIndexOutOfBoundsException",
                 "Array index 12 out of bounds for length 12 in product list adapter",
-                "at com.acme.shopping.ui.adapters.ProductListAdapter.onBindViewHolder(ProductListAdapter.kt:89)\\nat androidx.recyclerview.widget.RecyclerView\$Recycler.tryGetViewHolderForPositionByDeadline(RecyclerView.java:6235)",
+                "at com.acme.shopping.ui.adapters.ProductListAdapter.onBindViewHolder(ProductListAdapter.kt:89)\\n" +
+                    "at androidx.recyclerview.widget.RecyclerView\$Recycler" +
+                    ".tryGetViewHolderForPositionByDeadline(RecyclerView.java:6235)",
                 androidRelease, 1500, 20, 20, 48, androidDevices, "Android", androidVersions
             ),
 
@@ -461,7 +485,8 @@ object DemoDataReseeder {
                 "java.lang.StackOverflowError in CategoryTreeRenderer",
                 "java.lang.StackOverflowError",
                 "Infinite recursive call while rendering nested category tree",
-                "at com.acme.shopping.ui.CategoryTreeRenderer.renderNode(CategoryTreeRenderer.kt:67)\\nat com.acme.shopping.ui.CategoryTreeRenderer.renderNode(CategoryTreeRenderer.kt:81)",
+                "at com.acme.shopping.ui.CategoryTreeRenderer.renderNode(CategoryTreeRenderer.kt:67)\\n" +
+                    "at com.acme.shopping.ui.CategoryTreeRenderer.renderNode(CategoryTreeRenderer.kt:81)",
                 androidRelease, 1600, 12, 13, 96, androidDevices, "Android", androidVersions
             ),
 
@@ -470,7 +495,8 @@ object DemoDataReseeder {
                 "java.lang.IllegalArgumentException: Unknown URL scheme: acme://checkout",
                 "java.lang.IllegalArgumentException",
                 "Unknown URL scheme passed to NetworkClient deep link handler",
-                "at com.acme.shopping.network.NetworkClient.buildUrl(NetworkClient.kt:45)\\nat com.acme.shopping.deeplink.DeepLinkHandler.handle(DeepLinkHandler.kt:112)",
+                "at com.acme.shopping.network.NetworkClient.buildUrl(NetworkClient.kt:45)\\n" +
+                    "at com.acme.shopping.deeplink.DeepLinkHandler.handle(DeepLinkHandler.kt:112)",
                 androidRelease, 1700, 17, 17, 72, androidDevices, "Android", androidVersions
             ),
 
@@ -479,7 +505,8 @@ object DemoDataReseeder {
                 "java.lang.SecurityException: Permission Denial: requires android.permission.ACCESS_FINE_LOCATION",
                 "java.lang.SecurityException",
                 "ACCESS_FINE_LOCATION permission not granted before requesting location",
-                "at android.os.Parcel.createExceptionOrNull(Parcel.java:2374)\\nat com.acme.shopping.store.StoreLocatorService.getCurrentLocation(StoreLocatorService.kt:88)",
+                "at android.os.Parcel.createExceptionOrNull(Parcel.java:2374)\\n" +
+                    "at com.acme.shopping.store.StoreLocatorService.getCurrentLocation(StoreLocatorService.kt:88)",
                 androidRelease, 1800, 12, 12, 48, androidDevices, "Android", androidVersions
             ),
 
@@ -488,16 +515,19 @@ object DemoDataReseeder {
                 "android.database.sqlite.SQLiteException: UNIQUE constraint failed: orders.order_ref",
                 "android.database.sqlite.SQLiteException",
                 "UNIQUE constraint failed: orders.order_ref (code 2067 SQLITE_CONSTRAINT_UNIQUE)",
-                "at android.database.sqlite.SQLiteConnection.nativeExecuteForLastInsertedRowId(Native Method)\\nat com.acme.shopping.db.OrderDao.insertOrder(OrderDao.kt:34)",
+                "at android.database.sqlite.SQLiteConnection.nativeExecuteForLastInsertedRowId(Native Method)\\n" +
+                    "at com.acme.shopping.db.OrderDao.insertOrder(OrderDao.kt:34)",
                 androidRelease, 1900, 13, 13, 96, androidDevices, "Android", androidVersions
             ),
 
             issueInsert(
                 P1, "demo-android-11", "android", "error",
-                "org.json.JSONException: Value null at response of type org.json.JSONObject\$1 cannot be converted to JSONObject",
+                "org.json.JSONException: Value null at response of type org.json.JSONObject\$1 cannot be converted " +
+                    "to JSONObject",
                 "org.json.JSONException",
                 "Null response body from product API could not be parsed",
-                "at org.json.JSON.typeMismatch(JSON.java:111)\\nat com.acme.shopping.network.ProductApiParser.parse(ProductApiParser.kt:67)",
+                "at org.json.JSON.typeMismatch(JSON.java:111)\\n" +
+                    "at com.acme.shopping.network.ProductApiParser.parse(ProductApiParser.kt:67)",
                 androidRelease, 2000, 10, 10, 72, androidDevices, "Android", androidVersions
             ),
 
@@ -506,7 +536,8 @@ object DemoDataReseeder {
                 "java.net.ConnectException: Failed to connect to api.acmemobile.com/93.184.216.34:443",
                 "java.net.ConnectException",
                 "Connection to checkout API timed out after 30 seconds",
-                "at com.android.okhttp.internal.io.RealConnection.connectSocket(RealConnection.java:187)\\nat com.acme.shopping.network.ApiService\$CheckoutService.placeOrder(ApiService.kt:289)",
+                "at com.android.okhttp.internal.io.RealConnection.connectSocket(RealConnection.java:187)\\n" +
+                    "at com.acme.shopping.network.ApiService\$CheckoutService.placeOrder(ApiService.kt:289)",
                 androidRelease, 2100, 12, 12, 48, androidDevices, "Android", androidVersions
             ),
 
@@ -515,25 +546,30 @@ object DemoDataReseeder {
                 "javax.net.ssl.SSLHandshakeException: Certificate expired for api.acmemobile.com",
                 "javax.net.ssl.SSLHandshakeException",
                 "SSL certificate for api.acmemobile.com expired on 2024-01-15",
-                "at com.android.org.conscrypt.OpenSSLSocketImpl.startHandshake(OpenSSLSocketImpl.java:361)\\nat com.acme.shopping.network.SecureApiClient.connect(SecureApiClient.kt:78)",
+                "at com.android.org.conscrypt.OpenSSLSocketImpl.startHandshake(OpenSSLSocketImpl.java:361)\\n" +
+                    "at com.acme.shopping.network.SecureApiClient.connect(SecureApiClient.kt:78)",
                 androidRelease, 2200, 10, 10, 24, androidDevices, "Android", androidVersions
             ),
 
             issueInsert(
                 P1, "demo-android-14", "android", "error",
-                "android.content.ActivityNotFoundException: No Activity found to handle Intent { act=com.acme.payment.CHECKOUT }",
+                "android.content.ActivityNotFoundException: No Activity found to handle Intent { " +
+                    "act=com.acme.payment.CHECKOUT }",
                 "android.content.ActivityNotFoundException",
                 "Payment activity not found - payment module may not be installed",
-                "at android.app.Instrumentation.checkStartActivityResult(Instrumentation.java:2085)\\nat com.acme.shopping.checkout.PaymentLauncher.launch(PaymentLauncher.kt:56)",
+                "at android.app.Instrumentation.checkStartActivityResult(Instrumentation.java:2085)\\n" +
+                    "at com.acme.shopping.checkout.PaymentLauncher.launch(PaymentLauncher.kt:56)",
                 androidRelease, 2300, 7, 7, 96, androidDevices, "Android", androidVersions
             ),
 
             issueInsert(
                 P1, "demo-android-15", "android", "error",
-                "java.lang.ClassCastException: com.acme.shopping.model.SaleItem cannot be cast to com.acme.shopping.model.ProductItem",
+                "java.lang.ClassCastException: com.acme.shopping.model.SaleItem cannot be cast to " +
+                    "com.acme.shopping.model.ProductItem",
                 "java.lang.ClassCastException",
                 "Type mismatch in search results adapter — sale items mixed with regular products",
-                "at com.acme.shopping.ui.adapters.SearchResultAdapter.onBindViewHolder(SearchResultAdapter.kt:112)\\nat androidx.recyclerview.widget.RecyclerView.onScrolled(RecyclerView.java:1841)",
+                "at com.acme.shopping.ui.adapters.SearchResultAdapter.onBindViewHolder(SearchResultAdapter.kt:112)\\n" +
+                    "at androidx.recyclerview.widget.RecyclerView.onScrolled(RecyclerView.java:1841)",
                 androidRelease, 2400, 7, 7, 72, androidDevices, "Android", androidVersions
             ),
 
@@ -542,16 +578,19 @@ object DemoDataReseeder {
                 "java.lang.NumberFormatException: For input string: '12.99 USD'",
                 "java.lang.NumberFormatException",
                 "Price string contains currency symbol, cannot parse as Double",
-                "at java.lang.FloatingDecimal.readJavaFormatString(FloatingDecimal.java:2043)\\nat com.acme.shopping.ui.PriceFormatter.parse(PriceFormatter.kt:29)",
+                "at java.lang.FloatingDecimal.readJavaFormatString(FloatingDecimal.java:2043)\\n" +
+                    "at com.acme.shopping.ui.PriceFormatter.parse(PriceFormatter.kt:29)",
                 androidRelease, 2500, 6, 6, 48, androidDevices, "Android", androidVersions
             ),
 
             issueInsert(
                 P1, "demo-android-17", "android", "error",
-                "java.io.FileNotFoundException: /data/user/0/com.acme.shopping/cache/profile_img_1234.jpg (No such file or directory)",
+                "java.io.FileNotFoundException: /data/user/0/com.acme.shopping/cache/profile_img_1234.jpg (No such " +
+                    "file or directory)",
                 "java.io.FileNotFoundException",
                 "Cached profile image file deleted by system while still referenced",
-                "at java.io.FileInputStream.open0(Native Method)\\nat com.acme.shopping.profile.ProfileImageManager.loadCachedImage(ProfileImageManager.kt:88)",
+                "at java.io.FileInputStream.open0(Native Method)\\n" +
+                    "at com.acme.shopping.profile.ProfileImageManager.loadCachedImage(ProfileImageManager.kt:88)",
                 androidRelease, 2600, 5, 5, 120, androidDevices, "Android", androidVersions
             ),
 
@@ -560,7 +599,8 @@ object DemoDataReseeder {
                 "java.lang.UnsupportedOperationException: Payment method BNPL not supported in region",
                 "java.lang.UnsupportedOperationException",
                 "Buy-now-pay-later payment method unavailable for selected shipping region",
-                "at com.acme.shopping.payment.PaymentProcessor.process(PaymentProcessor.kt:234)\\nat com.acme.shopping.checkout.CheckoutViewModel.confirmOrder(CheckoutViewModel.kt:178)",
+                "at com.acme.shopping.payment.PaymentProcessor.process(PaymentProcessor.kt:234)\\n" +
+                    "at com.acme.shopping.checkout.CheckoutViewModel.confirmOrder(CheckoutViewModel.kt:178)",
                 androidRelease, 2700, 4, 4, 96, androidDevices, "Android", androidVersions
             ),
 
@@ -569,7 +609,9 @@ object DemoDataReseeder {
                 "android.os.DeadObjectException in PushNotificationService",
                 "android.os.DeadObjectException",
                 "Binder connection to push notification service died unexpectedly",
-                "at android.os.BinderProxy.transactNative(Native Method)\\nat com.acme.shopping.notifications.PushNotificationService.sendToken(PushNotificationService.kt:67)",
+                "at android.os.BinderProxy.transactNative(Native Method)\\n" +
+                    "at com.acme.shopping.notifications.PushNotificationService.sendToken(" +
+                    "PushNotificationService.kt:67)",
                 androidRelease, 2800, 4, 4, 72, androidDevices, "Android", androidVersions
             ),
 
@@ -578,16 +620,20 @@ object DemoDataReseeder {
                 "android.os.RemoteException in PaymentService",
                 "android.os.RemoteException",
                 "Remote payment service disconnected during transaction",
-                "at com.acme.shopping.payment.PaymentServiceConnection.onServiceDisconnected(PaymentServiceConnection.kt:45)\\nat com.acme.shopping.checkout.CheckoutActivity.finalizePayment(CheckoutActivity.kt:312)",
+                "at com.acme.shopping.payment.PaymentServiceConnection" +
+                    ".onServiceDisconnected(PaymentServiceConnection.kt:45)\\n" +
+                    "at com.acme.shopping.checkout.CheckoutActivity.finalizePayment(CheckoutActivity.kt:312)",
                 androidRelease, 2900, 4, 4, 48, androidDevices, "Android", androidVersions
             ),
 
             issueInsert(
                 P1, "demo-android-21", "android", "error",
-                "com.google.firebase.firestore.FirebaseFirestoreException: PERMISSION_DENIED: Missing or insufficient permissions",
+                "com.google.firebase.firestore.FirebaseFirestoreException: PERMISSION_DENIED: Missing or " +
+                    "insufficient permissions",
                 "com.google.firebase.firestore.FirebaseFirestoreException",
                 "Firestore security rules blocking wishlist read for unauthenticated user",
-                "at com.google.firebase.firestore.FirebaseFirestore.collection(FirebaseFirestore.java:234)\\nat com.acme.shopping.wishlist.WishlistRepository.fetchWishlist(WishlistRepository.kt:56)",
+                "at com.google.firebase.firestore.FirebaseFirestore.collection(FirebaseFirestore.java:234)\\n" +
+                    "at com.acme.shopping.wishlist.WishlistRepository.fetchWishlist(WishlistRepository.kt:56)",
                 androidRelease, 3000, 3, 3, 96, androidDevices, "Android", androidVersions
             ),
 
@@ -596,7 +642,8 @@ object DemoDataReseeder {
                 "java.text.ParseException: Unparseable date: 2024-13-45T00:00:00Z",
                 "java.text.ParseException",
                 "Invalid ISO 8601 date from order history API response",
-                "at java.text.SimpleDateFormat.parse(SimpleDateFormat.java:1457)\\nat com.acme.shopping.orders.OrderHistoryParser.parseDate(OrderHistoryParser.kt:78)",
+                "at java.text.SimpleDateFormat.parse(SimpleDateFormat.java:1457)\\n" +
+                    "at com.acme.shopping.orders.OrderHistoryParser.parseDate(OrderHistoryParser.kt:78)",
                 androidRelease, 3100, 2, 2, 120, androidDevices, "Android", androidVersions
             ),
 
@@ -605,7 +652,8 @@ object DemoDataReseeder {
                 "java.lang.NegativeArraySizeException: -3 in FilterManager",
                 "java.lang.NegativeArraySizeException",
                 "Negative size passed to array constructor when no filters selected",
-                "at com.acme.shopping.search.FilterManager.buildFilterArray(FilterManager.kt:112)\\nat com.acme.shopping.ui.SearchFragment.applyFilters(SearchFragment.kt:234)",
+                "at com.acme.shopping.search.FilterManager.buildFilterArray(FilterManager.kt:112)\\n" +
+                    "at com.acme.shopping.ui.SearchFragment.applyFilters(SearchFragment.kt:234)",
                 androidRelease, 3200, 2, 2, 72, androidDevices, "Android", androidVersions
             ),
 
@@ -614,7 +662,8 @@ object DemoDataReseeder {
                 "androidx.work.WorkerInitializationException: Could not instantiate SyncWorker",
                 "androidx.work.WorkerInitializationException",
                 "WorkManager SyncWorker failed to initialize — missing dependency injection",
-                "at androidx.work.WorkerFactory.createWorkerWithDefaultFallback(WorkerFactory.java:98)\\nat com.acme.shopping.sync.SyncWorker.<init>(SyncWorker.kt:24)",
+                "at androidx.work.WorkerFactory.createWorkerWithDefaultFallback(WorkerFactory.java:98)\\n" +
+                    "at com.acme.shopping.sync.SyncWorker.<init>(SyncWorker.kt:24)",
                 androidRelease, 3300, 2, 2, 96, androidDevices, "Android", androidVersions
             ),
 
@@ -623,17 +672,20 @@ object DemoDataReseeder {
                 "android.database.sqlite.SQLiteDatabaseCorruptException: database disk image is malformed",
                 "android.database.sqlite.SQLiteDatabaseCorruptException",
                 "Room database on-disk file corrupted — possible incomplete write during crash",
-                "at android.database.sqlite.SQLiteConnection.nativeExecuteForCursorWindow(Native Method)\\nat com.acme.shopping.db.AppDatabase\$\$_Impl.clearAllTables(AppDatabase.kt:45)",
+                "at android.database.sqlite.SQLiteConnection.nativeExecuteForCursorWindow(Native Method)\\n" +
+                    "at com.acme.shopping.db.AppDatabase\$\$_Impl.clearAllTables(AppDatabase.kt:45)",
                 androidRelease, 3400, 1, 1, 48, androidDevices, "Android", androidVersions
             ),
 
-            // ── iOS issues (project -2) ──────────────────────────────────────────
+            // iOS issues (project -2)
             issueInsert(
                 P2, "demo-ios-1", "ios", "error",
-                "NSInvalidArgumentException: -[UIViewController presentViewController:animated:completion:] called on nil",
+                "NSInvalidArgumentException: -[UIViewController presentViewController:animated:completion:] called " +
+                    "on nil",
                 "NSInvalidArgumentException",
                 "Attempt to present view controller from a deallocated UIViewController",
-                "at -[UIViewController presentViewController:animated:completion:] + 48\\nat -[AcmeProductDetailVC showCheckout] (ProductDetailViewController.m:312)",
+                "at -[UIViewController presentViewController:animated:completion:] + 48\\n" +
+                    "at -[AcmeProductDetailVC showCheckout] (ProductDetailViewController.m:312)",
                 iosRelease, 2000, 75, 40, 168, iosDevices, "iOS", iosVersions
             ),
 
@@ -641,8 +693,10 @@ object DemoDataReseeder {
                 P2, "demo-ios-2", "ios", "fatal",
                 "EXC_BAD_ACCESS (SIGSEGV) in ProductImageCache",
                 "EXC_BAD_ACCESS",
-                "SIGSEGV KERN_INVALID_ADDRESS at 0x0000000000000018 — dangling pointer to deallocated image cache entry",
-                "at AcmeProductImageCache.imageForURL(_:) + 156 (ProductImageCache.swift:89)\\nat AcmeProductCell.configure(with:) + 304 (ProductCell.swift:67)",
+                "SIGSEGV KERN_INVALID_ADDRESS at 0x0000000000000018 — dangling pointer to deallocated image cache " +
+                    "entry",
+                "at AcmeProductImageCache.imageForURL(_:) + 156 (ProductImageCache.swift:89)\\n" +
+                    "at AcmeProductCell.configure(with:) + 304 (ProductCell.swift:67)",
                 iosRelease, 2100, 60, 70, 120, iosDevices, "iOS", iosVersions
             ),
 
@@ -651,7 +705,9 @@ object DemoDataReseeder {
                 "Fatal error: Index out of range in CartViewController",
                 "Swift.IndexOutOfRangeError",
                 "Array index 5 is out of bounds for array with length 5 while removing cart item",
-                "at Swift._ArrayBuffer._checkValidSubscript(_:withSubscriptCheck:) + 220 (CartViewController.swift:178)\\nat AcmeCartViewController.removeItem(at:) + 88 (CartViewController.swift:178)",
+                "at Swift._ArrayBuffer._checkValidSubscript(_:withSubscriptCheck:) + 220 " +
+                    "(CartViewController.swift:178)\\n" +
+                    "at AcmeCartViewController.removeItem(at:) + 88 (CartViewController.swift:178)",
                 iosRelease, 2200, 45, 50, 96, iosDevices, "iOS", iosVersions
             ),
 
@@ -660,7 +716,8 @@ object DemoDataReseeder {
                 "NSRangeException: -[__NSArrayM objectAtIndex:]: index 15 beyond bounds for empty array",
                 "NSRangeException",
                 "Order history table view accessed index 15 on empty data source",
-                "at -[__NSArrayM objectAtIndex:] + 36\\nat -[AcmeOrderHistoryVC tableView:cellForRowAtIndexPath:] (OrderHistoryViewController.m:156)",
+                "at -[__NSArrayM objectAtIndex:] + 36\\n" +
+                    "at -[AcmeOrderHistoryVC tableView:cellForRowAtIndexPath:] (OrderHistoryViewController.m:156)",
                 iosRelease, 2300, 30, 35, 144, iosDevices, "iOS", iosVersions
             ),
 
@@ -669,7 +726,8 @@ object DemoDataReseeder {
                 "Thread 1: EXC_BAD_INSTRUCTION (EXC_I386_INVOP, subcode=0x0) in CheckoutViewController",
                 "EXC_BAD_INSTRUCTION",
                 "Force-unwrap of nil Optional in CheckoutViewController payment result handler",
-                "at AcmeCheckoutViewController.handlePaymentResult(_:) + 312 (CheckoutViewController.swift:234)\\nat AcmePaymentService.onComplete(_:) + 88 (PaymentService.swift:156)",
+                "at AcmeCheckoutViewController.handlePaymentResult(_:) + 312 (CheckoutViewController.swift:234)\\n" +
+                    "at AcmePaymentService.onComplete(_:) + 88 (PaymentService.swift:156)",
                 iosRelease, 2400, 22, 25, 72, iosDevices, "iOS", iosVersions
             ),
 
@@ -678,7 +736,8 @@ object DemoDataReseeder {
                 "NSURLErrorDomain -1009: The Internet connection appears to be offline",
                 "NSURLError",
                 "Network request failed — device has no internet connectivity during checkout",
-                "at AcmeNetworkService.performRequest(_:completion:) + 278 (NetworkService.swift:112)\\nat AcmeCheckoutService.submitOrder(_:) + 156 (CheckoutService.swift:89)",
+                "at AcmeNetworkService.performRequest(_:completion:) + 278 (NetworkService.swift:112)\\n" +
+                    "at AcmeCheckoutService.submitOrder(_:) + 156 (CheckoutService.swift:89)",
                 iosRelease, 2500, 18, 20, 48, iosDevices, "iOS", iosVersions
             ),
 
@@ -687,7 +746,8 @@ object DemoDataReseeder {
                 "Thread 1: signal SIGABRT — assertion failure in UITableView",
                 "SIGABRT",
                 "Invalid update: invalid number of sections 0 (before), 1 (after) in UITableView",
-                "at AcmeProductListVC.reloadData() + 534 (ProductListViewController.swift:445)\\nat -[UIApplication _handleApplicationActivationWithScene:...]",
+                "at AcmeProductListVC.reloadData() + 534 (ProductListViewController.swift:445)\\n" +
+                    "at -[UIApplication _handleApplicationActivationWithScene:...]",
                 iosRelease, 2600, 13, 15, 96, iosDevices, "iOS", iosVersions
             ),
 
@@ -696,7 +756,8 @@ object DemoDataReseeder {
                 "NSInternalInconsistencyException: Invalid update to UITableView section 0",
                 "NSInternalInconsistencyException",
                 "Attempted to delete rows while another animation was in progress — race condition in search results",
-                "at -[UITableView _endCellAnimationsWithContext:] + 8234\\nat AcmeSearchResultsVC.updateResults(_:) + 312 (SearchResultsViewController.swift:289)",
+                "at -[UITableView _endCellAnimationsWithContext:] + 8234\\n" +
+                    "at AcmeSearchResultsVC.updateResults(_:) + 312 (SearchResultsViewController.swift:289)",
                 iosRelease, 2700, 18, 20, 72, iosDevices, "iOS", iosVersions
             ),
 
@@ -705,7 +766,8 @@ object DemoDataReseeder {
                 "Swift.DecodingError.keyNotFound(CodingKeys.productId): No value associated with key productId",
                 "Swift.DecodingError",
                 "product_id key missing in product API response — backend returned camelCase vs snake_case mismatch",
-                "at AcmeProductParser.decode(_:) + 234 (ProductParser.swift:67)\\nat AcmeProductService.fetchProducts(completion:) + 388 (ProductService.swift:134)",
+                "at AcmeProductParser.decode(_:) + 234 (ProductParser.swift:67)\\n" +
+                    "at AcmeProductService.fetchProducts(completion:) + 388 (ProductService.swift:134)",
                 iosRelease, 2800, 16, 18, 120, iosDevices, "iOS", iosVersions
             ),
 
@@ -714,34 +776,41 @@ object DemoDataReseeder {
                 "URLError -1001: The request timed out after 30 seconds",
                 "URLError",
                 "Checkout API request timed out — server overloaded during flash sale",
-                "at AcmeAPIClient.dataTask(with:completionHandler:) + 156 (APIClient.swift:89)\\nat AcmeOrderService.placeOrder(_:completion:) + 488 (OrderService.swift:278)",
+                "at AcmeAPIClient.dataTask(with:completionHandler:) + 156 (APIClient.swift:89)\\n" +
+                    "at AcmeOrderService.placeOrder(_:completion:) + 488 (OrderService.swift:278)",
                 iosRelease, 2900, 13, 15, 48, iosDevices, "iOS", iosVersions
             ),
 
             issueInsert(
                 P2, "demo-ios-11", "ios", "error",
-                "NSCocoaErrorDomain 257: The file photo_library could not be opened because you don't have permission to view it",
+                "NSCocoaErrorDomain 257: The file photo_library could not be opened because you don't have " +
+                    "permission to view it",
                 "NSFileReadNoPermissionError",
                 "Photo library access requested without NSPhotoLibraryUsageDescription in Info.plist",
-                "at AcmeProfileImagePicker.requestPhotoAccess() + 78 (ProfileImagePicker.swift:45)\\nat AcmeProfileVC.didTapProfilePhoto(_:) + 234 (ProfileViewController.swift:156)",
+                "at AcmeProfileImagePicker.requestPhotoAccess() + 78 (ProfileImagePicker.swift:45)\\n" +
+                    "at AcmeProfileVC.didTapProfilePhoto(_:) + 234 (ProfileViewController.swift:156)",
                 iosRelease, 3000, 11, 12, 96, iosDevices, "iOS", iosVersions
             ),
 
             issueInsert(
                 P2, "demo-ios-12", "ios", "error",
-                "NSCocoaErrorDomain 4864: The model used to open the store is incompatible with the one used to create the store",
+                "NSCocoaErrorDomain 4864: The model used to open the store is incompatible with the one used to " +
+                    "create the store",
                 "NSCocoaErrorDomain",
                 "CoreData model version mismatch after app update — migration required from V3 to V4",
-                "at NSPersistentStoreCoordinator.addPersistentStore(ofType:configurationName:at:options:) + 312\\nat AcmeDataStack.loadStores() + 156 (DataStack.swift:78)",
+                "at NSPersistentStoreCoordinator.addPersistentStore(ofType:configurationName:at:options:) + 312\\n" +
+                    "at AcmeDataStack.loadStores() + 156 (DataStack.swift:78)",
                 iosRelease, 3100, 10, 10, 72, iosDevices, "iOS", iosVersions
             ),
 
             issueInsert(
                 P2, "demo-ios-13", "ios", "error",
-                "NSJSONSerialization error 3840: JSON text did not start with array or object and option to allow fragments not set",
+                "NSJSONSerialization error 3840: JSON text did not start with array or object and option to allow " +
+                    "fragments not set",
                 "NSJSONSerialization",
                 "Empty HTTP 200 response body from product search API cannot be parsed as JSON",
-                "at AcmeSearchResponseParser.parse(_:) + 112 (SearchResponseParser.swift:34)\\nat AcmeSearchService.search(query:completion:) + 234 (SearchService.swift:89)",
+                "at AcmeSearchResponseParser.parse(_:) + 112 (SearchResponseParser.swift:34)\\n" +
+                    "at AcmeSearchService.search(query:completion:) + 234 (SearchService.swift:89)",
                 iosRelease, 3200, 10, 10, 120, iosDevices, "iOS", iosVersions
             ),
 
@@ -750,25 +819,31 @@ object DemoDataReseeder {
                 "SKErrorDomain 0: Cannot connect to iTunes Store",
                 "SKError",
                 "StoreKit purchase failed — user cannot make in-app purchases (parental controls)",
-                "at AcmePremiumSubscriptionService.purchase(_:) + 189 (PremiumSubscriptionService.swift:112)\\nat AcmeSubscriptionVC.didTapSubscribe(_:) + 234 (SubscriptionViewController.swift:78)",
+                "at AcmePremiumSubscriptionService.purchase(_:) + 189 (PremiumSubscriptionService.swift:112)\\n" +
+                    "at AcmeSubscriptionVC.didTapSubscribe(_:) + 234 (SubscriptionViewController.swift:78)",
                 iosRelease, 3300, 8, 8, 96, iosDevices, "iOS", iosVersions
             ),
 
             issueInsert(
                 P2, "demo-ios-15", "ios", "error",
-                "WKNavigationDelegate webView(_:didFailProvisionalNavigation:withError:): A server with the specified hostname could not be found",
+                "WKNavigationDelegate webView(_:didFailProvisionalNavigation:withError:): A server with the " +
+                    "specified hostname could not be found",
                 "WKNavigationError",
                 "WebView failed to load order tracking page — DNS lookup failure for tracking subdomain",
-                "at AcmeOrderTrackingWebVC.webView(_:didFailProvisionalNavigation:withError:) + 156 (OrderTrackingWebViewController.swift:67)\\nat WebKit.WKWebView.performLoad(_:)",
+                "at AcmeOrderTrackingWebVC.webView(_:didFailProvisionalNavigation:withError:) + 156 " +
+                    "(OrderTrackingWebViewController.swift:67)\\n" +
+                    "at WebKit.WKWebView.performLoad(_:)",
                 iosRelease, 3400, 8, 8, 72, iosDevices, "iOS", iosVersions
             ),
 
             issueInsert(
                 P2, "demo-ios-16", "ios", "error",
-                "NSUnknownKeyException: setValue:forUndefinedKey: 'discountedPrice' this class is not key value coding-compliant",
+                "NSUnknownKeyException: setValue:forUndefinedKey: 'discountedPrice' this class is not key value " +
+                    "coding-compliant",
                 "NSUnknownKeyException",
                 "KVC access to discountedPrice property not found in ProductModel after model refactor",
-                "at NSObject.setValue(_:forKey:) + 56\\nat AcmeProductListVC.configureCell(_:with:) + 178 (ProductListViewController.swift:345)",
+                "at NSObject.setValue(_:forKey:) + 56\\n" +
+                    "at AcmeProductListVC.configureCell(_:with:) + 178 (ProductListViewController.swift:345)",
                 iosRelease, 3500, 7, 7, 96, iosDevices, "iOS", iosVersions
             ),
 
@@ -777,7 +852,8 @@ object DemoDataReseeder {
                 "AVFoundationErrorDomain -11819: AVCaptureSession cannot initialize camera capture for this device",
                 "AVFoundationError",
                 "Camera capture device unavailable — ARKit session failed to start on unsupported device",
-                "at AcmeARTryOnVC.startARSession() + 89 (ARTryOnViewController.swift:45)\\nat AcmeProductDetailVC.didTapTryOn(_:) + 234 (ProductDetailViewController.swift:289)",
+                "at AcmeARTryOnVC.startARSession() + 89 (ARTryOnViewController.swift:45)\\n" +
+                    "at AcmeProductDetailVC.didTapTryOn(_:) + 234 (ProductDetailViewController.swift:289)",
                 iosRelease, 3600, 6, 6, 72, iosDevices, "iOS", iosVersions
             ),
 
@@ -786,16 +862,19 @@ object DemoDataReseeder {
                 "CKErrorDomain 1: CloudKit account not available — iCloud not signed in",
                 "CKError",
                 "CloudKit sync failed — user not signed into iCloud, wishlist sync disabled",
-                "at AcmeCloudKitSyncService.syncWishlist() + 112 (CloudKitSyncService.swift:67)\\nat AcmeWishlistVC.viewDidAppear(_:) + 78 (WishlistViewController.swift:34)",
+                "at AcmeCloudKitSyncService.syncWishlist() + 112 (CloudKitSyncService.swift:67)\\n" +
+                    "at AcmeWishlistVC.viewDidAppear(_:) + 78 (WishlistViewController.swift:34)",
                 iosRelease, 3700, 6, 6, 120, iosDevices, "iOS", iosVersions
             ),
 
             issueInsert(
                 P2, "demo-ios-19", "ios", "error",
-                "NSInvalidUnarchiveOperationException: Cannot decode object of class AcmeUserPreferences because no such class exists",
+                "NSInvalidUnarchiveOperationException: Cannot decode object of class AcmeUserPreferences because no " +
+                    "such class exists",
                 "NSKeyedUnarchiver",
                 "Class AcmeUserPreferences renamed to UserPreferences — archived data cannot be decoded",
-                "at NSKeyedUnarchiver.decodeObject(forKey:) + 234\\nat AcmePreferencesManager.loadPreferences() + 89 (PreferencesManager.swift:45)",
+                "at NSKeyedUnarchiver.decodeObject(forKey:) + 234\\n" +
+                    "at AcmePreferencesManager.loadPreferences() + 89 (PreferencesManager.swift:45)",
                 iosRelease, 3800, 5, 5, 96, iosDevices, "iOS", iosVersions
             ),
 
@@ -804,16 +883,19 @@ object DemoDataReseeder {
                 "FirebaseAuthErrorDomain 17020: Network error occurred, please try again",
                 "FirebaseAuthError",
                 "Firebase Auth network request failed during social login — APNS token not registered",
-                "at AcmeSocialAuthService.signIn(with:) + 178 (SocialAuthService.swift:89)\\nat AcmeLoginVC.didTapGoogleSignIn(_:) + 234 (LoginViewController.swift:156)",
+                "at AcmeSocialAuthService.signIn(with:) + 178 (SocialAuthService.swift:89)\\n" +
+                    "at AcmeLoginVC.didTapGoogleSignIn(_:) + 234 (LoginViewController.swift:156)",
                 iosRelease, 3900, 5, 5, 72, iosDevices, "iOS", iosVersions
             ),
 
             issueInsert(
                 P2, "demo-ios-21", "ios", "error",
-                "UIApplicationInvalidInterfaceOrientation: Supported orientations has no common orientation with the application",
+                "UIApplicationInvalidInterfaceOrientation: Supported orientations has no common orientation with " +
+                    "the application",
                 "UIApplicationInvalidInterfaceOrientation",
                 "Video player forced landscape-only but parent app requires portrait — orientation conflict",
-                "at -[UIViewController _validateRotationViewBounds] + 812\\nat AcmeVideoPlayerVC.viewDidAppear(_:) + 89 (VideoPlayerViewController.swift:56)",
+                "at -[UIViewController _validateRotationViewBounds] + 812\\n" +
+                    "at AcmeVideoPlayerVC.viewDidAppear(_:) + 89 (VideoPlayerViewController.swift:56)",
                 iosRelease, 4000, 4, 4, 96, iosDevices, "iOS", iosVersions
             ),
 
@@ -822,7 +904,8 @@ object DemoDataReseeder {
                 "Fatal error: Unexpectedly found nil while implicitly unwrapping an Optional value in ProductService",
                 "Swift.UnexpectedNilError",
                 "Force-unwrapped currentUser! is nil — user session expired during background fetch",
-                "at AcmeProductService.fetchRecommendations() + 89 (ProductService.swift:223)\\nat AcmeHomeVC.viewWillAppear(_:) + 178 (HomeViewController.swift:67)",
+                "at AcmeProductService.fetchRecommendations() + 89 (ProductService.swift:223)\\n" +
+                    "at AcmeHomeVC.viewWillAppear(_:) + 178 (HomeViewController.swift:67)",
                 iosRelease, 4100, 4, 4, 48, iosDevices, "iOS", iosVersions
             ),
 
@@ -831,16 +914,19 @@ object DemoDataReseeder {
                 "BGTaskScheduler error: Background task com.acme.sync expired before completion",
                 "BGTaskError",
                 "Inventory sync background task exceeded 30-second time limit — partial sync committed",
-                "at AcmeInventorySyncTask.expirationHandler() + 45 (InventorySyncTask.swift:89)\\nat BGTaskScheduler.submit(_:) + 234",
+                "at AcmeInventorySyncTask.expirationHandler() + 45 (InventorySyncTask.swift:89)\\n" +
+                    "at BGTaskScheduler.submit(_:) + 234",
                 iosRelease, 4200, 3, 3, 120, iosDevices, "iOS", iosVersions
             ),
 
             issueInsert(
                 P2, "demo-ios-24", "ios", "error",
-                "RLMException: Migration is required for object type 'Product' due to the following errors: Property 'sku' has been added to latest object model",
+                "RLMException: Migration is required for object type 'Product' due to the following errors: " +
+                    "Property 'sku' has been added to latest object model",
                 "RLMException",
                 "Realm schema migration required from version 3 to 4 after adding Product.sku property",
-                "at RLMRealm.init(configuration:) + 456\\nat AcmeProductRepository.initializeDatabase() + 89 (ProductRepository.swift:34)",
+                "at RLMRealm.init(configuration:) + 456\\n" +
+                    "at AcmeProductRepository.initializeDatabase() + 89 (ProductRepository.swift:34)",
                 iosRelease, 4300, 3, 3, 96, iosDevices, "iOS", iosVersions
             ),
 
@@ -849,17 +935,22 @@ object DemoDataReseeder {
                 "APNs device token registration failed: InvalidDeviceToken",
                 "APNsError",
                 "Push notification device token rejected by APNs — sandbox token used in production environment",
-                "at AcmePushNotificationService.application(_:didFailToRegisterForRemoteNotificationsWithError:) + 78 (PushNotificationService.swift:56)\\nat UIApplication.registerForRemoteNotifications() + 234",
+                "at AcmePushNotificationService" +
+                    ".application(_:didFailToRegisterForRemoteNotificationsWithError:) + 78 " +
+                    "(PushNotificationService.swift:56)\\n" +
+                    "at UIApplication.registerForRemoteNotifications() + 234",
                 iosRelease, 4400, 2, 2, 72, iosDevices, "iOS", iosVersions
             ),
 
-            // ── React Native issues (project -3) ─────────────────────────────────
+            // React Native issues (project -3)
             issueInsert(
                 P3, "demo-rn-1", "react-native", "error",
                 "TypeError: Cannot read property 'id' of undefined",
                 "TypeError",
                 "Accessing .id on undefined cart item — product removed from store while user viewed cart",
-                "at HomeScreen.render (HomeScreen.js:42)\\nat processChild (react-native/Libraries/Renderer/implementations/ReactNativeRenderer-prod.js:4072)",
+                "at HomeScreen.render (HomeScreen.js:42)\\n" +
+                    "at processChild (react-native/Libraries/Renderer/implementations/" +
+                    "ReactNativeRenderer-prod.js:4072)",
                 rnRelease, 3000, 55, 30, 168, rnDevices, "Android", rnVersions
             ),
 
@@ -868,7 +959,8 @@ object DemoDataReseeder {
                 "UnhandledPromiseRejection: Network request failed in CheckoutService",
                 "UnhandledPromiseRejection",
                 "Fetch to checkout API failed — CORS policy blocked request from React Native WebView",
-                "at CheckoutService.submitOrder (src/services/CheckoutService.js:89)\\nat CheckoutScreen.handleSubmit (src/screens/CheckoutScreen.js:156)",
+                "at CheckoutService.submitOrder (src/services/CheckoutService.js:89)\\n" +
+                    "at CheckoutScreen.handleSubmit (src/screens/CheckoutScreen.js:156)",
                 rnRelease, 3100, 50, 60, 120, rnDevices, "Android", rnVersions
             ),
 
@@ -877,7 +969,8 @@ object DemoDataReseeder {
                 "RangeError: Maximum call stack size exceeded in CategoryTreeComponent",
                 "RangeError",
                 "Infinite re-render loop in CategoryTree — useEffect missing dependency array",
-                "at CategoryTreeComponent.renderNode (src/components/CategoryTree.js:67)\\nat CategoryTreeComponent.renderNode (src/components/CategoryTree.js:78)",
+                "at CategoryTreeComponent.renderNode (src/components/CategoryTree.js:67)\\n" +
+                    "at CategoryTreeComponent.renderNode (src/components/CategoryTree.js:78)",
                 rnRelease, 3200, 30, 35, 96, rnDevices, "Android", rnVersions
             ),
 
@@ -886,7 +979,8 @@ object DemoDataReseeder {
                 "TypeError: undefined is not a function (evaluating 'navigation.navigate')",
                 "TypeError",
                 "navigation prop not passed to deeply nested ProductCard component",
-                "at ProductCard.onPress (src/components/ProductCard.js:34)\\nat TouchableHighlight.onPress (Libraries/Components/Touchable/TouchableHighlight.js:195)",
+                "at ProductCard.onPress (src/components/ProductCard.js:34)\\n" +
+                    "at TouchableHighlight.onPress (Libraries/Components/Touchable/TouchableHighlight.js:195)",
                 rnRelease, 3300, 35, 40, 144, rnDevices, "Android", rnVersions
             ),
 
@@ -895,7 +989,8 @@ object DemoDataReseeder {
                 "Error: Network request failed — Request to https://api.acmemobile.com/v2/checkout timed out",
                 "NetworkError",
                 "Checkout API request timed out after 30 seconds — possible server congestion",
-                "at CheckoutService.submitOrder (src/services/CheckoutService.js:134)\\nat CheckoutScreen.onConfirmOrder (src/screens/CheckoutScreen.js:289)",
+                "at CheckoutService.submitOrder (src/services/CheckoutService.js:134)\\n" +
+                    "at CheckoutScreen.onConfirmOrder (src/screens/CheckoutScreen.js:289)",
                 rnRelease, 3400, 22, 25, 72, rnDevices, "Android", rnVersions
             ),
 
@@ -904,7 +999,8 @@ object DemoDataReseeder {
                 "TypeError: Cannot convert undefined or null to object in CartReducer",
                 "TypeError",
                 "Object.keys() called on undefined cart state — reducer received undefined instead of initial state",
-                "at CartReducer (src/store/reducers/cartReducer.js:45)\\nat combineReducers (node_modules/redux/dist/redux.js:589)",
+                "at CartReducer (src/store/reducers/cartReducer.js:45)\\n" +
+                    "at combineReducers (node_modules/redux/dist/redux.js:589)",
                 rnRelease, 3500, 18, 20, 96, rnDevices, "Android", rnVersions
             ),
 
@@ -913,13 +1009,15 @@ object DemoDataReseeder {
                 "Warning: Maximum update depth exceeded in CartSummaryComponent",
                 "MaximumUpdateDepthError",
                 "setState called inside render in CartSummary — causes infinite update loop",
-                "at CartSummaryComponent (src/components/CartSummary.js:89)\\nat checkForNestedUpdates (node_modules/react-dom/cjs/react-dom.development.js:25129)",
+                "at CartSummaryComponent (src/components/CartSummary.js:89)\\n" +
+                    "at checkForNestedUpdates (node_modules/react-dom/cjs/react-dom.development.js:25129)",
                 rnRelease, 3600, 13, 15, 72, rnDevices, "Android", rnVersions
             ),
 
             issueInsert(
                 P3, "demo-rn-8", "react-native", "warning",
-                "Warning: ViewPropTypes has been removed from React Native. Use ViewPropTypes from @react-native-community/art",
+                "Warning: ViewPropTypes has been removed from React Native. Use ViewPropTypes from " +
+                    "@react-native-community/art",
                 "DeprecationWarning",
                 "Third-party component react-native-camera still using deprecated ViewPropTypes",
                 "at checkPropTypes (node_modules/react/cjs/react.development.js:216)\\nat camera/CameraView.js:34",
@@ -931,7 +1029,8 @@ object DemoDataReseeder {
                 "AsyncStorage failed to get item 'authToken': Invalid JSON",
                 "AsyncStorageError",
                 "Corrupted JSON in AsyncStorage authToken — stored value truncated during previous crash",
-                "at AuthService.getToken (src/services/AuthService.js:23)\\nat ApiClient.setAuthHeader (src/api/ApiClient.js:67)",
+                "at AuthService.getToken (src/services/AuthService.js:23)\\n" +
+                    "at ApiClient.setAuthHeader (src/api/ApiClient.js:67)",
                 rnRelease, 3800, 10, 10, 96, rnDevices, "Android", rnVersions
             ),
 
@@ -940,7 +1039,8 @@ object DemoDataReseeder {
                 "ReferenceError: Can't find variable: Stripe in PaymentScreen",
                 "ReferenceError",
                 "Stripe native module not linked — missing react-native link for @stripe/stripe-react-native",
-                "at PaymentScreen.initializeStripe (src/screens/PaymentScreen.js:45)\\nat PaymentScreen.componentDidMount (src/screens/PaymentScreen.js:23)",
+                "at PaymentScreen.initializeStripe (src/screens/PaymentScreen.js:45)\\n" +
+                    "at PaymentScreen.componentDidMount (src/screens/PaymentScreen.js:23)",
                 rnRelease, 3900, 8, 8, 72, rnDevices, "Android", rnVersions
             ),
 
@@ -949,7 +1049,8 @@ object DemoDataReseeder {
                 "SyntaxError: JSON Parse error: Unexpected identifier 'undefined' in ProductService",
                 "SyntaxError",
                 "JSON.parse of undefined string — empty response body from product search endpoint",
-                "at ProductService.parseResponse (src/services/ProductService.js:89)\\nat ProductListScreen.fetchProducts (src/screens/ProductListScreen.js:45)",
+                "at ProductService.parseResponse (src/services/ProductService.js:89)\\n" +
+                    "at ProductListScreen.fetchProducts (src/screens/ProductListScreen.js:45)",
                 rnRelease, 4000, 8, 8, 120, rnDevices, "Android", rnVersions
             ),
 
@@ -958,7 +1059,8 @@ object DemoDataReseeder {
                 "PaymentError: Your card was declined — insufficient funds",
                 "PaymentError",
                 "Stripe card payment declined at checkout — card_declined error code",
-                "at PaymentService.processPayment (src/services/PaymentService.js:156)\\nat CheckoutScreen.onPaymentConfirm (src/screens/CheckoutScreen.js:234)",
+                "at PaymentService.processPayment (src/services/PaymentService.js:156)\\n" +
+                    "at CheckoutScreen.onPaymentConfirm (src/screens/CheckoutScreen.js:234)",
                 rnRelease, 4100, 7, 7, 96, rnDevices, "Android", rnVersions
             ),
 
@@ -967,7 +1069,8 @@ object DemoDataReseeder {
                 "Error: Couldn't find a navigation object. Is your component inside NavigationContainer?",
                 "NavigationError",
                 "useNavigation hook called outside of NavigationContainer in ProductCard deep link handler",
-                "at useNavigation (node_modules/@react-navigation/native/src/useNavigation.tsx:23)\\nat ProductCard.handleDeepLink (src/components/ProductCard.js:78)",
+                "at useNavigation (node_modules/@react-navigation/native/src/useNavigation.tsx:23)\\n" +
+                    "at ProductCard.handleDeepLink (src/components/ProductCard.js:78)",
                 rnRelease, 4200, 6, 6, 72, rnDevices, "Android", rnVersions
             ),
 
@@ -976,7 +1079,8 @@ object DemoDataReseeder {
                 "TypeError: Cannot read property 'navigate' of undefined in NotificationHandler",
                 "TypeError",
                 "Navigation ref not yet initialized when push notification arrives during app startup",
-                "at NotificationHandler.onNotification (src/services/NotificationHandler.js:45)\\nat PushNotification.configure (node_modules/react-native-push-notification/index.js:78)",
+                "at NotificationHandler.onNotification (src/services/NotificationHandler.js:45)\\n" +
+                    "at PushNotification.configure (node_modules/react-native-push-notification/index.js:78)",
                 rnRelease, 4300, 6, 6, 96, rnDevices, "Android", rnVersions
             ),
 
@@ -985,7 +1089,8 @@ object DemoDataReseeder {
                 "Error: Failed to load image https://cdn.acmemobile.com/products/img_4521.jpg — 404 Not Found",
                 "ImageLoadError",
                 "Product thumbnail deleted from CDN but not removed from product catalog — stale reference",
-                "at FastImage.onError (node_modules/react-native-fast-image/src/index.tsx:156)\\nat ProductThumbnail.render (src/components/ProductThumbnail.js:34)",
+                "at FastImage.onError (node_modules/react-native-fast-image/src/index.tsx:156)\\n" +
+                    "at ProductThumbnail.render (src/components/ProductThumbnail.js:34)",
                 rnRelease, 4400, 5, 5, 120, rnDevices, "Android", rnVersions
             ),
 
@@ -994,7 +1099,8 @@ object DemoDataReseeder {
                 "Error: Network error: Failed to fetch (GraphQL) — query: getProductRecommendations",
                 "GraphQLNetworkError",
                 "GraphQL query to recommendations service failed — service unavailable during deployment",
-                "at ApolloClient.query (node_modules/apollo-client/ApolloClient.js:142)\\nat RecommendationService.fetchRecommendations (src/services/RecommendationService.js:67)",
+                "at ApolloClient.query (node_modules/apollo-client/ApolloClient.js:142)\\n" +
+                    "at RecommendationService.fetchRecommendations (src/services/RecommendationService.js:67)",
                 rnRelease, 4500, 5, 5, 72, rnDevices, "Android", rnVersions
             ),
 
@@ -1003,7 +1109,8 @@ object DemoDataReseeder {
                 "TypeError: this.setState is not a function in LegacyCartComponent",
                 "TypeError",
                 "setState called after component unmount — missing cleanup in legacy class component",
-                "at LegacyCartComponent.updateTotal (src/components/legacy/LegacyCart.js:156)\\nat LegacyCartComponent.componentDidUpdate (src/components/legacy/LegacyCart.js:89)",
+                "at LegacyCartComponent.updateTotal (src/components/legacy/LegacyCart.js:156)\\n" +
+                    "at LegacyCartComponent.componentDidUpdate (src/components/legacy/LegacyCart.js:89)",
                 rnRelease, 4600, 4, 4, 96, rnDevices, "Android", rnVersions
             ),
 
@@ -1012,7 +1119,8 @@ object DemoDataReseeder {
                 "Error: Animated: `value` argument for `interpolate` must be of type number or Animated.Value",
                 "AnimationError",
                 "Product rating animation receives undefined value when rating data not yet loaded",
-                "at Animated.interpolate (Libraries/Animated/nodes/AnimatedInterpolation.js:302)\\nat ProductRatingBar.render (src/components/ProductRatingBar.js:45)",
+                "at Animated.interpolate (Libraries/Animated/nodes/AnimatedInterpolation.js:302)\\n" +
+                    "at ProductRatingBar.render (src/components/ProductRatingBar.js:45)",
                 rnRelease, 4700, 4, 4, 72, rnDevices, "Android", rnVersions
             ),
 
@@ -1021,7 +1129,8 @@ object DemoDataReseeder {
                 "Error: Firebase: Firebase App named '[DEFAULT]' already exists (app/duplicate-app)",
                 "FirebaseError",
                 "Firebase initialized twice — initializeApp called in both App.js and a lazy-loaded module",
-                "at FirebaseAppImpl.checkDestroyed_ (node_modules/@firebase/app/dist/index.node.cjs.js:412)\\nat App.initializeFirebase (src/App.js:34)",
+                "at FirebaseAppImpl.checkDestroyed_ (node_modules/@firebase/app/dist/index.node.cjs.js:412)\\n" +
+                    "at App.initializeFirebase (src/App.js:34)",
                 rnRelease, 4800, 3, 3, 120, rnDevices, "Android", rnVersions
             ),
 
@@ -1030,7 +1139,8 @@ object DemoDataReseeder {
                 "TypeError: Cannot destructure property 'id' of 'route.params' as it is undefined",
                 "TypeError",
                 "Product detail screen opened without required route params — deep link malformed",
-                "at ProductDetailScreen (src/screens/ProductDetailScreen.js:23)\\nat SceneView (node_modules/@react-navigation/native-stack/src/views/NativeStackView.tsx:156)",
+                "at ProductDetailScreen (src/screens/ProductDetailScreen.js:23)\\n" +
+                    "at SceneView (node_modules/@react-navigation/native-stack/src/views/NativeStackView.tsx:156)",
                 rnRelease, 4900, 3, 3, 96, rnDevices, "Android", rnVersions
             ),
 
@@ -1039,7 +1149,8 @@ object DemoDataReseeder {
                 "redux-persist/createMigrate: state versions do not match — unsupported migration from version 2 to 4",
                 "MigrationError",
                 "Redux persist state version jumped from 2 to 4 after skipping an intermediate release",
-                "at createMigrate (node_modules/redux-persist/es/createMigrate.js:34)\\nat persistReducer (node_modules/redux-persist/es/persistReducer.js:89)",
+                "at createMigrate (node_modules/redux-persist/es/createMigrate.js:34)\\n" +
+                    "at persistReducer (node_modules/redux-persist/es/persistReducer.js:89)",
                 rnRelease, 5000, 2, 2, 168, rnDevices, "Android", rnVersions
             ),
 
@@ -1048,7 +1159,8 @@ object DemoDataReseeder {
                 "Error: Push notification permission denied — cannot display promotional alerts",
                 "PermissionError",
                 "User declined push notification permission — promotional feature disabled",
-                "at NotificationService.requestPermission (src/services/NotificationService.js:34)\\nat App.componentDidMount (src/App.js:89)",
+                "at NotificationService.requestPermission (src/services/NotificationService.js:34)\\n" +
+                    "at App.componentDidMount (src/App.js:89)",
                 rnRelease, 5100, 2, 2, 120, rnDevices, "Android", rnVersions
             ),
 

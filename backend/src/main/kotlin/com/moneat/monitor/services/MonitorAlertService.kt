@@ -450,11 +450,13 @@ class MonitorAlertService(
                 "cpu_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.cpu.percent'"
                 "mem_percent" ->
                     "(1 - argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) / " +
-                        "nullIf(argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp), 0)) * 100" to
+                        "nullIf(argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp), 0)) * " +
+                        "100" to
                         "metric_name IN ('system.mem.available','system.mem.total')"
                 "disk_percent" ->
                     "argMax(CASE WHEN metric_name='system.disk.used' THEN value END, timestamp) / " +
-                        "nullIf(argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp), 0) * 100" to
+                        "nullIf(argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp), 0) * " +
+                        "100" to
                         "metric_name IN ('system.disk.used','system.disk.total')"
                 "load_1" -> "argMax(value, timestamp)" to "metric_name = 'system.load.1'"
                 "load_5" -> "argMax(value, timestamp)" to "metric_name = 'system.load.5'"

@@ -353,7 +353,10 @@ class LogService(private val logRepository: LogRepository) {
         }
 
         decodeCursor(request.cursor)?.let { (cursorTs, cursorLogId) ->
-            conditions += "(timestamp < fromUnixTimestamp64Milli($cursorTs) OR (timestamp = fromUnixTimestamp64Milli($cursorTs) AND toString(log_id) < '${escapeSql(cursorLogId)}'))"
+            conditions +=
+                "(timestamp < fromUnixTimestamp64Milli($cursorTs) OR " +
+                "(timestamp = fromUnixTimestamp64Milli($cursorTs) AND " +
+                "toString(log_id) < '${escapeSql(cursorLogId)}'))"
         }
 
         val whereClause = conditions.joinToString(" AND ")
@@ -530,7 +533,9 @@ class LogService(private val logRepository: LogRepository) {
         // Exclude filters
         if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
         if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
-        if (!excludeContainerName.isNullOrBlank()) conditions += "container_name != '${escapeSql(excludeContainerName)}'"
+        if (!excludeContainerName.isNullOrBlank()) {
+            conditions += "container_name != '${escapeSql(excludeContainerName)}'"
+        }
         excludeTags.forEach { (key, value) ->
             val condition = buildTagCondition(key, value, exclude = true)
             if (condition.isNotBlank()) {
@@ -567,7 +572,8 @@ class LogService(private val logRepository: LogRepository) {
             }
 
         logger.debug {
-            "Aggregate logs SQL for org $organizationId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, groupBy=$validGroupBy):\n$sql"
+            "Aggregate logs SQL for org $organizationId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, " +
+                "groupBy=$validGroupBy):\n$sql"
         }
         val body = logRepository.executeClickHouseQuery(sql)
         logger.debug { "Aggregate logs response body (first 500 chars): ${body.take(500)}" }
@@ -615,7 +621,8 @@ class LogService(private val logRepository: LogRepository) {
             }
 
         logger.debug {
-            "Aggregate logs result for org $organizationId: ${buckets.size} buckets, totalCount=$totalCount, interval=$resolvedInterval"
+            "Aggregate logs result for org $organizationId: ${buckets.size} buckets, totalCount=$totalCount, " +
+                "interval=$resolvedInterval"
         }
         return LogAggregateResponse(buckets = buckets, totalCount = totalCount, interval = resolvedInterval)
     }
@@ -674,7 +681,9 @@ class LogService(private val logRepository: LogRepository) {
         // Exclude filters
         if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
         if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
-        if (!excludeContainerName.isNullOrBlank()) conditions += "container_name != '${escapeSql(excludeContainerName)}'"
+        if (!excludeContainerName.isNullOrBlank()) {
+            conditions += "container_name != '${escapeSql(excludeContainerName)}'"
+        }
         excludeTags.forEach { (key, value) ->
             val condition = buildTagCondition(key, value, exclude = true)
             if (condition.isNotBlank()) {
@@ -748,7 +757,15 @@ class LogService(private val logRepository: LogRepository) {
                     .jsonObject["cnt"]
                     ?.jsonPrimitive
                     ?.longOrNull ?: 0L
-            } catch (_: SerializationException) { 0L } catch (_: IOException) { 0L } catch (_: IllegalStateException) { 0L } catch (_: IllegalArgumentException) { 0L }
+            } catch (_: SerializationException) {
+                0L
+            } catch (_: IOException) {
+                0L
+            } catch (_: IllegalStateException) {
+                0L
+            } catch (_: IllegalArgumentException) {
+                0L
+            }
 
         return LogTopResponse(field = field, values = values, totalCount = totalCount)
     }
@@ -818,7 +835,9 @@ class LogService(private val logRepository: LogRepository) {
         // Exclude filters
         if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
         if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
-        if (!excludeContainerName.isNullOrBlank()) conditions += "container_name != '${escapeSql(excludeContainerName)}'"
+        if (!excludeContainerName.isNullOrBlank()) {
+            conditions += "container_name != '${escapeSql(excludeContainerName)}'"
+        }
         excludeTags.forEach { (key, value) ->
             val condition = buildTagCondition(key, value, exclude = true)
             if (condition.isNotBlank()) {
@@ -1142,7 +1161,8 @@ class LogService(private val logRepository: LogRepository) {
                             host = obj["host"]?.jsonPrimitive?.content ?: "",
                             source =
                             normalizeSource(
-                                obj["source_text"]?.jsonPrimitive?.content ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"
+                                obj["source_text"]?.jsonPrimitive?.content
+                                    ?: obj["source"]?.jsonPrimitive?.content ?: "sdk"
                             ),
                             containerName = obj["container_name"]?.jsonPrimitive?.content ?: "",
                             containerId = obj["container_id"]?.jsonPrimitive?.content ?: "",

@@ -71,13 +71,21 @@ data class SentryEnvelope(
             val items = mutableListOf<EnvelopeItem>()
             while (bytePos < bodyBytes.size) {
                 // Skip blank lines
-                while (bytePos < bodyBytes.size && (bodyBytes[bytePos] == '\n'.code.toByte() || bodyBytes[bytePos] == '\r'.code.toByte())) {
+                while (
+                    bytePos < bodyBytes.size &&
+                    (
+                        bodyBytes[bytePos] == '\n'.code.toByte() ||
+                            bodyBytes[bytePos] == '\r'.code.toByte()
+                        )
+                ) {
                     bytePos++
                 }
                 if (bytePos >= bodyBytes.size) break
 
                 // Parse item header line
-                val itemHeaderEnd = (bytePos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() } ?: -1
+                val itemHeaderEnd =
+                    (bytePos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() }
+                        ?: -1
                 if (itemHeaderEnd == -1) break
                 val itemHeaderLine = bodyBytes.copyOfRange(bytePos, itemHeaderEnd).toString(Charsets.UTF_8)
                 val itemHeader =
@@ -118,19 +126,27 @@ data class SentryEnvelope(
 
                     var scanPos = bytePos
                     while (scanPos < bodyBytes.size) {
-                        val lineEnd = (scanPos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() } ?: bodyBytes.size
+                        val lineEnd =
+                            (scanPos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() }
+                                ?: bodyBytes.size
                         val line = bodyBytes.copyOfRange(scanPos, lineEnd).toString(Charsets.UTF_8).trim()
                         if (line.isNotEmpty()) {
                             try {
                                 val possibleHeader = Json.parseToJsonElement(line).jsonObject
                                 val possibleType = possibleHeader["type"]?.jsonPrimitive?.content
-                                if (possibleType != null && possibleType in knownItemTypes && possibleType != itemType) {
+                                if (possibleType != null &&
+                                    possibleType in knownItemTypes &&
+                                    possibleType != itemType
+                                ) {
                                     // Found the next item header - payload ends here
                                     payloadEnd = scanPos
                                     break
                                 }
                                 // Also detect next item header if it has the same type but includes a length field
-                                if (possibleType != null && possibleType in knownItemTypes && possibleHeader.containsKey("length")) {
+                                if (possibleType != null &&
+                                    possibleType in knownItemTypes &&
+                                    possibleHeader.containsKey("length")
+                                ) {
                                     payloadEnd = scanPos
                                     break
                                 }
@@ -144,7 +160,13 @@ data class SentryEnvelope(
                     if (payloadStart < payloadEnd) {
                         // Trim trailing newlines from payload
                         var trimmedEnd = payloadEnd
-                        while (trimmedEnd > payloadStart && (bodyBytes[trimmedEnd - 1] == '\n'.code.toByte() || bodyBytes[trimmedEnd - 1] == '\r'.code.toByte())) {
+                        while (
+                            trimmedEnd > payloadStart &&
+                            (
+                                bodyBytes[trimmedEnd - 1] == '\n'.code.toByte() ||
+                                    bodyBytes[trimmedEnd - 1] == '\r'.code.toByte()
+                                )
+                        ) {
                             trimmedEnd--
                         }
                         val payloadBytes = bodyBytes.copyOfRange(payloadStart, trimmedEnd)
