@@ -78,7 +78,7 @@ class DashboardQueryHelper(
     fun jsonFieldAsStoredString(obj: JsonObject, key: String, default: String = "{}"): String =
         when (val el = obj[key]) {
             null -> default
-            is JsonPrimitive -> el.content
+            is JsonPrimitive -> el.contentOrNull ?: default
             else -> json.encodeToString(JsonElement.serializer(), el)
         }
 
