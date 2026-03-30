@@ -657,10 +657,10 @@ class EventService(
 
     private fun syntheticReplayMetadataFromEnvelope(envelope: SentryEnvelope): SyntheticReplayMetadata {
         val fallback = SyntheticReplayMetadata(
-            sdkName = "sentry.java.android",
+            sdkName = "",
             sdkVersion = "",
-            platform = "android",
-            environment = "e2e-testing",
+            platform = "",
+            environment = "",
             release = "",
         )
         for (item in envelope.items) {

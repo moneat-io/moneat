@@ -438,7 +438,7 @@ class MonitorService(
             MONITOR_HISTORY_CACHE_TTL_SECONDS
         ) {
             val host = getHostById(hostId) ?: return@cached HistoricalMetricsResponse(
-                systemId = "",
+                systemId = hostId.toString(),
                 hostId = hostId,
                 from = fromTimestamp,
                 to = toTimestamp,
@@ -448,7 +448,7 @@ class MonitorService(
             val clampedWindow = clampRangeToRetention(hostId, fromTimestamp, toTimestamp)
             if (clampedWindow == null) {
                 return@cached HistoricalMetricsResponse(
-                    systemId = "",
+                    systemId = hostId.toString(),
                     hostId = hostId,
                     from = fromTimestamp,
                     to = toTimestamp,
@@ -503,7 +503,7 @@ class MonitorService(
                     val result = json.parseToJsonElement(body).jsonObject
                     val data =
                         result["data"]?.jsonArray ?: return@cached HistoricalMetricsResponse(
-                            systemId = "",
+                            systemId = hostId.toString(),
                             hostId = hostId,
                             from = effectiveFrom,
                             to = effectiveTo,
@@ -544,7 +544,7 @@ class MonitorService(
                 }
 
             HistoricalMetricsResponse(
-                systemId = "",
+                systemId = hostId.toString(),
                 hostId = hostId,
                 from = effectiveFrom,
                 to = effectiveTo,
