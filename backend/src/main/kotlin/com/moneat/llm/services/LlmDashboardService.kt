@@ -52,7 +52,7 @@ class LlmDashboardService {
     private fun metadataToString(element: JsonElement?): String =
         when (element) {
             null -> "{}"
-            is JsonPrimitive -> element.content
+            is JsonPrimitive -> element.contentOrNull ?: "{}"
             else -> json.encodeToString(JsonElement.serializer(), element)
         }
 
