@@ -47,8 +47,20 @@ complexity:
     active: false
   ComplexCondition:
     active: false
+  # Above default 600 while large production types are split incrementally.
   LargeClass:
-    active: false
+    active: true
+    threshold: 1700
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
   NestedBlockDepth:
     active: false
   NestedScopeFunctions:
