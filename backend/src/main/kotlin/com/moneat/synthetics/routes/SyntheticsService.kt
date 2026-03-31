@@ -140,6 +140,7 @@ class SyntheticsService(
         }
     }
 
+    /** Applies partial updates to a synthetic test; validates retry fields when either count or interval is present. */
     fun updateTest(
         testId: UUID,
         organizationId: Int,

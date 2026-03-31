@@ -67,6 +67,7 @@ class EventServiceTest {
     private val validPublicKey = "test-public-key-valid"
     private val inactivePublicKey = "test-public-key-inactive"
 
+    /** Constructs [EventService] with default and scenario-specific [EventRepository] mocks. */
     @BeforeTest
     fun setup() {
         eventService = EventService(eventRepository = eventRepository)

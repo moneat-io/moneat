@@ -216,6 +216,7 @@ class GrafanaTranslator : DashboardTranslator {
     private fun scaleGridValue(grafanaUnits: Int): Int =
         (grafanaUnits * GRAFANA_ROW_PX / MONEAT_ROW_PX).roundToInt()
 
+    /** Builds Moneat display config key/value strings from Grafana panel fieldConfig, mappings, and options. */
     private fun extractDisplayConfig(panelJson: JsonObject): Map<String, String> {
         val config = mutableMapOf<String, String>()
 

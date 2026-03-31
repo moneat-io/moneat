@@ -45,6 +45,7 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
+/** Escapes HTML special characters for safe inclusion in email templates. */
 private fun String.escapeHtml(): String =
     replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -189,6 +190,10 @@ class EmailService {
         sendEmail(toEmail, subject, htmlBody, textBody, "org_invitation")
     }
 
+    /**
+     * Sends a multipart alternative (plain text + HTML) message when SMTP is configured;
+     * otherwise logs a preview and records a failed send for metrics.
+     */
     fun sendEmail(
         to: String,
         subject: String,
