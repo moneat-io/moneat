@@ -65,11 +65,8 @@ internal suspend fun purgeInfraDemoData() {
 }
 // ── Kubernetes Demo Data ──────────────────────────────────────────────
 
-@Suppress("LongMethod")
-internal suspend fun reseedKubernetesData(orgId: String) {
-    // Pods (15 across namespaces)
-    val podsSql =
-        """
+private fun k8sPodsInsertSql(orgId: String): String {
+    return """
         INSERT INTO k8s_resources (
             resource_id, organization_id, uid, resource_type, namespace, name,
             cluster_name, cluster_id, status, tags, labels, annotations,
@@ -112,13 +109,11 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL (number * 24 + 48) HOUR,
             now() - INTERVAL (number % 5) MINUTE
         FROM numbers(15)
-        """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(podsSql) }
-        .onFailure { logger.warn { "Reseed k8s pods failed (non-fatal): ${it.message}" } }
+    """.trimIndent()
+}
 
-    // Nodes (3)
-    val nodesSql =
-        """
+private fun k8sNodesInsertSql(orgId: String): String {
+    return """
         INSERT INTO k8s_resources (
             resource_id, organization_id, uid, resource_type, namespace, name,
             cluster_name, cluster_id, status, tags, labels, annotations,
@@ -143,13 +138,11 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL 30 DAY,
             now() - INTERVAL (number % 3) MINUTE
         FROM numbers(3)
-        """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(nodesSql) }
-        .onFailure { logger.warn { "Reseed k8s nodes failed (non-fatal): ${it.message}" } }
+    """.trimIndent()
+}
 
-    // Services (5)
-    val servicesSql =
-        """
+private fun k8sServicesInsertSql(orgId: String): String {
+    return """
         INSERT INTO k8s_resources (
             resource_id, organization_id, uid, resource_type, namespace, name,
             cluster_name, cluster_id, status, tags, labels, annotations,
@@ -174,13 +167,11 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL 21 DAY,
             now() - INTERVAL (number % 5) MINUTE
         FROM numbers(5)
-        """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(servicesSql) }
-        .onFailure { logger.warn { "Reseed k8s services failed (non-fatal): ${it.message}" } }
+    """.trimIndent()
+}
 
-    // Deployments (5)
-    val deploymentsSql =
-        """
+private fun k8sDeploymentsInsertSql(orgId: String): String {
+    return """
         INSERT INTO k8s_resources (
             resource_id, organization_id, uid, resource_type, namespace, name,
             cluster_name, cluster_id, status, tags, labels, annotations,
@@ -205,13 +196,11 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL 14 DAY,
             now() - INTERVAL (number % 5) MINUTE
         FROM numbers(5)
-        """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(deploymentsSql) }
-        .onFailure { logger.warn { "Reseed k8s deployments failed (non-fatal): ${it.message}" } }
+    """.trimIndent()
+}
 
-    // DaemonSets (2)
-    val daemonsetsSql =
-        """
+private fun k8sDaemonsetsInsertSql(orgId: String): String {
+    return """
         INSERT INTO k8s_resources (
             resource_id, organization_id, uid, resource_type, namespace, name,
             cluster_name, cluster_id, status, tags, labels, annotations,
@@ -234,13 +223,11 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL 28 DAY,
             now() - INTERVAL (number % 3) MINUTE
         FROM numbers(2)
-        """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(daemonsetsSql) }
-        .onFailure { logger.warn { "Reseed k8s daemonsets failed (non-fatal): ${it.message}" } }
+    """.trimIndent()
+}
 
-    // ReplicaSets (5)
-    val replicasetsSql =
-        """
+private fun k8sReplicasetsInsertSql(orgId: String): String {
+    return """
         INSERT INTO k8s_resources (
             resource_id, organization_id, uid, resource_type, namespace, name,
             cluster_name, cluster_id, status, tags, labels, annotations,
@@ -266,8 +253,26 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL 7 DAY,
             now() - INTERVAL (number % 5) MINUTE
         FROM numbers(5)
-        """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(replicasetsSql) }
+    """.trimIndent()
+}
+
+internal suspend fun reseedKubernetesData(orgId: String) {
+    suspendRunCatching { ClickHouseClient.execute(k8sPodsInsertSql(orgId)) }
+        .onFailure { logger.warn { "Reseed k8s pods failed (non-fatal): ${it.message}" } }
+
+    suspendRunCatching { ClickHouseClient.execute(k8sNodesInsertSql(orgId)) }
+        .onFailure { logger.warn { "Reseed k8s nodes failed (non-fatal): ${it.message}" } }
+
+    suspendRunCatching { ClickHouseClient.execute(k8sServicesInsertSql(orgId)) }
+        .onFailure { logger.warn { "Reseed k8s services failed (non-fatal): ${it.message}" } }
+
+    suspendRunCatching { ClickHouseClient.execute(k8sDeploymentsInsertSql(orgId)) }
+        .onFailure { logger.warn { "Reseed k8s deployments failed (non-fatal): ${it.message}" } }
+
+    suspendRunCatching { ClickHouseClient.execute(k8sDaemonsetsInsertSql(orgId)) }
+        .onFailure { logger.warn { "Reseed k8s daemonsets failed (non-fatal): ${it.message}" } }
+
+    suspendRunCatching { ClickHouseClient.execute(k8sReplicasetsInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed k8s replicasets failed (non-fatal): ${it.message}" } }
 
     logger.info { "Kubernetes demo data reseed complete" }
@@ -432,11 +437,8 @@ internal suspend fun reseedDebuggerData(orgId: String) {
 
 // ── Network Device Monitoring Demo Data ────────────────────────────────
 
-@Suppress("LongMethod")
-internal suspend fun reseedNdmData(orgId: String) {
-    // Network devices (8)
-    val devicesSql =
-        """
+private fun ndmDevicesInsertSql(orgId: String): String {
+    return """
         INSERT INTO ndm_devices (
             device_id_hash, organization_id, device_id, ip_address, hostname,
             vendor, model, os_version, device_type, status, reachability,
@@ -480,13 +482,11 @@ internal suspend fun reseedNdmData(orgId: String) {
             map('env', 'production', 'site', 'dc-east-1'),
             now() - INTERVAL (number % 10) MINUTE
         FROM numbers(8)
-        """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(devicesSql) }
-        .onFailure { logger.warn { "Reseed ndm_devices failed (non-fatal): ${it.message}" } }
+    """.trimIndent()
+}
 
-    // SNMP traps (12)
-    val trapsSql =
-        """
+private fun ndmTrapsInsertSql(orgId: String): String {
+    return """
         INSERT INTO ndm_traps (
             trap_id, organization_id, device_ip, oid, severity,
             message, variables, received_at
@@ -531,13 +531,11 @@ internal suspend fun reseedNdmData(orgId: String) {
             map('ifIndex', toString(number + 1)),
             now() - INTERVAL (number * 31 % 480) MINUTE
         FROM numbers(12)
-        """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(trapsSql) }
-        .onFailure { logger.warn { "Reseed ndm_traps failed (non-fatal): ${it.message}" } }
+    """.trimIndent()
+}
 
-    // Network flows (20)
-    val flowsSql =
-        """
+private fun ndmFlowsInsertSql(orgId: String): String {
+    return """
         INSERT INTO ndm_flows (
             flow_id, organization_id, src_ip, dst_ip, src_port, dst_port,
             protocol, bytes, packets, direction, flow_type, tags, sampled_at
@@ -578,13 +576,11 @@ internal suspend fun reseedNdmData(orgId: String) {
             map('env', 'production'),
             now() - INTERVAL (number * 13 % 360) MINUTE
         FROM numbers(20)
-        """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(flowsSql) }
-        .onFailure { logger.warn { "Reseed ndm_flows failed (non-fatal): ${it.message}" } }
+    """.trimIndent()
+}
 
-    // Network paths (6)
-    val pathsSql =
-        """
+private fun ndmNetworkPathsInsertSql(orgId: String): String {
+    return """
         INSERT INTO network_paths (
             path_id, organization_id, source, destination, hops, hop_rtts,
             tags, collected_at
@@ -619,8 +615,20 @@ internal suspend fun reseedNdmData(orgId: String) {
             map('env', 'production'),
             now() - INTERVAL (number * 47 % 360) MINUTE
         FROM numbers(6)
-        """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(pathsSql) }
+    """.trimIndent()
+}
+
+internal suspend fun reseedNdmData(orgId: String) {
+    suspendRunCatching { ClickHouseClient.execute(ndmDevicesInsertSql(orgId)) }
+        .onFailure { logger.warn { "Reseed ndm_devices failed (non-fatal): ${it.message}" } }
+
+    suspendRunCatching { ClickHouseClient.execute(ndmTrapsInsertSql(orgId)) }
+        .onFailure { logger.warn { "Reseed ndm_traps failed (non-fatal): ${it.message}" } }
+
+    suspendRunCatching { ClickHouseClient.execute(ndmFlowsInsertSql(orgId)) }
+        .onFailure { logger.warn { "Reseed ndm_flows failed (non-fatal): ${it.message}" } }
+
+    suspendRunCatching { ClickHouseClient.execute(ndmNetworkPathsInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed network_paths failed (non-fatal): ${it.message}" } }
 
     logger.info { "NDM demo data reseed complete" }

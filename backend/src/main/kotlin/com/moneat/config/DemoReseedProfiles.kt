@@ -156,35 +156,37 @@ internal fun cleanDemoProfileFiles() {
     }
 }
 
-@Suppress("LongMethod")
+private fun profileFrameJson(name: String): String {
+    val dot = name.lastIndexOf('.')
+    val (module, fn) = if (dot > 0) {
+        name.substring(0, dot) to name.substring(dot + 1)
+    } else {
+        "" to name
+    }
+    return """{"function":"$fn","module":"$module"}"""
+}
+
+private fun buildProfileFramesJson(frames: List<String>): String =
+    frames.joinToString(",\n      ") { profileFrameJson(it) }
+
+private fun buildProfileStacksJson(stackIndices: List<List<Int>>): String =
+    stackIndices.joinToString(",") { idxList -> "[${idxList.joinToString(",")}]" }
+
+private fun buildProfileSamplesJson(sampleCount: Int, stackCount: Int): String =
+    (0 until sampleCount).joinToString(",") { n ->
+        val stackId = n % stackCount
+        """{"stack_id":$stackId}"""
+    }
+
 internal fun buildSentryProfile(service: String, seed: Int): String {
     val stacks = SERVICE_STACKS[service] ?: SERVICE_STACKS["api-gateway"]!!
     val frames = stacks.flatMap { it }.distinct()
     val frameIndex = frames.withIndex().associate { (i, name) -> name to i }
-
-    val stackIndices = stacks.map { stack ->
-        stack.map { frameIndex[it]!! }
-    }
-
-    val framesJson = frames.joinToString(",\n      ") { name ->
-        val dot = name.lastIndexOf('.')
-        val (module, fn) = if (dot > 0) {
-            name.substring(0, dot) to name.substring(dot + 1)
-        } else {
-            "" to name
-        }
-        """{"function":"$fn","module":"$module"}"""
-    }
-
-    val stacksJson = stackIndices.joinToString(",") { idxList ->
-        "[${idxList.joinToString(",")}]"
-    }
-
+    val stackIndices = stacks.map { stack -> stack.map { frameIndex[it]!! } }
     val sampleCount = 80 + (seed * 17) % 40
-    val samplesJson = (0 until sampleCount).joinToString(",") { n ->
-        val stackId = n % stackIndices.size
-        """{"stack_id":$stackId}"""
-    }
+    val framesJson = buildProfileFramesJson(frames)
+    val stacksJson = buildProfileStacksJson(stackIndices)
+    val samplesJson = buildProfileSamplesJson(sampleCount, stackIndices.size)
 
     return """
         {

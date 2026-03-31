@@ -81,9 +81,20 @@ internal suspend fun purgeDatadogDemoData() {
     cleanDemoProfileFiles()
 }
 
-@Suppress("LongMethod")
 internal suspend fun reseedDatadogData() {
-    // Hosts (PostgreSQL)
+    reseedDatadogHostsPostgres()
+    reseedDatadogApmRootSpans()
+    reseedDatadogApmChildSpans()
+    reseedDatadogProfileRows()
+    reseedDatadogInfraEvents()
+    reseedDatadogServiceChecks()
+    reseedDatadogProcesses()
+    reseedDatadogContainers()
+    reseedDatadogNetworkConnections()
+    logger.info { "Datadog agent demo data reseed complete" }
+}
+
+private suspend fun reseedDatadogHostsPostgres() {
     suspendRunCatching {
         transaction {
             val hostData = listOf(
@@ -106,19 +117,9 @@ internal suspend fun reseedDatadogData() {
             }
         }
     }.onFailure { logger.warn { "Reseed hosts failed (non-fatal): ${it.message}" } }
+}
 
-    // APM Spans — generate 20 traces with child spans using ClickHouse numbers()
-    val services = listOf("api-gateway", "user-service", "product-service", "order-service", "payment-service")
-    val resources = listOf(
-        "GET /api/v1/products",
-        "POST /api/v1/orders",
-        "GET /api/v1/users/{id}",
-        "POST /api/v1/checkout",
-        "GET /api/v1/cart"
-    )
-    val hosts = listOf("prod-web-01", "prod-api-01", "prod-worker-01")
-
-    // Root spans
+private suspend fun reseedDatadogApmRootSpans() {
     val rootSpansSql =
         """
         INSERT INTO apm_spans (
@@ -148,8 +149,9 @@ internal suspend fun reseedDatadogData() {
         """.trimIndent()
     suspendRunCatching { ClickHouseClient.execute(rootSpansSql) }
         .onFailure { logger.warn { "Reseed root spans failed (non-fatal): ${it.message}" } }
+}
 
-    // Child spans (3 per root trace = 60 more spans)
+private suspend fun reseedDatadogApmChildSpans() {
     val childSpansSql =
         """
         INSERT INTO apm_spans (
@@ -177,8 +179,9 @@ internal suspend fun reseedDatadogData() {
         """.trimIndent()
     suspendRunCatching { ClickHouseClient.execute(childSpansSql) }
         .onFailure { logger.warn { "Reseed child spans failed (non-fatal): ${it.message}" } }
+}
 
-    // Profiles — deterministic IDs so we can write matching files
+private suspend fun reseedDatadogProfileRows() {
     val demoProfileIds = (1..DEMO_PROFILE_COUNT).map { n ->
         "00000000-0000-4000-8000-" + n.toString().padStart(12, '0')
     }
@@ -228,8 +231,9 @@ internal suspend fun reseedDatadogData() {
     """.trimIndent()
     suspendRunCatching { ClickHouseClient.execute(profilesSql) }
         .onFailure { logger.warn { "Reseed profiles failed (non-fatal): ${it.message}" } }
+}
 
-    // Infrastructure Events
+private suspend fun reseedDatadogInfraEvents() {
     val eventsSql =
         """
         INSERT INTO infra_events (
@@ -275,8 +279,9 @@ internal suspend fun reseedDatadogData() {
         """.trimIndent()
     suspendRunCatching { ClickHouseClient.execute(eventsSql) }
         .onFailure { logger.warn { "Reseed infra_events failed (non-fatal): ${it.message}" } }
+}
 
-    // Service Checks (8 check types × 6 hosts)
+private suspend fun reseedDatadogServiceChecks() {
     val checksSql =
         """
         INSERT INTO service_checks (
@@ -304,8 +309,9 @@ internal suspend fun reseedDatadogData() {
         """.trimIndent()
     suspendRunCatching { ClickHouseClient.execute(checksSql) }
         .onFailure { logger.warn { "Reseed service_checks failed (non-fatal): ${it.message}" } }
+}
 
-    // Processes
+private suspend fun reseedDatadogProcesses() {
     val processesSql =
         """
         INSERT INTO processes (
@@ -341,8 +347,9 @@ internal suspend fun reseedDatadogData() {
         """.trimIndent()
     suspendRunCatching { ClickHouseClient.execute(processesSql) }
         .onFailure { logger.warn { "Reseed processes failed (non-fatal): ${it.message}" } }
+}
 
-    // Containers
+private suspend fun reseedDatadogContainers() {
     val containersSql =
         """
         INSERT INTO containers (
@@ -369,8 +376,9 @@ internal suspend fun reseedDatadogData() {
         """.trimIndent()
     suspendRunCatching { ClickHouseClient.execute(containersSql) }
         .onFailure { logger.warn { "Reseed containers failed (non-fatal): ${it.message}" } }
+}
 
-    // Network Connections
+private suspend fun reseedDatadogNetworkConnections() {
     val connSql =
         """
         INSERT INTO network_connections (
