@@ -71,7 +71,7 @@ complexity:
   NestedBlockDepth:
     active: false
   NestedScopeFunctions:
-    active: false
+    active: true
 
 exceptions:
   TooGenericExceptionCaught:
