@@ -48,6 +48,10 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
+private const val BILLING_JOB_INTERVAL_MS = 60_000L
+private const val QUOTA_WARNING_THRESHOLD = 0.8
+private const val CENTS_PER_DOLLAR = 100.0
+
 class BillingBackgroundService(
     private val stripeService: StripeService = StripeService(
         SubscriptionRepositoryImpl(),
@@ -82,7 +86,7 @@ class BillingBackgroundService(
                         val flushed = stripeService.flushPendingMeteredUsage()
                         if (flushed > 0) logger.info { "Flushed pending metered usage for $flushed subscription(s)" }
                     }
-                    delay(60_000L)
+                    delay(BILLING_JOB_INTERVAL_MS)
                 }
             }
 
@@ -96,7 +100,7 @@ class BillingBackgroundService(
                     ) {
                         stripeService.applyDunningDowngrade()
                     }
-                    delay(60_000L)
+                    delay(BILLING_JOB_INTERVAL_MS)
                 }
             }
 
@@ -110,7 +114,7 @@ class BillingBackgroundService(
                     ) {
                         processQuotaThresholdNotifications()
                     }
-                    delay(60_000L)
+                    delay(BILLING_JOB_INTERVAL_MS)
                 }
             }
     }
@@ -151,13 +155,13 @@ class BillingBackgroundService(
                     0.0
                 }
 
-            if (basePct >= 0.8) {
+            if (basePct >= QUOTA_WARNING_THRESHOLD) {
                 maybeSendNotification(orgId, periodStart, "base_80", usage)
             }
             if (basePct >= 1.0) {
                 maybeSendNotification(orgId, periodStart, "base_100", usage)
             }
-            if (usage.paygLimitUnits > 0 && paygPct >= 0.8) {
+            if (usage.paygLimitUnits > 0 && paygPct >= QUOTA_WARNING_THRESHOLD) {
                 maybeSendNotification(orgId, periodStart, "payg_80", usage)
             }
         }
@@ -229,8 +233,8 @@ class BillingBackgroundService(
                 appendLine("Plan: ${usage.plan}")
                 appendLine("Usage: ${usage.usedUnits}/${usage.totalLimitUnits} units")
                 appendLine("Base limit: ${usage.baseLimitUnits} units")
-                appendLine("PAYG budget: $${"%.2f".format(usage.paygBudgetCents / 100.0)}")
-                appendLine("PAYG used estimate: $${"%.2f".format(usage.paygUsedCentsEstimate / 100.0)}")
+                appendLine("PAYG budget: $${"%.2f".format(usage.paygBudgetCents / CENTS_PER_DOLLAR)}")
+                appendLine("PAYG used estimate: $${"%.2f".format(usage.paygUsedCentsEstimate / CENTS_PER_DOLLAR)}")
                 appendLine("Billing period: ${usage.periodStart} to ${usage.periodEnd}")
             }
 

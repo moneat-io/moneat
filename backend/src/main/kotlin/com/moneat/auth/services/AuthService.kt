@@ -79,6 +79,12 @@ class AuthService(
     companion object {
         private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
         private const val PASSWORD_RESET_TTL_MS = 60 * 60 * 1000L
+        private const val MIN_PASSWORD_LENGTH = 8
+        private const val ORG_SLUG_RANDOM_SUFFIX_LENGTH = 8
+        private const val JWT_ACCESS_TOKEN_EXPIRY_MS = 3_600_000L
+        private const val DEMO_TOKEN_EXPIRY_MS = 86_400_000L
+        private const val TOKEN_ENTROPY_BYTES = 32
+        private const val MAX_ORG_SLUG_LENGTH = 100
     }
 
     private val config = ApplicationConfig("application.conf")
@@ -97,7 +103,7 @@ class AuthService(
         if (request.email.isBlank()) {
             throw IllegalArgumentException("Email is required")
         }
-        if (request.password.length < 8) {
+        if (request.password.length < MIN_PASSWORD_LENGTH) {
             throw IllegalArgumentException("Password must be at least 8 characters")
         }
         validateSignupLegalConsent(request)
@@ -238,7 +244,7 @@ class AuthService(
                     finalOrgId =
                         Organizations.insert {
                             it[name] = "${request.name ?: request.email}'s Organization"
-                            it[slug] = "org-${UUID.randomUUID().toString().take(8)}"
+                            it[slug] = "org-${UUID.randomUUID().toString().take(ORG_SLUG_RANDOM_SUFFIX_LENGTH)}"
                         }[Organizations.id]
                     finalOrgRole = "owner"
 
@@ -400,7 +406,7 @@ class AuthService(
             .withClaim("email", email)
             .withClaim("orgId", orgId)
             .withClaim("orgRole", orgRole)
-            .withExpiresAt(Date(System.currentTimeMillis() + 3600000))
+            .withExpiresAt(Date(System.currentTimeMillis() + JWT_ACCESS_TOKEN_EXPIRY_MS))
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 
@@ -433,12 +439,12 @@ class AuthService(
             .withClaim("orgRole", "viewer")
             .withClaim("isDemo", true)
             .withClaim("demoEpochMs", demoEpochMs)
-            .withExpiresAt(Date(System.currentTimeMillis() + 86400000)) // 24 hours
+            .withExpiresAt(Date(System.currentTimeMillis() + DEMO_TOKEN_EXPIRY_MS)) // 24 hours
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 
     private fun generateVerificationToken(): String {
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(TOKEN_ENTROPY_BYTES)
         secureRandom.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
@@ -472,7 +478,7 @@ class AuthService(
         token: String,
         newPassword: String
     ): Boolean {
-        if (newPassword.length < 8) {
+        if (newPassword.length < MIN_PASSWORD_LENGTH) {
             throw IllegalArgumentException("Password must be at least 8 characters")
         }
 
@@ -509,7 +515,7 @@ class AuthService(
             .lowercase()
             .replace(Regex("[^a-z0-9]+"), "-")
             .trim('-')
-            .take(100)
+            .take(MAX_ORG_SLUG_LENGTH)
 
         val finalSlug = organizationRepository.updateOnboardingOrgAndMarkComplete(
             OrganizationRepository.OnboardingUpdate(

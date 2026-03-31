@@ -86,6 +86,16 @@ private const val STATUS_DOWN = "down"
 private const val SPIKE_FACTOR = 2
 private const val WEEK_SECONDS = 7 * 24 * 3600L
 private const val TWO_WEEKS_SECONDS = 14 * 24 * 3600L
+private const val SECONDS_PER_MINUTE = 60L
+private const val MILLIS_PER_SECOND = 1000L
+private const val SECONDS_PER_HOUR = 3600L
+private const val HOURS_PER_DAY = 24L
+private const val DAYS_IN_WEEK = 7L
+private const val DAYS_IN_MONTH = 30L
+private const val MILLIS_PER_HOUR = SECONDS_PER_HOUR * MILLIS_PER_SECOND
+private const val MILLIS_PER_DAY = HOURS_PER_DAY * MILLIS_PER_HOUR
+private const val MILLIS_7_DAYS = DAYS_IN_WEEK * MILLIS_PER_DAY
+private const val MILLIS_30_DAYS = DAYS_IN_MONTH * MILLIS_PER_DAY
 
 class SummaryService(
     private val monitorService: MonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl()),
@@ -342,7 +352,7 @@ class SummaryService(
         val projectIds = getProjectIds(organizationId)
 
         val now = Instant.now()
-        val windowStart = now.minusSeconds(METRICS_WINDOW_MINUTES * 60)
+        val windowStart = now.minusSeconds(METRICS_WINDOW_MINUTES * SECONDS_PER_MINUTE)
 
         // Load the specific incident from IncidentEventLog by ID and org, then
         // parse the deduplication key to find the exact triggering host/alert.
@@ -581,10 +591,10 @@ class SummaryService(
 
     private fun periodToMillis(period: String): Long {
         return when (period) {
-            "24h" -> 24L * 3600 * 1000
-            "7d" -> 7L * 24 * 3600 * 1000
-            "30d" -> 30L * 24 * 3600 * 1000
-            else -> 24L * 3600 * 1000
+            "24h" -> MILLIS_PER_DAY
+            "7d" -> MILLIS_7_DAYS
+            "30d" -> MILLIS_30_DAYS
+            else -> MILLIS_PER_DAY
         }
     }
 
