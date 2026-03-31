@@ -51,6 +51,7 @@ import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
+/** Manages synthetic HTTP checks, variables, execution, and ClickHouse result storage. */
 class SyntheticsService(
     private val emailService: EmailService = EmailService(),
     private val slackService: SlackService = SlackService(),

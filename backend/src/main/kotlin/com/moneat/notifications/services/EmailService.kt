@@ -61,6 +61,7 @@ private const val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
     "border:1px solid #e5e5e5;color:#737373;"
 private const val TOP_ISSUES_COUNT = 5
 
+/** Sends transactional and notification email via Jakarta Mail and HTML templates. */
 class EmailService {
     private val config = ApplicationConfig("application.conf")
     private val fromEmail = config.property("email.from").getString()

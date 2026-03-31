@@ -58,6 +58,7 @@ private const val FILL_OPACITY_SCALE = 100.0
 private const val REGEX_THIRD_GROUP_IDX = 3
 private const val GRAFANA_SCHEMA_VERSION = 39
 
+/** Imports and exports dashboards between Grafana JSON and Moneat dashboard models. */
 class GrafanaTranslator : DashboardTranslator {
 
     private val widgetTypeMap = mapOf(

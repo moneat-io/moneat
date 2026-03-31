@@ -123,6 +123,7 @@ class EventServiceTest {
 
     // ──── EVENT FINGERPRINTING TESTS (P0) ────
 
+    /** Asserts identical primary exception metadata yields the same deduplication fingerprint. */
     @Test
     fun `same error with identical exception generates same fingerprint for deduplication`() {
         val event1 =
