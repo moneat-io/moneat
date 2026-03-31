@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
 
@@ -29,7 +30,7 @@ internal suspend fun checkFreshSyntheticsDataCount(): Long {
         WHERE organization_id IN ($P1, $P2, $P3)
             AND timestamp >= now() - INTERVAL 2 HOUR
     """.trimIndent()
-    return runCatching {
+    return suspendRunCatching {
         val response = ClickHouseClient.execute(query)
         if (response.status.value !in 200..299) return 0
         response.bodyAsText().trim().toLongOrNull() ?: 0L
@@ -40,16 +41,16 @@ internal suspend fun checkFreshSyntheticsDataCount(): Long {
 }
 
 internal suspend fun purgeSyntheticsDemoData() {
-    runCatching {
-        ClickHouseClient.execute(
+    suspendRunCatching {
+        val response = ClickHouseClient.execute(
             "ALTER TABLE synthetic_results DELETE WHERE organization_id IN ($P1, $P2, $P3)"
         )
+        requireClickHouse2xx(response, "Purge synthetic_results")
     }.onFailure { logger.warn { "Purge synthetic_results failed (non-fatal): ${it.message}" } }
 }
 
-@Suppress("LongMethod")
-internal suspend fun reseedSyntheticsData() {
-    val syntheticsSql = """
+private fun buildSyntheticResultsInsertSql(): String =
+    """
         INSERT INTO synthetic_results (
             result_id, organization_id, test_id, test_name, test_type,
             status, probe_dc, duration_ms, error_message, timings, tags, timestamp
@@ -81,8 +82,19 @@ internal suspend fun reseedSyntheticsData() {
             now() - INTERVAL (number * 23 % 2880) MINUTE
         FROM numbers(80)
     """.trimIndent()
-    runCatching { ClickHouseClient.execute(syntheticsSql) }
-        .onFailure { logger.warn { "Reseed synthetic_results failed (non-fatal): ${it.message}" } }
 
-    logger.info { "Synthetics demo data reseed complete" }
+internal suspend fun reseedSyntheticsData() {
+    val insertResult =
+        suspendRunCatching {
+            requireClickHouse2xx(
+                ClickHouseClient.execute(buildSyntheticResultsInsertSql()),
+                "Reseed synthetic_results"
+            )
+        }
+    insertResult.onFailure {
+        logger.warn { "Reseed synthetic_results failed (non-fatal): ${it.message}" }
+    }
+    if (insertResult.isSuccess) {
+        logger.info { "Synthetics demo data reseed complete" }
+    }
 }

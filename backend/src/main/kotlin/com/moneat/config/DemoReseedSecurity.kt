@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
 
@@ -29,7 +30,7 @@ internal suspend fun checkFreshSecurityDataCount(): Long {
         WHERE organization_id IN ($P1, $P2, $P3)
             AND timestamp >= now() - INTERVAL 2 HOUR
     """.trimIndent()
-    return runCatching {
+    return suspendRunCatching {
         val response = ClickHouseClient.execute(query)
         if (response.status.value !in 200..299) return 0
         response.bodyAsText().trim().toLongOrNull() ?: 0L
@@ -41,7 +42,7 @@ internal suspend fun checkFreshSecurityDataCount(): Long {
 
 internal suspend fun purgeSecurityDemoData() {
     for (table in listOf("security_events", "compliance_findings", "security_dumps")) {
-        runCatching {
+        suspendRunCatching {
             ClickHouseClient.execute(
                 "ALTER TABLE $table DELETE WHERE organization_id IN ($P1, $P2, $P3)"
             )
@@ -49,9 +50,8 @@ internal suspend fun purgeSecurityDemoData() {
     }
 }
 
-@Suppress("LongMethod")
-internal suspend fun reseedSecurityData() {
-    val securityEventsSql = """
+private fun buildSecurityEventsInsertSql(): String =
+    """
         INSERT INTO security_events (
             event_id, organization_id, rule_id, rule_name, rule_category,
             severity, agent_rule_version, event_type, process_name,
@@ -95,10 +95,9 @@ internal suspend fun reseedSecurityData() {
             now() - INTERVAL (number * 37 % 4320) MINUTE
         FROM numbers(60)
     """.trimIndent()
-    runCatching { ClickHouseClient.execute(securityEventsSql) }
-        .onFailure { logger.warn { "Reseed security_events failed (non-fatal): ${it.message}" } }
 
-    val complianceSql = """
+private fun buildComplianceFindingsInsertSql(): String =
+    """
         INSERT INTO compliance_findings (
             finding_id, organization_id, framework, rule_id, rule_name,
             status, resource_type, resource_id, resource_name, tags, evaluated_at
@@ -132,8 +131,31 @@ internal suspend fun reseedSecurityData() {
             now() - INTERVAL (number * 61 % 2880) MINUTE
         FROM numbers(100)
     """.trimIndent()
-    runCatching { ClickHouseClient.execute(complianceSql) }
-        .onFailure { logger.warn { "Reseed compliance_findings failed (non-fatal): ${it.message}" } }
 
-    logger.info { "Security demo data reseed complete" }
+internal suspend fun reseedSecurityData() {
+    val eventsResult =
+        suspendRunCatching {
+            requireClickHouse2xx(
+                ClickHouseClient.execute(buildSecurityEventsInsertSql()),
+                "Reseed security_events"
+            )
+        }
+    eventsResult.onFailure {
+        logger.warn { "Reseed security_events failed (non-fatal): ${it.message}" }
+    }
+
+    val complianceResult =
+        suspendRunCatching {
+            requireClickHouse2xx(
+                ClickHouseClient.execute(buildComplianceFindingsInsertSql()),
+                "Reseed compliance_findings"
+            )
+        }
+    complianceResult.onFailure {
+        logger.warn { "Reseed compliance_findings failed (non-fatal): ${it.message}" }
+    }
+
+    if (eventsResult.isSuccess && complianceResult.isSuccess) {
+        logger.info { "Security demo data reseed complete" }
+    }
 }

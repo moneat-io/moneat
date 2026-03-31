@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
 
@@ -29,10 +30,15 @@ internal suspend fun checkFreshDataCount(): Long {
         WHERE project_id IN ($P1, $P2, $P3)
             AND timestamp >= now() - INTERVAL 7 DAY
         """.trimIndent()
-    val response = ClickHouseClient.execute(query)
-    val body = response.bodyAsText()
-    if (response.status.value !in 200..299) return 0
-    return body.trim().toLongOrNull() ?: 0
+    return suspendRunCatching {
+        val response = ClickHouseClient.execute(query)
+        val body = response.bodyAsText()
+        if (response.status.value !in 200..299) return@suspendRunCatching 0
+        body.trim().toLongOrNull() ?: 0
+    }.getOrElse {
+        logger.warn { "Failed to check fresh core demo data (non-fatal): ${it.message}" }
+        0
+    }
 }
 internal suspend fun purgeOldDemoData() {
     val tables =
@@ -45,13 +51,13 @@ internal suspend fun purgeOldDemoData() {
         )
     for ((table, col) in tables) {
         val query = "ALTER TABLE $table DELETE WHERE $col IN ($P1, $P2, $P3)"
-        runCatching { ClickHouseClient.execute(query) }
+        suspendRunCatching { ClickHouseClient.execute(query) }
             .onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
     }
     // Also purge issues materialized from demo events
-    runCatching {
+    suspendRunCatching {
         ClickHouseClient.execute("ALTER TABLE issues DELETE WHERE project_id IN ($P1, $P2, $P3)")
-    }
+    }.onFailure { logger.warn { "Purge issues failed (non-fatal): ${it.message}" } }
 }
 internal suspend fun reseedEvents() {
     val androidDevices =
@@ -892,7 +898,7 @@ internal suspend fun reseedEvents() {
     )
 
     for (sql in statements) {
-        runCatching { ClickHouseClient.execute(sql.trimIndent()) }
+        suspendRunCatching { ClickHouseClient.execute(sql.trimIndent()) }
             .onFailure { logger.warn { "Reseed events statement failed (non-fatal): ${it.message}" } }
     }
 }
@@ -914,7 +920,7 @@ internal suspend fun reseedSessions() {
             now() - INTERVAL (number * 2) HOUR
         FROM numbers(80)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(sql) }
+    suspendRunCatching { ClickHouseClient.execute(sql) }
         .onFailure { logger.warn { "Reseed sessions failed (non-fatal): ${it.message}" } }
 }
 
@@ -952,7 +958,7 @@ internal suspend fun reseedReplays() {
             '{}'
         FROM numbers(20)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(replayEventsSql) }
+    suspendRunCatching { ClickHouseClient.execute(replayEventsSql) }
         .onFailure { logger.warn { "Reseed replay_events failed (non-fatal): ${it.message}" } }
 
     // Seed replay_segments with valid rrweb recording data so the replay viewer can render them.
@@ -1040,6 +1046,6 @@ internal suspend fun reseedReplays() {
             ) as recording_data
         FROM numbers(20)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(segmentsSql) }
+    suspendRunCatching { ClickHouseClient.execute(segmentsSql) }
         .onFailure { logger.warn { "Reseed replay_segments failed (non-fatal): ${it.message}" } }
 }

@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
 
@@ -29,7 +30,7 @@ internal suspend fun checkFreshAnalyticsDataCount(): Long {
         WHERE project_id IN ($P1, $P2, $P3)
             AND timestamp >= now() - INTERVAL 7 DAY
         """.trimIndent()
-    return runCatching {
+    return suspendRunCatching {
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         if (response.status.value !in 200..299) return 0
@@ -40,11 +41,11 @@ internal suspend fun checkFreshAnalyticsDataCount(): Long {
     }
 }
 internal suspend fun purgeAnalyticsDemoData() {
-    runCatching {
+    suspendRunCatching {
         ClickHouseClient.execute("ALTER TABLE analytics_events DELETE WHERE project_id IN ($P1, $P2, $P3)")
     }.onFailure { logger.warn { "Purge analytics_events failed (non-fatal): ${it.message}" } }
 
-    runCatching {
+    suspendRunCatching {
         ClickHouseClient.execute("ALTER TABLE analytics_sessions_hourly DELETE WHERE project_id IN ($P1, $P2, $P3)")
     }.onFailure { logger.warn { "Purge analytics_sessions_hourly failed (non-fatal): ${it.message}" } }
 }
@@ -202,6 +203,6 @@ internal suspend fun reseedAnalyticsEvents() {
         FROM numbers(3000)
         """.trimIndent()
 
-    runCatching { ClickHouseClient.execute(sql) }
+    suspendRunCatching { ClickHouseClient.execute(sql) }
         .onFailure { logger.warn { "Reseed analytics_events failed (non-fatal): ${it.message}" } }
 }

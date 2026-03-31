@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -25,7 +26,7 @@ private val logger = KotlinLogging.logger {}
 // ── Datadog Agent Demo Data ─────────────────────────────────────────────
 
 internal suspend fun checkFreshDatadogCount(): Long {
-    return runCatching {
+    return suspendRunCatching {
         val tablesWithTimeCol =
             listOf(
                 Triple("apm_spans", "start", "organization_id"),
@@ -67,12 +68,12 @@ internal suspend fun purgeDatadogDemoData() {
             "network_connections",
         )
     for (table in tables) {
-        runCatching {
+        suspendRunCatching {
             ClickHouseClient.execute("ALTER TABLE $table DELETE WHERE organization_id = $ORG1")
         }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
     }
     // PostgreSQL hosts
-    runCatching {
+    suspendRunCatching {
         transaction {
             exec("DELETE FROM hosts WHERE organization_id = -1")
         }
@@ -83,7 +84,7 @@ internal suspend fun purgeDatadogDemoData() {
 @Suppress("LongMethod")
 internal suspend fun reseedDatadogData() {
     // Hosts (PostgreSQL)
-    runCatching {
+    suspendRunCatching {
         transaction {
             val hostData = listOf(
                 listOf("prod-web-01", "Ubuntu 22.04", "linux", "Intel Xeon E5-2686 v4", "8", "16384000", "7.52.1"),
@@ -145,7 +146,7 @@ internal suspend fun reseedDatadogData() {
             '1.3.0'
         FROM numbers(20)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(rootSpansSql) }
+    suspendRunCatching { ClickHouseClient.execute(rootSpansSql) }
         .onFailure { logger.warn { "Reseed root spans failed (non-fatal): ${it.message}" } }
 
     // Child spans (3 per root trace = 60 more spans)
@@ -174,7 +175,7 @@ internal suspend fun reseedDatadogData() {
             '1.3.0'
         FROM numbers(60)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(childSpansSql) }
+    suspendRunCatching { ClickHouseClient.execute(childSpansSql) }
         .onFailure { logger.warn { "Reseed child spans failed (non-fatal): ${it.message}" } }
 
     // Profiles — deterministic IDs so we can write matching files
@@ -225,7 +226,7 @@ internal suspend fun reseedDatadogData() {
         ) VALUES
         $profileValues
     """.trimIndent()
-    runCatching { ClickHouseClient.execute(profilesSql) }
+    suspendRunCatching { ClickHouseClient.execute(profilesSql) }
         .onFailure { logger.warn { "Reseed profiles failed (non-fatal): ${it.message}" } }
 
     // Infrastructure Events
@@ -272,7 +273,7 @@ internal suspend fun reseedDatadogData() {
             ''
         FROM numbers(10)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(eventsSql) }
+    suspendRunCatching { ClickHouseClient.execute(eventsSql) }
         .onFailure { logger.warn { "Reseed infra_events failed (non-fatal): ${it.message}" } }
 
     // Service Checks (8 check types × 6 hosts)
@@ -301,7 +302,7 @@ internal suspend fun reseedDatadogData() {
             ], number % 8 + 1)
         FROM numbers(48)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(checksSql) }
+    suspendRunCatching { ClickHouseClient.execute(checksSql) }
         .onFailure { logger.warn { "Reseed service_checks failed (non-fatal): ${it.message}" } }
 
     // Processes
@@ -338,7 +339,7 @@ internal suspend fun reseedDatadogData() {
             now() - INTERVAL (number % 30) MINUTE
         FROM numbers(42)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(processesSql) }
+    suspendRunCatching { ClickHouseClient.execute(processesSql) }
         .onFailure { logger.warn { "Reseed processes failed (non-fatal): ${it.message}" } }
 
     // Containers
@@ -366,7 +367,7 @@ internal suspend fun reseedDatadogData() {
             now() - INTERVAL (number % 30) MINUTE
         FROM numbers(42)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(containersSql) }
+    suspendRunCatching { ClickHouseClient.execute(containersSql) }
         .onFailure { logger.warn { "Reseed containers failed (non-fatal): ${it.message}" } }
 
     // Network Connections
@@ -395,7 +396,7 @@ internal suspend fun reseedDatadogData() {
             now() - INTERVAL (number % 30) MINUTE
         FROM numbers(8)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(connSql) }
+    suspendRunCatching { ClickHouseClient.execute(connSql) }
         .onFailure { logger.warn { "Reseed network_connections failed (non-fatal): ${it.message}" } }
 
     logger.info { "Datadog agent demo data reseed complete" }

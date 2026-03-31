@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
 
@@ -29,7 +30,7 @@ internal suspend fun checkFreshLogsCount(): Long {
         WHERE organization_id = $P1
             AND timestamp >= now() - INTERVAL 2 HOUR
         """.trimIndent()
-    return runCatching {
+    return suspendRunCatching {
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         if (response.status.value !in 200..299) return 0
@@ -41,11 +42,14 @@ internal suspend fun checkFreshLogsCount(): Long {
 }
 
 internal suspend fun purgeLogsDemoData() {
-    runCatching {
-        ClickHouseClient.execute(
+    suspendRunCatching {
+        val response = ClickHouseClient.execute(
             "ALTER TABLE logs DELETE WHERE organization_id = $P1 OR organization_id = 0"
         )
-    }.onFailure { logger.warn { "Purge logs failed (non-fatal): ${it.message}" } }
+        requireClickHouse2xx(response, "Purge logs")
+    }.onFailure {
+        logger.warn { "Purge logs failed (non-fatal): ${it.message}" }
+    }
 }
 
 internal suspend fun reseedLogs() {
@@ -173,6 +177,8 @@ internal suspend fun reseedLogs() {
             map() AS resource_attributes
         FROM numbers($LOG_SEED_ROWS)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(sql) }
-        .onFailure { logger.warn { "Reseed logs failed (non-fatal): ${it.message}" } }
+    suspendRunCatching {
+        val response = ClickHouseClient.execute(sql)
+        requireClickHouse2xx(response, "Reseed logs")
+    }.onFailure { logger.warn { "Reseed logs failed (non-fatal): ${it.message}" } }
 }

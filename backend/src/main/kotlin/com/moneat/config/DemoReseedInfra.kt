@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
 
@@ -42,7 +43,7 @@ internal suspend fun checkFreshInfraDataCount(): Long {
         WHERE organization_id = $ORG1
             AND collected_at >= now() - INTERVAL 2 HOUR
         """.trimIndent()
-    return runCatching {
+    return suspendRunCatching {
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
         if (response.status.value !in 200..299) return 0
@@ -55,7 +56,7 @@ internal suspend fun checkFreshInfraDataCount(): Long {
 
 internal suspend fun purgeInfraDemoData() {
     for (table in infraDemoTables) {
-        runCatching {
+        suspendRunCatching {
             ClickHouseClient.execute(
                 "ALTER TABLE $table DELETE WHERE organization_id = $ORG1"
             )
@@ -112,7 +113,7 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL (number % 5) MINUTE
         FROM numbers(15)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(podsSql) }
+    suspendRunCatching { ClickHouseClient.execute(podsSql) }
         .onFailure { logger.warn { "Reseed k8s pods failed (non-fatal): ${it.message}" } }
 
     // Nodes (3)
@@ -143,7 +144,7 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL (number % 3) MINUTE
         FROM numbers(3)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(nodesSql) }
+    suspendRunCatching { ClickHouseClient.execute(nodesSql) }
         .onFailure { logger.warn { "Reseed k8s nodes failed (non-fatal): ${it.message}" } }
 
     // Services (5)
@@ -174,7 +175,7 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL (number % 5) MINUTE
         FROM numbers(5)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(servicesSql) }
+    suspendRunCatching { ClickHouseClient.execute(servicesSql) }
         .onFailure { logger.warn { "Reseed k8s services failed (non-fatal): ${it.message}" } }
 
     // Deployments (5)
@@ -205,7 +206,7 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL (number % 5) MINUTE
         FROM numbers(5)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(deploymentsSql) }
+    suspendRunCatching { ClickHouseClient.execute(deploymentsSql) }
         .onFailure { logger.warn { "Reseed k8s deployments failed (non-fatal): ${it.message}" } }
 
     // DaemonSets (2)
@@ -234,7 +235,7 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL (number % 3) MINUTE
         FROM numbers(2)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(daemonsetsSql) }
+    suspendRunCatching { ClickHouseClient.execute(daemonsetsSql) }
         .onFailure { logger.warn { "Reseed k8s daemonsets failed (non-fatal): ${it.message}" } }
 
     // ReplicaSets (5)
@@ -266,7 +267,7 @@ internal suspend fun reseedKubernetesData(orgId: String) {
             now() - INTERVAL (number % 5) MINUTE
         FROM numbers(5)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(replicasetsSql) }
+    suspendRunCatching { ClickHouseClient.execute(replicasetsSql) }
         .onFailure { logger.warn { "Reseed k8s replicasets failed (non-fatal): ${it.message}" } }
 
     logger.info { "Kubernetes demo data reseed complete" }
@@ -328,7 +329,7 @@ internal suspend fun reseedDbmData(orgId: String) {
             map('env', 'production')
         FROM numbers(20)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(queriesSql) }
+    suspendRunCatching { ClickHouseClient.execute(queriesSql) }
         .onFailure { logger.warn { "Reseed dbm_queries failed (non-fatal): ${it.message}" } }
 
     logger.info { "DBM demo data reseed complete" }
@@ -390,7 +391,7 @@ internal suspend fun reseedDebuggerData(orgId: String) {
             map('env', 'production')
         FROM numbers(15)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(logsSql) }
+    suspendRunCatching { ClickHouseClient.execute(logsSql) }
         .onFailure { logger.warn { "Reseed debugger_logs failed (non-fatal): ${it.message}" } }
 
     // Debugger diagnostics (10 probe statuses)
@@ -423,7 +424,7 @@ internal suspend fun reseedDebuggerData(orgId: String) {
             map('env', 'production')
         FROM numbers(10)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(diagSql) }
+    suspendRunCatching { ClickHouseClient.execute(diagSql) }
         .onFailure { logger.warn { "Reseed debugger_diagnostics failed (non-fatal): ${it.message}" } }
 
     logger.info { "Debugger demo data reseed complete" }
@@ -480,7 +481,7 @@ internal suspend fun reseedNdmData(orgId: String) {
             now() - INTERVAL (number % 10) MINUTE
         FROM numbers(8)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(devicesSql) }
+    suspendRunCatching { ClickHouseClient.execute(devicesSql) }
         .onFailure { logger.warn { "Reseed ndm_devices failed (non-fatal): ${it.message}" } }
 
     // SNMP traps (12)
@@ -531,7 +532,7 @@ internal suspend fun reseedNdmData(orgId: String) {
             now() - INTERVAL (number * 31 % 480) MINUTE
         FROM numbers(12)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(trapsSql) }
+    suspendRunCatching { ClickHouseClient.execute(trapsSql) }
         .onFailure { logger.warn { "Reseed ndm_traps failed (non-fatal): ${it.message}" } }
 
     // Network flows (20)
@@ -578,7 +579,7 @@ internal suspend fun reseedNdmData(orgId: String) {
             now() - INTERVAL (number * 13 % 360) MINUTE
         FROM numbers(20)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(flowsSql) }
+    suspendRunCatching { ClickHouseClient.execute(flowsSql) }
         .onFailure { logger.warn { "Reseed ndm_flows failed (non-fatal): ${it.message}" } }
 
     // Network paths (6)
@@ -619,7 +620,7 @@ internal suspend fun reseedNdmData(orgId: String) {
             now() - INTERVAL (number * 47 % 360) MINUTE
         FROM numbers(6)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(pathsSql) }
+    suspendRunCatching { ClickHouseClient.execute(pathsSql) }
         .onFailure { logger.warn { "Reseed network_paths failed (non-fatal): ${it.message}" } }
 
     logger.info { "NDM demo data reseed complete" }
@@ -700,7 +701,7 @@ internal suspend fun reseedSbomData(orgId: String) {
             now() - INTERVAL (number * 19 % 720) MINUTE
         FROM numbers(25)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(sbomSql) }
+    suspendRunCatching { ClickHouseClient.execute(sbomSql) }
         .onFailure { logger.warn { "Reseed sbom_packages failed (non-fatal): ${it.message}" } }
 
     logger.info { "SBOM demo data reseed complete" }

@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
 import java.io.File
@@ -46,7 +47,7 @@ internal suspend fun ensureDemoProfileRows(profileIds: List<String>) {
     // and only runs when DEMO_ENABLED=true
     if (!EnvConfig.Demo.enabled) return
     val firstId = profileIds.firstOrNull() ?: return
-    val check = runCatching {
+    val check = suspendRunCatching {
         ClickHouseClient.execute(
             """
             SELECT count() FROM profiles
@@ -59,7 +60,7 @@ internal suspend fun ensureDemoProfileRows(profileIds: List<String>) {
     if (check > 0) return
 
     // Old rows exist with random IDs — purge and re-insert
-    runCatching {
+    suspendRunCatching {
         ClickHouseClient.execute(
             "ALTER TABLE profiles DELETE WHERE organization_id = $ORG1"
         )
@@ -105,7 +106,7 @@ internal suspend fun ensureDemoProfileRows(profileIds: List<String>) {
         ) VALUES
         $values
     """.trimIndent()
-    runCatching { ClickHouseClient.execute(sql) }
+    suspendRunCatching { ClickHouseClient.execute(sql) }
         .onFailure { logger.warn { "Re-insert demo profiles failed (non-fatal): ${it.message}" } }
         .onSuccess { logger.info { "Re-inserted ${profileIds.size} demo profile rows" } }
 }

@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
 
@@ -29,18 +30,25 @@ internal suspend fun checkFreshLlmDataCount(): Long {
         WHERE project_id IN ($P1, $P2, $P3)
             AND timestamp >= now() - INTERVAL 12 HOUR
         """.trimIndent()
-    val response = ClickHouseClient.execute(query)
-    val body = response.bodyAsText()
-    if (response.status.value !in 200..299) return 0
-    return body.trim().toLongOrNull() ?: 0
+    return suspendRunCatching {
+        val response = ClickHouseClient.execute(query)
+        if (response.status.value !in 200..299) {
+            0L
+        } else {
+            response.bodyAsText().trim().toLongOrNull() ?: 0L
+        }
+    }.getOrElse {
+        logger.warn { "Failed to check fresh LLM demo data (non-fatal): ${it.message}" }
+        0L
+    }
 }
 internal suspend fun purgeLlmDemoData() {
-    runCatching {
+    suspendRunCatching {
         ClickHouseClient.execute("ALTER TABLE llm_generations DELETE WHERE project_id IN ($P1, $P2, $P3)")
     }.onFailure { logger.warn { "Purge llm_generations failed (non-fatal): ${it.message}" } }
 
     // SummingMergeTree materialized rows need explicit cleanup.
-    runCatching {
+    suspendRunCatching {
         ClickHouseClient.execute("ALTER TABLE llm_generations_hourly_mv DELETE WHERE project_id IN ($P1, $P2, $P3)")
     }.onFailure { logger.warn { "Purge llm_generations_hourly_mv failed (non-fatal): ${it.message}" } }
 }
@@ -249,6 +257,6 @@ internal suspend fun reseedLlmGenerations() {
             timestamp AS received_at
         FROM numbers(800)
         """.trimIndent()
-    runCatching { ClickHouseClient.execute(sql) }
+    suspendRunCatching { ClickHouseClient.execute(sql) }
         .onFailure { logger.warn { "Reseed llm_generations failed (non-fatal): ${it.message}" } }
 }

@@ -17,10 +17,14 @@
 package com.moneat.config
 
 import com.moneat.uptime.models.UptimeMonitors
+import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import java.util.UUID
 import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
@@ -30,39 +34,44 @@ internal suspend fun reseedUptimeHeartbeats() {
         "00000000-0000-0000-0000-000000000001",
         "00000000-0000-0000-0000-000000000002"
     )
+    val demoMonitorUuids = demoMonitors.map { UUID.fromString(it) }
 
     // Delete all existing heartbeats for demo monitors and reseed with mostly-up data.
     // 30 days of 5-minute intervals = 8,640 points per monitor.
     // Two brief incident windows (numbers 150-161 and 500-509) simulate realistic downtime.
     for (monitorId in demoMonitors) {
-        runCatching {
-            ClickHouseClient.execute(
-                "ALTER TABLE uptime_heartbeats DELETE WHERE monitor_id = '$monitorId'"
-            )
-            ClickHouseClient.execute(
-                """
-                INSERT INTO uptime_heartbeats (
-                    monitor_id, timestamp, status, response_time_ms, status_code, message, ping_ms)
-                SELECT
-                    toUUID('$monitorId'),
-                    now() - INTERVAL (number * 5) MINUTE,
-                    if(number IN (150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
-                                  500, 501, 502, 503, 504, 505, 506, 507, 508, 509), 0, 1),
-                    if(number IN (150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
-                                  500, 501, 502, 503, 504, 505, 506, 507, 508, 509),
-                       0, 80 + (number % 120)) AS response_time_ms,
-                    if(number IN (150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
-                                  500, 501, 502, 503, 504, 505, 506, 507, 508, 509),
-                       0, 200) AS status_code,
-                    if(number IN (150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
-                                  500, 501, 502, 503, 504, 505, 506, 507, 508, 509),
-                       'Connection refused', 'OK') AS message,
-                    if(number IN (150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
-                                  500, 501, 502, 503, 504, 505, 506, 507, 508, 509),
-                       0, 10 + (number % 30)) AS ping_ms
-                FROM numbers(8640)
-                """.trimIndent()
-            )
+        suspendRunCatching {
+            val deleteResponse =
+                ClickHouseClient.execute(
+                    "ALTER TABLE uptime_heartbeats DELETE WHERE monitor_id = '$monitorId'"
+                )
+            requireClickHouse2xx(deleteResponse, "Delete uptime heartbeats for $monitorId")
+            val insertResponse =
+                ClickHouseClient.execute(
+                    """
+                    INSERT INTO uptime_heartbeats (
+                        monitor_id, timestamp, status, response_time_ms, status_code, message, ping_ms)
+                    SELECT
+                        toUUID('$monitorId'),
+                        now() - INTERVAL (number * 5) MINUTE,
+                        if(number IN (150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
+                                      500, 501, 502, 503, 504, 505, 506, 507, 508, 509), 0, 1),
+                        if(number IN (150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
+                                      500, 501, 502, 503, 504, 505, 506, 507, 508, 509),
+                           0, 80 + (number % 120)) AS response_time_ms,
+                        if(number IN (150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
+                                      500, 501, 502, 503, 504, 505, 506, 507, 508, 509),
+                           0, 200) AS status_code,
+                        if(number IN (150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
+                                      500, 501, 502, 503, 504, 505, 506, 507, 508, 509),
+                           'Connection refused', 'OK') AS message,
+                        if(number IN (150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
+                                      500, 501, 502, 503, 504, 505, 506, 507, 508, 509),
+                           0, 10 + (number % 30)) AS ping_ms
+                    FROM numbers(8640)
+                    """.trimIndent()
+                )
+            requireClickHouse2xx(insertResponse, "Insert uptime heartbeats for $monitorId")
         }.onFailure {
             logger.warn {
                 "Failed to reseed uptime heartbeats for $monitorId (non-fatal): ${it.message}"
@@ -71,10 +80,10 @@ internal suspend fun reseedUptimeHeartbeats() {
     }
 
     // Update postgres monitor status to "up" with a recent last_check_at.
-    runCatching {
+    suspendRunCatching {
         transaction {
             UptimeMonitors.update({
-                UptimeMonitors.organizationId eq -1
+                (UptimeMonitors.organizationId eq -1) and (UptimeMonitors.id inList demoMonitorUuids)
             }) {
                 it[UptimeMonitors.status] = "up"
                 it[UptimeMonitors.lastCheckAt] = Clock.System.now()
