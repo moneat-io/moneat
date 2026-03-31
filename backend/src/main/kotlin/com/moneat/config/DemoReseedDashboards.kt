@@ -27,7 +27,6 @@ import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.OrderByDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TimeRangeDef
-import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
@@ -63,7 +62,7 @@ private const val DEMO_ORG_ID = -1L
 private const val DEMO_USER_ID = -1L
 
 internal fun seedDemoDashboards() {
-    suspendRunCatching {
+    runCatching {
         transaction {
             // Purge existing demo dashboards (cascade deletes widgets)
             Dashboards.deleteWhere {

@@ -42,11 +42,19 @@ internal suspend fun checkFreshAnalyticsDataCount(): Long {
 }
 internal suspend fun purgeAnalyticsDemoData() {
     suspendRunCatching {
-        ClickHouseClient.execute("ALTER TABLE analytics_events DELETE WHERE project_id IN ($P1, $P2, $P3)")
+        requireClickHouse2xx(
+            ClickHouseClient.execute("ALTER TABLE analytics_events DELETE WHERE project_id IN ($P1, $P2, $P3)"),
+            "Purge analytics_events"
+        )
     }.onFailure { logger.warn { "Purge analytics_events failed (non-fatal): ${it.message}" } }
 
     suspendRunCatching {
-        ClickHouseClient.execute("ALTER TABLE analytics_sessions_hourly DELETE WHERE project_id IN ($P1, $P2, $P3)")
+        requireClickHouse2xx(
+            ClickHouseClient.execute(
+                "ALTER TABLE analytics_sessions_hourly DELETE WHERE project_id IN ($P1, $P2, $P3)"
+            ),
+            "Purge analytics_sessions_hourly"
+        )
     }.onFailure { logger.warn { "Purge analytics_sessions_hourly failed (non-fatal): ${it.message}" } }
 }
 internal suspend fun reseedAnalyticsEvents() {
@@ -203,6 +211,7 @@ internal suspend fun reseedAnalyticsEvents() {
         FROM numbers(3000)
         """.trimIndent()
 
-    suspendRunCatching { ClickHouseClient.execute(sql) }
-        .onFailure { logger.warn { "Reseed analytics_events failed (non-fatal): ${it.message}" } }
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(sql), "Reseed analytics_events")
+    }.onFailure { logger.warn { "Reseed analytics_events failed (non-fatal): ${it.message}" } }
 }
