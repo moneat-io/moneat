@@ -45,8 +45,20 @@ complexity:
     active: false
   CyclomaticComplexMethod:
     active: false
+  # Mirror core backend: above default 600 while large production types are split incrementally.
   LargeClass:
-    active: false
+    active: true
+    threshold: 1700
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
   ComplexCondition:
     active: false
   NestedBlockDepth:
