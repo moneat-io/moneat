@@ -44,14 +44,16 @@ internal suspend fun checkFreshDatadogCount(): Long {
                     AND $timeCol >= now() - INTERVAL 2 HOUR
                 """.trimIndent()
             val response = ClickHouseClient.execute(q)
-            if (response.status.value !in 200..299) return 0
-            val cnt = response.bodyAsText().trim().toLongOrNull() ?: 0
+            if (response.status.value !in 200..299) {
+                return@suspendRunCatching 0L
+            }
+            val cnt = response.bodyAsText().trim().toLongOrNull() ?: 0L
             if (cnt < minCount) minCount = cnt
         }
-        if (minCount == Long.MAX_VALUE) 0 else minCount
+        if (minCount == Long.MAX_VALUE) 0L else minCount
     }.getOrElse {
         logger.warn { "Failed to check fresh Datadog demo data (non-fatal): ${it.message}" }
-        0
+        0L
     }
 }
 

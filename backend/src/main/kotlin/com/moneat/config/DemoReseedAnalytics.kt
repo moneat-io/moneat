@@ -33,11 +33,14 @@ internal suspend fun checkFreshAnalyticsDataCount(): Long {
     return suspendRunCatching {
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
-        if (response.status.value !in 200..299) return 0
-        body.trim().toLongOrNull() ?: 0
+        if (response.status.value !in 200..299) {
+            0L
+        } else {
+            body.trim().toLongOrNull() ?: 0L
+        }
     }.getOrElse {
         logger.warn { "Failed to check fresh analytics demo data (non-fatal): ${it.message}" }
-        0
+        0L
     }
 }
 internal suspend fun purgeAnalyticsDemoData() {

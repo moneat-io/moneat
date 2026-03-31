@@ -31,6 +31,7 @@ import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -64,7 +65,14 @@ private const val DEMO_USER_ID = -1L
 internal fun seedDemoDashboards() {
     runCatching {
         transaction {
-            // Purge existing demo dashboards (cascade deletes widgets)
+            val demoDashboardIds = Dashboards.selectAll()
+                .where { (Dashboards.orgId eq DEMO_ORG_ID) and (Dashboards.createdBy eq DEMO_USER_ID) }
+                .map { it[Dashboards.id] }
+
+            if (demoDashboardIds.isNotEmpty()) {
+                DashboardWidgets.deleteWhere { dashboardId inList demoDashboardIds }
+            }
+
             Dashboards.deleteWhere {
                 (orgId eq DEMO_ORG_ID) and (createdBy eq DEMO_USER_ID)
             }
