@@ -39,7 +39,15 @@ object DemoDataReseeder {
             val freshAnalyticsCount = checkFreshAnalyticsDataCount()
             val freshLogsCount = checkFreshLogsCount()
             val freshDatadogCount = checkFreshDatadogCount()
-            val freshInfraCount = checkFreshInfraDataCount()
+            val freshK8sCount = checkFreshKubernetesDataCount()
+            val freshDbmCount = checkFreshDbmDataCount()
+            val freshDebuggerLogsCount = checkFreshDebuggerLogsCount()
+            val freshDebuggerDiagCount = checkFreshDebuggerDiagnosticsCount()
+            val freshNdmDevicesCount = checkFreshNdmDevicesCount()
+            val freshNdmTrapsCount = checkFreshNdmTrapsCount()
+            val freshNdmFlowsCount = checkFreshNdmFlowsCount()
+            val freshNetworkPathsCount = checkFreshNetworkPathsCount()
+            val freshSbomCount = checkFreshSbomDataCount()
             val freshSecurityCount = checkFreshSecurityDataCount()
             val freshSyntheticsCount = checkFreshSyntheticsDataCount()
             val demoDashboardCount = countDemoDashboards()
@@ -49,7 +57,17 @@ object DemoDataReseeder {
             val hasFreshAnalytics = freshAnalyticsCount > 0
             val hasFreshLogs = freshLogsCount > 0
             val hasFreshDatadog = freshDatadogCount > 0
-            val hasFreshInfra = freshInfraCount > 0
+            val hasFreshKubernetes = freshK8sCount > 0
+            val hasFreshDbm = freshDbmCount > 0
+            val hasFreshDebugger =
+                freshDebuggerLogsCount > 0 && freshDebuggerDiagCount > 0
+            val hasFreshNdm =
+                freshNdmDevicesCount > 0 && freshNdmTrapsCount > 0 &&
+                    freshNdmFlowsCount > 0 && freshNetworkPathsCount > 0
+            val hasFreshSbom = freshSbomCount > 0
+            val hasFreshInfra =
+                hasFreshKubernetes && hasFreshDbm && hasFreshDebugger &&
+                    hasFreshNdm && hasFreshSbom
             val hasFreshSecurity = freshSecurityCount > 0
             val hasFreshSynthetics = freshSyntheticsCount > 0
             val hasEnoughDashboards = demoDashboardCount >= 4
@@ -61,7 +79,11 @@ object DemoDataReseeder {
                     "Demo data looks fresh ($freshCoreCount recent core events, " +
                         "$freshLlmCount recent LLM generations, " +
                         "$freshAnalyticsCount recent analytics events, $freshLogsCount recent logs, " +
-                        "$freshDatadogCount recent Datadog spans, $freshInfraCount recent infra rows, " +
+                        "$freshDatadogCount recent Datadog spans, " +
+                        "infra (k8s=$freshK8sCount dbm=$freshDbmCount debugger_logs=$freshDebuggerLogsCount " +
+                        "debugger_diag=$freshDebuggerDiagCount ndm_dev=$freshNdmDevicesCount " +
+                        "ndm_traps=$freshNdmTrapsCount ndm_flows=$freshNdmFlowsCount " +
+                        "net_paths=$freshNetworkPathsCount sbom=$freshSbomCount), " +
                         "$freshSecurityCount recent security events, $freshSyntheticsCount recent synthetics, " +
                         "$demoDashboardCount demo dashboards), skipping reseed"
                 }
@@ -114,15 +136,51 @@ object DemoDataReseeder {
                 reseedDatadogData()
             }
 
-            if (freshInfraCount > 0) {
-                logger.info { "Infra demo data is fresh ($freshInfraCount recent rows), skipping infra reseed" }
+            if (hasFreshKubernetes) {
+                logger.info {
+                    "Kubernetes demo data is fresh ($freshK8sCount recent rows), skipping Kubernetes reseed"
+                }
             } else {
-                logger.info { "Infra demo data is stale or missing, reseeding for demo org..." }
-                purgeInfraDemoData()
+                logger.info { "Kubernetes demo data is stale or missing, reseeding..." }
+                purgeKubernetesDemoData()
                 reseedKubernetesData(ORG1)
+            }
+
+            if (hasFreshDbm) {
+                logger.info { "DBM demo data is fresh ($freshDbmCount recent rows), skipping DBM reseed" }
+            } else {
+                logger.info { "DBM demo data is stale or missing, reseeding..." }
+                purgeDbmDemoData()
                 reseedDbmData(ORG1)
+            }
+
+            if (hasFreshDebugger) {
+                logger.info {
+                    "Debugger demo data is fresh ($freshDebuggerLogsCount logs, " +
+                        "$freshDebuggerDiagCount diagnostics), skipping debugger reseed"
+                }
+            } else {
+                logger.info { "Debugger demo data is stale or missing, reseeding..." }
+                purgeDebuggerDemoData()
                 reseedDebuggerData(ORG1)
+            }
+
+            if (hasFreshNdm) {
+                logger.info {
+                    "NDM demo data is fresh ($freshNdmDevicesCount devices, $freshNdmTrapsCount traps, " +
+                        "$freshNdmFlowsCount flows, $freshNetworkPathsCount paths), skipping NDM reseed"
+                }
+            } else {
+                logger.info { "NDM demo data is stale or missing, reseeding..." }
+                purgeNdmDemoData()
                 reseedNdmData(ORG1)
+            }
+
+            if (hasFreshSbom) {
+                logger.info { "SBOM demo data is fresh ($freshSbomCount recent rows), skipping SBOM reseed" }
+            } else {
+                logger.info { "SBOM demo data is stale or missing, reseeding..." }
+                purgeSbomDemoData()
                 reseedSbomData(ORG1)
             }
 

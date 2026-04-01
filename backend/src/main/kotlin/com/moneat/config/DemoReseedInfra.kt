@@ -35,34 +35,91 @@ private val infraDemoTables =
         "sbom_packages",
     )
 
-internal suspend fun checkFreshInfraDataCount(): Long {
+private val k8sDemoTables = listOf("k8s_resources")
+private val dbmDemoTables = listOf("dbm_queries")
+private val debuggerDemoTables = listOf("debugger_logs", "debugger_diagnostics")
+private val ndmDemoTables = listOf("ndm_devices", "ndm_traps", "ndm_flows", "network_paths")
+private val sbomDemoTables = listOf("sbom_packages")
+
+private suspend fun executeClickHouseMutation(sql: String) {
+    val response = ClickHouseClient.execute(sql)
+    val body = response.bodyAsText()
+    check(!response.isClickHouseError(body)) {
+        "ClickHouse mutation failed (${response.status.value}): ${body.take(500)}"
+    }
+}
+
+private suspend fun checkFreshInfraRows(table: String, timeColumn: String): Long {
     val query =
         """
         SELECT count() as cnt
-        FROM k8s_resources
+        FROM $table
         WHERE organization_id = $ORG1
-            AND collected_at >= now() - INTERVAL 2 HOUR
+            AND $timeColumn >= now() - INTERVAL 2 HOUR
         """.trimIndent()
     return suspendRunCatching {
         val response = ClickHouseClient.execute(query)
         val body = response.bodyAsText()
-        if (response.status.value !in 200..299) return 0
+        if (response.status.value !in 200..299) return@suspendRunCatching 0
+        if (response.isClickHouseError(body)) return@suspendRunCatching 0
         body.trim().toLongOrNull() ?: 0
     }.getOrElse {
-        logger.warn { "Failed to check fresh infra demo data (non-fatal): ${it.message}" }
+        logger.warn { "Failed to check fresh $table demo data (non-fatal): ${it.message}" }
         0
     }
 }
 
-internal suspend fun purgeInfraDemoData() {
-    for (table in infraDemoTables) {
+internal suspend fun checkFreshKubernetesDataCount(): Long =
+    checkFreshInfraRows("k8s_resources", "collected_at")
+
+internal suspend fun checkFreshDbmDataCount(): Long =
+    checkFreshInfraRows("dbm_queries", "timestamp")
+
+internal suspend fun checkFreshDebuggerLogsCount(): Long =
+    checkFreshInfraRows("debugger_logs", "timestamp")
+
+internal suspend fun checkFreshDebuggerDiagnosticsCount(): Long =
+    checkFreshInfraRows("debugger_diagnostics", "timestamp")
+
+internal suspend fun checkFreshNdmDevicesCount(): Long =
+    checkFreshInfraRows("ndm_devices", "collected_at")
+
+internal suspend fun checkFreshNdmTrapsCount(): Long =
+    checkFreshInfraRows("ndm_traps", "received_at")
+
+internal suspend fun checkFreshNdmFlowsCount(): Long =
+    checkFreshInfraRows("ndm_flows", "sampled_at")
+
+internal suspend fun checkFreshNetworkPathsCount(): Long =
+    checkFreshInfraRows("network_paths", "collected_at")
+
+internal suspend fun checkFreshSbomDataCount(): Long =
+    checkFreshInfraRows("sbom_packages", "collected_at")
+
+internal suspend fun purgeInfraDemoTables(tables: List<String>) {
+    for (table in tables) {
         suspendRunCatching {
-            ClickHouseClient.execute(
+            executeClickHouseMutation(
                 "ALTER TABLE $table DELETE WHERE organization_id = $ORG1"
             )
         }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
     }
 }
+
+internal suspend fun purgeInfraDemoData() {
+    purgeInfraDemoTables(infraDemoTables)
+}
+
+internal suspend fun purgeKubernetesDemoData() = purgeInfraDemoTables(k8sDemoTables)
+
+internal suspend fun purgeDbmDemoData() = purgeInfraDemoTables(dbmDemoTables)
+
+internal suspend fun purgeDebuggerDemoData() = purgeInfraDemoTables(debuggerDemoTables)
+
+internal suspend fun purgeNdmDemoData() = purgeInfraDemoTables(ndmDemoTables)
+
+internal suspend fun purgeSbomDemoData() = purgeInfraDemoTables(sbomDemoTables)
+
 // ── Kubernetes Demo Data ──────────────────────────────────────────────
 
 private fun k8sPodsInsertSql(orgId: String): String {
@@ -257,22 +314,22 @@ private fun k8sReplicasetsInsertSql(orgId: String): String {
 }
 
 internal suspend fun reseedKubernetesData(orgId: String) {
-    suspendRunCatching { ClickHouseClient.execute(k8sPodsInsertSql(orgId)) }
+    suspendRunCatching { executeClickHouseMutation(k8sPodsInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed k8s pods failed (non-fatal): ${it.message}" } }
 
-    suspendRunCatching { ClickHouseClient.execute(k8sNodesInsertSql(orgId)) }
+    suspendRunCatching { executeClickHouseMutation(k8sNodesInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed k8s nodes failed (non-fatal): ${it.message}" } }
 
-    suspendRunCatching { ClickHouseClient.execute(k8sServicesInsertSql(orgId)) }
+    suspendRunCatching { executeClickHouseMutation(k8sServicesInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed k8s services failed (non-fatal): ${it.message}" } }
 
-    suspendRunCatching { ClickHouseClient.execute(k8sDeploymentsInsertSql(orgId)) }
+    suspendRunCatching { executeClickHouseMutation(k8sDeploymentsInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed k8s deployments failed (non-fatal): ${it.message}" } }
 
-    suspendRunCatching { ClickHouseClient.execute(k8sDaemonsetsInsertSql(orgId)) }
+    suspendRunCatching { executeClickHouseMutation(k8sDaemonsetsInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed k8s daemonsets failed (non-fatal): ${it.message}" } }
 
-    suspendRunCatching { ClickHouseClient.execute(k8sReplicasetsInsertSql(orgId)) }
+    suspendRunCatching { executeClickHouseMutation(k8sReplicasetsInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed k8s replicasets failed (non-fatal): ${it.message}" } }
 
     logger.info { "Kubernetes demo data reseed complete" }
@@ -301,16 +358,16 @@ internal suspend fun reseedDbmData(orgId: String) {
             toString(sipHash64(number, 70)),
             toString(sipHash64(number, 71)),
             arrayElement([
-                'SELECT u.id, u.email, u.name FROM users u WHERE u.id = $1',
-                'SELECT o.*, oi.* FROM orders o JOIN order_items oi ON o.id = oi.order_id WHERE o.user_id = $1 ORDER BY o.created_at DESC LIMIT 50',
-                'UPDATE products SET stock_count = stock_count - $1 WHERE id = $2 AND stock_count >= $1',
-                'SELECT p.*, c.name as category FROM products p JOIN categories c ON p.category_id = c.id WHERE p.price BETWEEN $1 AND $2 ORDER BY p.popularity DESC',
-                'INSERT INTO analytics_events (event_type, user_id, metadata, created_at) VALUES ($1, $2, $3, NOW())',
+                'SELECT u.id, u.email, u.name FROM users u WHERE u.id = ${'$'}1',
+                'SELECT o.*, oi.* FROM orders o JOIN order_items oi ON o.id = oi.order_id WHERE o.user_id = ${'$'}1 ORDER BY o.created_at DESC LIMIT 50',
+                'UPDATE products SET stock_count = stock_count - ${'$'}1 WHERE id = ${'$'}2 AND stock_count >= ${'$'}1',
+                'SELECT p.*, c.name as category FROM products p JOIN categories c ON p.category_id = c.id WHERE p.price BETWEEN ${'$'}1 AND ${'$'}2 ORDER BY p.popularity DESC',
+                'INSERT INTO analytics_events (event_type, user_id, metadata, created_at) VALUES (${'$'}1, ${'$'}2, ${'$'}3, NOW())',
                 'SELECT COUNT(*) as total, DATE_TRUNC(''hour'', created_at) as hour FROM orders WHERE created_at >= NOW() - INTERVAL ''7 days'' GROUP BY hour ORDER BY hour',
                 'DELETE FROM sessions WHERE expires_at < NOW()',
-                'SELECT i.*, w.name as warehouse FROM inventory i JOIN warehouses w ON i.warehouse_id = w.id WHERE i.product_id = $1',
-                'UPDATE users SET last_login_at = NOW(), login_count = login_count + 1 WHERE id = $1',
-                'SELECT r.*, u.name as reviewer FROM reviews r JOIN users u ON r.user_id = u.id WHERE r.product_id = $1 ORDER BY r.created_at DESC LIMIT 20',
+                'SELECT i.*, w.name as warehouse FROM inventory i JOIN warehouses w ON i.warehouse_id = w.id WHERE i.product_id = ${'$'}1',
+                'UPDATE users SET last_login_at = NOW(), login_count = login_count + 1 WHERE id = ${'$'}1',
+                'SELECT r.*, u.name as reviewer FROM reviews r JOIN users u ON r.user_id = u.id WHERE r.product_id = ${'$'}1 ORDER BY r.created_at DESC LIMIT 20',
                 'WITH ranked AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY category_id ORDER BY sales DESC) as rn FROM products) SELECT * FROM ranked WHERE rn <= 10',
                 'SELECT pg_stat_activity.pid, age(clock_timestamp(), pg_stat_activity.query_start), usename, query FROM pg_stat_activity WHERE state != ''idle'' ORDER BY query_start',
                 'ANALYZE orders',
@@ -334,7 +391,7 @@ internal suspend fun reseedDbmData(orgId: String) {
             map('env', 'production')
         FROM numbers(20)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(queriesSql) }
+    suspendRunCatching { executeClickHouseMutation(queriesSql) }
         .onFailure { logger.warn { "Reseed dbm_queries failed (non-fatal): ${it.message}" } }
 
     logger.info { "DBM demo data reseed complete" }
@@ -396,7 +453,7 @@ internal suspend fun reseedDebuggerData(orgId: String) {
             map('env', 'production')
         FROM numbers(15)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(logsSql) }
+    suspendRunCatching { executeClickHouseMutation(logsSql) }
         .onFailure { logger.warn { "Reseed debugger_logs failed (non-fatal): ${it.message}" } }
 
     // Debugger diagnostics (10 probe statuses)
@@ -429,7 +486,7 @@ internal suspend fun reseedDebuggerData(orgId: String) {
             map('env', 'production')
         FROM numbers(10)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(diagSql) }
+    suspendRunCatching { executeClickHouseMutation(diagSql) }
         .onFailure { logger.warn { "Reseed debugger_diagnostics failed (non-fatal): ${it.message}" } }
 
     logger.info { "Debugger demo data reseed complete" }
@@ -619,16 +676,16 @@ private fun ndmNetworkPathsInsertSql(orgId: String): String {
 }
 
 internal suspend fun reseedNdmData(orgId: String) {
-    suspendRunCatching { ClickHouseClient.execute(ndmDevicesInsertSql(orgId)) }
+    suspendRunCatching { executeClickHouseMutation(ndmDevicesInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed ndm_devices failed (non-fatal): ${it.message}" } }
 
-    suspendRunCatching { ClickHouseClient.execute(ndmTrapsInsertSql(orgId)) }
+    suspendRunCatching { executeClickHouseMutation(ndmTrapsInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed ndm_traps failed (non-fatal): ${it.message}" } }
 
-    suspendRunCatching { ClickHouseClient.execute(ndmFlowsInsertSql(orgId)) }
+    suspendRunCatching { executeClickHouseMutation(ndmFlowsInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed ndm_flows failed (non-fatal): ${it.message}" } }
 
-    suspendRunCatching { ClickHouseClient.execute(ndmNetworkPathsInsertSql(orgId)) }
+    suspendRunCatching { executeClickHouseMutation(ndmNetworkPathsInsertSql(orgId)) }
         .onFailure { logger.warn { "Reseed network_paths failed (non-fatal): ${it.message}" } }
 
     logger.info { "NDM demo data reseed complete" }
@@ -709,7 +766,7 @@ internal suspend fun reseedSbomData(orgId: String) {
             now() - INTERVAL (number * 19 % 720) MINUTE
         FROM numbers(25)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(sbomSql) }
+    suspendRunCatching { executeClickHouseMutation(sbomSql) }
         .onFailure { logger.warn { "Reseed sbom_packages failed (non-fatal): ${it.message}" } }
 
     logger.info { "SBOM demo data reseed complete" }
