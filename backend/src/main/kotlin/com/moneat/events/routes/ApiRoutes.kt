@@ -1256,7 +1256,7 @@ fun Route.apiRoutes() {
                         val alertFrequency =
                             (request["alertFrequencyMinutes"] as? Number)?.toInt()
                                 ?: existing?.get(NotificationPreferences.alert_frequency_minutes)
-                                    ?: DEFAULT_ALERT_FREQUENCY_MINUTES
+                                ?: DEFAULT_ALERT_FREQUENCY_MINUTES
 
                         if (existing != null) {
                             NotificationPreferences.update({
@@ -1324,7 +1324,7 @@ fun Route.apiRoutes() {
                         val alertFrequency =
                             (request["alertFrequencyMinutes"] as? Number)?.toInt()
                                 ?: existing?.get(NotificationPreferences.alert_frequency_minutes)
-                                    ?: DEFAULT_ALERT_FREQUENCY_MINUTES
+                                ?: DEFAULT_ALERT_FREQUENCY_MINUTES
 
                         if (existing != null) {
                             NotificationPreferences.update({
