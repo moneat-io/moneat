@@ -734,9 +734,9 @@ class AdminService(
         val daysBack =
             when (period) {
                 "24h" -> 1
-                "7d" -> PERIOD_7D_DAYS_BACK
-                "30d" -> PERIOD_30D_DAYS_BACK
-                else -> PERIOD_7D_DAYS_BACK
+                "7d" -> DAYS_IN_WEEK
+                "30d" -> DAYS_IN_MONTH
+                else -> DAYS_IN_WEEK
             }
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
         return usageTracker.getUsageForOrg(orgId, startDate, today)
@@ -750,9 +750,9 @@ class AdminService(
                 .date
         val daysBack =
             when (period) {
-                "7d" -> PERIOD_7D_DAYS_BACK
-                "30d" -> PERIOD_30D_DAYS_BACK
-                else -> PERIOD_30D_DAYS_BACK
+                "7d" -> DAYS_IN_WEEK
+                "30d" -> DAYS_IN_MONTH
+                else -> DAYS_IN_MONTH
             }
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
 
@@ -774,7 +774,7 @@ class AdminService(
                     .mapValues { it.value.size.toLong() }
 
             // Timeline for last 7 days
-            val last7DaysStart = today.minus(PERIOD_7D_DAYS_BACK, DateTimeUnit.DAY).atStartOfDayIn(TimeZone.UTC)
+            val last7DaysStart = today.minus(DAYS_IN_WEEK, DateTimeUnit.DAY).atStartOfDayIn(TimeZone.UTC)
             val last7Days =
                 EmailsSent
                     .selectAll()

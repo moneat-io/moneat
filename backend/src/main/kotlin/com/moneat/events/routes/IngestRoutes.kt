@@ -45,7 +45,7 @@ import java.security.MessageDigest
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
-private const val ENVELOPE_LOG_MAX_LENGTH = 500
+private const val SHA256_HEX_PREFIX_CHARS = 16
 
 private fun sha256HexPrefix(bytes: ByteArray, maxHexChars: Int): String {
     val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
@@ -107,7 +107,7 @@ fun Route.ingestRoutes(
                 logger.debug { "Received envelope for project $projectId" }
                 logger.debug {
                     "Envelope payload (redacted): bytes=${decompressedBytes.size}, " +
-                        "sha256_prefix=${sha256HexPrefix(decompressedBytes, ENVELOPE_LOG_MAX_LENGTH)}"
+                        "sha256_prefix=${sha256HexPrefix(decompressedBytes, SHA256_HEX_PREFIX_CHARS)}"
                 }
 
                 val envelope = SentryEnvelope.parse(decompressedBytes)

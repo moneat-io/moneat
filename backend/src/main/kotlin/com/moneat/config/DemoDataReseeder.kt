@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-@file:Suppress("MagicNumber") // Deterministic demo fixture values (events, layouts, synthetic stacks).
-
 package com.moneat.config
 
 import com.moneat.dashboards.models.AggFunction
