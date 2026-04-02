@@ -152,8 +152,9 @@ private suspend fun reseedDatadogApmRootSpans() {
             '1.3.0'
         FROM numbers(20)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(rootSpansSql) }
-        .onFailure { logger.warn { "Reseed root spans failed (non-fatal): ${it.message}" } }
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(rootSpansSql), "Reseed root spans")
+    }.onFailure { logger.warn { "Reseed root spans failed (non-fatal): ${it.message}" } }
 }
 
 private suspend fun reseedDatadogApmChildSpans() {
@@ -182,8 +183,9 @@ private suspend fun reseedDatadogApmChildSpans() {
             '1.3.0'
         FROM numbers(60)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(childSpansSql) }
-        .onFailure { logger.warn { "Reseed child spans failed (non-fatal): ${it.message}" } }
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(childSpansSql), "Reseed child spans")
+    }.onFailure { logger.warn { "Reseed child spans failed (non-fatal): ${it.message}" } }
 }
 
 private suspend fun reseedDatadogProfileRows() {
@@ -237,8 +239,9 @@ private suspend fun reseedDatadogInfraEvents() {
             ''
         FROM numbers(10)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(eventsSql) }
-        .onFailure { logger.warn { "Reseed infra_events failed (non-fatal): ${it.message}" } }
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(eventsSql), "Reseed infra_events")
+    }.onFailure { logger.warn { "Reseed infra_events failed (non-fatal): ${it.message}" } }
 }
 
 private suspend fun reseedDatadogServiceChecks() {
@@ -267,8 +270,9 @@ private suspend fun reseedDatadogServiceChecks() {
             ], number % 8 + 1)
         FROM numbers(48)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(checksSql) }
-        .onFailure { logger.warn { "Reseed service_checks failed (non-fatal): ${it.message}" } }
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(checksSql), "Reseed service_checks")
+    }.onFailure { logger.warn { "Reseed service_checks failed (non-fatal): ${it.message}" } }
 }
 
 private suspend fun reseedDatadogProcesses() {
@@ -305,8 +309,9 @@ private suspend fun reseedDatadogProcesses() {
             now() - INTERVAL (number % 30) MINUTE
         FROM numbers(42)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(processesSql) }
-        .onFailure { logger.warn { "Reseed processes failed (non-fatal): ${it.message}" } }
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(processesSql), "Reseed processes")
+    }.onFailure { logger.warn { "Reseed processes failed (non-fatal): ${it.message}" } }
 }
 
 private suspend fun reseedDatadogContainers() {
@@ -334,8 +339,9 @@ private suspend fun reseedDatadogContainers() {
             now() - INTERVAL (number % 30) MINUTE
         FROM numbers(42)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(containersSql) }
-        .onFailure { logger.warn { "Reseed containers failed (non-fatal): ${it.message}" } }
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(containersSql), "Reseed containers")
+    }.onFailure { logger.warn { "Reseed containers failed (non-fatal): ${it.message}" } }
 }
 
 private suspend fun reseedDatadogNetworkConnections() {
@@ -364,6 +370,7 @@ private suspend fun reseedDatadogNetworkConnections() {
             now() - INTERVAL (number % 30) MINUTE
         FROM numbers(8)
         """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(connSql) }
-        .onFailure { logger.warn { "Reseed network_connections failed (non-fatal): ${it.message}" } }
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(connSql), "Reseed network_connections")
+    }.onFailure { logger.warn { "Reseed network_connections failed (non-fatal): ${it.message}" } }
 }
