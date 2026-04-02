@@ -219,124 +219,146 @@ class GrafanaTranslator : DashboardTranslator {
     /** Builds Moneat display config key/value strings from Grafana panel fieldConfig, mappings, and options. */
     private fun extractDisplayConfig(panelJson: JsonObject): Map<String, String> {
         val config = mutableMapOf<String, String>()
-
-        val fieldConfig = panelJson["fieldConfig"]?.jsonObject
-        val fieldDefaults = fieldConfig?.get("defaults")?.jsonObject
+        val fieldDefaults = panelJson["fieldConfig"]?.jsonObject?.get("defaults")?.jsonObject
         val defaults = fieldDefaults?.get("custom")?.jsonObject
-
-        // Unit and decimals from fieldConfig.defaults
-        fieldDefaults?.get("unit")?.jsonPrimitive?.contentOrNull?.let { config["unit"] = it }
-        fieldDefaults?.get("decimals")?.jsonPrimitive?.intOrNull?.let { config["decimals"] = it.toString() }
-
-        // Thresholds from fieldConfig.defaults.thresholds
-        fieldDefaults?.get("thresholds")?.jsonObject?.let { thresholds ->
-            val steps = thresholds["steps"]?.jsonArray
-            if (steps != null && steps.size > 0) {
-                val moneatThresholds = steps.mapNotNull { step ->
-                    val stepObj = step.jsonObject
-                    val valuePrim = stepObj["value"]?.jsonPrimitive
-                    val value = valuePrim?.intOrNull
-                        ?: if (valuePrim?.contentOrNull == null) 0 else return@mapNotNull null
-                    val color = stepObj["color"]?.jsonPrimitive?.contentOrNull
-                        ?: return@mapNotNull null
-                    buildJsonObject {
-                        put("value", value)
-                        put("color", color)
-                    }
-                }
-                if (moneatThresholds.isNotEmpty()) {
-                    config["thresholds"] = JsonArray(moneatThresholds).toString()
-                }
-            }
-        }
-
-        // Value mappings from fieldConfig.defaults.mappings
-        fieldDefaults?.get("mappings")?.jsonArray?.let { mappings ->
-            val moneatMappings = mappings.mapNotNull { mapping ->
-                val mapObj = mapping.jsonObject
-                val type = mapObj["type"]?.jsonPrimitive?.contentOrNull
-                when (type) {
-                    "special" -> {
-                        val opts = mapObj["options"]?.jsonObject ?: return@mapNotNull null
-                        val match = opts["match"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                        val text = opts["result"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
-                            ?: return@mapNotNull null
-                        val color = opts["result"]?.jsonObject?.get("color")?.jsonPrimitive?.contentOrNull
-                        buildJsonObject {
-                            put("value", match)
-                            put("text", text)
-                            color?.let { put("color", it) }
-                        }
-                    }
-                    "value" -> {
-                        val opts = mapObj["options"]?.jsonObject ?: return@mapNotNull null
-                        val firstEntry = opts.entries.firstOrNull() ?: return@mapNotNull null
-                        val key = firstEntry.key
-                        val entry = firstEntry.value
-                        val result = entry.jsonObject["result"]?.jsonObject ?: return@mapNotNull null
-                        val text = result["text"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                        val color = result["color"]?.jsonPrimitive?.contentOrNull
-                        buildJsonObject {
-                            put("value", key)
-                            put("text", text)
-                            color?.let { put("color", it) }
-                        }
-                    }
-                    else -> null
-                }
-            }
-            if (moneatMappings.isNotEmpty()) {
-                config["valueMappings"] = JsonArray(moneatMappings).toString()
-            }
-        }
-
-        // Draw style and line width from custom config
-        defaults?.get("drawStyle")?.jsonPrimitive?.contentOrNull?.let { config["drawStyle"] = it }
-        defaults?.get("lineWidth")?.jsonPrimitive?.intOrNull?.let { config["lineWidth"] = it.toString() }
-
-        // fillOpacity: Grafana uses 0-100 scale, Moneat uses 0-1
-        defaults?.get("fillOpacity")?.jsonPrimitive?.intOrNull?.let {
-            config["fillOpacity"] = (it / FILL_OPACITY_SCALE).toString()
-        }
-
-        // Stacking → stackMode (frontend key)
-        defaults?.get(
-            "stacking"
-        )?.jsonObject?.get("mode")?.jsonPrimitive?.contentOrNull?.let { config["stackMode"] = it }
-
-        defaults?.get(
-            "scaleDistribution"
-        )?.jsonObject?.get("type")?.jsonPrimitive?.contentOrNull?.let { config["scaleType"] = it }
-
         val options = panelJson["options"]?.jsonObject
-        val legend = options?.get("legend")?.jsonObject
-        if (legend != null) {
-            legend["placement"]?.jsonPrimitive?.contentOrNull?.let { config["legendPlacement"] = it }
-            legend["displayMode"]?.jsonPrimitive?.contentOrNull?.let { mode ->
-                config["legendMode"] = when (mode) {
-                    "hidden" -> "hidden"
-                    "table" -> "table"
-                    else -> "list"
-                }
-            }
-        }
 
-        // Gauge-specific: min/max range
-        fieldDefaults?.get("min")?.jsonPrimitive?.intOrNull?.let { config["gaugeMin"] = it.toString() }
-        fieldDefaults?.get("max")?.jsonPrimitive?.intOrNull?.let { config["gaugeMax"] = it.toString() }
-
-        // Bar gauge: orientation and display mode
-        options?.get("orientation")?.jsonPrimitive?.contentOrNull?.let {
-            config["orientation"] = it
-        }
-        options?.get("displayMode")?.jsonPrimitive?.contentOrNull?.let {
-            config["displayMode"] = it
-        }
-
-        // Extract field filters and renames from Grafana transformations
+        putFieldDefaultUnitAndDecimals(fieldDefaults, config)
+        putThresholdsFromFieldDefaults(fieldDefaults, config)
+        putValueMappingsFromFieldDefaults(fieldDefaults, config)
+        putCustomDisplayDefaults(defaults, config)
+        putLegendFromOptions(options, config)
+        putGaugeRangeAndBarGaugeOptions(fieldDefaults, options, config)
         extractGrafanaTransformations(panelJson, config)
 
         return config
+    }
+
+    private fun putFieldDefaultUnitAndDecimals(
+        fieldDefaults: JsonObject?,
+        config: MutableMap<String, String>
+    ) {
+        val unit = fieldDefaults?.get("unit")?.jsonPrimitive?.contentOrNull
+        if (unit != null) config["unit"] = unit
+        val decimals = fieldDefaults?.get("decimals")?.jsonPrimitive?.intOrNull
+        if (decimals != null) config["decimals"] = decimals.toString()
+    }
+
+    private fun putThresholdsFromFieldDefaults(
+        fieldDefaults: JsonObject?,
+        config: MutableMap<String, String>
+    ) {
+        val steps = fieldDefaults?.get("thresholds")?.jsonObject?.get("steps")?.jsonArray
+        if (steps == null || steps.isEmpty()) return
+
+        val moneatThresholds = steps.mapNotNull { step ->
+            val stepObj = step.jsonObject
+            val valuePrim = stepObj["value"]?.jsonPrimitive
+            val value = valuePrim?.intOrNull
+                ?: if (valuePrim?.contentOrNull == null) 0 else return@mapNotNull null
+            val color = stepObj["color"]?.jsonPrimitive?.contentOrNull
+                ?: return@mapNotNull null
+            buildJsonObject {
+                put("value", value)
+                put("color", color)
+            }
+        }
+        if (moneatThresholds.isNotEmpty()) {
+            config["thresholds"] = JsonArray(moneatThresholds).toString()
+        }
+    }
+
+    private fun grafanaValueMappingToJson(mapObj: JsonObject): JsonObject? {
+        val type = mapObj["type"]?.jsonPrimitive?.contentOrNull
+        return when (type) {
+            "special" -> grafanaSpecialValueMapping(mapObj)
+            "value" -> grafanaDiscreteValueMapping(mapObj)
+            else -> null
+        }
+    }
+
+    private fun grafanaSpecialValueMapping(mapObj: JsonObject): JsonObject? {
+        val opts = mapObj["options"]?.jsonObject ?: return null
+        val match = opts["match"]?.jsonPrimitive?.contentOrNull ?: return null
+        val result = opts["result"]?.jsonObject ?: return null
+        val text = result["text"]?.jsonPrimitive?.contentOrNull ?: return null
+        val color = result["color"]?.jsonPrimitive?.contentOrNull
+        return buildJsonObject {
+            put("value", match)
+            put("text", text)
+            if (color != null) put("color", color)
+        }
+    }
+
+    private fun grafanaDiscreteValueMapping(mapObj: JsonObject): JsonObject? {
+        val opts = mapObj["options"]?.jsonObject ?: return null
+        val firstEntry = opts.entries.firstOrNull() ?: return null
+        val key = firstEntry.key
+        val result = firstEntry.value.jsonObject["result"]?.jsonObject ?: return null
+        val text = result["text"]?.jsonPrimitive?.contentOrNull ?: return null
+        val color = result["color"]?.jsonPrimitive?.contentOrNull
+        return buildJsonObject {
+            put("value", key)
+            put("text", text)
+            if (color != null) put("color", color)
+        }
+    }
+
+    private fun putValueMappingsFromFieldDefaults(
+        fieldDefaults: JsonObject?,
+        config: MutableMap<String, String>
+    ) {
+        val mappings = fieldDefaults?.get("mappings")?.jsonArray ?: return
+        val moneatMappings = mappings.mapNotNull { grafanaValueMappingToJson(it.jsonObject) }
+        if (moneatMappings.isNotEmpty()) {
+            config["valueMappings"] = JsonArray(moneatMappings).toString()
+        }
+    }
+
+    private fun putCustomDisplayDefaults(defaults: JsonObject?, config: MutableMap<String, String>) {
+        val drawStyle = defaults?.get("drawStyle")?.jsonPrimitive?.contentOrNull
+        if (drawStyle != null) config["drawStyle"] = drawStyle
+
+        val lineWidth = defaults?.get("lineWidth")?.jsonPrimitive?.intOrNull
+        if (lineWidth != null) config["lineWidth"] = lineWidth.toString()
+
+        val fillOpacity = defaults?.get("fillOpacity")?.jsonPrimitive?.intOrNull
+        if (fillOpacity != null) config["fillOpacity"] = (fillOpacity / 100.0).toString()
+
+        val stackMode = defaults?.get("stacking")?.jsonObject?.get("mode")?.jsonPrimitive?.contentOrNull
+        if (stackMode != null) config["stackMode"] = stackMode
+
+        val scaleType = defaults?.get("scaleDistribution")?.jsonObject?.get("type")
+            ?.jsonPrimitive?.contentOrNull
+        if (scaleType != null) config["scaleType"] = scaleType
+    }
+
+    private fun putLegendFromOptions(options: JsonObject?, config: MutableMap<String, String>) {
+        val legend = options?.get("legend")?.jsonObject ?: return
+        val placement = legend["placement"]?.jsonPrimitive?.contentOrNull
+        if (placement != null) config["legendPlacement"] = placement
+        val mode = legend["displayMode"]?.jsonPrimitive?.contentOrNull ?: return
+        config["legendMode"] = when (mode) {
+            "hidden" -> "hidden"
+            "table" -> "table"
+            else -> "list"
+        }
+    }
+
+    private fun putGaugeRangeAndBarGaugeOptions(
+        fieldDefaults: JsonObject?,
+        options: JsonObject?,
+        config: MutableMap<String, String>
+    ) {
+        val min = fieldDefaults?.get("min")?.jsonPrimitive?.intOrNull
+        if (min != null) config["gaugeMin"] = min.toString()
+        val max = fieldDefaults?.get("max")?.jsonPrimitive?.intOrNull
+        if (max != null) config["gaugeMax"] = max.toString()
+
+        val orientation = options?.get("orientation")?.jsonPrimitive?.contentOrNull
+        if (orientation != null) config["orientation"] = orientation
+        val displayMode = options?.get("displayMode")?.jsonPrimitive?.contentOrNull
+        if (displayMode != null) config["displayMode"] = displayMode
     }
 
     /**
