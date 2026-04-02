@@ -219,15 +219,17 @@ class CloudWatchHandler : DataSourceHandler {
     private fun resolveTime(expr: String, now: Instant): Instant {
         if (expr == "now") return now
         val match = Regex("""^now-(\d+)([smhdwMy])$""").matchEntire(expr) ?: return now
-        val amount = match.groupValues[1].toLong()
+        val amount = match.groupValues[1].toLongOrNull() ?: return now
+        fun safeDays(multiplier: Long): Long? =
+            if (amount <= Long.MAX_VALUE / multiplier) amount * multiplier else null
         val offset = when (match.groupValues[2]) {
             "s" -> Duration.parse("${amount}s")
             "m" -> Duration.parse("${amount}m")
             "h" -> Duration.parse("${amount}h")
             "d" -> Duration.parse("${amount}d")
-            "w" -> Duration.parse("${amount * DAYS_PER_WEEK}d")
-            "M" -> Duration.parse("${amount * DAYS_PER_MONTH}d")
-            "y" -> Duration.parse("${amount * DAYS_PER_YEAR}d")
+            "w" -> Duration.parse("${safeDays(DAYS_PER_WEEK) ?: return now}d")
+            "M" -> Duration.parse("${safeDays(DAYS_PER_MONTH) ?: return now}d")
+            "y" -> Duration.parse("${safeDays(DAYS_PER_YEAR) ?: return now}d")
             else -> Duration.ZERO
         }
         return now - offset

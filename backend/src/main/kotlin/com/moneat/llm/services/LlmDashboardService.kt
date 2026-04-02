@@ -45,7 +45,6 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
-private const val ERROR_BODY_PREVIEW_LENGTH = 200
 private const val MILLIS_PER_SECOND = 1000.0
 private const val DATETIME64_PRECISION_MS = 3
 
@@ -72,7 +71,7 @@ class LlmDashboardService {
         if (response.status != HttpStatusCode.OK) return null
         val body = response.bodyAsText()
         if (body.isClickHouseError()) {
-            logger.warn { "ClickHouse error: ${body.take(ERROR_BODY_PREVIEW_LENGTH)}" }
+            logger.warn { "ClickHouse returned an error body (length=${body.length})" }
             return null
         }
         return body

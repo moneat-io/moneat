@@ -214,10 +214,14 @@ class RedisHandler : DataSourceHandler {
     }
 
     private fun buildRedisUri(host: String, port: Int, password: String?): String {
-        val scheme = if (host.startsWith("rediss://")) "rediss://" else "redis://"
-        val cleanHost = host.removePrefix("rediss://").removePrefix("redis://")
+        val normalized = if (host.startsWith("redis://") || host.startsWith("rediss://")) host else "redis://$host"
+        val parsed = runCatching { java.net.URI(normalized) }.getOrNull()
+        val scheme = if (normalized.startsWith("rediss://")) "rediss://" else "redis://"
+        val cleanHost = parsed?.host
+            ?: normalized.removePrefix("rediss://").removePrefix("redis://").substringBefore(':')
+        val resolvedPort = if (parsed != null && parsed.port != -1) parsed.port else port
         val auth = if (!password.isNullOrBlank()) ":$password@" else ""
-        return "$scheme$auth$cleanHost:$port"
+        return "$scheme$auth$cleanHost:$resolvedPort"
     }
 
     /**

@@ -29,7 +29,6 @@ private val aiChatResponseJson = Json { ignoreUnknownKeys = true }
 class AiChatService {
 
     companion object {
-        private const val LOG_CONTEXT_LENGTH = 50
         private const val MAX_USER_INPUT_LENGTH = 4000
         private const val MAX_HISTORY_MESSAGES = 20
     }
@@ -39,7 +38,7 @@ class AiChatService {
             operation = "chat",
             userId = userId,
             orgId = orgId,
-            context = "message=${request.message.take(LOG_CONTEXT_LENGTH)}",
+            context = "messageLength=${request.message.length}",
         )
     }
 

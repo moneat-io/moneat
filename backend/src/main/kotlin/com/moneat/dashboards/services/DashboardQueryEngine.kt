@@ -89,8 +89,6 @@ class DashboardQueryEngine {
         private const val MAX_QUERY_RESULT_LIMIT = 10000
         private const val EPOCH_MS_TO_SECONDS_DIVISOR = 1000.0
         private const val DATETIME64_MILLIS_PRECISION = 3
-        private const val QUERY_LOG_PREVIEW_CHARS = 500
-        private const val ERROR_BODY_PREVIEW_CHARS = 400
 
         fun resolveTimeInterval(from: String, to: String): String {
             val rangeMs = parseRelativeTime(to) - parseRelativeTime(from)
@@ -363,14 +361,17 @@ class DashboardQueryEngine {
         }
 
         val sql = buildQuery(dsl, projectId, demoEpochMs, retentionDays)
-        logger.debug { "Executing dashboard query: ${sql.take(QUERY_LOG_PREVIEW_CHARS)}" }
+        logger.debug {
+            "Executing dashboard query dataSource=${dsl.dataSource} " +
+                "metrics=${dsl.metrics.size} filters=${dsl.filters.size} groupBy=${dsl.groupBy.size}"
+        }
 
         return suspendRunCatching {
             val response = ClickHouseClient.execute(sql)
             val body = response.bodyAsText()
 
             if (response.isClickHouseError(body)) {
-                logger.error { "ClickHouse error: ${body.take(ERROR_BODY_PREVIEW_CHARS)}" }
+                logger.error { "ClickHouse returned an error body (length=${body.length})" }
                 return emptyList()
             }
 

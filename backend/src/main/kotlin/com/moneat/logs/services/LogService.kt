@@ -96,12 +96,12 @@ private const val MAX_LOG_CONTAINER_ID_CHARS = 128
 private const val MAX_LOG_CONTAINER_IMAGE_CHARS = 512
 private const val MAX_LOG_TRACE_ID_CHARS = 128
 private const val MAX_LOG_SPAN_ID_CHARS = 128
-private const val UNIX_SECONDS_THRESHOLD = 1_000_000_000_000L
 private const val INGEST_KEY_MAX_CHARS = 128
 private const val INGEST_VALUE_MAX_CHARS = 1024
 private const val ERROR_BODY_LONG_CHARS = 1000
 private const val MAX_LOG_CONTAINER_NAME_CHARS = 256
 private const val MS_PER_SECOND = 1000
+private const val UNIX_EPOCH_SECONDS_MAX_DIGITS = 10
 private const val SQL_LOG_FINGERPRINT_HEX_CHARS = 16
 
 private fun utf8Fingerprint(text: String, hexChars: Int = SQL_LOG_FINGERPRINT_HEX_CHARS): String {
@@ -1492,7 +1492,11 @@ class LogService(private val logRepository: LogRepository) {
         val trimmed = value.trim()
 
         trimmed.toLongOrNull()?.let { numeric ->
-            return if (numeric > UNIX_SECONDS_THRESHOLD) numeric else numeric * MS_PER_SECOND
+            // Use digit count to distinguish seconds (≤10 digits) from milliseconds (13 digits).
+            // A numeric threshold would misclassify valid pre-2001 millisecond timestamps
+            // (e.g. 946684800000 for 2000-01-01).
+            val digits = trimmed.trimStart('-')
+            return if (digits.length <= UNIX_EPOCH_SECONDS_MAX_DIGITS) numeric * MS_PER_SECOND else numeric
         }
 
         return suspendRunCatching {
