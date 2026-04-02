@@ -19,10 +19,10 @@ package com.moneat.config
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 
-/** Treat non-2xx ClickHouse HTTP responses as failures (for [com.moneat.utils.suspendRunCatching]). */
+/** Treat failed HTTP status or ClickHouse error bodies as failures (for [com.moneat.utils.suspendRunCatching]). */
 internal suspend fun requireClickHouse2xx(response: HttpResponse, context: String) {
     val body = response.bodyAsText()
-    check(response.status.value in 200..299) {
+    check(!response.isClickHouseError(body)) {
         "$context failed: HTTP ${response.status.value}: ${body.take(200)}"
     }
 }
