@@ -71,7 +71,10 @@ internal suspend fun purgeDatadogDemoData() {
         )
     for (table in tables) {
         suspendRunCatching {
-            ClickHouseClient.execute("ALTER TABLE $table DELETE WHERE organization_id = $ORG1")
+            requireClickHouse2xx(
+                ClickHouseClient.execute("ALTER TABLE $table DELETE WHERE organization_id = $ORG1"),
+                "Purge Datadog $table"
+            )
         }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
     }
     // PostgreSQL hosts
