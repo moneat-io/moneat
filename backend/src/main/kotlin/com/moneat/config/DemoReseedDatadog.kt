@@ -187,52 +187,7 @@ private suspend fun reseedDatadogProfileRows() {
     val demoProfileIds = (1..DEMO_PROFILE_COUNT).map { n ->
         "00000000-0000-4000-8000-" + n.toString().padStart(12, '0')
     }
-    val profileTypes = listOf(
-        "cpu",
-        "heap",
-        "allocs",
-        "goroutine",
-        "block",
-    )
-    val profileHosts = listOf(
-        "prod-web-01",
-        "prod-api-01",
-        "prod-worker-01",
-        "prod-web-02",
-        "prod-api-01",
-    )
-
-    val profileValues = demoProfileIds.mapIndexed { i, uuid ->
-        val svc = demoProfileServices[i % demoProfileServices.size]
-        val typ = profileTypes[i % profileTypes.size]
-        val host = profileHosts[i % profileHosts.size]
-        val storageKey = "-1/$uuid.profile.json"
-        val minutesAgo = (i * 47) % 1440
-        """(
-            toUUID('$uuid'), $ORG1,
-            '$host', '$svc', 'production', '1.3.0',
-            'go1.21', 'go', '$typ',
-            now() - INTERVAL $minutesAgo MINUTE,
-            now() - INTERVAL $minutesAgo MINUTE + INTERVAL 60 SECOND,
-            60000000000,
-            '$storageKey',
-            map('service', '$svc', 'env', 'production'),
-            ${50_000 + (i * 31_337) % 450_000},
-            'sentry'
-        )"""
-    }.joinToString(",\n")
-
-    val profilesSql = """
-        INSERT INTO profiles (
-            profile_id, organization_id, host, service,
-            env, version, runtime, language, profile_type,
-            start_time, end_time, duration_ns,
-            storage_key, tags, size_bytes, source
-        ) VALUES
-        $profileValues
-    """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(profilesSql) }
-        .onFailure { logger.warn { "Reseed profiles failed (non-fatal): ${it.message}" } }
+    ensureDemoProfileRows(demoProfileIds)
 }
 
 private suspend fun reseedDatadogInfraEvents() {
@@ -408,6 +363,4 @@ private suspend fun reseedDatadogNetworkConnections() {
         """.trimIndent()
     suspendRunCatching { ClickHouseClient.execute(connSql) }
         .onFailure { logger.warn { "Reseed network_connections failed (non-fatal): ${it.message}" } }
-
-    logger.info { "Datadog agent demo data reseed complete" }
 }
