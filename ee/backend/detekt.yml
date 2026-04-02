@@ -19,8 +19,7 @@ style:
   ThrowsCount:
     active: false
   MaxLineLength:
-    active: true
-    maxLineLength: 120
+    active: false
   UseRequire:
     active: false
   UseCheckOrError:
