@@ -19,7 +19,8 @@ style:
   ThrowsCount:
     active: false
   MaxLineLength:
-    active: false
+    active: true
+    maxLineLength: 120
   UseRequire:
     active: false
   UseCheckOrError:
@@ -75,11 +76,21 @@ exceptions:
 
 naming:
   MatchingDeclarationName:
-    active: false
+    active: true
   ConstructorParameterNaming:
     active: false
   FunctionNaming:
-    active: false
+    active: true
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
   VariableNaming:
     active: false
 
