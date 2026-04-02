@@ -152,4 +152,34 @@ class RedisHandlerParserTest {
             RedisHandler.parseCommandStats("# Commandstats\n").isEmpty()
         )
     }
+
+    @Test
+    fun `buildRedisUri brackets bare IPv6 literal`() {
+        val uri = RedisHandler.buildRedisUri("2001:db8::5", 6379, null)
+        assertEquals("redis://[2001:db8::5]:6379", uri)
+    }
+
+    @Test
+    fun `buildRedisUri accepts already-bracketed IPv6`() {
+        val uri = RedisHandler.buildRedisUri("[2001:db8::5]", 6379, null)
+        assertEquals("redis://[2001:db8::5]:6379", uri)
+    }
+
+    @Test
+    fun `buildRedisUri brackets bare IPv6 loopback`() {
+        val uri = RedisHandler.buildRedisUri("::1", 6380, "secret")
+        assertEquals("redis://:secret@[::1]:6380", uri)
+    }
+
+    @Test
+    fun `buildRedisUri leaves plain hostname unchanged`() {
+        val uri = RedisHandler.buildRedisUri("myhost", 6379, null)
+        assertEquals("redis://myhost:6379", uri)
+    }
+
+    @Test
+    fun `buildRedisUri uses port from host string when present`() {
+        val uri = RedisHandler.buildRedisUri("myhost:6380", 6379, null)
+        assertEquals("redis://myhost:6380", uri)
+    }
 }

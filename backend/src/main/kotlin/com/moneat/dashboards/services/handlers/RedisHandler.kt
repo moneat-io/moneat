@@ -213,17 +213,6 @@ class RedisHandler : DataSourceHandler {
         }
     }
 
-    private fun buildRedisUri(host: String, port: Int, password: String?): String {
-        val normalized = if (host.startsWith("redis://") || host.startsWith("rediss://")) host else "redis://$host"
-        val parsed = runCatching { java.net.URI(normalized) }.getOrNull()
-        val scheme = if (normalized.startsWith("rediss://")) "rediss://" else "redis://"
-        val cleanHost = parsed?.host
-            ?: normalized.removePrefix("rediss://").removePrefix("redis://").substringBefore(':')
-        val resolvedPort = if (parsed != null && parsed.port != -1) parsed.port else port
-        val auth = if (!password.isNullOrBlank()) ":$password@" else ""
-        return "$scheme$auth$cleanHost:$resolvedPort"
-    }
-
     /**
      * Scan Redis keys using the non-blocking SCAN command with cursor iteration.
      * Avoids [io.lettuce.core.api.sync.RedisKeyCommands.keys] which can block the server.
@@ -245,6 +234,38 @@ class RedisHandler : DataSourceHandler {
     }
 
     companion object {
+        /**
+         * Build a Lettuce-compatible Redis URI from connection parameters.
+         *
+         * Bare IPv6 literals (e.g. `2001:db8::5`) are bracketed per RFC 2732 before
+         * being passed to [java.net.URI]; otherwise the URI parser returns null for
+         * the host and the fallback truncates the address at the first colon.
+         */
+        internal fun buildRedisUri(host: String, port: Int, password: String?): String {
+            val scheme = if (host.startsWith("rediss://")) "rediss://" else "redis://"
+            val hostPart = host.removePrefix("rediss://").removePrefix("redis://")
+            // RFC 2732: IPv6 literals require brackets in the authority component.
+            // Detect bare IPv6 by multiple colons and no leading '['.
+            val bracketed = if (!hostPart.startsWith('[') && hostPart.count { it == ':' } > 1) {
+                "[$hostPart]"
+            } else {
+                hostPart
+            }
+            val normalized = "$scheme$bracketed"
+            val parsed = runCatching { java.net.URI(normalized) }.getOrNull()
+            // java.net.URI.getHost() may return IPv6 with or without brackets depending on JVM.
+            // Normalise: strip any brackets, then re-bracket only when the host contains a colon.
+            val rawHost = parsed?.host ?: run {
+                val stripped = bracketed.removePrefix("[")
+                if (stripped.contains(']')) stripped.substringBefore(']') else stripped.substringBefore(':')
+            }
+            val bareHost = rawHost.removePrefix("[").removeSuffix("]")
+            val cleanHost = if (bareHost.contains(':')) "[$bareHost]" else bareHost
+            val resolvedPort = if (parsed != null && parsed.port != -1) parsed.port else port
+            val auth = if (!password.isNullOrBlank()) ":$password@" else ""
+            return "$scheme$auth$cleanHost:$resolvedPort"
+        }
+
         private const val REDIS_DEFAULT_PORT = 6379
         private const val REDIS_SAMPLE_KEY_LIMIT = 20
         private const val REDIS_SCHEMA_KEY_LIMIT = 100
