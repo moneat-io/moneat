@@ -92,6 +92,7 @@ class EmailService {
             Session.getInstance(
                 props,
                 object : Authenticator() {
+                    /** Credentials used for authenticated SMTP submission. */
                     override fun getPasswordAuthentication(): PasswordAuthentication {
                         return PasswordAuthentication(smtpUsername, smtpPassword)
                     }
@@ -293,6 +294,7 @@ class EmailService {
         }
     }
 
+    /** Records send outcome in [EmailsSent] for the recipient's organization when resolvable. */
     private fun trackEmailSent(
         recipient: String,
         emailType: String,

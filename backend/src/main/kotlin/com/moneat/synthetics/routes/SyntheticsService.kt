@@ -526,6 +526,7 @@ class SyntheticsService(
         }
     }
 
+    /** Ensures retry count and interval are non-negative before create/update. */
     private fun validateRetryParams(retryCount: Int, retryIntervalMs: Int) {
         require(retryCount >= 0) {
             "retryCount must be non-negative, got $retryCount"
