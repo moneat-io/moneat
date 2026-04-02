@@ -251,20 +251,25 @@ class GrafanaTranslator : DashboardTranslator {
         val steps = fieldDefaults?.get("thresholds")?.jsonObject?.get("steps")?.jsonArray
         if (steps == null || steps.isEmpty()) return
 
-        val moneatThresholds = steps.mapNotNull { step ->
-            val stepObj = step.jsonObject
-            val valuePrim = stepObj["value"]?.jsonPrimitive
-            val value = valuePrim?.intOrNull
-                ?: if (valuePrim?.contentOrNull == null) 0 else return@mapNotNull null
-            val color = stepObj["color"]?.jsonPrimitive?.contentOrNull
-                ?: return@mapNotNull null
-            buildJsonObject {
-                put("value", value)
-                put("color", color)
-            }
-        }
+        val moneatThresholds = steps.mapNotNull { thresholdStepToJsonObject(it) }
         if (moneatThresholds.isNotEmpty()) {
             config["thresholds"] = JsonArray(moneatThresholds).toString()
+        }
+    }
+
+    private fun thresholdStepToJsonObject(step: JsonElement): JsonObject? {
+        val stepObj = step.jsonObject
+        val valuePrim = stepObj["value"]?.jsonPrimitive
+        val intVal = valuePrim?.intOrNull
+        val value = when {
+            intVal != null -> intVal
+            valuePrim?.contentOrNull == null -> 0
+            else -> return null
+        }
+        val color = stepObj["color"]?.jsonPrimitive?.contentOrNull ?: return null
+        return buildJsonObject {
+            put("value", value)
+            put("color", color)
         }
     }
 
@@ -379,34 +384,26 @@ class GrafanaTranslator : DashboardTranslator {
 
             when (id) {
                 "filterFieldsByName" -> applyFilterFieldsByNameTransform(opts, config)
-                "organize" -> applyOrganizeRenameTransform(opts, config)
+                "organize" -> applyOrganizeTransform(opts, config)
             }
         }
     }
 
-    private fun applyFilterFieldsByNameTransform(
-        opts: JsonObject,
-        config: MutableMap<String, String>,
-    ) {
-        val include = opts["include"]?.jsonObject
-        val names = include?.get("names")?.jsonArray
-        if (names != null && names.isNotEmpty()) {
-            config["visibleFields"] = names.joinToString(",") {
-                it.jsonPrimitive.content
-            }
-        }
+    private fun applyFilterFieldsByNameTransform(opts: JsonObject, config: MutableMap<String, String>) {
+        val names = opts["include"]?.jsonObject?.get("names")?.jsonArray
+        if (names == null || names.isEmpty()) return
+        config["visibleFields"] = names.joinToString(",") { it.jsonPrimitive.content }
     }
 
-    private fun applyOrganizeRenameTransform(
-        opts: JsonObject,
-        config: MutableMap<String, String>,
-    ) {
-        val renameByName = opts["renameByName"]?.jsonObject
-        if (renameByName == null || renameByName.isEmpty()) return
+    private fun applyOrganizeTransform(opts: JsonObject, config: MutableMap<String, String>) {
+        val renameByName = opts["renameByName"]?.jsonObject ?: return
+        if (renameByName.isEmpty()) return
+
         val renames = renameByName.entries
             .filter { it.value.jsonPrimitive.contentOrNull?.isNotEmpty() == true }
             .associate { it.key to it.value.jsonPrimitive.content }
         if (renames.isEmpty()) return
+
         config["fieldRenames"] = buildJsonObject {
             renames.forEach { (k, v) -> put(k, v) }
         }.toString()
