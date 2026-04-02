@@ -164,10 +164,14 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
         val nowClause = queryHelper.demoNowClause(demoEpochMs)
         val filterClause = queryHelper.buildTransactionFilterClause(environment, operation)
 
+        val apdexToleratedUpper = APDEX_THRESHOLD_MS * APDEX_FRUSTRATED_MULTIPLIER
         val totalQuery = """
             SELECT count() as total, avg(duration_ms) as avg_duration,
                 countIf(duration_ms <= $APDEX_THRESHOLD_MS) as satisfied,
-                countIf(duration_ms > $APDEX_THRESHOLD_MS AND duration_ms <= ${APDEX_THRESHOLD_MS * APDEX_FRUSTRATED_MULTIPLIER}) as tolerated
+                countIf(
+                    duration_ms > $APDEX_THRESHOLD_MS
+                    AND duration_ms <= $apdexToleratedUpper
+                ) as tolerated
             FROM `$clickhouseDb`.events
             WHERE $projectIdClause
                 AND event_type = 'transaction'

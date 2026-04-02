@@ -29,6 +29,7 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
@@ -446,6 +447,9 @@ fun Route.incidentProviderRoutes() {
                     call.parameters["id"]?.toIntOrNull()
                         ?: return@get call.respond(HttpStatusCode.BadRequest)
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_INCIDENT_PAGE_LIMIT
+                if (limit <= 0) {
+                    throw BadRequestException("limit must be a positive integer")
+                }
 
                 val organizationId =
                     transaction {

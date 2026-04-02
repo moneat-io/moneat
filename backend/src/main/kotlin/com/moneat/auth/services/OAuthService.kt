@@ -112,6 +112,7 @@ class OAuthService {
         private const val ORG_SLUG_SUFFIX_LENGTH = 8
         private const val ONE_HOUR_MILLIS = 3_600_000L
         private const val STATE_BYTE_LENGTH = 32
+        private val HTTP_SUCCESS_STATUS_RANGE = 200..299
     }
 
     private val githubClientId = EnvConfig.get("GITHUB_OAUTH_CLIENT_ID")
@@ -174,7 +175,7 @@ class OAuthService {
                 parameter("code", code)
             }
 
-        if (tokenResponse.status.value !in 200..299) {
+        if (tokenResponse.status.value !in HTTP_SUCCESS_STATUS_RANGE) {
             logger.error { "GitHub token exchange failed: ${tokenResponse.status}" }
             throw IllegalArgumentException("Failed to exchange code for token")
         }
@@ -191,7 +192,7 @@ class OAuthService {
                 }
             }
 
-        if (userResponse.status.value !in 200..299) {
+        if (userResponse.status.value !in HTTP_SUCCESS_STATUS_RANGE) {
             logger.error { "GitHub user fetch failed: ${userResponse.status}" }
             throw IllegalArgumentException("Failed to fetch user info")
         }
@@ -211,7 +212,7 @@ class OAuthService {
                     }
                 }
 
-            if (emailsResponse.status.value in 200..299) {
+            if (emailsResponse.status.value in HTTP_SUCCESS_STATUS_RANGE) {
                 val emails: List<GitHubEmail> = emailsResponse.body()
                 val primaryEmail =
                     emails.firstOrNull { it.primary && it.verified }

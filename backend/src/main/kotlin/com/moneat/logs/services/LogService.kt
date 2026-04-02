@@ -57,9 +57,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
+import java.security.MessageDigest
 import java.time.Instant
 import com.moneat.utils.suspendRunCatching
 import java.util.*
+import kotlin.text.Charsets
 
 private val logger = KotlinLogging.logger {}
 
@@ -100,6 +102,12 @@ private const val INGEST_VALUE_MAX_CHARS = 1024
 private const val ERROR_BODY_LONG_CHARS = 1000
 private const val MAX_LOG_CONTAINER_NAME_CHARS = 256
 private const val MS_PER_SECOND = 1000
+private const val SQL_LOG_FINGERPRINT_HEX_CHARS = 16
+
+private fun utf8Fingerprint(text: String, hexChars: Int = SQL_LOG_FINGERPRINT_HEX_CHARS): String {
+    val digest = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+    return digest.joinToString("") { b -> "%02x".format(b) }.take(hexChars)
+}
 
 class LogService(private val logRepository: LogRepository) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -344,7 +352,10 @@ class LogService(private val logRepository: LogRepository) {
                     }
                 }
             }.getOrElse { e ->
-                logger.error(e) { "Failed to parse query '${request.query}', falling back to simple search" }
+                val q = request.query.orEmpty()
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(q)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(request.query)
             }
@@ -387,8 +398,10 @@ class LogService(private val logRepository: LogRepository) {
 
         val whereClause = conditions.joinToString(" AND ")
 
-        // Log the complete WHERE clause for debugging (at DEBUG level to avoid logging user data in production)
-        logger.debug { "Executing log query with WHERE clause: $whereClause" }
+        logger.debug {
+            "Executing log query: where_fp=${utf8Fingerprint(whereClause)} " +
+                "(where_len=${whereClause.length})"
+        }
 
         val query =
             """
@@ -419,8 +432,10 @@ class LogService(private val logRepository: LogRepository) {
 
         val body = logRepository.executeClickHouseQuery(query)
         if (body.isClickHouseError()) {
-            logger.error("ClickHouse query failed. WHERE clause: $whereClause")
-            logger.error("Full query: $query")
+            logger.error(
+                "ClickHouse query failed. where_fp=${utf8Fingerprint(whereClause)} " +
+                    "query_fp=${utf8Fingerprint(query)}"
+            )
             throw IllegalStateException("Failed to query logs: ${body.take(ERROR_BODY_LONG_CHARS)}")
         }
 
@@ -544,7 +559,9 @@ class LogService(private val logRepository: LogRepository) {
                     }
                 }
             }.getOrElse { e ->
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             }
@@ -599,7 +616,7 @@ class LogService(private val logRepository: LogRepository) {
 
         logger.debug {
             "Aggregate logs SQL for org $organizationId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, " +
-                "groupBy=$validGroupBy):\n$sql"
+                "groupBy=$validGroupBy): query_fp=${utf8Fingerprint(sql)}"
         }
         val body = logRepository.executeClickHouseQuery(sql)
         logger.debug { "Aggregate logs response body (first 500 chars): ${body.take(WARN_BODY_PREVIEW_CHARS)}" }
@@ -692,7 +709,9 @@ class LogService(private val logRepository: LogRepository) {
                     }
                 }
             }.getOrElse { e ->
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             }
@@ -834,19 +853,27 @@ class LogService(private val logRepository: LogRepository) {
                     }
                 }
             } catch (e: SerializationException) {
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             } catch (e: IOException) {
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             } catch (e: IllegalArgumentException) {
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             }
@@ -888,10 +915,13 @@ class LogService(private val logRepository: LogRepository) {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        logger.debug { "Export CSV SQL: $sql" }
+        logger.debug { "Export CSV SQL: query_fp=${utf8Fingerprint(sql)}" }
         val body = logRepository.executeClickHouseQuery(sql)
         if (body.isClickHouseError()) {
-            logger.error { "ClickHouse export error. SQL: $sql\nError: ${body.take(ERROR_BODY_PREVIEW_CHARS)}" }
+            logger.error {
+                "ClickHouse export error. query_fp=${utf8Fingerprint(sql)}\n" +
+                    "Error: ${body.take(ERROR_BODY_PREVIEW_CHARS)}"
+            }
             throw IllegalStateException("Failed to export logs: ${body.take(ERROR_BODY_PREVIEW_CHARS)}")
         }
 
