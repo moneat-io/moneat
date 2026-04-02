@@ -32,8 +32,11 @@ internal suspend fun checkFreshSecurityDataCount(): Long {
     """.trimIndent()
     return suspendRunCatching {
         val response = ClickHouseClient.execute(query)
-        if (response.status.value !in 200..299) return 0
-        response.bodyAsText().trim().toLongOrNull() ?: 0L
+        if (response.status.value !in 200..299) {
+            0L
+        } else {
+            response.bodyAsText().trim().toLongOrNull() ?: 0L
+        }
     }.getOrElse {
         logger.warn { "Failed to check fresh security demo data (non-fatal): ${it.message}" }
         0L

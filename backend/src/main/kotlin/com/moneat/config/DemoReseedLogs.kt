@@ -47,7 +47,10 @@ internal suspend fun checkFreshLogsCount(): Long {
 internal suspend fun purgeLogsDemoData() {
     suspendRunCatching {
         val response = ClickHouseClient.execute(
-            "ALTER TABLE logs DELETE WHERE organization_id = $P1 OR organization_id = 0"
+            """
+            ALTER TABLE logs DELETE WHERE organization_id = $P1 OR organization_id = 0
+            SETTINGS mutations_sync = 2
+            """.trimIndent()
         )
         requireClickHouse2xx(response, "Purge logs")
     }.onFailure {
