@@ -46,8 +46,11 @@ internal suspend fun checkFreshSecurityDataCount(): Long {
 internal suspend fun purgeSecurityDemoData() {
     for (table in listOf("security_events", "compliance_findings", "security_dumps")) {
         suspendRunCatching {
-            ClickHouseClient.execute(
-                "ALTER TABLE $table DELETE WHERE organization_id IN ($P1, $P2, $P3)"
+            requireClickHouse2xx(
+                ClickHouseClient.execute(
+                    "ALTER TABLE $table DELETE WHERE organization_id IN ($P1, $P2, $P3)"
+                ),
+                "Purge $table"
             )
         }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
     }
