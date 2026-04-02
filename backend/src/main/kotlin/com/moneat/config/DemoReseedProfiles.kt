@@ -61,8 +61,11 @@ internal suspend fun ensureDemoProfileRows(profileIds: List<String>) {
 
     // Old rows exist with random IDs — purge and re-insert
     suspendRunCatching {
-        ClickHouseClient.execute(
-            "ALTER TABLE profiles DELETE WHERE organization_id = $ORG1"
+        requireClickHouse2xx(
+            ClickHouseClient.execute(
+                "ALTER TABLE profiles DELETE WHERE organization_id = $ORG1"
+            ),
+            "Purge old demo profiles"
         )
     }.onFailure {
         logger.warn { "Purge old demo profiles failed (non-fatal): ${it.message}" }
@@ -106,7 +109,9 @@ internal suspend fun ensureDemoProfileRows(profileIds: List<String>) {
         ) VALUES
         $values
     """.trimIndent()
-    suspendRunCatching { ClickHouseClient.execute(sql) }
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(sql), "Re-insert demo profiles")
+    }
         .onFailure { logger.warn { "Re-insert demo profiles failed (non-fatal): ${it.message}" } }
         .onSuccess { logger.info { "Re-inserted ${profileIds.size} demo profile rows" } }
 }
