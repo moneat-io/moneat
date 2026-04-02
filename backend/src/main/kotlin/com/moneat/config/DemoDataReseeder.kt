@@ -34,182 +34,27 @@ object DemoDataReseeder {
         if (!EnvConfig.Demo.enabled) return
 
         suspendRunCatching {
-            val freshCoreCount = checkFreshDataCount()
-            val freshLlmCount = checkFreshLlmDataCount()
-            val freshAnalyticsCount = checkFreshAnalyticsDataCount()
-            val freshLogsCount = checkFreshLogsCount()
-            val freshDatadogCount = checkFreshDatadogCount()
-            val freshK8sCount = checkFreshKubernetesDataCount()
-            val freshDbmCount = checkFreshDbmDataCount()
-            val freshDebuggerLogsCount = checkFreshDebuggerLogsCount()
-            val freshDebuggerDiagCount = checkFreshDebuggerDiagnosticsCount()
-            val freshNdmDevicesCount = checkFreshNdmDevicesCount()
-            val freshNdmTrapsCount = checkFreshNdmTrapsCount()
-            val freshNdmFlowsCount = checkFreshNdmFlowsCount()
-            val freshNetworkPathsCount = checkFreshNetworkPathsCount()
-            val freshSbomCount = checkFreshSbomDataCount()
-            val freshSecurityCount = checkFreshSecurityDataCount()
-            val freshSyntheticsCount = checkFreshSyntheticsDataCount()
-            val demoDashboardCount = countDemoDashboards()
-
-            val hasFreshCore = freshCoreCount > 0
-            val hasFreshLlm = freshLlmCount > 0
-            val hasFreshAnalytics = freshAnalyticsCount > 0
-            val hasFreshLogs = freshLogsCount > 0
-            val hasFreshDatadog = freshDatadogCount > 0
-            val hasFreshKubernetes = freshK8sCount > 0
-            val hasFreshDbm = freshDbmCount > 0
-            val hasFreshDebugger =
-                freshDebuggerLogsCount > 0 && freshDebuggerDiagCount > 0
-            val hasFreshNdm =
-                freshNdmDevicesCount > 0 && freshNdmTrapsCount > 0 &&
-                    freshNdmFlowsCount > 0 && freshNetworkPathsCount > 0
-            val hasFreshSbom = freshSbomCount > 0
-            val hasFreshInfra =
-                hasFreshKubernetes && hasFreshDbm && hasFreshDebugger &&
-                    hasFreshNdm && hasFreshSbom
-            val hasFreshSecurity = freshSecurityCount > 0
-            val hasFreshSynthetics = freshSyntheticsCount > 0
-            val hasEnoughDashboards = demoDashboardCount >= 4
-
-            if (hasFreshCore && hasFreshLlm && hasFreshAnalytics && hasFreshLogs &&
-                hasFreshDatadog && hasFreshInfra && hasFreshSecurity && hasFreshSynthetics && hasEnoughDashboards
-            ) {
-                logger.info {
-                    "Demo data looks fresh ($freshCoreCount recent core events, " +
-                        "$freshLlmCount recent LLM generations, " +
-                        "$freshAnalyticsCount recent analytics events, $freshLogsCount recent logs, " +
-                        "$freshDatadogCount recent Datadog spans, " +
-                        "infra (k8s=$freshK8sCount dbm=$freshDbmCount debugger_logs=$freshDebuggerLogsCount " +
-                        "debugger_diag=$freshDebuggerDiagCount ndm_dev=$freshNdmDevicesCount " +
-                        "ndm_traps=$freshNdmTrapsCount ndm_flows=$freshNdmFlowsCount " +
-                        "net_paths=$freshNetworkPathsCount sbom=$freshSbomCount), " +
-                        "$freshSecurityCount recent security events, $freshSyntheticsCount recent synthetics, " +
-                        "$demoDashboardCount demo dashboards), skipping reseed"
-                }
+            val snap = gatherReseedSnapshot()
+            if (snap.fullyFresh()) {
+                logSkippingReseed(snap)
                 reseedUptimeHeartbeats()
                 ensureDemoProfileFiles()
-                return
+                return@suspendRunCatching
             }
 
-            if (freshCoreCount > 0) {
-                logger.info { "Core demo data is fresh ($freshCoreCount recent events), skipping core reseed" }
-            } else {
-                logger.info { "Core demo data is stale or missing, reseeding..." }
-                purgeOldDemoData()
-                reseedEvents()
-                reseedSessions()
-                reseedReplays()
-            }
-
-            if (freshLlmCount > 0) {
-                logger.info { "LLM demo data is fresh ($freshLlmCount recent generations), skipping LLM reseed" }
-            } else {
-                logger.info { "LLM demo data is stale or missing, reseeding..." }
-                purgeLlmDemoData()
-                reseedLlmGenerations()
-            }
-
-            if (freshAnalyticsCount > 0) {
-                logger.info {
-                    "Analytics demo data is fresh ($freshAnalyticsCount recent events), skipping analytics reseed"
-                }
-            } else {
-                logger.info { "Analytics demo data is stale or missing, reseeding..." }
-                purgeAnalyticsDemoData()
-                reseedAnalyticsEvents()
-            }
-
-            if (freshLogsCount > 0) {
-                logger.info { "Log demo data is fresh ($freshLogsCount recent logs), skipping logs reseed" }
-            } else {
-                logger.info { "Log demo data is stale or missing, reseeding..." }
-                purgeLogsDemoData()
-                reseedLogs()
-            }
-
-            if (freshDatadogCount > 0) {
-                logger.info { "Datadog demo data is fresh ($freshDatadogCount recent spans), skipping Datadog reseed" }
-            } else {
-                logger.info { "Datadog demo data is stale or missing, reseeding..." }
-                purgeDatadogDemoData()
-                reseedDatadogData()
-            }
-
-            if (hasFreshKubernetes) {
-                logger.info {
-                    "Kubernetes demo data is fresh ($freshK8sCount recent rows), skipping Kubernetes reseed"
-                }
-            } else {
-                logger.info { "Kubernetes demo data is stale or missing, reseeding..." }
-                purgeKubernetesDemoData()
-                reseedKubernetesData(ORG1)
-            }
-
-            if (hasFreshDbm) {
-                logger.info { "DBM demo data is fresh ($freshDbmCount recent rows), skipping DBM reseed" }
-            } else {
-                logger.info { "DBM demo data is stale or missing, reseeding..." }
-                purgeDbmDemoData()
-                reseedDbmData(ORG1)
-            }
-
-            if (hasFreshDebugger) {
-                logger.info {
-                    "Debugger demo data is fresh ($freshDebuggerLogsCount logs, " +
-                        "$freshDebuggerDiagCount diagnostics), skipping debugger reseed"
-                }
-            } else {
-                logger.info { "Debugger demo data is stale or missing, reseeding..." }
-                purgeDebuggerDemoData()
-                reseedDebuggerData(ORG1)
-            }
-
-            if (hasFreshNdm) {
-                logger.info {
-                    "NDM demo data is fresh ($freshNdmDevicesCount devices, $freshNdmTrapsCount traps, " +
-                        "$freshNdmFlowsCount flows, $freshNetworkPathsCount paths), skipping NDM reseed"
-                }
-            } else {
-                logger.info { "NDM demo data is stale or missing, reseeding..." }
-                purgeNdmDemoData()
-                reseedNdmData(ORG1)
-            }
-
-            if (hasFreshSbom) {
-                logger.info { "SBOM demo data is fresh ($freshSbomCount recent rows), skipping SBOM reseed" }
-            } else {
-                logger.info { "SBOM demo data is stale or missing, reseeding..." }
-                purgeSbomDemoData()
-                reseedSbomData(ORG1)
-            }
-
-            if (demoDashboardCount >= 4) {
-                logger.info { "Demo dashboards are present ($demoDashboardCount), skipping dashboard reseed" }
-            } else {
-                logger.info { "Demo dashboards missing or incomplete ($demoDashboardCount found), reseeding..." }
-                seedDemoDashboards()
-            }
-
-            if (hasFreshSecurity) {
-                logger.info {
-                    "Security demo data is fresh ($freshSecurityCount recent events), skipping security reseed"
-                }
-            } else {
-                logger.info { "Security demo data is stale or missing, reseeding..." }
-                purgeSecurityDemoData()
-                reseedSecurityData()
-            }
-
-            if (hasFreshSynthetics) {
-                logger.info {
-                    "Synthetics demo data is fresh ($freshSyntheticsCount recent results), skipping synthetics reseed"
-                }
-            } else {
-                logger.info { "Synthetics demo data is stale or missing, reseeding..." }
-                purgeSyntheticsDemoData()
-                reseedSyntheticsData()
-            }
+            maybeReseedCore(snap.freshCoreCount)
+            maybeReseedLlm(snap.freshLlmCount)
+            maybeReseedAnalytics(snap.freshAnalyticsCount)
+            maybeReseedLogs(snap.freshLogsCount)
+            maybeReseedDatadog(snap.freshDatadogCount)
+            maybeReseedKubernetes(snap.freshK8sCount)
+            maybeReseedDbm(snap.freshDbmCount)
+            maybeReseedDebugger(snap.hasFreshDebugger, snap)
+            maybeReseedNdm(snap.hasFreshNdm, snap)
+            maybeReseedSbom(snap.freshSbomCount)
+            maybeReseedDashboards(snap.demoDashboardCount)
+            maybeReseedSecurity(snap.freshSecurityCount)
+            maybeReseedSynthetics(snap.freshSyntheticsCount)
 
             logger.info { "Demo data reseed complete" }
             reseedUptimeHeartbeats()
@@ -218,4 +63,232 @@ object DemoDataReseeder {
             logger.error(e) { "Demo data reseed failed (non-fatal): ${e.message}" }
         }
     }
+}
+
+private data class ReseedSnapshot(
+    val freshCoreCount: Long,
+    val freshLlmCount: Long,
+    val freshAnalyticsCount: Long,
+    val freshLogsCount: Long,
+    val freshDatadogCount: Long,
+    val freshK8sCount: Long,
+    val freshDbmCount: Long,
+    val freshDebuggerLogsCount: Long,
+    val freshDebuggerDiagCount: Long,
+    val freshNdmDevicesCount: Long,
+    val freshNdmTrapsCount: Long,
+    val freshNdmFlowsCount: Long,
+    val freshNetworkPathsCount: Long,
+    val freshSbomCount: Long,
+    val freshSecurityCount: Long,
+    val freshSyntheticsCount: Long,
+    val demoDashboardCount: Long,
+) {
+    val hasFreshDebugger: Boolean
+        get() = freshDebuggerLogsCount > 0 && freshDebuggerDiagCount > 0
+
+    val hasFreshNdm: Boolean
+        get() =
+            freshNdmDevicesCount > 0 && freshNdmTrapsCount > 0 &&
+                freshNdmFlowsCount > 0 && freshNetworkPathsCount > 0
+
+    val hasFreshInfra: Boolean
+        get() =
+            freshK8sCount > 0 && freshDbmCount > 0 && hasFreshDebugger &&
+                hasFreshNdm && freshSbomCount > 0
+
+    fun fullyFresh(): Boolean =
+        freshCoreCount > 0 &&
+            freshLlmCount > 0 &&
+            freshAnalyticsCount > 0 &&
+            freshLogsCount > 0 &&
+            freshDatadogCount > 0 &&
+            hasFreshInfra &&
+            freshSecurityCount > 0 &&
+            freshSyntheticsCount > 0 &&
+            demoDashboardCount >= 4
+}
+
+private suspend fun gatherReseedSnapshot(): ReseedSnapshot =
+    ReseedSnapshot(
+        freshCoreCount = checkFreshDataCount(),
+        freshLlmCount = checkFreshLlmDataCount(),
+        freshAnalyticsCount = checkFreshAnalyticsDataCount(),
+        freshLogsCount = checkFreshLogsCount(),
+        freshDatadogCount = checkFreshDatadogCount(),
+        freshK8sCount = checkFreshKubernetesDataCount(),
+        freshDbmCount = checkFreshDbmDataCount(),
+        freshDebuggerLogsCount = checkFreshDebuggerLogsCount(),
+        freshDebuggerDiagCount = checkFreshDebuggerDiagnosticsCount(),
+        freshNdmDevicesCount = checkFreshNdmDevicesCount(),
+        freshNdmTrapsCount = checkFreshNdmTrapsCount(),
+        freshNdmFlowsCount = checkFreshNdmFlowsCount(),
+        freshNetworkPathsCount = checkFreshNetworkPathsCount(),
+        freshSbomCount = checkFreshSbomDataCount(),
+        freshSecurityCount = checkFreshSecurityDataCount(),
+        freshSyntheticsCount = checkFreshSyntheticsDataCount(),
+        demoDashboardCount = countDemoDashboards(),
+    )
+
+private fun logSkippingReseed(s: ReseedSnapshot) {
+    logger.info {
+        "Demo data looks fresh (${s.freshCoreCount} recent core events, " +
+            "${s.freshLlmCount} recent LLM generations, " +
+            "${s.freshAnalyticsCount} recent analytics events, ${s.freshLogsCount} recent logs, " +
+            "${s.freshDatadogCount} recent Datadog spans, " +
+            "infra (k8s=${s.freshK8sCount} dbm=${s.freshDbmCount} " +
+            "debugger_logs=${s.freshDebuggerLogsCount} " +
+            "debugger_diag=${s.freshDebuggerDiagCount} ndm_dev=${s.freshNdmDevicesCount} " +
+            "ndm_traps=${s.freshNdmTrapsCount} ndm_flows=${s.freshNdmFlowsCount} " +
+            "net_paths=${s.freshNetworkPathsCount} sbom=${s.freshSbomCount}), " +
+            "${s.freshSecurityCount} recent security events, ${s.freshSyntheticsCount} recent synthetics, " +
+            "${s.demoDashboardCount} demo dashboards), skipping reseed"
+    }
+}
+
+private suspend fun maybeReseedCore(freshCoreCount: Long) {
+    if (freshCoreCount > 0) {
+        logger.info { "Core demo data is fresh ($freshCoreCount recent events), skipping core reseed" }
+        return
+    }
+    logger.info { "Core demo data is stale or missing, reseeding..." }
+    purgeOldDemoData()
+    reseedEvents()
+    reseedSessions()
+    reseedReplays()
+}
+
+private suspend fun maybeReseedLlm(freshLlmCount: Long) {
+    if (freshLlmCount > 0) {
+        logger.info { "LLM demo data is fresh ($freshLlmCount recent generations), skipping LLM reseed" }
+        return
+    }
+    logger.info { "LLM demo data is stale or missing, reseeding..." }
+    purgeLlmDemoData()
+    reseedLlmGenerations()
+}
+
+private suspend fun maybeReseedAnalytics(freshAnalyticsCount: Long) {
+    if (freshAnalyticsCount > 0) {
+        logger.info {
+            "Analytics demo data is fresh ($freshAnalyticsCount recent events), skipping analytics reseed"
+        }
+        return
+    }
+    logger.info { "Analytics demo data is stale or missing, reseeding..." }
+    purgeAnalyticsDemoData()
+    reseedAnalyticsEvents()
+}
+
+private suspend fun maybeReseedLogs(freshLogsCount: Long) {
+    if (freshLogsCount > 0) {
+        logger.info { "Log demo data is fresh ($freshLogsCount recent logs), skipping logs reseed" }
+        return
+    }
+    logger.info { "Log demo data is stale or missing, reseeding..." }
+    purgeLogsDemoData()
+    reseedLogs()
+}
+
+private suspend fun maybeReseedDatadog(freshDatadogCount: Long) {
+    if (freshDatadogCount > 0) {
+        logger.info { "Datadog demo data is fresh ($freshDatadogCount recent spans), skipping Datadog reseed" }
+        return
+    }
+    logger.info { "Datadog demo data is stale or missing, reseeding..." }
+    purgeDatadogDemoData()
+    reseedDatadogData()
+}
+
+private suspend fun maybeReseedKubernetes(freshK8sCount: Long) {
+    if (freshK8sCount > 0) {
+        logger.info {
+            "Kubernetes demo data is fresh ($freshK8sCount recent rows), skipping Kubernetes reseed"
+        }
+        return
+    }
+    logger.info { "Kubernetes demo data is stale or missing, reseeding..." }
+    purgeKubernetesDemoData()
+    reseedKubernetesData(ORG1)
+}
+
+private suspend fun maybeReseedDbm(freshDbmCount: Long) {
+    if (freshDbmCount > 0) {
+        logger.info { "DBM demo data is fresh ($freshDbmCount recent rows), skipping DBM reseed" }
+        return
+    }
+    logger.info { "DBM demo data is stale or missing, reseeding..." }
+    purgeDbmDemoData()
+    reseedDbmData(ORG1)
+}
+
+private suspend fun maybeReseedDebugger(hasFreshDebugger: Boolean, s: ReseedSnapshot) {
+    if (hasFreshDebugger) {
+        logger.info {
+            "Debugger demo data is fresh (${s.freshDebuggerLogsCount} logs, " +
+                "${s.freshDebuggerDiagCount} diagnostics), skipping debugger reseed"
+        }
+        return
+    }
+    logger.info { "Debugger demo data is stale or missing, reseeding..." }
+    purgeDebuggerDemoData()
+    reseedDebuggerData(ORG1)
+}
+
+private suspend fun maybeReseedNdm(hasFreshNdm: Boolean, s: ReseedSnapshot) {
+    if (hasFreshNdm) {
+        logger.info {
+            "NDM demo data is fresh (${s.freshNdmDevicesCount} devices, ${s.freshNdmTrapsCount} traps, " +
+                "${s.freshNdmFlowsCount} flows, ${s.freshNetworkPathsCount} paths), skipping NDM reseed"
+        }
+        return
+    }
+    logger.info { "NDM demo data is stale or missing, reseeding..." }
+    purgeNdmDemoData()
+    reseedNdmData(ORG1)
+}
+
+private suspend fun maybeReseedSbom(freshSbomCount: Long) {
+    if (freshSbomCount > 0) {
+        logger.info { "SBOM demo data is fresh ($freshSbomCount recent rows), skipping SBOM reseed" }
+        return
+    }
+    logger.info { "SBOM demo data is stale or missing, reseeding..." }
+    purgeSbomDemoData()
+    reseedSbomData(ORG1)
+}
+
+private suspend fun maybeReseedDashboards(demoDashboardCount: Long) {
+    if (demoDashboardCount >= 4) {
+        logger.info { "Demo dashboards are present ($demoDashboardCount), skipping dashboard reseed" }
+        return
+    }
+    logger.info {
+        "Demo dashboards missing or incomplete ($demoDashboardCount found), reseeding..."
+    }
+    seedDemoDashboards()
+}
+
+private suspend fun maybeReseedSecurity(freshSecurityCount: Long) {
+    if (freshSecurityCount > 0) {
+        logger.info {
+            "Security demo data is fresh ($freshSecurityCount recent events), skipping security reseed"
+        }
+        return
+    }
+    logger.info { "Security demo data is stale or missing, reseeding..." }
+    purgeSecurityDemoData()
+    reseedSecurityData()
+}
+
+private suspend fun maybeReseedSynthetics(freshSyntheticsCount: Long) {
+    if (freshSyntheticsCount > 0) {
+        logger.info {
+            "Synthetics demo data is fresh ($freshSyntheticsCount recent results), skipping synthetics reseed"
+        }
+        return
+    }
+    logger.info { "Synthetics demo data is stale or missing, reseeding..." }
+    purgeSyntheticsDemoData()
+    reseedSyntheticsData()
 }

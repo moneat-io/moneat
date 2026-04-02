@@ -21,6 +21,10 @@ style:
   MaxLineLength:
     active: true
     maxLineLength: 120
+    # Demo seed data: long literals are intentional.
+    excludes:
+      - '**/com/moneat/config/DemoReseedCore.kt'
+      - '**/com/moneat/config/DemoReseedDatadog.kt'
   UseRequire:
     active: false
   UseCheckOrError:
@@ -112,3 +116,7 @@ potential-bugs:
 formatting:
   ImportOrdering:
     active: false
+  # ktlint line-length; demo seed strings in DemoReseedCore exceed 120 chars by design.
+  MaximumLineLength:
+    excludes:
+      - '**/com/moneat/config/DemoReseedCore.kt'

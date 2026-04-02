@@ -23,10 +23,18 @@ import java.io.File
 
 private val logger = KotlinLogging.logger {}
 
+private const val DEMO_PROFILE_SVC_API_GATEWAY = "api-gateway"
+private const val PROFILE_FRAME_ENCODING_JSON_MARSHAL = "encoding/json.Marshal"
+private const val PROFILE_FRAME_GORILLA_MUX_SERVE_HTTP = "github.com/gorilla/mux.ServeHTTP"
+private const val PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP = "net/http.serverHandler.ServeHTTP"
+private const val PROFILE_FRAME_NET_HTTP_CONN_SERVE = "net/http.(*conn).serve"
+private const val PROFILE_FRAME_RUNTIME_GOEXIT = "runtime.goexit"
+private const val PROFILE_FRAME_ORDER_PLACE_ORDER = "github.com/acme/order-service/handlers.PlaceOrder"
+
 // ── Demo Profile Flamegraph Files ────────────────────────────────────────
 
 internal val demoProfileServices = listOf(
-    "api-gateway",
+    DEMO_PROFILE_SVC_API_GATEWAY,
     "user-service",
     "order-service",
     "product-service",
@@ -184,7 +192,7 @@ private fun buildProfileSamplesJson(sampleCount: Int, stackCount: Int): String =
     }
 
 internal fun buildSentryProfile(service: String, seed: Int): String {
-    val stacks = SERVICE_STACKS[service] ?: SERVICE_STACKS["api-gateway"]!!
+    val stacks = SERVICE_STACKS[service] ?: SERVICE_STACKS[DEMO_PROFILE_SVC_API_GATEWAY]!!
     val frames = stacks.flatMap { it }.distinct()
     val frameIndex = frames.withIndex().associate { (i, name) -> name to i }
     val stackIndices = stacks.map { stack -> stack.map { frameIndex[it]!! } }
@@ -207,45 +215,45 @@ internal fun buildSentryProfile(service: String, seed: Int): String {
 // Realistic Go call stacks per service (leaf-first order).
 // Each inner list is one stack: [leaf, ..., root].
 private val SERVICE_STACKS = mapOf(
-    "api-gateway" to listOf(
+    DEMO_PROFILE_SVC_API_GATEWAY to listOf(
         listOf(
-            "encoding/json.Marshal",
+            PROFILE_FRAME_ENCODING_JSON_MARSHAL,
             "github.com/acme/api-gateway/handlers.handleListProducts",
-            "github.com/gorilla/mux.ServeHTTP",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_GORILLA_MUX_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "github.com/acme/api-gateway/middleware.validateJWT",
             "github.com/acme/api-gateway/middleware.AuthMiddleware",
-            "github.com/gorilla/mux.ServeHTTP",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_GORILLA_MUX_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "io.ReadAll",
             "net/http.(*Request).ParseForm",
             "github.com/acme/api-gateway/handlers.handleCheckout",
-            "github.com/gorilla/mux.ServeHTTP",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_GORILLA_MUX_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "compress/gzip.(*Writer).Write",
             "github.com/acme/api-gateway/middleware.GzipResponseWriter.Write",
             "github.com/acme/api-gateway/handlers.handleSearch",
-            "github.com/gorilla/mux.ServeHTTP",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_GORILLA_MUX_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "crypto/tls.(*Conn).Read",
             "net/http.(*persistConn).readLoop",
-            "runtime.goexit"
+            PROFILE_FRAME_RUNTIME_GOEXIT
         )
     ),
     "user-service" to listOf(
@@ -253,64 +261,64 @@ private val SERVICE_STACKS = mapOf(
             "database/sql.(*DB).QueryRow",
             "github.com/acme/user-service/repo.(*UserRepo).FindByID",
             "github.com/acme/user-service/handlers.GetUser",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "golang.org/x/crypto/bcrypt.GenerateFromPassword",
             "github.com/acme/user-service/handlers.CreateUser",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "github.com/go-redis/redis.(*Client).Get",
             "github.com/acme/user-service/cache.GetUserSession",
             "github.com/acme/user-service/handlers.GetUser",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
-            "encoding/json.Marshal",
+            PROFILE_FRAME_ENCODING_JSON_MARSHAL,
             "github.com/acme/user-service/handlers.ListUsers",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         )
     ),
     "order-service" to listOf(
         listOf(
             "database/sql.(*Tx).Exec",
             "github.com/acme/order-service/repo.(*OrderRepo).Create",
-            "github.com/acme/order-service/handlers.PlaceOrder",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_ORDER_PLACE_ORDER,
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "net/http.(*Client).Do",
             "github.com/acme/order-service/client.(*PaymentClient).Charge",
-            "github.com/acme/order-service/handlers.PlaceOrder",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_ORDER_PLACE_ORDER,
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "github.com/acme/order-service/events.(*Publisher).Emit",
-            "github.com/acme/order-service/handlers.PlaceOrder",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_ORDER_PLACE_ORDER,
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "database/sql.(*DB).QueryRow",
             "github.com/acme/order-service/repo.(*OrderRepo).GetByID",
             "github.com/acme/order-service/handlers.GetOrder",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         )
     ),
     "product-service" to listOf(
@@ -318,32 +326,32 @@ private val SERVICE_STACKS = mapOf(
             "github.com/go-redis/redis.(*Client).Get",
             "github.com/acme/product-service/cache.GetProduct",
             "github.com/acme/product-service/handlers.GetProduct",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "github.com/olivere/elastic.(*SearchService).Do",
             "github.com/acme/product-service/search.Query",
             "github.com/acme/product-service/handlers.SearchProducts",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "database/sql.(*DB).Query",
             "github.com/acme/product-service/repo.(*ProductRepo).ListByCategory",
             "github.com/acme/product-service/handlers.ListProducts",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
-            "encoding/json.Marshal",
+            PROFILE_FRAME_ENCODING_JSON_MARSHAL,
             "github.com/acme/product-service/handlers.GetProduct",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         )
     ),
     "inventory-service" to listOf(
@@ -351,31 +359,31 @@ private val SERVICE_STACKS = mapOf(
             "sync.(*Mutex).Lock",
             "github.com/acme/inventory-service/stock.(*Manager).Reserve",
             "github.com/acme/inventory-service/handlers.ReserveStock",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "database/sql.(*Tx).Exec",
             "github.com/acme/inventory-service/repo.(*StockRepo).Decrement",
             "github.com/acme/inventory-service/stock.(*Manager).Reserve",
             "github.com/acme/inventory-service/handlers.ReserveStock",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "database/sql.(*DB).Query",
             "github.com/acme/inventory-service/repo.(*StockRepo).GetLevels",
             "github.com/acme/inventory-service/handlers.GetInventory",
-            "net/http.serverHandler.ServeHTTP",
-            "net/http.(*conn).serve",
-            "runtime.goexit"
+            PROFILE_FRAME_NET_HTTP_SERVER_HANDLER_SERVE_HTTP,
+            PROFILE_FRAME_NET_HTTP_CONN_SERVE,
+            PROFILE_FRAME_RUNTIME_GOEXIT
         ),
         listOf(
             "github.com/acme/inventory-service/events.(*Consumer).Process",
             "github.com/acme/inventory-service/worker.Run",
-            "runtime.goexit"
+            PROFILE_FRAME_RUNTIME_GOEXIT
         )
     )
 )

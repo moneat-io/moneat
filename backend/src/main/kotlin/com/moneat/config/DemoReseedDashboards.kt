@@ -40,6 +40,16 @@ import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
+/** Default time bucket for demo dashboard time-series widgets (Sonar: deduplicate literal). */
+private const val DEMO_DASHBOARD_TIME_BUCKET = "1 HOUR"
+
+internal data class DemoWidgetGrid(
+    val x: Int,
+    val y: Int,
+    val w: Int,
+    val h: Int,
+)
+
 internal fun countDemoDashboards(): Long =
     runCatching {
         transaction {
@@ -109,23 +119,20 @@ internal fun insertWidget(
     dashId: Long,
     title: String,
     type: String,
-    x: Int,
-    y: Int,
-    w: Int,
-    h: Int,
+    grid: DemoWidgetGrid,
     queries: List<QueryDsl>,
     display: Map<String, String> = emptyMap(),
-    order: Int = 0
+    order: Int = 0,
 ) {
     val now = Clock.System.now()
     DashboardWidgets.insert {
         it[dashboardId] = dashId
         it[DashboardWidgets.title] = title
         it[widgetType] = type
-        it[gridX] = x
-        it[gridY] = y
-        it[gridW] = w
-        it[gridH] = h
+        it[gridX] = grid.x
+        it[gridY] = grid.y
+        it[gridW] = grid.w
+        it[gridH] = grid.h
         it[queryConfig] = if (queries.isNotEmpty()) json.encodeToString(queries.first()) else "{}"
         it[queryConfigs] = json.encodeToString(queries)
         it[displayConfig] = if (display.isEmpty()) "{}" else json.encodeToString(display)
@@ -147,18 +154,28 @@ internal fun seedErrorOverviewDashboard() {
     var row = 0
 
     // Section: Error Trends
-    insertWidget(id, "Error Trends", "section", 0, row, 12, 1, emptyList(), order = 0)
+    insertWidget(
+        id,
+        "Error Trends",
+        "section",
+        DemoWidgetGrid(0, row, 12, 1),
+        emptyList(),
+        order = 0,
+    )
     row += 1
 
     // Errors over time by platform
     insertWidget(
-        id, "Errors Over Time", "timeseries", 0, row, 8, 4,
+        id,
+        "Errors Over Time",
+        "timeseries",
+        DemoWidgetGrid(0, row, 8, 4),
         listOf(
             QueryDsl(
                 dataSource = "events",
                 metrics = listOf(MetricDef(AggFunction.COUNT, alias = "errors")),
                 groupBy = listOf(
-                    GroupByDef("timestamp", GroupByType.TIME, "1 HOUR"),
+                    GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET),
                     GroupByDef("platform", GroupByType.FIELD)
                 ),
                 filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
@@ -166,12 +183,15 @@ internal fun seedErrorOverviewDashboard() {
                 limit = 1000
             )
         ),
-        order = 1
+        order = 1,
     )
 
     // Total errors stat
     insertWidget(
-        id, "Total Errors", "stat", 8, row, 2, 2,
+        id,
+        "Total Errors",
+        "stat",
+        DemoWidgetGrid(8, row, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "events",
@@ -180,12 +200,15 @@ internal fun seedErrorOverviewDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 2
+        order = 2,
     )
 
     // Unique affected users stat
     insertWidget(
-        id, "Affected Users", "stat", 10, row, 2, 2,
+        id,
+        "Affected Users",
+        "stat",
+        DemoWidgetGrid(10, row, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "events",
@@ -194,12 +217,15 @@ internal fun seedErrorOverviewDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 3
+        order = 3,
     )
 
     // Top error types bar
     insertWidget(
-        id, "Top Error Types", "bar", 8, row + 2, 4, 2,
+        id,
+        "Top Error Types",
+        "bar",
+        DemoWidgetGrid(8, row + 2, 4, 2),
         listOf(
             QueryDsl(
                 dataSource = "events",
@@ -211,17 +237,27 @@ internal fun seedErrorOverviewDashboard() {
                 limit = 5
             )
         ),
-        order = 4
+        order = 4,
     )
     row += 4
 
     // Section: Error Details
-    insertWidget(id, "Error Details", "section", 0, row, 12, 1, emptyList(), order = 5)
+    insertWidget(
+        id,
+        "Error Details",
+        "section",
+        DemoWidgetGrid(0, row, 12, 1),
+        emptyList(),
+        order = 5,
+    )
     row += 1
 
     // Recent errors table
     insertWidget(
-        id, "Recent Errors", "table", 0, row, 8, 4,
+        id,
+        "Recent Errors",
+        "table",
+        DemoWidgetGrid(0, row, 8, 4),
         listOf(
             QueryDsl(
                 dataSource = "events",
@@ -236,12 +272,15 @@ internal fun seedErrorOverviewDashboard() {
                 limit = 20
             )
         ),
-        order = 6
+        order = 6,
     )
 
     // Errors by platform donut
     insertWidget(
-        id, "Errors by Platform", "donut", 8, row, 4, 4,
+        id,
+        "Errors by Platform",
+        "donut",
+        DemoWidgetGrid(8, row, 4, 4),
         listOf(
             QueryDsl(
                 dataSource = "events",
@@ -251,7 +290,7 @@ internal fun seedErrorOverviewDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 7
+        order = 7,
     )
 }
 
@@ -265,28 +304,41 @@ internal fun seedPerformanceDashboard() {
     var row = 0
 
     // Section: Transactions
-    insertWidget(id, "Transactions", "section", 0, row, 12, 1, emptyList(), order = 0)
+    insertWidget(
+        id,
+        "Transactions",
+        "section",
+        DemoWidgetGrid(0, row, 12, 1),
+        emptyList(),
+        order = 0,
+    )
     row += 1
 
     // Transaction count over time
     insertWidget(
-        id, "Transactions Over Time", "timeseries", 0, row, 8, 4,
+        id,
+        "Transactions Over Time",
+        "timeseries",
+        DemoWidgetGrid(0, row, 8, 4),
         listOf(
             QueryDsl(
                 dataSource = "events",
                 metrics = listOf(MetricDef(AggFunction.COUNT, alias = "transactions")),
-                groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "1 HOUR")),
+                groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET)),
                 filters = listOf(FilterDef("event_type", FilterOp.EQ, "transaction")),
                 timeRange = defaultTimeRange,
                 limit = 1000
             )
         ),
-        order = 1
+        order = 1,
     )
 
     // Transaction count stat
     insertWidget(
-        id, "Total Transactions", "stat", 8, row, 2, 2,
+        id,
+        "Total Transactions",
+        "stat",
+        DemoWidgetGrid(8, row, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "events",
@@ -295,12 +347,15 @@ internal fun seedPerformanceDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 2
+        order = 2,
     )
 
     // Unique transaction users
     insertWidget(
-        id, "Unique Users", "stat", 10, row, 2, 2,
+        id,
+        "Unique Users",
+        "stat",
+        DemoWidgetGrid(10, row, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "events",
@@ -309,12 +364,15 @@ internal fun seedPerformanceDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 3
+        order = 3,
     )
 
     // Transactions by platform
     insertWidget(
-        id, "Transactions by Platform", "bar", 8, row + 2, 4, 2,
+        id,
+        "Transactions by Platform",
+        "bar",
+        DemoWidgetGrid(8, row + 2, 4, 2),
         listOf(
             QueryDsl(
                 dataSource = "events",
@@ -324,32 +382,45 @@ internal fun seedPerformanceDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 4
+        order = 4,
     )
     row += 4
 
     // Section: Sessions
-    insertWidget(id, "Sessions", "section", 0, row, 12, 1, emptyList(), order = 5)
+    insertWidget(
+        id,
+        "Sessions",
+        "section",
+        DemoWidgetGrid(0, row, 12, 1),
+        emptyList(),
+        order = 5,
+    )
     row += 1
 
     // Sessions over time
     insertWidget(
-        id, "Sessions Over Time", "timeseries", 0, row, 6, 4,
+        id,
+        "Sessions Over Time",
+        "timeseries",
+        DemoWidgetGrid(0, row, 6, 4),
         listOf(
             QueryDsl(
                 dataSource = "sessions",
                 metrics = listOf(MetricDef(AggFunction.COUNT, alias = "sessions")),
-                groupBy = listOf(GroupByDef("started", GroupByType.TIME, "1 HOUR")),
+                groupBy = listOf(GroupByDef("started", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET)),
                 timeRange = defaultTimeRange,
                 limit = 1000
             )
         ),
-        order = 6
+        order = 6,
     )
 
     // Total sessions stat
     insertWidget(
-        id, "Total Sessions", "stat", 6, row, 3, 2,
+        id,
+        "Total Sessions",
+        "stat",
+        DemoWidgetGrid(6, row, 3, 2),
         listOf(
             QueryDsl(
                 dataSource = "sessions",
@@ -357,12 +428,15 @@ internal fun seedPerformanceDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 7
+        order = 7,
     )
 
     // Unique session users
     insertWidget(
-        id, "Unique Session Users", "stat", 9, row, 3, 2,
+        id,
+        "Unique Session Users",
+        "stat",
+        DemoWidgetGrid(9, row, 3, 2),
         listOf(
             QueryDsl(
                 dataSource = "sessions",
@@ -370,7 +444,7 @@ internal fun seedPerformanceDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 8
+        order = 8,
     )
 }
 
@@ -384,27 +458,40 @@ internal fun seedLlmMonitoringDashboard() {
     var row = 0
 
     // Section: Usage Overview
-    insertWidget(id, "Usage Overview", "section", 0, row, 12, 1, emptyList(), order = 0)
+    insertWidget(
+        id,
+        "Usage Overview",
+        "section",
+        DemoWidgetGrid(0, row, 12, 1),
+        emptyList(),
+        order = 0,
+    )
     row += 1
 
     // Generations over time
     insertWidget(
-        id, "Generations Over Time", "timeseries", 0, row, 6, 4,
+        id,
+        "Generations Over Time",
+        "timeseries",
+        DemoWidgetGrid(0, row, 6, 4),
         listOf(
             QueryDsl(
                 dataSource = "llm_generations",
                 metrics = listOf(MetricDef(AggFunction.COUNT, alias = "generations")),
-                groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "1 HOUR")),
+                groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET)),
                 timeRange = defaultTimeRange,
                 limit = 1000
             )
         ),
-        order = 1
+        order = 1,
     )
 
     // Total generations stat
     insertWidget(
-        id, "Total Generations", "stat", 6, row, 2, 2,
+        id,
+        "Total Generations",
+        "stat",
+        DemoWidgetGrid(6, row, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "llm_generations",
@@ -412,12 +499,15 @@ internal fun seedLlmMonitoringDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 2
+        order = 2,
     )
 
     // Total tokens stat
     insertWidget(
-        id, "Total Tokens", "stat", 8, row, 2, 2,
+        id,
+        "Total Tokens",
+        "stat",
+        DemoWidgetGrid(8, row, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "llm_generations",
@@ -425,12 +515,15 @@ internal fun seedLlmMonitoringDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 3
+        order = 3,
     )
 
     // Total cost stat
     insertWidget(
-        id, "Total Cost", "stat", 10, row, 2, 2,
+        id,
+        "Total Cost",
+        "stat",
+        DemoWidgetGrid(10, row, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "llm_generations",
@@ -439,12 +532,15 @@ internal fun seedLlmMonitoringDashboard() {
             )
         ),
         mapOf("unit" to "currency_usd"),
-        order = 4
+        order = 4,
     )
 
     // Avg latency stat
     insertWidget(
-        id, "Avg Latency", "stat", 6, row + 2, 2, 2,
+        id,
+        "Avg Latency",
+        "stat",
+        DemoWidgetGrid(6, row + 2, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "llm_generations",
@@ -453,12 +549,15 @@ internal fun seedLlmMonitoringDashboard() {
             )
         ),
         mapOf("unit" to "ms"),
-        order = 5
+        order = 5,
     )
 
     // P95 latency stat
     insertWidget(
-        id, "P95 Latency", "stat", 8, row + 2, 2, 2,
+        id,
+        "P95 Latency",
+        "stat",
+        DemoWidgetGrid(8, row + 2, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "llm_generations",
@@ -467,12 +566,15 @@ internal fun seedLlmMonitoringDashboard() {
             )
         ),
         mapOf("unit" to "ms"),
-        order = 6
+        order = 6,
     )
 
     // Error rate stat
     insertWidget(
-        id, "Error Generations", "stat", 10, row + 2, 2, 2,
+        id,
+        "Error Generations",
+        "stat",
+        DemoWidgetGrid(10, row + 2, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "llm_generations",
@@ -481,17 +583,27 @@ internal fun seedLlmMonitoringDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 7
+        order = 7,
     )
     row += 4
 
     // Section: Model Breakdown
-    insertWidget(id, "Model Breakdown", "section", 0, row, 12, 1, emptyList(), order = 8)
+    insertWidget(
+        id,
+        "Model Breakdown",
+        "section",
+        DemoWidgetGrid(0, row, 12, 1),
+        emptyList(),
+        order = 8,
+    )
     row += 1
 
     // Generations by model
     insertWidget(
-        id, "Generations by Model", "bar", 0, row, 4, 4,
+        id,
+        "Generations by Model",
+        "bar",
+        DemoWidgetGrid(0, row, 4, 4),
         listOf(
             QueryDsl(
                 dataSource = "llm_generations",
@@ -502,12 +614,15 @@ internal fun seedLlmMonitoringDashboard() {
                 limit = 10
             )
         ),
-        order = 9
+        order = 9,
     )
 
     // Avg latency by model
     insertWidget(
-        id, "Avg Latency by Model", "bar", 4, row, 4, 4,
+        id,
+        "Avg Latency by Model",
+        "bar",
+        DemoWidgetGrid(4, row, 4, 4),
         listOf(
             QueryDsl(
                 dataSource = "llm_generations",
@@ -519,12 +634,15 @@ internal fun seedLlmMonitoringDashboard() {
             )
         ),
         mapOf("unit" to "ms"),
-        order = 10
+        order = 10,
     )
 
     // Generations by provider donut
     insertWidget(
-        id, "Generations by Provider", "donut", 8, row, 4, 4,
+        id,
+        "Generations by Provider",
+        "donut",
+        DemoWidgetGrid(8, row, 4, 4),
         listOf(
             QueryDsl(
                 dataSource = "llm_generations",
@@ -533,7 +651,7 @@ internal fun seedLlmMonitoringDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 11
+        order = 11,
     )
 }
 
@@ -547,28 +665,41 @@ internal fun seedWebAnalyticsDashboard() {
     var row = 0
 
     // Section: Traffic Overview
-    insertWidget(id, "Traffic Overview", "section", 0, row, 12, 1, emptyList(), order = 0)
+    insertWidget(
+        id,
+        "Traffic Overview",
+        "section",
+        DemoWidgetGrid(0, row, 12, 1),
+        emptyList(),
+        order = 0,
+    )
     row += 1
 
     // Pageviews over time
     insertWidget(
-        id, "Pageviews Over Time", "timeseries", 0, row, 8, 4,
+        id,
+        "Pageviews Over Time",
+        "timeseries",
+        DemoWidgetGrid(0, row, 8, 4),
         listOf(
             QueryDsl(
                 dataSource = "analytics_events",
                 metrics = listOf(MetricDef(AggFunction.COUNT, alias = "pageviews")),
-                groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "1 HOUR")),
+                groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET)),
                 filters = listOf(FilterDef("event_name", FilterOp.EQ, "pageview")),
                 timeRange = defaultTimeRange,
                 limit = 1000
             )
         ),
-        order = 1
+        order = 1,
     )
 
     // Total pageviews stat
     insertWidget(
-        id, "Total Pageviews", "stat", 8, row, 2, 2,
+        id,
+        "Total Pageviews",
+        "stat",
+        DemoWidgetGrid(8, row, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "analytics_events",
@@ -577,12 +708,15 @@ internal fun seedWebAnalyticsDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 2
+        order = 2,
     )
 
     // Unique sessions stat
     insertWidget(
-        id, "Unique Sessions", "stat", 10, row, 2, 2,
+        id,
+        "Unique Sessions",
+        "stat",
+        DemoWidgetGrid(10, row, 2, 2),
         listOf(
             QueryDsl(
                 dataSource = "analytics_events",
@@ -590,12 +724,15 @@ internal fun seedWebAnalyticsDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 3
+        order = 3,
     )
 
     // Events by type bar
     insertWidget(
-        id, "Events by Type", "bar", 8, row + 2, 4, 2,
+        id,
+        "Events by Type",
+        "bar",
+        DemoWidgetGrid(8, row + 2, 4, 2),
         listOf(
             QueryDsl(
                 dataSource = "analytics_events",
@@ -606,17 +743,27 @@ internal fun seedWebAnalyticsDashboard() {
                 limit = 10
             )
         ),
-        order = 4
+        order = 4,
     )
     row += 4
 
     // Section: Breakdown
-    insertWidget(id, "Breakdown", "section", 0, row, 12, 1, emptyList(), order = 5)
+    insertWidget(
+        id,
+        "Breakdown",
+        "section",
+        DemoWidgetGrid(0, row, 12, 1),
+        emptyList(),
+        order = 5,
+    )
     row += 1
 
     // Top pages bar
     insertWidget(
-        id, "Top Pages", "bar", 0, row, 6, 4,
+        id,
+        "Top Pages",
+        "bar",
+        DemoWidgetGrid(0, row, 6, 4),
         listOf(
             QueryDsl(
                 dataSource = "analytics_events",
@@ -628,12 +775,15 @@ internal fun seedWebAnalyticsDashboard() {
                 limit = 10
             )
         ),
-        order = 6
+        order = 6,
     )
 
     // Traffic by country donut
     insertWidget(
-        id, "Traffic by Country", "donut", 6, row, 3, 4,
+        id,
+        "Traffic by Country",
+        "donut",
+        DemoWidgetGrid(6, row, 3, 4),
         listOf(
             QueryDsl(
                 dataSource = "analytics_events",
@@ -644,12 +794,15 @@ internal fun seedWebAnalyticsDashboard() {
                 limit = 10
             )
         ),
-        order = 7
+        order = 7,
     )
 
     // Traffic by device type donut
     insertWidget(
-        id, "Traffic by Device", "donut", 9, row, 3, 4,
+        id,
+        "Traffic by Device",
+        "donut",
+        DemoWidgetGrid(9, row, 3, 4),
         listOf(
             QueryDsl(
                 dataSource = "analytics_events",
@@ -658,13 +811,16 @@ internal fun seedWebAnalyticsDashboard() {
                 timeRange = defaultTimeRange
             )
         ),
-        order = 8
+        order = 8,
     )
     row += 4
 
     // Traffic by browser bar
     insertWidget(
-        id, "Traffic by Browser", "bar", 0, row, 6, 4,
+        id,
+        "Traffic by Browser",
+        "bar",
+        DemoWidgetGrid(0, row, 6, 4),
         listOf(
             QueryDsl(
                 dataSource = "analytics_events",
@@ -675,12 +831,15 @@ internal fun seedWebAnalyticsDashboard() {
                 limit = 10
             )
         ),
-        order = 9
+        order = 9,
     )
 
     // Traffic by OS bar
     insertWidget(
-        id, "Traffic by OS", "bar", 6, row, 6, 4,
+        id,
+        "Traffic by OS",
+        "bar",
+        DemoWidgetGrid(6, row, 6, 4),
         listOf(
             QueryDsl(
                 dataSource = "analytics_events",
@@ -691,6 +850,6 @@ internal fun seedWebAnalyticsDashboard() {
                 limit = 10
             )
         ),
-        order = 10
+        order = 10,
     )
 }

@@ -23,6 +23,11 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 
+private const val DEMO_DD_HOST_OS = "Ubuntu 22.04"
+private const val DEMO_DD_AGENT_VERSION = "7.52.1"
+private const val DEMO_DD_CPU_INTEL_XEON = "Intel Xeon E5-2686 v4"
+private const val DEMO_DD_CPU_AMD_EPYC = "AMD EPYC 7R13"
+
 // ── Datadog Agent Demo Data ─────────────────────────────────────────────
 
 internal suspend fun checkFreshDatadogCount(): Long {
@@ -102,14 +107,63 @@ internal suspend fun reseedDatadogData() {
 private suspend fun reseedDatadogHostsPostgres() {
     suspendRunCatching {
         transaction {
-            val hostData = listOf(
-                listOf("prod-web-01", "Ubuntu 22.04", "linux", "Intel Xeon E5-2686 v4", "8", "16384000", "7.52.1"),
-                listOf("prod-web-02", "Ubuntu 22.04", "linux", "Intel Xeon E5-2686 v4", "8", "16384000", "7.52.1"),
-                listOf("prod-api-01", "Ubuntu 22.04", "linux", "AMD EPYC 7R13", "16", "32768000", "7.52.1"),
-                listOf("prod-db-01", "Ubuntu 22.04", "linux", "AMD EPYC 7R13", "32", "65536000", "7.52.1"),
-                listOf("prod-cache-01", "Ubuntu 22.04", "linux", "Intel Xeon E5-2686 v4", "4", "8192000", "7.52.1"),
-                listOf("prod-worker-01", "Ubuntu 22.04", "linux", "AMD EPYC 7R13", "8", "16384000", "7.52.1"),
-            )
+            val hostData =
+                listOf(
+                    listOf(
+                        "prod-web-01",
+                        DEMO_DD_HOST_OS,
+                        "linux",
+                        DEMO_DD_CPU_INTEL_XEON,
+                        "8",
+                        "16384000",
+                        DEMO_DD_AGENT_VERSION,
+                    ),
+                    listOf(
+                        "prod-web-02",
+                        DEMO_DD_HOST_OS,
+                        "linux",
+                        DEMO_DD_CPU_INTEL_XEON,
+                        "8",
+                        "16384000",
+                        DEMO_DD_AGENT_VERSION,
+                    ),
+                    listOf(
+                        "prod-api-01",
+                        DEMO_DD_HOST_OS,
+                        "linux",
+                        DEMO_DD_CPU_AMD_EPYC,
+                        "16",
+                        "32768000",
+                        DEMO_DD_AGENT_VERSION,
+                    ),
+                    listOf(
+                        "prod-db-01",
+                        DEMO_DD_HOST_OS,
+                        "linux",
+                        DEMO_DD_CPU_AMD_EPYC,
+                        "32",
+                        "65536000",
+                        DEMO_DD_AGENT_VERSION,
+                    ),
+                    listOf(
+                        "prod-cache-01",
+                        DEMO_DD_HOST_OS,
+                        "linux",
+                        DEMO_DD_CPU_INTEL_XEON,
+                        "4",
+                        "8192000",
+                        DEMO_DD_AGENT_VERSION,
+                    ),
+                    listOf(
+                        "prod-worker-01",
+                        DEMO_DD_HOST_OS,
+                        "linux",
+                        DEMO_DD_CPU_AMD_EPYC,
+                        "8",
+                        "16384000",
+                        DEMO_DD_AGENT_VERSION,
+                    ),
+                )
             for (h in hostData) {
                 exec(
                     """
