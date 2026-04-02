@@ -51,7 +51,8 @@ complexity:
     active: false
   ComplexCondition:
     active: false
-  # Above default 600 while large production types are split incrementally.
+  # Enforced (issue #296): flag types over threshold so large classes are split intentionally.
+  # Threshold above default 600 while a few large production types are migrated incrementally.
   LargeClass:
     active: true
     threshold: 1700

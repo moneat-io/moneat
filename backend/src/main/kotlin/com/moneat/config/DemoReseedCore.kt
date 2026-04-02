@@ -25,7 +25,8 @@ private val logger = KotlinLogging.logger {}
 /** Platform value for React Native demo issues (Sonar: avoid duplicating literal). */
 private const val DEMO_PLATFORM_REACT_NATIVE = "react-native"
 
-private data class DemoIssueInsertSpec(
+// Demo seed DSL: one property per INSERT column; Sonar S107 suppressed — nesting would churn 70+ call sites.
+private data class DemoIssueInsertSpec @Suppress("kotlin:S107") constructor(
     val project: String,
     val issueId: String,
     val platform: String,

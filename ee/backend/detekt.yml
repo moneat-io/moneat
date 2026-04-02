@@ -45,7 +45,7 @@ complexity:
     active: false
   CyclomaticComplexMethod:
     active: false
-  # Mirror core backend: above default 600 while large production types are split incrementally.
+  # Mirror core backend: LargeClass enabled (issue #296); threshold raised during incremental splits.
   LargeClass:
     active: true
     threshold: 1700

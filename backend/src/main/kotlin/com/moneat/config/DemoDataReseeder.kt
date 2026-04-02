@@ -36,29 +36,10 @@ object DemoDataReseeder {
         suspendRunCatching {
             val snap = gatherReseedSnapshot()
             if (snap.fullyFresh()) {
-                logSkippingReseed(snap)
-                reseedUptimeHeartbeats()
-                ensureDemoProfileFiles()
-                return@suspendRunCatching
+                finishWhenDemoAlreadyFresh(snap)
+            } else {
+                runStaleDemoReseed(snap)
             }
-
-            maybeReseedCore(snap.freshCoreCount)
-            maybeReseedLlm(snap.freshLlmCount)
-            maybeReseedAnalytics(snap.freshAnalyticsCount)
-            maybeReseedLogs(snap.freshLogsCount)
-            maybeReseedDatadog(snap.freshDatadogCount)
-            maybeReseedKubernetes(snap.freshK8sCount)
-            maybeReseedDbm(snap.freshDbmCount)
-            maybeReseedDebugger(snap.hasFreshDebugger, snap)
-            maybeReseedNdm(snap.hasFreshNdm, snap)
-            maybeReseedSbom(snap.freshSbomCount)
-            maybeReseedDashboards(snap.demoDashboardCount)
-            maybeReseedSecurity(snap.freshSecurityCount)
-            maybeReseedSynthetics(snap.freshSyntheticsCount)
-
-            logger.info { "Demo data reseed complete" }
-            reseedUptimeHeartbeats()
-            ensureDemoProfileFiles()
         }.getOrElse { e ->
             logger.error(e) { "Demo data reseed failed (non-fatal): ${e.message}" }
         }
@@ -94,19 +75,28 @@ private data class ReseedSnapshot(
 
     val hasFreshInfra: Boolean
         get() =
-            freshK8sCount > 0 && freshDbmCount > 0 && hasFreshDebugger &&
-                hasFreshNdm && freshSbomCount > 0
+            listOf(
+                freshK8sCount > 0,
+                freshDbmCount > 0,
+                hasFreshDebugger,
+                hasFreshNdm,
+                freshSbomCount > 0,
+            ).all { it }
 
-    fun fullyFresh(): Boolean =
-        freshCoreCount > 0 &&
-            freshLlmCount > 0 &&
-            freshAnalyticsCount > 0 &&
-            freshLogsCount > 0 &&
-            freshDatadogCount > 0 &&
-            hasFreshInfra &&
-            freshSecurityCount > 0 &&
-            freshSyntheticsCount > 0 &&
-            demoDashboardCount >= 4
+    fun fullyFresh(): Boolean {
+        val coreDataFresh =
+            listOf(
+                freshCoreCount > 0,
+                freshLlmCount > 0,
+                freshAnalyticsCount > 0,
+                freshLogsCount > 0,
+                freshDatadogCount > 0,
+                freshSecurityCount > 0,
+                freshSyntheticsCount > 0,
+                demoDashboardCount >= 4,
+            ).all { it }
+        return coreDataFresh && hasFreshInfra
+    }
 }
 
 private suspend fun gatherReseedSnapshot(): ReseedSnapshot =
@@ -129,6 +119,32 @@ private suspend fun gatherReseedSnapshot(): ReseedSnapshot =
         freshSyntheticsCount = checkFreshSyntheticsDataCount(),
         demoDashboardCount = countDemoDashboards(),
     )
+
+private suspend fun finishWhenDemoAlreadyFresh(snap: ReseedSnapshot) {
+    logSkippingReseed(snap)
+    reseedUptimeHeartbeats()
+    ensureDemoProfileFiles()
+}
+
+private suspend fun runStaleDemoReseed(snap: ReseedSnapshot) {
+    maybeReseedCore(snap.freshCoreCount)
+    maybeReseedLlm(snap.freshLlmCount)
+    maybeReseedAnalytics(snap.freshAnalyticsCount)
+    maybeReseedLogs(snap.freshLogsCount)
+    maybeReseedDatadog(snap.freshDatadogCount)
+    maybeReseedKubernetes(snap.freshK8sCount)
+    maybeReseedDbm(snap.freshDbmCount)
+    maybeReseedDebugger(snap.hasFreshDebugger, snap)
+    maybeReseedNdm(snap.hasFreshNdm, snap)
+    maybeReseedSbom(snap.freshSbomCount)
+    maybeReseedDashboards(snap.demoDashboardCount)
+    maybeReseedSecurity(snap.freshSecurityCount)
+    maybeReseedSynthetics(snap.freshSyntheticsCount)
+
+    logger.info { "Demo data reseed complete" }
+    reseedUptimeHeartbeats()
+    ensureDemoProfileFiles()
+}
 
 private fun logSkippingReseed(s: ReseedSnapshot) {
     logger.info {
