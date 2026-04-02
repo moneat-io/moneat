@@ -39,6 +39,8 @@ import io.ktor.server.netty.EngineMain
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 
+private const val STACK_TRACE_DEPTH = 20
+
 fun main(args: Array<String>) {
     // Add JVM shutdown hook to log when shutdown is triggered
     Runtime.getRuntime().addShutdownHook(
@@ -70,7 +72,7 @@ fun Application.module() {
     // Log stack trace when shutdown is triggered to identify the cause
     monitor.subscribe(ApplicationStopping) {
         log.warn("APPLICATION STOPPING - Stack trace to identify trigger:")
-        Thread.currentThread().stackTrace.take(20).forEach { frame ->
+        Thread.currentThread().stackTrace.take(STACK_TRACE_DEPTH).forEach { frame ->
             log.warn("  at $frame")
         }
     }

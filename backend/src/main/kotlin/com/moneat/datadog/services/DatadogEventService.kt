@@ -30,6 +30,7 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 private const val EVENT_QUEUE_KEY = "moneat:infra_events:queue"
+private const val ERROR_BODY_MAX_LEN = 600
 
 @Serializable
 data class QueuedEventBatch(
@@ -191,7 +192,7 @@ object DatadogEventService {
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             throw IllegalStateException(
-                "Failed to insert DD events: ${errorBody.take(600)}"
+                "Failed to insert DD events: ${errorBody.take(ERROR_BODY_MAX_LEN)}"
             )
         }
     }
@@ -235,7 +236,7 @@ object DatadogEventService {
             val errorBody = response.bodyAsText()
             throw IllegalStateException(
                 "Failed to insert DD service checks: " +
-                    errorBody.take(600)
+                    errorBody.take(ERROR_BODY_MAX_LEN)
             )
         }
     }

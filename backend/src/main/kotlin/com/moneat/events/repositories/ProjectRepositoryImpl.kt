@@ -51,6 +51,10 @@ private val logger = KotlinLogging.logger {}
 class ProjectRepositoryImpl(
     private val timestampRetentionClause: (String, Int, Long?) -> String
 ) : ProjectRepository {
+    companion object {
+        private const val HTTP_SUCCESS_MIN = 200
+        private const val HTTP_SUCCESS_MAX = 299
+    }
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
@@ -222,7 +226,11 @@ class ProjectRepositoryImpl(
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) return 0
+            if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX ||
+                body.trimStart().startsWith("Code:")
+            ) {
+                return 0
+            }
             if (body.isBlank()) return 0
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["total"]?.jsonPrimitive?.long ?: 0

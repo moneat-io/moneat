@@ -52,6 +52,8 @@ class RefreshTokenService {
         private const val REFRESH_TOKEN_LENGTH = 64
         private const val REFRESH_TOKEN_EXPIRY_DAYS = 30L
         private const val ACCESS_TOKEN_EXPIRY_HOURS = 1L
+        private const val MILLIS_PER_DAY = 86_400_000L
+        private const val MILLIS_PER_HOUR = 3_600_000L
 
         private fun hashToken(token: String): String {
             val digest = MessageDigest.getInstance("SHA-256")
@@ -79,7 +81,7 @@ class RefreshTokenService {
         val refreshToken = generateRandomToken()
         val tokenHash = hashToken(refreshToken)
         val now = System.currentTimeMillis()
-        val expiresAt = now + (REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
+        val expiresAt = now + (REFRESH_TOKEN_EXPIRY_DAYS * MILLIS_PER_DAY)
 
         transaction {
             RefreshTokens.insert {
@@ -201,7 +203,7 @@ class RefreshTokenService {
                 .withClaim("email", email)
                 .withClaim("orgId", orgId)
                 .withClaim("orgRole", effectiveRole)
-                .withExpiresAt(Date(issuedAt.time + (ACCESS_TOKEN_EXPIRY_HOURS * 3600000)))
+                .withExpiresAt(Date(issuedAt.time + (ACCESS_TOKEN_EXPIRY_HOURS * MILLIS_PER_HOUR)))
 
         if (isDemoIdentity) {
             jwtBuilder

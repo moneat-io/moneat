@@ -44,6 +44,8 @@ import org.slf4j.LoggerFactory
 import com.moneat.utils.suspendRunCatching
 import java.util.*
 
+private const val SLACK_CHANNEL_FETCH_LIMIT = 200
+
 class SlackService {
     private val logger = LoggerFactory.getLogger(SlackService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
@@ -835,7 +837,7 @@ class SlackService {
                 httpClient.get("https://slack.com/api/conversations.list") {
                     header("Authorization", "Bearer $accessToken")
                     parameter("types", "public_channel,private_channel")
-                    parameter("limit", 200)
+                    parameter("limit", SLACK_CHANNEL_FETCH_LIMIT)
                 }
 
             val result = json.decodeFromString<SlackChannelsResponse>(response.bodyAsText())

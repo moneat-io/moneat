@@ -39,6 +39,9 @@ import java.time.format.DateTimeFormatter
 private val logger = KotlinLogging.logger {}
 private val jsonParser = Json { ignoreUnknownKeys = true }
 
+private const val ERROR_TRUNCATE_LENGTH = 500
+private const val PERCENTAGE_MULTIPLIER = 100
+
 /**
  * Query builder for analytics dashboard endpoints.
  * Builds ClickHouse SQL queries with filters, date ranges, and comparison periods.
@@ -221,7 +224,7 @@ class AnalyticsService {
         val count = suspendRunCatching {
             RedisConfig.sync().pfcount(key)
         }.getOrElse { e ->
-            val errorMsg = e.toString().take(500)
+            val errorMsg = e.toString().take(ERROR_TRUNCATE_LENGTH)
             logger.debug { "Failed to read realtime counter: $errorMsg" }
             0L
         }
@@ -284,7 +287,7 @@ class AnalyticsService {
                 step
             } else {
                 val prev = funnelSteps[i - 1].visitors
-                val dropoff = if (prev > 0) ((prev - step.visitors).toDouble() / prev * 100) else 0.0
+                val dropoff = if (prev > 0) ((prev - step.visitors).toDouble() / prev * PERCENTAGE_MULTIPLIER) else 0.0
                 step.copy(dropoff = dropoff)
             }
         }

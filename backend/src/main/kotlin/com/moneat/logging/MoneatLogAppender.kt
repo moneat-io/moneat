@@ -34,6 +34,10 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
 
     companion object {
         private const val QUEUE_CAPACITY = 10_000
+        private const val LOG_HTTP_TIMEOUT_MS = 1000
+        private const val HTTP_SUCCESS_MIN = 200
+        private const val HTTP_SUCCESS_MAX = 299
+        private const val SHUTDOWN_TIMEOUT_SECONDS = 5L
     }
 
     private val executor =
@@ -123,12 +127,12 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Authorization", "Bearer $token")
             connection.doOutput = true
-            connection.connectTimeout = 1000
-            connection.readTimeout = 1000
+            connection.connectTimeout = LOG_HTTP_TIMEOUT_MS
+            connection.readTimeout = LOG_HTTP_TIMEOUT_MS
 
             connection.outputStream.use { it.write(payload.toByteArray()) }
             val responseCode = connection.responseCode
-            if (responseCode !in 200..299) {
+            if (responseCode !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 val body = runCatching { connection.errorStream?.bufferedReader()?.readText() }.getOrNull()
                 System.err.println(
                     "[MoneatLogAppender] Non-2xx response: $responseCode${if (body != null) " - $body" else ""}"
@@ -151,7 +155,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
 
     override fun stop() {
         executor.shutdown()
-        executor.awaitTermination(5, TimeUnit.SECONDS)
+        executor.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         super.stop()
     }
 }

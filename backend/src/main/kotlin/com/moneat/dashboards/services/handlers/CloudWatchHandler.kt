@@ -53,6 +53,15 @@ private val json = Json { ignoreUnknownKeys = true }
  */
 class CloudWatchHandler : DataSourceHandler {
 
+    companion object {
+        private const val CLOUDWATCH_DEFAULT_PERIOD_SECONDS = 300
+        private const val CLOUDWATCH_MAX_DATAPOINTS = 100_800
+        private const val MILLIS_PER_SECOND = 1_000L
+        private const val DAYS_PER_WEEK = 7L
+        private const val DAYS_PER_MONTH = 30L
+        private const val DAYS_PER_YEAR = 365L
+    }
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val region = request.region ?: "us-east-1"
         val accessKey = request.accessKeyId
@@ -77,7 +86,7 @@ class CloudWatchHandler : DataSourceHandler {
                                     namespace = "AWS/EC2"
                                     metricName = "CPUUtilization"
                                 }
-                                period = 300
+                                period = CLOUDWATCH_DEFAULT_PERIOD_SECONDS
                                 stat = "Average"
                             }
                             returnData = true
@@ -136,7 +145,7 @@ class CloudWatchHandler : DataSourceHandler {
         val endTime = resolveTime(timeRange?.to ?: "now", now)
 
         return suspendRunCatching {
-            val normalizedLimit = limit.coerceIn(1, 100800)
+            val normalizedLimit = limit.coerceIn(1, CLOUDWATCH_MAX_DATAPOINTS)
             createClient(region, accessKey, secretKey).use { client ->
                 val startJava = java.time.Instant.ofEpochMilli(startTime.toEpochMilliseconds())
                 val endJava = java.time.Instant.ofEpochMilli(endTime.toEpochMilliseconds())
@@ -153,7 +162,7 @@ class CloudWatchHandler : DataSourceHandler {
                                     this.metricName = metricName
                                     this.dimensions = dimensions
                                 }
-                                period = 300
+                                period = CLOUDWATCH_DEFAULT_PERIOD_SECONDS
                                 stat = "Average"
                             }
                             returnData = true
@@ -169,7 +178,7 @@ class CloudWatchHandler : DataSourceHandler {
                     val values = result.values ?: emptyList()
                     for ((i, ts) in timestamps.withIndex()) {
                         val value = values.getOrNull(i) ?: continue
-                        val tsMs = ts.epochSeconds * 1000
+                        val tsMs = ts.epochSeconds * MILLIS_PER_SECOND
                         rows.add(
                             mapOf(
                                 "time_bucket" to JsonPrimitive(tsMs),
@@ -216,9 +225,9 @@ class CloudWatchHandler : DataSourceHandler {
             "m" -> Duration.parse("${amount}m")
             "h" -> Duration.parse("${amount}h")
             "d" -> Duration.parse("${amount}d")
-            "w" -> Duration.parse("${amount * 7}d")
-            "M" -> Duration.parse("${amount * 30}d")
-            "y" -> Duration.parse("${amount * 365}d")
+            "w" -> Duration.parse("${amount * DAYS_PER_WEEK}d")
+            "M" -> Duration.parse("${amount * DAYS_PER_MONTH}d")
+            "y" -> Duration.parse("${amount * DAYS_PER_YEAR}d")
             else -> Duration.ZERO
         }
         return now - offset

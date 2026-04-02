@@ -32,6 +32,8 @@ private val logger = KotlinLogging.logger {}
 
 object DatadogJfrFlamegraphService {
 
+    private const val JFR_MAGIC_LAST_BYTE_INDEX = 3
+
     private data class MutableFrame(
         val name: String,
         var value: Long = 0L,
@@ -119,7 +121,7 @@ object DatadogJfrFlamegraphService {
             data[0] == JFR_MAGIC[0] &&
             data[1] == JFR_MAGIC[1] &&
             data[2] == JFR_MAGIC[2] &&
-            data[3] == JFR_MAGIC[3]
+            data[JFR_MAGIC_LAST_BYTE_INDEX] == JFR_MAGIC[JFR_MAGIC_LAST_BYTE_INDEX]
     }
 
     private fun toJson(frame: MutableFrame): JsonObject = buildJsonObject {

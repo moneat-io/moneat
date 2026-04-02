@@ -59,6 +59,7 @@ private const val BADGE_NEGATIVE =
     "background-color:#fef2f2;border:1px solid #fecaca;color:#dc2626;"
 private const val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
     "border:1px solid #e5e5e5;color:#737373;"
+private const val TOP_ISSUES_COUNT = 5
 
 class EmailService {
     private val config = ApplicationConfig("application.conf")
@@ -529,6 +530,8 @@ class EmailService {
     ) {
         val subject = "Your Weekly Summary: ${data.totalEvents} events, ${data.newIssues} new issues"
         val htmlBody = loadWeeklySummaryTemplate(data)
+        val topIssuesList = data.topIssues.take(TOP_ISSUES_COUNT)
+            .joinToString("\n") { "- ${it.title} (${it.project}): ${it.count} events" }
         val textBody =
             """
             Your Weekly Summary (${data.startDate} – ${data.endDate})
@@ -539,7 +542,7 @@ class EmailService {
             - Affected Users: ${data.affectedUsers} (${if (data.usersTrend > 0) "+" else ""}${data.usersTrend}%)
             
             TOP ISSUES:
-            ${data.topIssues.take(5).joinToString("\n") { "- ${it.title} (${it.project}): ${it.count} events" }}
+            $topIssuesList
             
             Open Dashboard: ${data.dashboardUrl}
             Manage preferences: ${data.settingsUrl}

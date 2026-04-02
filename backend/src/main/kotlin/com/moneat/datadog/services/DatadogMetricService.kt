@@ -31,6 +31,7 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 private const val METRIC_QUEUE_KEY = "moneat:metrics:queue"
+private const val ERROR_BODY_MAX_LEN = 600
 
 @Serializable
 data class QueuedMetricBatch(
@@ -195,7 +196,7 @@ object DatadogMetricService {
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             throw IllegalStateException(
-                "Failed to insert DD metrics: ${errorBody.take(600)}"
+                "Failed to insert DD metrics: ${errorBody.take(ERROR_BODY_MAX_LEN)}"
             )
         }
     }
@@ -238,7 +239,7 @@ object DatadogMetricService {
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             throw IllegalStateException(
-                "Failed to insert DD sketches: ${errorBody.take(600)}"
+                "Failed to insert DD sketches: ${errorBody.take(ERROR_BODY_MAX_LEN)}"
             )
         }
     }

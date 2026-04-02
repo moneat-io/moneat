@@ -74,7 +74,7 @@ class PulseService(
 
         pulseJob = scope.launch {
             // Delay the first pulse to let the application fully initialise
-            delay(60_000)
+            delay(PULSE_INTERVAL_MS)
 
             while (true) {
                 suspendRunCatching {
@@ -210,6 +210,8 @@ class PulseService(
     }
 
     companion object {
+        private const val PULSE_INTERVAL_MS = 60_000L
+
         fun isEnabled(): Boolean {
             val selfHost = EnvConfig.SelfHost.enabled
             val telemetryEnabled = EnvConfig.get("TELEMETRY_ENABLED", "true").toBoolean()

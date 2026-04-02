@@ -123,7 +123,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
     val body = response.bodyAsText().trim()
 
     if (response.isClickHouseError(body)) {
-        logger.warn { "Failed to query telemetry_pulses: ${body.take(200)}" }
+        logger.warn { "Failed to query telemetry_pulses: ${body.take(LOG_BODY_PREVIEW_LENGTH)}" }
         return ReceivedTelemetryStatus(deploymentCount = 0, lastSeenAt = null, deployments = emptyList())
     }
 
@@ -167,6 +167,12 @@ private data class AdminUsersResponse(
     val page: Int,
     val limit: Int
 )
+
+private const val LOG_BODY_PREVIEW_LENGTH = 200
+private const val DEFAULT_PAGE_LIMIT = 25
+private const val SMALL_PAGE_LIMIT = 10
+private const val LARGE_PAGE_LIMIT = 500
+private const val MEDIUM_PAGE_LIMIT = 100
 
 @Serializable
 private data class AdminImpersonationTokenResponse(
@@ -236,7 +242,7 @@ fun Route.adminRoutes() {
 
             get("/organizations") {
                 val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
                 val orgs = adminService.getAllOrganizations(page, limit)
                 call.respond(orgs)
             }
@@ -292,7 +298,7 @@ fun Route.adminRoutes() {
             }
 
             get("/top-consumers") {
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: SMALL_PAGE_LIMIT
                 val consumers = adminService.getTopConsumers(limit)
                 call.respond(consumers)
             }
@@ -787,7 +793,7 @@ fun Route.adminRoutes() {
 
             get("/users") {
                 val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
                 val search = call.request.queryParameters["search"]
                 val users = adminService.getAllUsers(page, limit, search)
                 val total = adminService.getTotalUserCount(search)
@@ -887,7 +893,7 @@ fun Route.adminRoutes() {
                 }
 
                 get("/subscriptions") {
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: LARGE_PAGE_LIMIT
                     call.respond(pricingTierService.listAdminSubscriptions(limit))
                 }
 
@@ -972,7 +978,7 @@ fun Route.adminRoutes() {
                 }
 
                 get("/promotional-credits") {
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: MEDIUM_PAGE_LIMIT
                     val grants = adminBillingService.getAllPromotionalCreditGrants(limit)
                     call.respond(grants)
                 }

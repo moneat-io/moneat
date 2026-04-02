@@ -43,6 +43,11 @@ sealed class OpenAiError(override val message: String) : Exception(message) {
 }
 
 object OpenAiClient {
+    private const val HTTP_UNAUTHORIZED = 401
+    private const val HTTP_TOO_MANY_REQUESTS = 429
+    private const val HTTP_CLIENT_ERROR_MIN = 400
+    private const val HTTP_CLIENT_ERROR_MAX = 499
+
     private val json = Json { ignoreUnknownKeys = true }
 
     private val client =
@@ -92,9 +97,10 @@ object OpenAiClient {
         if (response.status != HttpStatusCode.OK) {
             logger.error { "OpenAI API error (${response.status}): $body" }
             throw when (response.status.value) {
-                401 -> OpenAiError.AuthenticationError("Invalid or expired API key")
-                429 -> OpenAiError.RateLimitError("Rate limit exceeded — please try again later")
-                in 400..499 -> OpenAiError.ModelError("OpenAI request error (${response.status.value}): $body")
+                HTTP_UNAUTHORIZED -> OpenAiError.AuthenticationError("Invalid or expired API key")
+                HTTP_TOO_MANY_REQUESTS -> OpenAiError.RateLimitError("Rate limit exceeded — please try again later")
+                in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX ->
+                    OpenAiError.ModelError("OpenAI request error (${response.status.value}): $body")
                 else -> OpenAiError.ServerError("OpenAI server error (${response.status.value})")
             }
         }

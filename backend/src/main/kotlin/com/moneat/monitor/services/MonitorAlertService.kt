@@ -93,6 +93,7 @@ class MonitorAlertService(
         const val MIN_ALERT_INTERVAL_MINUTES = 15 // Don't spam alerts
         const val POLL_INTERVAL_SECONDS = 15
         const val MIN_DATA_POINT_RATIO = 0.8
+        private const val SECONDS_PER_MINUTE = 60
     }
 
     /**
@@ -874,7 +875,7 @@ class MonitorAlertService(
 
         val lastSeenText =
             run {
-                val minutesAgo = ((Clock.System.now() - lastSeenAt).inWholeSeconds / 60).toInt()
+                val minutesAgo = ((Clock.System.now() - lastSeenAt).inWholeSeconds / SECONDS_PER_MINUTE).toInt()
                 "Last seen $minutesAgo minutes ago"
             }
 

@@ -47,6 +47,8 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
+private const val WEEKLY_ROTATION_DAYS = 7L
+
 @Serializable
 data class ScheduleTimelineEntry(
     val userId: Int,
@@ -586,7 +588,7 @@ private fun buildScheduleTimeline(
     }
 
     val rotationType = scheduleRow[OnCallSchedules.rotationType]
-    val rotationDays = when (rotationType) { "DAILY" -> 1L; else -> 7L }
+    val rotationDays = when (rotationType) { "DAILY" -> 1L; else -> WEEKLY_ROTATION_DAYS }
     val zoneId = ZoneId.of(scheduleRow[OnCallSchedules.timezone])
     val handoffLocalTime = scheduleRow[OnCallSchedules.handoffTime]
 

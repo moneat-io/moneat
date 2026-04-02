@@ -108,6 +108,12 @@ class OAuthService {
     private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
     private val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
 
+    companion object {
+        private const val ORG_SLUG_SUFFIX_LENGTH = 8
+        private const val ONE_HOUR_MILLIS = 3_600_000L
+        private const val STATE_BYTE_LENGTH = 32
+    }
+
     private val githubClientId = EnvConfig.get("GITHUB_OAUTH_CLIENT_ID")
     private val githubClientSecret = EnvConfig.get("GITHUB_OAUTH_CLIENT_SECRET")
     private val githubOauthBaseUrl = EnvConfig.get("GITHUB_OAUTH_BASE_URL", "https://github.com").trimEnd('/')
@@ -468,7 +474,7 @@ class OAuthService {
             val orgId =
                 Organizations.insert {
                     it[name] = "${userData.name ?: userData.email}'s Organization"
-                    it[slug] = "org-${UUID.randomUUID().toString().take(8)}"
+                    it[slug] = "org-${UUID.randomUUID().toString().take(ORG_SLUG_SUFFIX_LENGTH)}"
                 }[Organizations.id]
 
             // Add membership
@@ -509,12 +515,12 @@ class OAuthService {
             .withClaim("email", email)
             .withClaim("orgId", orgId)
             .withClaim("orgRole", orgRole)
-            .withExpiresAt(Date(System.currentTimeMillis() + 3600000))
+            .withExpiresAt(Date(System.currentTimeMillis() + ONE_HOUR_MILLIS))
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 
     fun generateState(): String {
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(STATE_BYTE_LENGTH)
         java.security.SecureRandom().nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }

@@ -85,6 +85,8 @@ class DashboardAlertService(
     companion object {
         const val EVALUATION_INTERVAL_SECONDS = 60
         const val MIN_ALERT_INTERVAL_MINUTES = 15
+        private const val DEFAULT_RETENTION_DAYS = 90
+        private const val MILLIS_PER_SECOND = 1000
     }
 
     fun start(scope: CoroutineScope) {
@@ -288,7 +290,7 @@ class DashboardAlertService(
         val queryDsl = queryConfigs.getOrNull(queryIndex) ?: return
 
         val projectId = alert.projectId ?: return
-        val retentionDays = retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
+        val retentionDays = retentionPolicyService.getRetentionDaysForProject(projectId) ?: DEFAULT_RETENTION_DAYS
 
         val results = suspendRunCatching {
             queryEngine.executeQuery(queryDsl, projectId, null, retentionDays)
@@ -430,8 +432,8 @@ class DashboardAlertService(
             suspendRunCatching {
                 val redis = RedisConfig.sync()
                 val existing = redis.get(pendingKey)?.toLongOrNull()
-                if (existing != null) return Instant.fromEpochMilliseconds(existing * 1000)
-                redis.set(pendingKey, (now.toEpochMilliseconds() / 1000).toString())
+                if (existing != null) return Instant.fromEpochMilliseconds(existing * MILLIS_PER_SECOND)
+                redis.set(pendingKey, (now.toEpochMilliseconds() / MILLIS_PER_SECOND).toString())
                 return now
             }
         }

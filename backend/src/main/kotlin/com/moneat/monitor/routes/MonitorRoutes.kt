@@ -50,6 +50,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 
 private const val DEFAULT_PROJECT_ID = 0L
+private const val DEFAULT_LIMIT = 100
 
 /**
  * Helper function to get organization IDs for a user from their memberships.
@@ -363,7 +364,7 @@ fun Route.monitorRoutes(
                     ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
                         ?: return@get
 
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT
                 val cursor = call.request.queryParameters["cursor"]
                 val query = call.request.queryParameters["query"]
                 val levels = call.request.queryParameters.getAll("levels") ?: emptyList()

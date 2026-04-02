@@ -30,6 +30,7 @@ class OnCallHandoffService(
     companion object {
         private const val CHECK_INTERVAL_MS = 60_000L // 60 seconds
         private const val REDIS_KEY_PREFIX = "oncall:current:"
+        private const val UNINITIALIZED_USER_ID = -2
     }
 
     fun start() {
@@ -84,7 +85,7 @@ class OnCallHandoffService(
         val lastUserId = lastUserIdStr?.toIntOrNull()
 
         // If state changed
-        if (currentUserId != (lastUserId ?: -2)) { // -2 as uninitialized sentinel
+        if (currentUserId != (lastUserId ?: UNINITIALIZED_USER_ID)) { // uninitialized sentinel
             // Update cache
             redisClient.set(cacheKey, currentUserId.toString())
 

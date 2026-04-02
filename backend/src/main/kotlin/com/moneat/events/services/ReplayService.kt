@@ -117,9 +117,9 @@ class ReplayService(
     private fun isClickHouseError(statusCode: Int, body: String, context: String): Boolean {
         if (statusCode !in 200..299 || body.trimStart().startsWith("Code:")) {
             if (statusCode !in 200..299) {
-                logger.error { "$context failed: $statusCode ${body.take(400)}" }
+                logger.error { "$context failed: $statusCode ${body.take(LOG_BODY_PREVIEW_LENGTH)}" }
             } else {
-                logger.error { "$context (ClickHouse): ${body.take(400)}" }
+                logger.error { "$context (ClickHouse): ${body.take(LOG_BODY_PREVIEW_LENGTH)}" }
             }
             return true
         }
@@ -347,8 +347,8 @@ class ReplayService(
     }
 
     private fun isLikelyMp4(payloadBytes: ByteArray): Boolean {
-        if (payloadBytes.size < 8) return false
-        val boxType = String(payloadBytes.copyOfRange(4, 8), Charsets.US_ASCII)
+        if (payloadBytes.size < MP4_HEADER_MIN_BYTES) return false
+        val boxType = String(payloadBytes.copyOfRange(MP4_BOX_TYPE_OFFSET, MP4_HEADER_MIN_BYTES), Charsets.US_ASCII)
         return boxType == "ftyp"
     }
 
@@ -455,13 +455,13 @@ class ReplayService(
         val nowMs = demoEpochMs ?: System.currentTimeMillis()
         val periodMs =
             when (period) {
-                "24h" -> 24 * 60 * 60 * 1000L
-                "30d" -> 30 * 24 * 60 * 60 * 1000L
-                "90d" -> 90 * 24 * 60 * 60 * 1000L
-                else -> 7 * 24 * 60 * 60 * 1000L
+                "24h" -> PERIOD_24H_MS
+                "30d" -> PERIOD_30D_MS
+                "90d" -> PERIOD_90D_MS
+                else -> PERIOD_7D_MS
             }
         val periodStartMs = nowMs - periodMs
-        val retentionStartMs = nowMs - (retentionDays * 24 * 60 * 60 * 1000L)
+        val retentionStartMs = nowMs - (retentionDays * MILLIS_PER_DAY)
 
         val envClause =
             if (environment != null && environment.isNotBlank()) {
@@ -778,7 +778,7 @@ class ReplayService(
             suspendRunCatching {
                 Instant.parse(replay.finishedAt).toEpochMilli()
             }.getOrElse { _ ->
-                replayStartMs + 86400_000L
+                replayStartMs + MILLIS_PER_DAY
             }
         val projectId = replay.projectId
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
@@ -1062,5 +1062,16 @@ class ReplayService(
             logger.error(e) { "Failed to fetch replays for issue $issueId" }
             emptyList()
         }
+    }
+
+    companion object {
+        private const val LOG_BODY_PREVIEW_LENGTH = 400
+        private const val MP4_HEADER_MIN_BYTES = 8
+        private const val MP4_BOX_TYPE_OFFSET = 4
+        private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
+        private const val PERIOD_24H_MS = MILLIS_PER_DAY
+        private const val PERIOD_7D_MS = 7 * MILLIS_PER_DAY
+        private const val PERIOD_30D_MS = 30 * MILLIS_PER_DAY
+        private const val PERIOD_90D_MS = 90 * MILLIS_PER_DAY
     }
 }

@@ -45,6 +45,10 @@ object ProcessAgentPayloadDecoder {
     private const val ENC_ZSTD_1X_PB: Int = 4
     private const val ENC_ZSTD_PB_NO_CGO: Int = 5
 
+    // Protobuf wire format constants
+    private const val PROTO_FIELD_SHIFT = 3
+    private const val PROTO_PAYLOAD_ITEMS_FIELD = 3
+
     // Type constants
     const val TYPE_COLLECTOR_PROC: Int = 12
     const val TYPE_COLLECTOR_CONTAINER: Int = 39
@@ -108,9 +112,10 @@ object ProcessAgentPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1, LEN: hostName
-                (1 shl 3) or 2 -> hostName = input.readString()
+                (1 shl PROTO_FIELD_SHIFT) or 2 -> hostName = input.readString()
                 // field 3, LEN: repeated Container
-                (3 shl 3) or 2 -> containers += decodeContainer(input.readByteArray())
+                (PROTO_PAYLOAD_ITEMS_FIELD shl PROTO_FIELD_SHIFT) or 2 ->
+                    containers += decodeContainer(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -185,8 +190,9 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl 3) or 2 -> hostName = input.readString()
-                (3 shl 3) or 2 -> processes += decodeProcess(input.readByteArray())
+                (2 shl PROTO_FIELD_SHIFT) or 2 -> hostName = input.readString()
+                (PROTO_PAYLOAD_ITEMS_FIELD shl PROTO_FIELD_SHIFT) or 2 ->
+                    processes += decodeProcess(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -288,7 +294,7 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl 3) or 2 -> return input.readString()
+                (1 shl PROTO_FIELD_SHIFT) or 2 -> return input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -303,8 +309,8 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl 3) or 0 -> rss = input.readUInt64()
-                (2 shl 3) or 0 -> vms = input.readUInt64()
+                (1 shl PROTO_FIELD_SHIFT) or 0 -> rss = input.readUInt64()
+                (2 shl PROTO_FIELD_SHIFT) or 0 -> vms = input.readUInt64()
                 else -> input.skipField(tag)
             }
         }

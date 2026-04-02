@@ -38,6 +38,18 @@ abstract class JdbcHandler(
     private val pools: ConcurrentHashMap<Long, HikariDataSource>,
 ) : DataSourceHandler {
 
+    companion object {
+        private const val QUERY_MAX_ROWS = 10_000
+        private const val QUERY_TIMEOUT_SECONDS = 30
+        private const val SCHEMA_COMMENT_COLUMN = 3
+        private const val POOL_MAX_SIZE = 3
+        private const val POOL_MIN_IDLE = 0
+        private const val POOL_IDLE_TIMEOUT_MS = 60_000L
+        private const val POOL_MAX_LIFETIME_MS = 300_000L
+        private const val POOL_CONNECTION_TIMEOUT_MS = 10_000L
+        private const val TEMP_POOL_MAX_SIZE = 1
+    }
+
     protected abstract fun buildJdbcUrl(host: String, port: Int, database: String): String
     protected abstract fun defaultPort(): Int
     protected abstract fun schemaIntrospectionQuery(): String
@@ -86,8 +98,8 @@ abstract class JdbcHandler(
         val ds = getOrCreatePool(sourceId, host, p, db, credentials)
         return ds.connection.use { conn ->
             conn.createStatement().use { stmt ->
-                stmt.maxRows = limit.coerceIn(1, 10000)
-                stmt.queryTimeout = 30
+                stmt.maxRows = limit.coerceIn(1, QUERY_MAX_ROWS)
+                stmt.queryTimeout = QUERY_TIMEOUT_SECONDS
                 stmt.executeQuery(query).use { rs -> resultSetToMaps(rs) }
             }
         }
@@ -109,7 +121,13 @@ abstract class JdbcHandler(
                 conn.createStatement().use { stmt ->
                     stmt.executeQuery(query).use { rs ->
                         while (rs.next()) {
-                            fields.add(DataSourceField(rs.getString(1), rs.getString(2), rs.getString(3).orEmpty()))
+                            fields.add(
+                                DataSourceField(
+                                    rs.getString(1),
+                                    rs.getString(2),
+                                    rs.getString(SCHEMA_COMMENT_COLUMN).orEmpty(),
+                                )
+                            )
                         }
                     }
                 }
@@ -144,11 +162,11 @@ abstract class JdbcHandler(
             jdbcUrl = buildJdbcUrl(host, port, database)
             this.username = username ?: ""
             this.password = password ?: ""
-            maximumPoolSize = 3
+            maximumPoolSize = POOL_MAX_SIZE
             minimumIdle = 0
-            idleTimeout = 60_000
-            maxLifetime = 300_000
-            connectionTimeout = 10_000
+            idleTimeout = POOL_IDLE_TIMEOUT_MS
+            maxLifetime = POOL_MAX_LIFETIME_MS
+            connectionTimeout = POOL_CONNECTION_TIMEOUT_MS
             isReadOnly = true
             addDataSourceProperty("ApplicationName", "moneat-custom-datasource")
         }
@@ -168,7 +186,7 @@ abstract class JdbcHandler(
             this.username = username ?: ""
             this.password = password ?: ""
             maximumPoolSize = 1
-            connectionTimeout = 10_000
+            connectionTimeout = POOL_CONNECTION_TIMEOUT_MS
             isReadOnly = true
         }
         return HikariDataSource(config)

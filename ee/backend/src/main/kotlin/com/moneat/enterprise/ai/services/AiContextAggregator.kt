@@ -21,6 +21,7 @@ import java.time.LocalDate
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
+private const val CHARS_PER_TOKEN = 4
 
 /** Describes the time window to query observability data. */
 sealed class AiTimeFilter {
@@ -313,6 +314,6 @@ class AiContextAggregator {
     /** Estimate token count for the aggregated context (rough: ~4 chars per token). */
     fun estimateTokens(context: AggregatedContext): Int {
         val contextJson = json.encodeToString(AggregatedContext.serializer(), context)
-        return contextJson.length / 4
+        return contextJson.length / CHARS_PER_TOKEN
     }
 }

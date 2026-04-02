@@ -20,6 +20,8 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
 
+private const val DEFAULT_INCIDENT_LIMIT = 50
+
 @Serializable
 data class DeclareIncidentRequest(
     val title: String,
@@ -59,7 +61,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
 
                 val status = call.request.queryParameters["status"]
                 val priorityLevel = call.request.queryParameters["priority"]
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_INCIDENT_LIMIT
                 val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
 
                 val incidentService = incidentServiceProvider()

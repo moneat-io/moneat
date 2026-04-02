@@ -45,11 +45,16 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
     private val clickhouseDb: String get() = queryHelper.clickhouseDb
     private val json get() = queryHelper.json
 
+    companion object {
+        private const val RELEASES_CACHE_TTL_SECONDS = 120L
+        private const val RELEASE_STATS_INTERVAL_MINUTES = 360
+    }
+
     suspend fun getReleases(
         projectId: Long,
         parentSpan: ISpan? = null
     ): List<ReleaseListResponse> =
-        CacheService.cached("cache:releases:$projectId", 120, parentSpan) {
+        CacheService.cached("cache:releases:$projectId", RELEASES_CACHE_TTL_SECONDS, parentSpan) {
             val retentionDays = queryHelper.getProjectRetentionDays(projectId)
             val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
             val releasesQuery =
@@ -126,7 +131,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             // Crash-free user rate stays null until a user-based ClickHouse query is implemented.
             val crashFreeUserRate: Double? = null
 
-            val intervalMinutes = 360
+            val intervalMinutes = RELEASE_STATS_INTERVAL_MINUTES
             val eventsTimelineQuery =
                 """
                 SELECT

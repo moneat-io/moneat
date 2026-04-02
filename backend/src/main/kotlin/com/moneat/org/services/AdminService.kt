@@ -253,6 +253,23 @@ class AdminService(
 
     companion object {
         private const val USABLE_STORAGE_BYTES = 35L * 1024 * 1024 * 1024 // 35GB from MONETIZATION.md
+        private const val PRO_PLAN_PRICE = 19.0
+        private const val TEAM_PLAN_PRICE = 49.0
+        private const val TEAM_CLOUD_COST_PER_ORG = 6.0
+        private const val EVENTS_HISTORY_DAYS = 365
+        private const val PERCENT_MULTIPLIER = 100.0
+        private const val PERIOD_7D_DAYS_BACK = 6
+        private const val PERIOD_30D_DAYS_BACK = 29
+        private const val DAYS_IN_WEEK = 7
+        private const val DAYS_IN_MONTH = 30
+        private const val CLICKHOUSE_TABLE_MIN_COLUMNS = 4
+        private const val CLICKHOUSE_BYTES_COLUMN_INDEX = 3
+        private const val STORAGE_WARNING_THRESHOLD_PCT = 70.0
+        private const val STORAGE_CRITICAL_THRESHOLD_PCT = 80.0
+        private const val SES_COST_PER_EMAIL = 0.0001
+        private const val BYTES_PER_KB = 1024L
+        private const val BYTES_PER_MB = BYTES_PER_KB * BYTES_PER_KB
+        private const val BYTES_PER_GB = BYTES_PER_MB * BYTES_PER_KB
     }
 
     private fun applyUserSearchFilter(
@@ -293,7 +310,7 @@ class AdminService(
 
         val (allTimeEvents, last30Events, eventsTimeline) =
             queryClickHouseEvents(
-                today.minus(365, DateTimeUnit.DAY),
+                today.minus(EVENTS_HISTORY_DAYS, DateTimeUnit.DAY),
                 today
             )
 
@@ -304,8 +321,8 @@ class AdminService(
                     .where { Subscriptions.status eq "active" }
                     .mapNotNull { row ->
                         when (row[Subscriptions.plan].lowercase()) {
-                            "pro" -> 19.0
-                            "team" -> 49.0
+                            "pro" -> PRO_PLAN_PRICE
+                            "team" -> TEAM_PLAN_PRICE
                             else -> null
                         }
                     }.sum()
@@ -377,12 +394,12 @@ class AdminService(
                 val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
                 val quotaPct =
                     when {
-                        tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(
-                            100.0
-                        )
-                        tier.monthlyUnitLimit > 0 -> (usage.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(
-                            100.0
-                        )
+                        tier.monthlyGbLimit > 0 ->
+                            (bytesCount.toDouble() / tier.monthlyGbLimit * PERCENT_MULTIPLIER)
+                                .coerceAtMost(PERCENT_MULTIPLIER)
+                        tier.monthlyUnitLimit > 0 ->
+                            (usage.toDouble() / tier.monthlyUnitLimit * PERCENT_MULTIPLIER)
+                                .coerceAtMost(PERCENT_MULTIPLIER)
                         else -> null
                     }
 
@@ -443,10 +460,12 @@ class AdminService(
             val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
             val quotaPct =
                 when {
-                    tier.monthlyGbLimit > 0 -> (bytesCount.toDouble() / tier.monthlyGbLimit * 100).coerceAtMost(100.0)
-                    tier.monthlyUnitLimit > 0 -> (eventCount.toDouble() / tier.monthlyUnitLimit * 100).coerceAtMost(
-                        100.0
-                    )
+                    tier.monthlyGbLimit > 0 ->
+                        (bytesCount.toDouble() / tier.monthlyGbLimit * PERCENT_MULTIPLIER)
+                            .coerceAtMost(PERCENT_MULTIPLIER)
+                    tier.monthlyUnitLimit > 0 ->
+                        (eventCount.toDouble() / tier.monthlyUnitLimit * PERCENT_MULTIPLIER)
+                            .coerceAtMost(PERCENT_MULTIPLIER)
                     else -> null
                 }
 
@@ -505,9 +524,9 @@ class AdminService(
         val daysBack =
             when (period) {
                 "24h" -> 0
-                "7d" -> 6
-                "30d" -> 29
-                else -> 6
+                "7d" -> PERIOD_7D_DAYS_BACK
+                "30d" -> PERIOD_30D_DAYS_BACK
+                else -> PERIOD_7D_DAYS_BACK
             }
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
 
@@ -562,8 +581,8 @@ class AdminService(
         val mrr =
             subsByPlan.entries.sumOf { (plan, count) ->
                 when (plan) {
-                    "pro" -> count * 19.0
-                    "team" -> count * 49.0
+                    "pro" -> count * PRO_PLAN_PRICE
+                    "team" -> count * TEAM_PLAN_PRICE
                     else -> 0.0
                 }
             }
@@ -579,7 +598,7 @@ class AdminService(
             mapOf(
                 "free" to 0.0,
                 "pro" to 2.0,
-                "team" to 6.0
+                "team" to TEAM_CLOUD_COST_PER_ORG
             )
         return AdminRevenueMetrics(
             mrr = mrr,
@@ -608,11 +627,11 @@ class AdminService(
                 val lines = text.trim().split("\n").filter { it.isNotBlank() }
                 for (line in lines) {
                     val parts = line.split("\t")
-                    if (parts.size >= 4) {
+                    if (parts.size >= CLICKHOUSE_TABLE_MIN_COLUMNS) {
                         val db = parts[0]
                         val rawTable = parts[1]
                         val rows = parts[2].toLongOrNull() ?: 0L
-                        val bytes = parts[3].toLongOrNull() ?: 0L
+                        val bytes = parts[CLICKHOUSE_BYTES_COLUMN_INDEX].toLongOrNull() ?: 0L
                         // Prefix with database name for non-app tables to disambiguate
                         val tableName = if (db == clickhouseDb) rawTable else "$db.$rawTable"
                         tables.add(
@@ -633,10 +652,14 @@ class AdminService(
         }
 
         val storageUsedPercent =
-            if (USABLE_STORAGE_BYTES > 0) (totalBytes.toDouble() / USABLE_STORAGE_BYTES * 100) else 0.0
+            if (USABLE_STORAGE_BYTES > 0) (totalBytes.toDouble() / USABLE_STORAGE_BYTES * PERCENT_MULTIPLIER) else 0.0
         val alerts = mutableListOf<String>()
-        if (storageUsedPercent > 70) alerts.add("Storage > 70% (consider adding block storage)")
-        if (storageUsedPercent > 80) alerts.add("Storage > 80% (scaling trigger)")
+        if (storageUsedPercent > STORAGE_WARNING_THRESHOLD_PCT) {
+            alerts.add("Storage > 70% (consider adding block storage)")
+        }
+        if (storageUsedPercent > STORAGE_CRITICAL_THRESHOLD_PCT) {
+            alerts.add("Storage > 80% (scaling trigger)")
+        }
 
         return AdminInfrastructureHealth(
             clickhouseTables = tables.sortedByDescending { it.bytesOnDisk },
@@ -711,9 +734,9 @@ class AdminService(
         val daysBack =
             when (period) {
                 "24h" -> 1
-                "7d" -> 7
-                "30d" -> 30
-                else -> 7
+                "7d" -> DAYS_IN_WEEK
+                "30d" -> DAYS_IN_MONTH
+                else -> DAYS_IN_WEEK
             }
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
         return usageTracker.getUsageForOrg(orgId, startDate, today)
@@ -727,9 +750,9 @@ class AdminService(
                 .date
         val daysBack =
             when (period) {
-                "7d" -> 7
-                "30d" -> 30
-                else -> 30
+                "7d" -> DAYS_IN_WEEK
+                "30d" -> DAYS_IN_MONTH
+                else -> DAYS_IN_MONTH
             }
         val startDate = today.minus(daysBack, DateTimeUnit.DAY)
 
@@ -751,7 +774,7 @@ class AdminService(
                     .mapValues { it.value.size.toLong() }
 
             // Timeline for last 7 days
-            val last7DaysStart = today.minus(7, DateTimeUnit.DAY).atStartOfDayIn(TimeZone.UTC)
+            val last7DaysStart = today.minus(DAYS_IN_WEEK, DateTimeUnit.DAY).atStartOfDayIn(TimeZone.UTC)
             val last7Days =
                 EmailsSent
                     .selectAll()
@@ -781,7 +804,7 @@ class AdminService(
                     }.sortedBy { it.date }
 
             // Estimate cost - AWS SES costs $0.10 per 1,000 emails
-            val estimatedCost = totalSent * 0.0001
+            val estimatedCost = totalSent * SES_COST_PER_EMAIL
 
             AdminEmailStats(
                 totalSent = totalSent,
@@ -845,10 +868,10 @@ class AdminService(
 
     private fun formatBytes(bytes: Long): String {
         return when {
-            bytes < 1024 -> "$bytes B"
-            bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
-            bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
-            else -> "%.1f GB".format(bytes / (1024.0 * 1024 * 1024))
+            bytes < BYTES_PER_KB -> "$bytes B"
+            bytes < BYTES_PER_MB -> "%.1f KB".format(bytes.toDouble() / BYTES_PER_KB)
+            bytes < BYTES_PER_GB -> "%.1f MB".format(bytes.toDouble() / BYTES_PER_MB)
+            else -> "%.1f GB".format(bytes.toDouble() / BYTES_PER_GB)
         }
     }
 

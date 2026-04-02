@@ -45,6 +45,11 @@ private val json = Json { ignoreUnknownKeys = true }
 
 private const val DEFAULT_LIMIT = 100
 private const val MAX_LIMIT = 500
+private const val MAX_IDENTIFIER_LENGTH = 255
+private const val MAX_NAME_LENGTH = 64
+private const val MAX_SHORT_NAME_LENGTH = 32
+private const val HTTP_SUCCESS_MIN = 200
+private const val HTTP_SUCCESS_MAX = 299
 
 private fun getOrgIdsForUser(userId: Int): List<Int> {
     return transaction {
@@ -71,13 +76,13 @@ private fun sanitizeSeverity(value: String?): String? =
     value?.takeIf { it.lowercase() in ALLOWED_SEVERITY }?.let { it }
 
 private fun sanitizeIdentifier(value: String?): String? =
-    value?.takeIf { it.matches(SAFE_IDENTIFIER_REGEX) && it.length <= 255 }
+    value?.takeIf { it.matches(SAFE_IDENTIFIER_REGEX) && it.length <= MAX_IDENTIFIER_LENGTH }
 
 private fun sanitizeFramework(value: String?): String? =
-    value?.takeIf { it.matches(SAFE_IDENTIFIER_REGEX) && it.length <= 64 }
+    value?.takeIf { it.matches(SAFE_IDENTIFIER_REGEX) && it.length <= MAX_NAME_LENGTH }
 
 private fun sanitizeStatus(value: String?): String? =
-    value?.takeIf { it.matches(SAFE_IDENTIFIER_REGEX) && it.length <= 32 }
+    value?.takeIf { it.matches(SAFE_IDENTIFIER_REGEX) && it.length <= MAX_SHORT_NAME_LENGTH }
 
 private fun snakeToCamel(snake: String): String {
     return snake.split('_').mapIndexed { index, part ->
@@ -103,7 +108,7 @@ private fun parseJsonEachRow(body: String): List<JsonObject> {
 private suspend fun executeChQuery(query: String): List<JsonObject>? {
     return runCatching {
         val response = ClickHouseClient.execute(query)
-        if (response.status.value !in 200..299) {
+        if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
             logger.warn { "ClickHouse query failed: ${response.status}" }
             return null
         }

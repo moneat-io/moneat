@@ -39,6 +39,10 @@ private val json = Json {
 }
 
 class DashboardWidgetRepositoryImpl : DashboardWidgetRepository {
+    companion object {
+        private const val DEFAULT_WIDGET_WIDTH = 6
+        private const val DEFAULT_WIDGET_HEIGHT = 4
+    }
 
     override fun listByDashboardId(dashboardId: Long): List<WidgetData> =
         transaction {
@@ -121,8 +125,8 @@ class DashboardWidgetRepositoryImpl : DashboardWidgetRepository {
             it[DashboardWidgets.widgetType] = widget.widgetType ?: "timeseries"
             it[DashboardWidgets.gridX] = widget.gridX ?: 0
             it[DashboardWidgets.gridY] = widget.gridY ?: 0
-            it[DashboardWidgets.gridW] = widget.gridW ?: 6
-            it[DashboardWidgets.gridH] = widget.gridH ?: 4
+            it[DashboardWidgets.gridW] = widget.gridW ?: DEFAULT_WIDGET_WIDTH
+            it[DashboardWidgets.gridH] = widget.gridH ?: DEFAULT_WIDGET_HEIGHT
             it[DashboardWidgets.queryConfig] = widget.queryConfigs
                 ?.firstOrNull()
                 ?.let { qc -> json.encodeToString<QueryDsl>(qc) }

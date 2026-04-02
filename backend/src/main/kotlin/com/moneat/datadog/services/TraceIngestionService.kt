@@ -57,6 +57,20 @@ private const val CANONICAL_TRACE_ID_SQL =
 private const val MAX_META_VALUE_LENGTH = 5000
 private const val DEFAULT_QUERY_LIMIT = 50
 private const val MAX_QUERY_LIMIT = 200
+private const val HEX_RADIX = 16
+private const val NANOSECONDS_PER_MILLISECOND = 1_000_000L
+private const val PROTO_TAG_SHIFT = 3
+private const val PROTO_FIELD_3 = 3
+private const val PROTO_FIELD_4 = 4
+private const val PROTO_FIELD_5 = 5
+private const val PROTO_FIELD_6 = 6
+private const val PROTO_FIELD_7 = 7
+private const val PROTO_FIELD_8 = 8
+private const val PROTO_FIELD_9 = 9
+private const val PROTO_FIELD_10 = 10
+private const val PROTO_FIELD_11 = 11
+private const val PROTO_FIELD_12 = 12
+private const val PROTO_FIELD_14 = 14
 
 object TraceIngestionService {
     private val clickhouseDb by lazy { ClickHouseClient.getDatabase() }
@@ -131,6 +145,11 @@ object TraceIngestionService {
                 ?: hostname
             val spanEnv = span.meta["env"] ?: env
             val ver = span.meta["version"] ?: appVersion
+            val parentIdHex = if (span.parentId != 0UL) {
+                java.lang.Long.toUnsignedString(span.parentId.toLong(), HEX_RADIX)
+            } else {
+                ""
+            }
 
             """(
                 ${span.spanId},
@@ -152,9 +171,9 @@ object TraceIngestionService {
                 '${escapeSql(host)}',
                 '${escapeSql(spanEnv)}',
                 '${escapeSql(ver)}',
-                '${java.lang.Long.toUnsignedString(span.traceId.toLong(), 16)}',
-                '${java.lang.Long.toUnsignedString(span.spanId.toLong(), 16)}',
-                '${if (span.parentId != 0UL) java.lang.Long.toUnsignedString(span.parentId.toLong(), 16) else ""}',
+                '${java.lang.Long.toUnsignedString(span.traceId.toLong(), HEX_RADIX)}',
+                '${java.lang.Long.toUnsignedString(span.spanId.toLong(), HEX_RADIX)}',
+                '$parentIdHex',
                 'datadog'
             )"""
         }
@@ -199,7 +218,7 @@ object TraceIngestionService {
         if (entries.isEmpty()) return
 
         val rows = entries.joinToString(",\n") { (bucket, entry) ->
-            val startMs = bucket.start / 1_000_000 // ns to ms
+            val startMs = bucket.start / NANOSECONDS_PER_MILLISECOND // ns to ms
             """(
                 $organizationId,
                 '${escapeSql(entry.service)}',
@@ -749,9 +768,9 @@ object TraceIngestionService {
         var env = ""
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl 3) or 2 -> hostname = input.readString()
-                (2 shl 3) or 2 -> env = input.readString()
-                (5 shl 3) or 2 -> {
+                (1 shl PROTO_TAG_SHIFT) or 2 -> hostname = input.readString()
+                (2 shl PROTO_TAG_SHIFT) or 2 -> env = input.readString()
+                (PROTO_FIELD_5 shl PROTO_TAG_SHIFT) or 2 -> {
                     val payloadBytes = input.readBytes().toByteArray()
                     traces.addAll(decodeTracerPayload(payloadBytes))
                 }
@@ -767,7 +786,7 @@ object TraceIngestionService {
         val traces = mutableListOf<List<DdSpan>>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (6 shl 3) or 2 -> {
+                (PROTO_FIELD_6 shl PROTO_TAG_SHIFT) or 2 -> {
                     val chunkBytes = input.readBytes().toByteArray()
                     val spans = decodeTraceChunk(chunkBytes)
                     if (spans.isNotEmpty()) traces.add(spans)
@@ -784,7 +803,7 @@ object TraceIngestionService {
         val spans = mutableListOf<DdSpan>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (3 shl 3) or 2 -> {
+                (PROTO_FIELD_3 shl PROTO_TAG_SHIFT) or 2 -> {
                     val spanBytes = input.readBytes().toByteArray()
                     spans.add(decodeProtobufSpan(spanBytes))
                 }
@@ -814,24 +833,24 @@ object TraceIngestionService {
         val metrics = mutableMapOf<String, Double>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl 3) or 2 -> service = input.readString()
-                (2 shl 3) or 2 -> name = input.readString()
-                (3 shl 3) or 2 -> resource = input.readString()
-                (4 shl 3) or 0 -> traceId = input.readUInt64().toULong()
-                (5 shl 3) or 0 -> spanId = input.readUInt64().toULong()
-                (6 shl 3) or 0 -> parentId = input.readUInt64().toULong()
-                (7 shl 3) or 0 -> start = input.readInt64()
-                (8 shl 3) or 0 -> duration = input.readInt64()
-                (9 shl 3) or 0 -> error = input.readInt32()
-                (10 shl 3) or 2 -> {
+                (1 shl PROTO_TAG_SHIFT) or 2 -> service = input.readString()
+                (2 shl PROTO_TAG_SHIFT) or 2 -> name = input.readString()
+                (PROTO_FIELD_3 shl PROTO_TAG_SHIFT) or 2 -> resource = input.readString()
+                (PROTO_FIELD_4 shl PROTO_TAG_SHIFT) or 0 -> traceId = input.readUInt64().toULong()
+                (PROTO_FIELD_5 shl PROTO_TAG_SHIFT) or 0 -> spanId = input.readUInt64().toULong()
+                (PROTO_FIELD_6 shl PROTO_TAG_SHIFT) or 0 -> parentId = input.readUInt64().toULong()
+                (PROTO_FIELD_7 shl PROTO_TAG_SHIFT) or 0 -> start = input.readInt64()
+                (PROTO_FIELD_8 shl PROTO_TAG_SHIFT) or 0 -> duration = input.readInt64()
+                (PROTO_FIELD_9 shl PROTO_TAG_SHIFT) or 0 -> error = input.readInt32()
+                (PROTO_FIELD_10 shl PROTO_TAG_SHIFT) or 2 -> {
                     val (k, v) = decodeStringStringEntry(input.readBytes().toByteArray())
                     meta[k] = v
                 }
-                (11 shl 3) or 2 -> {
+                (PROTO_FIELD_11 shl PROTO_TAG_SHIFT) or 2 -> {
                     val (k, v) = decodeStringDoubleEntry(input.readBytes().toByteArray())
                     metrics[k] = v
                 }
-                (12 shl 3) or 2 -> type = input.readString()
+                (PROTO_FIELD_12 shl PROTO_TAG_SHIFT) or 2 -> type = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -850,8 +869,8 @@ object TraceIngestionService {
         var value = ""
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl 3) or 2 -> key = input.readString()
-                (2 shl 3) or 2 -> value = input.readString()
+                (1 shl PROTO_TAG_SHIFT) or 2 -> key = input.readString()
+                (2 shl PROTO_TAG_SHIFT) or 2 -> value = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -865,8 +884,8 @@ object TraceIngestionService {
         var value = 0.0
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl 3) or 2 -> key = input.readString()
-                (2 shl 3) or 1 -> value = input.readDouble()
+                (1 shl PROTO_TAG_SHIFT) or 2 -> key = input.readString()
+                (2 shl PROTO_TAG_SHIFT) or 1 -> value = input.readDouble()
                 else -> input.skipField(tag)
             }
         }

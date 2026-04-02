@@ -48,6 +48,13 @@ private val logger = KotlinLogging.logger {}
 private val SentryTransactionKey = AttributeKey<ITransaction>("SentryTransaction")
 private val ingestPathRegex = Regex("^/api/[^/]+/(envelope|logs|store|security)/?$")
 
+private const val HTTP_SUCCESS_MIN = 200
+private const val HTTP_SUCCESS_MAX = 299
+private const val HTTP_CLIENT_ERROR_MIN = 400
+private const val HTTP_CLIENT_ERROR_MAX = 499
+private const val HTTP_SERVER_ERROR_MIN = 500
+private const val HTTP_SERVER_ERROR_MAX = 599
+
 fun Application.configureMonitoring() {
     // Sentry transaction interceptor for non-ingestion, non-health requests
     intercept(ApplicationCallPipeline.Setup) {
@@ -90,9 +97,9 @@ fun Application.configureMonitoring() {
                 // Determine transaction status based on HTTP status code
                 transaction.status =
                     when (status?.value) {
-                        in 200..299 -> SpanStatus.OK
-                        in 400..499 -> SpanStatus.INVALID_ARGUMENT
-                        in 500..599 -> SpanStatus.INTERNAL_ERROR
+                        in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX -> SpanStatus.OK
+                        in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX -> SpanStatus.INVALID_ARGUMENT
+                        in HTTP_SERVER_ERROR_MIN..HTTP_SERVER_ERROR_MAX -> SpanStatus.INTERNAL_ERROR
                         else -> SpanStatus.UNKNOWN_ERROR
                     }
 

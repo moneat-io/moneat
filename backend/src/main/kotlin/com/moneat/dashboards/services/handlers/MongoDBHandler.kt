@@ -40,15 +40,24 @@ private val logger = KotlinLogging.logger {}
  */
 class MongoDBHandler : DataSourceHandler {
 
+    companion object {
+        private const val MONGODB_DEFAULT_PORT = 27017
+        private const val MONGODB_DB_SAMPLE_LIMIT = 20
+    }
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val connStr = request.connectionString ?: buildConnectionString(
-            request.host, request.port ?: 27017, request.databaseName, request.username, request.password
+            request.host, request.port ?: MONGODB_DEFAULT_PORT, request.databaseName, request.username, request.password
         )
 
         return suspendRunCatching {
             MongoClients.create(connStr).use { client ->
                 val databases = client.listDatabaseNames().toList()
-                TestConnectionResult(true, "Connected successfully", databases = databases.take(20))
+                TestConnectionResult(
+                    true,
+                    "Connected successfully",
+                    databases = databases.take(MONGODB_DB_SAMPLE_LIMIT),
+                )
             }
         }.getOrElse { e ->
             logger.warn(e) { "MongoDB connection test failed" }
@@ -67,7 +76,13 @@ class MongoDBHandler : DataSourceHandler {
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
         val connStr = credentials.connectionString
-            ?: buildConnectionString(host, port ?: 27017, databaseName, credentials.username, credentials.password)
+            ?: buildConnectionString(
+                host,
+                port ?: MONGODB_DEFAULT_PORT,
+                databaseName,
+                credentials.username,
+                credentials.password,
+            )
         val dbName = databaseName ?: "test"
 
         return suspendRunCatching {
@@ -98,7 +113,13 @@ class MongoDBHandler : DataSourceHandler {
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val connStr = credentials.connectionString
-            ?: buildConnectionString(host, port ?: 27017, databaseName, credentials.username, credentials.password)
+            ?: buildConnectionString(
+                host,
+                port ?: MONGODB_DEFAULT_PORT,
+                databaseName,
+                credentials.username,
+                credentials.password,
+            )
         val dbName = databaseName ?: "test"
 
         return suspendRunCatching {

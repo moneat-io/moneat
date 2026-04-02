@@ -56,6 +56,10 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
 import com.moneat.utils.suspendRunCatching
 
+private const val PROVIDER_TYPE_MAX_LENGTH = 50
+private const val PROVIDER_NAME_MAX_LENGTH = 255
+private const val DEFAULT_INCIDENT_PAGE_LIMIT = 50
+
 fun Route.incidentProviderRoutes() {
     val json =
         Json {
@@ -145,8 +149,8 @@ fun Route.incidentProviderRoutes() {
                             sql,
                             listOf(
                                 IntegerColumnType() to organizationId,
-                                VarCharColumnType(50) to request.providerType,
-                                VarCharColumnType(255) to request.name,
+                                VarCharColumnType(PROVIDER_TYPE_MAX_LENGTH) to request.providerType,
+                                VarCharColumnType(PROVIDER_NAME_MAX_LENGTH) to request.name,
                                 TextColumnType() to request.apiKey,
                                 TextColumnType() to jsonString,
                                 BooleanColumnType() to true,
@@ -202,7 +206,7 @@ fun Route.incidentProviderRoutes() {
 
                         request.name?.let {
                             setClauses.add("name = ?")
-                            params.add(VarCharColumnType(255) to it)
+                            params.add(VarCharColumnType(PROVIDER_NAME_MAX_LENGTH) to it)
                         }
                         request.apiKey?.let {
                             setClauses.add("api_key = ?")
@@ -441,7 +445,7 @@ fun Route.incidentProviderRoutes() {
                 val configId =
                     call.parameters["id"]?.toIntOrNull()
                         ?: return@get call.respond(HttpStatusCode.BadRequest)
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_INCIDENT_PAGE_LIMIT
 
                 val organizationId =
                     transaction {

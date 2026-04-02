@@ -74,6 +74,10 @@ import com.moneat.utils.suspendRunCatching
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
+private const val QUERY_PREVIEW_LENGTH = 80
+private const val DEFAULT_RETENTION_DAYS = 90
+private const val MAX_QUERIES_PER_REQUEST = 10
+
 private fun getOrgIdForUser(userId: Int): Long? {
     return transaction {
         Memberships.selectAll()
@@ -127,13 +131,14 @@ fun Route.customDashboardRoutes(
         if (promSource == null) {
             logger.warn {
                 val sourcesList = sources.map { "${it.id}:${it.sourceType}" }
-                val shortQuery = dsl.rawQuery?.take(80) ?: ""
+                val shortQuery = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH) ?: ""
                 "No Prometheus datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
                     "cannot resolve __prometheus for rawQuery=$shortQuery"
             }
             return dsl
         }
-        logger.debug { "Resolved __prometheus -> custom:${promSource.id} for rawQuery=${dsl.rawQuery?.take(80)}" }
+        val rawQueryPreview = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH)
+        logger.debug { "Resolved __prometheus -> custom:${promSource.id} for rawQuery=$rawQueryPreview" }
         return dsl.copy(dataSource = "custom:${promSource.id}")
     }
 
@@ -327,7 +332,11 @@ fun Route.customDashboardRoutes(
                 }
 
                 val retentionDays =
-                    if (isDemoUser) 90 else retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
+                    if (isDemoUser) {
+                        DEFAULT_RETENTION_DAYS
+                    } else {
+                        retentionPolicyService.getRetentionDaysForProject(projectId) ?: DEFAULT_RETENTION_DAYS
+                    }
                 val withTimeRange = if (request.timeRange != null) {
                     request.queryConfig.copy(timeRange = request.timeRange)
                 } else {
@@ -411,13 +420,17 @@ fun Route.customDashboardRoutes(
                     )
                 }
 
-                if (request.queries.size > 10) {
+                if (request.queries.size > MAX_QUERIES_PER_REQUEST) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Maximum 10 queries per batch"))
                     return@post
                 }
 
                 val retentionDays =
-                    if (isDemoUser) 90 else retentionPolicyService.getRetentionDaysForProject(projectId) ?: 90
+                    if (isDemoUser) {
+                        DEFAULT_RETENTION_DAYS
+                    } else {
+                        retentionPolicyService.getRetentionDaysForProject(projectId) ?: DEFAULT_RETENTION_DAYS
+                    }
                 val results = mutableMapOf<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>()
 
                 for ((index, query) in request.queries.withIndex()) {

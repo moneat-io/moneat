@@ -44,6 +44,7 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
+private const val ENVELOPE_LOG_MAX_LENGTH = 500
 
 fun Route.ingestRoutes(
     eventService: EventService = GlobalContext.get().get(),
@@ -98,7 +99,7 @@ fun Route.ingestRoutes(
                 val decompressedBytes = DecompressionService.decompress(bodyBytes, contentEncoding)
 
                 logger.debug { "Received envelope for project $projectId" }
-                logger.debug { "Envelope body:\n${decompressedBytes.decodeToString().take(500)}" }
+                logger.debug { "Envelope body:\n${decompressedBytes.decodeToString().take(ENVELOPE_LOG_MAX_LENGTH)}" }
 
                 val envelope = SentryEnvelope.parse(decompressedBytes)
                 logger.debug { "Envelope parsed successfully, items: ${envelope.items.size}" }

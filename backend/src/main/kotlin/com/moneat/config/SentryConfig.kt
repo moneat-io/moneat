@@ -21,6 +21,10 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
+private const val DEFAULT_SAMPLE_RATE = 0.1
+private const val MAX_BREADCRUMBS = 100
+private const val DSN_LOG_LENGTH = 20
+
 object SentryConfig {
     fun initialize() {
         val dsn = EnvConfig.get("SENTRY_DSN")
@@ -36,18 +40,20 @@ object SentryConfig {
             options.release = EnvConfig.get("RELEASE_VERSION") ?: "moneat@${System.getProperty("app.version", "dev")}"
 
             // Performance monitoring
-            val tracesSampleRate = EnvConfig.get("SENTRY_TRACES_SAMPLE_RATE", "0.1").toDoubleOrNull() ?: 0.1
+            val tracesSampleRate = EnvConfig.get("SENTRY_TRACES_SAMPLE_RATE", "0.1").toDoubleOrNull()
+                ?: DEFAULT_SAMPLE_RATE
             options.tracesSampleRate = tracesSampleRate
 
             // Enable profiling (if supported)
-            val profilesSampleRate = EnvConfig.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1").toDoubleOrNull() ?: 0.1
+            val profilesSampleRate = EnvConfig.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1").toDoubleOrNull()
+                ?: DEFAULT_SAMPLE_RATE
             options.profilesSampleRate = profilesSampleRate
 
             // Set server name
             options.serverName = EnvConfig.get("HOSTNAME", "moneat-backend")
 
             // Enable breadcrumbs
-            options.maxBreadcrumbs = 100
+            options.maxBreadcrumbs = MAX_BREADCRUMBS
 
             // Send default PII (Personal Identifiable Information)
             options.isSendDefaultPii = false
@@ -64,7 +70,7 @@ object SentryConfig {
 
             logger.info {
                 "Sentry initialized with DSN: ${dsn.take(
-                    20
+                    DSN_LOG_LENGTH
                 )}..., traces: $tracesSampleRate, profiles: $profilesSampleRate"
             }
         }

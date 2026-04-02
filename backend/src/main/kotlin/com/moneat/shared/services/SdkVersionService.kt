@@ -70,6 +70,7 @@ object SdkVersionService {
     private const val MIN_CACHE_TTL_SECONDS = 300
     private const val MAX_CACHE_TTL_SECONDS = 86_400
     private const val GITHUB_API_BASE = "https://api.github.com"
+    private const val GITHUB_RELEASES_PER_PAGE = 20
 
     private val versionTargets =
         listOf(
@@ -222,7 +223,7 @@ object SdkVersionService {
             suspendRunCatching {
                 httpClient.get("$GITHUB_API_BASE/repos/$repository/tags") {
                     applyGitHubHeaders()
-                    parameter("per_page", 20)
+                    parameter("per_page", GITHUB_RELEASES_PER_PAGE)
                 }
             }.getOrElse { e ->
                 sdkVersionLogger.warn(e) { "Failed to fetch tags for $repository" }

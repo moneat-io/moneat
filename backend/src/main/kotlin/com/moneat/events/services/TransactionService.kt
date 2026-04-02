@@ -49,6 +49,8 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
     companion object {
         private const val APDEX_THRESHOLD_MS = 500
         private const val NANOS_PER_MILLI = 1_000_000.0
+        private const val APDEX_FRUSTRATED_MULTIPLIER = 4
+        private const val APDEX_TOLERATED_WEIGHT = 0.5
     }
 
     private fun getOrganizationIdForProject(projectId: Long): Int? =
@@ -165,7 +167,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
         val totalQuery = """
             SELECT count() as total, avg(duration_ms) as avg_duration,
                 countIf(duration_ms <= $APDEX_THRESHOLD_MS) as satisfied,
-                countIf(duration_ms > $APDEX_THRESHOLD_MS AND duration_ms <= ${APDEX_THRESHOLD_MS * 4}) as tolerated
+                countIf(duration_ms > $APDEX_THRESHOLD_MS AND duration_ms <= ${APDEX_THRESHOLD_MS * APDEX_FRUSTRATED_MULTIPLIER}) as tolerated
             FROM `$clickhouseDb`.events
             WHERE $projectIdClause
                 AND event_type = 'transaction'
@@ -232,7 +234,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             val slowest = queryHelper.executeSlowestTransactionsQuery(slowestQuery)
 
             val apdex = if (totalCount > 0) {
-                ((satisfiedCount + toleratedCount * 0.5) / totalCount).coerceIn(0.0, 1.0)
+                ((satisfiedCount + toleratedCount * APDEX_TOLERATED_WEIGHT) / totalCount).coerceIn(0.0, 1.0)
             } else {
                 0.0
             }

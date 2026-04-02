@@ -25,6 +25,8 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.minutes
 
+private const val ONE_HOUR_SECONDS = 3600L
+
 /**
  * Background service that syncs on-call schedules to Slack user groups.
  * Runs every 60 seconds and updates Slack user groups to contain:
@@ -167,7 +169,7 @@ class SlackUserGroupSyncService(
             )
             // Cache the new state
             redisClient.set(cacheKey, targetState)
-            redisClient.expire(cacheKey, 3600) // Expire in 1 hour as a safety net
+            redisClient.expire(cacheKey, ONE_HOUR_SECONDS) // Expire in 1 hour as a safety net
         } else {
             logger.error(
                 "Failed to sync Slack usergroup ${schedule.usergroupHandle} for schedule ${schedule.scheduleName}",

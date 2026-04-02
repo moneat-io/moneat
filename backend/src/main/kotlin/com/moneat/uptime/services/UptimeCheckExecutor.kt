@@ -56,6 +56,12 @@ private val logger = KotlinLogging.logger {}
  */
 class UptimeCheckExecutor {
 
+    companion object {
+        private const val MILLIS_PER_SECOND = 1000
+        private const val HTTP_OK = 200
+        private const val DEFAULT_HTTPS_PORT = 443
+    }
+
     private val httpClient =
         HttpClient(CIO) {
             install(HttpTimeout) {
@@ -73,7 +79,7 @@ class UptimeCheckExecutor {
      */
     suspend fun executeCheck(monitor: UptimeMonitorData): CheckResult {
         return try {
-            withTimeout(monitor.timeoutSeconds * 1000L) {
+            withTimeout(monitor.timeoutSeconds * MILLIS_PER_SECOND.toLong()) {
                 when (monitor.type.lowercase()) {
                     "http" -> checkHttp(monitor)
                     "keyword" -> checkKeyword(monitor)
@@ -172,7 +178,7 @@ class UptimeCheckExecutor {
                 monitor.expectedStatusCodes
                     ?.split(",")
                     ?.mapNotNull { it.trim().toIntOrNull() }
-                    ?: listOf(200)
+                    ?: listOf(HTTP_OK)
 
             val isSuccess = statusCode in expectedCodes
 
@@ -301,7 +307,7 @@ class UptimeCheckExecutor {
 
         return try {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress(hostname, port), monitor.timeoutSeconds * 1000)
+                socket.connect(InetSocketAddress(hostname, port), monitor.timeoutSeconds * MILLIS_PER_SECOND)
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
                 CheckResult(1, responseTime, 0, "TCP connection successful")
             }
@@ -321,7 +327,7 @@ class UptimeCheckExecutor {
 
         return try {
             val address = InetAddress.getByName(hostname)
-            val reachable = address.isReachable(monitor.timeoutSeconds * 1000)
+            val reachable = address.isReachable(monitor.timeoutSeconds * MILLIS_PER_SECOND)
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
 
             if (reachable) {
@@ -456,7 +462,7 @@ class UptimeCheckExecutor {
                 val response = httpClient.get(dockerUrl)
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
 
-                if (response.status.value == 200) {
+                if (response.status.value == HTTP_OK) {
                     val body = response.bodyAsText()
                     val running = body.contains("\"Running\":true")
 
@@ -518,14 +524,14 @@ class UptimeCheckExecutor {
      */
     private suspend fun checkSsl(monitor: UptimeMonitorData): CheckResult {
         val hostname = monitor.hostname ?: return CheckResult(0, -1, 0, "No hostname configured")
-        val port = monitor.port ?: 443
+        val port = monitor.port ?: DEFAULT_HTTPS_PORT
 
         val startTime = System.currentTimeMillis()
 
         return try {
             val url = java.net.URI("https://$hostname:$port").toURL()
             val conn = url.openConnection() as HttpsURLConnection
-            conn.connectTimeout = monitor.timeoutSeconds * 1000
+            conn.connectTimeout = monitor.timeoutSeconds * MILLIS_PER_SECOND
             conn.connect()
 
             val responseTime = (System.currentTimeMillis() - startTime).toInt()

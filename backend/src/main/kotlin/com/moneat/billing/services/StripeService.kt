@@ -243,7 +243,7 @@ class StripeService(
                 InvoiceListParams
                     .builder()
                     .setCustomer(customerId)
-                    .setLimit(limit.coerceIn(1, 100))
+                    .setLimit(limit.coerceIn(1, MAX_INVOICES_LIMIT))
                     .build()
             )
         return invoices.data.map { invoice ->
@@ -770,7 +770,7 @@ class StripeService(
                 it[plan] = "free"
                 it[status] = "active"
                 it[current_period_start] = Clock.System.now()
-                it[current_period_end] = addDays(Clock.System.now(), 30)
+                it[current_period_end] = addDays(Clock.System.now(), FREE_TIER_PERIOD_DAYS)
                 it[payg_budget_cents] = 0
                 it[payg_used_units] = 0
                 it[payg_used_micros] = 0
@@ -827,9 +827,9 @@ class StripeService(
                 // that cannot form a full unit remain in pending_overage_bytes for the
                 // next flush cycle rather than being silently dropped.
                 val pendingBytes = row[Subscriptions.pending_overage_bytes]
-                val drainableUnits = pendingBytes / (BYTES_PER_GB / 100)
+                val drainableUnits = pendingBytes / (BYTES_PER_GB / GB_METER_UNITS_PER_GB)
                 if (drainableUnits > 0) {
-                    val remainingBytes = pendingBytes - drainableUnits * (BYTES_PER_GB / 100)
+                    val remainingBytes = pendingBytes - drainableUnits * (BYTES_PER_GB / GB_METER_UNITS_PER_GB)
                     Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
                         it[pending_meter_units] = row[Subscriptions.pending_meter_units] + drainableUnits
                         it[pending_overage_bytes] = remainingBytes
@@ -1039,7 +1039,7 @@ class StripeService(
                         it[plan] = "free"
                         it[status] = "active"
                         it[current_period_start] = now
-                        it[current_period_end] = addDays(now, 30)
+                        it[current_period_end] = addDays(now, FREE_TIER_PERIOD_DAYS)
                         it[pricing_tier_config_id] = freeTier?.id?.takeIf { id -> id > 0 }
                         it[payg_budget_cents] = 0
                         it[payg_used_units] = 0
@@ -1141,7 +1141,7 @@ class StripeService(
         instant: Instant,
         days: Int
     ): Instant {
-        return Instant.fromEpochSeconds(instant.epochSeconds + (days * 86_400L))
+        return Instant.fromEpochSeconds(instant.epochSeconds + (days * SECONDS_PER_DAY))
     }
 
     private fun epochSecondsToIso(epochSeconds: Long?): String? {
@@ -1163,5 +1163,9 @@ class StripeService(
     companion object {
         private val TERMINAL_WEBHOOK_STATUSES = listOf("processed", "success", "skipped")
         private const val BYTES_PER_GB = 1_073_741_824L
+        private const val MAX_INVOICES_LIMIT = 100L
+        private const val FREE_TIER_PERIOD_DAYS = 30
+        private const val GB_METER_UNITS_PER_GB = 100
+        private const val SECONDS_PER_DAY = 86_400L
     }
 }

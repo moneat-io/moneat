@@ -59,6 +59,10 @@ class BillingQuotaService(
 ) {
     companion object {
         private const val BYTES_PER_GB = 1_073_741_824L
+        private const val MICROS_PER_CENT = 10_000L
+        private const val UNITS_PER_THOUSAND = 1_000L
+        private const val UNITS_PER_MILLION = 1_000_000L
+        private const val UNITS_PER_HUNDRED_THOUSAND = 100_000L
     }
 
     fun isEnforcementEnabled(): Boolean {
@@ -714,7 +718,7 @@ class BillingQuotaService(
         val paygEnabled = tier.paygEnabled
         val paygLimitUnits =
             if (paygEnabled && paygBudgetCents > 0 && paygRateMicros > 0) {
-                (paygBudgetCents.toLong() * 10_000L) / paygRateMicros
+                (paygBudgetCents.toLong() * MICROS_PER_CENT) / paygRateMicros
             } else {
                 0
             }
@@ -831,7 +835,7 @@ class BillingQuotaService(
         val errorOverageUnits = max(0, state.usedErrors - state.errorLimit)
         val errorOverageCents =
             if (state.errorOverageRateCentsPer1k > 0 && errorOverageUnits > 0) {
-                ((errorOverageUnits * state.errorOverageRateCentsPer1k) / 1000).toInt()
+                ((errorOverageUnits * state.errorOverageRateCentsPer1k) / UNITS_PER_THOUSAND).toInt()
             } else {
                 0
             }
@@ -863,7 +867,7 @@ class BillingQuotaService(
         val llmOverageUnits = max(0, state.usedLlmEvents - state.llmEventLimit)
         val llmOverageCents =
             if (state.llmOverageRateCentsPer1k > 0 && llmOverageUnits > 0) {
-                ((llmOverageUnits * state.llmOverageRateCentsPer1k) / 1000).toInt()
+                ((llmOverageUnits * state.llmOverageRateCentsPer1k) / UNITS_PER_THOUSAND).toInt()
             } else {
                 0
             }
@@ -878,7 +882,7 @@ class BillingQuotaService(
                     (
                         analyticsPageviewOverageUnits *
                             state.analyticsPageviewOverageRateCentsPer100k
-                        ) / 100_000
+                        ) / UNITS_PER_HUNDRED_THOUSAND
                     ).toInt()
             } else {
                 0
@@ -891,7 +895,7 @@ class BillingQuotaService(
         }
         val apmSpanOverageCents =
             if (state.apmSpanOverageRateCentsPer1m > 0 && apmSpanOverageUnits > 0) {
-                ((apmSpanOverageUnits * state.apmSpanOverageRateCentsPer1m) / 1_000_000).toInt()
+                ((apmSpanOverageUnits * state.apmSpanOverageRateCentsPer1m) / UNITS_PER_MILLION).toInt()
             } else {
                 0
             }
@@ -907,7 +911,7 @@ class BillingQuotaService(
                     (
                         customMetricOverageUnits *
                             state.customMetricOverageRateCentsPer100k
-                        ) / 100_000
+                        ) / UNITS_PER_HUNDRED_THOUSAND
                     ).toInt()
             } else {
                 0

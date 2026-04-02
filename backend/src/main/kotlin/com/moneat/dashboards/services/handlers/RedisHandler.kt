@@ -40,13 +40,13 @@ private val logger = KotlinLogging.logger {}
 class RedisHandler : DataSourceHandler {
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        val uri = buildRedisUri(request.host, request.port ?: 6379, request.password ?: request.apiKey)
+        val uri = buildRedisUri(request.host, request.port ?: REDIS_DEFAULT_PORT, request.password ?: request.apiKey)
 
         return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     conn.sync().ping()
-                    val keys = scanKeys(conn.sync(), "*", 20)
+                    val keys = scanKeys(conn.sync(), "*", REDIS_SAMPLE_KEY_LIMIT)
                     TestConnectionResult(true, "Connected successfully", keys = keys)
                 }
             }
@@ -66,7 +66,7 @@ class RedisHandler : DataSourceHandler {
         limit: Int,
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
-        val uri = buildRedisUri(host, port ?: 6379, credentials.password ?: credentials.apiKey)
+        val uri = buildRedisUri(host, port ?: REDIS_DEFAULT_PORT, credentials.password ?: credentials.apiKey)
         val db = databaseName?.toIntOrNull() ?: 0
 
         return suspendRunCatching {
@@ -141,7 +141,7 @@ class RedisHandler : DataSourceHandler {
                         "LRANGE" -> {
                             val key = parts.getOrNull(1) ?: return emptyList()
                             val start = parts.getOrNull(2)?.toLongOrNull() ?: 0L
-                            val stop = parts.getOrNull(3)?.toLongOrNull() ?: -1L
+                            val stop = parts.getOrNull(LRANGE_STOP_ARG_INDEX)?.toLongOrNull() ?: -1L
                             cmd.lrange(key, start, stop).take(limit).mapIndexed { i, v ->
                                 mapOf(
                                     "index" to JsonPrimitive(i),
@@ -197,13 +197,13 @@ class RedisHandler : DataSourceHandler {
         databaseName: String?,
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
-        val uri = buildRedisUri(host, port ?: 6379, credentials.password ?: credentials.apiKey)
+        val uri = buildRedisUri(host, port ?: REDIS_DEFAULT_PORT, credentials.password ?: credentials.apiKey)
         val dbIndex = databaseName?.toIntOrNull() ?: 0
         return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     if (dbIndex != 0) conn.sync().select(dbIndex)
-                    val keys = scanKeys(conn.sync(), "*", 100)
+                    val keys = scanKeys(conn.sync(), "*", REDIS_SCHEMA_KEY_LIMIT)
                     keys.map { DataSourceField(it, "key", "Redis key") }
                 }
             }
@@ -241,6 +241,18 @@ class RedisHandler : DataSourceHandler {
     }
 
     companion object {
+        private const val REDIS_DEFAULT_PORT = 6379
+        private const val REDIS_SAMPLE_KEY_LIMIT = 20
+        private const val REDIS_SCHEMA_KEY_LIMIT = 100
+        private const val LRANGE_STOP_ARG_INDEX = 3
+        private const val SLOWLOG_ARGS_INDEX = 3
+        private const val CLUSTER_NODE_MASTER_IDX = 3
+        private const val CLUSTER_NODE_PING_IDX = 4
+        private const val CLUSTER_NODE_PONG_IDX = 5
+        private const val CLUSTER_NODE_EPOCH_IDX = 6
+        private const val CLUSTER_NODE_LINK_IDX = 7
+        private const val CLUSTER_NODE_SLOT_IDX = 8
+
         /**
          * Parse Redis INFO output (key:value lines grouped by sections)
          * into a single flat map row.
@@ -318,7 +330,7 @@ class RedisHandler : DataSourceHandler {
                     val id = (fields.getOrNull(0) as? Number)?.toLong() ?: 0L
                     val ts = (fields.getOrNull(1) as? Number)?.toLong() ?: 0L
                     val duration = (fields.getOrNull(2) as? Number)?.toLong() ?: 0L
-                    val args = (fields.getOrNull(3) as? List<*>)
+                    val args = (fields.getOrNull(SLOWLOG_ARGS_INDEX) as? List<*>)
                         ?.joinToString(" ") ?: ""
                     mapOf(
                         "Id" to JsonPrimitive(id),
@@ -343,12 +355,12 @@ class RedisHandler : DataSourceHandler {
                     "Id" to JsonPrimitive(parts.getOrElse(0) { "" }),
                     "Address" to JsonPrimitive(parts.getOrElse(1) { "" }),
                     "Flags" to JsonPrimitive(parts.getOrElse(2) { "" }),
-                    "Master" to JsonPrimitive(parts.getOrElse(3) { "" }),
-                    "Ping" to JsonPrimitive(parts.getOrElse(4) { "" }),
-                    "Pong" to JsonPrimitive(parts.getOrElse(5) { "" }),
-                    "Epoch" to JsonPrimitive(parts.getOrElse(6) { "" }),
-                    "Link" to JsonPrimitive(parts.getOrElse(7) { "" }),
-                    "Slot" to JsonPrimitive(parts.getOrElse(8) { "" })
+                    "Master" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_MASTER_IDX) { "" }),
+                    "Ping" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_PING_IDX) { "" }),
+                    "Pong" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_PONG_IDX) { "" }),
+                    "Epoch" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_EPOCH_IDX) { "" }),
+                    "Link" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_LINK_IDX) { "" }),
+                    "Slot" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_SLOT_IDX) { "" })
                 )
             }
         }

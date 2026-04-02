@@ -80,6 +80,8 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
     }
 }
 
+private const val MIN_INTERVAL_SECONDS = 10
+
 /**
  * Uptime monitoring routes.
  */
@@ -523,7 +525,7 @@ private fun validateMonitorRequest(request: CreateUptimeMonitorRequest): String?
         }
     }
 
-    if (request.intervalSeconds < 10) {
+    if (request.intervalSeconds < MIN_INTERVAL_SECONDS) {
         return "Check interval must be at least 10 seconds"
     }
 

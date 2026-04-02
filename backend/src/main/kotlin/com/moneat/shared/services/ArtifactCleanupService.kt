@@ -41,6 +41,10 @@ class ArtifactCleanupService(
 ) {
     private var cleanupJob: Job? = null
 
+    companion object {
+        private const val INVITATION_EXPIRY_DAYS = 90
+    }
+
     fun start(scope: CoroutineScope) {
         logger.info { "Starting artifact cleanup service (auth tokens, invitations)" }
         cleanupJob =
@@ -51,7 +55,7 @@ class ArtifactCleanupService(
                         if (authDeleted > 0) {
                             logger.info { "Cleaned up $authDeleted expired auth tokens" }
                         }
-                        val inviteDeleted = orgInvitationService.purgeOldInvitations(90)
+                        val inviteDeleted = orgInvitationService.purgeOldInvitations(INVITATION_EXPIRY_DAYS)
                         if (inviteDeleted > 0) {
                             logger.info { "Purged $inviteDeleted old invitations" }
                         }

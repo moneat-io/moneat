@@ -68,6 +68,9 @@ import com.moneat.utils.suspendRunCatching
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
+private const val MILLIS_IN_24_HOURS = 24L * 60 * 60 * 1000
+private const val SSE_POLL_TIMEOUT_SECONDS = 15L
+
 fun Route.logRoutes(
     logService: LogService = GlobalContext.get().get(),
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
@@ -214,7 +217,7 @@ fun Route.logRoutes(
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
                     if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
                         Instant.ofEpochMilli(twentyFourHoursAgo).toString()
                     } else {
                         call.request.queryParameters["from"]
@@ -278,7 +281,7 @@ fun Route.logRoutes(
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
                     if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
                         Instant.ofEpochMilli(twentyFourHoursAgo).toString()
                     } else {
                         call.request.queryParameters["from"]
@@ -309,7 +312,7 @@ fun Route.logRoutes(
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
                     if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
                         Instant.ofEpochMilli(twentyFourHoursAgo).toString()
                     } else {
                         call.request.queryParameters["from"]
@@ -362,7 +365,7 @@ fun Route.logRoutes(
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
                     if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
                         Instant.ofEpochMilli(twentyFourHoursAgo).toString()
                     } else {
                         call.request.queryParameters["from"]
@@ -476,7 +479,7 @@ fun Route.logRoutes(
                     flush()
 
                     while (true) {
-                        val next = queue.poll(15, TimeUnit.SECONDS)
+                        val next = queue.poll(SSE_POLL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                         if (next == null) {
                             write(": heartbeat\n\n")
                             flush()

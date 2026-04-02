@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import java.io.IOException
+import java.nio.ByteBuffer
 import java.time.Instant
 import java.time.format.DateTimeParseException
 import java.util.Base64
@@ -49,19 +50,6 @@ private val logger = KotlinLogging.logger {}
 private const val BRPOP_BACKOFF_DELAY_MS = 1000L
 private const val ERROR_BODY_PREVIEW_CHARS = 600
 private const val PROJECT_ID_HEADER_SIZE = 8
-private const val BYTE_MASK = 0xFFL
-private const val SHIFT_56 = 56
-private const val SHIFT_48 = 48
-private const val SHIFT_40 = 40
-private const val SHIFT_32 = 32
-private const val SHIFT_24 = 24
-private const val SHIFT_16 = 16
-private const val SHIFT_8 = 8
-private const val HEADER_LAST_BYTE_INDEX = 7
-private const val HEADER_BYTE_INDEX_3 = 3
-private const val HEADER_BYTE_INDEX_4 = 4
-private const val HEADER_BYTE_INDEX_5 = 5
-private const val HEADER_BYTE_INDEX_6 = 6
 
 class LlmIngestionWorker(
     private val queueKey: String,
@@ -255,15 +243,7 @@ class LlmIngestionWorker(
         fun decodeMessage(encoded: String): Pair<Long, ByteArray> {
             val bytes = Base64.getDecoder().decode(encoded)
             if (bytes.size < PROJECT_ID_HEADER_SIZE) throw IllegalArgumentException("Message too short")
-            val projectId =
-                ((bytes[0].toLong() and BYTE_MASK) shl SHIFT_56) or
-                    ((bytes[1].toLong() and BYTE_MASK) shl SHIFT_48) or
-                    ((bytes[2].toLong() and BYTE_MASK) shl SHIFT_40) or
-                    ((bytes[HEADER_BYTE_INDEX_3].toLong() and BYTE_MASK) shl SHIFT_32) or
-                    ((bytes[HEADER_BYTE_INDEX_4].toLong() and BYTE_MASK) shl SHIFT_24) or
-                    ((bytes[HEADER_BYTE_INDEX_5].toLong() and BYTE_MASK) shl SHIFT_16) or
-                    ((bytes[HEADER_BYTE_INDEX_6].toLong() and BYTE_MASK) shl SHIFT_8) or
-                    (bytes[HEADER_LAST_BYTE_INDEX].toLong() and BYTE_MASK)
+            val projectId = ByteBuffer.wrap(bytes, 0, PROJECT_ID_HEADER_SIZE).long
             val payloadBytes = bytes.copyOfRange(PROJECT_ID_HEADER_SIZE, bytes.size)
             return projectId to payloadBytes
         }
@@ -273,14 +253,7 @@ class LlmIngestionWorker(
             payloadBytes: ByteArray
         ): String {
             val bytes = ByteArray(PROJECT_ID_HEADER_SIZE + payloadBytes.size)
-            bytes[0] = (projectId shr SHIFT_56).toByte()
-            bytes[1] = (projectId shr SHIFT_48).toByte()
-            bytes[2] = (projectId shr SHIFT_40).toByte()
-            bytes[HEADER_BYTE_INDEX_3] = (projectId shr SHIFT_32).toByte()
-            bytes[HEADER_BYTE_INDEX_4] = (projectId shr SHIFT_24).toByte()
-            bytes[HEADER_BYTE_INDEX_5] = (projectId shr SHIFT_16).toByte()
-            bytes[HEADER_BYTE_INDEX_6] = (projectId shr SHIFT_8).toByte()
-            bytes[HEADER_LAST_BYTE_INDEX] = projectId.toByte()
+            ByteBuffer.wrap(bytes).putLong(projectId)
             payloadBytes.copyInto(bytes, PROJECT_ID_HEADER_SIZE)
             return Base64.getEncoder().encodeToString(bytes)
         }

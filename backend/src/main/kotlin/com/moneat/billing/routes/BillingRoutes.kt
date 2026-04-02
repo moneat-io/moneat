@@ -58,6 +58,8 @@ private const val FAILED_TO_CREATE_CHECKOUT_SESSION = "Failed to create checkout
 private const val FAILED_TO_CANCEL_SUBSCRIPTION = "Failed to cancel subscription"
 private const val FAILED_TO_UPDATE_ON_CALL_SEATS = "Failed to update on-call seats"
 private const val FAILED_TO_UPDATE_SEATS = "Failed to update seats"
+private const val PAYG_INCREMENT_CENTS = 500
+private const val MAX_ONCALL_SEATS = 200
 
 // Public billing endpoints (no auth required)
 fun Route.publicBillingRoutes(
@@ -306,7 +308,7 @@ fun Route.billingRoutes(
                     return@put
                 }
             val request = call.receive<UpdatePaygBudgetRequest>()
-            if (request.paygBudgetCents < 0 || request.paygBudgetCents % 500 != 0) {
+            if (request.paygBudgetCents < 0 || request.paygBudgetCents % PAYG_INCREMENT_CENTS != 0) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("PAYG budget must be in $5 increments"))
                 return@put
             }
@@ -358,7 +360,7 @@ fun Route.billingRoutes(
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Seats must be non-negative"))
                 return@put
             }
-            if (request.seats > 200) {
+            if (request.seats > MAX_ONCALL_SEATS) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Maximum 200 on-call seats allowed"))
                 return@put
             }

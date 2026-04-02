@@ -61,6 +61,10 @@ class SyntheticsService(
         private const val PRO_TIER_LIMIT = 20
         private const val TEAM_TIER_LIMIT = 50
         private const val BUSINESS_TIER_LIMIT = Int.MAX_VALUE
+        private const val MILLIS_PER_SECOND = 1000L
+        private const val TIMEOUT_BUFFER_MS = 5000L
+        private const val HTTP_SUCCESS_MIN = 200
+        private const val HTTP_SUCCESS_MAX = 299
     }
 
     fun createTest(
@@ -327,7 +331,7 @@ class SyntheticsService(
 
         for (attempt in 1..maxAttempts) {
             lastResult = suspendRunCatching {
-                withTimeout(test.timeoutSeconds * 1000L + 5000) {
+                withTimeout(test.timeoutSeconds * MILLIS_PER_SECOND + TIMEOUT_BUFFER_MS) {
                     executor.executeTest(test)
                 }
             }.getOrElse { e ->
@@ -672,7 +676,7 @@ class SyntheticsService(
             ClickHouseClient.execute(query)
         }.getOrNull() ?: return null
 
-        if (response.status.value !in 200..299) {
+        if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
             logger.warn {
                 "ClickHouse summary query failed: ${response.status}"
             }

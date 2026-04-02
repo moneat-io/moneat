@@ -41,6 +41,8 @@ import com.moneat.datadog.models.DatadogMetricV1
  */
 object MetricPayloadDecoder {
 
+    private const val PROTO_FIELD_SHIFT = 3
+
     private val METRIC_TYPES = mapOf(0 to "gauge", 1 to "count", 2 to "rate", 3 to "gauge")
 
     /** Decodes a raw (already decompressed) protobuf MetricPayload into DatadogMetricSeriesV1. */
@@ -52,7 +54,7 @@ object MetricPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (LEN): repeated MetricSeries series
-                (1 shl 3) or 2 -> series += decodeSeries(input.readByteArray())
+                (1 shl PROTO_FIELD_SHIFT) or 2 -> series += decodeSeries(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -113,8 +115,8 @@ object MetricPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl 3) or 2 -> type = input.readString()
-                (2 shl 3) or 2 -> name = input.readString()
+                (1 shl PROTO_FIELD_SHIFT) or 2 -> type = input.readString()
+                (2 shl PROTO_FIELD_SHIFT) or 2 -> name = input.readString()
                 else -> input.skipField(tag)
             }
         }

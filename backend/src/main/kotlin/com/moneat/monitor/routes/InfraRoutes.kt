@@ -41,6 +41,8 @@ private val json = Json { ignoreUnknownKeys = true }
 
 private const val DEFAULT_LIMIT = 100
 private const val MAX_LIMIT = 500
+private const val HTTP_SUCCESS_MIN = 200
+private const val HTTP_SUCCESS_MAX = 299
 
 private fun getOrgIdsForUser(userId: Int): List<Int> {
     return transaction {
@@ -521,7 +523,7 @@ fun Route.infraRoutes() {
 private suspend fun executeChQuery(query: String): List<JsonObject>? {
     return runCatching {
         val response = ClickHouseClient.execute(query)
-        if (response.status.value !in 200..299) {
+        if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
             logger.warn { "ClickHouse query failed: ${response.status}" }
             return null
         }

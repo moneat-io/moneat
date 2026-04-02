@@ -34,6 +34,10 @@ class IssueService(
     private val queryHelper: DashboardQueryHelper
 ) {
 
+    companion object {
+        private const val ISSUE_OVERFETCH_MULTIPLIER = 5
+    }
+
     suspend fun getProjectIdForIssue(issueId: String): Long? =
         issueRepository.getProjectIdForIssue(issueId)
 
@@ -52,7 +56,7 @@ class IssueService(
 
         val pgOverrides = issueRepository.getIssueStatusOverrides(projectId)
 
-        val overfetch = if (status != null) (limit + offset) * 5 else limit + offset
+        val overfetch = if (status != null) (limit + offset) * ISSUE_OVERFETCH_MULTIPLIER else limit + offset
         val rows = issueRepository.getIssuesRaw(
             projectId = projectId,
             offset = offset,

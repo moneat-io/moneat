@@ -69,6 +69,10 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
+private const val HOURS_PER_DAY = 24
+private const val PERCENT_MULTIPLIER = 100.0
+private const val TOKEN_BYTES_SIZE = 32
+
 class StatusPageService(
     private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
 ) {
@@ -666,7 +670,7 @@ class StatusPageService(
                 val currentStatus = getCurrentMonitorStatus(data.monitorId)
 
                 // Calculate uptime percentage
-                val uptimePercentage = uptimeService.getUptimePercentage(data.monitorId, historyDays * 24)
+                val uptimePercentage = uptimeService.getUptimePercentage(data.monitorId, historyDays * HOURS_PER_DAY)
 
                 // Get uptime history if enabled
                 val uptimeHistory =
@@ -767,7 +771,7 @@ class StatusPageService(
         days: Int
     ): List<UptimeDataPoint> {
         val now = Clock.System.now()
-        val from = now.minus((days * 24).hours)
+        val from = now.minus((days * HOURS_PER_DAY).hours)
 
         // Get daily uptime percentages
         val query =
@@ -797,7 +801,8 @@ class StatusPageService(
                     val upCount = json["up_count"]?.jsonPrimitive?.long ?: 0L
                     val totalCount = json["total_count"]?.jsonPrimitive?.long ?: 0L
 
-                    val uptime = if (totalCount == 0L) 0.0 else (upCount.toDouble() / totalCount.toDouble() * 100.0)
+                    val uptime =
+                        if (totalCount == 0L) 0.0 else (upCount.toDouble() / totalCount.toDouble() * PERCENT_MULTIPLIER)
 
                     UptimeDataPoint(date = date, uptime = uptime)
                 } catch (e: SerializationException) {
@@ -815,7 +820,7 @@ class StatusPageService(
 
     private fun generateVerificationToken(): String {
         val random = SecureRandom()
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(TOKEN_BYTES_SIZE)
         random.nextBytes(bytes)
         return bytes.joinToString("") { "%02x".format(it) }
     }

@@ -51,6 +51,10 @@ class ReleaseService {
     private val dateFormatter = DateTimeFormatter.ISO_INSTANT
     private val logger = KotlinLogging.logger {}
 
+    companion object {
+        private const val IO_BUFFER_SIZE = 8192
+    }
+
     /**
      * Create a new release for a project
      */
@@ -467,7 +471,7 @@ class ReleaseService {
         // Verify checksum
         val digest = MessageDigest.getInstance("SHA-1")
         storage.openInputStream(storageKey)?.use { input ->
-            val buffer = ByteArray(8192)
+            val buffer = ByteArray(IO_BUFFER_SIZE)
             var read: Int
             while (input.read(buffer).also { read = it } != -1) {
                 digest.update(buffer, 0, read)

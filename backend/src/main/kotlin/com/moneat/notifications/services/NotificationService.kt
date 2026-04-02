@@ -57,6 +57,15 @@ import java.util.concurrent.TimeUnit
 
 private val logger = KotlinLogging.logger {}
 
+private const val STACK_FRAMES_COUNT = 5
+private const val EPOCH_SECONDS_TO_MILLIS = 1000
+private const val WEEKLY_SUMMARY_DAYS = 7L
+private const val ERROR_BODY_PREVIEW_CHARS = 500
+private const val WEEKLY_SUMMARY_HOUR = 9
+private const val FULL_PERCENTAGE = 100
+private const val MILLION = 1_000_000L
+private const val THOUSAND = 1_000L
+
 class NotificationService(
     private val emailService: EmailService,
     private val slackService: SlackService = SlackService(),
@@ -161,7 +170,7 @@ class NotificationService(
                     ?.firstOrNull()
                     ?.stacktrace
                     ?.frames
-                    ?.takeLast(5)
+                    ?.takeLast(STACK_FRAMES_COUNT)
                     ?.joinToString("\n") { frame ->
                         "  at ${frame.function ?: "unknown"} (${frame.filename}:${frame.lineno})"
                     } ?: "No stack trace available"
@@ -187,7 +196,7 @@ class NotificationService(
                     timestamp =
                     event.timestamp?.let {
                         java.time.Instant
-                            .ofEpochMilli((it * 1000).toLong())
+                            .ofEpochMilli((it * EPOCH_SECONDS_TO_MILLIS).toLong())
                             .toString()
                     } ?: java.time.Instant
                         .now()
@@ -286,8 +295,8 @@ class NotificationService(
 
             val now = Instant.now()
             val endDate = now
-            val startDate = now.minus(Duration.ofDays(7))
-            val priorStartDate = startDate.minus(Duration.ofDays(7))
+            val startDate = now.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
+            val priorStartDate = startDate.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
 
             // Get all users with weekly summary enabled
             val usersToNotify =
@@ -323,8 +332,8 @@ class NotificationService(
     suspend fun sendWeeklySummaryForUser(userId: Int, email: String) {
         val now = Instant.now()
         val endDate = now
-        val startDate = now.minus(Duration.ofDays(7))
-        val priorStartDate = startDate.minus(Duration.ofDays(7))
+        val startDate = now.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
+        val priorStartDate = startDate.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
         sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
     }
 
@@ -435,7 +444,8 @@ class NotificationService(
         val response = ClickHouseClient.execute(query)
         val responseBody = response.bodyAsText()
         if (!response.status.isSuccess()) {
-            logger.error("ClickHouse query failed in getStatsForPeriod: ${response.status} - ${responseBody.take(500)}")
+            val preview = responseBody.take(ERROR_BODY_PREVIEW_CHARS)
+            logger.error("ClickHouse query failed in getStatsForPeriod: ${response.status} - $preview")
             return PeriodStats(totalEvents = 0, uniqueIssues = 0, uniqueUsers = 0)
         }
         val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
@@ -511,7 +521,8 @@ class NotificationService(
         val response = ClickHouseClient.execute(query)
         val responseBody = response.bodyAsText()
         if (!response.status.isSuccess()) {
-            logger.error("ClickHouse query failed in getTopIssues: ${response.status} - ${responseBody.take(500)}")
+            val preview = responseBody.take(ERROR_BODY_PREVIEW_CHARS)
+            logger.error("ClickHouse query failed in getTopIssues: ${response.status} - $preview")
             return emptyList()
         }
         val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
@@ -597,7 +608,7 @@ class NotificationService(
         var nextRun =
             now
                 .with(DayOfWeek.MONDAY)
-                .withHour(9)
+                .withHour(WEEKLY_SUMMARY_HOUR)
                 .withMinute(0)
                 .withSecond(0)
                 .withNano(0)
@@ -608,7 +619,7 @@ class NotificationService(
         }
 
         val initialDelay = Duration.between(now, nextRun).toMillis()
-        val period = Duration.ofDays(7).toMillis()
+        val period = Duration.ofDays(WEEKLY_SUMMARY_DAYS).toMillis()
 
         logger.info { "Scheduling weekly summary for $nextRun" }
 
@@ -632,14 +643,14 @@ class NotificationService(
         current: Long,
         previous: Long
     ): Int {
-        if (previous == 0L) return if (current > 0) 100 else 0
-        return ((current - previous) * 100 / previous).toInt()
+        if (previous == 0L) return if (current > 0) FULL_PERCENTAGE else 0
+        return ((current - previous) * FULL_PERCENTAGE / previous).toInt()
     }
 
     private fun formatNumber(num: Long): String {
         return when {
-            num >= 1_000_000 -> String.format(Locale.US, "%.1fM", num / 1_000_000.0)
-            num >= 1_000 -> String.format(Locale.US, "%.1fK", num / 1_000.0)
+            num >= MILLION -> String.format(Locale.US, "%.1fM", num / MILLION.toDouble())
+            num >= THOUSAND -> String.format(Locale.US, "%.1fK", num / THOUSAND.toDouble())
             else -> num.toString()
         }
     }

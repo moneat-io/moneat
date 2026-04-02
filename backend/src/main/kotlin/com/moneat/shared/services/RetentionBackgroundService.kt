@@ -55,6 +55,12 @@ class RetentionBackgroundService(
 
     private var sweepJob: Job? = null
 
+    companion object {
+        private const val MILLIS_PER_SECOND = 1000L
+        private const val HTTP_SUCCESS_MIN = 200
+        private const val HTTP_SUCCESS_MAX = 299
+    }
+
     fun start(scope: CoroutineScope) {
         if (!enabled) {
             logger.info { "Retention background job is disabled by config" }
@@ -69,7 +75,7 @@ class RetentionBackgroundService(
                     }.onFailure { e ->
                         logger.error(e) { "Retention sweep failed" }
                     }
-                    delay(sweepIntervalSeconds * 1000L)
+                    delay(sweepIntervalSeconds * MILLIS_PER_SECOND)
                 }
             }
     }
@@ -284,7 +290,7 @@ class RetentionBackgroundService(
         }
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
-            if (response.status.value !in 200..299) {
+            if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 logger.error { "Retention mutation failed for $label (status=${response.status})" }
                 false
             } else {

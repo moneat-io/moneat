@@ -418,7 +418,9 @@ private fun maskEmail(email: String): String {
     return "$masked@${parts[1]}"
 }
 
+private const val PHONE_VISIBLE_DIGITS = 4
+
 private fun maskPhone(phone: String): String {
-    if (phone.length <= 4) return phone
-    return "*".repeat(phone.length - 4) + phone.takeLast(4)
+    if (phone.length <= PHONE_VISIBLE_DIGITS) return phone
+    return "*".repeat(phone.length - PHONE_VISIBLE_DIGITS) + phone.takeLast(PHONE_VISIBLE_DIGITS)
 }
