@@ -306,16 +306,16 @@ tasks.jacocoTestReport {
                 exclude(*jacocoBackendMainExcludes)
             }
         }
-    val enterpriseSsoClasses =
-        fileTree(eeProject.layout.buildDirectory.dir("classes/kotlin/main")) {
-            include("**/com/moneat/enterprise/sso/**")
-        }
-    classDirectories.setFrom(files(backendFiltered, enterpriseSsoClasses))
+    // All enterprise module classes: Sonar analyzes ../ee/backend/src/main/kotlin in full; the XML
+    // must map execution data to those sources or new-code coverage reads as 0%.
+    val enterpriseClasses =
+        fileTree(eeProject.layout.buildDirectory.dir("classes/kotlin/main"))
+    classDirectories.setFrom(files(backendFiltered, enterpriseClasses))
 
     sourceDirectories.setFrom(
         files(
             sourceSets.main.get().allSource.srcDirs.filter { it.exists() },
-            eeProject.file("src/main/kotlin/com/moneat/enterprise/sso"),
+            eeProject.file("src/main/kotlin"),
         )
     )
 }
