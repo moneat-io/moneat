@@ -144,6 +144,24 @@ internal fun insertWidget(
 
 private val defaultTimeRange = TimeRangeDef("now-7d", "now")
 
+/** Full-width section row; returns the next grid y after the section (Sonar: deduplicate section blocks). */
+private fun insertDemoDashboardSectionRow(
+    dashboardId: Long,
+    title: String,
+    row: Int,
+    order: Int,
+): Int {
+    insertWidget(
+        dashboardId,
+        title,
+        "section",
+        DemoWidgetGrid(0, row, 12, 1),
+        emptyList(),
+        order = order,
+    )
+    return row + 1
+}
+
 /** First section at row 0; returns dashboard id and next grid row (1). */
 private fun openDemoDashboardWithSection(
     title: String,
@@ -151,15 +169,74 @@ private fun openDemoDashboardWithSection(
     sectionTitle: String,
 ): Pair<Long, Int> {
     val id = insertDashboard(title, description)
+    val nextRow = insertDemoDashboardSectionRow(id, sectionTitle, row = 0, order = 0)
+    return id to nextRow
+}
+
+/** Donut: COUNT grouped by one field (Sonar: deduplicate donut widgets). */
+private fun insertDemoCountDonutByField(
+    dashboardId: Long,
+    title: String,
+    grid: DemoWidgetGrid,
+    dataSource: String,
+    groupByField: String,
+    filters: List<FilterDef> = emptyList(),
+    orderBy: OrderByDef? = null,
+    limit: Int = 100,
+    order: Int,
+) {
     insertWidget(
-        id,
-        sectionTitle,
-        "section",
-        DemoWidgetGrid(0, 0, 12, 1),
-        emptyList(),
-        order = 0,
+        dashboardId,
+        title,
+        "donut",
+        grid,
+        listOf(
+            QueryDsl(
+                dataSource = dataSource,
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
+                groupBy = listOf(GroupByDef(groupByField, GroupByType.FIELD)),
+                filters = filters,
+                orderBy = orderBy,
+                timeRange = defaultTimeRange,
+                limit = limit,
+            )
+        ),
+        order = order,
     )
-    return id to 1
+}
+
+/** Bar: COUNT grouped by one field, descending order (Sonar: deduplicate bar widgets). */
+private fun insertDemoBarCountByField(
+    dashboardId: Long,
+    title: String,
+    grid: DemoWidgetGrid,
+    dataSource: String,
+    groupByField: String,
+    metricAlias: String = "count",
+    filters: List<FilterDef> = emptyList(),
+    limit: Int = 10,
+    display: Map<String, String> = emptyMap(),
+    order: Int,
+) {
+    insertWidget(
+        dashboardId,
+        title,
+        "bar",
+        grid,
+        listOf(
+            QueryDsl(
+                dataSource = dataSource,
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = metricAlias)),
+                groupBy = listOf(GroupByDef(groupByField, GroupByType.FIELD)),
+                filters = filters,
+                orderBy = OrderByDef(metricAlias, "desc"),
+                timeRange = defaultTimeRange,
+                limit = limit,
+            )
+        ),
+        display,
+        order = order,
+    )
 }
 
 /**
@@ -296,15 +373,7 @@ internal fun seedErrorOverviewDashboard() {
     row += 4
 
     // Section: Error Details
-    insertWidget(
-        id,
-        "Error Details",
-        "section",
-        DemoWidgetGrid(0, row, 12, 1),
-        emptyList(),
-        order = 5,
-    )
-    row += 1
+    row = insertDemoDashboardSectionRow(id, "Error Details", row, order = 5)
 
     // Recent errors table
     insertWidget(
@@ -330,20 +399,13 @@ internal fun seedErrorOverviewDashboard() {
     )
 
     // Errors by platform donut
-    insertWidget(
-        id,
-        "Errors by Platform",
-        "donut",
-        DemoWidgetGrid(8, row, 4, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef("platform", GroupByType.FIELD)),
-                filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
-                timeRange = defaultTimeRange
-            )
-        ),
+    insertDemoCountDonutByField(
+        dashboardId = id,
+        title = "Errors by Platform",
+        grid = DemoWidgetGrid(8, row, 4, 4),
+        dataSource = "events",
+        groupByField = "platform",
+        filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
         order = 7,
     )
 }
@@ -380,15 +442,7 @@ internal fun seedPerformanceDashboard() {
     row += 4
 
     // Section: Sessions
-    insertWidget(
-        id,
-        "Sessions",
-        "section",
-        DemoWidgetGrid(0, row, 12, 1),
-        emptyList(),
-        order = 5,
-    )
-    row += 1
+    row = insertDemoDashboardSectionRow(id, "Sessions", row, order = 5)
 
     // Sessions over time
     insertWidget(
@@ -451,15 +505,7 @@ internal fun seedLlmMonitoringDashboard() {
     var row = 0
 
     // Section: Usage Overview
-    insertWidget(
-        id,
-        "Usage Overview",
-        "section",
-        DemoWidgetGrid(0, row, 12, 1),
-        emptyList(),
-        order = 0,
-    )
-    row += 1
+    row = insertDemoDashboardSectionRow(id, "Usage Overview", row, order = 0)
 
     // Generations over time
     insertWidget(
@@ -581,32 +627,15 @@ internal fun seedLlmMonitoringDashboard() {
     row += 4
 
     // Section: Model Breakdown
-    insertWidget(
-        id,
-        "Model Breakdown",
-        "section",
-        DemoWidgetGrid(0, row, 12, 1),
-        emptyList(),
-        order = 8,
-    )
-    row += 1
+    row = insertDemoDashboardSectionRow(id, "Model Breakdown", row, order = 8)
 
     // Generations by model
-    insertWidget(
-        id,
-        "Generations by Model",
-        "bar",
-        DemoWidgetGrid(0, row, 4, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "llm_generations",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef("model", GroupByType.FIELD)),
-                orderBy = OrderByDef("count", "desc"),
-                timeRange = defaultTimeRange,
-                limit = 10
-            )
-        ),
+    insertDemoBarCountByField(
+        dashboardId = id,
+        title = "Generations by Model",
+        grid = DemoWidgetGrid(0, row, 4, 4),
+        dataSource = "llm_generations",
+        groupByField = "model",
         order = 9,
     )
 
@@ -631,19 +660,12 @@ internal fun seedLlmMonitoringDashboard() {
     )
 
     // Generations by provider donut
-    insertWidget(
-        id,
-        "Generations by Provider",
-        "donut",
-        DemoWidgetGrid(8, row, 4, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "llm_generations",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef("provider", GroupByType.FIELD)),
-                timeRange = defaultTimeRange
-            )
-        ),
+    insertDemoCountDonutByField(
+        dashboardId = id,
+        title = "Generations by Provider",
+        grid = DemoWidgetGrid(8, row, 4, 4),
+        dataSource = "llm_generations",
+        groupByField = "provider",
         order = 11,
     )
 }
@@ -684,108 +706,60 @@ internal fun seedWebAnalyticsDashboard() {
     row += 4
 
     // Section: Breakdown
-    insertWidget(
-        id,
-        "Breakdown",
-        "section",
-        DemoWidgetGrid(0, row, 12, 1),
-        emptyList(),
-        order = 5,
-    )
-    row += 1
+    row = insertDemoDashboardSectionRow(id, "Breakdown", row, order = 5)
 
     // Top pages bar
-    insertWidget(
-        id,
-        "Top Pages",
-        "bar",
-        DemoWidgetGrid(0, row, 6, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "analytics_events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "views")),
-                groupBy = listOf(GroupByDef("pathname", GroupByType.FIELD)),
-                filters = listOf(FilterDef("event_name", FilterOp.EQ, "pageview")),
-                orderBy = OrderByDef("views", "desc"),
-                timeRange = defaultTimeRange,
-                limit = 10
-            )
-        ),
+    insertDemoBarCountByField(
+        dashboardId = id,
+        title = "Top Pages",
+        grid = DemoWidgetGrid(0, row, 6, 4),
+        dataSource = "analytics_events",
+        groupByField = "pathname",
+        metricAlias = "views",
+        filters = listOf(FilterDef("event_name", FilterOp.EQ, "pageview")),
         order = 6,
     )
 
     // Traffic by country donut
-    insertWidget(
-        id,
-        "Traffic by Country",
-        "donut",
-        DemoWidgetGrid(6, row, 3, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "analytics_events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef("country_code", GroupByType.FIELD)),
-                orderBy = OrderByDef("count", "desc"),
-                timeRange = defaultTimeRange,
-                limit = 10
-            )
-        ),
+    insertDemoCountDonutByField(
+        dashboardId = id,
+        title = "Traffic by Country",
+        grid = DemoWidgetGrid(6, row, 3, 4),
+        dataSource = "analytics_events",
+        groupByField = "country_code",
+        orderBy = OrderByDef("count", "desc"),
+        limit = 10,
         order = 7,
     )
 
     // Traffic by device type donut
-    insertWidget(
-        id,
-        "Traffic by Device",
-        "donut",
-        DemoWidgetGrid(9, row, 3, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "analytics_events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef("device_type", GroupByType.FIELD)),
-                timeRange = defaultTimeRange
-            )
-        ),
+    insertDemoCountDonutByField(
+        dashboardId = id,
+        title = "Traffic by Device",
+        grid = DemoWidgetGrid(9, row, 3, 4),
+        dataSource = "analytics_events",
+        groupByField = "device_type",
         order = 8,
     )
     row += 4
 
     // Traffic by browser bar
-    insertWidget(
-        id,
-        "Traffic by Browser",
-        "bar",
-        DemoWidgetGrid(0, row, 6, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "analytics_events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef("browser", GroupByType.FIELD)),
-                orderBy = OrderByDef("count", "desc"),
-                timeRange = defaultTimeRange,
-                limit = 10
-            )
-        ),
+    insertDemoBarCountByField(
+        dashboardId = id,
+        title = "Traffic by Browser",
+        grid = DemoWidgetGrid(0, row, 6, 4),
+        dataSource = "analytics_events",
+        groupByField = "browser",
         order = 9,
     )
 
     // Traffic by OS bar
-    insertWidget(
-        id,
-        "Traffic by OS",
-        "bar",
-        DemoWidgetGrid(6, row, 6, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "analytics_events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef("os", GroupByType.FIELD)),
-                orderBy = OrderByDef("count", "desc"),
-                timeRange = defaultTimeRange,
-                limit = 10
-            )
-        ),
+    insertDemoBarCountByField(
+        dashboardId = id,
+        title = "Traffic by OS",
+        grid = DemoWidgetGrid(6, row, 6, 4),
+        dataSource = "analytics_events",
+        groupByField = "os",
         order = 10,
     )
 }
