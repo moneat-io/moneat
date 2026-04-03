@@ -15,6 +15,7 @@ style:
     excludes:
       - '**/test/**'
       - '**/integrationTest/**'
+      - '**/DemoDataReseeder.kt'
     ignorePropertyDeclaration: true
     ignoreEnums: true
     ignoreRanges: true

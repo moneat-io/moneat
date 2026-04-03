@@ -48,6 +48,21 @@ object ProcessAgentPayloadDecoder {
     // Protobuf wire format constants
     private const val PROTO_FIELD_SHIFT = 3
     private const val PROTO_PAYLOAD_ITEMS_FIELD = 3
+    private const val PROTO_WIRE_FLOAT = 5 // 32-bit float wire type
+    private const val PROTO_FIELD_3 = 3
+    private const val PROTO_FIELD_4 = 4
+    private const val PROTO_FIELD_5 = 5
+    private const val PROTO_FIELD_6 = 6
+    private const val PROTO_FIELD_7 = 7
+    private const val PROTO_FIELD_8 = 8
+    private const val PROTO_FIELD_11 = 11
+    private const val PROTO_FIELD_12 = 12
+    private const val PROTO_FIELD_16 = 16
+    private const val PROTO_FIELD_17 = 17
+    private const val PROTO_FIELD_20 = 20
+    private const val PROTO_FIELD_21 = 21
+    private const val PROTO_FIELD_23 = 23
+    private const val PROTO_FIELD_26 = 26
 
     // Type constants
     const val TYPE_COLLECTOR_PROC: Int = 12
@@ -133,7 +148,6 @@ object ProcessAgentPayloadDecoder {
     //   20 (float) : totalPct    → cpuPercent
     //   21 (uint64): memRss      → memUsage
     //   26 (string, repeated): tags
-    @Suppress("MagicNumber")
     private fun decodeContainer(bytes: ByteArray): DatadogContainer {
         val input = CodedInputStream.newInstance(bytes)
         var id = ""
@@ -150,16 +164,16 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl 3) or 2 -> id = input.readString()
-                (3 shl 3) or 2 -> name = input.readString()
-                (4 shl 3) or 2 -> image = input.readString()
-                (6 shl 3) or 0 -> memLimit = input.readUInt64()
-                (8 shl 3) or 0 -> state = input.readEnum()
-                (16 shl 3) or 5 -> netRcvdBps = input.readFloat()
-                (17 shl 3) or 5 -> netSentBps = input.readFloat()
-                (20 shl 3) or 5 -> totalPct = input.readFloat()
-                (21 shl 3) or 0 -> memRss = input.readUInt64()
-                (26 shl 3) or 2 -> tags += input.readString()
+                (2 shl PROTO_FIELD_SHIFT) or 2 -> id = input.readString()
+                (PROTO_FIELD_3 shl PROTO_FIELD_SHIFT) or 2 -> name = input.readString()
+                (PROTO_FIELD_4 shl PROTO_FIELD_SHIFT) or 2 -> image = input.readString()
+                (PROTO_FIELD_6 shl PROTO_FIELD_SHIFT) or 0 -> memLimit = input.readUInt64()
+                (PROTO_FIELD_8 shl PROTO_FIELD_SHIFT) or 0 -> state = input.readEnum()
+                (PROTO_FIELD_16 shl PROTO_FIELD_SHIFT) or PROTO_WIRE_FLOAT -> netRcvdBps = input.readFloat()
+                (PROTO_FIELD_17 shl PROTO_FIELD_SHIFT) or PROTO_WIRE_FLOAT -> netSentBps = input.readFloat()
+                (PROTO_FIELD_20 shl PROTO_FIELD_SHIFT) or PROTO_WIRE_FLOAT -> totalPct = input.readFloat()
+                (PROTO_FIELD_21 shl PROTO_FIELD_SHIFT) or 0 -> memRss = input.readUInt64()
+                (PROTO_FIELD_26 shl PROTO_FIELD_SHIFT) or 2 -> tags += input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -208,7 +222,6 @@ object ProcessAgentPayloadDecoder {
     //   11 (int32)  : openFdCount
     //   12 (enum)   : state
     //   23 (repeated string): tags
-    @Suppress("MagicNumber")
     private fun decodeProcess(bytes: ByteArray): DatadogProcess {
         val input = CodedInputStream.newInstance(bytes)
         var pid = 0
@@ -226,32 +239,32 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl 3) or 0 -> pid = input.readInt32()
-                (4 shl 3) or 2 -> {
+                (2 shl PROTO_FIELD_SHIFT) or 0 -> pid = input.readInt32()
+                (PROTO_FIELD_4 shl PROTO_FIELD_SHIFT) or 2 -> {
                     val r = decodeCommand(
                         input.readByteArray()
                     )
                     cmdName = r.first
                     cmdFull = r.second
                 }
-                (5 shl 3) or 2 -> userName = decodeProcessUser(input.readByteArray())
-                (7 shl 3) or 2 -> {
+                (PROTO_FIELD_5 shl PROTO_FIELD_SHIFT) or 2 -> userName = decodeProcessUser(input.readByteArray())
+                (PROTO_FIELD_7 shl PROTO_FIELD_SHIFT) or 2 -> {
                     val r = decodeMemoryStat(
                         input.readByteArray()
                     )
                     memRss = r.first
                     memVms = r.second
                 }
-                (8 shl 3) or 2 -> {
+                (PROTO_FIELD_8 shl PROTO_FIELD_SHIFT) or 2 -> {
                     val r = decodeCpuStat(
                         input.readByteArray()
                     )
                     cpuTotalPct = r.first
                     numThreads = r.second
                 }
-                (11 shl 3) or 0 -> openFdCount = input.readInt32()
-                (12 shl 3) or 0 -> state = input.readEnum()
-                (23 shl 3) or 2 -> tags += input.readString()
+                (PROTO_FIELD_11 shl PROTO_FIELD_SHIFT) or 0 -> openFdCount = input.readInt32()
+                (PROTO_FIELD_12 shl PROTO_FIELD_SHIFT) or 0 -> state = input.readEnum()
+                (PROTO_FIELD_23 shl PROTO_FIELD_SHIFT) or 2 -> tags += input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -271,7 +284,6 @@ object ProcessAgentPayloadDecoder {
     }
 
     // Command: field 1 (repeated string) args, field 8 (string) exe
-    @Suppress("MagicNumber")
     private fun decodeCommand(bytes: ByteArray): Pair<String, String> {
         val input = CodedInputStream.newInstance(bytes)
         val args = mutableListOf<String>()
@@ -279,8 +291,8 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl 3) or 2 -> args += input.readString()
-                (8 shl 3) or 2 -> exe = input.readString()
+                (1 shl PROTO_FIELD_SHIFT) or 2 -> args += input.readString()
+                (PROTO_FIELD_8 shl PROTO_FIELD_SHIFT) or 2 -> exe = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -318,7 +330,6 @@ object ProcessAgentPayloadDecoder {
     }
 
     // CPUStat: field 2 (float) totalPct, field 5 (int32) numThreads
-    @Suppress("MagicNumber")
     private fun decodeCpuStat(bytes: ByteArray): Pair<Float, Int> {
         val input = CodedInputStream.newInstance(bytes)
         var totalPct = 0f
@@ -326,8 +337,8 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl 3) or 5 -> totalPct = input.readFloat()
-                (5 shl 3) or 0 -> numThreads = input.readInt32()
+                (2 shl PROTO_FIELD_SHIFT) or PROTO_WIRE_FLOAT -> totalPct = input.readFloat()
+                (PROTO_FIELD_5 shl PROTO_FIELD_SHIFT) or 0 -> numThreads = input.readInt32()
                 else -> input.skipField(tag)
             }
         }

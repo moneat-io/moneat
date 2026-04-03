@@ -31,6 +31,7 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 private const val EVENT_QUEUE_KEY = "moneat:infra_events:queue"
 private const val ERROR_BODY_MAX_LEN = 600
+private const val MILLIS_PER_SECOND = 1000L
 
 @Serializable
 data class QueuedEventBatch(
@@ -75,7 +76,6 @@ object DatadogEventService {
         encodeDefaults = true
     }
 
-    @Suppress("MagicNumber")
     fun mapEvents(
         organizationId: Long,
         events: List<DatadogEvent>
@@ -84,7 +84,7 @@ object DatadogEventService {
         val entries = events.map { event ->
             val tags = DatadogMetricService.parseDdTagList(event.tags)
             val timestampMs = if (event.dateHappened != null) {
-                event.dateHappened * 1000
+                event.dateHappened * MILLIS_PER_SECOND
             } else {
                 now
             }
@@ -114,7 +114,6 @@ object DatadogEventService {
         )
     }
 
-    @Suppress("MagicNumber")
     fun mapServiceChecks(
         organizationId: Long,
         checks: List<DatadogServiceCheck>
@@ -123,7 +122,7 @@ object DatadogEventService {
         val entries = checks.map { sc ->
             val tags = DatadogMetricService.parseDdTagList(sc.tags)
             val timestampMs = if (sc.timestamp != null) {
-                sc.timestamp * 1000
+                sc.timestamp * MILLIS_PER_SECOND
             } else {
                 now
             }

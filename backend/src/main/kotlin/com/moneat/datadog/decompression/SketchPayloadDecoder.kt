@@ -45,8 +45,15 @@ import com.moneat.datadog.models.DatadogSketchPoint
  *     repeated uint32 n = 8;  // DDSketch bucket counts (packed)
  *   }
  */
-@Suppress("MagicNumber")
 object SketchPayloadDecoder {
+
+    private const val PROTO_FIELD_SHIFT = 3
+    private const val PROTO_FIELD_3 = 3
+    private const val PROTO_FIELD_4 = 4
+    private const val PROTO_FIELD_5 = 5
+    private const val PROTO_FIELD_6 = 6
+    private const val PROTO_FIELD_7 = 7
+    private const val PROTO_FIELD_8 = 8
 
     fun decode(proto: ByteArray): DatadogSketchPayload {
         val input = CodedInputStream.newInstance(proto)
@@ -56,7 +63,7 @@ object SketchPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (LEN): repeated Sketch sketches
-                (1 shl 3) or 2 -> sketches += decodeSketch(input.readByteArray())
+                (1 shl PROTO_FIELD_SHIFT) or 2 -> sketches += decodeSketch(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -74,13 +81,13 @@ object SketchPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (LEN): string metric
-                (1 shl 3) or 2 -> metric = input.readString()
+                (1 shl PROTO_FIELD_SHIFT) or 2 -> metric = input.readString()
                 // field 2 (LEN): string host
-                (2 shl 3) or 2 -> host = input.readString()
+                (2 shl PROTO_FIELD_SHIFT) or 2 -> host = input.readString()
                 // field 3 (LEN): repeated string tags
-                (3 shl 3) or 2 -> tags += input.readString()
+                (PROTO_FIELD_3 shl PROTO_FIELD_SHIFT) or 2 -> tags += input.readString()
                 // field 4 (LEN): repeated Distribution
-                (4 shl 3) or 2 -> distributions += decodeDistribution(input.readByteArray())
+                (PROTO_FIELD_4 shl PROTO_FIELD_SHIFT) or 2 -> distributions += decodeDistribution(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -102,25 +109,25 @@ object SketchPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (VARINT): int64 ts
-                (1 shl 3) or 0 -> ts = input.readInt64()
+                (1 shl PROTO_FIELD_SHIFT) or 0 -> ts = input.readInt64()
                 // field 2 (VARINT): int64 cnt
-                (2 shl 3) or 0 -> cnt = input.readInt64()
+                (2 shl PROTO_FIELD_SHIFT) or 0 -> cnt = input.readInt64()
                 // field 3 (64-bit): double min
-                (3 shl 3) or 1 -> min = input.readDouble()
+                (PROTO_FIELD_3 shl PROTO_FIELD_SHIFT) or 1 -> min = input.readDouble()
                 // field 4 (64-bit): double max
-                (4 shl 3) or 1 -> max = input.readDouble()
+                (PROTO_FIELD_4 shl PROTO_FIELD_SHIFT) or 1 -> max = input.readDouble()
                 // field 5 (64-bit): double avg
-                (5 shl 3) or 1 -> avg = input.readDouble()
+                (PROTO_FIELD_5 shl PROTO_FIELD_SHIFT) or 1 -> avg = input.readDouble()
                 // field 6 (64-bit): double sum
-                (6 shl 3) or 1 -> sum = input.readDouble()
+                (PROTO_FIELD_6 shl PROTO_FIELD_SHIFT) or 1 -> sum = input.readDouble()
                 // field 7 (LEN): packed repeated sint32 k (zigzag)
-                (7 shl 3) or 2 -> k += decodePackedSint32(input.readByteArray())
+                (PROTO_FIELD_7 shl PROTO_FIELD_SHIFT) or 2 -> k += decodePackedSint32(input.readByteArray())
                 // field 7 (VARINT): non-packed sint32 k (single value)
-                (7 shl 3) or 0 -> k += input.readSInt32()
+                (PROTO_FIELD_7 shl PROTO_FIELD_SHIFT) or 0 -> k += input.readSInt32()
                 // field 8 (LEN): packed repeated uint32 n
-                (8 shl 3) or 2 -> n += decodePackedUint32(input.readByteArray())
+                (PROTO_FIELD_8 shl PROTO_FIELD_SHIFT) or 2 -> n += decodePackedUint32(input.readByteArray())
                 // field 8 (VARINT): non-packed uint32 n (single value)
-                (8 shl 3) or 0 -> n += input.readUInt32()
+                (PROTO_FIELD_8 shl PROTO_FIELD_SHIFT) or 0 -> n += input.readUInt32()
                 else -> input.skipField(tag)
             }
         }

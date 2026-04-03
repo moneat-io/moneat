@@ -42,6 +42,11 @@ import com.moneat.datadog.models.DatadogMetricV1
 object MetricPayloadDecoder {
 
     private const val PROTO_FIELD_SHIFT = 3
+    private const val PROTO_FIELD_3 = 3
+    private const val PROTO_FIELD_4 = 4
+    private const val PROTO_FIELD_5 = 5
+    private const val PROTO_FIELD_6 = 6
+    private const val PROTO_FIELD_7 = 7
 
     private val METRIC_TYPES = mapOf(0 to "gauge", 1 to "count", 2 to "rate", 3 to "gauge")
 
@@ -61,7 +66,6 @@ object MetricPayloadDecoder {
         return DatadogMetricSeriesV1(series = series)
     }
 
-    @Suppress("MagicNumber")
     private fun decodeSeries(bytes: ByteArray): DatadogMetricV1 {
         val input = CodedInputStream.newInstance(bytes)
         var metric = ""
@@ -76,22 +80,22 @@ object MetricPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (LEN): repeated Resource
-                (1 shl 3) or 2 -> {
+                (1 shl PROTO_FIELD_SHIFT) or 2 -> {
                     val resource = decodeResource(input.readByteArray())
                     if (resource.first == "host") host = resource.second
                 }
                 // field 2 (LEN): string metric
-                (2 shl 3) or 2 -> metric = input.readString()
+                (2 shl PROTO_FIELD_SHIFT) or 2 -> metric = input.readString()
                 // field 3 (LEN): repeated string tags
-                (3 shl 3) or 2 -> tags += input.readString()
+                (PROTO_FIELD_3 shl PROTO_FIELD_SHIFT) or 2 -> tags += input.readString()
                 // field 4 (LEN): repeated MetricPoint
-                (4 shl 3) or 2 -> points += decodeMetricPoint(input.readByteArray())
+                (PROTO_FIELD_4 shl PROTO_FIELD_SHIFT) or 2 -> points += decodeMetricPoint(input.readByteArray())
                 // field 5 (VARINT): MetricType
-                (5 shl 3) or 0 -> typeInt = input.readEnum()
+                (PROTO_FIELD_5 shl PROTO_FIELD_SHIFT) or 0 -> typeInt = input.readEnum()
                 // field 6 (LEN): string unit
-                (6 shl 3) or 2 -> unit = input.readString()
+                (PROTO_FIELD_6 shl PROTO_FIELD_SHIFT) or 2 -> unit = input.readString()
                 // field 7 (LEN): string source_type_name
-                (7 shl 3) or 2 -> sourceTypeName = input.readString()
+                (PROTO_FIELD_7 shl PROTO_FIELD_SHIFT) or 2 -> sourceTypeName = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -124,7 +128,6 @@ object MetricPayloadDecoder {
     }
 
     // MetricPoint: field 1 (double/fixed64) value, field 2 (varint) timestamp
-    @Suppress("MagicNumber")
     private fun decodeMetricPoint(bytes: ByteArray): List<Double> {
         val input = CodedInputStream.newInstance(bytes)
         var value = 0.0
@@ -132,8 +135,8 @@ object MetricPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl 3) or 1 -> value = input.readDouble() // wire type 1 = 64-bit
-                (2 shl 3) or 0 -> timestamp = input.readInt64() // wire type 0 = varint
+                (1 shl PROTO_FIELD_SHIFT) or 1 -> value = input.readDouble() // wire type 1 = 64-bit
+                (2 shl PROTO_FIELD_SHIFT) or 0 -> timestamp = input.readInt64() // wire type 0 = varint
                 else -> input.skipField(tag)
             }
         }
