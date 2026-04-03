@@ -219,6 +219,12 @@ class GrafanaTranslator : DashboardTranslator {
     /** Builds Moneat display config key/value strings from Grafana panel fieldConfig, mappings, and options. */
     private fun extractDisplayConfig(panelJson: JsonObject): Map<String, String> {
         val config = mutableMapOf<String, String>()
+        populateDisplayConfigFromPanel(panelJson, config)
+        extractGrafanaTransformations(panelJson, config)
+        return config
+    }
+
+    private fun populateDisplayConfigFromPanel(panelJson: JsonObject, config: MutableMap<String, String>) {
         val fieldDefaults = panelJson["fieldConfig"]?.jsonObject?.get("defaults")?.jsonObject
         val defaults = fieldDefaults?.get("custom")?.jsonObject
         val options = panelJson["options"]?.jsonObject
@@ -229,9 +235,6 @@ class GrafanaTranslator : DashboardTranslator {
         putCustomDisplayDefaults(defaults, config)
         putLegendFromOptions(options, config)
         putGaugeRangeAndBarGaugeOptions(fieldDefaults, options, config)
-        extractGrafanaTransformations(panelJson, config)
-
-        return config
     }
 
     private fun putFieldDefaultUnitAndDecimals(
@@ -249,12 +252,14 @@ class GrafanaTranslator : DashboardTranslator {
         config: MutableMap<String, String>
     ) {
         val steps = fieldDefaults?.get("thresholds")?.jsonObject?.get("steps")?.jsonArray
-        if (steps == null || steps.isEmpty()) return
+        if (steps.isNullOrEmpty()) return
+        applyParsedThresholdSteps(steps, config)
+    }
 
+    private fun applyParsedThresholdSteps(steps: JsonArray, config: MutableMap<String, String>) {
         val moneatThresholds = steps.mapNotNull { thresholdStepToJsonObject(it) }
-        if (moneatThresholds.isNotEmpty()) {
-            config["thresholds"] = JsonArray(moneatThresholds).toString()
-        }
+        if (moneatThresholds.isEmpty()) return
+        config["thresholds"] = JsonArray(moneatThresholds).toString()
     }
 
     private fun thresholdStepToJsonObject(step: JsonElement): JsonObject? {
@@ -314,10 +319,13 @@ class GrafanaTranslator : DashboardTranslator {
         config: MutableMap<String, String>
     ) {
         val mappings = fieldDefaults?.get("mappings")?.jsonArray ?: return
+        applyParsedValueMappings(mappings, config)
+    }
+
+    private fun applyParsedValueMappings(mappings: JsonArray, config: MutableMap<String, String>) {
         val moneatMappings = mappings.mapNotNull { grafanaValueMappingToJson(it.jsonObject) }
-        if (moneatMappings.isNotEmpty()) {
-            config["valueMappings"] = JsonArray(moneatMappings).toString()
-        }
+        if (moneatMappings.isEmpty()) return
+        config["valueMappings"] = JsonArray(moneatMappings).toString()
     }
 
     private fun putCustomDisplayDefaults(defaults: JsonObject?, config: MutableMap<String, String>) {
