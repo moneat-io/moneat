@@ -28,6 +28,13 @@ private const val DEMO_DD_AGENT_VERSION = "7.52.1"
 private const val DEMO_DD_CPU_INTEL_XEON = "Intel Xeon E5-2686 v4"
 private const val DEMO_DD_CPU_AMD_EPYC = "AMD EPYC 7R13"
 
+private const val DEMO_DD_HOST_PROD_WEB_01 = "prod-web-01"
+private const val DEMO_DD_HOST_PROD_WEB_02 = "prod-web-02"
+private const val DEMO_DD_HOST_PROD_API_01 = "prod-api-01"
+private const val DEMO_DD_HOST_PROD_DB_01 = "prod-db-01"
+private const val DEMO_DD_HOST_PROD_CACHE_01 = "prod-cache-01"
+private const val DEMO_DD_HOST_PROD_WORKER_01 = "prod-worker-01"
+
 // ── Datadog Agent Demo Data ─────────────────────────────────────────────
 
 internal suspend fun checkFreshDatadogCount(): Long {
@@ -110,7 +117,7 @@ private suspend fun reseedDatadogHostsPostgres() {
             val hostData =
                 listOf(
                     listOf(
-                        "prod-web-01",
+                        DEMO_DD_HOST_PROD_WEB_01,
                         DEMO_DD_HOST_OS,
                         "linux",
                         DEMO_DD_CPU_INTEL_XEON,
@@ -119,7 +126,7 @@ private suspend fun reseedDatadogHostsPostgres() {
                         DEMO_DD_AGENT_VERSION,
                     ),
                     listOf(
-                        "prod-web-02",
+                        DEMO_DD_HOST_PROD_WEB_02,
                         DEMO_DD_HOST_OS,
                         "linux",
                         DEMO_DD_CPU_INTEL_XEON,
@@ -128,7 +135,7 @@ private suspend fun reseedDatadogHostsPostgres() {
                         DEMO_DD_AGENT_VERSION,
                     ),
                     listOf(
-                        "prod-api-01",
+                        DEMO_DD_HOST_PROD_API_01,
                         DEMO_DD_HOST_OS,
                         "linux",
                         DEMO_DD_CPU_AMD_EPYC,
@@ -137,7 +144,7 @@ private suspend fun reseedDatadogHostsPostgres() {
                         DEMO_DD_AGENT_VERSION,
                     ),
                     listOf(
-                        "prod-db-01",
+                        DEMO_DD_HOST_PROD_DB_01,
                         DEMO_DD_HOST_OS,
                         "linux",
                         DEMO_DD_CPU_AMD_EPYC,
@@ -146,7 +153,7 @@ private suspend fun reseedDatadogHostsPostgres() {
                         DEMO_DD_AGENT_VERSION,
                     ),
                     listOf(
-                        "prod-cache-01",
+                        DEMO_DD_HOST_PROD_CACHE_01,
                         DEMO_DD_HOST_OS,
                         "linux",
                         DEMO_DD_CPU_INTEL_XEON,
@@ -155,7 +162,7 @@ private suspend fun reseedDatadogHostsPostgres() {
                         DEMO_DD_AGENT_VERSION,
                     ),
                     listOf(
-                        "prod-worker-01",
+                        DEMO_DD_HOST_PROD_WORKER_01,
                         DEMO_DD_HOST_OS,
                         "linux",
                         DEMO_DD_CPU_AMD_EPYC,
@@ -201,7 +208,7 @@ private suspend fun reseedDatadogApmRootSpans() {
                 'http.url', arrayElement(['GET /api/v1/products', 'POST /api/v1/orders', 'GET /api/v1/users/{id}', 'POST /api/v1/checkout', 'GET /api/v1/cart'], number % 5 + 1),
                 'http.status_code', if(number % 7 = 0, '500', '200')),
             map('_sample_rate', 1.0),
-            arrayElement(['prod-web-01', 'prod-web-02', 'prod-api-01'], number % 3 + 1),
+            arrayElement(['${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_WEB_02}', '${DEMO_DD_HOST_PROD_API_01}'], number % 3 + 1),
             'production',
             '1.3.0'
         FROM numbers(20)
@@ -232,7 +239,7 @@ private suspend fun reseedDatadogApmChildSpans() {
             0,
             map('component', arrayElement(['user-service', 'postgres', 'cache-service', 'product-service', 'order-service', 'inventory-service'], number % 6 + 1)),
             map('_sample_rate', 1.0),
-            arrayElement(['prod-api-01', 'prod-db-01', 'prod-cache-01', 'prod-api-01', 'prod-api-01', 'prod-worker-01'], number % 6 + 1),
+            arrayElement(['${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_DB_01}', '${DEMO_DD_HOST_PROD_CACHE_01}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_WORKER_01}'], number % 6 + 1),
             'production',
             '1.3.0'
         FROM numbers(60)
@@ -285,7 +292,7 @@ private suspend fun reseedDatadogInfraEvents() {
             ], number % 10 + 1),
             now() - INTERVAL (number * 7) HOUR,
             'normal',
-            arrayElement(['prod-web-01', 'prod-web-01', 'prod-db-01', 'prod-api-01', 'prod-web-01', 'prod-db-01', 'prod-web-01', 'prod-api-01', 'prod-cache-01', 'prod-api-01'], number % 10 + 1),
+            arrayElement(['${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_DB_01}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_DB_01}', '${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_CACHE_01}', '${DEMO_DD_HOST_PROD_API_01}'], number % 10 + 1),
             map('env', 'production'),
             arrayElement(['info', 'success', 'warning', 'warning', 'info', 'info', 'warning', 'error', 'warning', 'error'], number % 10 + 1),
             '',
@@ -308,7 +315,7 @@ private suspend fun reseedDatadogServiceChecks() {
             generateUUIDv4(),
             $ORG1,
             arrayElement(['datadog.agent.up', 'http.can_connect', 'postgres.can_connect', 'redis.can_ping', 'disk.check', 'ntp.offset', 'tls.cert_expiry', 'http.can_connect'], number % 8 + 1),
-            arrayElement(['prod-web-01', 'prod-web-02', 'prod-api-01', 'prod-db-01', 'prod-cache-01', 'prod-worker-01'], intDiv(number, 8) % 6 + 1),
+            arrayElement(['${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_WEB_02}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_DB_01}', '${DEMO_DD_HOST_PROD_CACHE_01}', '${DEMO_DD_HOST_PROD_WORKER_01}'], intDiv(number, 8) % 6 + 1),
             arrayElement(['ok', 'ok', 'ok', 'ok', 'warning', 'ok', 'ok', 'critical'], number % 8 + 1),
             now() - INTERVAL (number % 60) MINUTE,
             map('env', 'production'),
@@ -340,7 +347,7 @@ private suspend fun reseedDatadogProcesses() {
         SELECT
             generateUUIDv4(),
             $ORG1,
-            arrayElement(['prod-web-01', 'prod-web-02', 'prod-api-01', 'prod-db-01', 'prod-cache-01', 'prod-worker-01'], intDiv(number, 7) % 6 + 1),
+            arrayElement(['${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_WEB_02}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_DB_01}', '${DEMO_DD_HOST_PROD_CACHE_01}', '${DEMO_DD_HOST_PROD_WORKER_01}'], intDiv(number, 7) % 6 + 1),
             1000 + number * 100,
             arrayElement(['nginx', 'api-gateway', 'user-service', 'postgres', 'redis-server', 'datadog-agent', 'containerd'], number % 7 + 1),
             arrayElement([
@@ -379,7 +386,7 @@ private suspend fun reseedDatadogContainers() {
         SELECT
             generateUUIDv4(),
             $ORG1,
-            arrayElement(['prod-web-01', 'prod-web-02', 'prod-api-01', 'prod-db-01', 'prod-cache-01', 'prod-worker-01'], intDiv(number, 7) % 6 + 1),
+            arrayElement(['${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_WEB_02}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_DB_01}', '${DEMO_DD_HOST_PROD_CACHE_01}', '${DEMO_DD_HOST_PROD_WORKER_01}'], intDiv(number, 7) % 6 + 1),
             substring(toString(sipHash64(number, 50)), 1, 12),
             arrayElement(['api-gateway', 'user-service', 'product-service', 'order-service', 'payment-service', 'nginx-ingress', 'datadog-agent'], number % 7 + 1),
             arrayElement(['acme/api-gateway:1.3.0', 'acme/user-service:1.2.8', 'acme/product-service:1.4.1', 'acme/order-service:2.0.3', 'acme/payment-service:1.1.5', 'nginx/nginx-ingress:3.4.0', 'datadog/agent:7.52.1'], number % 7 + 1),
@@ -409,11 +416,11 @@ private suspend fun reseedDatadogNetworkConnections() {
         SELECT
             generateUUIDv4(),
             $ORG1,
-            arrayElement(['prod-web-01', 'prod-api-01', 'prod-api-01', 'prod-web-02', 'prod-worker-01', 'prod-worker-01', 'prod-web-01', 'prod-web-02'], number % 8 + 1),
+            arrayElement(['${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_WEB_02}', '${DEMO_DD_HOST_PROD_WORKER_01}', '${DEMO_DD_HOST_PROD_WORKER_01}', '${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_WEB_02}'], number % 8 + 1),
             1000 + number * 111,
-            arrayElement(['prod-web-01', 'prod-api-01', 'prod-api-01', 'prod-web-02', 'prod-worker-01', 'prod-worker-01', 'prod-web-01', 'prod-web-02'], number % 8 + 1),
+            arrayElement(['${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_WEB_02}', '${DEMO_DD_HOST_PROD_WORKER_01}', '${DEMO_DD_HOST_PROD_WORKER_01}', '${DEMO_DD_HOST_PROD_WEB_01}', '${DEMO_DD_HOST_PROD_WEB_02}'], number % 8 + 1),
             arrayElement([8080, 8080, 8080, 8080, 8080, 8080, 443, 443], number % 8 + 1),
-            arrayElement(['prod-api-01', 'prod-db-01', 'prod-cache-01', 'prod-api-01', 'prod-db-01', 'prod-cache-01', '0.0.0.0', '0.0.0.0'], number % 8 + 1),
+            arrayElement(['${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_DB_01}', '${DEMO_DD_HOST_PROD_CACHE_01}', '${DEMO_DD_HOST_PROD_API_01}', '${DEMO_DD_HOST_PROD_DB_01}', '${DEMO_DD_HOST_PROD_CACHE_01}', '0.0.0.0', '0.0.0.0'], number % 8 + 1),
             arrayElement([8080, 5432, 6379, 8080, 5432, 6379, 0, 0], number % 8 + 1),
             'tcp',
             'IPv4',
