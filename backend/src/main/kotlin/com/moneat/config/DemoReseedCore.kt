@@ -26,7 +26,9 @@ private val logger = KotlinLogging.logger {}
 private const val DEMO_PLATFORM_REACT_NATIVE = "react-native"
 
 // Demo seed DSL: one property per INSERT column; Sonar S107 suppressed — nesting would churn 70+ call sites.
-private data class DemoIssueInsertSpec @Suppress("kotlin:S107") constructor(
+private data class DemoIssueInsertSpec
+@Suppress("kotlin:S107")
+constructor(
     val project: String,
     val issueId: String,
     val platform: String,
