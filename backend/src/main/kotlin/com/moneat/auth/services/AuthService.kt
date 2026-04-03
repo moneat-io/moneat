@@ -230,7 +230,7 @@ class AuthService(
      * Must be called within a database transaction.
      */
     private fun resolvePendingInvite(inviteToken: String?, normalizedEmail: String, now: Long): ResultRow? {
-        if (inviteToken != null) {
+        return if (inviteToken != null) {
             val inviteByToken =
                 OrgInvitations
                     .selectAll()
@@ -239,9 +239,7 @@ class AuthService(
                     ?: throw IllegalArgumentException("Invitation not found")
 
             val inviteStatus = inviteByToken[OrgInvitations.status]
-            if (inviteStatus != "pending") {
-                throw IllegalArgumentException("Invitation is no longer valid")
-            }
+            require(inviteStatus == "pending") { "Invitation is no longer valid" }
 
             val inviteExpiresAt = inviteByToken[OrgInvitations.expires_at]
             if (now > inviteExpiresAt) {
@@ -251,11 +249,11 @@ class AuthService(
                 throw IllegalArgumentException("Invitation has expired")
             }
 
-            if (inviteByToken[OrgInvitations.email].lowercase() != normalizedEmail) {
-                throw IllegalArgumentException("This invitation was sent to a different email address")
+            require(inviteByToken[OrgInvitations.email].lowercase() == normalizedEmail) {
+                "This invitation was sent to a different email address"
             }
 
-            return inviteByToken
+            inviteByToken
         } else {
             OrgInvitations.update({
                 (OrgInvitations.email eq normalizedEmail) and
@@ -265,7 +263,7 @@ class AuthService(
                 it[OrgInvitations.status] = "expired"
             }
 
-            return OrgInvitations
+            OrgInvitations
                 .selectAll()
                 .where {
                     (OrgInvitations.email eq normalizedEmail) and
@@ -287,7 +285,7 @@ class AuthService(
         pendingInvite: ResultRow?,
         request: SignupRequest,
     ): Pair<Int, String> {
-        if (pendingInvite != null) {
+        return if (pendingInvite != null) {
             val orgId = pendingInvite[OrgInvitations.organization_id]
             val orgRole = pendingInvite[OrgInvitations.role]
             Memberships.insert {
@@ -303,7 +301,7 @@ class AuthService(
                 "User joined via invitation",
                 mapOf("user_id" to userId, "organization_id" to orgId, "role" to orgRole),
             )
-            return orgId to orgRole
+            orgId to orgRole
         } else {
             val orgId =
                 Organizations.insert {
@@ -320,7 +318,7 @@ class AuthService(
                 "User created new org",
                 mapOf("user_id" to userId, "organization_id" to orgId),
             )
-            return orgId to "owner"
+            orgId to "owner"
         }
     }
 
