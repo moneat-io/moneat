@@ -28,6 +28,7 @@ import com.moneat.dashboards.models.GroupByType
 import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.WidgetResponse
+import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -42,7 +43,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
 import kotlin.math.roundToInt
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
