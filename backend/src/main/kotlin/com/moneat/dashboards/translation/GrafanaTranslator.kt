@@ -710,29 +710,31 @@ class GrafanaTranslator : DashboardTranslator {
             }
             val dims = target["dimensions"]
             if (dims is JsonObject) {
-                put(
-                    "Dimensions",
-                    buildJsonArray {
-                        for ((key, value) in dims) {
-                            val vals = if (value is JsonArray) {
-                                value.map { it.jsonPrimitive.content }
-                            } else {
-                                listOf(value.jsonPrimitive.content)
-                            }
-                            for (v in vals) {
-                                add(
-                                    buildJsonObject {
-                                        put("Name", key)
-                                        put("Value", v)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                )
+                put("Dimensions", buildCloudWatchDimensionsArray(dims))
             }
         }.toString()
     }
+
+    private fun buildCloudWatchDimensionsArray(dims: JsonObject): JsonArray = buildJsonArray {
+        for ((key, value) in dims) {
+            val vals = cloudWatchDimensionValueStrings(value)
+            for (v in vals) {
+                add(
+                    buildJsonObject {
+                        put("Name", key)
+                        put("Value", v)
+                    }
+                )
+            }
+        }
+    }
+
+    private fun cloudWatchDimensionValueStrings(value: JsonElement): List<String> =
+        if (value is JsonArray) {
+            value.map { it.jsonPrimitive.content }
+        } else {
+            listOf(value.jsonPrimitive.content)
+        }
 
     /**
      * Convert Grafana Elasticsearch plugin target to an ES query JSON body
@@ -986,51 +988,53 @@ class GrafanaTranslator : DashboardTranslator {
 
         return list.mapNotNull { element ->
             suspendRunCatching {
-                val varObj = element.jsonObject
-                val name = varObj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                val type = varObj["type"]?.jsonPrimitive?.contentOrNull ?: "custom"
-                val label = varObj["label"]?.jsonPrimitive?.contentOrNull
-                val query = varObj["query"]?.let { q ->
-                    when (q) {
-                        is JsonPrimitive -> q.contentOrNull
-                        is JsonObject -> q["query"]?.jsonPrimitive?.contentOrNull
-                        else -> null
-                    }
-                }
-                val current = varObj["current"]?.jsonObject?.get("value")?.let { v ->
-                    when (v) {
-                        is JsonPrimitive -> v.contentOrNull
-                        else -> null
-                    }
-                }
-                val options = varObj["options"]?.jsonArray?.mapNotNull { opt ->
-                    opt.jsonObject["value"]?.jsonPrimitive?.contentOrNull
-                } ?: emptyList()
-
-                val datasource = varObj["datasource"]?.let { ds ->
-                    when (ds) {
-                        is JsonPrimitive -> ds.contentOrNull
-                        is JsonObject -> ds["type"]?.jsonPrimitive?.contentOrNull
-                        else -> null
-                    }
-                }
-
-                val supportedTypes = setOf("query", "custom", "textbox", "constant")
-                DashboardVariable(
-                    name = name,
-                    label = label,
-                    type = if (type in supportedTypes) type else "custom",
-                    query = query,
-                    defaultValue = current,
-                    current = current,
-                    options = options.filter { it != "\$__all" },
-                    datasource = datasource
-                )
+                parseSingleGrafanaVariable(element.jsonObject)
             }.getOrElse { e ->
                 logger.warn { "Failed to parse Grafana variable: ${e.message}" }
                 null
             }
         }
+    }
+
+    private fun parseSingleGrafanaVariable(varObj: JsonObject): DashboardVariable? {
+        val name = varObj["name"]?.jsonPrimitive?.contentOrNull ?: return null
+        val type = varObj["type"]?.jsonPrimitive?.contentOrNull ?: "custom"
+        val label = varObj["label"]?.jsonPrimitive?.contentOrNull
+        val query = varObj["query"]?.let(::grafanaVariableQueryFromJson)
+        val current = varObj["current"]?.jsonObject?.get("value")?.let(::grafanaVariableCurrentString)
+        val options = varObj["options"]?.jsonArray?.mapNotNull { opt ->
+            opt.jsonObject["value"]?.jsonPrimitive?.contentOrNull
+        } ?: emptyList()
+        val datasource = varObj["datasource"]?.let(::grafanaVariableDatasourceFromJson)
+
+        val supportedTypes = setOf("query", "custom", "textbox", "constant")
+        return DashboardVariable(
+            name = name,
+            label = label,
+            type = if (type in supportedTypes) type else "custom",
+            query = query,
+            defaultValue = current,
+            current = current,
+            options = options.filter { it != "\$__all" },
+            datasource = datasource
+        )
+    }
+
+    private fun grafanaVariableQueryFromJson(q: JsonElement): String? = when (q) {
+        is JsonPrimitive -> q.contentOrNull
+        is JsonObject -> q["query"]?.jsonPrimitive?.contentOrNull
+        else -> null
+    }
+
+    private fun grafanaVariableCurrentString(v: JsonElement): String? = when (v) {
+        is JsonPrimitive -> v.contentOrNull
+        else -> null
+    }
+
+    private fun grafanaVariableDatasourceFromJson(ds: JsonElement): String? = when (ds) {
+        is JsonPrimitive -> ds.contentOrNull
+        is JsonObject -> ds["type"]?.jsonPrimitive?.contentOrNull
+        else -> null
     }
 
     override fun export(dashboard: DashboardResponse): JsonObject {
