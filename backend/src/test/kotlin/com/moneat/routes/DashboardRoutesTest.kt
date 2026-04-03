@@ -23,6 +23,7 @@ import com.moneat.dashboards.models.FolderResponse
 import com.moneat.dashboards.models.NotificationChannels
 import com.moneat.dashboards.models.SearchResponse
 import com.moneat.dashboards.models.TestConnectionResult
+import com.moneat.dashboards.routes.DashboardTranslators
 import com.moneat.dashboards.routes.customDashboardRoutes
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.CustomDataSourceExecutor
@@ -216,8 +217,7 @@ class DashboardRoutesTest {
                 dashboardService = mockDashboardService,
                 queryEngine = mockQueryEngine,
                 retentionPolicyService = mockRetentionService,
-                dataDogTranslator = mockDDTranslator,
-                grafanaTranslator = mockGrafanaTranslator,
+                translators = DashboardTranslators(mockDDTranslator, mockGrafanaTranslator),
                 dataSourceService = mockDataSourceService,
                 dataSourceExecutor = mockDataSourceExecutor,
                 dashboardAlertService = mockAlertService,

@@ -79,6 +79,14 @@ private const val QUERY_PREVIEW_LENGTH = 80
 private const val DEFAULT_RETENTION_DAYS = 90
 private const val MAX_QUERIES_PER_REQUEST = 10
 
+private const val AUTH_JWT = "auth-jwt"
+private const val ERR_NO_ORGANIZATION = "No organization found"
+private const val ERR_INVALID_DASHBOARD_ID = "Invalid dashboard ID"
+private const val ERR_DASHBOARD_NOT_FOUND = "Dashboard not found"
+private const val ERR_DATA_SOURCE_NOT_FOUND = "Data source not found"
+private const val ERR_UNKNOWN_SOURCE_TYPE = "Unknown source type"
+private const val ERR_INVALID_DATA_SOURCE_ID = "Invalid data source ID"
+
 private fun getOrgIdForUser(userId: Int): Long? {
     return transaction {
         Memberships.selectAll()
@@ -142,7 +150,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListDashboards(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
     val dashboards = dashboardService.listDashboards(orgId, projectId, userId)
     call.respond(dashboards)
@@ -154,7 +162,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateDashboard(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val request = call.receive<CreateDashboardRequest>()
     val dashboard = dashboardService.createDashboard(orgId, userId.toLong(), request)
     call.respond(HttpStatusCode.Created, dashboard)
@@ -166,7 +174,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFolders(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val folders = dashboardService.listFolders(orgId)
     call.respond(folders)
 }
@@ -177,7 +185,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateFolder(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val request = call.receive<CreateFolderRequest>()
     val folder = dashboardService.createFolder(orgId, request)
     call.respond(HttpStatusCode.Created, folder)
@@ -189,7 +197,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateFolder(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val folderId = call.parameters["folderId"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid folder ID"))
     val request = call.receive<UpdateFolderRequest>()
@@ -204,7 +212,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteFolder(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val folderId = call.parameters["folderId"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid folder ID"))
     if (dashboardService.deleteFolder(folderId, orgId)) {
@@ -220,11 +228,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetDashboard(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val dashboard = dashboardService.getDashboard(id, orgId, userId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
     call.respond(dashboard)
 }
 
@@ -234,9 +242,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleToggleFavorite(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val isFavorited = dashboardService.toggleFavorite(userId, id, orgId)
     call.respond(HttpStatusCode.OK, mapOf("is_favorited" to isFavorited))
 }
@@ -247,14 +255,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleMoveDashboardToF
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val request = call.receive<MoveToFolderRequest>()
     if (dashboardService.moveDashboardToFolder(id, orgId, request.folderId)) {
         call.respond(HttpStatusCode.OK, mapOf("folder_id" to request.folderId))
     } else {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
     }
 }
 
@@ -264,12 +272,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateDashboard(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val request = call.receive<UpdateDashboardRequest>()
     val updated = dashboardService.updateDashboard(id, orgId, request)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
     call.respond(updated)
 }
 
@@ -279,13 +287,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteDashboard(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     if (dashboardService.deleteDashboard(id, orgId)) {
         call.respond(HttpStatusCode.NoContent, "")
     } else {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
     }
 }
 
@@ -298,11 +306,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val dashboardScope = getDashboardScope(id, orgId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
 
     val request = call.receive<ExecuteQueryRequest>()
     val demoEpochMs = call.getDemoEpochMs()
@@ -351,13 +359,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
                     HttpStatusCode.BadRequest, ErrorResponse("Invalid custom data source ID")
                 )
             val source = dataSourceService.getDataSource(sourceId, orgId)
-                ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+                ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
             val creds = dataSourceService.getDecryptedCredentials(sourceId, orgId)
                 ?: return call.respond(
                     HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials")
                 )
             val sourceType = CustomDataSourceType.fromString(source.sourceType)
-                ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unknown source type"))
+                ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_UNKNOWN_SOURCE_TYPE))
             val rawQuery = effectiveQuery.rawQuery
                 ?: return call.respond(
                     HttpStatusCode.BadRequest,
@@ -377,6 +385,30 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     }
 }
 
+private suspend fun executeSingleQuery(
+    effectiveQuery: QueryDsl,
+    orgId: Long,
+    projectId: Long,
+    demoEpochMs: Long?,
+    retentionDays: Int,
+    queryEngine: DashboardQueryEngine,
+    dataSourceService: CustomDataSourceService,
+    dataSourceExecutor: CustomDataSourceExecutor,
+): List<Map<String, kotlinx.serialization.json.JsonElement>>? {
+    if (!queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
+        return queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays)
+    }
+    val sourceId = queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource) ?: return null
+    val source = dataSourceService.getDataSource(sourceId, orgId) ?: return null
+    val creds = dataSourceService.getDecryptedCredentials(sourceId, orgId) ?: return null
+    val sourceType = CustomDataSourceType.fromString(source.sourceType) ?: return null
+    val rawQuery = effectiveQuery.rawQuery ?: return null
+    return dataSourceExecutor.executeQuery(
+        sourceId, sourceType, source.host, source.port,
+        source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
+    )
+}
+
 private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQuery(
     queryEngine: DashboardQueryEngine,
     retentionPolicyService: RetentionPolicyService,
@@ -386,11 +418,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val dashboardScope = getDashboardScope(id, orgId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
 
     val request = call.receive<ExecuteBatchQueryRequest>()
     val demoEpochMs = call.getDemoEpochMs()
@@ -438,28 +470,17 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
             orgId,
             dataSourceService
         )
-
         suspendRunCatching {
-            if (queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
-                val sourceId = queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource)
-                    ?: continue
-                val source = dataSourceService.getDataSource(sourceId, orgId) ?: continue
-                val creds = dataSourceService.getDecryptedCredentials(sourceId, orgId) ?: continue
-                val sourceType = CustomDataSourceType.fromString(source.sourceType) ?: continue
-                val rawQuery = effectiveQuery.rawQuery ?: continue
-
-                results[refId] = dataSourceExecutor.executeQuery(
-                    sourceId, sourceType, source.host, source.port,
-                    source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
-                )
-            } else {
-                results[refId] = queryEngine.executeQuery(
-                    effectiveQuery,
-                    projectId,
-                    demoEpochMs,
-                    retentionDays
-                )
-            }
+            executeSingleQuery(
+                effectiveQuery,
+                orgId,
+                projectId,
+                demoEpochMs,
+                retentionDays,
+                queryEngine,
+                dataSourceService,
+                dataSourceExecutor,
+            )?.let { results[refId] = it }
         }.getOrElse { e ->
             logger.warn(e) { "Batch query $refId failed" }
             results[refId] = emptyList()
@@ -477,14 +498,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     getDashboardScope(id, orgId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
 
     val dashboard = dashboardService.getDashboard(id, orgId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
 
     val variables = dashboard.variables
     val currentValues = call.receive<Map<String, String>>()
@@ -533,7 +554,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleImportDashboard(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
 
     val request = call.receive<ImportDashboardRequest>()
     val jsonParseResult = suspendRunCatching {
@@ -594,13 +615,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleExportDashboard(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val format = call.parameters["format"]
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Format required"))
     val dashboard = dashboardService.getDashboard(id, orgId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Dashboard not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
 
     when (format.lowercase()) {
         "moneat" -> call.respond(dashboard)
@@ -619,9 +640,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListAlerts(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     call.respond(dashboardAlertService.listAlerts(id, orgId))
 }
 
@@ -631,9 +652,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateAlert(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val request = call.receive<CreateDashboardAlertRequest>()
     try {
         val alert = dashboardAlertService.createAlert(id, orgId, userId.toLong(), request)
@@ -649,9 +670,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAlert(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val alertId = call.parameters["alertId"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
     val request = call.receive<UpdateDashboardAlertRequest>()
@@ -670,9 +691,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAlert(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid dashboard ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val alertId = call.parameters["alertId"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
     if (dashboardAlertService.deleteAlert(alertId, id, orgId)) {
@@ -703,7 +724,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSearch(
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val query = call.request.queryParameters["q"]?.trim().orEmpty()
     val result = dashboardService.search(orgId, userId, query)
     call.respond(result)
@@ -715,7 +736,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListCustomDataSo
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     call.respond(dataSourceService.listDataSources(orgId))
 }
 
@@ -725,7 +746,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateCustomData
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val request = call.receive<CreateCustomDataSourceRequest>()
     try {
         val source = dataSourceService.createDataSource(orgId, userId.toLong(), request)
@@ -753,11 +774,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetCustomDataSou
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid data source ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
     val source = dataSourceService.getDataSource(id, orgId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
     call.respond(source)
 }
 
@@ -768,12 +789,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateCustomData
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid data source ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
     val request = call.receive<UpdateCustomDataSourceRequest>()
     val updated = dataSourceService.updateDataSource(id, orgId, request)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
 
     // Invalidate any cached connection pool
     dataSourceExecutor.closePool(id)
@@ -787,17 +808,17 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteCustomData
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(
             HttpStatusCode.BadRequest,
-            ErrorResponse("Invalid data source ID")
+            ErrorResponse(ERR_INVALID_DATA_SOURCE_ID)
         )
     if (dataSourceService.deleteDataSource(id, orgId)) {
         dataSourceExecutor.closePool(id)
         call.respond(HttpStatusCode.NoContent, "")
     } else {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
     }
 }
 
@@ -808,17 +829,17 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetDataSourceSch
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid data source ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
     val source = dataSourceService.getDataSource(id, orgId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
     val creds = dataSourceService.getDecryptedCredentials(id, orgId)
         ?: return call.respond(
             HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials")
         )
     val sourceType = CustomDataSourceType.fromString(source.sourceType)
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unknown source type"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_UNKNOWN_SOURCE_TYPE))
     val schema = dataSourceExecutor.getSchema(
         sourceType,
         source.host,
@@ -836,18 +857,18 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCustomDataSource
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid data source ID"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
     val request = call.receive<CustomDataSourceQueryRequest>()
     val source = dataSourceService.getDataSource(id, orgId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Data source not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
     val creds = dataSourceService.getDecryptedCredentials(id, orgId)
         ?: return call.respond(
             HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials")
         )
     val sourceType = CustomDataSourceType.fromString(source.sourceType)
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unknown source type"))
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_UNKNOWN_SOURCE_TYPE))
     try {
         val results = dataSourceExecutor.executeQuery(
             id, sourceType, source.host, source.port,
@@ -859,18 +880,22 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCustomDataSource
     }
 }
 
+data class DashboardTranslators(
+    val dataDog: DataDogTranslator = DataDogTranslator(),
+    val grafana: GrafanaTranslator = GrafanaTranslator(),
+)
+
 fun Route.customDashboardRoutes(
     dashboardService: CustomDashboardService = GlobalContext.get().get(),
     queryEngine: DashboardQueryEngine = GlobalContext.get().get(),
     retentionPolicyService: RetentionPolicyService = GlobalContext.get().get(),
-    dataDogTranslator: DataDogTranslator = DataDogTranslator(),
-    grafanaTranslator: GrafanaTranslator = GrafanaTranslator(),
+    translators: DashboardTranslators = DashboardTranslators(),
     dataSourceService: CustomDataSourceService = GlobalContext.get().get(),
     dataSourceExecutor: CustomDataSourceExecutor = GlobalContext.get().get(),
     dashboardAlertService: DashboardAlertService = GlobalContext.get().get(),
 ) {
     route("/v1/dashboards") {
-        authenticate("auth-jwt") {
+        authenticate(AUTH_JWT) {
             get { handleListDashboards(dashboardService) }
             post { handleCreateDashboard(dashboardService) }
             route("/folders") {
@@ -893,9 +918,9 @@ fun Route.customDashboardRoutes(
             post("/{id}/variables/resolve") {
                 handleVariablesResolve(dashboardService, dataSourceService, dataSourceExecutor)
             }
-            post("/import") { handleImportDashboard(dashboardService, dataDogTranslator, grafanaTranslator) }
+            post("/import") { handleImportDashboard(dashboardService, translators.dataDog, translators.grafana) }
             get("/{id}/export/{format}") {
-                handleExportDashboard(dashboardService, dataDogTranslator, grafanaTranslator)
+                handleExportDashboard(dashboardService, translators.dataDog, translators.grafana)
             }
             get("/{id}/alerts") { handleListAlerts(dashboardAlertService) }
             post("/{id}/alerts") { handleCreateAlert(dashboardAlertService) }
@@ -908,7 +933,7 @@ fun Route.customDashboardRoutes(
 
     // Global search (dashboards, projects)
     route("/v1/search") {
-        authenticate("auth-jwt") {
+        authenticate(AUTH_JWT) {
             get { handleSearch(dashboardService) }
         }
     }
@@ -916,7 +941,7 @@ fun Route.customDashboardRoutes(
     // Custom data source management routes
     route("/v1") {
         route("/datasources") {
-            authenticate("auth-jwt") {
+            authenticate(AUTH_JWT) {
                 get { handleListCustomDataSources(dataSourceService) }
                 post { handleCreateCustomDataSource(dataSourceService) }
                 // Test connection (without saving) — must be before /{id} routes
