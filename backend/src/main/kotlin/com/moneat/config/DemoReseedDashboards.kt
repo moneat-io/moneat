@@ -50,6 +50,25 @@ internal data class DemoWidgetGrid(
     val h: Int,
 )
 
+/** Query config for demo COUNT donut widgets (Sonar: keep insert helper arity ≤ 7). */
+private data class DemoCountDonutQuerySpec(
+    val dataSource: String,
+    val groupByField: String,
+    val filters: List<FilterDef> = emptyList(),
+    val orderBy: OrderByDef? = null,
+    val limit: Int = 100,
+)
+
+/** Query config for demo COUNT bar widgets (Sonar: keep insert helper arity ≤ 7). */
+private data class DemoBarCountQuerySpec(
+    val dataSource: String,
+    val groupByField: String,
+    val metricAlias: String = "count",
+    val filters: List<FilterDef> = emptyList(),
+    val limit: Int = 10,
+    val display: Map<String, String> = emptyMap(),
+)
+
 internal fun countDemoDashboards(): Long =
     runCatching {
         transaction {
@@ -178,11 +197,7 @@ private fun insertDemoCountDonutByField(
     dashboardId: Long,
     title: String,
     grid: DemoWidgetGrid,
-    dataSource: String,
-    groupByField: String,
-    filters: List<FilterDef> = emptyList(),
-    orderBy: OrderByDef? = null,
-    limit: Int = 100,
+    query: DemoCountDonutQuerySpec,
     order: Int,
 ) {
     insertWidget(
@@ -192,13 +207,13 @@ private fun insertDemoCountDonutByField(
         grid,
         listOf(
             QueryDsl(
-                dataSource = dataSource,
+                dataSource = query.dataSource,
                 metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef(groupByField, GroupByType.FIELD)),
-                filters = filters,
-                orderBy = orderBy,
+                groupBy = listOf(GroupByDef(query.groupByField, GroupByType.FIELD)),
+                filters = query.filters,
+                orderBy = query.orderBy,
                 timeRange = defaultTimeRange,
-                limit = limit,
+                limit = query.limit,
             )
         ),
         order = order,
@@ -210,12 +225,7 @@ private fun insertDemoBarCountByField(
     dashboardId: Long,
     title: String,
     grid: DemoWidgetGrid,
-    dataSource: String,
-    groupByField: String,
-    metricAlias: String = "count",
-    filters: List<FilterDef> = emptyList(),
-    limit: Int = 10,
-    display: Map<String, String> = emptyMap(),
+    query: DemoBarCountQuerySpec,
     order: Int,
 ) {
     insertWidget(
@@ -225,16 +235,16 @@ private fun insertDemoBarCountByField(
         grid,
         listOf(
             QueryDsl(
-                dataSource = dataSource,
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = metricAlias)),
-                groupBy = listOf(GroupByDef(groupByField, GroupByType.FIELD)),
-                filters = filters,
-                orderBy = OrderByDef(metricAlias, "desc"),
+                dataSource = query.dataSource,
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = query.metricAlias)),
+                groupBy = listOf(GroupByDef(query.groupByField, GroupByType.FIELD)),
+                filters = query.filters,
+                orderBy = OrderByDef(query.metricAlias, "desc"),
                 timeRange = defaultTimeRange,
-                limit = limit,
+                limit = query.limit,
             )
         ),
-        display,
+        query.display,
         order = order,
     )
 }
@@ -403,9 +413,11 @@ internal fun seedErrorOverviewDashboard() {
         dashboardId = id,
         title = "Errors by Platform",
         grid = DemoWidgetGrid(8, row, 4, 4),
-        dataSource = "events",
-        groupByField = "platform",
-        filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
+        query = DemoCountDonutQuerySpec(
+            dataSource = "events",
+            groupByField = "platform",
+            filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
+        ),
         order = 7,
     )
 }
@@ -634,8 +646,10 @@ internal fun seedLlmMonitoringDashboard() {
         dashboardId = id,
         title = "Generations by Model",
         grid = DemoWidgetGrid(0, row, 4, 4),
-        dataSource = "llm_generations",
-        groupByField = "model",
+        query = DemoBarCountQuerySpec(
+            dataSource = "llm_generations",
+            groupByField = "model",
+        ),
         order = 9,
     )
 
@@ -664,8 +678,10 @@ internal fun seedLlmMonitoringDashboard() {
         dashboardId = id,
         title = "Generations by Provider",
         grid = DemoWidgetGrid(8, row, 4, 4),
-        dataSource = "llm_generations",
-        groupByField = "provider",
+        query = DemoCountDonutQuerySpec(
+            dataSource = "llm_generations",
+            groupByField = "provider",
+        ),
         order = 11,
     )
 }
@@ -713,10 +729,12 @@ internal fun seedWebAnalyticsDashboard() {
         dashboardId = id,
         title = "Top Pages",
         grid = DemoWidgetGrid(0, row, 6, 4),
-        dataSource = "analytics_events",
-        groupByField = "pathname",
-        metricAlias = "views",
-        filters = listOf(FilterDef("event_name", FilterOp.EQ, "pageview")),
+        query = DemoBarCountQuerySpec(
+            dataSource = "analytics_events",
+            groupByField = "pathname",
+            metricAlias = "views",
+            filters = listOf(FilterDef("event_name", FilterOp.EQ, "pageview")),
+        ),
         order = 6,
     )
 
@@ -725,10 +743,12 @@ internal fun seedWebAnalyticsDashboard() {
         dashboardId = id,
         title = "Traffic by Country",
         grid = DemoWidgetGrid(6, row, 3, 4),
-        dataSource = "analytics_events",
-        groupByField = "country_code",
-        orderBy = OrderByDef("count", "desc"),
-        limit = 10,
+        query = DemoCountDonutQuerySpec(
+            dataSource = "analytics_events",
+            groupByField = "country_code",
+            orderBy = OrderByDef("count", "desc"),
+            limit = 10,
+        ),
         order = 7,
     )
 
@@ -737,8 +757,10 @@ internal fun seedWebAnalyticsDashboard() {
         dashboardId = id,
         title = "Traffic by Device",
         grid = DemoWidgetGrid(9, row, 3, 4),
-        dataSource = "analytics_events",
-        groupByField = "device_type",
+        query = DemoCountDonutQuerySpec(
+            dataSource = "analytics_events",
+            groupByField = "device_type",
+        ),
         order = 8,
     )
     row += 4
@@ -748,8 +770,10 @@ internal fun seedWebAnalyticsDashboard() {
         dashboardId = id,
         title = "Traffic by Browser",
         grid = DemoWidgetGrid(0, row, 6, 4),
-        dataSource = "analytics_events",
-        groupByField = "browser",
+        query = DemoBarCountQuerySpec(
+            dataSource = "analytics_events",
+            groupByField = "browser",
+        ),
         order = 9,
     )
 
@@ -758,8 +782,10 @@ internal fun seedWebAnalyticsDashboard() {
         dashboardId = id,
         title = "Traffic by OS",
         grid = DemoWidgetGrid(6, row, 6, 4),
-        dataSource = "analytics_events",
-        groupByField = "os",
+        query = DemoBarCountQuerySpec(
+            dataSource = "analytics_events",
+            groupByField = "os",
+        ),
         order = 10,
     )
 }
