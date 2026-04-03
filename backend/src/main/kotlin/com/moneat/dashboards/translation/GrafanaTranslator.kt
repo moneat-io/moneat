@@ -480,94 +480,122 @@ class GrafanaTranslator : DashboardTranslator {
         panelIndex: Int,
         legendFormat: String?
     ): QueryDsl {
-        // Try PromQL first (takes priority — rawSql may be a Grafana default template)
+        tryParsePromqlGrafanaTarget(target, warnings, panelIndex, legendFormat)?.let { return it }
+        tryParseSqlGrafanaTarget(target, warnings, panelIndex)?.let { return it }
+        tryParseElasticsearchGrafanaTarget(target, legendFormat)?.let { return it }
+        tryParseGenericQueryGrafanaTarget(target, warnings, panelIndex, legendFormat)?.let { return it }
+        tryParseRedisGrafanaTarget(target, legendFormat)?.let { return it }
+        tryParseInfluxGrafanaTarget(target, legendFormat)?.let { return it }
+        tryParseCloudWatchGrafanaTarget(target, legendFormat)?.let { return it }
+        tryParseGraphiteGrafanaTarget(target, legendFormat)?.let { return it }
+        return parseGrafanaTargetFallback(target, warnings, panelIndex, legendFormat)
+    }
+
+    /** PromQL takes priority — rawSql may be a Grafana default template. */
+    private fun tryParsePromqlGrafanaTarget(
+        target: JsonObject,
+        warnings: MutableList<String>,
+        panelIndex: Int,
+        legendFormat: String?
+    ): QueryDsl? {
         val expr = target["expr"]?.jsonPrimitive?.contentOrNull
-        if (!expr.isNullOrBlank()) {
-            val parsed = parsePromQL(expr, warnings, panelIndex)
-            // Apply legendFormat as the metric alias so the chart uses it as series name
-            return if (legendFormat != null && parsed.metrics.isNotEmpty()) {
-                parsed.copy(metrics = parsed.metrics.map { it.copy(alias = legendFormat) })
-            } else {
-                parsed
-            }
+        if (expr.isNullOrBlank()) return null
+        val parsed = parsePromQL(expr, warnings, panelIndex)
+        return if (legendFormat != null && parsed.metrics.isNotEmpty()) {
+            parsed.copy(metrics = parsed.metrics.map { it.copy(alias = legendFormat) })
+        } else {
+            parsed
         }
+    }
 
-        // Try SQL
-        val rawSql = target["rawSql"]?.jsonPrimitive?.contentOrNull
-        if (rawSql != null) {
-            return parseGrafanaSql(rawSql, warnings, panelIndex)
-        }
+    private fun tryParseSqlGrafanaTarget(
+        target: JsonObject,
+        warnings: MutableList<String>,
+        panelIndex: Int
+    ): QueryDsl? {
+        val rawSql = target["rawSql"]?.jsonPrimitive?.contentOrNull ?: return null
+        return parseGrafanaSql(rawSql, warnings, panelIndex)
+    }
 
-        // Try Grafana Elasticsearch plugin format (metrics/bucketAggs arrays)
-        // Check before generic query so ES targets with Lucene query + aggregations
-        // get full translation instead of losing metrics/bucketAggs
+    /** ES targets with Lucene query + aggregations — before generic [query] handling. */
+    private fun tryParseElasticsearchGrafanaTarget(
+        target: JsonObject,
+        legendFormat: String?
+    ): QueryDsl? {
         val esMetrics = target["metrics"] as? JsonArray
         val esBucketAggs = target["bucketAggs"] as? JsonArray
-        if (esMetrics != null || esBucketAggs != null) {
-            val esQuery = translateGrafanaElasticsearchTarget(target)
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = esQuery
-            )
-        }
+        if (esMetrics == null && esBucketAggs == null) return null
+        val esQuery = translateGrafanaElasticsearchTarget(target)
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = esQuery
+        )
+    }
 
-        // Try generic query (skip empty strings from plugin-specific targets)
+    private fun tryParseGenericQueryGrafanaTarget(
+        target: JsonObject,
+        warnings: MutableList<String>,
+        panelIndex: Int,
+        legendFormat: String?
+    ): QueryDsl? {
         val query = target["query"]?.jsonPrimitive?.contentOrNull
-        if (!query.isNullOrBlank()) {
-            warnings.add("Panel $panelIndex: generic query stored as rawQuery")
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = query
-            )
-        }
+        if (query.isNullOrBlank()) return null
+        warnings.add("Panel $panelIndex: generic query stored as rawQuery")
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = query
+        )
+    }
 
-        // Try Grafana Redis datasource plugin format (command/section/type fields)
-        val redisCommand = target["command"]?.jsonPrimitive?.contentOrNull
-        if (redisCommand != null) {
-            val rawCmd = translateGrafanaRedisCommand(redisCommand, target)
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = rawCmd
-            )
-        }
+    private fun tryParseRedisGrafanaTarget(target: JsonObject, legendFormat: String?): QueryDsl? {
+        val redisCommand = target["command"]?.jsonPrimitive?.contentOrNull ?: return null
+        val rawCmd = translateGrafanaRedisCommand(redisCommand, target)
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = rawCmd
+        )
+    }
 
-        // Try Grafana InfluxDB plugin format (measurement/select/groupBy)
-        val measurement = target["measurement"]?.jsonPrimitive?.contentOrNull
-        if (measurement != null) {
-            val fluxFilter = translateGrafanaInfluxTarget(target)
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = fluxFilter
-            )
-        }
+    private fun tryParseInfluxGrafanaTarget(target: JsonObject, legendFormat: String?): QueryDsl? {
+        if (target["measurement"]?.jsonPrimitive?.contentOrNull == null) return null
+        val fluxFilter = translateGrafanaInfluxTarget(target)
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = fluxFilter
+        )
+    }
 
-        // Try Grafana CloudWatch plugin format (namespace/metricName)
-        val namespace = target["namespace"]?.jsonPrimitive?.contentOrNull
-        if (namespace != null && target.containsKey("metricName")) {
-            val cwJson = translateGrafanaCloudWatchTarget(target)
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = cwJson
-            )
-        }
+    private fun tryParseCloudWatchGrafanaTarget(target: JsonObject, legendFormat: String?): QueryDsl? {
+        val namespace = target["namespace"]?.jsonPrimitive?.contentOrNull ?: return null
+        if (!target.containsKey("metricName")) return null
+        val cwJson = translateGrafanaCloudWatchTarget(target)
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = cwJson
+        )
+    }
 
-        // Try Grafana Graphite plugin format (target field)
+    private fun tryParseGraphiteGrafanaTarget(target: JsonObject, legendFormat: String?): QueryDsl? {
         val graphiteTarget = target["target"]?.jsonPrimitive?.contentOrNull
-        if (!graphiteTarget.isNullOrBlank()) {
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = graphiteTarget
-            )
-        }
+        if (graphiteTarget.isNullOrBlank()) return null
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = graphiteTarget
+        )
+    }
 
-        // No standard query format found — serialize the full target as rawQuery
-        // so plugin-specific fields are preserved
+    private fun parseGrafanaTargetFallback(
+        target: JsonObject,
+        warnings: MutableList<String>,
+        panelIndex: Int,
+        legendFormat: String?
+    ): QueryDsl {
         val knownKeys = setOf("refId", "datasource", "legendFormat", "query")
         val hasExtraFields = target.keys.any { it !in knownKeys }
         if (hasExtraFields) {
@@ -580,7 +608,6 @@ class GrafanaTranslator : DashboardTranslator {
                 rawQuery = target.toString()
             )
         }
-
         warnings.add("Panel $panelIndex: no recognizable query target")
         return QueryDsl(
             dataSource = "events",
@@ -848,54 +875,18 @@ class GrafanaTranslator : DashboardTranslator {
         // Try aggregation with by/without: sum by (labels) (inner_expr)
         val aggByMatch = Regex("""^(\w+)\s+(?:by|without)\s*\(([^)]*)\)\s*\((.+)\)$""").find(normalized)
 
-        val (metricName, labelStr, aggFunction) = when {
-            aggByMatch != null -> {
-                // Parse inner expression recursively for metric name
-                val innerExpr = aggByMatch.groupValues[REGEX_THIRD_GROUP_IDX].trim()
-                val innerFunc = Regex("""(\w+)\(([^{(]+?)(?:\{[^}]*\})?(?:\[[^]]*])?.*\)""").find(innerExpr)
-                val metric = innerFunc?.groupValues?.getOrNull(2)?.trim() ?: "unknown"
-                val innerLabels = Regex("""\{([^}]*)\}""").find(innerExpr)?.groupValues?.get(1) ?: ""
-                Triple(metric, innerLabels, mapPromFunction(aggByMatch.groupValues[1]))
-            }
-            funcMatch != null -> {
-                Triple(
-                    funcMatch.groupValues[2].trim(),
-                    funcMatch.groupValues[REGEX_THIRD_GROUP_IDX],
-                    mapPromFunction(funcMatch.groupValues[1])
-                )
-            }
-            bareMatch != null -> {
-                Triple(
-                    bareMatch.groupValues[1].trim(),
-                    bareMatch.groupValues[2],
-                    AggFunction.AVG
-                )
-            }
-            else -> {
-                warnings.add("Panel $panelIndex: couldn't parse PromQL '$expr', stored as rawQuery")
-                return QueryDsl(
-                    dataSource = "__prometheus",
-                    metrics = listOf(MetricDef(AggFunction.AVG, alias = "value")),
-                    rawQuery = expr,
-                    limit = 5000
-                )
-            }
+        val parsedMetric = resolvePromqlMetricAndLabels(aggByMatch, funcMatch, bareMatch)
+        if (parsedMetric == null) {
+            warnings.add("Panel $panelIndex: couldn't parse PromQL '$expr', stored as rawQuery")
+            return QueryDsl(
+                dataSource = "__prometheus",
+                metrics = listOf(MetricDef(AggFunction.AVG, alias = "value")),
+                rawQuery = expr,
+                limit = 5000
+            )
         }
-
-        val filters = mutableListOf<FilterDef>()
-        if (labelStr.isNotBlank()) {
-            // Parse label matchers: key="val", key=~"val", key!="val", key!~"val"
-            Regex("""(\w+)\s*(=~|!=|!~|=)\s*"([^"]*?)"""").findAll(labelStr).forEach { m ->
-                val key = m.groupValues[1]
-                val op = when (m.groupValues[2]) {
-                    "=~" -> FilterOp.LIKE
-                    "!~" -> FilterOp.NOT_LIKE
-                    "!=" -> FilterOp.NEQ
-                    else -> FilterOp.EQ
-                }
-                filters.add(FilterDef(key, op, m.groupValues[REGEX_THIRD_GROUP_IDX]))
-            }
-        }
+        val (metricName, labelStr, aggFunction) = parsedMetric
+        val filters = parsePromqlLabelMatchers(labelStr)
 
         return QueryDsl(
             dataSource = "__prometheus",
@@ -905,6 +896,49 @@ class GrafanaTranslator : DashboardTranslator {
             rawQuery = expr,
             limit = 5000
         )
+    }
+
+    private fun resolvePromqlMetricAndLabels(
+        aggByMatch: MatchResult?,
+        funcMatch: MatchResult?,
+        bareMatch: MatchResult?
+    ): Triple<String, String, AggFunction>? = when {
+        aggByMatch != null -> {
+            val innerExpr = aggByMatch.groupValues[3].trim()
+            val innerFunc = Regex("""(\w+)\(([^{(]+?)(?:\{[^}]*\})?(?:\[[^]]*])?.*\)""").find(innerExpr)
+            val metric = innerFunc?.groupValues?.getOrNull(2)?.trim() ?: "unknown"
+            val innerLabels = Regex("""\{([^}]*)\}""").find(innerExpr)?.groupValues?.get(1) ?: ""
+            Triple(metric, innerLabels, mapPromFunction(aggByMatch.groupValues[1]))
+        }
+        funcMatch != null -> {
+            Triple(
+                funcMatch.groupValues[2].trim(),
+                funcMatch.groupValues[3],
+                mapPromFunction(funcMatch.groupValues[1])
+            )
+        }
+        bareMatch != null -> {
+            Triple(
+                bareMatch.groupValues[1].trim(),
+                bareMatch.groupValues[2],
+                AggFunction.AVG
+            )
+        }
+        else -> null
+    }
+
+    private fun parsePromqlLabelMatchers(labelStr: String): List<FilterDef> {
+        if (labelStr.isBlank()) return emptyList()
+        val labelRegex = Regex("""(\w+)\s*(=~|!=|!~|=)\s*"([^"]*?)"""")
+        return labelRegex.findAll(labelStr).map { m ->
+            val op = when (m.groupValues[2]) {
+                "=~" -> FilterOp.LIKE
+                "!~" -> FilterOp.NOT_LIKE
+                "!=" -> FilterOp.NEQ
+                else -> FilterOp.EQ
+            }
+            FilterDef(m.groupValues[1], op, m.groupValues[3])
+        }.toList()
     }
 
     private fun mapPromFunction(fn: String): AggFunction = when (fn.lowercase()) {
