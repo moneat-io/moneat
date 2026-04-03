@@ -144,100 +144,154 @@ internal fun insertWidget(
 
 private val defaultTimeRange = TimeRangeDef("now-7d", "now")
 
-// ── Error Overview Dashboard ───────────────────────────────────────────
-
-internal fun seedErrorOverviewDashboard() {
-    val id = insertDashboard(
-        "Error Overview",
-        "Cross-platform error monitoring across Android, iOS, and React Native"
-    )
-    var row = 0
-
-    // Section: Error Trends
+/** First section at row 0; returns dashboard id and next grid row (1). */
+private fun openDemoDashboardWithSection(
+    title: String,
+    description: String,
+    sectionTitle: String,
+): Pair<Long, Int> {
+    val id = insertDashboard(title, description)
     insertWidget(
         id,
-        "Error Trends",
+        sectionTitle,
         "section",
-        DemoWidgetGrid(0, row, 12, 1),
+        DemoWidgetGrid(0, 0, 12, 1),
         emptyList(),
         order = 0,
     )
-    row += 1
+    return id to 1
+}
 
-    // Errors over time by platform
-    insertWidget(
-        id,
-        "Errors Over Time",
-        "timeseries",
-        DemoWidgetGrid(0, row, 8, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "errors")),
-                groupBy = listOf(
-                    GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET),
-                    GroupByDef("platform", GroupByType.FIELD)
+/**
+ * Shared demo layout: timeseries + total + unique + bar (Sonar: deduplicate seed blocks).
+ * [uniqueStatFilters] / [barFilters]: null means reuse [rowFilters]; empty list means no filters.
+ */
+private data class DemoOverviewMetricRowConfig(
+    val dataSource: String,
+    val timeseriesTitle: String,
+    val timeseriesMetricAlias: String,
+    val timeseriesGroupBy: List<GroupByDef>,
+    val rowFilters: List<FilterDef>,
+    val totalStatTitle: String,
+    val uniqueStatTitle: String,
+    val uniqueField: String,
+    val uniqueMetricAlias: String,
+    val uniqueStatFilters: List<FilterDef>? = null,
+    val barTitle: String,
+    val barGroupByField: String,
+    val barFilters: List<FilterDef>? = null,
+    val barOrderBy: OrderByDef? = null,
+    val barLimit: Int? = null,
+)
+
+private fun insertDemoOverviewMetricRow(
+    dashboardId: Long,
+    row: Int,
+    config: DemoOverviewMetricRowConfig,
+    orderStart: Int,
+) {
+    val uniqueFilters = config.uniqueStatFilters ?: config.rowFilters
+    val barFilterList = config.barFilters ?: config.rowFilters
+    with(config) {
+        insertWidget(
+            dashboardId,
+            timeseriesTitle,
+            "timeseries",
+            DemoWidgetGrid(0, row, 8, 4),
+            listOf(
+                QueryDsl(
+                    dataSource = dataSource,
+                    metrics = listOf(MetricDef(AggFunction.COUNT, alias = timeseriesMetricAlias)),
+                    groupBy = timeseriesGroupBy,
+                    filters = rowFilters,
+                    timeRange = defaultTimeRange,
+                    limit = 1000,
                 ),
-                filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
-                timeRange = defaultTimeRange,
-                limit = 1000
-            )
-        ),
-        order = 1,
-    )
+            ),
+            order = orderStart,
+        )
+        insertWidget(
+            dashboardId,
+            totalStatTitle,
+            "stat",
+            DemoWidgetGrid(8, row, 2, 2),
+            listOf(
+                QueryDsl(
+                    dataSource = dataSource,
+                    metrics = listOf(MetricDef(AggFunction.COUNT, alias = "total")),
+                    filters = rowFilters,
+                    timeRange = defaultTimeRange,
+                ),
+            ),
+            order = orderStart + 1,
+        )
+        insertWidget(
+            dashboardId,
+            uniqueStatTitle,
+            "stat",
+            DemoWidgetGrid(10, row, 2, 2),
+            listOf(
+                QueryDsl(
+                    dataSource = dataSource,
+                    metrics = listOf(MetricDef(AggFunction.UNIQ, uniqueField, uniqueMetricAlias)),
+                    filters = uniqueFilters,
+                    timeRange = defaultTimeRange,
+                ),
+            ),
+            order = orderStart + 2,
+        )
+        insertWidget(
+            dashboardId,
+            barTitle,
+            "bar",
+            DemoWidgetGrid(8, row + 2, 4, 2),
+            listOf(
+                QueryDsl(
+                    dataSource = dataSource,
+                    metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
+                    groupBy = listOf(GroupByDef(barGroupByField, GroupByType.FIELD)),
+                    filters = barFilterList,
+                    orderBy = barOrderBy,
+                    timeRange = defaultTimeRange,
+                    limit = barLimit ?: 100,
+                ),
+            ),
+            order = orderStart + 3,
+        )
+    }
+}
 
-    // Total errors stat
-    insertWidget(
-        id,
-        "Total Errors",
-        "stat",
-        DemoWidgetGrid(8, row, 2, 2),
-        listOf(
-            QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "total")),
-                filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
-                timeRange = defaultTimeRange
-            )
-        ),
-        order = 2,
-    )
+// ── Error Overview Dashboard ───────────────────────────────────────────
 
-    // Unique affected users stat
-    insertWidget(
-        id,
-        "Affected Users",
-        "stat",
-        DemoWidgetGrid(10, row, 2, 2),
-        listOf(
-            QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.UNIQ, "user_id", "users")),
-                filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
-                timeRange = defaultTimeRange
-            )
-        ),
-        order = 3,
+internal fun seedErrorOverviewDashboard() {
+    val (id, row0) = openDemoDashboardWithSection(
+        "Error Overview",
+        "Cross-platform error monitoring across Android, iOS, and React Native",
+        "Error Trends",
     )
-
-    // Top error types bar
-    insertWidget(
+    var row = row0
+    insertDemoOverviewMetricRow(
         id,
-        "Top Error Types",
-        "bar",
-        DemoWidgetGrid(8, row + 2, 4, 2),
-        listOf(
-            QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef("exception_type", GroupByType.FIELD)),
-                filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
-                orderBy = OrderByDef("count", "desc"),
-                timeRange = defaultTimeRange,
-                limit = 5
-            )
+        row,
+        DemoOverviewMetricRowConfig(
+            dataSource = "events",
+            timeseriesTitle = "Errors Over Time",
+            timeseriesMetricAlias = "errors",
+            timeseriesGroupBy = listOf(
+                GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET),
+                GroupByDef("platform", GroupByType.FIELD),
+            ),
+            rowFilters = listOf(FilterDef("level", FilterOp.EQ, "error")),
+            totalStatTitle = "Total Errors",
+            uniqueStatTitle = "Affected Users",
+            uniqueField = "user_id",
+            uniqueMetricAlias = "users",
+            barTitle = "Top Error Types",
+            barGroupByField = "exception_type",
+            barOrderBy = OrderByDef("count", "desc"),
+            barLimit = 5,
         ),
-        order = 4,
+        orderStart = 1,
     )
     row += 4
 
@@ -297,92 +351,31 @@ internal fun seedErrorOverviewDashboard() {
 // ── Performance Dashboard ──────────────────────────────────────────────
 
 internal fun seedPerformanceDashboard() {
-    val id = insertDashboard(
+    val (id, row0) = openDemoDashboardWithSection(
         "Performance",
-        "Transaction performance and session monitoring"
-    )
-    var row = 0
-
-    // Section: Transactions
-    insertWidget(
-        id,
+        "Transaction performance and session monitoring",
         "Transactions",
-        "section",
-        DemoWidgetGrid(0, row, 12, 1),
-        emptyList(),
-        order = 0,
     )
-    row += 1
-
-    // Transaction count over time
-    insertWidget(
+    var row = row0
+    insertDemoOverviewMetricRow(
         id,
-        "Transactions Over Time",
-        "timeseries",
-        DemoWidgetGrid(0, row, 8, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "transactions")),
-                groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET)),
-                filters = listOf(FilterDef("event_type", FilterOp.EQ, "transaction")),
-                timeRange = defaultTimeRange,
-                limit = 1000
-            )
+        row,
+        DemoOverviewMetricRowConfig(
+            dataSource = "events",
+            timeseriesTitle = "Transactions Over Time",
+            timeseriesMetricAlias = "transactions",
+            timeseriesGroupBy = listOf(
+                GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET),
+            ),
+            rowFilters = listOf(FilterDef("event_type", FilterOp.EQ, "transaction")),
+            totalStatTitle = "Total Transactions",
+            uniqueStatTitle = "Unique Users",
+            uniqueField = "user_id",
+            uniqueMetricAlias = "users",
+            barTitle = "Transactions by Platform",
+            barGroupByField = "platform",
         ),
-        order = 1,
-    )
-
-    // Transaction count stat
-    insertWidget(
-        id,
-        "Total Transactions",
-        "stat",
-        DemoWidgetGrid(8, row, 2, 2),
-        listOf(
-            QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "total")),
-                filters = listOf(FilterDef("event_type", FilterOp.EQ, "transaction")),
-                timeRange = defaultTimeRange
-            )
-        ),
-        order = 2,
-    )
-
-    // Unique transaction users
-    insertWidget(
-        id,
-        "Unique Users",
-        "stat",
-        DemoWidgetGrid(10, row, 2, 2),
-        listOf(
-            QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.UNIQ, "user_id", "users")),
-                filters = listOf(FilterDef("event_type", FilterOp.EQ, "transaction")),
-                timeRange = defaultTimeRange
-            )
-        ),
-        order = 3,
-    )
-
-    // Transactions by platform
-    insertWidget(
-        id,
-        "Transactions by Platform",
-        "bar",
-        DemoWidgetGrid(8, row + 2, 4, 2),
-        listOf(
-            QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef("platform", GroupByType.FIELD)),
-                filters = listOf(FilterDef("event_type", FilterOp.EQ, "transaction")),
-                timeRange = defaultTimeRange
-            )
-        ),
-        order = 4,
+        orderStart = 1,
     )
     row += 4
 
@@ -658,92 +651,35 @@ internal fun seedLlmMonitoringDashboard() {
 // ── Web Analytics Dashboard ────────────────────────────────────────────
 
 internal fun seedWebAnalyticsDashboard() {
-    val id = insertDashboard(
+    val (id, row0) = openDemoDashboardWithSection(
         "Web Analytics",
-        "Website traffic, pageviews, and visitor demographics"
-    )
-    var row = 0
-
-    // Section: Traffic Overview
-    insertWidget(
-        id,
+        "Website traffic, pageviews, and visitor demographics",
         "Traffic Overview",
-        "section",
-        DemoWidgetGrid(0, row, 12, 1),
-        emptyList(),
-        order = 0,
     )
-    row += 1
-
-    // Pageviews over time
-    insertWidget(
+    var row = row0
+    insertDemoOverviewMetricRow(
         id,
-        "Pageviews Over Time",
-        "timeseries",
-        DemoWidgetGrid(0, row, 8, 4),
-        listOf(
-            QueryDsl(
-                dataSource = "analytics_events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "pageviews")),
-                groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET)),
-                filters = listOf(FilterDef("event_name", FilterOp.EQ, "pageview")),
-                timeRange = defaultTimeRange,
-                limit = 1000
-            )
+        row,
+        DemoOverviewMetricRowConfig(
+            dataSource = "analytics_events",
+            timeseriesTitle = "Pageviews Over Time",
+            timeseriesMetricAlias = "pageviews",
+            timeseriesGroupBy = listOf(
+                GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET),
+            ),
+            rowFilters = listOf(FilterDef("event_name", FilterOp.EQ, "pageview")),
+            totalStatTitle = "Total Pageviews",
+            uniqueStatTitle = "Unique Sessions",
+            uniqueField = "session_id",
+            uniqueMetricAlias = "sessions",
+            uniqueStatFilters = emptyList(),
+            barTitle = "Events by Type",
+            barGroupByField = "event_name",
+            barFilters = emptyList(),
+            barOrderBy = OrderByDef("count", "desc"),
+            barLimit = 10,
         ),
-        order = 1,
-    )
-
-    // Total pageviews stat
-    insertWidget(
-        id,
-        "Total Pageviews",
-        "stat",
-        DemoWidgetGrid(8, row, 2, 2),
-        listOf(
-            QueryDsl(
-                dataSource = "analytics_events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "total")),
-                filters = listOf(FilterDef("event_name", FilterOp.EQ, "pageview")),
-                timeRange = defaultTimeRange
-            )
-        ),
-        order = 2,
-    )
-
-    // Unique sessions stat
-    insertWidget(
-        id,
-        "Unique Sessions",
-        "stat",
-        DemoWidgetGrid(10, row, 2, 2),
-        listOf(
-            QueryDsl(
-                dataSource = "analytics_events",
-                metrics = listOf(MetricDef(AggFunction.UNIQ, "session_id", "sessions")),
-                timeRange = defaultTimeRange
-            )
-        ),
-        order = 3,
-    )
-
-    // Events by type bar
-    insertWidget(
-        id,
-        "Events by Type",
-        "bar",
-        DemoWidgetGrid(8, row + 2, 4, 2),
-        listOf(
-            QueryDsl(
-                dataSource = "analytics_events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                groupBy = listOf(GroupByDef("event_name", GroupByType.FIELD)),
-                orderBy = OrderByDef("count", "desc"),
-                timeRange = defaultTimeRange,
-                limit = 10
-            )
-        ),
-        order = 4,
+        orderStart = 1,
     )
     row += 4
 
