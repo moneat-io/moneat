@@ -621,29 +621,10 @@ class AdminService(
                 """.trimIndent()
             val response = ClickHouseClient.execute(query)
             if (response.status.isSuccess()) {
-                val text = response.bodyAsText()
-                val lines = text.trim().split("\n").filter { it.isNotBlank() }
-                for (line in lines) {
-                    val parts = line.split("\t")
-                    if (parts.size >= CLICKHOUSE_TABLE_MIN_COLUMNS) {
-                        val db = parts[0]
-                        val rawTable = parts[1]
-                        val rows = parts[2].toLongOrNull() ?: 0L
-                        val bytes = parts[CLICKHOUSE_BYTES_COLUMN_INDEX].toLongOrNull() ?: 0L
-                        // Prefix with database name for non-app tables to disambiguate
-                        val tableName = if (db == clickhouseDb) rawTable else "$db.$rawTable"
-                        tables.add(
-                            TableSize(
-                                table = tableName,
-                                rows = rows,
-                                bytesOnDisk = bytes,
-                                bytesOnDiskFormatted = formatBytes(bytes)
-                            )
-                        )
-                        totalBytes += bytes
-                        totalRows += rows
-                    }
-                }
+                val parsed = parseClickHouseParts(response.bodyAsText())
+                tables.addAll(parsed)
+                totalBytes += parsed.sumOf { it.bytesOnDisk }
+                totalRows += parsed.sumOf { it.rows }
             }
         }.getOrElse { e ->
             logger.error(e) { "Failed to query ClickHouse system.parts" }
@@ -666,6 +647,30 @@ class AdminService(
             storageUsedPercent = storageUsedPercent,
             scalingTriggerAlerts = alerts
         )
+    }
+
+    private fun parseClickHouseParts(text: String): List<TableSize> {
+        val result = mutableListOf<TableSize>()
+        for (line in text.trim().split("\n").filter { it.isNotBlank() }) {
+            val parts = line.split("\t")
+            if (parts.size >= CLICKHOUSE_TABLE_MIN_COLUMNS) {
+                val db = parts[0]
+                val rawTable = parts[1]
+                val rows = parts[2].toLongOrNull() ?: 0L
+                val bytes = parts[CLICKHOUSE_BYTES_COLUMN_INDEX].toLongOrNull() ?: 0L
+                // Prefix with database name for non-app tables to disambiguate
+                val tableName = if (db == clickhouseDb) rawTable else "$db.$rawTable"
+                result.add(
+                    TableSize(
+                        table = tableName,
+                        rows = rows,
+                        bytesOnDisk = bytes,
+                        bytesOnDiskFormatted = formatBytes(bytes),
+                    ),
+                )
+            }
+        }
+        return result
     }
 
     fun getTopConsumers(limit: Int): List<AdminTopConsumer> {

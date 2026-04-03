@@ -157,7 +157,7 @@ class IngestionWorker(
          */
         fun decodeMessage(encoded: String): Pair<Long, ByteArray> {
             val bytes = Base64.getDecoder().decode(encoded)
-            if (bytes.size < PROJECT_ID_BYTE_LENGTH) throw IllegalArgumentException("Message too short")
+            require(bytes.size >= PROJECT_ID_BYTE_LENGTH) { "Message too short" }
             val projectId = ByteBuffer.wrap(bytes, 0, PROJECT_ID_BYTE_LENGTH).long
             val envelopeBytes = bytes.copyOfRange(PROJECT_ID_BYTE_LENGTH, bytes.size)
             return projectId to envelopeBytes

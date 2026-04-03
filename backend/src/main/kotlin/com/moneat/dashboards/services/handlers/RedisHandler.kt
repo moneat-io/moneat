@@ -242,8 +242,8 @@ class RedisHandler : DataSourceHandler {
          * the host and the fallback truncates the address at the first colon.
          */
         internal fun buildRedisUri(host: String, port: Int, password: String?): String {
-            val scheme = if (host.startsWith("rediss://")) "rediss://" else "redis://"
-            val hostPart = host.removePrefix("rediss://").removePrefix("redis://")
+            val scheme = if (host.startsWith(REDISS_SCHEME)) REDISS_SCHEME else REDIS_SCHEME
+            val hostPart = host.removePrefix(REDISS_SCHEME).removePrefix(REDIS_SCHEME)
             // RFC 2732: IPv6 literals require brackets in the authority component.
             // Detect bare IPv6 by multiple colons and no leading '['.
             val bracketed = if (!hostPart.startsWith('[') && hostPart.count { it == ':' } > 1) {
@@ -266,6 +266,8 @@ class RedisHandler : DataSourceHandler {
             return "$scheme$auth$cleanHost:$resolvedPort"
         }
 
+        private const val REDIS_SCHEME = "redis://"
+        private const val REDISS_SCHEME = "rediss://"
         private const val REDIS_DEFAULT_PORT = 6379
         private const val REDIS_SAMPLE_KEY_LIMIT = 20
         private const val REDIS_SCHEMA_KEY_LIMIT = 100

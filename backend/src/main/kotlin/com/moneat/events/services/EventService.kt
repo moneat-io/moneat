@@ -189,56 +189,75 @@ class EventService(
                 }
 
                 "replay_video" -> {
-                    // Mobile replay uses replay_video instead of replay_recording.
-                    // The SDK may send a preceding replay_event item (with replay_id & segment_id)
-                    // or just a standalone replay_video. Handle both cases.
-                    val rid = lastReplayId ?: envelope.eventId
-
-                    val segmentId =
-                        if (lastReplayId != null) {
-                            // A replay_event was parsed in this envelope - use its segment_id
-                            lastSegmentId
-                        } else {
-                            // No replay_event - derive segment_id from an in-memory counter.
-                            // Evict stale entries if the map grows too large.
-                            if (replaySegmentCounters.size > MAX_REPLAY_SEGMENT_COUNTERS) {
-                                replaySegmentCounters.clear()
-                            }
-                            replaySegmentCounters
-                                .computeIfAbsent(rid) { AtomicInteger(0) }
-                                .getAndIncrement()
-                        }
-
-                    // Only create a synthetic replay event for the first segment of a session
-                    if (lastReplayId == null && segmentId == 0) {
-                        storeSyntheticReplayEvent(projectId, rid, segmentId, envelope)
-                    }
-
-                    storeReplayRecording(projectId, rid, segmentId, item.payload)
-                    recordUsage(projectId, "replay", item)
-                    lastReplayId = null
-                    lastSegmentId = 0
+                    val (newReplayId, newSegmentId) = handleReplayVideoItem(
+                        projectId,
+                        item,
+                        envelope,
+                        lastReplayId,
+                        lastSegmentId,
+                    )
+                    lastReplayId = newReplayId
+                    lastSegmentId = newSegmentId
                 }
 
-                "profile" -> {
-                    logger.debug { "Profile payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
-                    if (storeProfile(projectId, item.payload)) {
-                        recordUsage(projectId, "profile", item)
-                    }
-                }
+                "profile" -> handleProfileItem(projectId, item)
 
-                "feedback" -> {
-                    logger.debug { "Feedback payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
-                    val feedback = json.decodeFromString<SentryFeedback>(item.payload)
-                    if (storeFeedback(projectId, feedback)) {
-                        recordUsage(projectId, "feedback", item)
-                    }
-                }
+                "feedback" -> handleFeedbackItem(projectId, item)
 
                 else -> {
                     logger.debug { "Unknown item type: ${item.type}" }
                 }
             }
+        }
+    }
+
+    private suspend fun handleReplayVideoItem(
+        projectId: Long,
+        item: EnvelopeItem,
+        envelope: SentryEnvelope,
+        lastReplayId: String?,
+        lastSegmentId: Int,
+    ): Pair<String?, Int> {
+        // Mobile replay uses replay_video instead of replay_recording.
+        // The SDK may send a preceding replay_event item (with replay_id & segment_id)
+        // or just a standalone replay_video. Handle both cases.
+        val rid = lastReplayId ?: envelope.eventId
+
+        val segmentId =
+            if (lastReplayId != null) {
+                // A replay_event was parsed in this envelope - use its segment_id
+                lastSegmentId
+            } else {
+                // No replay_event - derive segment_id from an in-memory counter.
+                // Evict stale entries if the map grows too large.
+                if (replaySegmentCounters.size > MAX_REPLAY_SEGMENT_COUNTERS) {
+                    replaySegmentCounters.clear()
+                }
+                replaySegmentCounters.computeIfAbsent(rid) { AtomicInteger(0) }.getAndIncrement()
+            }
+
+        // Only create a synthetic replay event for the first segment of a session
+        if (lastReplayId == null && segmentId == 0) {
+            storeSyntheticReplayEvent(projectId, rid, segmentId, envelope)
+        }
+
+        storeReplayRecording(projectId, rid, segmentId, item.payload)
+        recordUsage(projectId, "replay", item)
+        return null to 0
+    }
+
+    private suspend fun handleProfileItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Profile payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        if (storeProfile(projectId, item.payload)) {
+            recordUsage(projectId, "profile", item)
+        }
+    }
+
+    private suspend fun handleFeedbackItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Feedback payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        val feedback = json.decodeFromString<SentryFeedback>(item.payload)
+        if (storeFeedback(projectId, feedback)) {
+            recordUsage(projectId, "feedback", item)
         }
     }
 

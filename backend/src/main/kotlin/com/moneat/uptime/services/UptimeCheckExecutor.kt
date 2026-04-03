@@ -449,38 +449,39 @@ class UptimeCheckExecutor {
 
         // Docker API check
         return suspendRunCatching {
-            val startTime = System.currentTimeMillis()
-
-            // For HTTP-based Docker API
             if (dockerHost.startsWith("http")) {
-                val dockerUrl = "$dockerHost/containers/$containerName/json"
-                try {
-                    UrlValidator.validateExternalUrl(dockerUrl)
-                } catch (e: UrlValidator.SsrfException) {
-                    return CheckResult(0, -1, 0, "Blocked: ${e.message}")
-                }
-                val response = httpClient.get(dockerUrl)
-                val responseTime = (System.currentTimeMillis() - startTime).toInt()
-
-                if (response.status.value == HTTP_OK) {
-                    val body = response.bodyAsText()
-                    val running = body.contains("\"Running\":true")
-
-                    CheckResult(
-                        status = if (running) 1 else 0,
-                        responseTimeMs = responseTime,
-                        statusCode = response.status.value,
-                        message = if (running) "Container is running" else "Container is not running"
-                    )
-                } else {
-                    CheckResult(0, responseTime, response.status.value, "Container not found or Docker API error")
-                }
+                checkHttpDockerContainer(containerName, dockerHost)
             } else {
                 // Unix socket not easily supported here
                 CheckResult(0, -1, 0, "Docker Unix socket not supported. Use HTTP Docker API.")
             }
         }.getOrElse { e ->
             CheckResult(0, -1, 0, "Docker check failed: ${e.message}")
+        }
+    }
+
+    private suspend fun checkHttpDockerContainer(containerName: String, dockerHost: String): CheckResult {
+        val dockerUrl = "$dockerHost/containers/$containerName/json"
+        try {
+            UrlValidator.validateExternalUrl(dockerUrl)
+        } catch (e: UrlValidator.SsrfException) {
+            return CheckResult(0, -1, 0, "Blocked: ${e.message}")
+        }
+        val startTime = System.currentTimeMillis()
+        val response = httpClient.get(dockerUrl)
+        val responseTime = (System.currentTimeMillis() - startTime).toInt()
+
+        return if (response.status.value == HTTP_OK) {
+            val body = response.bodyAsText()
+            val running = body.contains("\"Running\":true")
+            CheckResult(
+                status = if (running) 1 else 0,
+                responseTimeMs = responseTime,
+                statusCode = response.status.value,
+                message = if (running) "Container is running" else "Container is not running"
+            )
+        } else {
+            CheckResult(0, responseTime, response.status.value, "Container not found or Docker API error")
         }
     }
 

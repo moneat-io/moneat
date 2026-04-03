@@ -764,12 +764,8 @@ object TraceIngestionService {
     fun parseProtobufAgentPayload(bytes: ByteArray): List<List<DdSpan>> {
         val input = CodedInputStream.newInstance(bytes)
         val traces = mutableListOf<List<DdSpan>>()
-        var hostname = ""
-        var env = ""
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl PROTO_TAG_SHIFT) or 2 -> hostname = input.readString()
-                (2 shl PROTO_TAG_SHIFT) or 2 -> env = input.readString()
                 (PROTO_FIELD_5 shl PROTO_TAG_SHIFT) or 2 -> {
                     val payloadBytes = input.readBytes().toByteArray()
                     traces.addAll(decodeTracerPayload(payloadBytes))

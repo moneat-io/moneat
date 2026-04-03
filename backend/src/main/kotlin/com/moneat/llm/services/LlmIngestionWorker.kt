@@ -242,7 +242,7 @@ class LlmIngestionWorker(
     companion object {
         fun decodeMessage(encoded: String): Pair<Long, ByteArray> {
             val bytes = Base64.getDecoder().decode(encoded)
-            if (bytes.size < PROJECT_ID_HEADER_SIZE) throw IllegalArgumentException("Message too short")
+            require(bytes.size >= PROJECT_ID_HEADER_SIZE) { "Message too short" }
             val projectId = ByteBuffer.wrap(bytes, 0, PROJECT_ID_HEADER_SIZE).long
             val payloadBytes = bytes.copyOfRange(PROJECT_ID_HEADER_SIZE, bytes.size)
             return projectId to payloadBytes
