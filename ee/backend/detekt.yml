@@ -52,8 +52,20 @@ complexity:
     active: false
   CyclomaticComplexMethod:
     active: false
+  # Mirror core backend: LargeClass enabled (issue #296); threshold raised during incremental splits.
   LargeClass:
-    active: false
+    active: true
+    threshold: 1700
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
   ComplexCondition:
     active: false
   NestedBlockDepth:
