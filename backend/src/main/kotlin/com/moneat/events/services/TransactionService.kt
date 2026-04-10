@@ -39,6 +39,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_RANGE
 
 private val logger = KotlinLogging.logger {}
 
@@ -221,7 +222,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             val avgDuration: Double
             val satisfiedCount: Long
             val toleratedCount: Long
-            if (totalResponse.status.value in 200..299 && totalBody.isNotBlank()) {
+            if (totalResponse.status.value in HTTP_SUCCESS_RANGE && totalBody.isNotBlank()) {
                 val obj = json.parseToJsonElement(totalBody.lines().first()).jsonObject
                 totalCount = obj["total"]?.jsonPrimitive?.long ?: 0L
                 avgDuration = obj["avg_duration"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0

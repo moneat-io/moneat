@@ -47,6 +47,9 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+
 class SyntheticsService(
     private val emailService: EmailService = EmailService(),
     private val slackService: SlackService = SlackService(),
@@ -63,8 +66,6 @@ class SyntheticsService(
         private const val BUSINESS_TIER_LIMIT = Int.MAX_VALUE
         private const val MILLIS_PER_SECOND = 1000L
         private const val TIMEOUT_BUFFER_MS = 5000L
-        private const val HTTP_SUCCESS_MIN = 200
-        private const val HTTP_SUCCESS_MAX = 299
     }
 
     fun createTest(

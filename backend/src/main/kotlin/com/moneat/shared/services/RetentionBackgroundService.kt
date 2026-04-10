@@ -29,6 +29,8 @@ import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
@@ -57,8 +59,6 @@ class RetentionBackgroundService(
 
     companion object {
         private const val MILLIS_PER_SECOND = 1000L
-        private const val HTTP_SUCCESS_MIN = 200
-        private const val HTTP_SUCCESS_MAX = 299
     }
 
     fun start(scope: CoroutineScope) {

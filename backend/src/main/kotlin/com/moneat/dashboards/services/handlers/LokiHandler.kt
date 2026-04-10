@@ -34,6 +34,13 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND
+import com.moneat.utils.TimeConstants.SECONDS_PER_DAY
+import com.moneat.utils.TimeConstants.SECONDS_PER_HOUR
+import com.moneat.utils.TimeConstants.SECONDS_PER_MINUTE
+import com.moneat.utils.TimeConstants.SECONDS_PER_MONTH_30
+import com.moneat.utils.TimeConstants.SECONDS_PER_WEEK
+import com.moneat.utils.TimeConstants.SECONDS_PER_YEAR_365
 
 private val logger = KotlinLogging.logger {}
 
@@ -46,15 +53,8 @@ class LokiHandler : HttpApiHandler() {
 
     companion object {
         private const val LOKI_DEFAULT_PORT = 3100
-        private const val MILLIS_PER_SECOND = 1_000
         private const val LOKI_MAX_QUERY_LIMIT = 5_000
         private const val LOKI_TIMESTAMP_MS_LENGTH = 13
-        private const val SECONDS_PER_HOUR = 3_600L
-        private const val SECONDS_PER_MINUTE = 60L
-        private const val SECONDS_PER_DAY = 86_400L
-        private const val SECONDS_PER_WEEK = 604_800L
-        private const val SECONDS_PER_MONTH_30 = 2_592_000L
-        private const val SECONDS_PER_YEAR_365 = 31_536_000L
     }
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {

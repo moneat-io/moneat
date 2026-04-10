@@ -35,6 +35,8 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
@@ -47,8 +49,6 @@ private const val INTERVAL_MINUTES_24H = 60
 private const val INTERVAL_MINUTES_7D = 360
 private const val INTERVAL_MINUTES_30D = 1440
 private const val INTERVAL_MINUTES_90D = 4320
-private const val HTTP_SUCCESS_MIN = 200
-private const val HTTP_SUCCESS_MAX = 299
 private const val ERROR_BODY_PREVIEW_CHARS = 400
 
 class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {

@@ -41,6 +41,8 @@ import io.sentry.Sentry
 import io.sentry.SpanStatus
 import mu.KotlinLogging
 import org.slf4j.event.Level
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
@@ -48,8 +50,6 @@ private val logger = KotlinLogging.logger {}
 private val SentryTransactionKey = AttributeKey<ITransaction>("SentryTransaction")
 private val ingestPathRegex = Regex("^/api/[^/]+/(envelope|logs|store|security)/?$")
 
-private const val HTTP_SUCCESS_MIN = 200
-private const val HTTP_SUCCESS_MAX = 299
 private const val HTTP_CLIENT_ERROR_MIN = 400
 private const val HTTP_CLIENT_ERROR_MAX = 499
 private const val HTTP_SERVER_ERROR_MIN = 500

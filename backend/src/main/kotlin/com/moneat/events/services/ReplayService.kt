@@ -46,6 +46,7 @@ import org.msgpack.core.MessageUnpacker
 import org.msgpack.value.ValueType
 import java.time.Instant
 import java.util.Base64
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_RANGE
 
 private val logger = KotlinLogging.logger {}
 
@@ -115,8 +116,8 @@ class ReplayService(
     }
 
     private fun isClickHouseError(statusCode: Int, body: String, context: String): Boolean {
-        if (statusCode !in 200..299 || body.trimStart().startsWith("Code:")) {
-            if (statusCode !in 200..299) {
+        if (statusCode !in HTTP_SUCCESS_RANGE || body.trimStart().startsWith("Code:")) {
+            if (statusCode !in HTTP_SUCCESS_RANGE) {
                 logger.error { "$context failed: $statusCode ${body.take(LOG_BODY_PREVIEW_LENGTH)}" }
             } else {
                 logger.error { "$context (ClickHouse): ${body.take(LOG_BODY_PREVIEW_LENGTH)}" }

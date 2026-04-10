@@ -25,6 +25,8 @@ import java.util.concurrent.RejectedExecutionHandler
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     var endpoint: String = "https://api.moneat.io/v1/logs/otlp"
@@ -35,8 +37,6 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     companion object {
         private const val QUEUE_CAPACITY = 10_000
         private const val LOG_HTTP_TIMEOUT_MS = 1000
-        private const val HTTP_SUCCESS_MIN = 200
-        private const val HTTP_SUCCESS_MAX = 299
         private const val SHUTDOWN_TIMEOUT_SECONDS = 5L
     }
 

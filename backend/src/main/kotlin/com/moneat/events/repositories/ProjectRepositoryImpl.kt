@@ -45,16 +45,14 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
 class ProjectRepositoryImpl(
     private val timestampRetentionClause: (String, Int, Long?) -> String
 ) : ProjectRepository {
-    companion object {
-        private const val HTTP_SUCCESS_MIN = 200
-        private const val HTTP_SUCCESS_MAX = 299
-    }
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }

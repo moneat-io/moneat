@@ -38,9 +38,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
-
-private const val HTTP_SUCCESS_MIN = 200
-private const val HTTP_SUCCESS_MAX = 299
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 /**
  * incident.io provider implementation using Alert Events V2 API.

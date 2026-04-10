@@ -182,4 +182,34 @@ class RedisHandlerParserTest {
         val uri = RedisHandler.buildRedisUri("myhost:6380", 6379, null)
         assertEquals("redis://myhost:6380", uri)
     }
+
+    @Test
+    fun `buildRedisUri strips redis scheme from host`() {
+        val uri = RedisHandler.buildRedisUri("redis://cache.example.com", 6379, null)
+        assertEquals("redis://cache.example.com:6379", uri)
+    }
+
+    @Test
+    fun `buildRedisUri preserves rediss scheme for TLS`() {
+        val uri = RedisHandler.buildRedisUri("rediss://cache.example.com", 6379, "pw")
+        assertEquals("rediss://:pw@cache.example.com:6379", uri)
+    }
+
+    @Test
+    fun `buildRedisUri uses port from rediss URI`() {
+        val uri = RedisHandler.buildRedisUri("rediss://cache.example.com:6380", 6379, null)
+        assertEquals("rediss://cache.example.com:6380", uri)
+    }
+
+    @Test
+    fun `buildRedisUri handles IPv6 with rediss scheme`() {
+        val uri = RedisHandler.buildRedisUri("rediss://[2001:db8::5]:6380", 6379, null)
+        assertEquals("rediss://[2001:db8::5]:6380", uri)
+    }
+
+    @Test
+    fun `buildRedisUri adds password with IPv4`() {
+        val uri = RedisHandler.buildRedisUri("192.168.1.1", 6379, "mypassword")
+        assertEquals("redis://:mypassword@192.168.1.1:6379", uri)
+    }
 }
