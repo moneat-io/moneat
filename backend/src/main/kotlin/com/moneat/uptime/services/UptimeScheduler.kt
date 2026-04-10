@@ -42,6 +42,7 @@ import java.sql.SQLException
 import java.util.*
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -58,6 +59,10 @@ class UptimeScheduler(
     private val emailService: EmailService = EmailService(),
     private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
 ) {
+    companion object {
+        private const val TIMEOUT_BUFFER_MS = 5000L
+    }
+
     private var schedulerJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val runningChecks = Collections.synchronizedSet(mutableSetOf<UUID>())
@@ -81,7 +86,7 @@ class UptimeScheduler(
                     }
 
                     // Check every second
-                    delay(1000)
+                    delay(MILLIS_PER_SECOND_LONG)
                 }
             }
 
@@ -162,7 +167,7 @@ class UptimeScheduler(
         // Execute the check
         val result =
             try {
-                withTimeout(monitor.timeoutSeconds * 1000L + 5000) { // Add 5s buffer
+                withTimeout(monitor.timeoutSeconds * MILLIS_PER_SECOND_LONG + TIMEOUT_BUFFER_MS) { // Add 5s buffer
                     checkExecutor.executeCheck(monitor)
                 }
             } catch (e: TimeoutCancellationException) {
@@ -232,11 +237,11 @@ class UptimeScheduler(
         var lastResult = initialResult
 
         for (retry in 1..monitor.retries) {
-            delay(monitor.retryIntervalSeconds * 1000L)
+            delay(monitor.retryIntervalSeconds * MILLIS_PER_SECOND_LONG)
 
             val retryResult =
                 try {
-                    withTimeout(monitor.timeoutSeconds * 1000L + 5000) {
+                    withTimeout(monitor.timeoutSeconds * MILLIS_PER_SECOND_LONG + TIMEOUT_BUFFER_MS) {
                         checkExecutor.executeCheck(monitor)
                     }
                 } catch (e: TimeoutCancellationException) {

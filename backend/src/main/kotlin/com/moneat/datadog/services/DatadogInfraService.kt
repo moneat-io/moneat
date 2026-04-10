@@ -31,6 +31,7 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 private const val INFRA_QUEUE_KEY = "moneat:infra:queue"
+private const val ERROR_BODY_MAX_LEN = 600
 
 @Serializable
 data class QueuedInfraBatch(
@@ -343,7 +344,7 @@ object DatadogInfraService {
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             throw IllegalStateException(
-                "Failed to insert $label: ${errorBody.take(600)}"
+                "Failed to insert $label: ${errorBody.take(ERROR_BODY_MAX_LEN)}"
             )
         }
     }

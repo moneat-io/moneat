@@ -18,6 +18,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 private val dataSourceService = CustomDataSourceService()
 private val dataSourceExecutor = CustomDataSourceExecutor()
+private const val DEFAULT_QUERY_LIMIT = 100
 
 class ListDataSourcesTool : McpTool {
     override val name = "list_datasources"
@@ -141,7 +142,7 @@ class ExecuteDataSourceQueryTool : McpTool {
             ?: return errorResult("datasource_id is required")
         val query = args["query"]?.jsonPrimitive?.content
             ?: return errorResult("query is required")
-        val limit = args["limit"]?.jsonPrimitive?.intOrNull ?: 100
+        val limit = args["limit"]?.jsonPrimitive?.intOrNull ?: DEFAULT_QUERY_LIMIT
         val orgId = context.organizationId.toLong()
 
         val source = dataSourceService.getDataSource(id, orgId)

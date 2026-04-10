@@ -56,6 +56,12 @@ class UptimeService(
         private const val TEAM_TIER_QUOTA = 25
         private const val BUSINESS_TIER_QUOTA = Int.MAX_VALUE
         private const val DEFAULT_TIER_QUOTA = 3
+        private const val MILLIS_PER_SECOND = 1000
+        private const val PERCENT_MULTIPLIER = 100f
+        private const val HOURS_PER_DAY = 24
+        private const val HOURS_PER_WEEK = 168
+        private const val HOURS_PER_MONTH = 720
+        private const val TOKEN_BYTES_SIZE = 32
     }
 
     /**
@@ -161,7 +167,7 @@ class UptimeService(
         monitorId: UUID,
         result: CheckResult
     ) {
-        val timestamp = Clock.System.now().toEpochMilliseconds() / 1000.0
+        val timestamp = Clock.System.now().toEpochMilliseconds() / MILLIS_PER_SECOND.toDouble()
 
         val sql =
             """
@@ -169,7 +175,7 @@ class UptimeService(
             (monitor_id, timestamp, status, response_time_ms, status_code, message, ping_ms)
             VALUES (
                 '$monitorId',
-                fromUnixTimestamp64Milli(${(timestamp * 1000).toLong()}),
+                fromUnixTimestamp64Milli(${(timestamp * MILLIS_PER_SECOND).toLong()}),
                 ${result.status},
                 ${result.responseTimeMs},
                 ${result.statusCode},
@@ -279,7 +285,7 @@ class UptimeService(
             val upCount = json["up_count"]?.jsonPrimitive?.long ?: 0L
             val totalCount = json["total_count"]?.jsonPrimitive?.long ?: 0L
 
-            if (totalCount == 0L) 0f else (upCount.toFloat() / totalCount.toFloat() * 100f)
+            if (totalCount == 0L) 0f else (upCount.toFloat() / totalCount.toFloat() * PERCENT_MULTIPLIER)
         }.getOrElse { e ->
             logger.error(e) { "Failed to calculate uptime for monitor $monitorId" }
             0f
@@ -364,9 +370,9 @@ class UptimeService(
                 // Run async calls synchronously (in real impl, could be suspended)
                 kotlinx.coroutines.runBlocking {
                     Triple(
-                        getUptimePercentage(monitor.id, 24),
-                        getUptimePercentage(monitor.id, 168),
-                        getUptimePercentage(monitor.id, 720)
+                        getUptimePercentage(monitor.id, HOURS_PER_DAY),
+                        getUptimePercentage(monitor.id, HOURS_PER_WEEK),
+                        getUptimePercentage(monitor.id, HOURS_PER_MONTH)
                     )
                 }
             } else {
@@ -376,7 +382,7 @@ class UptimeService(
         val avgResponseTime =
             if (includeStats) {
                 kotlinx.coroutines.runBlocking {
-                    getAverageResponseTime(monitor.id, 24)
+                    getAverageResponseTime(monitor.id, HOURS_PER_DAY)
                 }
             } else {
                 null
@@ -438,7 +444,7 @@ class UptimeService(
 
     private fun generatePushToken(): String {
         val random = SecureRandom()
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(TOKEN_BYTES_SIZE)
         random.nextBytes(bytes)
         return bytes.joinToString("") { "%02x".format(it) }
     }

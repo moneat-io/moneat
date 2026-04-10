@@ -35,8 +35,21 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
+
+private const val STATS_CACHE_TTL_SECONDS = 60L
+private const val HOURS_IN_24H = 24
+private const val HOURS_IN_7D = 168
+private const val HOURS_IN_30D = 720
+private const val HOURS_IN_90D = 2160
+private const val INTERVAL_MINUTES_24H = 60
+private const val INTERVAL_MINUTES_7D = 360
+private const val INTERVAL_MINUTES_30D = 1440
+private const val INTERVAL_MINUTES_90D = 4320
+private const val ERROR_BODY_PREVIEW_CHARS = 400
 
 class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
     private val clickhouseDb: String get() = queryHelper.clickhouseDb
@@ -48,24 +61,28 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
         parentSpan: ISpan? = null,
         demoEpochMs: Long? = null
     ): ProjectStatsResponse =
-        CacheService.cached("cache:project_stats:$projectId:$period:${demoEpochMs ?: ""}", 60, parentSpan) {
+        CacheService.cached(
+            "cache:project_stats:$projectId:$period:${demoEpochMs ?: ""}",
+            STATS_CACHE_TTL_SECONDS,
+            parentSpan,
+        ) {
             val retentionDays = queryHelper.getProjectRetentionDays(projectId)
             val hoursBack =
                 when (period) {
-                    "24h" -> 24
-                    "7d" -> 168
-                    "30d" -> 720
-                    "90d" -> 2160
-                    else -> 168
+                    "24h" -> HOURS_IN_24H
+                    "7d" -> HOURS_IN_7D
+                    "30d" -> HOURS_IN_30D
+                    "90d" -> HOURS_IN_90D
+                    else -> HOURS_IN_7D
                 }
 
             val intervalMinutes =
                 when (period) {
-                    "24h" -> 60
-                    "7d" -> 360
-                    "30d" -> 1440
-                    "90d" -> 4320
-                    else -> 360
+                    "24h" -> INTERVAL_MINUTES_24H
+                    "7d" -> INTERVAL_MINUTES_7D
+                    "30d" -> INTERVAL_MINUTES_30D
+                    "90d" -> INTERVAL_MINUTES_90D
+                    else -> INTERVAL_MINUTES_7D
                 }
 
             val nowSql = queryHelper.demoNowClause(demoEpochMs)
@@ -318,8 +335,10 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
             val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to execute release markers query: ${response.status} ${body.take(400)}" }
+            if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX || body.trimStart().startsWith("Code:")) {
+                logger.error {
+                    "Failed to execute release markers query: ${response.status} ${body.take(ERROR_BODY_PREVIEW_CHARS)}"
+                }
                 return emptyList()
             }
             body
@@ -369,7 +388,7 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
         """.trimIndent()
         val response = ClickHouseClient.execute(query, parentSpan)
         val body = response.bodyAsText()
-        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
+        if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX || body.trimStart().startsWith("Code:")) {
             return pgOverrides
         }
         val retainedIds = body.lines()

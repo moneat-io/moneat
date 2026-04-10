@@ -75,6 +75,17 @@ class EventService(
     companion object {
         private const val DEFAULT_PROFILE_MAX_PAYLOAD_BYTES = 10 * 1024 * 1024 // 10 MiB
 
+        private const val LOG_PAYLOAD_PREVIEW_CHARS = 500
+        private const val MAX_REPLAY_SEGMENT_COUNTERS = 10_000
+        private const val MAX_REPLAY_URLS = 100
+        private const val FINGERPRINT_HASH_LENGTH = 16
+        private const val MS_PER_SECOND = 1000.0
+        private const val NS_PER_SECOND = 1_000_000_000.0
+        private const val UUID_SEG1 = 8
+        private const val UUID_SEG2 = 12
+        private const val UUID_SEG3 = 16
+        private const val UUID_SEG4 = 20
+
         /** Keys set by the server for apm_spans; must not be overwritten by SDK tag maps. */
         private val SENTRY_APM_META_RESERVED_KEYS = setOf("sentry.transaction_id", "sentry.project_id")
     }
@@ -140,7 +151,7 @@ class EventService(
             logger.debug { "Processing envelope item type: ${item.type}" }
             when (item.type) {
                 "event" -> {
-                    logger.debug { "Event payload: ${item.payload.take(500)}" }
+                    logger.debug { "Event payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
                     val event = json.decodeFromString<SentryEvent>(item.payload)
                     if (storeEvent(projectId, event)) {
                         recordUsage(projectId, "error", item)
@@ -148,7 +159,7 @@ class EventService(
                 }
 
                 "transaction" -> {
-                    logger.debug { "Transaction payload: ${item.payload.take(500)}" }
+                    logger.debug { "Transaction payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
                     val transaction = parseTransactionPayload(item.payload)
                     if (storeTransaction(projectId, transaction)) {
                         recordUsage(projectId, "transaction", item)
@@ -178,56 +189,75 @@ class EventService(
                 }
 
                 "replay_video" -> {
-                    // Mobile replay uses replay_video instead of replay_recording.
-                    // The SDK may send a preceding replay_event item (with replay_id & segment_id)
-                    // or just a standalone replay_video. Handle both cases.
-                    val rid = lastReplayId ?: envelope.eventId
-
-                    val segmentId =
-                        if (lastReplayId != null) {
-                            // A replay_event was parsed in this envelope - use its segment_id
-                            lastSegmentId
-                        } else {
-                            // No replay_event - derive segment_id from an in-memory counter.
-                            // Evict stale entries if the map grows too large.
-                            if (replaySegmentCounters.size > 10_000) {
-                                replaySegmentCounters.clear()
-                            }
-                            replaySegmentCounters
-                                .computeIfAbsent(rid) { AtomicInteger(0) }
-                                .getAndIncrement()
-                        }
-
-                    // Only create a synthetic replay event for the first segment of a session
-                    if (lastReplayId == null && segmentId == 0) {
-                        storeSyntheticReplayEvent(projectId, rid, segmentId, envelope)
-                    }
-
-                    storeReplayRecording(projectId, rid, segmentId, item.payload)
-                    recordUsage(projectId, "replay", item)
-                    lastReplayId = null
-                    lastSegmentId = 0
+                    val (newReplayId, newSegmentId) = handleReplayVideoItem(
+                        projectId,
+                        item,
+                        envelope,
+                        lastReplayId,
+                        lastSegmentId,
+                    )
+                    lastReplayId = newReplayId
+                    lastSegmentId = newSegmentId
                 }
 
-                "profile" -> {
-                    logger.debug { "Profile payload: ${item.payload.take(500)}" }
-                    if (storeProfile(projectId, item.payload)) {
-                        recordUsage(projectId, "profile", item)
-                    }
-                }
+                "profile" -> handleProfileItem(projectId, item)
 
-                "feedback" -> {
-                    logger.debug { "Feedback payload: ${item.payload.take(500)}" }
-                    val feedback = json.decodeFromString<SentryFeedback>(item.payload)
-                    if (storeFeedback(projectId, feedback)) {
-                        recordUsage(projectId, "feedback", item)
-                    }
-                }
+                "feedback" -> handleFeedbackItem(projectId, item)
 
                 else -> {
                     logger.debug { "Unknown item type: ${item.type}" }
                 }
             }
+        }
+    }
+
+    private suspend fun handleReplayVideoItem(
+        projectId: Long,
+        item: EnvelopeItem,
+        envelope: SentryEnvelope,
+        lastReplayId: String?,
+        lastSegmentId: Int,
+    ): Pair<String?, Int> {
+        // Mobile replay uses replay_video instead of replay_recording.
+        // The SDK may send a preceding replay_event item (with replay_id & segment_id)
+        // or just a standalone replay_video. Handle both cases.
+        val rid = lastReplayId ?: envelope.eventId
+
+        val segmentId =
+            if (lastReplayId != null) {
+                // A replay_event was parsed in this envelope - use its segment_id
+                lastSegmentId
+            } else {
+                // No replay_event - derive segment_id from an in-memory counter.
+                // Evict stale entries if the map grows too large.
+                if (replaySegmentCounters.size > MAX_REPLAY_SEGMENT_COUNTERS) {
+                    replaySegmentCounters.clear()
+                }
+                replaySegmentCounters.computeIfAbsent(rid) { AtomicInteger(0) }.getAndIncrement()
+            }
+
+        // Only create a synthetic replay event for the first segment of a session
+        if (lastReplayId == null && segmentId == 0) {
+            storeSyntheticReplayEvent(projectId, rid, segmentId, envelope)
+        }
+
+        storeReplayRecording(projectId, rid, segmentId, item.payload)
+        recordUsage(projectId, "replay", item)
+        return null to 0
+    }
+
+    private suspend fun handleProfileItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Profile payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        if (storeProfile(projectId, item.payload)) {
+            recordUsage(projectId, "profile", item)
+        }
+    }
+
+    private suspend fun handleFeedbackItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Feedback payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        val feedback = json.decodeFromString<SentryFeedback>(item.payload)
+        if (storeFeedback(projectId, feedback)) {
+            recordUsage(projectId, "feedback", item)
         }
     }
 
@@ -262,7 +292,7 @@ class EventService(
         val traceStatus = traceContext?.get("status")?.jsonPrimitive?.contentOrNull
         val transactionLevel = if (traceStatus == null || traceStatus == "ok") "info" else "error"
 
-        val endTimestampMs = unixSecondsToMillis(transaction.timestamp ?: (System.currentTimeMillis() / 1000.0))
+        val endTimestampMs = unixSecondsToMillis(transaction.timestamp ?: (System.currentTimeMillis() / MS_PER_SECOND))
         val durationMs = durationMs(transaction.start_timestamp, transaction.timestamp)
 
         val contexts = transaction.contexts?.toString() ?: "{}"
@@ -533,7 +563,7 @@ class EventService(
         val ts = replayEvent.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
         val startTs = replayEvent.replay_start_timestamp?.let { unixSecondsToMillis(it) } ?: ts
 
-        val urls = replayEvent.urls?.take(100) ?: emptyList()
+        val urls = replayEvent.urls?.take(MAX_REPLAY_URLS) ?: emptyList()
         val errorIds = replayEvent.error_ids ?: emptyList()
         val traceIds = replayEvent.trace_ids ?: emptyList()
         val tags = replayEvent.tags?.let { JsonObject(it.mapValues { (_, v) -> JsonPrimitive(v) }).toString() } ?: "{}"
@@ -769,7 +799,7 @@ class EventService(
     private fun parseTimestampString(raw: String): Double? {
         raw.toDoubleOrNull()?.let { return it }
         val instant = runCatching { Instant.parse(raw) }.getOrNull() ?: return null
-        return instant.epochSecond.toDouble() + instant.nano / 1_000_000_000.0
+        return instant.epochSecond.toDouble() + instant.nano / NS_PER_SECOND
     }
 
     private fun generateFingerprint(event: SentryEvent): List<String> {
@@ -806,7 +836,7 @@ class EventService(
         val combined = fingerprint.joinToString("::")
         val digest = MessageDigest.getInstance("SHA-256")
         val hash = digest.digest(combined.toByteArray())
-        return hash.joinToString("") { "%02x".format(it) }.take(16)
+        return hash.joinToString("") { "%02x".format(it) }.take(FINGERPRINT_HASH_LENGTH)
     }
 
     private fun normalizeUuid(value: String): String {
@@ -816,13 +846,9 @@ class EventService(
 
         val hexRegex = Regex("^[0-9a-f]{32}$")
         if (hexRegex.matches(trimmed)) {
-            return "${trimmed.substring(
-                0,
-                8
-            )}-${trimmed.substring(
-                8,
-                12
-            )}-${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
+            return "${trimmed.substring(0, UUID_SEG1)}-${trimmed.substring(UUID_SEG1, UUID_SEG2)}" +
+                "-${trimmed.substring(UUID_SEG2, UUID_SEG3)}-${trimmed.substring(UUID_SEG3, UUID_SEG4)}" +
+                "-${trimmed.substring(UUID_SEG4)}"
         }
 
         return UUID.randomUUID().toString()
@@ -901,7 +927,7 @@ class EventService(
     }
 
     private fun unixSecondsToMillis(value: Double): Long {
-        return (value * 1000).toLong()
+        return (value * MS_PER_SECOND).toLong()
     }
 
     private fun unixSecondsToMillis(value: Double?): Long? {
@@ -913,15 +939,15 @@ class EventService(
         end: Double?
     ): Double {
         if (start == null || end == null) return 0.0
-        return ((end - start) * 1000.0).coerceAtLeast(0.0)
+        return ((end - start) * MS_PER_SECOND).coerceAtLeast(0.0)
     }
 
     private fun unixSecondsToNanos(value: Double): Long =
-        (value * 1_000_000_000.0).toLong()
+        (value * NS_PER_SECOND).toLong()
 
     private fun durationNanos(start: Double?, end: Double?): Long {
         if (start == null || end == null) return 0L
-        return ((end - start) * 1_000_000_000.0).toLong().coerceAtLeast(0L)
+        return ((end - start) * NS_PER_SECOND).toLong().coerceAtLeast(0L)
     }
 
     private fun sentryStatusToError(status: String?): Int =
@@ -999,7 +1025,7 @@ class EventService(
             ?.get("span_id")?.jsonPrimitive?.contentOrNull ?: ""
         if (rootSpanId.isBlank()) return null
 
-        val startTs = transaction.start_timestamp ?: (System.currentTimeMillis() / 1000.0)
+        val startTs = transaction.start_timestamp ?: (System.currentTimeMillis() / MS_PER_SECOND)
         val (traceIdHigh, traceIdLow) = hexToULongPair(traceId)
         val (spanIdHigh, spanIdLow) = hexToULongPair(rootSpanId)
         val rootMetrics = extractMeasurementMetrics(transaction)

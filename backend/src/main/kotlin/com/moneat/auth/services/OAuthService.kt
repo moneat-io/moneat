@@ -51,6 +51,7 @@ import java.security.KeyFactory
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.RSAPublicKeySpec
 import java.util.*
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_RANGE
 
 private val logger = KotlinLogging.logger {}
 
@@ -107,6 +108,12 @@ class OAuthService {
     private val jwtAudience = config.property("jwt.audience").getString()
     private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
     private val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
+
+    companion object {
+        private const val ORG_SLUG_SUFFIX_LENGTH = 8
+        private const val ONE_HOUR_MILLIS = 3_600_000L
+        private const val STATE_BYTE_LENGTH = 32
+    }
 
     private val githubClientId = EnvConfig.get("GITHUB_OAUTH_CLIENT_ID")
     private val githubClientSecret = EnvConfig.get("GITHUB_OAUTH_CLIENT_SECRET")
@@ -168,7 +175,7 @@ class OAuthService {
                 parameter("code", code)
             }
 
-        if (tokenResponse.status.value !in 200..299) {
+        if (tokenResponse.status.value !in HTTP_SUCCESS_RANGE) {
             logger.error { "GitHub token exchange failed: ${tokenResponse.status}" }
             throw IllegalArgumentException("Failed to exchange code for token")
         }
@@ -185,7 +192,7 @@ class OAuthService {
                 }
             }
 
-        if (userResponse.status.value !in 200..299) {
+        if (userResponse.status.value !in HTTP_SUCCESS_RANGE) {
             logger.error { "GitHub user fetch failed: ${userResponse.status}" }
             throw IllegalArgumentException("Failed to fetch user info")
         }
@@ -205,7 +212,7 @@ class OAuthService {
                     }
                 }
 
-            if (emailsResponse.status.value in 200..299) {
+            if (emailsResponse.status.value in HTTP_SUCCESS_RANGE) {
                 val emails: List<GitHubEmail> = emailsResponse.body()
                 val primaryEmail =
                     emails.firstOrNull { it.primary && it.verified }
@@ -468,7 +475,7 @@ class OAuthService {
             val orgId =
                 Organizations.insert {
                     it[name] = "${userData.name ?: userData.email}'s Organization"
-                    it[slug] = "org-${UUID.randomUUID().toString().take(8)}"
+                    it[slug] = "org-${UUID.randomUUID().toString().take(ORG_SLUG_SUFFIX_LENGTH)}"
                 }[Organizations.id]
 
             // Add membership
@@ -509,12 +516,12 @@ class OAuthService {
             .withClaim("email", email)
             .withClaim("orgId", orgId)
             .withClaim("orgRole", orgRole)
-            .withExpiresAt(Date(System.currentTimeMillis() + 3600000))
+            .withExpiresAt(Date(System.currentTimeMillis() + ONE_HOUR_MILLIS))
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 
     fun generateState(): String {
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(STATE_BYTE_LENGTH)
         java.security.SecureRandom().nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }

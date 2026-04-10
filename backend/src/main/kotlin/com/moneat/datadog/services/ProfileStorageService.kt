@@ -184,7 +184,7 @@ object ProfileStorageService {
 
     private fun sanitizeFilename(name: String): String {
         val sanitized = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-        if (sanitized.isBlank()) return "profile_${UUID.randomUUID().toString().take(8)}"
+        if (sanitized.isBlank()) return "profile_${UUID.randomUUID().toString().take(PROFILE_FALLBACK_ID_LENGTH)}"
         return sanitized
     }
 
@@ -220,4 +220,5 @@ object ProfileStorageService {
 
     private const val GZIP_MAGIC_0: Byte = 0x1f
     private const val GZIP_MAGIC_1: Byte = 0x8b.toByte()
+    private const val PROFILE_FALLBACK_ID_LENGTH = 8
 }

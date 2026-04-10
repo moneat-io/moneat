@@ -64,13 +64,13 @@ private object TrustedProxies {
             val addr = InetAddress.getByName(ip).address
             val network = InetAddress.getByName(networkStr).address
             if (addr.size != network.size) return false
-            val fullBytes = prefixLen / 8
-            val remainBits = prefixLen % 8
+            val fullBytes = prefixLen / BITS_PER_BYTE
+            val remainBits = prefixLen % BITS_PER_BYTE
             for (i in 0 until fullBytes) {
                 if (addr[i] != network[i]) return false
             }
             if (remainBits > 0) {
-                val mask = (0xFF shl (8 - remainBits)).toByte()
+                val mask = (BYTE_MASK shl (BITS_PER_BYTE - remainBits)).toByte()
                 val addrBits = addr[fullBytes].toInt() and mask.toInt()
                 val networkBits = network[fullBytes].toInt() and mask.toInt()
                 if (addrBits != networkBits) return false
@@ -104,6 +104,8 @@ private const val INGEST_RATE_LIMIT = 100
 private const val INGEST_REFILL_SECONDS = 1
 private const val TELEMETRY_RATE_LIMIT = 10
 private const val TELEMETRY_REFILL_SECONDS = 60
+private const val BITS_PER_BYTE = 8
+private const val BYTE_MASK = 0xFF
 
 fun Application.configureRateLimiting() {
     install(RateLimit) {

@@ -23,6 +23,9 @@ import io.opentelemetry.proto.resource.v1.Resource
 
 private const val NANOS_PER_MILLI = 1_000_000L
 private val HEX_CHARS = "0123456789abcdef".toCharArray()
+private const val BYTE_MASK = 0xFF
+private const val HEX_SHIFT = 4
+private const val NIBBLE_MASK = 0x0F
 
 /**
  * Shared utilities for converting OTLP protobuf objects to Moneat internal models.
@@ -66,14 +69,13 @@ object OtlpProtobufParser {
         return nanos / NANOS_PER_MILLI
     }
 
-    @Suppress("MagicNumber")
     fun bytesToHex(bytes: ByteString): String {
         if (bytes.isEmpty) return ""
         val hex = CharArray(bytes.size() * 2)
         bytes.forEachIndexed { i, b ->
-            val v = b.toInt() and 0xFF
-            hex[i * 2] = HEX_CHARS[v ushr 4]
-            hex[i * 2 + 1] = HEX_CHARS[v and 0x0F]
+            val v = b.toInt() and BYTE_MASK
+            hex[i * 2] = HEX_CHARS[v ushr HEX_SHIFT]
+            hex[i * 2 + 1] = HEX_CHARS[v and NIBBLE_MASK]
         }
         return String(hex)
     }

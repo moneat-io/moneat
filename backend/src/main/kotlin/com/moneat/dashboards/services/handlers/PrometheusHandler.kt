@@ -37,10 +37,23 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND
+import com.moneat.utils.TimeConstants.SECONDS_PER_DAY
+import com.moneat.utils.TimeConstants.SECONDS_PER_HOUR
+import com.moneat.utils.TimeConstants.SECONDS_PER_MINUTE
+import com.moneat.utils.TimeConstants.SECONDS_PER_MONTH_30
+import com.moneat.utils.TimeConstants.SECONDS_PER_WEEK
+import com.moneat.utils.TimeConstants.SECONDS_PER_YEAR_365
 
 private val logger = KotlinLogging.logger {}
 
 class PrometheusHandler : HttpApiHandler() {
+
+    companion object {
+        private const val PROMETHEUS_LABEL_LIMIT = 20
+        private const val SECONDS_SIX_HOURS = 21_600L
+    }
+
     override val defaultPort: Int = 9090
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
@@ -48,12 +61,12 @@ class PrometheusHandler : HttpApiHandler() {
             val baseUrl = buildUrl(request.host, request.port)
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
                 request.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
-                parameter("limit", 20)
+                parameter("limit", PROMETHEUS_LABEL_LIMIT)
             }
             if (response.status.isSuccess()) {
                 val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
                 val metrics = body["data"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
-                TestConnectionResult(true, "Connected successfully", metrics = metrics.take(20))
+                TestConnectionResult(true, "Connected successfully", metrics = metrics.take(PROMETHEUS_LABEL_LIMIT))
             } else {
                 TestConnectionResult(false, "Prometheus returned ${response.status}")
             }
@@ -122,7 +135,7 @@ class PrometheusHandler : HttpApiHandler() {
 
         return suspendRunCatching {
             val response = if (timeRange != null) {
-                val nowSec = System.currentTimeMillis() / 1000
+                val nowSec = System.currentTimeMillis() / MILLIS_PER_SECOND
                 val fromSec = resolveRelativeTimeSec(timeRange.from, nowSec)
                 val toSec = resolveRelativeTimeSec(timeRange.to, nowSec)
                 val step = resolvePrometheusStep(toSec - fromSec)
@@ -224,7 +237,7 @@ class PrometheusHandler : HttpApiHandler() {
 
     private fun promTimestampToMs(element: JsonElement): JsonElement {
         val sec = element.jsonPrimitive.doubleOrNull ?: return element
-        return JsonPrimitive((sec * 1000).toLong())
+        return JsonPrimitive((sec * MILLIS_PER_SECOND).toLong())
     }
 
     private fun promValueToNumber(element: JsonElement): JsonElement {
@@ -239,22 +252,22 @@ class PrometheusHandler : HttpApiHandler() {
         val amount = match.groupValues[1].toLong()
         val offsetSec = when (match.groupValues[2]) {
             "s" -> amount
-            "m" -> amount * 60
-            "h" -> amount * 3600
-            "d" -> amount * 86400
-            "w" -> amount * 604800
-            "M" -> amount * 2592000
-            "y" -> amount * 31536000
+            "m" -> amount * SECONDS_PER_MINUTE
+            "h" -> amount * SECONDS_PER_HOUR
+            "d" -> amount * SECONDS_PER_DAY
+            "w" -> amount * SECONDS_PER_WEEK
+            "M" -> amount * SECONDS_PER_MONTH_30
+            "y" -> amount * SECONDS_PER_YEAR_365
             else -> 0
         }
         return nowSec - offsetSec
     }
 
     internal fun resolvePrometheusStep(rangeSec: Long): String = when {
-        rangeSec <= 3600 -> "15s"
-        rangeSec <= 21600 -> "1m"
-        rangeSec <= 86400 -> "5m"
-        rangeSec <= 604800 -> "1h"
+        rangeSec <= SECONDS_PER_HOUR -> "15s"
+        rangeSec <= SECONDS_SIX_HOURS -> "1m"
+        rangeSec <= SECONDS_PER_DAY -> "5m"
+        rangeSec <= SECONDS_PER_WEEK -> "1h"
         else -> "1d"
     }
 }

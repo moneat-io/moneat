@@ -19,6 +19,7 @@ private val metricsMonitorService = MonitorService(HostRepositoryImpl(), HostAle
 
 private const val DEFAULT_METRIC_HOURS = 24
 private const val MAX_METRIC_HOURS = 168
+private const val MILLIS_PER_HOUR = 3_600_000L
 
 class GetHostMetricsTool : McpTool {
     override val name = "get_host_metrics"
@@ -48,7 +49,7 @@ class GetHostMetricsTool : McpTool {
             ?.coerceIn(1, MAX_METRIC_HOURS) ?: DEFAULT_METRIC_HOURS
 
         val now = System.currentTimeMillis()
-        val from = now - hrs * 3600 * 1000L
+        val from = now - hrs * MILLIS_PER_HOUR
         val metrics = metricsMonitorService.getHistoricalMetrics(
             hostId,
             from,

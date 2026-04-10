@@ -50,6 +50,13 @@ private const val GRAFANA_COLS = 24
 private const val MONEAT_COLS = 12
 private const val GRAFANA_ROW_PX = 30.0
 private const val MONEAT_ROW_PX = 30.0
+private const val GRAFANA_DEFAULT_PANEL_W = 12
+private const val GRAFANA_DEFAULT_PANEL_H = 4
+private const val MONEAT_MAX_COL_IDX = MONEAT_COLS - 1
+private const val MIN_WIDGET_HEIGHT = 3
+private const val FILL_OPACITY_SCALE = 100.0
+private const val REGEX_THIRD_GROUP_IDX = 3
+private const val GRAFANA_SCHEMA_VERSION = 39
 
 class GrafanaTranslator : DashboardTranslator {
 
@@ -174,13 +181,13 @@ class GrafanaTranslator : DashboardTranslator {
         val gridPos = panelJson["gridPos"]?.jsonObject
         val grafanaX = gridPos?.get("x")?.jsonPrimitive?.intOrNull ?: 0
         val grafanaY = gridPos?.get("y")?.jsonPrimitive?.intOrNull ?: 0
-        val grafanaW = gridPos?.get("w")?.jsonPrimitive?.intOrNull ?: 12
-        val grafanaH = gridPos?.get("h")?.jsonPrimitive?.intOrNull ?: 4
+        val grafanaW = gridPos?.get("w")?.jsonPrimitive?.intOrNull ?: GRAFANA_DEFAULT_PANEL_W
+        val grafanaH = gridPos?.get("h")?.jsonPrimitive?.intOrNull ?: GRAFANA_DEFAULT_PANEL_H
 
         // Grafana uses a 24-col grid, Moneat uses 12-col.
         // Use floor-aligned scaling: x = floor(gx*12/24), w = floor((gx+gw)*12/24) - x
         // This guarantees adjacent panels share exact column boundaries with no gaps or overflow.
-        val gridX = (grafanaX * MONEAT_COLS / GRAFANA_COLS).coerceIn(0, 11)
+        val gridX = (grafanaX * MONEAT_COLS / GRAFANA_COLS).coerceIn(0, MONEAT_MAX_COL_IDX)
         val gridY = scaleGridValue(grafanaY)
         val gridXEnd = ((grafanaX + grafanaW) * MONEAT_COLS / GRAFANA_COLS).coerceAtMost(MONEAT_COLS)
         val gridW = (gridXEnd - gridX).coerceAtLeast(1)
@@ -189,7 +196,7 @@ class GrafanaTranslator : DashboardTranslator {
         val queryConfigs = parseGrafanaTargets(panelJson, warnings, index, inputsMap)
         val displayConfig = extractDisplayConfig(panelJson)
 
-        val minH = if (moneatType == "stat" || moneatType == "gauge") 1 else 3
+        val minH = if (moneatType == "stat" || moneatType == "gauge") 1 else MIN_WIDGET_HEIGHT
         return WidgetResponse(
             id = 0,
             dashboardId = 0,
@@ -198,7 +205,7 @@ class GrafanaTranslator : DashboardTranslator {
             gridX = gridX,
             gridY = gridY,
             gridW = gridW,
-            gridH = gridH.coerceIn(minH, 12),
+            gridH = gridH.coerceIn(minH, MONEAT_COLS),
             queryConfigs = queryConfigs,
             displayConfig = displayConfig,
             sortOrder = index
@@ -286,7 +293,7 @@ class GrafanaTranslator : DashboardTranslator {
 
         // fillOpacity: Grafana uses 0-100 scale, Moneat uses 0-1
         defaults?.get("fillOpacity")?.jsonPrimitive?.intOrNull?.let {
-            config["fillOpacity"] = (it / 100.0).toString()
+            config["fillOpacity"] = (it / FILL_OPACITY_SCALE).toString()
         }
 
         // Stacking → stackMode (frontend key)
@@ -809,7 +816,7 @@ class GrafanaTranslator : DashboardTranslator {
         val (metricName, labelStr, aggFunction) = when {
             aggByMatch != null -> {
                 // Parse inner expression recursively for metric name
-                val innerExpr = aggByMatch.groupValues[3].trim()
+                val innerExpr = aggByMatch.groupValues[REGEX_THIRD_GROUP_IDX].trim()
                 val innerFunc = Regex("""(\w+)\(([^{(]+?)(?:\{[^}]*\})?(?:\[[^]]*])?.*\)""").find(innerExpr)
                 val metric = innerFunc?.groupValues?.getOrNull(2)?.trim() ?: "unknown"
                 val innerLabels = Regex("""\{([^}]*)\}""").find(innerExpr)?.groupValues?.get(1) ?: ""
@@ -818,7 +825,7 @@ class GrafanaTranslator : DashboardTranslator {
             funcMatch != null -> {
                 Triple(
                     funcMatch.groupValues[2].trim(),
-                    funcMatch.groupValues[3],
+                    funcMatch.groupValues[REGEX_THIRD_GROUP_IDX],
                     mapPromFunction(funcMatch.groupValues[1])
                 )
             }
@@ -851,7 +858,7 @@ class GrafanaTranslator : DashboardTranslator {
                     "!=" -> FilterOp.NEQ
                     else -> FilterOp.EQ
                 }
-                filters.add(FilterDef(key, op, m.groupValues[3]))
+                filters.add(FilterDef(key, op, m.groupValues[REGEX_THIRD_GROUP_IDX]))
             }
         }
 
@@ -1047,7 +1054,7 @@ class GrafanaTranslator : DashboardTranslator {
                     }
                 )
             }
-            put("schemaVersion", 39)
+            put("schemaVersion", GRAFANA_SCHEMA_VERSION)
             put("version", 1)
             put("timezone", "browser")
         }

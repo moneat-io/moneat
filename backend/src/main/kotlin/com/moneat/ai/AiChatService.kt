@@ -28,18 +28,22 @@ private val aiChatResponseJson = Json { ignoreUnknownKeys = true }
  */
 class AiChatService {
 
+    companion object {
+        private const val MAX_USER_INPUT_LENGTH = 4000
+        private const val MAX_HISTORY_MESSAGES = 20
+    }
+
     suspend fun chat(userId: Int, orgId: Int, request: ChatRequest): ChatApiResponse {
         return unavailable(
             operation = "chat",
             userId = userId,
             orgId = orgId,
-            context = "message=${request.message.take(50)}",
+            context = "messageLength=${request.message.length}",
         )
     }
 
     /** Shared helpers for AI message shaping; `internal` for unit tests and enterprise module reuse. */
     internal fun sanitizeUserInput(input: String): String {
-        val maxLength = 4000
         val injectionPatterns = listOf(
             Regex("ignore previous instructions", RegexOption.IGNORE_CASE),
             Regex("system:", RegexOption.IGNORE_CASE),
@@ -49,7 +53,7 @@ class AiChatService {
         for (pattern in injectionPatterns) {
             sanitized = pattern.replace(sanitized, "")
         }
-        return sanitized.take(maxLength)
+        return sanitized.take(MAX_USER_INPUT_LENGTH)
     }
 
     internal fun buildOpenAiMessages(
@@ -59,7 +63,7 @@ class AiChatService {
     ): List<OpenAiMessage> {
         val systemContent = "$systemPrompt\n\n== API DOCUMENTATION ==\n$docBlock"
         val systemMessage = OpenAiMessage(role = "system", content = systemContent)
-        val recentHistory = history.takeLast(20)
+        val recentHistory = history.takeLast(MAX_HISTORY_MESSAGES)
         return listOf(systemMessage) + recentHistory
     }
 

@@ -38,6 +38,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 /**
  * incident.io provider implementation using Alert Events V2 API.
@@ -109,7 +111,7 @@ class IncidentIoProvider : IncidentProvider {
                     setBody(payload)
                 }
 
-            if (response.status.value in 200..299) {
+            if (response.status.value in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 val responseBody = response.body<AlertEventResponse>()
                 Result.success(responseBody.deduplication_key)
             } else {
@@ -147,7 +149,7 @@ class IncidentIoProvider : IncidentProvider {
                     setBody(payload)
                 }
 
-            if (response.status.value in 200..299) {
+            if (response.status.value in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 val responseBody = response.body<AlertEventResponse>()
                 Result.success(responseBody.deduplication_key)
             } else {
@@ -184,7 +186,7 @@ class IncidentIoProvider : IncidentProvider {
                     setBody(payload)
                 }
 
-            if (response.status.value in 200..299) {
+            if (response.status.value in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 // Immediately resolve the test alert
                 resolveAlert(testDedup, config)
                 Result.success(true)

@@ -41,6 +41,7 @@ import com.moneat.utils.suspendRunCatching
 object ClickHouseMigrations {
     private const val MIGRATIONS_TABLE = "schema_migrations"
     private const val MIGRATIONS_PATH = "db/clickhouse_migration"
+    private const val ERROR_BODY_MAX_LEN = 500
 
     data class Migration(
         val version: Int,
@@ -180,7 +181,7 @@ object ClickHouseMigrations {
         val response = ClickHouseClient.executeMigration(query)
         val body = response.bodyAsText()
         if (response.isClickHouseError(body)) {
-            throw RuntimeException("ClickHouse error reading applied migrations: ${body.take(500)}")
+            throw RuntimeException("ClickHouse error reading applied migrations: ${body.take(ERROR_BODY_MAX_LEN)}")
         }
         if (body.isBlank()) return emptyList()
 

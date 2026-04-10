@@ -33,6 +33,8 @@ private val logger = KotlinLogging.logger {}
  */
 object SentrySpanBackfill {
 
+    private const val ERROR_BODY_MAX_LENGTH = 500
+
     suspend fun run() {
         val mapping = loadProjectOrgMapping()
         if (mapping.isEmpty()) {
@@ -95,9 +97,9 @@ object SentrySpanBackfill {
         } else {
             val bodySnippet =
                 suspendRunCatching {
-                    response.bodyAsText().take(500)
+                    response.bodyAsText().take(ERROR_BODY_MAX_LENGTH)
                 }.getOrElse { e ->
-                    (e.message ?: "").take(500)
+                    (e.message ?: "").take(ERROR_BODY_MAX_LENGTH)
                 }
             logger.error { "Spans backfill failed: HTTP ${response.status}, body: $bodySnippet" }
         }

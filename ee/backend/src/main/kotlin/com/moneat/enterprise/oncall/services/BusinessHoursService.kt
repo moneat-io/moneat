@@ -19,6 +19,11 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 
+private const val DAY_OF_WEEK_WEDNESDAY = 3
+private const val DAY_OF_WEEK_THURSDAY = 4
+private const val DAY_OF_WEEK_FRIDAY = 5
+private const val DAY_OF_WEEK_SATURDAY = 6
+
 class BusinessHoursService {
     fun getBusinessHours(organizationId: Int): BusinessHoursConfig? =
         transaction {
@@ -70,10 +75,10 @@ class BusinessHoursService {
                     kotlinx.datetime.DayOfWeek.SUNDAY -> 0
                     kotlinx.datetime.DayOfWeek.MONDAY -> 1
                     kotlinx.datetime.DayOfWeek.TUESDAY -> 2
-                    kotlinx.datetime.DayOfWeek.WEDNESDAY -> 3
-                    kotlinx.datetime.DayOfWeek.THURSDAY -> 4
-                    kotlinx.datetime.DayOfWeek.FRIDAY -> 5
-                    kotlinx.datetime.DayOfWeek.SATURDAY -> 6
+                    kotlinx.datetime.DayOfWeek.WEDNESDAY -> DAY_OF_WEEK_WEDNESDAY
+                    kotlinx.datetime.DayOfWeek.THURSDAY -> DAY_OF_WEEK_THURSDAY
+                    kotlinx.datetime.DayOfWeek.FRIDAY -> DAY_OF_WEEK_FRIDAY
+                    kotlinx.datetime.DayOfWeek.SATURDAY -> DAY_OF_WEEK_SATURDAY
                 }
 
             val currentTime = java.time.LocalTime.of(now.hour, now.minute, now.second)

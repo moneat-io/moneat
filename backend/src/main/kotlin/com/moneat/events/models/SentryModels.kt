@@ -39,6 +39,8 @@ import kotlinx.serialization.json.long
 import java.time.format.DateTimeParseException
 import java.util.*
 
+private const val NANOS_PER_SECOND = 1_000_000_000.0
+
 @Serializable
 data class SentryEnvelope(
     val eventId: String,
@@ -300,7 +302,7 @@ object FlexibleTimestampSerializer : KSerializer<Double?> {
                     val isoString = element.contentOrNull ?: return null
                     try {
                         val instant = java.time.Instant.parse(isoString)
-                        instant.epochSecond.toDouble() + instant.nano / 1_000_000_000.0
+                        instant.epochSecond.toDouble() + instant.nano / NANOS_PER_SECOND
                     } catch (_: DateTimeParseException) {
                         null
                     }

@@ -33,6 +33,7 @@ private val logger = KotlinLogging.logger {}
 
 private const val DOGSTATSD_METRIC_SEPARATOR = '|'
 private const val DOGSTATSD_TAG_SEPARATOR = '#'
+private const val MILLIS_TO_SECONDS = 1000.0
 
 fun Route.datadogDogStatsDRoutes() {
     route("/dd") {
@@ -119,7 +120,7 @@ internal fun parseDogStatsDLine(
         }
     }
 
-    val now = System.currentTimeMillis().toDouble() / 1000.0
+    val now = System.currentTimeMillis().toDouble() / MILLIS_TO_SECONDS
 
     return DatadogMetricV1(
         metric = metricName,

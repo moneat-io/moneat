@@ -28,6 +28,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import java.io.Writer
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.Month
 import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
@@ -269,7 +270,7 @@ $contextStr"""
 
         // Conversation history (last 20 messages)
         val history = loadHistory(conversationId)
-        messages.addAll(history.takeLast(20))
+        messages.addAll(history.takeLast(MAX_HISTORY_MESSAGES))
 
         return messages
     }
@@ -306,7 +307,7 @@ $contextStr"""
             AiConversations.insert {
                 it[organization_id] = orgId
                 it[user_id] = userId
-                it[title] = firstMessage.take(100)
+                it[title] = firstMessage.take(MAX_TITLE_LENGTH)
                 it[created_at] = now
                 it[updated_at] = now
             } get AiConversations.id
@@ -365,20 +366,13 @@ $contextStr"""
     }
 
     private fun parseDateFromMessage(message: String): LocalDate? {
-        val months = mapOf(
-            "january" to 1, "february" to 2, "march" to 3, "april" to 4,
-            "may" to 5, "june" to 6, "july" to 7, "august" to 8,
-            "september" to 9, "october" to 10, "november" to 11, "december" to 12,
-            "jan" to 1, "feb" to 2, "mar" to 3, "apr" to 4,
-            "jun" to 6, "jul" to 7, "aug" to 8, "sep" to 9, "oct" to 10, "nov" to 11, "dec" to 12,
-        )
         val pattern = Regex(
             """(january|february|march|april|may|june|july|august|september|october|november|december|""" +
                 """jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?""",
             RegexOption.IGNORE_CASE,
         )
         val match = pattern.find(message) ?: return null
-        val month = months[match.groupValues[1].lowercase()] ?: return null
+        val month = MONTH_NUMBERS[match.groupValues[1].lowercase()] ?: return null
         val day = match.groupValues[2].toIntOrNull() ?: return null
         val today = LocalDate.now()
         return try {
@@ -388,14 +382,14 @@ $contextStr"""
     }
 
     private fun parseTimeRangeHours(timeRange: String?): Int {
-        if (timeRange.isNullOrBlank()) return 24
+        if (timeRange.isNullOrBlank()) return HOURS_24H
         return when (timeRange.lowercase()) {
             "1h" -> 1
-            "6h" -> 6
-            "24h" -> 24
-            "7d" -> 168
-            "30d" -> 720
-            else -> 24
+            "6h" -> HOURS_6H
+            "24h" -> HOURS_24H
+            "7d" -> HOURS_7D
+            "30d" -> HOURS_30D
+            else -> HOURS_24H
         }
     }
 
@@ -404,5 +398,21 @@ $contextStr"""
             writer.write("data: $data\n\n")
             writer.flush()
         }
+
+        private const val MAX_HISTORY_MESSAGES = 20
+        private const val MAX_TITLE_LENGTH = 100
+        private const val HOURS_6H = 6
+        private const val HOURS_24H = 24
+        private const val HOURS_7D = 168
+        private const val HOURS_30D = 720
+
+        private val MONTH_NUMBERS: Map<String, Int> = Month.values().flatMap { m ->
+            val name = m.name.lowercase()
+            if (name.length > 3) {
+                listOf(name to m.value, name.take(3) to m.value)
+            } else {
+                listOf(name to m.value)
+            }
+        }.toMap()
     }
 }

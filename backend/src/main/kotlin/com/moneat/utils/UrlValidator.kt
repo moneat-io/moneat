@@ -26,6 +26,18 @@ import java.net.UnknownHostException
 
 object UrlValidator {
 
+    private const val IPV6_ADDRESS_BYTE_LENGTH = 16
+    private const val IPV4_MAPPED_ZERO_RANGE_END = 9
+    private const val IPV4_MAPPED_FF_FIRST_IDX = 10
+    private const val IPV4_MAPPED_FF_SECOND_IDX = 11
+    private const val IPV4_IN_IPV6_START_IDX = 12
+    private const val IPV4_IN_IPV6_END_IDX = 15
+    private const val IPV4_BYTE_LENGTH = 4
+    private const val IPV4_LAST_BYTE_IDX = 3
+    private const val BYTE_MASK_UNSIGNED = 0xFF
+    private const val IPV6_ULA_FC_PREFIX = 0xFC
+    private const val IPV6_ULA_FD_PREFIX = 0xFD
+
     class SsrfException(message: String) : IllegalArgumentException(message)
 
     /**
@@ -105,12 +117,12 @@ object UrlValidator {
         if (addr is Inet6Address) {
             val bytes = addr.address
             // Check for ::ffff:x.x.x.x pattern (bytes 0-9 = 0, 10-11 = 0xff)
-            val isMapped = bytes.size == 16 &&
-                bytes.slice(0..9).all { it == 0.toByte() } &&
-                bytes[10] == 0xFF.toByte() &&
-                bytes[11] == 0xFF.toByte()
+            val isMapped = bytes.size == IPV6_ADDRESS_BYTE_LENGTH &&
+                bytes.slice(0..IPV4_MAPPED_ZERO_RANGE_END).all { it == 0.toByte() } &&
+                bytes[IPV4_MAPPED_FF_FIRST_IDX] == 0xFF.toByte() &&
+                bytes[IPV4_MAPPED_FF_SECOND_IDX] == 0xFF.toByte()
             if (isMapped) {
-                val ipv4Bytes = bytes.sliceArray(12..15)
+                val ipv4Bytes = bytes.sliceArray(IPV4_IN_IPV6_START_IDX..IPV4_IN_IPV6_END_IDX)
                 return Inet4Address.getByAddress(ipv4Bytes)
             }
         }
@@ -140,17 +152,17 @@ object UrlValidator {
 
     private fun isMetadataAddress(addr: InetAddress): Boolean {
         val bytes = addr.address
-        if (bytes.size != 4) return false
+        if (bytes.size != IPV4_BYTE_LENGTH) return false
         return bytes[0] == 169.toByte() &&
             bytes[1] == 254.toByte() &&
             bytes[2] == 169.toByte() &&
-            bytes[3] == 254.toByte()
+            bytes[IPV4_LAST_BYTE_IDX] == 254.toByte()
     }
 
     private fun isIPv6UniqueLocal(addr: InetAddress): Boolean {
         if (addr !is Inet6Address) return false
-        val firstByte = addr.address[0].toInt() and 0xFF
+        val firstByte = addr.address[0].toInt() and BYTE_MASK_UNSIGNED
         // fc00::/7 means first byte is 0xFC or 0xFD
-        return firstByte == 0xFC || firstByte == 0xFD
+        return firstByte == IPV6_ULA_FC_PREFIX || firstByte == IPV6_ULA_FD_PREFIX
     }
 }

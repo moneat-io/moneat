@@ -157,7 +157,7 @@ class AnalyticsIngestionWorker(
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
         if (response.isClickHouseError(body)) {
-            throw IOException("ClickHouse insert failed: ${body.take(500)}")
+            throw IOException("ClickHouse insert failed: ${body.take(ERROR_BODY_MAX_LENGTH)}")
         }
     }
 
@@ -168,6 +168,7 @@ class AnalyticsIngestionWorker(
         private const val DEFAULT_WORKER_COUNT = 2
         private const val BRPOP_TIMEOUT = 5L
         private const val ERROR_BACKOFF_MS = 1000L
+        private const val ERROR_BODY_MAX_LENGTH = 500
 
         fun escapeCH(s: String): String = ClickHouseSqlUtils.escapeSql(s)
     }

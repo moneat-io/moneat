@@ -39,8 +39,12 @@ class OrgInvitationService(
     private val logger = LoggerFactory.getLogger(OrgInvitationService::class.java)
     private val random = SecureRandom()
 
+    companion object {
+        private const val TOKEN_BYTES_SIZE = 32
+    }
+
     private fun generateToken(): String {
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(TOKEN_BYTES_SIZE)
         random.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }

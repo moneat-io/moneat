@@ -11,7 +11,14 @@ comments:
 # These can be enabled incrementally as the codebase is cleaned up.
 style:
   MagicNumber:
-    active: false
+    active: true
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/DemoDataReseeder.kt'
+    ignorePropertyDeclaration: true
+    ignoreEnums: true
+    ignoreRanges: true
   WildcardImport:
     active: false
   ReturnCount:

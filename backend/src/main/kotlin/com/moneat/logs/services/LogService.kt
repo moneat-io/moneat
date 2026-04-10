@@ -57,9 +57,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
+import java.security.MessageDigest
 import java.time.Instant
 import com.moneat.utils.suspendRunCatching
 import java.util.*
+import kotlin.text.Charsets
 
 private val logger = KotlinLogging.logger {}
 
@@ -74,6 +76,38 @@ private data class LogWithCursor(
     val log: LogEntryResponse,
     val timestampMs: Long
 )
+
+private const val MAX_LOG_QUERY_LIMIT = 500
+private const val MAX_TOP_VALUES_LIMIT = 100
+private const val MAX_FILTER_VALUES_LIMIT = 200
+private const val MAX_EXPORT_LIMIT = 10_000
+private const val ERROR_BODY_PREVIEW_CHARS = 600
+private const val WARN_BODY_PREVIEW_CHARS = 500
+private const val MILLIS_PER_HOUR = 3_600_000L
+private const val MILLIS_PER_6_HOURS = 21_600_000L
+private const val MILLIS_PER_DAY = 86_400_000L
+private const val MILLIS_PER_WEEK = 604_800_000L
+private const val MAX_LOG_MESSAGE_CHARS = 8192
+private const val MAX_LOG_BODY_CHARS = 32768
+private const val MAX_LOG_SERVICE_CHARS = 256
+private const val MAX_LOG_ENVIRONMENT_CHARS = 128
+private const val MAX_LOG_HOST_CHARS = 256
+private const val MAX_LOG_CONTAINER_ID_CHARS = 128
+private const val MAX_LOG_CONTAINER_IMAGE_CHARS = 512
+private const val MAX_LOG_TRACE_ID_CHARS = 128
+private const val MAX_LOG_SPAN_ID_CHARS = 128
+private const val INGEST_KEY_MAX_CHARS = 128
+private const val INGEST_VALUE_MAX_CHARS = 1024
+private const val ERROR_BODY_LONG_CHARS = 1000
+private const val MAX_LOG_CONTAINER_NAME_CHARS = 256
+private const val MS_PER_SECOND = 1000
+private const val UNIX_EPOCH_SECONDS_MAX_DIGITS = 10
+private const val SQL_LOG_FINGERPRINT_HEX_CHARS = 16
+
+private fun utf8Fingerprint(text: String, hexChars: Int = SQL_LOG_FINGERPRINT_HEX_CHARS): String {
+    val digest = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+    return digest.joinToString("") { b -> "%02x".format(b) }.take(hexChars)
+}
 
 class LogService(private val logRepository: LogRepository) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -260,7 +294,7 @@ class LogService(private val logRepository: LogRepository) {
         organizationId: Long,
         request: LogQueryRequest
     ): LogQueryResponse {
-        val limit = request.limit.coerceIn(1, 500)
+        val limit = request.limit.coerceIn(1, MAX_LOG_QUERY_LIMIT)
         val conditions = mutableListOf<String>()
 
         val totalCountFilter =
@@ -318,7 +352,10 @@ class LogService(private val logRepository: LogRepository) {
                     }
                 }
             }.getOrElse { e ->
-                logger.error(e) { "Failed to parse query '${request.query}', falling back to simple search" }
+                val q = request.query.orEmpty()
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(q)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(request.query)
             }
@@ -361,8 +398,10 @@ class LogService(private val logRepository: LogRepository) {
 
         val whereClause = conditions.joinToString(" AND ")
 
-        // Log the complete WHERE clause for debugging (at DEBUG level to avoid logging user data in production)
-        logger.debug { "Executing log query with WHERE clause: $whereClause" }
+        logger.debug {
+            "Executing log query: where_fp=${utf8Fingerprint(whereClause)} " +
+                "(where_len=${whereClause.length})"
+        }
 
         val query =
             """
@@ -393,9 +432,11 @@ class LogService(private val logRepository: LogRepository) {
 
         val body = logRepository.executeClickHouseQuery(query)
         if (body.isClickHouseError()) {
-            logger.error("ClickHouse query failed. WHERE clause: $whereClause")
-            logger.error("Full query: $query")
-            throw IllegalStateException("Failed to query logs: ${body.take(1000)}")
+            logger.error(
+                "ClickHouse query failed. where_fp=${utf8Fingerprint(whereClause)} " +
+                    "query_fp=${utf8Fingerprint(query)}"
+            )
+            throw IllegalStateException("Failed to query logs: ${body.take(ERROR_BODY_LONG_CHARS)}")
         }
 
         val parsed = parseQueryRows(body)
@@ -443,16 +484,16 @@ class LogService(private val logRepository: LogRepository) {
         if (fromMs == null || toMs == null) return "1h"
         val rangeMs = toMs - fromMs
         return when {
-            rangeMs <= 3_600_000L -> "1m"
+            rangeMs <= MILLIS_PER_HOUR -> "1m"
 
             // ≤1h → 1m
-            rangeMs <= 21_600_000L -> "5m"
+            rangeMs <= MILLIS_PER_6_HOURS -> "5m"
 
             // ≤6h → 5m
-            rangeMs <= 86_400_000L -> "15m"
+            rangeMs <= MILLIS_PER_DAY -> "15m"
 
             // ≤24h → 15m
-            rangeMs <= 604_800_000L -> "1h"
+            rangeMs <= MILLIS_PER_WEEK -> "1h"
 
             // ≤7d → 1h
             else -> "1d" // >7d → 1d
@@ -518,7 +559,9 @@ class LogService(private val logRepository: LogRepository) {
                     }
                 }
             }.getOrElse { e ->
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             }
@@ -573,12 +616,12 @@ class LogService(private val logRepository: LogRepository) {
 
         logger.debug {
             "Aggregate logs SQL for org $organizationId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, " +
-                "groupBy=$validGroupBy):\n$sql"
+                "groupBy=$validGroupBy): query_fp=${utf8Fingerprint(sql)}"
         }
         val body = logRepository.executeClickHouseQuery(sql)
-        logger.debug { "Aggregate logs response body (first 500 chars): ${body.take(500)}" }
+        logger.debug { "Aggregate logs response body (first 500 chars): ${body.take(WARN_BODY_PREVIEW_CHARS)}" }
         if (body.isClickHouseError()) {
-            logger.warn { "Failed to aggregate logs: ${body.take(600)}" }
+            logger.warn { "Failed to aggregate logs: ${body.take(ERROR_BODY_PREVIEW_CHARS)}" }
             return LogAggregateResponse(buckets = emptyList(), totalCount = 0, interval = resolvedInterval)
         }
 
@@ -666,7 +709,9 @@ class LogService(private val logRepository: LogRepository) {
                     }
                 }
             }.getOrElse { e ->
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             }
@@ -692,7 +737,7 @@ class LogService(private val logRepository: LogRepository) {
         }
 
         val whereClause = conditions.joinToString(" AND ")
-        val safeLimit = limit.coerceIn(1, 100)
+        val safeLimit = limit.coerceIn(1, MAX_TOP_VALUES_LIMIT)
 
         // Determine the SQL column expression for the field
         val columnExpr =
@@ -721,7 +766,7 @@ class LogService(private val logRepository: LogRepository) {
 
         val body = logRepository.executeClickHouseQuery(sql)
         if (body.isClickHouseError()) {
-            logger.warn { "Failed to query top values: ${body.take(600)}" }
+            logger.warn { "Failed to query top values: ${body.take(ERROR_BODY_PREVIEW_CHARS)}" }
             return LogTopResponse(field = field, values = emptyList(), totalCount = 0)
         }
 
@@ -808,19 +853,27 @@ class LogService(private val logRepository: LogRepository) {
                     }
                 }
             } catch (e: SerializationException) {
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             } catch (e: IOException) {
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             } catch (e: IllegalStateException) {
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             } catch (e: IllegalArgumentException) {
-                logger.error(e) { "Failed to parse query '$query', falling back to simple search" }
+                logger.error(e) {
+                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+                }
                 // Fallback: treat as simple full-text search
                 conditions += buildSimpleSearchCondition(query)
             }
@@ -846,7 +899,7 @@ class LogService(private val logRepository: LogRepository) {
         }
 
         val whereClause = conditions.joinToString(" AND ")
-        val safeLimit = limit.coerceIn(1, 10_000)
+        val safeLimit = limit.coerceIn(1, MAX_EXPORT_LIMIT)
 
         val sql =
             """
@@ -862,11 +915,14 @@ class LogService(private val logRepository: LogRepository) {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        logger.debug { "Export CSV SQL: $sql" }
+        logger.debug { "Export CSV SQL: query_fp=${utf8Fingerprint(sql)}" }
         val body = logRepository.executeClickHouseQuery(sql)
         if (body.isClickHouseError()) {
-            logger.error { "ClickHouse export error. SQL: $sql\nError: ${body.take(600)}" }
-            throw IllegalStateException("Failed to export logs: ${body.take(600)}")
+            logger.error {
+                "ClickHouse export error. query_fp=${utf8Fingerprint(sql)}\n" +
+                    "Error: ${body.take(ERROR_BODY_PREVIEW_CHARS)}"
+            }
+            throw IllegalStateException("Failed to export logs: ${body.take(ERROR_BODY_PREVIEW_CHARS)}")
         }
 
         val sb = StringBuilder()
@@ -966,7 +1022,7 @@ class LogService(private val logRepository: LogRepository) {
     private suspend fun queryValueCounts(query: String): List<LogFilterOptionWithCount> {
         val body = logRepository.executeClickHouseQuery(query)
         if (body.isClickHouseError()) {
-            logger.warn { "Failed to query value counts: ${body.take(600)}" }
+            logger.warn { "Failed to query value counts: ${body.take(ERROR_BODY_PREVIEW_CHARS)}" }
             return emptyList()
         }
         val results = mutableListOf<LogFilterOptionWithCount>()
@@ -1097,7 +1153,7 @@ class LogService(private val logRepository: LogRepository) {
             FROM `$clickhouseDb`.logs
             WHERE $whereClause AND $fieldRef != ''
             ORDER BY tag_value
-            LIMIT ${limit.coerceIn(1, 200)}
+            LIMIT ${limit.coerceIn(1, MAX_FILTER_VALUES_LIMIT)}
             FORMAT TSV
                 """.trimIndent()
             } else {
@@ -1107,7 +1163,7 @@ class LogService(private val logRepository: LogRepository) {
             FROM `$clickhouseDb`.logs
             WHERE $whereClause AND tags['$escapedKey'] != ''
             ORDER BY tag_value
-            LIMIT ${limit.coerceIn(1, 200)}
+            LIMIT ${limit.coerceIn(1, MAX_FILTER_VALUES_LIMIT)}
             FORMAT TSV
                 """.trimIndent()
             }
@@ -1120,7 +1176,7 @@ class LogService(private val logRepository: LogRepository) {
     private suspend fun queryDistinctLines(query: String): List<String> {
         val body = logRepository.executeClickHouseQuery(query)
         if (body.isClickHouseError()) {
-            logger.warn { "Failed to query log filter values: ${body.take(600)}" }
+            logger.warn { "Failed to query log filter values: ${body.take(ERROR_BODY_PREVIEW_CHARS)}" }
             return emptyList()
         }
         return body
@@ -1240,17 +1296,17 @@ class LogService(private val logRepository: LogRepository) {
             logId = UUID.randomUUID().toString(),
             timestampMs = resolveTimestampMs(entry.timestamp, entry.timestampMs),
             level = normalizeLevel(entry.level),
-            message = trimTo(entry.message.orEmpty(), 8192),
-            body = trimTo(entry.body ?: entry.message.orEmpty(), 32768),
-            service = trimTo(entry.service.orEmpty(), 256),
-            environment = trimTo(entry.environment.orEmpty(), 128),
-            host = trimTo(entry.host.orEmpty(), 256),
+            message = trimTo(entry.message.orEmpty(), MAX_LOG_MESSAGE_CHARS),
+            body = trimTo(entry.body ?: entry.message.orEmpty(), MAX_LOG_BODY_CHARS),
+            service = trimTo(entry.service.orEmpty(), MAX_LOG_SERVICE_CHARS),
+            environment = trimTo(entry.environment.orEmpty(), MAX_LOG_ENVIRONMENT_CHARS),
+            host = trimTo(entry.host.orEmpty(), MAX_LOG_HOST_CHARS),
             source = normalizeSource(entry.source ?: "sdk"),
-            containerName = trimTo(entry.containerName.orEmpty(), 256),
-            containerId = trimTo(entry.containerId.orEmpty(), 128),
-            containerImage = trimTo(entry.containerImage.orEmpty(), 512),
-            traceId = trimTo(entry.traceId.orEmpty(), 128),
-            spanId = trimTo(entry.spanId.orEmpty(), 128),
+            containerName = trimTo(entry.containerName.orEmpty(), MAX_LOG_CONTAINER_NAME_CHARS),
+            containerId = trimTo(entry.containerId.orEmpty(), MAX_LOG_CONTAINER_ID_CHARS),
+            containerImage = trimTo(entry.containerImage.orEmpty(), MAX_LOG_CONTAINER_IMAGE_CHARS),
+            traceId = trimTo(entry.traceId.orEmpty(), MAX_LOG_TRACE_ID_CHARS),
+            spanId = trimTo(entry.spanId.orEmpty(), MAX_LOG_SPAN_ID_CHARS),
             tags = sanitizeMap(entry.tags),
             resourceAttributes = sanitizeMap(entry.resourceAttributes)
         )
@@ -1273,17 +1329,17 @@ class LogService(private val logRepository: LogRepository) {
             logId = UUID.randomUUID().toString(),
             timestampMs = resolveTimestampMs(entry.timestamp, entry.timestampMs),
             level = normalizeLevel(entry.level),
-            message = trimTo(entry.message.orEmpty(), 8192),
-            body = trimTo(entry.body ?: entry.message.orEmpty(), 32768),
-            service = trimTo(entry.service ?: entry.containerName.orEmpty(), 256),
-            environment = trimTo(entry.environment.orEmpty(), 128),
-            host = trimTo(entry.host.orEmpty(), 256),
+            message = trimTo(entry.message.orEmpty(), MAX_LOG_MESSAGE_CHARS),
+            body = trimTo(entry.body ?: entry.message.orEmpty(), MAX_LOG_BODY_CHARS),
+            service = trimTo(entry.service ?: entry.containerName.orEmpty(), MAX_LOG_SERVICE_CHARS),
+            environment = trimTo(entry.environment.orEmpty(), MAX_LOG_ENVIRONMENT_CHARS),
+            host = trimTo(entry.host.orEmpty(), MAX_LOG_HOST_CHARS),
             source = source,
-            containerName = trimTo(entry.containerName.orEmpty(), 256),
-            containerId = trimTo(entry.containerId.orEmpty(), 128),
-            containerImage = trimTo(entry.containerImage.orEmpty(), 512),
-            traceId = trimTo(entry.traceId.orEmpty(), 128),
-            spanId = trimTo(entry.spanId.orEmpty(), 128),
+            containerName = trimTo(entry.containerName.orEmpty(), MAX_LOG_CONTAINER_NAME_CHARS),
+            containerId = trimTo(entry.containerId.orEmpty(), MAX_LOG_CONTAINER_ID_CHARS),
+            containerImage = trimTo(entry.containerImage.orEmpty(), MAX_LOG_CONTAINER_IMAGE_CHARS),
+            traceId = trimTo(entry.traceId.orEmpty(), MAX_LOG_TRACE_ID_CHARS),
+            spanId = trimTo(entry.spanId.orEmpty(), MAX_LOG_SPAN_ID_CHARS),
             tags = sanitizeMap(entry.tags),
             resourceAttributes = sanitizeMap(entry.resourceAttributes),
             systemId = systemId
@@ -1327,7 +1383,7 @@ class LogService(private val logRepository: LogRepository) {
             try {
                 ExportLogsServiceRequest.parseFrom(bytes)
             } catch (e: InvalidProtocolBufferException) {
-                logger.warn { "Invalid OTLP protobuf logs payload: ${e.message?.take(500)}" }
+                logger.warn { "Invalid OTLP protobuf logs payload: ${e.message?.take(WARN_BODY_PREVIEW_CHARS)}" }
                 return emptyList()
             }
 
@@ -1436,7 +1492,11 @@ class LogService(private val logRepository: LogRepository) {
         val trimmed = value.trim()
 
         trimmed.toLongOrNull()?.let { numeric ->
-            return if (numeric > 1_000_000_000_000L) numeric else numeric * 1000
+            // Use digit count to distinguish seconds (≤10 digits) from milliseconds (13 digits).
+            // A numeric threshold would misclassify valid pre-2001 millisecond timestamps
+            // (e.g. 946684800000 for 2000-01-01).
+            val digits = trimmed.trimStart('-')
+            return if (digits.length <= UNIX_EPOCH_SECONDS_MAX_DIGITS) numeric * MS_PER_SECOND else numeric
         }
 
         return suspendRunCatching {
@@ -1504,9 +1564,9 @@ class LogService(private val logRepository: LogRepository) {
         if (input == null || input.isEmpty()) return emptyMap()
         return input
             .mapNotNull { (rawKey, rawValue) ->
-                val key = rawKey.trim().take(128)
+                val key = rawKey.trim().take(INGEST_KEY_MAX_CHARS)
                 if (key.isBlank()) return@mapNotNull null
-                key to rawValue.trim().take(1024)
+                key to rawValue.trim().take(INGEST_VALUE_MAX_CHARS)
             }.toMap()
     }
 

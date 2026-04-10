@@ -45,6 +45,9 @@ object ProfileIngestionService {
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracking = UsageTrackingService.instance
 
+    private const val NANOS_PER_MILLI = 1_000_000L
+    private const val MIN_PROFILE_PARTS = 3
+
     private data class LockEntry(val mutex: Mutex = Mutex(), val refs: AtomicInteger = AtomicInteger(0))
     private val sessionLocks = ConcurrentHashMap<String, LockEntry>()
 
@@ -163,7 +166,7 @@ object ProfileIngestionService {
             runtime.substringBefore(" ").trim()
         }
 
-        val durationNs = (endMs - startMs) * 1_000_000
+        val durationNs = (endMs - startMs) * NANOS_PER_MILLI
 
         val insert = """
             INSERT INTO `$clickhouseDb`.profiles (
@@ -359,7 +362,7 @@ object ProfileIngestionService {
         val result = ClickHouseClient.executeWithFormat(query, "")
         val line = result.trim().takeIf { it.isNotBlank() } ?: return null
         val parts = line.split("\t")
-        return if (parts.size >= 3) {
+        return if (parts.size >= MIN_PROFILE_PARTS) {
             ProfileMeta(parts[0], parts[1], parts[2])
         } else if (parts.size >= 2) {
             ProfileMeta(parts[0], parts[1], "datadog")

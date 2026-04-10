@@ -30,10 +30,10 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 private const val DBM_QUEUE_KEY = "moneat:dd:dbm:queue"
-private const val MILLIS_PER_SECOND = 1000L
 
 @Serializable
 data class QueuedDbmBatch(
@@ -148,7 +148,7 @@ object DbmIngestionService {
                 rowsAffected = row.rowsAffected,
                 errorCode = row.errorCode,
                 errorMessage = row.errorMessage,
-                timestampMs = row.timestamp?.let { it * MILLIS_PER_SECOND }
+                timestampMs = row.timestamp?.let { it * MILLIS_PER_SECOND_LONG }
                     ?: System.currentTimeMillis(),
                 host = payload.host, env = payload.env,
                 service = payload.service, tags = tags,
@@ -163,7 +163,7 @@ object DbmIngestionService {
             QueuedDbmMetricEntry(
                 dbHost = payload.dbHost, dbSystem = payload.dbSystem,
                 dbName = row.dbName, querySignature = row.querySignature,
-                timestampMs = row.timestamp?.let { it * MILLIS_PER_SECOND }
+                timestampMs = row.timestamp?.let { it * MILLIS_PER_SECOND_LONG }
                     ?: System.currentTimeMillis(),
                 calls = row.calls, totalTimeNs = row.totalTimeNs,
                 rows = row.rows, sharedBlksHit = row.sharedBlksHit,
@@ -186,7 +186,7 @@ object DbmIngestionService {
                 waitEvent = row.waitEvent,
                 blockingPids = row.blockingPids,
                 durationNs = row.durationNs,
-                timestampMs = row.timestamp?.let { it * MILLIS_PER_SECOND }
+                timestampMs = row.timestamp?.let { it * MILLIS_PER_SECOND_LONG }
                     ?: System.currentTimeMillis(),
                 host = payload.host, env = payload.env, tags = tags,
             )

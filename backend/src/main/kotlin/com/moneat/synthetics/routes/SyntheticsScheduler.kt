@@ -36,6 +36,8 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
+private const val SCHEDULER_STARTUP_DELAY_MS = 2000L
+
 class SyntheticsScheduler(
     private val service: SyntheticsService = SyntheticsService(),
     private val executor: SyntheticsCheckExecutor = SyntheticsCheckExecutor()
@@ -58,7 +60,7 @@ class SyntheticsScheduler(
                 TaskLock.tryWithLock("synthetics-scheduler", lockAtMostFor = 5.minutes, lockAtLeastFor = 1.seconds) {
                     checkTests(this)
                 }
-                delay(2000)
+                delay(SCHEDULER_STARTUP_DELAY_MS)
             }
         }
 

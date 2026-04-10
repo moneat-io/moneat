@@ -43,9 +43,15 @@ private val logger = KotlinLogging.logger {}
  */
 class GraphiteHandler : HttpApiHandler() {
 
+    companion object {
+        private const val GRAPHITE_DEFAULT_PORT = 80
+        private const val GRAPHITE_SCHEMA_LIMIT = 100
+        private const val MILLIS_PER_SECOND = 1_000
+    }
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         return suspendRunCatching {
-            val baseUrl = buildUrl(request.host, request.port ?: 80)
+            val baseUrl = buildUrl(request.host, request.port ?: GRAPHITE_DEFAULT_PORT)
             val response = httpClient.get("$baseUrl/render") {
                 parameter("target", "constantLine(1)")
                 parameter("format", "json")
@@ -73,7 +79,7 @@ class GraphiteHandler : HttpApiHandler() {
         limit: Int,
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
-        val baseUrl = buildUrl(host, port ?: 80)
+        val baseUrl = buildUrl(host, port ?: GRAPHITE_DEFAULT_PORT)
         val from = timeRange?.from ?: "-24h"
         val until = timeRange?.to ?: "now"
         val targets = query.split(",").map { it.trim() }.filter { it.isNotBlank() }
@@ -104,14 +110,16 @@ class GraphiteHandler : HttpApiHandler() {
         databaseName: String?,
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
-        val baseUrl = buildUrl(host, port ?: 80)
+        val baseUrl = buildUrl(host, port ?: GRAPHITE_DEFAULT_PORT)
         return suspendRunCatching {
             val response = httpClient.get("$baseUrl/metrics/index.json") {
                 credentials.apiKey?.let { header("Authorization", "Bearer $it") }
             }
             if (response.status.isSuccess()) {
                 val arr = json.parseToJsonElement(response.bodyAsText()).jsonArray
-                arr.map { DataSourceField(it.jsonPrimitive.content, "metric", "Graphite metric") }.take(100)
+                arr.map {
+                    DataSourceField(it.jsonPrimitive.content, "metric", "Graphite metric")
+                }.take(GRAPHITE_SCHEMA_LIMIT)
             } else {
                 emptyList()
             }
@@ -134,7 +142,7 @@ class GraphiteHandler : HttpApiHandler() {
                 val value = pair.getOrNull(0)?.jsonPrimitive?.content?.toDoubleOrNull()
                 rows.add(
                     mapOf(
-                        "time_bucket" to JsonPrimitive(ts * 1000),
+                        "time_bucket" to JsonPrimitive(ts * MILLIS_PER_SECOND),
                         target to JsonPrimitive(value ?: 0.0)
                     )
                 )

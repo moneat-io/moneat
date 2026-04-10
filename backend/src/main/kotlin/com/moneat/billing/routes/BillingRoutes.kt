@@ -32,6 +32,7 @@ import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
@@ -58,6 +59,10 @@ private const val FAILED_TO_CREATE_CHECKOUT_SESSION = "Failed to create checkout
 private const val FAILED_TO_CANCEL_SUBSCRIPTION = "Failed to cancel subscription"
 private const val FAILED_TO_UPDATE_ON_CALL_SEATS = "Failed to update on-call seats"
 private const val FAILED_TO_UPDATE_SEATS = "Failed to update seats"
+private const val PAYG_INCREMENT_CENTS = 500
+private const val MAX_ONCALL_SEATS = 200
+private const val AUTH_REQUIRED = "Authentication required"
+private const val NO_ORG_ACCESS = "No organization access"
 
 // Public billing endpoints (no auth required)
 fun Route.publicBillingRoutes(
@@ -90,13 +95,13 @@ fun Route.billingRoutes(
         get("/usage") {
             val principal =
                 call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Authentication required"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
                     return@get
                 }
             val userId = principal.payload.getClaim("userId").asInt()
             val orgId =
                 pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
                     return@get
                 }
 
@@ -145,52 +150,28 @@ fun Route.billingRoutes(
         post("/checkout") {
             val principal =
                 call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Authentication required"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
                     return@post
                 }
             val userId = principal.payload.getClaim("userId").asInt()
             val orgId =
                 pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
                     return@post
                 }
-
-            val request = call.receive<CheckoutSessionRequest>()
-            suspendRunCatching {
-                val response =
-                    stripeService.createCheckoutSession(
-                        organizationId = orgId,
-                        tierName = request.tierName,
-                        billingInterval = request.billingInterval,
-                        successUrl = request.successUrl,
-                        cancelUrl = request.cancelUrl,
-                        oncallSeats = request.oncallSeats
-                    )
-                call.respond(response)
-            }.onFailure { e ->
-                when (e) {
-                    is IllegalArgumentException -> call.respond(
-                        HttpStatusCode.BadRequest,
-                        ErrorResponse(e.message ?: "Invalid checkout request")
-                    )
-                    else -> call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ErrorResponse(e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION)
-                    )
-                }
-            }
+            handleBillingCheckout(call, stripeService, orgId)
         }
 
         get("/invoices") {
             val principal =
                 call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Authentication required"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
                     return@get
                 }
             val userId = principal.payload.getClaim("userId").asInt()
             val orgId =
                 pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
                     return@get
                 }
 
@@ -204,13 +185,13 @@ fun Route.billingRoutes(
         get("/payment-method") {
             val principal =
                 call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Authentication required"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
                     return@get
                 }
             val userId = principal.payload.getClaim("userId").asInt()
             val orgId =
                 pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
                     return@get
                 }
 
@@ -224,13 +205,13 @@ fun Route.billingRoutes(
         post("/setup-intent") {
             val principal =
                 call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Authentication required"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
                     return@post
                 }
             val userId = principal.payload.getClaim("userId").asInt()
             val orgId =
                 pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
                     return@post
                 }
 
@@ -244,13 +225,13 @@ fun Route.billingRoutes(
         post("/setup-intent/confirm") {
             val principal =
                 call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Authentication required"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
                     return@post
                 }
             val userId = principal.payload.getClaim("userId").asInt()
             val orgId =
                 pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
                     return@post
                 }
 
@@ -267,135 +248,188 @@ fun Route.billingRoutes(
         post("/cancel") {
             val principal =
                 call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Authentication required"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
                     return@post
                 }
             val userId = principal.payload.getClaim("userId").asInt()
             val orgId =
                 pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
                     return@post
                 }
-
-            suspendRunCatching {
-                call.respond(stripeService.cancelSubscription(orgId))
-            }.onFailure { e ->
-                when (e) {
-                    is IllegalStateException -> call.respond(
-                        HttpStatusCode.BadRequest,
-                        ErrorResponse(e.message ?: "No cancelable subscription found")
-                    )
-                    else -> call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ErrorResponse(e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION)
-                    )
-                }
-            }
+            handleBillingCancel(call, stripeService, orgId)
         }
 
         put("/payg-budget") {
             val principal =
                 call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Authentication required"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
                     return@put
                 }
             val userId = principal.payload.getClaim("userId").asInt()
             val orgId =
                 pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
                     return@put
                 }
-            val request = call.receive<UpdatePaygBudgetRequest>()
-            if (request.paygBudgetCents < 0 || request.paygBudgetCents % 500 != 0) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("PAYG budget must be in $5 increments"))
-                return@put
-            }
-
-            val tierContext = pricingTierService.getEffectiveTierForOrganization(orgId)
-            if (!tierContext.tier.paygEnabled || tierContext.tier.tierName.equals("FREE", ignoreCase = true)) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("PAYG budget is only available on paid tiers"))
-                return@put
-            }
-
-            val updated =
-                transaction {
-                    val sub =
-                        Subscriptions
-                            .selectAll()
-                            .where {
-                                (Subscriptions.organization_id eq orgId) and
-                                    (Subscriptions.status inList listOf("active", "trialing", "past_due"))
-                            }.orderBy(Subscriptions.id to SortOrder.DESC)
-                            .firstOrNull()
-                            ?: return@transaction false
-                    Subscriptions.update({ Subscriptions.id eq sub[Subscriptions.id] }) {
-                        it[payg_budget_cents] = request.paygBudgetCents
-                    }
-                    true
-                }
-            if (!updated) {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("No active subscription found"))
-                return@put
-            }
-            call.respond(UpdatePaygBudgetResponse(paygBudgetCents = request.paygBudgetCents))
+            handleBillingPaygBudget(call, pricingTierService, orgId)
         }
 
         put("/oncall-seats") {
             val principal =
                 call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Authentication required"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
                     return@put
                 }
             val userId = principal.payload.getClaim("userId").asInt()
             val orgId =
                 pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
                     return@put
                 }
-
-            val request = call.receive<UpdateOnCallSeatsRequest>()
-            if (request.seats < 0) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Seats must be non-negative"))
-                return@put
-            }
-            if (request.seats > 200) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Maximum 200 on-call seats allowed"))
-                return@put
-            }
-
-            // Check if seats >= currently used
-            val usedSeats =
-                suspendRunCatching {
-                    val clazz = Class.forName("com.moneat.enterprise.services.oncall.OnCallScheduleService")
-                    val instance = clazz.getDeclaredConstructor().newInstance()
-                    val method = clazz.getMethod("getOnCallUsedSeats", Int::class.java)
-                    method.invoke(instance, orgId) as? Int ?: 0
-                }.getOrElse { _ ->
-                    0
-                }
-            if (request.seats < usedSeats) {
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    ErrorResponse("Cannot reduce seats below currently assigned users ($usedSeats)")
-                )
-                return@put
-            }
-
-            try {
-                val response = stripeService.updateOnCallSeats(orgId, request.seats)
-                call.respond(response)
-            } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
-            } catch (e: SerializationException) {
-                logger.error(e) { FAILED_TO_UPDATE_ON_CALL_SEATS }
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse(FAILED_TO_UPDATE_SEATS))
-            } catch (e: IOException) {
-                logger.error(e) { FAILED_TO_UPDATE_ON_CALL_SEATS }
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse(FAILED_TO_UPDATE_SEATS))
-            } catch (e: IllegalStateException) {
-                logger.error(e) { FAILED_TO_UPDATE_ON_CALL_SEATS }
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse(FAILED_TO_UPDATE_SEATS))
-            }
+            handleBillingOnCallSeats(call, stripeService, orgId)
         }
+    }
+}
+
+private suspend fun handleBillingCheckout(
+    call: ApplicationCall,
+    stripeService: StripeService,
+    orgId: Int,
+) {
+    val request = call.receive<CheckoutSessionRequest>()
+    suspendRunCatching {
+        val response =
+            stripeService.createCheckoutSession(
+                organizationId = orgId,
+                tierName = request.tierName,
+                billingInterval = request.billingInterval,
+                successUrl = request.successUrl,
+                cancelUrl = request.cancelUrl,
+                oncallSeats = request.oncallSeats
+            )
+        call.respond(response)
+    }.onFailure { e ->
+        when (e) {
+            is IllegalArgumentException -> call.respond(
+                HttpStatusCode.BadRequest,
+                ErrorResponse(e.message ?: "Invalid checkout request")
+            )
+            else -> call.respond(
+                HttpStatusCode.InternalServerError,
+                ErrorResponse(e.message ?: FAILED_TO_CREATE_CHECKOUT_SESSION)
+            )
+        }
+    }
+}
+
+private suspend fun handleBillingCancel(
+    call: ApplicationCall,
+    stripeService: StripeService,
+    orgId: Int,
+) {
+    suspendRunCatching {
+        call.respond(stripeService.cancelSubscription(orgId))
+    }.onFailure { e ->
+        when (e) {
+            is IllegalStateException -> call.respond(
+                HttpStatusCode.BadRequest,
+                ErrorResponse(e.message ?: "No cancelable subscription found")
+            )
+            else -> call.respond(
+                HttpStatusCode.InternalServerError,
+                ErrorResponse(e.message ?: FAILED_TO_CANCEL_SUBSCRIPTION)
+            )
+        }
+    }
+}
+
+private suspend fun handleBillingPaygBudget(
+    call: ApplicationCall,
+    pricingTierService: PricingTierService,
+    orgId: Int,
+) {
+    val request = call.receive<UpdatePaygBudgetRequest>()
+    if (request.paygBudgetCents < 0 || request.paygBudgetCents % PAYG_INCREMENT_CENTS != 0) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("PAYG budget must be in $5 increments"))
+        return
+    }
+
+    val tierContext = pricingTierService.getEffectiveTierForOrganization(orgId)
+    if (!tierContext.tier.paygEnabled || tierContext.tier.tierName.equals("FREE", ignoreCase = true)) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("PAYG budget is only available on paid tiers"))
+        return
+    }
+
+    val updated =
+        transaction {
+            val sub =
+                Subscriptions
+                    .selectAll()
+                    .where {
+                        (Subscriptions.organization_id eq orgId) and
+                            (Subscriptions.status inList listOf("active", "trialing", "past_due"))
+                    }.orderBy(Subscriptions.id to SortOrder.DESC)
+                    .firstOrNull()
+                    ?: return@transaction false
+            Subscriptions.update({ Subscriptions.id eq sub[Subscriptions.id] }) {
+                it[payg_budget_cents] = request.paygBudgetCents
+            }
+            true
+        }
+    if (!updated) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse("No active subscription found"))
+        return
+    }
+    call.respond(UpdatePaygBudgetResponse(paygBudgetCents = request.paygBudgetCents))
+}
+
+private suspend fun handleBillingOnCallSeats(
+    call: ApplicationCall,
+    stripeService: StripeService,
+    orgId: Int,
+) {
+    val request = call.receive<UpdateOnCallSeatsRequest>()
+    if (request.seats < 0) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Seats must be non-negative"))
+        return
+    }
+    if (request.seats > MAX_ONCALL_SEATS) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Maximum 200 on-call seats allowed"))
+        return
+    }
+
+    // Check if seats >= currently used
+    val usedSeats =
+        suspendRunCatching {
+            val clazz = Class.forName("com.moneat.enterprise.services.oncall.OnCallScheduleService")
+            val instance = clazz.getDeclaredConstructor().newInstance()
+            val method = clazz.getMethod("getOnCallUsedSeats", Int::class.java)
+            method.invoke(instance, orgId) as? Int ?: 0
+        }.getOrElse { _ ->
+            0
+        }
+    if (request.seats < usedSeats) {
+        call.respond(
+            HttpStatusCode.BadRequest,
+            ErrorResponse("Cannot reduce seats below currently assigned users ($usedSeats)")
+        )
+        return
+    }
+
+    try {
+        val response = stripeService.updateOnCallSeats(orgId, request.seats)
+        call.respond(response)
+    } catch (e: IllegalArgumentException) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse((e.message ?: "Invalid request")))
+    } catch (e: SerializationException) {
+        logger.error(e) { FAILED_TO_UPDATE_ON_CALL_SEATS }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(FAILED_TO_UPDATE_SEATS))
+    } catch (e: IOException) {
+        logger.error(e) { FAILED_TO_UPDATE_ON_CALL_SEATS }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(FAILED_TO_UPDATE_SEATS))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { FAILED_TO_UPDATE_ON_CALL_SEATS }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(FAILED_TO_UPDATE_SEATS))
     }
 }

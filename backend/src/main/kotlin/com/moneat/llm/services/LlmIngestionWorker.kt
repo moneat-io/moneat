@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import java.io.IOException
+import java.nio.ByteBuffer
 import java.time.Instant
 import java.time.format.DateTimeParseException
 import java.util.Base64
@@ -45,6 +46,10 @@ import java.util.UUID
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+
+private const val BRPOP_BACKOFF_DELAY_MS = 1000L
+private const val ERROR_BODY_PREVIEW_CHARS = 600
+private const val PROJECT_ID_HEADER_SIZE = 8
 
 class LlmIngestionWorker(
     private val queueKey: String,
@@ -83,9 +88,9 @@ class LlmIngestionWorker(
                 } catch (e: CancellationException) {
                     break
                 } catch (e: RedisException) {
-                    brpopLoopBackoff(logger, workerId, "LLM", 1000L, e)
+                    brpopLoopBackoff(logger, workerId, "LLM", BRPOP_BACKOFF_DELAY_MS, e)
                 } catch (e: IOException) {
-                    brpopLoopBackoff(logger, workerId, "LLM", 1000L, e)
+                    brpopLoopBackoff(logger, workerId, "LLM", BRPOP_BACKOFF_DELAY_MS, e)
                 }
             }
         } finally {
@@ -196,7 +201,7 @@ class LlmIngestionWorker(
         val response = ClickHouseClient.execute(query)
         if (!response.status.isSuccess()) {
             val body = response.bodyAsText()
-            throw IllegalStateException("Failed to insert LLM generations: ${body.take(600)}")
+            throw IllegalStateException("Failed to insert LLM generations: ${body.take(ERROR_BODY_PREVIEW_CHARS)}")
         }
         logger.info { "Inserted ${rows.size} LLM generations for project $projectId" }
     }
@@ -237,17 +242,9 @@ class LlmIngestionWorker(
     companion object {
         fun decodeMessage(encoded: String): Pair<Long, ByteArray> {
             val bytes = Base64.getDecoder().decode(encoded)
-            if (bytes.size < 8) throw IllegalArgumentException("Message too short")
-            val projectId =
-                ((bytes[0].toLong() and 0xFF) shl 56) or
-                    ((bytes[1].toLong() and 0xFF) shl 48) or
-                    ((bytes[2].toLong() and 0xFF) shl 40) or
-                    ((bytes[3].toLong() and 0xFF) shl 32) or
-                    ((bytes[4].toLong() and 0xFF) shl 24) or
-                    ((bytes[5].toLong() and 0xFF) shl 16) or
-                    ((bytes[6].toLong() and 0xFF) shl 8) or
-                    (bytes[7].toLong() and 0xFF)
-            val payloadBytes = bytes.copyOfRange(8, bytes.size)
+            require(bytes.size >= PROJECT_ID_HEADER_SIZE) { "Message too short" }
+            val projectId = ByteBuffer.wrap(bytes, 0, PROJECT_ID_HEADER_SIZE).long
+            val payloadBytes = bytes.copyOfRange(PROJECT_ID_HEADER_SIZE, bytes.size)
             return projectId to payloadBytes
         }
 
@@ -255,16 +252,9 @@ class LlmIngestionWorker(
             projectId: Long,
             payloadBytes: ByteArray
         ): String {
-            val bytes = ByteArray(8 + payloadBytes.size)
-            bytes[0] = (projectId shr 56).toByte()
-            bytes[1] = (projectId shr 48).toByte()
-            bytes[2] = (projectId shr 40).toByte()
-            bytes[3] = (projectId shr 32).toByte()
-            bytes[4] = (projectId shr 24).toByte()
-            bytes[5] = (projectId shr 16).toByte()
-            bytes[6] = (projectId shr 8).toByte()
-            bytes[7] = projectId.toByte()
-            payloadBytes.copyInto(bytes, 8)
+            val bytes = ByteArray(PROJECT_ID_HEADER_SIZE + payloadBytes.size)
+            ByteBuffer.wrap(bytes).putLong(projectId)
+            payloadBytes.copyInto(bytes, PROJECT_ID_HEADER_SIZE)
             return Base64.getEncoder().encodeToString(bytes)
         }
     }

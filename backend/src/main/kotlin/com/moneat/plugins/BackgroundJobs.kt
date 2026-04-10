@@ -47,6 +47,7 @@ import kotlin.time.Duration.Companion.hours
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+private const val DEFAULT_WORKER_THREADS = 4
 
 fun Application.configureBackgroundJobs() {
     val backgroundJobsEnabled =
@@ -154,7 +155,7 @@ fun Application.configureBackgroundJobs() {
                 .propertyOrNull("pulse.intervalHours")
                 ?.getString()
                 ?.toIntOrNull()
-                ?.takeIf { it > 0 } ?: 4
+                ?.takeIf { it > 0 } ?: DEFAULT_WORKER_THREADS
         PulseService(interval = telemetryIntervalHours.hours).also {
             logger.info { "Telemetry pulse enabled for self-hosted deployment" }
             it.start(jobScope)

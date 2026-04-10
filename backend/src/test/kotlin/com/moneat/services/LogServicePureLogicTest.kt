@@ -658,4 +658,59 @@ class LogServicePureLogicTest {
         val result = service.parseOtlpProtobuf(request.toByteArray())
         assertEquals(1700000000000L, result.first().timestampMs)
     }
+
+    // ──── estimateBillableBytes — private helper branch coverage ────
+
+    @Test
+    fun `estimateBillableBytes covers non-empty tags including blank-key filtering`() {
+        // Exercises sanitizeMap with a non-empty map; the blank key is filtered out
+        val entries = listOf(
+            LogIngestEntry(
+                message = "Hello",
+                body = "World",
+                tags = hashMapOf("env" to "production", "  " to "blank-key-skipped"),
+            ),
+        )
+        assertEquals(10L, service.estimateBillableBytes(entries))
+    }
+
+    @Test
+    fun `estimateBillableBytes covers trace warning and fatal log level normalization`() {
+        // Exercises normalizeLevel branches: trace, warn/warning, fatal/critical/panic
+        val entries = listOf(
+            LogIngestEntry(message = "a", body = "b", level = "trace"),
+            LogIngestEntry(message = "c", body = "d", level = "warning"),
+            LogIngestEntry(message = "e", body = "f", level = "fatal"),
+        )
+        assertEquals(6L, service.estimateBillableBytes(entries))
+    }
+
+    @Test
+    fun `estimateBillableBytes covers agent and unknown source normalization`() {
+        // Exercises normalizeSource branches: agent_stdout, agent_stderr, else (unknown)
+        val entries = listOf(
+            LogIngestEntry(message = "x", body = "y", source = "agent_stdout"),
+            LogIngestEntry(message = "p", body = "q", source = "agent_stderr"),
+            LogIngestEntry(message = "r", body = "s", source = "custom_source"),
+        )
+        assertEquals(6L, service.estimateBillableBytes(entries))
+    }
+
+    @Test
+    fun `estimateBillableBytes handles 10-digit Unix seconds timestamp`() {
+        // Exercises parseTimeToMillis digit-count branch: 10 digits → seconds → multiply by 1000
+        val entries = listOf(
+            LogIngestEntry(message = "Hello", body = "World", timestamp = "1700000000"),
+        )
+        assertEquals(10L, service.estimateBillableBytes(entries))
+    }
+
+    @Test
+    fun `estimateBillableBytes handles invalid unparseable timestamp`() {
+        // Exercises parseTimeToMillis getOrElse fallback when Instant.parse throws
+        val entries = listOf(
+            LogIngestEntry(message = "msg", body = "log", timestamp = "not-a-timestamp"),
+        )
+        assertEquals(6L, service.estimateBillableBytes(entries))
+    }
 }

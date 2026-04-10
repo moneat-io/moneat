@@ -40,6 +40,10 @@ private val logger = KotlinLogging.logger {}
  */
 class BigQueryHandler : DataSourceHandler {
 
+    companion object {
+        private const val BIGQUERY_MAX_RESULTS = 10_000L
+    }
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val projectId = request.projectId ?: request.host.ifBlank { null }
             ?: return TestConnectionResult(false, "Project ID is required")
@@ -77,7 +81,7 @@ class BigQueryHandler : DataSourceHandler {
         return suspendRunCatching {
             val bigQuery = createBigQueryClient(projectId, serviceAccountJson)
             val config = QueryJobConfiguration.newBuilder(query)
-                .setMaxResults(limit.toLong().coerceIn(1, 10000))
+                .setMaxResults(limit.toLong().coerceIn(1, BIGQUERY_MAX_RESULTS))
                 .build()
             val results = bigQuery.query(config)
             val schema = results.schema ?: return emptyList()

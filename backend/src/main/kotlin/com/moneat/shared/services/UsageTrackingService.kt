@@ -70,6 +70,7 @@ class UsageTrackingService {
 
         /** Sentinel project ID for org-level usage (logs, etc.) when no specific project applies. */
         const val ORG_PROJECT_ID_SENTINEL = 0L
+        private const val USAGE_RECORD_PARTS_COUNT = 4
     }
 
     private val buffer = ConcurrentHashMap<String, Pair<AtomicInteger, java.util.concurrent.atomic.AtomicLong>>()
@@ -184,7 +185,7 @@ class UsageTrackingService {
             toFlush.mapNotNull { key ->
                 val pair = buffer.remove(key) ?: return@mapNotNull null
                 val parts = key.split("|")
-                if (parts.size != 4) return@mapNotNull null
+                if (parts.size != USAGE_RECORD_PARTS_COUNT) return@mapNotNull null
                 val (orgId, projectId, eventType, dateStr) = parts
                 UsageRecord(
                     organizationId = orgId.toIntOrNull() ?: return@mapNotNull null,

@@ -137,12 +137,14 @@ To avoid Sonar/ESLint code smells in `dashboard/`:
 
 ## Key Conventions
 
-### Warnings and lint fixes (no suppressions)
+### Warnings and lint fixes (suppress rarely)
 
 **CRITICAL:** When asked to fix a compiler warning, linter finding, or static analysis issue (Detekt, ESLint, Sonar, Kotlin compiler, etc.):
 
-- ❌ **NEVER suppress** the finding — do not use `@Suppress`, `eslint-disable`, `// NOSONAR`, `SuppressWarnings`, file- or line-level ignores, or similar to silence the tool without fixing the underlying problem.
+- ❌ **Do not suppress to defer work** — do not use `@Suppress`, `eslint-disable`, `// NOSONAR`, `SuppressWarnings`, file- or line-level ignores, or similar because fixing the finding properly is too large or inconvenient right now. That is not a valid reason to silence the tool.
 - ✅ **Fix the root cause** — refactor, correct types, satisfy the rule, or extract helpers so the violation is resolved properly.
+- ✅ **Suppress only when it is appropriate forever** — e.g. a documented false positive, or a case where the rule genuinely does not apply on that line and a short comment explains why. **New feature code** should not ship with suppressions that are really “TODO fix later”; land the feature clean or fix the underlying issue before merge.
+- ✅ **When the rule genuinely does not fit the file** — e.g. a demo data seeder may trigger hundreds of “magic number” findings: those literals *are* the seed data, not something that should become hundreds of named constants in one file. Prefer **configuration** (exclude that file or path in `detekt.yml`, ESLint `overrides`, etc.) so the tool skips that context, rather than line-level suppressions or a wall of constants that add no clarity.
 
 If a rule is wrong for the whole project, **adjust the tool configuration** (e.g. `detekt.yml`, ESLint config) deliberately — do not mask individual violations with suppressions.
 

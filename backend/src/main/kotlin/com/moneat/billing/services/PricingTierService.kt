@@ -56,6 +56,18 @@ data class EffectiveTierContext(
     val currentPeriodEnd: kotlinx.datetime.LocalDate?
 )
 
+private const val DEFAULT_ANALYTICS_RETENTION_DAYS = 1095
+private const val MAX_RETENTION_DAYS = 90
+private const val MAX_TRIAL_DAYS = 60
+private const val MAX_ANALYTICS_RETENTION_DAYS = 3650
+private const val PRO_MONTHLY_PRICE_CENTS = 2900
+private const val TEAM_MONTHLY_PRICE_CENTS = 7900
+private const val BUSINESS_MONTHLY_PRICE_CENTS = 19900
+private const val PRO_YEARLY_PRICE_CENTS = 28800
+private const val TEAM_YEARLY_PRICE_CENTS = 79200
+private const val BUSINESS_YEARLY_PRICE_CENTS = 199200
+private const val DEFAULT_TRIAL_DAYS_NON_FREE = 14
+
 class PricingTierService {
     private data class DefaultFeatureFlags(
         val statusPagesEnabled: Boolean,
@@ -242,7 +254,9 @@ class PricingTierService {
             val resolvedOncallEnabled = request.oncallEnabled ?: currentConfig?.oncallEnabled ?: false
             val resolvedMaxAnalyticsSites = request.maxAnalyticsSites
             val resolvedAnalyticsRetentionDays =
-                request.analyticsRetentionDays ?: currentConfig?.analyticsRetentionDays ?: 1095
+                request.analyticsRetentionDays
+                    ?: currentConfig?.analyticsRetentionDays
+                    ?: DEFAULT_ANALYTICS_RETENTION_DAYS
             val resolvedMonthlyAnalyticsPageviewLimit =
                 request.monthlyAnalyticsPageviewLimit ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
             val resolvedAnalyticsPageviewOverageRateCentsPer100k =
@@ -397,9 +411,9 @@ class PricingTierService {
     }
 
     private fun validateCreateTierRequest(request: CreateTierVersionRequest) {
-        require(request.retentionDays in 1..90) { "Retention days must be between 1 and 90" }
+        require(request.retentionDays in 1..MAX_RETENTION_DAYS) { "Retention days must be between 1 and 90" }
         if (request.logRetentionDays != null) {
-            require(request.logRetentionDays in 1..90) { "Log retention days must be between 1 and 90" }
+            require(request.logRetentionDays in 1..MAX_RETENTION_DAYS) { "Log retention days must be between 1 and 90" }
         }
         require(request.monthlyUnitLimit >= 0) { "Monthly unit limit must be non-negative" }
         require(request.monthlyErrorLimit >= 0) { "Monthly error limit must be non-negative" }
@@ -408,10 +422,12 @@ class PricingTierService {
         require(request.monthlyFeedbackLimit >= 0) { "Monthly feedback limit must be non-negative" }
         require(request.monthlyLlmEventLimit >= 0) { "Monthly LLM event limit must be non-negative" }
         if (request.replayRetentionDays != null) {
-            require(request.replayRetentionDays in 1..90) { "Replay retention days must be between 1 and 90" }
+            require(request.replayRetentionDays in 1..MAX_RETENTION_DAYS) {
+                "Replay retention days must be between 1 and 90"
+            }
         }
         if (request.llmRetentionDays != null) {
-            require(request.llmRetentionDays in 1..90) { "LLM retention days must be between 1 and 90" }
+            require(request.llmRetentionDays in 1..MAX_RETENTION_DAYS) { "LLM retention days must be between 1 and 90" }
         }
         if (request.monthlyGbLimit != null) {
             require(request.monthlyGbLimit >= 0) { "Monthly GB limit must be non-negative" }
@@ -420,7 +436,7 @@ class PricingTierService {
             require(request.yearlyPriceCents >= 0) { "Yearly price cannot be negative" }
         }
         if (request.trialDays != null) {
-            require(request.trialDays in 0..60) { "Trial days must be between 0 and 60" }
+            require(request.trialDays in 0..MAX_TRIAL_DAYS) { "Trial days must be between 0 and 60" }
         }
         if (request.overageRateCentsPerGb != null) {
             require(request.overageRateCentsPerGb >= 0) { "Overage rate cannot be negative" }
@@ -435,7 +451,9 @@ class PricingTierService {
             require(request.llmOverageRateCentsPer1k >= 0) { "LLM overage rate cannot be negative" }
         }
         if (request.analyticsRetentionDays != null) {
-            require(request.analyticsRetentionDays in 1..3650) { "Analytics retention days must be between 1 and 3650" }
+            require(request.analyticsRetentionDays in 1..MAX_ANALYTICS_RETENTION_DAYS) {
+                "Analytics retention days must be between 1 and 3650"
+            }
         }
         if (request.monthlyAnalyticsPageviewLimit != null) {
             require(
@@ -575,21 +593,21 @@ class PricingTierService {
         val monthlyPrice =
             when (tier) {
                 PricingTier.FREE -> 0
-                PricingTier.PRO -> 2900
-                PricingTier.TEAM -> 7900
-                PricingTier.BUSINESS -> 19900
+                PricingTier.PRO -> PRO_MONTHLY_PRICE_CENTS
+                PricingTier.TEAM -> TEAM_MONTHLY_PRICE_CENTS
+                PricingTier.BUSINESS -> BUSINESS_MONTHLY_PRICE_CENTS
             }
         val yearlyPrice =
             when (tier) {
                 PricingTier.FREE -> 0
 
-                PricingTier.PRO -> 28800
+                PricingTier.PRO -> PRO_YEARLY_PRICE_CENTS
 
                 // $288/yr
-                PricingTier.TEAM -> 79200
+                PricingTier.TEAM -> TEAM_YEARLY_PRICE_CENTS
 
                 // $792/yr
-                PricingTier.BUSINESS -> 199200 // $1992/yr
+                PricingTier.BUSINESS -> BUSINESS_YEARLY_PRICE_CENTS // $1992/yr
             }
         return PricingTierConfigResponse(
             id = 0,
@@ -736,6 +754,6 @@ class PricingTierService {
     }
 
     private fun defaultTrialDaysForTier(tierName: String): Int {
-        return if (tierName.uppercase() == "FREE") 0 else 14
+        return if (tierName.uppercase() == "FREE") 0 else DEFAULT_TRIAL_DAYS_NON_FREE
     }
 }

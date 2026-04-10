@@ -29,6 +29,9 @@ import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -69,7 +72,7 @@ class RetentionBackgroundService(
                     }.onFailure { e ->
                         logger.error(e) { "Retention sweep failed" }
                     }
-                    delay(sweepIntervalSeconds * 1000L)
+                    delay(sweepIntervalSeconds * MILLIS_PER_SECOND_LONG)
                 }
             }
     }
@@ -284,7 +287,7 @@ class RetentionBackgroundService(
         }
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
-            if (response.status.value !in 200..299) {
+            if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 logger.error { "Retention mutation failed for $label (status=${response.status})" }
                 false
             } else {

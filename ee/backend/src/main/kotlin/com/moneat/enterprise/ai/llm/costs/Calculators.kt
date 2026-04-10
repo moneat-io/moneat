@@ -9,6 +9,8 @@ import com.moneat.enterprise.ai.llm.LlmCostCalculator
 import java.math.BigDecimal
 import java.math.RoundingMode
 
+private const val COST_DECIMAL_SCALE = 6
+
 /** GPT-4o-mini: $0.15 / 1M input, $0.60 / 1M output */
 class Gpt4oMiniCalculator : LlmCostCalculator {
     override fun model() = "gpt-4o-mini"
@@ -17,9 +19,9 @@ class Gpt4oMiniCalculator : LlmCostCalculator {
         val inputCost = BigDecimal(inputTokens).multiply(BigDecimal("0.00000015"))
         val outputCost = BigDecimal(outputTokens).multiply(BigDecimal("0.0000006"))
         return LlmCost(
-            inputCost = inputCost.setScale(6, RoundingMode.HALF_UP),
-            outputCost = outputCost.setScale(6, RoundingMode.HALF_UP),
-            totalCost = inputCost.add(outputCost).setScale(6, RoundingMode.HALF_UP),
+            inputCost = inputCost.setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
+            outputCost = outputCost.setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
+            totalCost = inputCost.add(outputCost).setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
         )
     }
 }
@@ -32,9 +34,9 @@ class Gpt4oCalculator : LlmCostCalculator {
         val inputCost = BigDecimal(inputTokens).multiply(BigDecimal("0.0000025"))
         val outputCost = BigDecimal(outputTokens).multiply(BigDecimal("0.00001"))
         return LlmCost(
-            inputCost = inputCost.setScale(6, RoundingMode.HALF_UP),
-            outputCost = outputCost.setScale(6, RoundingMode.HALF_UP),
-            totalCost = inputCost.add(outputCost).setScale(6, RoundingMode.HALF_UP),
+            inputCost = inputCost.setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
+            outputCost = outputCost.setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
+            totalCost = inputCost.add(outputCost).setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
         )
     }
 }
@@ -47,9 +49,9 @@ class Claude4SonnetCalculator : LlmCostCalculator {
         val inputCost = BigDecimal(inputTokens).multiply(BigDecimal("0.000003"))
         val outputCost = BigDecimal(outputTokens).multiply(BigDecimal("0.000015"))
         return LlmCost(
-            inputCost = inputCost.setScale(6, RoundingMode.HALF_UP),
-            outputCost = outputCost.setScale(6, RoundingMode.HALF_UP),
-            totalCost = inputCost.add(outputCost).setScale(6, RoundingMode.HALF_UP),
+            inputCost = inputCost.setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
+            outputCost = outputCost.setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
+            totalCost = inputCost.add(outputCost).setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
         )
     }
 }
@@ -62,9 +64,9 @@ class Claude4OpusCalculator : LlmCostCalculator {
         val inputCost = BigDecimal(inputTokens).multiply(BigDecimal("0.000015"))
         val outputCost = BigDecimal(outputTokens).multiply(BigDecimal("0.000075"))
         return LlmCost(
-            inputCost = inputCost.setScale(6, RoundingMode.HALF_UP),
-            outputCost = outputCost.setScale(6, RoundingMode.HALF_UP),
-            totalCost = inputCost.add(outputCost).setScale(6, RoundingMode.HALF_UP),
+            inputCost = inputCost.setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
+            outputCost = outputCost.setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
+            totalCost = inputCost.add(outputCost).setScale(COST_DECIMAL_SCALE, RoundingMode.HALF_UP),
         )
     }
 }

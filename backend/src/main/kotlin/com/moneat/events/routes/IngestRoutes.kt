@@ -41,9 +41,16 @@ import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
 import com.moneat.utils.suspendRunCatching
+import java.security.MessageDigest
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
+private const val SHA256_HEX_PREFIX_CHARS = 16
+
+private fun sha256HexPrefix(bytes: ByteArray, maxHexChars: Int): String {
+    val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+    return digest.joinToString("") { b -> "%02x".format(b) }.take(maxHexChars)
+}
 
 fun Route.ingestRoutes(
     eventService: EventService = GlobalContext.get().get(),
@@ -98,7 +105,10 @@ fun Route.ingestRoutes(
                 val decompressedBytes = DecompressionService.decompress(bodyBytes, contentEncoding)
 
                 logger.debug { "Received envelope for project $projectId" }
-                logger.debug { "Envelope body:\n${decompressedBytes.decodeToString().take(500)}" }
+                logger.debug {
+                    "Envelope payload (redacted): bytes=${decompressedBytes.size}, " +
+                        "sha256_prefix=${sha256HexPrefix(decompressedBytes, SHA256_HEX_PREFIX_CHARS)}"
+                }
 
                 val envelope = SentryEnvelope.parse(decompressedBytes)
                 logger.debug { "Envelope parsed successfully, items: ${envelope.items.size}" }

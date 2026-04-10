@@ -24,6 +24,9 @@ package com.moneat.utils
  */
 object ClickHouseQueryUtils {
 
+    private const val MILLIS_PER_SECOND = 1000.0
+    private const val DATETIME64_PRECISION_MS = 3
+
     /**
      * Generate a project_id comparison clause that works with negative IDs.
      *
@@ -78,7 +81,7 @@ object ClickHouseQueryUtils {
     ): String {
         val nowClause =
             if (demoEpochMs != null) {
-                "toDateTime64(${demoEpochMs / 1000.0}, 3)"
+                "toDateTime64(${demoEpochMs / MILLIS_PER_SECOND}, $DATETIME64_PRECISION_MS)"
             } else {
                 "now()"
             }

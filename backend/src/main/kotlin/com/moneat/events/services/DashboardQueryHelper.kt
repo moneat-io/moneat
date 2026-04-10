@@ -43,6 +43,7 @@ import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_RANGE
 
 private val logger = KotlinLogging.logger {}
 
@@ -90,6 +91,27 @@ class DashboardQueryHelper(
         }
 
     /**
+     * Reads the response body and returns it when ClickHouse returned a successful
+     * result. Returns `null` (and logs) when the HTTP status is outside the 2xx
+     * range or the body starts with the ClickHouse `Code:` error prefix.
+     */
+    suspend fun readClickHouseBody(
+        response: HttpResponse,
+        errorContext: String,
+    ): String? {
+        val body = response.bodyAsText()
+        if (response.status.value !in HTTP_SUCCESS_RANGE ||
+            body.trimStart().startsWith("Code:")
+        ) {
+            logger.error {
+                "$errorContext: status=${response.status}, body=${body.take(LOG_BODY_CHARS)}"
+            }
+            return null
+        }
+        return body
+    }
+
+    /**
      * Executes a query that returns a single row with project_id, e.g. for entity lookup.
      * Returns null on HTTP/ClickHouse error or when no valid row is returned.
      */
@@ -100,11 +122,7 @@ class DashboardQueryHelper(
     ): Long? {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "$context failed for $entityId: ${response.status} ${body.take(400)}" }
-                return null
-            }
+            val body = readClickHouseBody(response, "$context for $entityId") ?: return null
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.longOrNull
@@ -124,11 +142,7 @@ class DashboardQueryHelper(
     ): List<JsonObject>? {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "$errorContext failed: ${response.status} ${body.take(400)}" }
-                return null
-            }
+            val body = readClickHouseBody(response, "$errorContext failed") ?: return null
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -152,7 +166,7 @@ class DashboardQueryHelper(
         val body = response.bodyAsText()
         // ClickHouse returns error messages as plain text starting with "Code:"
         if (body.startsWith("Code:") && body.contains("DB::Exception")) {
-            logger.warn { "ClickHouse error: ${body.take(200)}" }
+            logger.warn { "ClickHouse error: ${body.take(LOG_SNIPPET_CHARS)}" }
             return null
         }
         return body
@@ -165,8 +179,11 @@ class DashboardQueryHelper(
 
         val hexRegex = Regex("^[0-9a-f]{32}$")
         if (hexRegex.matches(trimmed)) {
-            return "${trimmed.substring(0, 8)}-${trimmed.substring(8, 12)}-" +
-                "${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
+            return "${trimmed.substring(0, UUID_HEX_BLOCK1_END)}-" +
+                "${trimmed.substring(UUID_HEX_BLOCK1_END, UUID_HEX_BLOCK2_END)}-" +
+                "${trimmed.substring(UUID_HEX_BLOCK2_END, UUID_HEX_BLOCK3_END)}-" +
+                "${trimmed.substring(UUID_HEX_BLOCK3_END, UUID_HEX_BLOCK4_END)}-" +
+                trimmed.substring(UUID_HEX_BLOCK4_END)
         }
 
         return null
@@ -236,7 +253,7 @@ class DashboardQueryHelper(
 
     fun demoNowClause(demoEpochMs: Long? = null): String {
         return if (demoEpochMs != null) {
-            "toDateTime64(${demoEpochMs / 1000.0}, 3)"
+            "toDateTime64(${demoEpochMs / MILLIS_PER_SECOND}, 3)"
         } else {
             "now()"
         }
@@ -284,16 +301,14 @@ class DashboardQueryHelper(
     ): Long {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to execute scalar query: ${response.status} ${body.take(400)}" }
-                return 0
-            }
+            val body = readClickHouseBody(response, "Scalar query failed") ?: return 0
             if (body.isBlank()) return 0
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["total"]?.jsonPrimitive?.long ?: 0
         }.getOrElse { e ->
-            logger.error(e) { "Scalar query failed (transport/parse): query=${query.take(200)}, returning 0" }
+            logger.error(e) {
+                "Scalar query failed (transport/parse): query=${query.take(LOG_SNIPPET_CHARS)}, returning 0"
+            }
             0
         }
     }
@@ -304,11 +319,7 @@ class DashboardQueryHelper(
     ): List<TimelinePoint> {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "ClickHouse query failed: ${body.take(400)}" }
-                return emptyList()
-            }
+            val body = readClickHouseBody(response, "Timeline query failed") ?: return emptyList()
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -327,7 +338,10 @@ class DashboardQueryHelper(
         }.getOrElse { e ->
             logger.error(
                 e
-            ) { "executeTimelineQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
+            ) {
+                "executeTimelineQuery failed (transport/parse): " +
+                    "query=${query.take(LOG_SNIPPET_CHARS)}, returning emptyList"
+            }
             emptyList()
         }
     }
@@ -338,11 +352,8 @@ class DashboardQueryHelper(
     ): List<SlowTransactionResponse> {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "ClickHouse query failed: ${body.take(400)}" }
-                return emptyList()
-            }
+            val body = readClickHouseBody(response, "Slowest transactions query failed")
+                ?: return emptyList()
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -367,7 +378,7 @@ class DashboardQueryHelper(
         }.getOrElse { e ->
             logger.error(e) {
                 "executeSlowestTransactionsQuery failed (transport/parse): query=${query.take(
-                    200
+                    LOG_SNIPPET_CHARS
                 )}, returning emptyList"
             }
             emptyList()
@@ -381,11 +392,7 @@ class DashboardQueryHelper(
     ): Map<String, Long> {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to execute map query: ${response.status} ${body.take(400)}" }
-                return emptyMap()
-            }
+            val body = readClickHouseBody(response, "Map query failed") ?: return emptyMap()
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -396,13 +403,15 @@ class DashboardQueryHelper(
                         val count = obj["count"]?.jsonPrimitive?.long ?: 0
                         key to count
                     }.getOrElse { e ->
-                        logger.error(e) { "Failed to parse map query line: ${line.take(200)}" }
+                        logger.error(e) { "Failed to parse map query line: ${line.take(LOG_SNIPPET_CHARS)}" }
                         null
                     }
                 }
                 .toMap()
         }.getOrElse { e ->
-            logger.error(e) { "executeMapQuery failed (transport/parse): query=${query.take(200)}, returning emptyMap" }
+            logger.error(e) {
+                "executeMapQuery failed (transport/parse): query=${query.take(LOG_SNIPPET_CHARS)}, returning emptyMap"
+            }
             emptyMap()
         }
     }
@@ -419,15 +428,8 @@ class DashboardQueryHelper(
     ): Map<K, V> {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.isBlank() ||
-                body.trimStart().startsWith("Code:")
-            ) {
-                if (response.status.value !in 200..299) {
-                    logger.error { "$errorContext failed: ${response.status} ${body.take(400)}" }
-                }
-                return emptyMap()
-            }
+            val body = readClickHouseBody(response, "$errorContext failed")
+            if (body.isNullOrBlank()) return emptyMap()
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -457,13 +459,12 @@ class DashboardQueryHelper(
             throw e
         }
         val body = response.bodyAsText()
-        if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-            logger.error {
-                "$errorContext failed: query=${query.take(200)}, status=${response.status}, " +
-                    "body=${body.take(400)}"
-            }
+        if (response.status.value !in HTTP_SUCCESS_RANGE ||
+            body.trimStart().startsWith("Code:")
+        ) {
+            logger.error { "$errorContext failed: status=${response.status}, body=${body.take(LOG_BODY_CHARS)}" }
             throw IllegalStateException(
-                "ClickHouse mutation failed: ${response.status} ${body.take(200)}"
+                "ClickHouse mutation failed: ${response.status} ${body.take(LOG_SNIPPET_CHARS)}"
             )
         }
     }
@@ -474,11 +475,8 @@ class DashboardQueryHelper(
     ): List<TopIssue> {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to execute top issues query: ${response.status} ${body.take(400)}" }
-                return emptyList()
-            }
+            val body = readClickHouseBody(response, "Top issues query failed")
+                ?: return emptyList()
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -491,15 +489,28 @@ class DashboardQueryHelper(
                             count = obj["count"]?.jsonPrimitive?.long ?: 0
                         )
                     }.getOrElse { e ->
-                        logger.error(e) { "Failed to parse top issues line: ${line.take(200)}" }
+                        logger.error(e) { "Failed to parse top issues line: ${line.take(LOG_SNIPPET_CHARS)}" }
                         null
                     }
                 }
         }.getOrElse { e ->
             logger.error(
                 e
-            ) { "executeTopIssuesQuery failed (transport/parse): query=${query.take(200)}, returning emptyList" }
+            ) {
+                "executeTopIssuesQuery failed (transport/parse): " +
+                    "query=${query.take(LOG_SNIPPET_CHARS)}, returning emptyList"
+            }
             emptyList()
         }
+    }
+
+    companion object {
+        private const val LOG_BODY_CHARS = 400
+        private const val LOG_SNIPPET_CHARS = 200
+        private const val MILLIS_PER_SECOND = 1000.0
+        private const val UUID_HEX_BLOCK1_END = 8
+        private const val UUID_HEX_BLOCK2_END = 12
+        private const val UUID_HEX_BLOCK3_END = 16
+        private const val UUID_HEX_BLOCK4_END = 20
     }
 }

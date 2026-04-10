@@ -45,6 +45,9 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
+private const val MILLIS_PER_SECOND = 1000.0
+private const val DATETIME64_PRECISION_MS = 3
+
 class LlmDashboardService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
@@ -68,7 +71,7 @@ class LlmDashboardService {
         if (response.status != HttpStatusCode.OK) return null
         val body = response.bodyAsText()
         if (body.isClickHouseError()) {
-            logger.warn { "ClickHouse error: ${body.take(200)}" }
+            logger.warn { "ClickHouse returned an error body (length=${body.length})" }
             return null
         }
         return body
@@ -99,7 +102,7 @@ class LlmDashboardService {
 
     private fun nowClause(demoEpochMs: Long?): String {
         return if (demoEpochMs != null) {
-            "toDateTime64(${demoEpochMs / 1000.0}, 3)"
+            "toDateTime64(${demoEpochMs / MILLIS_PER_SECOND}, $DATETIME64_PRECISION_MS)"
         } else {
             "now()"
         }

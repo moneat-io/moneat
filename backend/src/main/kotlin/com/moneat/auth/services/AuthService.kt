@@ -35,6 +35,7 @@ import com.moneat.shared.repositories.OrganizationRepository
 import com.moneat.shared.services.SidebarPreferenceService
 import com.moneat.utils.SentryUtils
 import io.ktor.server.config.ApplicationConfig
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
@@ -79,6 +80,12 @@ class AuthService(
     companion object {
         private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
         private const val PASSWORD_RESET_TTL_MS = 60 * 60 * 1000L
+        private const val MIN_PASSWORD_LENGTH = 8
+        private const val ORG_SLUG_RANDOM_SUFFIX_LENGTH = 8
+        private const val JWT_ACCESS_TOKEN_EXPIRY_MS = 3_600_000L
+        private const val DEMO_TOKEN_EXPIRY_MS = 86_400_000L
+        private const val TOKEN_ENTROPY_BYTES = 32
+        private const val MAX_ORG_SLUG_LENGTH = 100
     }
 
     private val config = ApplicationConfig("application.conf")
@@ -97,9 +104,7 @@ class AuthService(
         if (request.email.isBlank()) {
             throw IllegalArgumentException("Email is required")
         }
-        if (request.password.length < 8) {
-            throw IllegalArgumentException("Password must be at least 8 characters")
-        }
+        require(request.password.length >= MIN_PASSWORD_LENGTH) { "Password must be at least 8 characters" }
         validateSignupLegalConsent(request)
 
         val normalizedEmail = request.email.lowercase().trim()
@@ -127,52 +132,7 @@ class AuthService(
                 val now = System.currentTimeMillis()
 
                 // Resolve invite in a strict state-aware way.
-                val pendingInvite =
-                    if (inviteToken != null) {
-                        val inviteByToken =
-                            OrgInvitations
-                                .selectAll()
-                                .where { OrgInvitations.token eq inviteToken }
-                                .singleOrNull()
-                                ?: throw IllegalArgumentException("Invitation not found")
-
-                        val inviteStatus = inviteByToken[OrgInvitations.status]
-                        if (inviteStatus != "pending") {
-                            throw IllegalArgumentException("Invitation is no longer valid")
-                        }
-
-                        val inviteExpiresAt = inviteByToken[OrgInvitations.expires_at]
-                        if (now > inviteExpiresAt) {
-                            OrgInvitations.update({ OrgInvitations.id eq inviteByToken[OrgInvitations.id] }) {
-                                it[OrgInvitations.status] = "expired"
-                            }
-                            throw IllegalArgumentException("Invitation has expired")
-                        }
-
-                        if (inviteByToken[OrgInvitations.email].lowercase() != normalizedEmail) {
-                            throw IllegalArgumentException("This invitation was sent to a different email address")
-                        }
-
-                        inviteByToken
-                    } else {
-                        OrgInvitations.update({
-                            (OrgInvitations.email eq normalizedEmail) and
-                                (OrgInvitations.status eq "pending") and
-                                (OrgInvitations.expires_at lessEq now)
-                        }) {
-                            it[OrgInvitations.status] = "expired"
-                        }
-
-                        OrgInvitations
-                            .selectAll()
-                            .where {
-                                (OrgInvitations.email eq normalizedEmail) and
-                                    (OrgInvitations.status eq "pending") and
-                                    (OrgInvitations.expires_at greater now)
-                            }.orderBy(OrgInvitations.created_at, org.jetbrains.exposed.v1.core.SortOrder.DESC)
-                            .limit(1)
-                            .singleOrNull()
-                    }
+                val pendingInvite = resolvePendingInvite(inviteToken, normalizedEmail, now)
 
                 // Detect first real user (excludes demo user which has id < 0)
                 val isFirstUser = Users.selectAll().where { Users.id greater 0 }.count() == 0L
@@ -202,62 +162,8 @@ class AuthService(
                         it[email_verification_expires_at] = expiresAt
                     }[Users.id]
 
-                val finalOrgId: Int
-                val finalOrgRole: String
-
                 // Join existing org if invited, otherwise create new org
-                if (pendingInvite != null) {
-                    finalOrgId = pendingInvite[OrgInvitations.organization_id]
-                    finalOrgRole = pendingInvite[OrgInvitations.role]
-
-                    // Create membership
-                    Memberships.insert {
-                        it[user_id] = id
-                        it[organization_id] = finalOrgId
-                        it[role] = finalOrgRole
-                    }
-
-                    // Mark invitation as accepted
-                    OrgInvitations.update(
-                        { OrgInvitations.id eq pendingInvite[OrgInvitations.id] }
-                    ) {
-                        it[status] = "accepted"
-                    }
-
-                    SentryUtils.breadcrumb(
-                        "auth",
-                        "User joined via invitation",
-                        mapOf(
-                            "user_id" to id,
-                            "organization_id" to finalOrgId,
-                            "role" to finalOrgRole
-                        )
-                    )
-                } else {
-                    // Create default organization
-                    finalOrgId =
-                        Organizations.insert {
-                            it[name] = "${request.name ?: request.email}'s Organization"
-                            it[slug] = "org-${UUID.randomUUID().toString().take(8)}"
-                        }[Organizations.id]
-                    finalOrgRole = "owner"
-
-                    // Add membership
-                    Memberships.insert {
-                        it[user_id] = id
-                        it[organization_id] = finalOrgId
-                        it[role] = finalOrgRole
-                    }
-
-                    SentryUtils.breadcrumb(
-                        "auth",
-                        "User created new org",
-                        mapOf(
-                            "user_id" to id,
-                            "organization_id" to finalOrgId
-                        )
-                    )
-                }
+                val (finalOrgId, finalOrgRole) = createUserOrgMembership(id, pendingInvite, request)
 
                 val acceptedAt = Clock.System.now()
                 UserLegalAcceptances.insert {
@@ -317,6 +223,103 @@ class AuthService(
             expiresIn = tokenPair.expiresIn,
             user = UserResponse(userId, normalizedEmail, request.name, emailVerified, false, isAdmin)
         )
+    }
+
+    /**
+     * Resolve a pending invitation for signup: validate a token-based invite or find an email-based one.
+     * Must be called within a database transaction.
+     */
+    private fun resolvePendingInvite(inviteToken: String?, normalizedEmail: String, now: Long): ResultRow? {
+        return if (inviteToken != null) {
+            val inviteByToken =
+                OrgInvitations
+                    .selectAll()
+                    .where { OrgInvitations.token eq inviteToken }
+                    .singleOrNull()
+                    ?: throw IllegalArgumentException("Invitation not found")
+
+            val inviteStatus = inviteByToken[OrgInvitations.status]
+            require(inviteStatus == "pending") { "Invitation is no longer valid" }
+
+            val inviteExpiresAt = inviteByToken[OrgInvitations.expires_at]
+            if (now > inviteExpiresAt) {
+                OrgInvitations.update({ OrgInvitations.id eq inviteByToken[OrgInvitations.id] }) {
+                    it[OrgInvitations.status] = "expired"
+                }
+                throw IllegalArgumentException("Invitation has expired")
+            }
+
+            require(inviteByToken[OrgInvitations.email].lowercase() == normalizedEmail) {
+                "This invitation was sent to a different email address"
+            }
+
+            inviteByToken
+        } else {
+            OrgInvitations.update({
+                (OrgInvitations.email eq normalizedEmail) and
+                    (OrgInvitations.status eq "pending") and
+                    (OrgInvitations.expires_at lessEq now)
+            }) {
+                it[OrgInvitations.status] = "expired"
+            }
+
+            OrgInvitations
+                .selectAll()
+                .where {
+                    (OrgInvitations.email eq normalizedEmail) and
+                        (OrgInvitations.status eq "pending") and
+                        (OrgInvitations.expires_at greater now)
+                }.orderBy(OrgInvitations.created_at, org.jetbrains.exposed.v1.core.SortOrder.DESC)
+                .limit(1)
+                .singleOrNull()
+        }
+    }
+
+    /**
+     * Create an org membership for a new user: join via invite or create a new org.
+     * Must be called within a database transaction.
+     * Returns (orgId, orgRole).
+     */
+    private fun createUserOrgMembership(
+        userId: Int,
+        pendingInvite: ResultRow?,
+        request: SignupRequest,
+    ): Pair<Int, String> {
+        return if (pendingInvite != null) {
+            val orgId = pendingInvite[OrgInvitations.organization_id]
+            val orgRole = pendingInvite[OrgInvitations.role]
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = orgId
+                it[role] = orgRole
+            }
+            OrgInvitations.update({ OrgInvitations.id eq pendingInvite[OrgInvitations.id] }) {
+                it[status] = "accepted"
+            }
+            SentryUtils.breadcrumb(
+                "auth",
+                "User joined via invitation",
+                mapOf("user_id" to userId, "organization_id" to orgId, "role" to orgRole),
+            )
+            orgId to orgRole
+        } else {
+            val orgId =
+                Organizations.insert {
+                    it[name] = "${request.name ?: request.email}'s Organization"
+                    it[slug] = "org-${UUID.randomUUID().toString().take(ORG_SLUG_RANDOM_SUFFIX_LENGTH)}"
+                }[Organizations.id]
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+            SentryUtils.breadcrumb(
+                "auth",
+                "User created new org",
+                mapOf("user_id" to userId, "organization_id" to orgId),
+            )
+            orgId to "owner"
+        }
     }
 
     fun verifyEmail(token: String): Boolean {
@@ -400,7 +403,7 @@ class AuthService(
             .withClaim("email", email)
             .withClaim("orgId", orgId)
             .withClaim("orgRole", orgRole)
-            .withExpiresAt(Date(System.currentTimeMillis() + 3600000))
+            .withExpiresAt(Date(System.currentTimeMillis() + JWT_ACCESS_TOKEN_EXPIRY_MS))
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 
@@ -433,12 +436,12 @@ class AuthService(
             .withClaim("orgRole", "viewer")
             .withClaim("isDemo", true)
             .withClaim("demoEpochMs", demoEpochMs)
-            .withExpiresAt(Date(System.currentTimeMillis() + 86400000)) // 24 hours
+            .withExpiresAt(Date(System.currentTimeMillis() + DEMO_TOKEN_EXPIRY_MS)) // 24 hours
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 
     private fun generateVerificationToken(): String {
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(TOKEN_ENTROPY_BYTES)
         secureRandom.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
@@ -472,9 +475,7 @@ class AuthService(
         token: String,
         newPassword: String
     ): Boolean {
-        if (newPassword.length < 8) {
-            throw IllegalArgumentException("Password must be at least 8 characters")
-        }
+        require(newPassword.length >= MIN_PASSWORD_LENGTH) { "Password must be at least 8 characters" }
 
         val user = userRepository.findByPasswordResetToken(token) ?: return false
         val expiresAt = user.passwordResetExpiresAt
@@ -509,7 +510,7 @@ class AuthService(
             .lowercase()
             .replace(Regex("[^a-z0-9]+"), "-")
             .trim('-')
-            .take(100)
+            .take(MAX_ORG_SLUG_LENGTH)
 
         val finalSlug = organizationRepository.updateOnboardingOrgAndMarkComplete(
             OrganizationRepository.OnboardingUpdate(

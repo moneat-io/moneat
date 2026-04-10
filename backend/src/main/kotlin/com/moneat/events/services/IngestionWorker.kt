@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
+import java.nio.ByteBuffer
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
@@ -149,22 +150,16 @@ class IngestionWorker(
     }
 
     companion object {
+        private const val PROJECT_ID_BYTE_LENGTH = 8
+
         /**
          * Decode a queue message: Base64(8 bytes projectId big-endian + envelope bytes).
          */
         fun decodeMessage(encoded: String): Pair<Long, ByteArray> {
             val bytes = Base64.getDecoder().decode(encoded)
-            if (bytes.size < 8) throw IllegalArgumentException("Message too short")
-            val projectId =
-                ((bytes[0].toLong() and 0xFF) shl 56) or
-                    ((bytes[1].toLong() and 0xFF) shl 48) or
-                    ((bytes[2].toLong() and 0xFF) shl 40) or
-                    ((bytes[3].toLong() and 0xFF) shl 32) or
-                    ((bytes[4].toLong() and 0xFF) shl 24) or
-                    ((bytes[5].toLong() and 0xFF) shl 16) or
-                    ((bytes[6].toLong() and 0xFF) shl 8) or
-                    (bytes[7].toLong() and 0xFF)
-            val envelopeBytes = bytes.copyOfRange(8, bytes.size)
+            require(bytes.size >= PROJECT_ID_BYTE_LENGTH) { "Message too short" }
+            val projectId = ByteBuffer.wrap(bytes, 0, PROJECT_ID_BYTE_LENGTH).long
+            val envelopeBytes = bytes.copyOfRange(PROJECT_ID_BYTE_LENGTH, bytes.size)
             return projectId to envelopeBytes
         }
 
@@ -175,16 +170,9 @@ class IngestionWorker(
             projectId: Long,
             envelopeBytes: ByteArray
         ): String {
-            val bytes = ByteArray(8 + envelopeBytes.size)
-            bytes[0] = (projectId shr 56).toByte()
-            bytes[1] = (projectId shr 48).toByte()
-            bytes[2] = (projectId shr 40).toByte()
-            bytes[3] = (projectId shr 32).toByte()
-            bytes[4] = (projectId shr 24).toByte()
-            bytes[5] = (projectId shr 16).toByte()
-            bytes[6] = (projectId shr 8).toByte()
-            bytes[7] = projectId.toByte()
-            envelopeBytes.copyInto(bytes, 8)
+            val bytes = ByteArray(PROJECT_ID_BYTE_LENGTH + envelopeBytes.size)
+            ByteBuffer.wrap(bytes).putLong(projectId)
+            envelopeBytes.copyInto(bytes, PROJECT_ID_BYTE_LENGTH)
             return Base64.getEncoder().encodeToString(bytes)
         }
     }

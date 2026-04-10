@@ -60,6 +60,7 @@ import com.moneat.utils.suspendRunCatching
 private val logger = KotlinLogging.logger {}
 private const val GITHUB_OAUTH_CALLBACK_ERROR = "GitHub OAuth callback error"
 private const val APPLE_OAUTH_CALLBACK_ERROR = "Apple OAuth callback error"
+private const val USER_AGENT_MAX_LENGTH = 2048
 
 fun Route.authRoutes(
     authService: AuthService = GlobalContext.get().get(),
@@ -112,7 +113,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSignup(authServi
         call.request.headers["User-Agent"]
             ?.trim()
             ?.takeIf { it.isNotBlank() }
-            ?.take(2048)
+            ?.take(USER_AGENT_MAX_LENGTH)
     val context =
         SignupRequestContext(
             ipAddress = cfConnectingIp ?: forwardedFor ?: remoteHost,

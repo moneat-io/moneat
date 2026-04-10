@@ -33,6 +33,11 @@ class ProjectService(
     private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
 ) {
 
+    companion object {
+        private const val KEY_BYTE_LENGTH = 32
+        private const val PUBLIC_KEY_LENGTH = 40
+    }
+
     suspend fun getProjects(
         userId: Int,
         demoEpochMs: Long? = null
@@ -154,13 +159,13 @@ class ProjectService(
     }
 
     private fun generatePublicKey(): String {
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(KEY_BYTE_LENGTH)
         SecureRandom().nextBytes(bytes)
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes).take(40)
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes).take(PUBLIC_KEY_LENGTH)
     }
 
     private fun generateSecretKey(): String {
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(KEY_BYTE_LENGTH)
         SecureRandom().nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }

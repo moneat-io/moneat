@@ -56,6 +56,12 @@ data class AttributionSummary(
 
 class AttributionAnalyticsService {
 
+    companion object {
+        private const val MONTHS_PER_YEAR = 12
+        private const val CENTS_PER_DOLLAR = 100
+        private const val PERCENT_MULTIPLIER = 100.0
+    }
+
     fun getAttributionMetrics(
         groupBy: String = "campaign" // "source", "medium", "campaign", "all"
     ): AttributionAnalyticsResponse {
@@ -143,7 +149,7 @@ class AttributionAnalyticsService {
                                                 if (interval == "yearly") {
                                                     BigDecimal(
                                                         basePriceCents
-                                                    ).divide(BigDecimal(12), 2, RoundingMode.HALF_UP)
+                                                    ).divide(BigDecimal(MONTHS_PER_YEAR), 2, RoundingMode.HALF_UP)
                                                 } else {
                                                     BigDecimal(basePriceCents)
                                                 }
@@ -152,11 +158,15 @@ class AttributionAnalyticsService {
                                         null
                                     }
                                 }.fold(BigDecimal.ZERO) { acc, value -> acc + value }
-                                .divide(BigDecimal(100), 2, RoundingMode.HALF_UP) // Convert cents to dollars
+                                .divide(
+                                    BigDecimal(CENTS_PER_DOLLAR),
+                                    2,
+                                    RoundingMode.HALF_UP
+                                ) // Convert cents to dollars
 
                         val conversionRate =
                             if (signups > 0) {
-                                (paidOrgs.toDouble() / signups.toDouble()) * 100
+                                (paidOrgs.toDouble() / signups.toDouble()) * PERCENT_MULTIPLIER
                             } else {
                                 0.0
                             }
@@ -169,7 +179,7 @@ class AttributionAnalyticsService {
                             }
 
                         // Estimated LTV (assuming 12-month retention for simplicity)
-                        val estimatedLtv = totalMrr.multiply(BigDecimal(12))
+                        val estimatedLtv = totalMrr.multiply(BigDecimal(MONTHS_PER_YEAR))
 
                         AttributionMetrics(
                             source = source,
@@ -203,7 +213,7 @@ class AttributionAnalyticsService {
                     totalPaidOrganizations = totalPaid,
                     overallConversionRate =
                     if (totalSignups > 0) {
-                        (totalPaid.toDouble() / totalSignups.toDouble()) * 100
+                        (totalPaid.toDouble() / totalSignups.toDouble()) * PERCENT_MULTIPLIER
                     } else {
                         0.0
                     },

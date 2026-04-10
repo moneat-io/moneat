@@ -11,7 +11,14 @@ comments:
 # Mirror core's disabled rules for consistency.
 style:
   MagicNumber:
-    active: false
+    active: true
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/DemoDataReseeder.kt'
+    ignorePropertyDeclaration: true
+    ignoreEnums: true
+    ignoreRanges: true
   WildcardImport:
     active: false
   ReturnCount:

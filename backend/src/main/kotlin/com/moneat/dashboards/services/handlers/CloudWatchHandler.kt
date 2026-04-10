@@ -41,6 +41,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -52,6 +53,14 @@ private val json = Json { ignoreUnknownKeys = true }
  * Example: {"Namespace":"AWS/EC2","MetricName":"CPUUtilization"}
  */
 class CloudWatchHandler : DataSourceHandler {
+
+    companion object {
+        private const val CLOUDWATCH_DEFAULT_PERIOD_SECONDS = 300
+        private const val CLOUDWATCH_MAX_DATAPOINTS = 100_800
+        private const val DAYS_PER_WEEK = 7L
+        private const val DAYS_PER_MONTH = 30L
+        private const val DAYS_PER_YEAR = 365L
+    }
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val region = request.region ?: "us-east-1"
@@ -77,7 +86,7 @@ class CloudWatchHandler : DataSourceHandler {
                                     namespace = "AWS/EC2"
                                     metricName = "CPUUtilization"
                                 }
-                                period = 300
+                                period = CLOUDWATCH_DEFAULT_PERIOD_SECONDS
                                 stat = "Average"
                             }
                             returnData = true
@@ -136,7 +145,7 @@ class CloudWatchHandler : DataSourceHandler {
         val endTime = resolveTime(timeRange?.to ?: "now", now)
 
         return suspendRunCatching {
-            val normalizedLimit = limit.coerceIn(1, 100800)
+            val normalizedLimit = limit.coerceIn(1, CLOUDWATCH_MAX_DATAPOINTS)
             createClient(region, accessKey, secretKey).use { client ->
                 val startJava = java.time.Instant.ofEpochMilli(startTime.toEpochMilliseconds())
                 val endJava = java.time.Instant.ofEpochMilli(endTime.toEpochMilliseconds())
@@ -153,7 +162,7 @@ class CloudWatchHandler : DataSourceHandler {
                                     this.metricName = metricName
                                     this.dimensions = dimensions
                                 }
-                                period = 300
+                                period = CLOUDWATCH_DEFAULT_PERIOD_SECONDS
                                 stat = "Average"
                             }
                             returnData = true
@@ -169,7 +178,7 @@ class CloudWatchHandler : DataSourceHandler {
                     val values = result.values ?: emptyList()
                     for ((i, ts) in timestamps.withIndex()) {
                         val value = values.getOrNull(i) ?: continue
-                        val tsMs = ts.epochSeconds * 1000
+                        val tsMs = ts.epochSeconds * MILLIS_PER_SECOND_LONG
                         rows.add(
                             mapOf(
                                 "time_bucket" to JsonPrimitive(tsMs),
@@ -210,15 +219,17 @@ class CloudWatchHandler : DataSourceHandler {
     private fun resolveTime(expr: String, now: Instant): Instant {
         if (expr == "now") return now
         val match = Regex("""^now-(\d+)([smhdwMy])$""").matchEntire(expr) ?: return now
-        val amount = match.groupValues[1].toLong()
+        val amount = match.groupValues[1].toLongOrNull() ?: return now
+        fun safeDays(multiplier: Long): Long? =
+            if (amount <= Long.MAX_VALUE / multiplier) amount * multiplier else null
         val offset = when (match.groupValues[2]) {
             "s" -> Duration.parse("${amount}s")
             "m" -> Duration.parse("${amount}m")
             "h" -> Duration.parse("${amount}h")
             "d" -> Duration.parse("${amount}d")
-            "w" -> Duration.parse("${amount * 7}d")
-            "M" -> Duration.parse("${amount * 30}d")
-            "y" -> Duration.parse("${amount * 365}d")
+            "w" -> Duration.parse("${safeDays(DAYS_PER_WEEK) ?: return now}d")
+            "M" -> Duration.parse("${safeDays(DAYS_PER_MONTH) ?: return now}d")
+            "y" -> Duration.parse("${safeDays(DAYS_PER_YEAR) ?: return now}d")
             else -> Duration.ZERO
         }
         return now - offset

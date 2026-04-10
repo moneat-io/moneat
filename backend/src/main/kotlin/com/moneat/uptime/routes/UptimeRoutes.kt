@@ -80,6 +80,8 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
     }
 }
 
+private const val MIN_INTERVAL_SECONDS = 10
+
 /**
  * Uptime monitoring routes.
  */
@@ -458,78 +460,40 @@ fun Route.uptimeRoutes(
  * Validate monitor creation request.
  */
 private fun validateMonitorRequest(request: CreateUptimeMonitorRequest): String? {
-    if (request.name.isBlank()) {
-        return "Monitor name is required"
-    }
+    if (request.name.isBlank()) return "Monitor name is required"
 
+    val typeError = validateMonitorType(request)
+    if (typeError != null) return typeError
+
+    if (request.intervalSeconds < MIN_INTERVAL_SECONDS) return "Check interval must be at least 10 seconds"
+    if (request.timeoutSeconds < 1) return "Timeout must be at least 1 second"
+
+    return null
+}
+
+private fun validateMonitorType(request: CreateUptimeMonitorRequest): String? =
     when (request.type.lowercase()) {
-        "http", "keyword", "json_query" -> {
-            if (request.url.isNullOrBlank()) {
-                return "URL is required for ${request.type} monitors"
-            }
-        }
-
-        "tcp" -> {
-            if (request.hostname.isNullOrBlank()) {
-                return "Hostname is required for TCP monitors"
-            }
-            if (request.port == null) {
-                return "Port is required for TCP monitors"
-            }
-        }
-
-        "ping" -> {
-            if (request.hostname.isNullOrBlank()) {
-                return "Hostname is required for ping monitors"
-            }
-        }
-
-        "dns" -> {
-            if (request.hostname.isNullOrBlank()) {
-                return "Hostname is required for DNS monitors"
-            }
-        }
-
-        "websocket" -> {
-            if (request.url.isNullOrBlank()) {
-                return "URL is required for WebSocket monitors"
-            }
-        }
-
-        "ssl" -> {
-            if (request.hostname.isNullOrBlank()) {
-                return "Hostname is required for SSL monitors"
-            }
-        }
-
-        "database" -> {
-            if (request.dbConnectionString.isNullOrBlank()) {
-                return "Database connection string is required"
-            }
-        }
-
-        "docker" -> {
-            if (request.dockerContainerName.isNullOrBlank()) {
-                return "Container name is required for Docker monitors"
-            }
-        }
-
-        "push" -> {
-            // No additional validation for push monitors
-        }
-
-        else -> {
-            return "Unknown monitor type: ${request.type}"
-        }
+        "http", "keyword", "json_query" ->
+            if (request.url.isNullOrBlank()) "URL is required for ${request.type} monitors" else null
+        "tcp" -> validateTcpMonitor(request)
+        "ping" ->
+            if (request.hostname.isNullOrBlank()) "Hostname is required for ping monitors" else null
+        "dns" ->
+            if (request.hostname.isNullOrBlank()) "Hostname is required for DNS monitors" else null
+        "websocket" ->
+            if (request.url.isNullOrBlank()) "URL is required for WebSocket monitors" else null
+        "ssl" ->
+            if (request.hostname.isNullOrBlank()) "Hostname is required for SSL monitors" else null
+        "database" ->
+            if (request.dbConnectionString.isNullOrBlank()) "Database connection string is required" else null
+        "docker" ->
+            if (request.dockerContainerName.isNullOrBlank()) "Container name is required for Docker monitors" else null
+        "push" -> null // No additional validation for push monitors
+        else -> "Unknown monitor type: ${request.type}"
     }
 
-    if (request.intervalSeconds < 10) {
-        return "Check interval must be at least 10 seconds"
-    }
-
-    if (request.timeoutSeconds < 1) {
-        return "Timeout must be at least 1 second"
-    }
-
+private fun validateTcpMonitor(request: CreateUptimeMonitorRequest): String? {
+    if (request.hostname.isNullOrBlank()) return "Hostname is required for TCP monitors"
+    if (request.port == null) return "Port is required for TCP monitors"
     return null
 }

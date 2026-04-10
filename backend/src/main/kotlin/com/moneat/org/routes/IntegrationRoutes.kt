@@ -110,6 +110,14 @@ data class SlackChannel(
 )
 
 // Helper functions for secure state management
+private const val MILLIS_PER_SECOND = 1000
+private const val SLACK_REQUEST_MAX_AGE_SECONDS = 300
+private const val NONCE_BYTES_SIZE = 16
+private const val OAUTH_PARTS_COUNT = 5
+private const val OAUTH_STATE_NONCE_INDEX = 3
+private const val OAUTH_STATE_SIGNATURE_INDEX = 4
+private const val OAUTH_STATE_MAX_AGE_MS = 600_000
+private const val DISCORD_BOT_PERMISSIONS = 85504 // 0x14C00
 private val secureRandom = SecureRandom()
 
 private fun getStateSecret(): String {
@@ -144,10 +152,10 @@ private fun verifySlackRequestSignature(
     val timestamp = headers["X-Slack-Request-Timestamp"] ?: return false
     val signature = headers["X-Slack-Signature"] ?: return false
     val requestTs = timestamp.toLongOrNull() ?: return false
-    val nowTs = System.currentTimeMillis() / 1000
+    val nowTs = System.currentTimeMillis() / MILLIS_PER_SECOND
 
     // Reject stale/replayed payloads.
-    if (abs(nowTs - requestTs) > 60 * 5) return false
+    if (abs(nowTs - requestTs) > SLACK_REQUEST_MAX_AGE_SECONDS) return false
 
     val secret =
         getSlackSigningSecret() ?: run {
@@ -166,7 +174,7 @@ private fun generateSecureState(
     userId: Int,
     organizationId: Int
 ): String {
-    val nonce = ByteArray(16)
+    val nonce = ByteArray(NONCE_BYTES_SIZE)
     secureRandom.nextBytes(nonce)
     val timestamp = System.currentTimeMillis()
     val payload = "$userId:$organizationId:$timestamp:${Base64.getUrlEncoder().withoutPadding().encodeToString(nonce)}"
@@ -184,16 +192,16 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
     suspendRunCatching {
         val decoded = String(Base64.getUrlDecoder().decode(state))
         val parts = decoded.split(":")
-        if (parts.size != 5) return null
+        if (parts.size != OAUTH_PARTS_COUNT) return null
 
         val userId = parts[0].toInt()
         val organizationId = parts[1].toInt()
         val timestamp = parts[2].toLong()
-        val nonce = parts[3]
-        val signature = parts[4]
+        val nonce = parts[OAUTH_STATE_NONCE_INDEX]
+        val signature = parts[OAUTH_STATE_SIGNATURE_INDEX]
 
         // Check if state is expired (10 minutes)
-        if (System.currentTimeMillis() - timestamp > 10 * 60 * 1000) {
+        if (System.currentTimeMillis() - timestamp > OAUTH_STATE_MAX_AGE_MS) {
             return null
         }
 
@@ -544,7 +552,7 @@ fun Route.integrationRoutes() {
 
                 // Discord permissions: Send Messages (0x800), Embed Links (0x4000),
                 // Read Message History (0x10000), View Channels (0x400)
-                val permissions = 85504 // 0x14C00
+                val permissions = DISCORD_BOT_PERMISSIONS
                 val scopes = "bot+guilds"
 
                 val state = generateSecureState(userId, organizationId)

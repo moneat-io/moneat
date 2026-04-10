@@ -47,6 +47,7 @@ private val logger = KotlinLogging.logger {}
 // OTLP AggregationTemporality (opentelemetry.proto.metrics.v1.AggregationTemporality)
 private const val AGGREGATION_TEMPORALITY_DELTA = 1
 private const val AGGREGATION_TEMPORALITY_CUMULATIVE = 2
+private const val ERROR_MESSAGE_PREVIEW_LENGTH = 500
 
 @Serializable
 data class OtlpMetricInsert(
@@ -137,7 +138,9 @@ class OtlpMetricsService(
             try {
                 ExportMetricsServiceRequest.parseFrom(bytes)
             } catch (e: InvalidProtocolBufferException) {
-                logger.warn { "Invalid OTLP protobuf metrics payload: ${e.message?.take(500)}" }
+                logger.warn {
+                    "Invalid OTLP protobuf metrics payload: ${e.message?.take(ERROR_MESSAGE_PREVIEW_LENGTH)}"
+                }
                 return null
             }
 

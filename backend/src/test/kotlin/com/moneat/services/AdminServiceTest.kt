@@ -688,4 +688,43 @@ class AdminServiceTest {
         val result = service.getEmailStats(period = "7d")
         assertEquals(0L, result.totalSent)
     }
+
+    @Test
+    fun `getEmailStats defaults to 30d for unknown period`() {
+        // Exercises the else branch of the period when-expression in getEmailStats
+        val result = service.getEmailStats(period = "unknown")
+        assertEquals(0L, result.totalSent)
+    }
+
+    @Test
+    fun `getOrgUsage returns usage for 24h period`() {
+        // Exercises the "24h" branch of the period when-expression in getOrgUsage
+        val orgId = seedOrg()
+        val result = service.getOrgUsage(orgId, "24h")
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `getOrgUsage returns usage for 30d period`() {
+        // Exercises the "30d" branch of the period when-expression in getOrgUsage
+        val orgId = seedOrg()
+        val result = service.getOrgUsage(orgId, "30d")
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `getOrgUsage defaults to 7d for unknown period`() {
+        // Exercises the else branch of the period when-expression in getOrgUsage
+        val orgId = seedOrg()
+        val result = service.getOrgUsage(orgId, "unknown")
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `getUsageBreakdown returns empty for 30d period`() {
+        // Exercises the "30d" branch of the period when-expression in getUsageBreakdown
+        val result = service.getUsageBreakdown("30d")
+        assertTrue(result.daily.isEmpty())
+        assertEquals(0L, result.totalBytes)
+    }
 }

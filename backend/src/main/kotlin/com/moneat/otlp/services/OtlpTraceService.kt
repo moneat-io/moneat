@@ -58,6 +58,7 @@ private const val OTLP_SPAN_KIND_SERVER = 2
 private const val OTLP_SPAN_KIND_CLIENT = 3
 private const val OTLP_SPAN_KIND_PRODUCER = 4
 private const val OTLP_SPAN_KIND_CONSUMER = 5
+private const val ERROR_MESSAGE_PREVIEW_LENGTH = 500
 
 @Serializable
 data class OtlpSpanInsert(
@@ -102,7 +103,7 @@ class OtlpTraceService(
             try {
                 ExportTraceServiceRequest.parseFrom(bytes)
             } catch (e: InvalidProtocolBufferException) {
-                logger.warn { "Invalid OTLP protobuf traces payload: ${e.message?.take(500)}" }
+                logger.warn { "Invalid OTLP protobuf traces payload: ${e.message?.take(ERROR_MESSAGE_PREVIEW_LENGTH)}" }
                 return null
             }
 

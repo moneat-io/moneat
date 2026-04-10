@@ -47,6 +47,8 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.util.UUID
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
@@ -97,7 +99,7 @@ private fun parseJsonEachRow(body: String): List<JsonObject> {
 private suspend fun executeChQuery(query: String): List<JsonObject>? {
     return runCatching {
         val response = ClickHouseClient.execute(query)
-        if (response.status.value !in 200..299) {
+        if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
             logger.warn { "ClickHouse query failed: ${response.status}" }
             return null
         }

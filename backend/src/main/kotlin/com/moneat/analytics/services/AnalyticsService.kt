@@ -39,6 +39,10 @@ import java.time.format.DateTimeFormatter
 private val logger = KotlinLogging.logger {}
 private val jsonParser = Json { ignoreUnknownKeys = true }
 
+private const val ERROR_TRUNCATE_LENGTH = 500
+private const val PERCENTAGE_MULTIPLIER = 100
+private const val DEFAULT_LIMIT = 100
+
 /**
  * Query builder for analytics dashboard endpoints.
  * Builds ClickHouse SQL queries with filters, date ranges, and comparison periods.
@@ -159,7 +163,7 @@ class AnalyticsService {
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
         dimension: String,
-        limit: Int = 100,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse {
         val (column, table, alias) = resolveDimension(dimension)
         val timeColumn = if (alias == "s") "hour" else "timestamp"
@@ -195,7 +199,7 @@ class AnalyticsService {
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
-        limit: Int = 100,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse = getBreakdown(projectId, dateFrom, dateTo, filters, "pathname", limit)
 
     suspend fun getEntryPages(
@@ -203,7 +207,7 @@ class AnalyticsService {
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
-        limit: Int = 100,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse = getBreakdown(projectId, dateFrom, dateTo, filters, "entry_page", limit)
 
     suspend fun getExitPages(
@@ -211,7 +215,7 @@ class AnalyticsService {
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
-        limit: Int = 100,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse = getBreakdown(projectId, dateFrom, dateTo, filters, "exit_page", limit)
 
     // --- Realtime ---
@@ -221,7 +225,7 @@ class AnalyticsService {
         val count = suspendRunCatching {
             RedisConfig.sync().pfcount(key)
         }.getOrElse { e ->
-            val errorMsg = e.toString().take(500)
+            val errorMsg = e.toString().take(ERROR_TRUNCATE_LENGTH)
             logger.debug { "Failed to read realtime counter: $errorMsg" }
             0L
         }
@@ -284,7 +288,7 @@ class AnalyticsService {
                 step
             } else {
                 val prev = funnelSteps[i - 1].visitors
-                val dropoff = if (prev > 0) ((prev - step.visitors).toDouble() / prev * 100) else 0.0
+                val dropoff = if (prev > 0) ((prev - step.visitors).toDouble() / prev * PERCENTAGE_MULTIPLIER) else 0.0
                 step.copy(dropoff = dropoff)
             }
         }
@@ -298,7 +302,7 @@ class AnalyticsService {
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
-        limit: Int = 100,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse {
         val where = buildWhere(projectId, dateFrom, dateTo, filters, "e", "timestamp")
         val sql = """

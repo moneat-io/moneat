@@ -161,13 +161,17 @@ class DiscordService(
     )
 
     companion object {
+        private const val DISCORD_COLOR_RED = 0xE01E5A
+        private const val DISCORD_COLOR_GREEN = 0x2EB67D
+        private const val DISCORD_COLOR_YELLOW = 0xECB22E
+
         /** Builds embed for host metric alerts. Exposed for unit testing. */
         internal fun buildHostAlertEmbed(p: DiscordService.HostAlertParams): DiscordEmbed =
             DiscordEmbed(
                 title = "⚠️ Host Alert",
                 description = "**${p.hostName}** triggered an alert",
                 url = "${p.baseUrl}/monitoring/hosts/${p.hostId}",
-                color = 0xECB22E,
+                color = DISCORD_COLOR_YELLOW,
                 fields = listOf(
                     DiscordField("Host", p.hostName, true),
                     DiscordField("Metric", p.metric, true),
@@ -190,7 +194,7 @@ class DiscordService(
                 title = "🔴 Host Down",
                 description = "**$hostName** is not responding",
                 url = "$baseUrl/monitoring/hosts/$hostId",
-                color = 0xE01E5A,
+                color = DISCORD_COLOR_RED,
                 fields = listOf(
                     DiscordField("Host", hostName, true),
                     DiscordField("Last Seen", lastSeen, true)
@@ -210,7 +214,7 @@ class DiscordService(
                 title = "✅ Host Recovered",
                 description = "**$hostName** is back online",
                 url = "$baseUrl/monitoring/hosts/$hostId",
-                color = 0x2EB67D,
+                color = DISCORD_COLOR_GREEN,
                 fields = listOf(
                     DiscordField("Host", hostName, true),
                     DiscordField("Status", "Online", true)
@@ -222,7 +226,7 @@ class DiscordService(
         /** Builds embed for uptime monitor alerts. Exposed for unit testing. */
         internal fun buildUptimeAlertEmbed(p: DiscordService.UptimeAlertParams): DiscordEmbed {
             val title = if (p.isDown) "🔴 Uptime Monitor Down" else "✅ Uptime Monitor Recovered"
-            val color = if (p.isDown) 0xE01E5A else 0x2EB67D
+            val color = if (p.isDown) DISCORD_COLOR_RED else DISCORD_COLOR_GREEN
             val statusText = when {
                 p.errorMessage != null -> p.errorMessage
                 p.statusCode != null -> "HTTP ${p.statusCode}"
@@ -249,9 +253,9 @@ class DiscordService(
         /** Builds embed for dashboard alerts. Exposed for unit testing. */
         internal fun buildDashboardAlertEmbed(p: DiscordService.DashboardAlertParams): DiscordEmbed {
             val color = when (p.severity) {
-                "CRITICAL", "HIGH" -> 0xE01E5A
-                "MEDIUM" -> 0xECB22E
-                else -> 0xECB22E
+                "CRITICAL", "HIGH" -> DISCORD_COLOR_RED
+                "MEDIUM" -> DISCORD_COLOR_YELLOW
+                else -> DISCORD_COLOR_YELLOW
             }
             return DiscordEmbed(
                 title = "📊 Dashboard Alert: ${p.alertName}",
@@ -272,9 +276,9 @@ class DiscordService(
         /** Builds embed for error/issue alerts. Exposed for unit testing. */
         internal fun buildErrorAlertEmbed(p: DiscordService.ErrorAlertParams): DiscordEmbed {
             val color = when (p.level.lowercase()) {
-                "fatal", "error" -> 0xE01E5A
-                "warning" -> 0xECB22E
-                else -> 0x2EB67D
+                "fatal", "error" -> DISCORD_COLOR_RED
+                "warning" -> DISCORD_COLOR_YELLOW
+                else -> DISCORD_COLOR_GREEN
             }
             return DiscordEmbed(
                 title = "🐛 New Issue Detected",
@@ -303,7 +307,7 @@ class DiscordService(
                 title = "✅ Discord Integration Test",
                 description = "Your Discord integration is working correctly!",
                 url = baseUrl,
-                color = 0x2EB67D,
+                color = DISCORD_COLOR_GREEN,
                 fields = listOf(
                     DiscordField("Status", "Connected", true),
                     DiscordField("Guild ID", guildId, true)
