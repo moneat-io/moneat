@@ -91,6 +91,27 @@ class DashboardQueryHelper(
         }
 
     /**
+     * Reads the response body and returns it when ClickHouse returned a successful
+     * result. Returns `null` (and logs) when the HTTP status is outside the 2xx
+     * range or the body starts with the ClickHouse `Code:` error prefix.
+     */
+    suspend fun readClickHouseBody(
+        response: HttpResponse,
+        errorContext: String,
+    ): String? {
+        val body = response.bodyAsText()
+        if (response.status.value !in HTTP_SUCCESS_RANGE ||
+            body.trimStart().startsWith("Code:")
+        ) {
+            logger.error {
+                "$errorContext: status=${response.status}, body=${body.take(LOG_BODY_CHARS)}"
+            }
+            return null
+        }
+        return body
+    }
+
+    /**
      * Executes a query that returns a single row with project_id, e.g. for entity lookup.
      * Returns null on HTTP/ClickHouse error or when no valid row is returned.
      */
@@ -101,11 +122,7 @@ class DashboardQueryHelper(
     ): Long? {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (response.status.value !in HTTP_SUCCESS_RANGE || body.trimStart().startsWith("Code:")) {
-                logger.error { "$context failed for $entityId: ${response.status} ${body.take(LOG_BODY_CHARS)}" }
-                return null
-            }
+            val body = readClickHouseBody(response, "$context for $entityId") ?: return null
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["project_id"]?.jsonPrimitive?.longOrNull
@@ -125,11 +142,7 @@ class DashboardQueryHelper(
     ): List<JsonObject>? {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in HTTP_SUCCESS_RANGE || body.trimStart().startsWith("Code:")) {
-                logger.error { "$errorContext failed: ${response.status} ${body.take(LOG_BODY_CHARS)}" }
-                return null
-            }
+            val body = readClickHouseBody(response, "$errorContext failed") ?: return null
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -288,11 +301,7 @@ class DashboardQueryHelper(
     ): Long {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in HTTP_SUCCESS_RANGE || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to execute scalar query: ${response.status} ${body.take(LOG_BODY_CHARS)}" }
-                return 0
-            }
+            val body = readClickHouseBody(response, "Scalar query failed") ?: return 0
             if (body.isBlank()) return 0
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["total"]?.jsonPrimitive?.long ?: 0
@@ -310,11 +319,7 @@ class DashboardQueryHelper(
     ): List<TimelinePoint> {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in HTTP_SUCCESS_RANGE || body.trimStart().startsWith("Code:")) {
-                logger.error { "ClickHouse query failed: ${body.take(LOG_BODY_CHARS)}" }
-                return emptyList()
-            }
+            val body = readClickHouseBody(response, "Timeline query failed") ?: return emptyList()
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -347,11 +352,8 @@ class DashboardQueryHelper(
     ): List<SlowTransactionResponse> {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in HTTP_SUCCESS_RANGE || body.trimStart().startsWith("Code:")) {
-                logger.error { "ClickHouse query failed: ${body.take(LOG_BODY_CHARS)}" }
-                return emptyList()
-            }
+            val body = readClickHouseBody(response, "Slowest transactions query failed")
+                ?: return emptyList()
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -390,11 +392,7 @@ class DashboardQueryHelper(
     ): Map<String, Long> {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in HTTP_SUCCESS_RANGE || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to execute map query: ${response.status} ${body.take(LOG_BODY_CHARS)}" }
-                return emptyMap()
-            }
+            val body = readClickHouseBody(response, "Map query failed") ?: return emptyMap()
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -430,15 +428,8 @@ class DashboardQueryHelper(
     ): Map<K, V> {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in HTTP_SUCCESS_RANGE || body.isBlank() ||
-                body.trimStart().startsWith("Code:")
-            ) {
-                if (response.status.value !in HTTP_SUCCESS_RANGE) {
-                    logger.error { "$errorContext failed: ${response.status} ${body.take(LOG_BODY_CHARS)}" }
-                }
-                return emptyMap()
-            }
+            val body = readClickHouseBody(response, "$errorContext failed")
+            if (body.isNullOrBlank()) return emptyMap()
             body
                 .lines()
                 .filter { it.isNotBlank() }
@@ -468,11 +459,10 @@ class DashboardQueryHelper(
             throw e
         }
         val body = response.bodyAsText()
-        if (response.status.value !in HTTP_SUCCESS_RANGE || body.trimStart().startsWith("Code:")) {
-            logger.error {
-                "$errorContext failed: query=${query.take(LOG_SNIPPET_CHARS)}, status=${response.status}, " +
-                    "body=${body.take(LOG_BODY_CHARS)}"
-            }
+        if (response.status.value !in HTTP_SUCCESS_RANGE ||
+            body.trimStart().startsWith("Code:")
+        ) {
+            logger.error { "$errorContext failed: status=${response.status}, body=${body.take(LOG_BODY_CHARS)}" }
             throw IllegalStateException(
                 "ClickHouse mutation failed: ${response.status} ${body.take(LOG_SNIPPET_CHARS)}"
             )
@@ -485,11 +475,8 @@ class DashboardQueryHelper(
     ): List<TopIssue> {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query, parentSpan)
-            val body = response.bodyAsText()
-            if (response.status.value !in HTTP_SUCCESS_RANGE || body.trimStart().startsWith("Code:")) {
-                logger.error { "Failed to execute top issues query: ${response.status} ${body.take(LOG_BODY_CHARS)}" }
-                return emptyList()
-            }
+            val body = readClickHouseBody(response, "Top issues query failed")
+                ?: return emptyList()
             body
                 .lines()
                 .filter { it.isNotBlank() }
