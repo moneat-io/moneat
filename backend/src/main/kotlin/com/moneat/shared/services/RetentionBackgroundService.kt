@@ -31,6 +31,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -57,10 +58,6 @@ class RetentionBackgroundService(
 
     private var sweepJob: Job? = null
 
-    companion object {
-        private const val MILLIS_PER_SECOND = 1000L
-    }
-
     fun start(scope: CoroutineScope) {
         if (!enabled) {
             logger.info { "Retention background job is disabled by config" }
@@ -75,7 +72,7 @@ class RetentionBackgroundService(
                     }.onFailure { e ->
                         logger.error(e) { "Retention sweep failed" }
                     }
-                    delay(sweepIntervalSeconds * MILLIS_PER_SECOND)
+                    delay(sweepIntervalSeconds * MILLIS_PER_SECOND_LONG)
                 }
             }
     }

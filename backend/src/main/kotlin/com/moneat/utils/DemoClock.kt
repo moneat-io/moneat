@@ -19,14 +19,13 @@ package com.moneat.utils
 import com.moneat.config.EnvConfig
 import kotlin.time.Clock
 import kotlin.time.Instant
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 /**
  * Virtual clock for demo mode.
  * When demo mode is active, returns the configured demo epoch instead of the current time.
  */
 object DemoClock {
-
-    private const val MILLIS_PER_SECOND = 1000L
 
     /**
      * Get current timestamp in milliseconds.
@@ -57,6 +56,6 @@ object DemoClock {
      * In demo mode, returns the demo epoch; otherwise returns actual current time.
      */
     fun nowSeconds(isDemo: Boolean): Long {
-        return nowMs(isDemo) / MILLIS_PER_SECOND
+        return nowMs(isDemo) / MILLIS_PER_SECOND_LONG
     }
 }

@@ -37,6 +37,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.*
 import kotlin.time.Clock
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 class AuthTokenService {
     private val secureRandom = SecureRandom()
@@ -58,7 +59,6 @@ class AuthTokenService {
         // sentry-cli compatible org auth token format: sntrys_{base64_payload}_{base64_secret}
         private const val TOKEN_PREFIX = "sntrys_"
         private const val TOKEN_LENGTH = 32 // 32 bytes = 256 bits
-        private const val MILLIS_PER_SECOND = 1000L
         private const val SECONDS_PER_DAY = 86_400
     }
 
@@ -73,7 +73,7 @@ class AuthTokenService {
     ): String {
         val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
         // Use Long instead of Double to avoid scientific notation
-        val iat = System.currentTimeMillis() / MILLIS_PER_SECOND
+        val iat = System.currentTimeMillis() / MILLIS_PER_SECOND_LONG
         val payloadJson = """{"iat":$iat,"url":"$backendUrl","region_url":"$backendUrl","org":"$orgSlug"}"""
         val payloadEncoded = Base64.getEncoder().encodeToString(payloadJson.toByteArray())
         val secretEncoded = Base64.getEncoder().withoutPadding().encodeToString(secretBytes)

@@ -36,6 +36,9 @@ import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import kotlin.collections.filter
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_DAY
+import com.moneat.utils.TimeConstants.MILLIS_PER_HOUR
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -73,10 +76,7 @@ class DashboardQueryEngine {
 
         private val TIME_RANGE_REGEX = Regex("""^now-(\d+)([smhdwMy])$""")
 
-        private const val MILLIS_PER_SECOND = 1000L
         private const val MILLIS_PER_MINUTE = 60_000L
-        private const val MILLIS_PER_HOUR = 3_600_000L
-        private const val MILLIS_PER_DAY = 86_400_000L
         private const val MILLIS_PER_WEEK = 604_800_000L
         private const val MILLIS_PER_MONTH = 2_592_000_000L
         private const val MILLIS_PER_YEAR = 31_536_000_000L
@@ -110,7 +110,7 @@ class DashboardQueryEngine {
             val amount = match.groupValues[1].toLong()
             val unit = match.groupValues[2]
             val ms = when (unit) {
-                "s" -> amount * MILLIS_PER_SECOND
+                "s" -> amount * MILLIS_PER_SECOND_LONG
                 "m" -> amount * MILLIS_PER_MINUTE
                 "h" -> amount * MILLIS_PER_HOUR
                 "d" -> amount * MILLIS_PER_DAY

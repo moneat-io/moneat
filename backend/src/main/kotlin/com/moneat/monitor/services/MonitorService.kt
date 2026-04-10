@@ -48,6 +48,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Clock
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -84,9 +85,6 @@ class MonitorService(
         private const val INTERVAL_FIVE_MINUTES = 300
         private const val INTERVAL_THIRTY_MINUTES = 1800
         private const val INTERVAL_ONE_HOUR = 3600
-
-        // Unit conversion: multiply epoch-seconds by this to get epoch-milliseconds
-        private const val MILLIS_PER_SECOND = 1000L
 
         // Container freshness: keep rows within (monitorInterval * multiplier) seconds,
         // but never less than the minimum window.
@@ -491,8 +489,8 @@ class MonitorService(
             FROM `$clickhouseDb`.metrics
             WHERE organization_id = ${host.organizationId}
               AND tags['host_id'] = '$hostId'
-              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND})
-              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND})
+              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
+              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
@@ -785,8 +783,8 @@ class MonitorService(
             WHERE organization_id = ${host.organizationId}
               AND tags['host_id'] = '$hostId'
               AND name = '$escapedName'
-              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND})
-              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND})
+              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
+              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact

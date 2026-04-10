@@ -27,11 +27,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 private const val EVENT_QUEUE_KEY = "moneat:infra_events:queue"
 private const val ERROR_BODY_MAX_LEN = 600
-private const val MILLIS_PER_SECOND = 1000L
 
 @Serializable
 data class QueuedEventBatch(
@@ -84,7 +84,7 @@ object DatadogEventService {
         val entries = events.map { event ->
             val tags = DatadogMetricService.parseDdTagList(event.tags)
             val timestampMs = if (event.dateHappened != null) {
-                event.dateHappened * MILLIS_PER_SECOND
+                event.dateHappened * MILLIS_PER_SECOND_LONG
             } else {
                 now
             }
@@ -122,7 +122,7 @@ object DatadogEventService {
         val entries = checks.map { sc ->
             val tags = DatadogMetricService.parseDdTagList(sc.tags)
             val timestampMs = if (sc.timestamp != null) {
-                sc.timestamp * MILLIS_PER_SECOND
+                sc.timestamp * MILLIS_PER_SECOND_LONG
             } else {
                 now
             }

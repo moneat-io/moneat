@@ -28,11 +28,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 private const val METRIC_QUEUE_KEY = "moneat:metrics:queue"
 private const val ERROR_BODY_MAX_LEN = 600
-private const val MILLIS_PER_SECOND = 1000L
 
 @Serializable
 data class QueuedMetricBatch(
@@ -102,7 +102,7 @@ object DatadogMetricService {
 
         return series.points.mapNotNull { point ->
             if (point.size < 2) return@mapNotNull null
-            val timestampMs = (point[0] * MILLIS_PER_SECOND).toLong()
+            val timestampMs = (point[0] * MILLIS_PER_SECOND_LONG).toLong()
             val value = point[1]
             QueuedMetricEntry(
                 name = series.metric,
@@ -126,7 +126,7 @@ object DatadogMetricService {
             sketch.distributions.map { dist ->
                 QueuedSketchEntry(
                     name = sketch.metric,
-                    timestampMs = dist.ts * MILLIS_PER_SECOND,
+                    timestampMs = dist.ts * MILLIS_PER_SECOND_LONG,
                     host = sketch.host,
                     tags = tags,
                     count = dist.cnt,

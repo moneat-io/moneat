@@ -18,6 +18,9 @@ package com.moneat.utils
 
 object TimeConstants {
     const val MILLIS_PER_SECOND = 1_000
+    const val MILLIS_PER_SECOND_LONG = 1_000L
+    const val MILLIS_PER_HOUR = 3_600_000L
+    const val MILLIS_PER_DAY = 86_400_000L
     const val SECONDS_PER_MINUTE = 60L
     const val SECONDS_PER_HOUR = 3_600L
     const val SECONDS_PER_DAY = 86_400L

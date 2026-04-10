@@ -41,6 +41,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -56,7 +57,6 @@ class CloudWatchHandler : DataSourceHandler {
     companion object {
         private const val CLOUDWATCH_DEFAULT_PERIOD_SECONDS = 300
         private const val CLOUDWATCH_MAX_DATAPOINTS = 100_800
-        private const val MILLIS_PER_SECOND = 1_000L
         private const val DAYS_PER_WEEK = 7L
         private const val DAYS_PER_MONTH = 30L
         private const val DAYS_PER_YEAR = 365L
@@ -178,7 +178,7 @@ class CloudWatchHandler : DataSourceHandler {
                     val values = result.values ?: emptyList()
                     for ((i, ts) in timestamps.withIndex()) {
                         val value = values.getOrNull(i) ?: continue
-                        val tsMs = ts.epochSeconds * MILLIS_PER_SECOND
+                        val tsMs = ts.epochSeconds * MILLIS_PER_SECOND_LONG
                         rows.add(
                             mapOf(
                                 "time_bucket" to JsonPrimitive(tsMs),

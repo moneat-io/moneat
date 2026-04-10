@@ -46,6 +46,7 @@ import java.net.Socket
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -116,7 +117,7 @@ open class SyntheticsCheckExecutor {
             )
         }
 
-        val timeoutMs = test.timeoutSeconds * MILLIS_PER_SECOND
+        val timeoutMs = test.timeoutSeconds * MILLIS_PER_SECOND_LONG
         val client = buildClient(timeoutMs)
 
         val totalStart = System.nanoTime()
@@ -544,7 +545,7 @@ open class SyntheticsCheckExecutor {
             return SyntheticCheckResult(status = "failed", durationMs = 0, errorMessage = "No steps configured")
         }
 
-        val timeoutMs = test.timeoutSeconds * MILLIS_PER_SECOND
+        val timeoutMs = test.timeoutSeconds * MILLIS_PER_SECOND_LONG
         val client = buildClient(timeoutMs)
         val variables = mutableMapOf<String, String>()
         val startTime = System.currentTimeMillis()
@@ -847,6 +848,5 @@ open class SyntheticsCheckExecutor {
     companion object {
         private const val NS_PER_MS = 1_000_000L
         private const val REQUEST_FAILED = "Request failed"
-        private const val MILLIS_PER_SECOND = 1000L
     }
 }

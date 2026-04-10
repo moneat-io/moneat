@@ -67,6 +67,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import com.moneat.utils.TimeConstants.MILLIS_PER_DAY
 
 private val logger = KotlinLogging.logger {}
 
@@ -87,13 +88,8 @@ private const val SPIKE_FACTOR = 2
 private const val WEEK_SECONDS = 7 * 24 * 3600L
 private const val TWO_WEEKS_SECONDS = 14 * 24 * 3600L
 private const val SECONDS_PER_MINUTE = 60L
-private const val MILLIS_PER_SECOND = 1000L
-private const val SECONDS_PER_HOUR = 3600L
-private const val HOURS_PER_DAY = 24L
 private const val DAYS_IN_WEEK = 7L
 private const val DAYS_IN_MONTH = 30L
-private const val MILLIS_PER_HOUR = SECONDS_PER_HOUR * MILLIS_PER_SECOND
-private const val MILLIS_PER_DAY = HOURS_PER_DAY * MILLIS_PER_HOUR
 private const val MILLIS_7_DAYS = DAYS_IN_WEEK * MILLIS_PER_DAY
 private const val MILLIS_30_DAYS = DAYS_IN_MONTH * MILLIS_PER_DAY
 

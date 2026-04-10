@@ -49,6 +49,7 @@ import kotlin.time.Duration.Companion.seconds
 import com.moneat.utils.suspendRunCatching
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 class SyntheticsService(
     private val emailService: EmailService = EmailService(),
@@ -64,7 +65,6 @@ class SyntheticsService(
         private const val PRO_TIER_LIMIT = 20
         private const val TEAM_TIER_LIMIT = 50
         private const val BUSINESS_TIER_LIMIT = Int.MAX_VALUE
-        private const val MILLIS_PER_SECOND = 1000L
         private const val TIMEOUT_BUFFER_MS = 5000L
     }
 
@@ -332,7 +332,7 @@ class SyntheticsService(
 
         for (attempt in 1..maxAttempts) {
             lastResult = suspendRunCatching {
-                withTimeout(test.timeoutSeconds * MILLIS_PER_SECOND + TIMEOUT_BUFFER_MS) {
+                withTimeout(test.timeoutSeconds * MILLIS_PER_SECOND_LONG + TIMEOUT_BUFFER_MS) {
                     executor.executeTest(test)
                 }
             }.getOrElse { e ->
