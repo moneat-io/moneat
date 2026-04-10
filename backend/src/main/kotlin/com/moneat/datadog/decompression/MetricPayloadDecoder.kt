@@ -17,6 +17,12 @@
 package com.moneat.datadog.decompression
 
 import com.google.protobuf.CodedInputStream
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_7
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogMetricV1
 
@@ -41,13 +47,6 @@ import com.moneat.datadog.models.DatadogMetricV1
  */
 object MetricPayloadDecoder {
 
-    private const val PROTO_FIELD_SHIFT = 3
-    private const val PROTO_FIELD_3 = 3
-    private const val PROTO_FIELD_4 = 4
-    private const val PROTO_FIELD_5 = 5
-    private const val PROTO_FIELD_6 = 6
-    private const val PROTO_FIELD_7 = 7
-
     private val METRIC_TYPES = mapOf(0 to "gauge", 1 to "count", 2 to "rate", 3 to "gauge")
 
     /** Decodes a raw (already decompressed) protobuf MetricPayload into DatadogMetricSeriesV1. */
@@ -59,7 +58,7 @@ object MetricPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (LEN): repeated MetricSeries series
-                (1 shl PROTO_FIELD_SHIFT) or 2 -> series += decodeSeries(input.readByteArray())
+                (1 shl FIELD_SHIFT) or 2 -> series += decodeSeries(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -80,22 +79,22 @@ object MetricPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (LEN): repeated Resource
-                (1 shl PROTO_FIELD_SHIFT) or 2 -> {
+                (1 shl FIELD_SHIFT) or 2 -> {
                     val resource = decodeResource(input.readByteArray())
                     if (resource.first == "host") host = resource.second
                 }
                 // field 2 (LEN): string metric
-                (2 shl PROTO_FIELD_SHIFT) or 2 -> metric = input.readString()
+                (2 shl FIELD_SHIFT) or 2 -> metric = input.readString()
                 // field 3 (LEN): repeated string tags
-                (PROTO_FIELD_3 shl PROTO_FIELD_SHIFT) or 2 -> tags += input.readString()
+                (FIELD_3 shl FIELD_SHIFT) or 2 -> tags += input.readString()
                 // field 4 (LEN): repeated MetricPoint
-                (PROTO_FIELD_4 shl PROTO_FIELD_SHIFT) or 2 -> points += decodeMetricPoint(input.readByteArray())
+                (FIELD_4 shl FIELD_SHIFT) or 2 -> points += decodeMetricPoint(input.readByteArray())
                 // field 5 (VARINT): MetricType
-                (PROTO_FIELD_5 shl PROTO_FIELD_SHIFT) or 0 -> typeInt = input.readEnum()
+                (FIELD_5 shl FIELD_SHIFT) or 0 -> typeInt = input.readEnum()
                 // field 6 (LEN): string unit
-                (PROTO_FIELD_6 shl PROTO_FIELD_SHIFT) or 2 -> unit = input.readString()
+                (FIELD_6 shl FIELD_SHIFT) or 2 -> unit = input.readString()
                 // field 7 (LEN): string source_type_name
-                (PROTO_FIELD_7 shl PROTO_FIELD_SHIFT) or 2 -> sourceTypeName = input.readString()
+                (FIELD_7 shl FIELD_SHIFT) or 2 -> sourceTypeName = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -119,8 +118,8 @@ object MetricPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl PROTO_FIELD_SHIFT) or 2 -> type = input.readString()
-                (2 shl PROTO_FIELD_SHIFT) or 2 -> name = input.readString()
+                (1 shl FIELD_SHIFT) or 2 -> type = input.readString()
+                (2 shl FIELD_SHIFT) or 2 -> name = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -135,8 +134,8 @@ object MetricPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl PROTO_FIELD_SHIFT) or 1 -> value = input.readDouble() // wire type 1 = 64-bit
-                (2 shl PROTO_FIELD_SHIFT) or 0 -> timestamp = input.readInt64() // wire type 0 = varint
+                (1 shl FIELD_SHIFT) or 1 -> value = input.readDouble() // wire type 1 = 64-bit
+                (2 shl FIELD_SHIFT) or 0 -> timestamp = input.readInt64() // wire type 0 = varint
                 else -> input.skipField(tag)
             }
         }

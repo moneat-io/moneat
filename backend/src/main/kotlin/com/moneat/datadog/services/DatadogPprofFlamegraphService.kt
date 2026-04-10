@@ -18,6 +18,12 @@ package com.moneat.datadog.services
 
 import com.google.protobuf.CodedInputStream
 import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_14
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -28,12 +34,6 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 private const val HEX_RADIX = 16
-private const val PROTO_TAG_SHIFT = 3
-private const val PROTO_FIELD_3 = 3
-private const val PROTO_FIELD_4 = 4
-private const val PROTO_FIELD_5 = 5
-private const val PROTO_FIELD_6 = 6
-private const val PROTO_FIELD_14 = 14
 private const val JFR_MAGIC_LAST_INDEX = 3
 
 object DatadogPprofFlamegraphService {
@@ -258,25 +258,25 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl PROTO_TAG_SHIFT) or 2 -> sampleTypes += decodeValueType(input.readByteArray())
-                (2 shl PROTO_TAG_SHIFT) or 2 -> samples += decodeSample(input.readByteArray())
-                (PROTO_FIELD_3 shl PROTO_TAG_SHIFT) or 2 -> {
+                (1 shl FIELD_SHIFT) or 2 -> sampleTypes += decodeValueType(input.readByteArray())
+                (2 shl FIELD_SHIFT) or 2 -> samples += decodeSample(input.readByteArray())
+                (FIELD_3 shl FIELD_SHIFT) or 2 -> {
                     val mapping = decodeMapping(input.readByteArray())
                     mappings[mapping.id] = mapping
                 }
-                (PROTO_FIELD_4 shl PROTO_TAG_SHIFT) or 2 -> {
+                (FIELD_4 shl FIELD_SHIFT) or 2 -> {
                     val location = decodeLocation(input.readByteArray())
                     if (location.id != 0L) {
                         locations[location.id] = location
                     }
                     locationList += location
                 }
-                (PROTO_FIELD_5 shl PROTO_TAG_SHIFT) or 2 -> {
+                (FIELD_5 shl FIELD_SHIFT) or 2 -> {
                     val fn = decodeFunction(input.readByteArray())
                     functions[fn.id] = fn
                 }
-                (PROTO_FIELD_6 shl PROTO_TAG_SHIFT) or 2 -> strings += input.readString()
-                (PROTO_FIELD_14 shl PROTO_TAG_SHIFT) or 0 -> defaultSampleType = input.readInt64()
+                (FIELD_6 shl FIELD_SHIFT) or 2 -> strings += input.readString()
+                (FIELD_14 shl FIELD_SHIFT) or 0 -> defaultSampleType = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -300,8 +300,8 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl PROTO_TAG_SHIFT) or 0 -> typeIdx = input.readInt64()
-                (2 shl PROTO_TAG_SHIFT) or 0 -> unitIdx = input.readInt64()
+                (1 shl FIELD_SHIFT) or 0 -> typeIdx = input.readInt64()
+                (2 shl FIELD_SHIFT) or 0 -> unitIdx = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -317,12 +317,12 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl PROTO_TAG_SHIFT) or 0 -> locationIds += input.readUInt64()
-                (1 shl PROTO_TAG_SHIFT) or 2 -> readPackedUInt64(input.readByteArray(), locationIds)
-                (2 shl PROTO_TAG_SHIFT) or 0 -> values += input.readInt64()
-                (2 shl PROTO_TAG_SHIFT) or 2 -> readPackedInt64(input.readByteArray(), values)
-                (PROTO_FIELD_4 shl PROTO_TAG_SHIFT) or 0 -> locationIdx += input.readUInt64()
-                (PROTO_FIELD_4 shl PROTO_TAG_SHIFT) or 2 -> readPackedUInt64(input.readByteArray(), locationIdx)
+                (1 shl FIELD_SHIFT) or 0 -> locationIds += input.readUInt64()
+                (1 shl FIELD_SHIFT) or 2 -> readPackedUInt64(input.readByteArray(), locationIds)
+                (2 shl FIELD_SHIFT) or 0 -> values += input.readInt64()
+                (2 shl FIELD_SHIFT) or 2 -> readPackedInt64(input.readByteArray(), values)
+                (FIELD_4 shl FIELD_SHIFT) or 0 -> locationIdx += input.readUInt64()
+                (FIELD_4 shl FIELD_SHIFT) or 2 -> readPackedUInt64(input.readByteArray(), locationIdx)
                 else -> input.skipField(tag)
             }
         }
@@ -342,9 +342,9 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl PROTO_TAG_SHIFT) or 0 -> id = input.readUInt64()
-                (PROTO_FIELD_5 shl PROTO_TAG_SHIFT) or 0 -> filenameIdx = input.readInt64()
-                (PROTO_FIELD_6 shl PROTO_TAG_SHIFT) or 0 -> buildIdIdx = input.readInt64()
+                (1 shl FIELD_SHIFT) or 0 -> id = input.readUInt64()
+                (FIELD_5 shl FIELD_SHIFT) or 0 -> filenameIdx = input.readInt64()
+                (FIELD_6 shl FIELD_SHIFT) or 0 -> buildIdIdx = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -361,10 +361,10 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl PROTO_TAG_SHIFT) or 0 -> id = input.readUInt64()
-                (2 shl PROTO_TAG_SHIFT) or 0 -> mappingId = input.readUInt64()
-                (PROTO_FIELD_3 shl PROTO_TAG_SHIFT) or 0 -> address = input.readUInt64()
-                (PROTO_FIELD_4 shl PROTO_TAG_SHIFT) or 2 -> lines += decodeLine(input.readByteArray())
+                (1 shl FIELD_SHIFT) or 0 -> id = input.readUInt64()
+                (2 shl FIELD_SHIFT) or 0 -> mappingId = input.readUInt64()
+                (FIELD_3 shl FIELD_SHIFT) or 0 -> address = input.readUInt64()
+                (FIELD_4 shl FIELD_SHIFT) or 2 -> lines += decodeLine(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -383,8 +383,8 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl PROTO_TAG_SHIFT) or 0 -> functionId = input.readUInt64()
-                (2 shl PROTO_TAG_SHIFT) or 0 -> line = input.readInt64()
+                (1 shl FIELD_SHIFT) or 0 -> functionId = input.readUInt64()
+                (2 shl FIELD_SHIFT) or 0 -> line = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -401,10 +401,10 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl PROTO_TAG_SHIFT) or 0 -> id = input.readUInt64()
-                (2 shl PROTO_TAG_SHIFT) or 0 -> nameIdx = input.readInt64()
-                (PROTO_FIELD_3 shl PROTO_TAG_SHIFT) or 0 -> systemNameIdx = input.readInt64()
-                (PROTO_FIELD_4 shl PROTO_TAG_SHIFT) or 0 -> filenameIdx = input.readInt64()
+                (1 shl FIELD_SHIFT) or 0 -> id = input.readUInt64()
+                (2 shl FIELD_SHIFT) or 0 -> nameIdx = input.readInt64()
+                (FIELD_3 shl FIELD_SHIFT) or 0 -> systemNameIdx = input.readInt64()
+                (FIELD_4 shl FIELD_SHIFT) or 0 -> filenameIdx = input.readInt64()
                 else -> input.skipField(tag)
             }
         }

@@ -18,6 +18,13 @@ package com.moneat.datadog.services
 
 import com.google.protobuf.CodedInputStream
 import com.moneat.config.ClickHouseClient
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_7
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_8
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import com.moneat.datadog.models.DdApmErrorGroup
 import com.moneat.datadog.models.DdApmErrorsResponse
 import com.moneat.datadog.models.DdResourceStatsItem
@@ -59,18 +66,10 @@ private const val DEFAULT_QUERY_LIMIT = 50
 private const val MAX_QUERY_LIMIT = 200
 private const val HEX_RADIX = 16
 private const val NANOSECONDS_PER_MILLISECOND = 1_000_000L
-private const val PROTO_TAG_SHIFT = 3
-private const val PROTO_FIELD_3 = 3
-private const val PROTO_FIELD_4 = 4
-private const val PROTO_FIELD_5 = 5
-private const val PROTO_FIELD_6 = 6
-private const val PROTO_FIELD_7 = 7
-private const val PROTO_FIELD_8 = 8
 private const val PROTO_FIELD_9 = 9
 private const val PROTO_FIELD_10 = 10
 private const val PROTO_FIELD_11 = 11
 private const val PROTO_FIELD_12 = 12
-private const val PROTO_FIELD_14 = 14
 
 object TraceIngestionService {
     private val clickhouseDb by lazy { ClickHouseClient.getDatabase() }
@@ -766,7 +765,7 @@ object TraceIngestionService {
         val traces = mutableListOf<List<DdSpan>>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (PROTO_FIELD_5 shl PROTO_TAG_SHIFT) or 2 -> {
+                (FIELD_5 shl FIELD_SHIFT) or 2 -> {
                     val payloadBytes = input.readBytes().toByteArray()
                     traces.addAll(decodeTracerPayload(payloadBytes))
                 }
@@ -782,7 +781,7 @@ object TraceIngestionService {
         val traces = mutableListOf<List<DdSpan>>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (PROTO_FIELD_6 shl PROTO_TAG_SHIFT) or 2 -> {
+                (FIELD_6 shl FIELD_SHIFT) or 2 -> {
                     val chunkBytes = input.readBytes().toByteArray()
                     val spans = decodeTraceChunk(chunkBytes)
                     if (spans.isNotEmpty()) traces.add(spans)
@@ -799,7 +798,7 @@ object TraceIngestionService {
         val spans = mutableListOf<DdSpan>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (PROTO_FIELD_3 shl PROTO_TAG_SHIFT) or 2 -> {
+                (FIELD_3 shl FIELD_SHIFT) or 2 -> {
                     val spanBytes = input.readBytes().toByteArray()
                     spans.add(decodeProtobufSpan(spanBytes))
                 }
@@ -829,24 +828,24 @@ object TraceIngestionService {
         val metrics = mutableMapOf<String, Double>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl PROTO_TAG_SHIFT) or 2 -> service = input.readString()
-                (2 shl PROTO_TAG_SHIFT) or 2 -> name = input.readString()
-                (PROTO_FIELD_3 shl PROTO_TAG_SHIFT) or 2 -> resource = input.readString()
-                (PROTO_FIELD_4 shl PROTO_TAG_SHIFT) or 0 -> traceId = input.readUInt64().toULong()
-                (PROTO_FIELD_5 shl PROTO_TAG_SHIFT) or 0 -> spanId = input.readUInt64().toULong()
-                (PROTO_FIELD_6 shl PROTO_TAG_SHIFT) or 0 -> parentId = input.readUInt64().toULong()
-                (PROTO_FIELD_7 shl PROTO_TAG_SHIFT) or 0 -> start = input.readInt64()
-                (PROTO_FIELD_8 shl PROTO_TAG_SHIFT) or 0 -> duration = input.readInt64()
-                (PROTO_FIELD_9 shl PROTO_TAG_SHIFT) or 0 -> error = input.readInt32()
-                (PROTO_FIELD_10 shl PROTO_TAG_SHIFT) or 2 -> {
+                (1 shl FIELD_SHIFT) or 2 -> service = input.readString()
+                (2 shl FIELD_SHIFT) or 2 -> name = input.readString()
+                (FIELD_3 shl FIELD_SHIFT) or 2 -> resource = input.readString()
+                (FIELD_4 shl FIELD_SHIFT) or 0 -> traceId = input.readUInt64().toULong()
+                (FIELD_5 shl FIELD_SHIFT) or 0 -> spanId = input.readUInt64().toULong()
+                (FIELD_6 shl FIELD_SHIFT) or 0 -> parentId = input.readUInt64().toULong()
+                (FIELD_7 shl FIELD_SHIFT) or 0 -> start = input.readInt64()
+                (FIELD_8 shl FIELD_SHIFT) or 0 -> duration = input.readInt64()
+                (PROTO_FIELD_9 shl FIELD_SHIFT) or 0 -> error = input.readInt32()
+                (PROTO_FIELD_10 shl FIELD_SHIFT) or 2 -> {
                     val (k, v) = decodeStringStringEntry(input.readBytes().toByteArray())
                     meta[k] = v
                 }
-                (PROTO_FIELD_11 shl PROTO_TAG_SHIFT) or 2 -> {
+                (PROTO_FIELD_11 shl FIELD_SHIFT) or 2 -> {
                     val (k, v) = decodeStringDoubleEntry(input.readBytes().toByteArray())
                     metrics[k] = v
                 }
-                (PROTO_FIELD_12 shl PROTO_TAG_SHIFT) or 2 -> type = input.readString()
+                (PROTO_FIELD_12 shl FIELD_SHIFT) or 2 -> type = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -865,8 +864,8 @@ object TraceIngestionService {
         var value = ""
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl PROTO_TAG_SHIFT) or 2 -> key = input.readString()
-                (2 shl PROTO_TAG_SHIFT) or 2 -> value = input.readString()
+                (1 shl FIELD_SHIFT) or 2 -> key = input.readString()
+                (2 shl FIELD_SHIFT) or 2 -> value = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -880,8 +879,8 @@ object TraceIngestionService {
         var value = 0.0
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl PROTO_TAG_SHIFT) or 2 -> key = input.readString()
-                (2 shl PROTO_TAG_SHIFT) or 1 -> value = input.readDouble()
+                (1 shl FIELD_SHIFT) or 2 -> key = input.readString()
+                (2 shl FIELD_SHIFT) or 1 -> value = input.readDouble()
                 else -> input.skipField(tag)
             }
         }
