@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+@file:Suppress("MagicNumber")
+
 package com.moneat.config
 
 import com.moneat.dashboards.models.AggFunction
