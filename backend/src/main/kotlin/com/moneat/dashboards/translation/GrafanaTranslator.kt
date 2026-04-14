@@ -352,34 +352,38 @@ class GrafanaTranslator : DashboardTranslator {
             val opts = transform["options"]?.jsonObject ?: continue
 
             when (id) {
-                "filterFieldsByName" -> {
-                    val include = opts["include"]?.jsonObject
-                    val names = include?.get("names")?.jsonArray
-                    if (names != null && names.isNotEmpty()) {
-                        config["visibleFields"] = names.joinToString(",") {
-                            it.jsonPrimitive.content
-                        }
-                    }
-                }
-                "organize" -> {
-                    val renameByName = opts["renameByName"]?.jsonObject
-                    if (renameByName != null && renameByName.isNotEmpty()) {
-                        val renames = renameByName.entries
-                            .filter {
-                                it.value.jsonPrimitive.contentOrNull?.isNotEmpty() == true
-                            }
-                            .associate {
-                                it.key to it.value.jsonPrimitive.content
-                            }
-                        if (renames.isNotEmpty()) {
-                            config["fieldRenames"] = buildJsonObject {
-                                renames.forEach { (k, v) -> put(k, v) }
-                            }.toString()
-                        }
-                    }
-                }
+                "filterFieldsByName" -> applyFilterFieldsByNameTransform(opts, config)
+                "organize" -> applyOrganizeRenameTransform(opts, config)
             }
         }
+    }
+
+    private fun applyFilterFieldsByNameTransform(
+        opts: JsonObject,
+        config: MutableMap<String, String>,
+    ) {
+        val include = opts["include"]?.jsonObject
+        val names = include?.get("names")?.jsonArray
+        if (names != null && names.isNotEmpty()) {
+            config["visibleFields"] = names.joinToString(",") {
+                it.jsonPrimitive.content
+            }
+        }
+    }
+
+    private fun applyOrganizeRenameTransform(
+        opts: JsonObject,
+        config: MutableMap<String, String>,
+    ) {
+        val renameByName = opts["renameByName"]?.jsonObject
+        if (renameByName == null || renameByName.isEmpty()) return
+        val renames = renameByName.entries
+            .filter { it.value.jsonPrimitive.contentOrNull?.isNotEmpty() == true }
+            .associate { it.key to it.value.jsonPrimitive.content }
+        if (renames.isEmpty()) return
+        config["fieldRenames"] = buildJsonObject {
+            renames.forEach { (k, v) -> put(k, v) }
+        }.toString()
     }
 
     internal fun parseGrafanaTargets(

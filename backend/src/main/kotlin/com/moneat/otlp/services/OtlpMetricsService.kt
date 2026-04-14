@@ -309,7 +309,14 @@ class OtlpMetricsService(
 
         val resourceMetrics = parsed["resourceMetrics"]?.jsonArray ?: return null
         val results = mutableListOf<OtlpMetricInsert>()
+        appendOtlpJsonMetricsFromResourceMetrics(resourceMetrics, results)
+        return results
+    }
 
+    private fun appendOtlpJsonMetricsFromResourceMetrics(
+        resourceMetrics: JsonArray,
+        results: MutableList<OtlpMetricInsert>,
+    ) {
         resourceMetrics.forEach { rmElement ->
             val rm = rmElement.jsonObject
             val resourceCtx = OtlpParsingUtils.extractResourceContext(
@@ -318,74 +325,84 @@ class OtlpMetricsService(
             val scopeMetrics = rm["scopeMetrics"]?.jsonArray
                 ?: rm["instrumentationLibraryMetrics"]?.jsonArray
                 ?: JsonArray(emptyList())
+            appendOtlpJsonMetricsFromScopeMetrics(scopeMetrics, resourceCtx, results)
+        }
+    }
 
-            scopeMetrics.forEach { smElement ->
-                val sm = smElement.jsonObject
-                val metricsArray = OtlpParsingUtils.safeJsonArray(sm["metrics"])
-
-                metricsArray.forEach { metricElement ->
-                    val metric = metricElement.jsonObject
-                    val name = metric["name"]?.jsonPrimitive?.contentOrNull ?: ""
-                    val description = metric["description"]?.jsonPrimitive?.contentOrNull ?: ""
-                    val unit = metric["unit"]?.jsonPrimitive?.contentOrNull ?: ""
-
-                    when {
-                        metric.containsKey("gauge") -> {
-                            parseGaugeDataPoints(
-                                metric["gauge"]!!.jsonObject,
-                                name,
-                                description,
-                                unit,
-                                resourceCtx,
-                                results
-                            )
-                        }
-                        metric.containsKey("sum") -> {
-                            parseSumDataPoints(
-                                metric["sum"]!!.jsonObject,
-                                name,
-                                description,
-                                unit,
-                                resourceCtx,
-                                results
-                            )
-                        }
-                        metric.containsKey("histogram") -> {
-                            parseHistogramDataPoints(
-                                metric["histogram"]!!.jsonObject,
-                                name,
-                                description,
-                                unit,
-                                resourceCtx,
-                                results
-                            )
-                        }
-                        metric.containsKey("exponentialHistogram") -> {
-                            parseExpHistogramDataPoints(
-                                metric["exponentialHistogram"]!!.jsonObject,
-                                name,
-                                description,
-                                unit,
-                                resourceCtx,
-                                results
-                            )
-                        }
-                        metric.containsKey("summary") -> {
-                            parseSummaryDataPoints(
-                                metric["summary"]!!.jsonObject,
-                                name,
-                                description,
-                                unit,
-                                resourceCtx,
-                                results
-                            )
-                        }
-                    }
-                }
+    private fun appendOtlpJsonMetricsFromScopeMetrics(
+        scopeMetrics: JsonArray,
+        resourceCtx: com.moneat.otlp.ResourceContext,
+        results: MutableList<OtlpMetricInsert>,
+    ) {
+        scopeMetrics.forEach { smElement ->
+            val sm = smElement.jsonObject
+            val metricsArray = OtlpParsingUtils.safeJsonArray(sm["metrics"])
+            metricsArray.forEach { metricElement ->
+                appendOtlpJsonMetric(metricElement.jsonObject, resourceCtx, results)
             }
         }
+    }
 
-        return results
+    private fun appendOtlpJsonMetric(
+        metric: kotlinx.serialization.json.JsonObject,
+        resourceCtx: com.moneat.otlp.ResourceContext,
+        results: MutableList<OtlpMetricInsert>,
+    ) {
+        val name = metric["name"]?.jsonPrimitive?.contentOrNull ?: ""
+        val description = metric["description"]?.jsonPrimitive?.contentOrNull ?: ""
+        val unit = metric["unit"]?.jsonPrimitive?.contentOrNull ?: ""
+        when {
+            metric.containsKey("gauge") -> {
+                parseGaugeDataPoints(
+                    metric["gauge"]!!.jsonObject,
+                    name,
+                    description,
+                    unit,
+                    resourceCtx,
+                    results
+                )
+            }
+            metric.containsKey("sum") -> {
+                parseSumDataPoints(
+                    metric["sum"]!!.jsonObject,
+                    name,
+                    description,
+                    unit,
+                    resourceCtx,
+                    results
+                )
+            }
+            metric.containsKey("histogram") -> {
+                parseHistogramDataPoints(
+                    metric["histogram"]!!.jsonObject,
+                    name,
+                    description,
+                    unit,
+                    resourceCtx,
+                    results
+                )
+            }
+            metric.containsKey("exponentialHistogram") -> {
+                parseExpHistogramDataPoints(
+                    metric["exponentialHistogram"]!!.jsonObject,
+                    name,
+                    description,
+                    unit,
+                    resourceCtx,
+                    results
+                )
+            }
+            metric.containsKey("summary") -> {
+                parseSummaryDataPoints(
+                    metric["summary"]!!.jsonObject,
+                    name,
+                    description,
+                    unit,
+                    resourceCtx,
+                    results
+                )
+            }
+        }
     }
 
     private fun readJsonNumberValue(dpObj: kotlinx.serialization.json.JsonObject): Double? =

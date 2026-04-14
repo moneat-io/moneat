@@ -16,6 +16,8 @@ style:
       - '**/test/**'
       - '**/integrationTest/**'
       - '**/DemoDataReseeder.kt'
+      # Demo reseed modules: many intentional numeric literals (intervals, layout, sample data).
+      - '**/com/moneat/config/DemoReseed*.kt'
     ignorePropertyDeclaration: true
     ignoreEnums: true
     ignoreRanges: true
@@ -73,8 +75,9 @@ complexity:
       - '**/androidInstrumentedTest/**'
       - '**/jsTest/**'
       - '**/iosTest/**'
+  # Enforced (issue #297): flag deeply-nested blocks so functions are kept flat.
   NestedBlockDepth:
-    active: false
+    active: true
   NestedScopeFunctions:
     active: false
 

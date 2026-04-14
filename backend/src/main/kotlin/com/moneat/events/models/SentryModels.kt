@@ -107,80 +107,132 @@ data class SentryEnvelope(
                 bytePos = itemHeaderEnd + 1
 
                 if (explicitLength != null && explicitLength > 0 && bytePos + explicitLength <= bodyBytes.size) {
-                    // Explicit length provided - read exact bytes
-                    val payloadBytes = bodyBytes.copyOfRange(bytePos, bytePos + explicitLength)
-                    if (itemType == "replay_video" || itemType == "replay_recording") {
-                        val payload =
-                            java.util.Base64
-                                .getEncoder()
-                                .encodeToString(payloadBytes)
-                        items.add(EnvelopeItem(itemType, payload, payloadBytes, itemHeader))
-                    } else {
-                        val payload = payloadBytes.toString(Charsets.UTF_8)
-                        items.add(EnvelopeItem(itemType, payload, null, itemHeader))
-                    }
-                    bytePos += explicitLength
+                    bytePos += appendExplicitLengthEnvelopeItem(
+                        bodyBytes,
+                        bytePos,
+                        explicitLength,
+                        itemType,
+                        itemHeader,
+                        items
+                    )
                 } else if (itemType != "unknown" && itemType in knownItemTypes) {
-                    // No explicit length - scan forward for the next item header or end of envelope.
-                    // This handles SDKs (like Android) that omit `length` for text-based items.
-                    val payloadStart = bytePos
-                    var payloadEnd = bodyBytes.size
-
-                    var scanPos = bytePos
-                    while (scanPos < bodyBytes.size) {
-                        val lineEnd =
-                            (scanPos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() }
-                                ?: bodyBytes.size
-                        val line = bodyBytes.copyOfRange(scanPos, lineEnd).toString(Charsets.UTF_8).trim()
-                        if (line.isNotEmpty()) {
-                            try {
-                                val possibleHeader = Json.parseToJsonElement(line).jsonObject
-                                val possibleType = possibleHeader["type"]?.jsonPrimitive?.content
-                                if (possibleType != null &&
-                                    possibleType in knownItemTypes &&
-                                    possibleType != itemType
-                                ) {
-                                    // Found the next item header - payload ends here
-                                    payloadEnd = scanPos
-                                    break
-                                }
-                                // Also detect next item header if it has the same type but includes a length field
-                                if (possibleType != null &&
-                                    possibleType in knownItemTypes &&
-                                    possibleHeader.containsKey("length")
-                                ) {
-                                    payloadEnd = scanPos
-                                    break
-                                }
-                            } catch (_: SerializationException) {
-                                // Not valid JSON - still part of current payload
-                            }
-                        }
-                        scanPos = if (lineEnd < bodyBytes.size) lineEnd + 1 else bodyBytes.size
-                    }
-
-                    if (payloadStart < payloadEnd) {
-                        // Trim trailing newlines from payload
-                        var trimmedEnd = payloadEnd
-                        while (
-                            trimmedEnd > payloadStart &&
-                            (
-                                bodyBytes[trimmedEnd - 1] == '\n'.code.toByte() ||
-                                    bodyBytes[trimmedEnd - 1] == '\r'.code.toByte()
-                                )
-                        ) {
-                            trimmedEnd--
-                        }
-                        val payloadBytes = bodyBytes.copyOfRange(payloadStart, trimmedEnd)
-                        val payload = payloadBytes.toString(Charsets.UTF_8)
-                        items.add(EnvelopeItem(itemType, payload, null, itemHeader))
-                    }
-                    bytePos = payloadEnd
+                    bytePos = appendImplicitLengthEnvelopeItem(
+                        bodyBytes,
+                        bytePos,
+                        knownItemTypes,
+                        itemType,
+                        itemHeader,
+                        items
+                    )
                 } else {
                     // Unknown type with no length - skip
                 }
             }
             return SentryEnvelope(eventId, items)
+        }
+
+        private fun appendExplicitLengthEnvelopeItem(
+            bodyBytes: ByteArray,
+            bytePos: Int,
+            explicitLength: Int,
+            itemType: String,
+            itemHeader: JsonObject,
+            items: MutableList<EnvelopeItem>,
+        ): Int {
+            val payloadBytes = bodyBytes.copyOfRange(bytePos, bytePos + explicitLength)
+            if (itemType == "replay_video" || itemType == "replay_recording") {
+                val payload =
+                    java.util.Base64
+                        .getEncoder()
+                        .encodeToString(payloadBytes)
+                items.add(EnvelopeItem(itemType, payload, payloadBytes, itemHeader))
+            } else {
+                val payload = payloadBytes.toString(Charsets.UTF_8)
+                items.add(EnvelopeItem(itemType, payload, null, itemHeader))
+            }
+            return explicitLength
+        }
+
+        /**
+         * No explicit length — scan forward for the next item header or end of envelope
+         * (SDKs like Android may omit `length` for text-based items).
+         */
+        private fun appendImplicitLengthEnvelopeItem(
+            bodyBytes: ByteArray,
+            bytePos: Int,
+            knownItemTypes: Set<String>,
+            itemType: String,
+            itemHeader: JsonObject,
+            items: MutableList<EnvelopeItem>,
+        ): Int {
+            val payloadStart = bytePos
+            val payloadEnd = findImplicitEnvelopePayloadEnd(bodyBytes, bytePos, knownItemTypes, itemType)
+            if (payloadStart < payloadEnd) {
+                val trimmedEnd = trimTrailingEnvelopeNewlines(bodyBytes, payloadStart, payloadEnd)
+                val payloadBytes = bodyBytes.copyOfRange(payloadStart, trimmedEnd)
+                val payload = payloadBytes.toString(Charsets.UTF_8)
+                items.add(EnvelopeItem(itemType, payload, null, itemHeader))
+            }
+            return payloadEnd
+        }
+
+        private fun implicitScanStopsAtLine(
+            line: String,
+            knownItemTypes: Set<String>,
+            currentItemType: String,
+        ): Boolean {
+            val possibleHeader = Json.parseToJsonElement(line).jsonObject
+            val possibleType = possibleHeader["type"]?.jsonPrimitive?.content ?: return false
+            if (possibleType !in knownItemTypes) return false
+            if (possibleType != currentItemType) return true
+            return possibleHeader.containsKey("length")
+        }
+
+        private fun findImplicitEnvelopePayloadEnd(
+            bodyBytes: ByteArray,
+            bytePos: Int,
+            knownItemTypes: Set<String>,
+            currentItemType: String,
+        ): Int {
+            var payloadEnd = bodyBytes.size
+            var scanPos = bytePos
+            while (scanPos < bodyBytes.size) {
+                val lineEnd =
+                    (scanPos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() }
+                        ?: bodyBytes.size
+                val line = bodyBytes.copyOfRange(scanPos, lineEnd).toString(Charsets.UTF_8).trim()
+                if (line.isNotEmpty()) {
+                    val stop = try {
+                        implicitScanStopsAtLine(line, knownItemTypes, currentItemType)
+                    } catch (_: SerializationException) {
+                        false
+                    }
+                    if (stop) {
+                        payloadEnd = scanPos
+                        break
+                    }
+                }
+                scanPos = if (lineEnd < bodyBytes.size) lineEnd + 1 else bodyBytes.size
+            }
+            return payloadEnd
+        }
+
+        private fun trimTrailingEnvelopeNewlines(
+            bodyBytes: ByteArray,
+            payloadStart: Int,
+            payloadEnd: Int,
+        ): Int {
+            var trimmedEnd = payloadEnd
+            while (
+                trimmedEnd > payloadStart &&
+                (
+                    bodyBytes[trimmedEnd - 1] == '\n'.code.toByte() ||
+                        bodyBytes[trimmedEnd - 1] == '\r'.code.toByte()
+                    )
+            ) {
+                trimmedEnd--
+            }
+            return trimmedEnd
         }
     }
 }

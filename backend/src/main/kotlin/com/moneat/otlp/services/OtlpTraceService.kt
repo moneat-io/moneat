@@ -21,12 +21,14 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.otlp.OtlpProtobufParser
+import com.moneat.otlp.ResourceContext
 import com.moneat.otlp.calculateBillableBytes
 import com.moneat.otlp.hexToULongPair
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
 import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
+import io.opentelemetry.proto.trace.v1.ScopeSpans
 import io.opentelemetry.proto.common.v1.AnyValue
 import io.opentelemetry.proto.common.v1.KeyValue
 import io.opentelemetry.proto.trace.v1.Span
@@ -108,61 +110,81 @@ class OtlpTraceService(
             }
 
         val spans = mutableListOf<OtlpSpanInsert>()
+        appendProtobufResourceSpans(request, spans)
+        return spans
+    }
 
+    private fun appendProtobufResourceSpans(
+        request: ExportTraceServiceRequest,
+        spans: MutableList<OtlpSpanInsert>,
+    ) {
         request.resourceSpansList.forEach { rs ->
             val resourceCtx = OtlpProtobufParser.extractResourceContext(rs.resource)
-
             rs.scopeSpansList.forEach { ss ->
-                val scopeName = ss.scope?.name ?: ""
-                val scopeVersion = ss.scope?.version ?: ""
-
-                ss.spansList.forEach { span ->
-                    val traceId = OtlpProtobufParser.bytesToHex(span.traceId)
-                    val spanId = OtlpProtobufParser.bytesToHex(span.spanId)
-                    val parentSpanId = OtlpProtobufParser.bytesToHex(span.parentSpanId)
-                    val kind = mapSpanKind(span.kindValue)
-
-                    val startNanos = span.startTimeUnixNano
-                    val endNanos = span.endTimeUnixNano.takeIf { it != 0L } ?: startNanos
-                    val durationNanos = maxOf(0L, endNanos - startNanos)
-
-                    val statusCode = span.status?.codeValue ?: 0
-                    val statusMessage = span.status?.message ?: ""
-                    val error = if (statusCode == OTLP_SPAN_STATUS_ERROR) 1 else 0
-
-                    val attributes = OtlpProtobufParser.attributesToMap(span.attributesList)
-                    val events = protoEventsToJson(span.eventsList)
-                    val links = protoLinksToJson(span.linksList)
-
-                    spans += OtlpSpanInsert(
-                        traceIdHex = traceId,
-                        spanIdHex = spanId,
-                        parentIdHex = parentSpanId,
-                        organizationId = 0,
-                        name = span.name,
-                        service = resourceCtx.serviceName,
-                        resource = span.name,
-                        kind = kind,
-                        startNanos = startNanos,
-                        durationNanos = durationNanos,
-                        error = error,
-                        statusCode = statusCode,
-                        statusMessage = statusMessage,
-                        meta = attributes,
-                        resourceAttributes = resourceCtx.attributes,
-                        host = resourceCtx.hostName,
-                        env = resourceCtx.environment,
-                        version = resourceCtx.serviceVersion,
-                        scopeName = scopeName,
-                        scopeVersion = scopeVersion,
-                        events = events,
-                        links = links,
-                    )
-                }
+                appendProtobufScopeSpans(ss, resourceCtx, spans)
             }
         }
+    }
 
-        return spans
+    private fun appendProtobufScopeSpans(
+        ss: ScopeSpans,
+        resourceCtx: ResourceContext,
+        spans: MutableList<OtlpSpanInsert>,
+    ) {
+        val scopeName = ss.scope?.name ?: ""
+        val scopeVersion = ss.scope?.version ?: ""
+        ss.spansList.forEach { span ->
+            spans += otlpSpanInsertFromProtobuf(span, resourceCtx, scopeName, scopeVersion)
+        }
+    }
+
+    private fun otlpSpanInsertFromProtobuf(
+        span: Span,
+        resourceCtx: ResourceContext,
+        scopeName: String,
+        scopeVersion: String,
+    ): OtlpSpanInsert {
+        val traceId = OtlpProtobufParser.bytesToHex(span.traceId)
+        val spanId = OtlpProtobufParser.bytesToHex(span.spanId)
+        val parentSpanId = OtlpProtobufParser.bytesToHex(span.parentSpanId)
+        val kind = mapSpanKind(span.kindValue)
+
+        val startNanos = span.startTimeUnixNano
+        val endNanos = span.endTimeUnixNano.takeIf { it != 0L } ?: startNanos
+        val durationNanos = maxOf(0L, endNanos - startNanos)
+
+        val statusCode = span.status?.codeValue ?: 0
+        val statusMessage = span.status?.message ?: ""
+        val error = if (statusCode == OTLP_SPAN_STATUS_ERROR) 1 else 0
+
+        val attributes = OtlpProtobufParser.attributesToMap(span.attributesList)
+        val events = protoEventsToJson(span.eventsList)
+        val links = protoLinksToJson(span.linksList)
+
+        return OtlpSpanInsert(
+            traceIdHex = traceId,
+            spanIdHex = spanId,
+            parentIdHex = parentSpanId,
+            organizationId = 0,
+            name = span.name,
+            service = resourceCtx.serviceName,
+            resource = span.name,
+            kind = kind,
+            startNanos = startNanos,
+            durationNanos = durationNanos,
+            error = error,
+            statusCode = statusCode,
+            statusMessage = statusMessage,
+            meta = attributes,
+            resourceAttributes = resourceCtx.attributes,
+            host = resourceCtx.hostName,
+            env = resourceCtx.environment,
+            version = resourceCtx.serviceVersion,
+            scopeName = scopeName,
+            scopeVersion = scopeVersion,
+            events = events,
+            links = links,
+        )
     }
 
     fun parseOtlpTracesJson(payload: String): List<OtlpSpanInsert>? {
@@ -179,7 +201,14 @@ class OtlpTraceService(
 
         val resourceSpans = parsed["resourceSpans"]?.jsonArray ?: return null
         val spans = mutableListOf<OtlpSpanInsert>()
+        appendJsonResourceSpans(resourceSpans, spans)
+        return spans
+    }
 
+    private fun appendJsonResourceSpans(
+        resourceSpans: JsonArray,
+        spans: MutableList<OtlpSpanInsert>,
+    ) {
         resourceSpans.forEach { rsElement ->
             val rs = rsElement.jsonObject
             val resourceCtx = OtlpParsingUtils.extractResourceContext(
@@ -188,69 +217,86 @@ class OtlpTraceService(
             val scopeSpans = rs["scopeSpans"]?.jsonArray
                 ?: rs["instrumentationLibrarySpans"]?.jsonArray
                 ?: JsonArray(emptyList())
+            appendJsonScopeSpans(scopeSpans, resourceCtx, spans)
+        }
+    }
 
-            scopeSpans.forEach { ssElement ->
-                val ss = ssElement.jsonObject
-                val scopeName = OtlpParsingUtils.extractScopeName(ss)
-                val scopeVersion = OtlpParsingUtils.extractScopeVersion(ss)
-                val spanArray = OtlpParsingUtils.safeJsonArray(ss["spans"])
-
-                spanArray.forEach { spanElement ->
-                    val span = spanElement.jsonObject
-                    val traceId = span["traceId"]?.jsonPrimitive?.contentOrNull ?: ""
-                    val spanId = span["spanId"]?.jsonPrimitive?.contentOrNull ?: ""
-                    val parentSpanId = span["parentSpanId"]?.jsonPrimitive?.contentOrNull ?: ""
-                    val name = span["name"]?.jsonPrimitive?.contentOrNull ?: ""
-                    val kindInt = span["kind"]?.jsonPrimitive?.intOrNull ?: 0
-                    val kind = mapSpanKind(kindInt)
-
-                    val startNanos = OtlpParsingUtils.extractTimestampNanos(
-                        span, "startTimeUnixNano"
-                    ) ?: 0L
-                    val endNanos = OtlpParsingUtils.extractTimestampNanos(
-                        span, "endTimeUnixNano"
-                    ) ?: startNanos
-                    val durationNanos = maxOf(0L, endNanos - startNanos)
-
-                    val statusObj = span["status"]?.jsonObject
-                    val statusCode = statusObj?.get("code")?.jsonPrimitive?.intOrNull ?: 0
-                    val statusMessage = statusObj?.get("message")
-                        ?.jsonPrimitive?.contentOrNull ?: ""
-                    val error = if (statusCode == OTLP_SPAN_STATUS_ERROR) 1 else 0
-
-                    val attributes = OtlpParsingUtils.attributesToMap(span["attributes"])
-                    val events = span["events"]?.toString() ?: "[]"
-                    val links = span["links"]?.toString() ?: "[]"
-
-                    spans += OtlpSpanInsert(
-                        traceIdHex = traceId,
-                        spanIdHex = spanId,
-                        parentIdHex = parentSpanId,
-                        organizationId = 0,
-                        name = name,
-                        service = resourceCtx.serviceName,
-                        resource = name,
-                        kind = kind,
-                        startNanos = startNanos,
-                        durationNanos = durationNanos,
-                        error = error,
-                        statusCode = statusCode,
-                        statusMessage = statusMessage,
-                        meta = attributes,
-                        resourceAttributes = resourceCtx.attributes,
-                        host = resourceCtx.hostName,
-                        env = resourceCtx.environment,
-                        version = resourceCtx.serviceVersion,
-                        scopeName = scopeName,
-                        scopeVersion = scopeVersion,
-                        events = events,
-                        links = links,
-                    )
-                }
+    private fun appendJsonScopeSpans(
+        scopeSpans: JsonArray,
+        resourceCtx: ResourceContext,
+        spans: MutableList<OtlpSpanInsert>,
+    ) {
+        scopeSpans.forEach { ssElement ->
+            val ss = ssElement.jsonObject
+            val scopeName = OtlpParsingUtils.extractScopeName(ss)
+            val scopeVersion = OtlpParsingUtils.extractScopeVersion(ss)
+            val spanArray = OtlpParsingUtils.safeJsonArray(ss["spans"])
+            spanArray.forEach { spanElement ->
+                spans += otlpSpanInsertFromJson(
+                    spanElement.jsonObject,
+                    resourceCtx,
+                    scopeName,
+                    scopeVersion
+                )
             }
         }
+    }
 
-        return spans
+    private fun otlpSpanInsertFromJson(
+        span: JsonObject,
+        resourceCtx: ResourceContext,
+        scopeName: String,
+        scopeVersion: String,
+    ): OtlpSpanInsert {
+        val traceId = span["traceId"]?.jsonPrimitive?.contentOrNull ?: ""
+        val spanId = span["spanId"]?.jsonPrimitive?.contentOrNull ?: ""
+        val parentSpanId = span["parentSpanId"]?.jsonPrimitive?.contentOrNull ?: ""
+        val name = span["name"]?.jsonPrimitive?.contentOrNull ?: ""
+        val kindInt = span["kind"]?.jsonPrimitive?.intOrNull ?: 0
+        val kind = mapSpanKind(kindInt)
+
+        val startNanos = OtlpParsingUtils.extractTimestampNanos(
+            span, "startTimeUnixNano"
+        ) ?: 0L
+        val endNanos = OtlpParsingUtils.extractTimestampNanos(
+            span, "endTimeUnixNano"
+        ) ?: startNanos
+        val durationNanos = maxOf(0L, endNanos - startNanos)
+
+        val statusObj = span["status"]?.jsonObject
+        val statusCode = statusObj?.get("code")?.jsonPrimitive?.intOrNull ?: 0
+        val statusMessage = statusObj?.get("message")
+            ?.jsonPrimitive?.contentOrNull ?: ""
+        val error = if (statusCode == OTLP_SPAN_STATUS_ERROR) 1 else 0
+
+        val attributes = OtlpParsingUtils.attributesToMap(span["attributes"])
+        val events = span["events"]?.toString() ?: "[]"
+        val links = span["links"]?.toString() ?: "[]"
+
+        return OtlpSpanInsert(
+            traceIdHex = traceId,
+            spanIdHex = spanId,
+            parentIdHex = parentSpanId,
+            organizationId = 0,
+            name = name,
+            service = resourceCtx.serviceName,
+            resource = name,
+            kind = kind,
+            startNanos = startNanos,
+            durationNanos = durationNanos,
+            error = error,
+            statusCode = statusCode,
+            statusMessage = statusMessage,
+            meta = attributes,
+            resourceAttributes = resourceCtx.attributes,
+            host = resourceCtx.hostName,
+            env = resourceCtx.environment,
+            version = resourceCtx.serviceVersion,
+            scopeName = scopeName,
+            scopeVersion = scopeVersion,
+            events = events,
+            links = links,
+        )
     }
 
     fun enqueueTraces(

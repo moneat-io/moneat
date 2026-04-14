@@ -73,47 +73,72 @@ abstract class OtlpIngestionWorkerBase(
         var conn: StatefulRedisConnection<String, String>? = null
         try {
             while (scope.isActive) {
-                try {
-                    if (conn == null || !conn.isOpen) {
-                        conn?.let { disposeRedisConnection(workerId, it) }
-                        conn = RedisConfig.newStatefulBlockingConnection()
-                    }
-                    val redis = conn.sync()
-                    val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-                    val payload = result?.value ?: continue
-                    try {
-                        processMessage(workerId, payload)
-                    } catch (proc: CancellationException) {
-                        throw proc
-                    } catch (proc: SerializationException) {
-                        onOtlpProcessMessageFailure(workerId, proc)
-                    } catch (proc: IOException) {
-                        onOtlpProcessMessageFailure(workerId, proc)
-                    } catch (proc: SQLException) {
-                        onOtlpProcessMessageFailure(workerId, proc)
-                    } catch (proc: RedisException) {
-                        onOtlpProcessMessageFailure(workerId, proc)
-                    } catch (proc: IllegalStateException) {
-                        onOtlpProcessMessageFailure(workerId, proc)
-                    } catch (proc: IllegalArgumentException) {
-                        onOtlpProcessMessageFailure(workerId, proc)
-                    }
-                } catch (e: CancellationException) {
-                    break
-                } catch (e: RedisException) {
-                    onOtlpBrpopLoopFailure(workerId, e, conn) { c ->
-                        disposeRedisConnection(workerId, c)
-                        conn = null
-                    }
-                } catch (e: IOException) {
-                    onOtlpBrpopLoopFailure(workerId, e, conn) { c ->
-                        disposeRedisConnection(workerId, c)
-                        conn = null
+                when (val outcome = runBrpopIteration(workerId, conn)) {
+                    is BrpopIterationOutcome.Break -> break
+                    is BrpopIterationOutcome.Continue -> {
+                        conn = outcome.connection
                     }
                 }
             }
         } finally {
             conn?.let { disposeRedisConnection(workerId, it) }
+        }
+    }
+
+    private sealed class BrpopIterationOutcome {
+        data class Continue(val connection: StatefulRedisConnection<String, String>?) : BrpopIterationOutcome()
+        data object Break : BrpopIterationOutcome()
+    }
+
+    private suspend fun runBrpopIteration(
+        workerId: Int,
+        conn: StatefulRedisConnection<String, String>?,
+    ): BrpopIterationOutcome {
+        var activeConn = conn
+        return try {
+            if (activeConn == null || !activeConn.isOpen) {
+                activeConn?.let { disposeRedisConnection(workerId, it) }
+                activeConn = RedisConfig.newStatefulBlockingConnection()
+            }
+            val redis = activeConn.sync()
+            val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
+            val payload = result?.value ?: return BrpopIterationOutcome.Continue(activeConn)
+            processBrpopPayload(workerId, payload)
+            BrpopIterationOutcome.Continue(activeConn)
+        } catch (e: CancellationException) {
+            BrpopIterationOutcome.Break
+        } catch (e: RedisException) {
+            onOtlpBrpopLoopFailure(workerId, e, activeConn) { c ->
+                disposeRedisConnection(workerId, c)
+                activeConn = null
+            }
+            BrpopIterationOutcome.Continue(activeConn)
+        } catch (e: IOException) {
+            onOtlpBrpopLoopFailure(workerId, e, activeConn) { c ->
+                disposeRedisConnection(workerId, c)
+                activeConn = null
+            }
+            BrpopIterationOutcome.Continue(activeConn)
+        }
+    }
+
+    private suspend fun processBrpopPayload(workerId: Int, payload: String) {
+        try {
+            processMessage(workerId, payload)
+        } catch (proc: CancellationException) {
+            throw proc
+        } catch (proc: SerializationException) {
+            onOtlpProcessMessageFailure(workerId, proc)
+        } catch (proc: IOException) {
+            onOtlpProcessMessageFailure(workerId, proc)
+        } catch (proc: SQLException) {
+            onOtlpProcessMessageFailure(workerId, proc)
+        } catch (proc: RedisException) {
+            onOtlpProcessMessageFailure(workerId, proc)
+        } catch (proc: IllegalStateException) {
+            onOtlpProcessMessageFailure(workerId, proc)
+        } catch (proc: IllegalArgumentException) {
+            onOtlpProcessMessageFailure(workerId, proc)
         }
     }
 

@@ -28,6 +28,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
+import java.sql.Connection
 import java.sql.ResultSet
 import java.util.concurrent.ConcurrentHashMap
 
@@ -115,27 +116,29 @@ abstract class JdbcHandler(
         val db = databaseName ?: defaultDatabase()
         val ds = createTempDataSource(host, p, db, credentials.username, credentials.password)
         return try {
-            ds.connection.use { conn ->
-                val fields = mutableListOf<DataSourceField>()
-                val query = schemaFieldsQuery() ?: schemaIntrospectionQuery()
-                conn.createStatement().use { stmt ->
-                    stmt.executeQuery(query).use { rs ->
-                        while (rs.next()) {
-                            fields.add(
-                                DataSourceField(
-                                    rs.getString(1),
-                                    rs.getString(2),
-                                    rs.getString(SCHEMA_COMMENT_COLUMN).orEmpty(),
-                                )
-                            )
-                        }
-                    }
-                }
-                fields
-            }
+            ds.connection.use { conn -> readJdbcSchemaFields(conn) }
         } finally {
             ds.close()
         }
+    }
+
+    private fun readJdbcSchemaFields(conn: Connection): List<DataSourceField> {
+        val fields = mutableListOf<DataSourceField>()
+        val query = schemaFieldsQuery() ?: schemaIntrospectionQuery()
+        conn.createStatement().use { stmt ->
+            stmt.executeQuery(query).use { rs ->
+                while (rs.next()) {
+                    fields.add(
+                        DataSourceField(
+                            rs.getString(1),
+                            rs.getString(2),
+                            rs.getString(SCHEMA_COMMENT_COLUMN).orEmpty(),
+                        )
+                    )
+                }
+            }
+        }
+        return fields
     }
 
     protected open fun defaultDatabase(): String = ""
