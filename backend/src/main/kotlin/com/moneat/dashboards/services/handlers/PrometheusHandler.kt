@@ -27,6 +27,7 @@ import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -205,34 +206,49 @@ class PrometheusHandler : HttpApiHandler() {
             when (resultType) {
                 "matrix" -> {
                     val values = result.jsonObject["values"]?.jsonArray ?: continue
-                    for (point in values) {
-                        val arr = point.jsonArray
-                        val row = mutableMapOf<String, JsonElement>()
-                        row["time_bucket"] = promTimestampToMs(arr[0])
-                        row[metricName] = promValueToNumber(arr[1])
-                        for ((k, v) in metric) {
-                            if (k != "__name__") row[k] = v
-                        }
-                        rows.add(row)
-                        if (rows.size >= limit) return rows
-                    }
+                    appendPrometheusMatrixPoints(values, metric, metricName, rows, limit)
                 }
-                "vector" -> {
-                    val value = result.jsonObject["value"]?.jsonArray
-                    if (value != null) {
-                        val row = mutableMapOf<String, JsonElement>()
-                        row["time_bucket"] = promTimestampToMs(value[0])
-                        row[metricName] = promValueToNumber(value[1])
-                        for ((k, v) in metric) {
-                            if (k != "__name__") row[k] = v
-                        }
-                        rows.add(row)
-                    }
-                }
+                "vector" -> appendPrometheusVectorRow(result.jsonObject, metric, metricName, rows)
             }
             if (rows.size >= limit) break
         }
         return rows
+    }
+
+    private fun appendPrometheusMatrixPoints(
+        values: JsonArray,
+        metric: JsonObject,
+        metricName: String,
+        rows: MutableList<Map<String, JsonElement>>,
+        limit: Int,
+    ) {
+        for (point in values) {
+            val arr = point.jsonArray
+            val row = mutableMapOf<String, JsonElement>()
+            row["time_bucket"] = promTimestampToMs(arr[0])
+            row[metricName] = promValueToNumber(arr[1])
+            for ((k, v) in metric) {
+                if (k != "__name__") row[k] = v
+            }
+            rows.add(row)
+            if (rows.size >= limit) return
+        }
+    }
+
+    private fun appendPrometheusVectorRow(
+        resultObj: JsonObject,
+        metric: JsonObject,
+        metricName: String,
+        rows: MutableList<Map<String, JsonElement>>,
+    ) {
+        val value = resultObj["value"]?.jsonArray ?: return
+        val row = mutableMapOf<String, JsonElement>()
+        row["time_bucket"] = promTimestampToMs(value[0])
+        row[metricName] = promValueToNumber(value[1])
+        for ((k, v) in metric) {
+            if (k != "__name__") row[k] = v
+        }
+        rows.add(row)
     }
 
     private fun promTimestampToMs(element: JsonElement): JsonElement {

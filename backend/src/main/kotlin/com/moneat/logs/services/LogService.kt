@@ -42,11 +42,15 @@ import com.moneat.logs.models.QueuedLogEntry
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.otlp.OtlpProtobufParser
+import com.moneat.otlp.ResourceContext
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.opentelemetry.proto.collector.logs.v1.ExportLogsServiceRequest
+import io.opentelemetry.proto.logs.v1.LogRecord
+import io.opentelemetry.proto.logs.v1.ResourceLogs
+import io.opentelemetry.proto.logs.v1.ScopeLogs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -842,42 +846,7 @@ class LogService(private val logRepository: LogRepository) {
             val inClause = normalizedLevels.joinToString(",") { "'${escapeSql(it)}'" }
             conditions += "level IN ($inClause)"
         }
-        if (!query.isNullOrBlank()) {
-            // Use Datadog-compatible query parser
-            try {
-                val parsed = queryParser.parse(query)
-                if (parsed.rootNode != null) {
-                    val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
-                    if (queryCondition.isNotBlank() && queryCondition != "1=1") {
-                        conditions += "($queryCondition)"
-                    }
-                }
-            } catch (e: SerializationException) {
-                logger.error(e) {
-                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
-                }
-                // Fallback: treat as simple full-text search
-                conditions += buildSimpleSearchCondition(query)
-            } catch (e: IOException) {
-                logger.error(e) {
-                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
-                }
-                // Fallback: treat as simple full-text search
-                conditions += buildSimpleSearchCondition(query)
-            } catch (e: IllegalStateException) {
-                logger.error(e) {
-                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
-                }
-                // Fallback: treat as simple full-text search
-                conditions += buildSimpleSearchCondition(query)
-            } catch (e: IllegalArgumentException) {
-                logger.error(e) {
-                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
-                }
-                // Fallback: treat as simple full-text search
-                conditions += buildSimpleSearchCondition(query)
-            }
-        }
+        addExportCsvQueryConditions(query, conditions)
         tags.forEach { (key, value) ->
             val condition = buildTagCondition(key, value)
             if (condition.isNotBlank()) {
@@ -952,6 +921,43 @@ class LogService(private val logRepository: LogRepository) {
         }
 
         return sb.toString()
+    }
+
+    /** Applies Datadog-style query parsing to [conditions], or falls back to simple search on parse errors. */
+    private fun addExportCsvQueryConditions(
+        query: String?,
+        conditions: MutableList<String>,
+    ) {
+        if (query.isNullOrBlank()) return
+        try {
+            val parsed = queryParser.parse(query)
+            if (parsed.rootNode != null) {
+                val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
+                if (queryCondition.isNotBlank() && queryCondition != "1=1") {
+                    conditions += "($queryCondition)"
+                }
+            }
+        } catch (e: SerializationException) {
+            logger.error(e) {
+                "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+            }
+            conditions += buildSimpleSearchCondition(query)
+        } catch (e: IOException) {
+            logger.error(e) {
+                "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+            }
+            conditions += buildSimpleSearchCondition(query)
+        } catch (e: IllegalStateException) {
+            logger.error(e) {
+                "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+            }
+            conditions += buildSimpleSearchCondition(query)
+        } catch (e: IllegalArgumentException) {
+            logger.error(e) {
+                "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+            }
+            conditions += buildSimpleSearchCondition(query)
+        }
     }
 
     private fun csvEscape(value: String): String {
@@ -1388,41 +1394,60 @@ class LogService(private val logRepository: LogRepository) {
             }
 
         val entries = mutableListOf<LogIngestEntry>()
-
         request.resourceLogsList.forEach { resourceLogs ->
-            val resourceCtx = OtlpProtobufParser.extractResourceContext(resourceLogs.resource)
-
-            resourceLogs.scopeLogsList.forEach { scopeLogs ->
-                scopeLogs.logRecordsList.forEach { record ->
-                    val attributes = OtlpProtobufParser.attributesToMap(record.attributesList)
-                    val bodyText = OtlpProtobufParser.extractAnyValue(record.body) ?: ""
-                    val message = if (bodyText.isBlank()) "OTLP log record" else bodyText
-                    val severityText = record.severityText.ifEmpty { null }
-                    val timestampNs = record.timeUnixNano.takeIf { it != 0L }
-                        ?: record.observedTimeUnixNano.takeIf { it != 0L }
-                    val timestampMs = timestampNs?.let { OtlpProtobufParser.nanoToEpochMs(it) }
-
-                    entries += LogIngestEntry(
-                        timestampMs = timestampMs,
-                        level = severityText,
-                        message = message,
-                        body = bodyText,
-                        service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
-                        environment = resourceCtx.environment.ifEmpty {
-                            attributes["deployment.environment"] ?: attributes["service.environment"]
-                        },
-                        host = resourceCtx.hostName.ifEmpty { attributes["host.name"] },
-                        source = "otlp",
-                        traceId = OtlpProtobufParser.bytesToHex(record.traceId).ifEmpty { null },
-                        spanId = OtlpProtobufParser.bytesToHex(record.spanId).ifEmpty { null },
-                        tags = HashMap(attributes),
-                        resourceAttributes = HashMap(resourceCtx.attributes),
-                    )
-                }
-            }
+            appendOtlpProtobufResourceLogs(resourceLogs, entries)
         }
-
         return entries
+    }
+
+    private fun appendOtlpProtobufResourceLogs(
+        resourceLogs: ResourceLogs,
+        entries: MutableList<LogIngestEntry>,
+    ) {
+        val resourceCtx = OtlpProtobufParser.extractResourceContext(resourceLogs.resource)
+        resourceLogs.scopeLogsList.forEach { scopeLogs ->
+            appendOtlpProtobufScopeLogs(scopeLogs, resourceCtx, entries)
+        }
+    }
+
+    private fun appendOtlpProtobufScopeLogs(
+        scopeLogs: ScopeLogs,
+        resourceCtx: ResourceContext,
+        entries: MutableList<LogIngestEntry>,
+    ) {
+        scopeLogs.logRecordsList.forEach { record ->
+            entries += logIngestEntryFromOtlpProtobuf(record, resourceCtx)
+        }
+    }
+
+    private fun logIngestEntryFromOtlpProtobuf(
+        record: LogRecord,
+        resourceCtx: ResourceContext,
+    ): LogIngestEntry {
+        val attributes = OtlpProtobufParser.attributesToMap(record.attributesList)
+        val bodyText = OtlpProtobufParser.extractAnyValue(record.body) ?: ""
+        val message = if (bodyText.isBlank()) "OTLP log record" else bodyText
+        val severityText = record.severityText.ifEmpty { null }
+        val timestampNs = record.timeUnixNano.takeIf { it != 0L }
+            ?: record.observedTimeUnixNano.takeIf { it != 0L }
+        val timestampMs = timestampNs?.let { OtlpProtobufParser.nanoToEpochMs(it) }
+
+        return LogIngestEntry(
+            timestampMs = timestampMs,
+            level = severityText,
+            message = message,
+            body = bodyText,
+            service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
+            environment = resourceCtx.environment.ifEmpty {
+                attributes["deployment.environment"] ?: attributes["service.environment"]
+            },
+            host = resourceCtx.hostName.ifEmpty { attributes["host.name"] },
+            source = "otlp",
+            traceId = OtlpProtobufParser.bytesToHex(record.traceId).ifEmpty { null },
+            spanId = OtlpProtobufParser.bytesToHex(record.spanId).ifEmpty { null },
+            tags = HashMap(attributes),
+            resourceAttributes = HashMap(resourceCtx.attributes),
+        )
     }
 
     fun parseOtlpJson(payload: String): List<LogIngestEntry> {
@@ -1436,7 +1461,14 @@ class LogService(private val logRepository: LogRepository) {
 
         val resourceLogs = parsed["resourceLogs"]?.jsonArray ?: return emptyList()
         val entries = mutableListOf<LogIngestEntry>()
+        appendOtlpJsonResourceLogs(resourceLogs, entries)
+        return entries
+    }
 
+    private fun appendOtlpJsonResourceLogs(
+        resourceLogs: JsonArray,
+        entries: MutableList<LogIngestEntry>,
+    ) {
         resourceLogs.forEach { resourceLogElement ->
             val resourceLog = resourceLogElement.jsonObject
             val resourceCtx = OtlpParsingUtils.extractResourceContext(resourceLog["resource"]?.jsonObject)
@@ -1444,47 +1476,55 @@ class LogService(private val logRepository: LogRepository) {
                 resourceLog["scopeLogs"]?.jsonArray
                     ?: resourceLog["instrumentationLibraryLogs"]?.jsonArray
                     ?: JsonArray(emptyList())
+            appendOtlpJsonScopeLogs(scopeLogs, resourceCtx, entries)
+        }
+    }
 
-            scopeLogs.forEach { scopeElement ->
-                val scopeLog = scopeElement.jsonObject
-                val logRecords = OtlpParsingUtils.safeJsonArray(scopeLog["logRecords"])
-
-                logRecords.forEach { recordElement ->
-                    val record = recordElement.jsonObject
-                    val attributes = OtlpParsingUtils.attributesToMap(record["attributes"])
-                    val bodyText = OtlpParsingUtils.extractAnyValue(record["body"]) ?: ""
-                    val message = if (bodyText.isBlank()) "OTLP log record" else bodyText
-                    val severityText = record["severityText"]?.jsonPrimitive?.contentOrNull
-                    val timestampNs = OtlpParsingUtils.extractTimestampNanos(
-                        record,
-                        "timeUnixNano",
-                        "observedTimeUnixNano"
-                    )
-                    val timestampMs = OtlpParsingUtils.nanoToEpochMs(timestampNs)
-
-                    val entry =
-                        LogIngestEntry(
-                            timestampMs = timestampMs,
-                            level = severityText,
-                            message = message,
-                            body = bodyText,
-                            service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
-                            environment = resourceCtx.environment.ifEmpty {
-                                attributes["deployment.environment"] ?: attributes["service.environment"]
-                            },
-                            host = resourceCtx.hostName.ifEmpty { attributes["host.name"] },
-                            source = "otlp",
-                            traceId = record["traceId"]?.jsonPrimitive?.contentOrNull,
-                            spanId = record["spanId"]?.jsonPrimitive?.contentOrNull,
-                            tags = HashMap(attributes),
-                            resourceAttributes = HashMap(resourceCtx.attributes)
-                        )
-                    entries += entry
-                }
+    private fun appendOtlpJsonScopeLogs(
+        scopeLogs: JsonArray,
+        resourceCtx: ResourceContext,
+        entries: MutableList<LogIngestEntry>,
+    ) {
+        scopeLogs.forEach { scopeElement ->
+            val scopeLog = scopeElement.jsonObject
+            val logRecords = OtlpParsingUtils.safeJsonArray(scopeLog["logRecords"])
+            logRecords.forEach { recordElement ->
+                entries += logIngestEntryFromOtlpJson(recordElement.jsonObject, resourceCtx)
             }
         }
+    }
 
-        return entries
+    private fun logIngestEntryFromOtlpJson(
+        record: JsonObject,
+        resourceCtx: ResourceContext,
+    ): LogIngestEntry {
+        val attributes = OtlpParsingUtils.attributesToMap(record["attributes"])
+        val bodyText = OtlpParsingUtils.extractAnyValue(record["body"]) ?: ""
+        val message = if (bodyText.isBlank()) "OTLP log record" else bodyText
+        val severityText = record["severityText"]?.jsonPrimitive?.contentOrNull
+        val timestampNs = OtlpParsingUtils.extractTimestampNanos(
+            record,
+            "timeUnixNano",
+            "observedTimeUnixNano"
+        )
+        val timestampMs = OtlpParsingUtils.nanoToEpochMs(timestampNs)
+
+        return LogIngestEntry(
+            timestampMs = timestampMs,
+            level = severityText,
+            message = message,
+            body = bodyText,
+            service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
+            environment = resourceCtx.environment.ifEmpty {
+                attributes["deployment.environment"] ?: attributes["service.environment"]
+            },
+            host = resourceCtx.hostName.ifEmpty { attributes["host.name"] },
+            source = "otlp",
+            traceId = record["traceId"]?.jsonPrimitive?.contentOrNull,
+            spanId = record["spanId"]?.jsonPrimitive?.contentOrNull,
+            tags = HashMap(attributes),
+            resourceAttributes = HashMap(resourceCtx.attributes)
+        )
     }
 
     private fun parseTimeToMillis(value: String?): Long? {

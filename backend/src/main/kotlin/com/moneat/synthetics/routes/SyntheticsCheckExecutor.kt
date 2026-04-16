@@ -552,68 +552,80 @@ open class SyntheticsCheckExecutor {
 
         return try {
             for (step in steps) {
-                val stepUrl = substituteVariables(step.url, variables)
-                try {
-                    UrlValidator.validateExternalUrl(stepUrl)
-                } catch (e: UrlValidator.SsrfException) {
-                    val durationMs = System.currentTimeMillis() - startTime
-                    return SyntheticCheckResult(
-                        status = "failed",
-                        durationMs = durationMs,
-                        errorMessage = "Step '${step.name}' blocked: ${e.message}"
-                    )
-                }
-                val stepBody = step.body?.let { substituteVariables(it, variables) }
-                val stepHeaders = step.headers?.mapValues { (_, v) -> substituteVariables(v, variables) }
-
-                val stepStart = System.currentTimeMillis()
-                val response = suspendRunCatching {
-                    client.request(stepUrl) {
-                        method = resolveHttpMethod(step.method)
-                        stepHeaders?.forEach { (k, v) -> header(k, v) }
-                        stepBody?.let { b -> setBody(b) }
-                    }
-                }.getOrElse { e ->
-                    val durationMs = System.currentTimeMillis() - startTime
-                    return SyntheticCheckResult(
-                        status = "failed",
-                        durationMs = durationMs,
-                        errorMessage = "Step '${step.name}' failed: ${e.message}"
-                    )
-                }
-
-                val stepDurationMs = System.currentTimeMillis() - stepStart
-                val statusCode = response.status.value
-                val body = response.bodyAsText()
-                val responseHeaders = response.headers.entries()
-                    .associate { (k, v) -> k to v.firstOrNull().orEmpty() }
-
-                // Evaluate step assertions
-                val allPassed = step.assertions.all { assertion ->
-                    evaluateAssertion(assertion, statusCode, body, stepDurationMs, responseHeaders)
-                }
-                if (!allPassed) {
-                    val durationMs = System.currentTimeMillis() - startTime
-                    return SyntheticCheckResult(
-                        status = "failed",
-                        durationMs = durationMs,
-                        errorMessage = "Step '${step.name}' assertion failed"
-                    )
-                }
-
-                // Extract variables for subsequent steps
-                step.extractVariables.forEach { extraction ->
-                    val extracted = extractVariable(extraction.source, extraction.path, body, responseHeaders)
-                    if (extracted != null) {
-                        variables[extraction.name] = extracted
-                    }
-                }
+                val stepOutcome = runSingleMultistepStep(step, client, variables, startTime)
+                if (stepOutcome != null) return stepOutcome
             }
 
             SyntheticCheckResult(status = "passed", durationMs = System.currentTimeMillis() - startTime)
         } finally {
             client.close()
         }
+    }
+
+    /**
+     * Runs one synthetic multistep step. Returns a terminal [SyntheticCheckResult] on failure, or null to continue.
+     */
+    private suspend fun runSingleMultistepStep(
+        step: SyntheticStep,
+        client: HttpClient,
+        variables: MutableMap<String, String>,
+        startTime: Long,
+    ): SyntheticCheckResult? {
+        val stepUrl = substituteVariables(step.url, variables)
+        try {
+            UrlValidator.validateExternalUrl(stepUrl)
+        } catch (e: UrlValidator.SsrfException) {
+            val durationMs = System.currentTimeMillis() - startTime
+            return SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = "Step '${step.name}' blocked: ${e.message}"
+            )
+        }
+        val stepBody = step.body?.let { substituteVariables(it, variables) }
+        val stepHeaders = step.headers?.mapValues { (_, v) -> substituteVariables(v, variables) }
+
+        val stepStart = System.currentTimeMillis()
+        val response = suspendRunCatching {
+            client.request(stepUrl) {
+                method = resolveHttpMethod(step.method)
+                stepHeaders?.forEach { (k, v) -> header(k, v) }
+                stepBody?.let { b -> setBody(b) }
+            }
+        }.getOrElse { e ->
+            val durationMs = System.currentTimeMillis() - startTime
+            return SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = "Step '${step.name}' failed: ${e.message}"
+            )
+        }
+
+        val stepDurationMs = System.currentTimeMillis() - stepStart
+        val statusCode = response.status.value
+        val body = response.bodyAsText()
+        val responseHeaders = response.headers.entries()
+            .associate { (k, v) -> k to v.firstOrNull().orEmpty() }
+
+        val allPassed = step.assertions.all { assertion ->
+            evaluateAssertion(assertion, statusCode, body, stepDurationMs, responseHeaders)
+        }
+        if (!allPassed) {
+            val durationMs = System.currentTimeMillis() - startTime
+            return SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = "Step '${step.name}' assertion failed"
+            )
+        }
+
+        step.extractVariables.forEach { extraction ->
+            val extracted = extractVariable(extraction.source, extraction.path, body, responseHeaders)
+            if (extracted != null) {
+                variables[extraction.name] = extracted
+            }
+        }
+        return null
     }
 
     private fun evaluateAssertion(

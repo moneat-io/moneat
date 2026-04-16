@@ -360,19 +360,25 @@ class TraceIngestionServiceTest {
                 is Long -> packer.packLong(value)
                 is Int -> packer.packInt(value)
                 is String -> packer.packString(value)
-                is Map<*, *> -> {
-                    packer.packMapHeader(value.size)
-                    for ((mk, mv) in value) {
-                        packer.packString(mk as String)
-                        when (mv) {
-                            is String -> packer.packString(mv)
-                            is Double -> packer.packDouble(mv)
-                            else -> packer.packString(mv.toString())
-                        }
-                    }
-                }
+                is Map<*, *> -> packNestedSpanMetaMap(packer, value)
                 else -> packer.packString(value.toString())
             }
+        }
+    }
+
+    private fun packNestedSpanMetaMap(packer: MessageBufferPacker, value: Map<*, *>) {
+        packer.packMapHeader(value.size)
+        for ((mk, mv) in value) {
+            packer.packString(mk as String)
+            packSpanMetaValue(packer, mv)
+        }
+    }
+
+    private fun packSpanMetaValue(packer: MessageBufferPacker, mv: Any?) {
+        when (mv) {
+            is String -> packer.packString(mv)
+            is Double -> packer.packDouble(mv)
+            else -> packer.packString(mv.toString())
         }
     }
 }

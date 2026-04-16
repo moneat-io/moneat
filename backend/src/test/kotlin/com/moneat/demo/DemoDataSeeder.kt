@@ -3892,6 +3892,63 @@ object DemoDataSeeder {
         val level: String
     )
 
+    private suspend fun deleteClickHouseDemoDataForOrganization(orgId: Int) {
+        println("Deleting ClickHouse demo data...")
+        val projectIds =
+            transaction {
+                Projects
+                    .selectAll()
+                    .where { Projects.organization_id eq orgId }
+                    .map { it[Projects.id] }
+            }
+
+        if (projectIds.isNotEmpty()) {
+            val projectIdList = projectIds.joinToString(",")
+            println("Deleting ClickHouse data for projects: $projectIdList")
+
+            val clickhouseQueries =
+                listOf(
+                    "ALTER TABLE issues DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE events DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE logs DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE user_feedback DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE replay_events DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE replay_segments DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE sessions DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE spans DELETE WHERE project_id IN ($projectIdList)"
+                )
+
+            for (query in clickhouseQueries) {
+                try {
+                    ClickHouseClient.execute(query)
+                } catch (e: Exception) {
+                    // Silently continue
+                }
+            }
+        }
+
+        println("Deleting Datadog agent ClickHouse data...")
+        val ddClickhouseQueries =
+            listOf(
+                "ALTER TABLE apm_spans DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE trace_stats DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE profiles DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE infra_events DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE service_checks DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE processes DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE containers DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE network_connections DELETE WHERE toInt64(organization_id) = $orgId",
+            )
+
+        for (query in ddClickhouseQueries) {
+            try {
+                ClickHouseClient.execute(query)
+            } catch (_: Exception) {
+                // Silently continue - table may not exist
+            }
+        }
+    }
+
     suspend fun deleteDemoData() {
         println("🗑️  Deleting existing demo data...")
 
@@ -3975,64 +4032,7 @@ object DemoDataSeeder {
             }
         }
 
-        // Delete ClickHouse data - get actual project IDs
-        if (orgId != null) {
-            println("Deleting ClickHouse demo data...")
-            val projectIds =
-                transaction {
-                    Projects
-                        .selectAll()
-                        .where { Projects.organization_id eq orgId }
-                        .map { it[Projects.id] }
-                }
-
-            if (projectIds.isNotEmpty()) {
-                val projectIdList = projectIds.joinToString(",")
-                println("Deleting ClickHouse data for projects: $projectIdList")
-
-                val clickhouseQueries =
-                    listOf(
-                        "ALTER TABLE issues DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE events DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE logs DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE user_feedback DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE replay_events DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE replay_segments DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE sessions DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE spans DELETE WHERE project_id IN ($projectIdList)"
-                    )
-
-                for (query in clickhouseQueries) {
-                    try {
-                        ClickHouseClient.execute(query)
-                    } catch (e: Exception) {
-                        // Silently continue
-                    }
-                }
-            }
-
-            // Delete Datadog agent ClickHouse data (keyed by organization_id)
-            println("Deleting Datadog agent ClickHouse data...")
-            val ddClickhouseQueries =
-                listOf(
-                    "ALTER TABLE apm_spans DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE trace_stats DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE profiles DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE infra_events DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE service_checks DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE processes DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE containers DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE network_connections DELETE WHERE toInt64(organization_id) = $orgId",
-                )
-
-            for (query in ddClickhouseQueries) {
-                try {
-                    ClickHouseClient.execute(query)
-                } catch (_: Exception) {
-                    // Silently continue - table may not exist
-                }
-            }
-        }
+        orgId?.let { deleteClickHouseDemoDataForOrganization(it) }
 
         println("✅ Demo data deleted")
     }
