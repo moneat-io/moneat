@@ -336,7 +336,7 @@ class GrafanaTranslator : DashboardTranslator {
         if (lineWidth != null) config["lineWidth"] = lineWidth.toString()
 
         val fillOpacity = defaults?.get("fillOpacity")?.jsonPrimitive?.intOrNull
-        if (fillOpacity != null) config["fillOpacity"] = (fillOpacity / 100.0).toString()
+        if (fillOpacity != null) config["fillOpacity"] = (fillOpacity / FILL_OPACITY_SCALE).toString()
 
         val stackMode = defaults?.get("stacking")?.jsonObject?.get("mode")?.jsonPrimitive?.contentOrNull
         if (stackMode != null) config["stackMode"] = stackMode
@@ -906,7 +906,7 @@ class GrafanaTranslator : DashboardTranslator {
         bareMatch: MatchResult?
     ): Triple<String, String, AggFunction>? = when {
         aggByMatch != null -> {
-            val innerExpr = aggByMatch.groupValues[3].trim()
+            val innerExpr = aggByMatch.groupValues[REGEX_THIRD_GROUP_IDX].trim()
             val innerFunc = Regex("""(\w+)\(([^{(]+?)(?:\{[^}]*\})?(?:\[[^]]*])?.*\)""").find(innerExpr)
             val metric = innerFunc?.groupValues?.getOrNull(2)?.trim() ?: "unknown"
             val innerLabels = Regex("""\{([^}]*)\}""").find(innerExpr)?.groupValues?.get(1) ?: ""
@@ -915,7 +915,7 @@ class GrafanaTranslator : DashboardTranslator {
         funcMatch != null -> {
             Triple(
                 funcMatch.groupValues[2].trim(),
-                funcMatch.groupValues[3],
+                funcMatch.groupValues[REGEX_THIRD_GROUP_IDX],
                 mapPromFunction(funcMatch.groupValues[1])
             )
         }
@@ -939,7 +939,7 @@ class GrafanaTranslator : DashboardTranslator {
                 "!=" -> FilterOp.NEQ
                 else -> FilterOp.EQ
             }
-            FilterDef(m.groupValues[1], op, m.groupValues[3])
+            FilterDef(m.groupValues[1], op, m.groupValues[REGEX_THIRD_GROUP_IDX])
         }.toList()
     }
 
