@@ -64,6 +64,20 @@ object TestDatabaseHelper {
         }
     }
 
+    /**
+     * Drops all H2 objects, resets auto-increment columns, and patches JSONB
+     * columns to TEXT for H2 compatibility **without** creating tables via
+     * SchemaUtils. Use when the caller provides manual DDL (e.g. tables with
+     * JSONB defaults that H2 cannot parse from Exposed's generated SQL).
+     */
+    fun dropAndPatchJsonb(vararg tables: Table) {
+        transaction {
+            exec("DROP ALL OBJECTS")
+        }
+        resetAutoIncNullable(*tables)
+        patchJsonbForH2(*tables)
+    }
+
     private fun resetAutoIncNullable(vararg tables: Table) {
         tables.forEach { table ->
             table.columns.forEach { column ->
