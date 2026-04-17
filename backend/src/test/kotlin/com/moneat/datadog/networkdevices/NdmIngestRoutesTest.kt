@@ -1,0 +1,172 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.datadog.networkdevices
+
+import com.moneat.datadog.auth.DatadogAuthMiddleware
+import com.moneat.datadog.services.DatadogService
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.install
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.routing.routing
+import io.ktor.server.testing.testApplication
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class NdmIngestRoutesTest {
+
+    companion object {
+        private const val DD_API_KEY_HEADER = "DD-API-KEY"
+        private const val VALID_KEY = "ndm-ingest-test-key"
+    }
+
+    @BeforeTest
+    fun setupKoin() {
+        startTestKoin()
+        DatadogAuthMiddleware.clearCache()
+        mockkObject(DatadogService)
+        mockkObject(NdmIngestionService)
+        every { NdmIngestionService.enqueue(any(), any()) } returns 1
+    }
+
+    @AfterTest
+    fun teardownKoin() {
+        unmockkObject(NdmIngestionService)
+        unmockkObject(DatadogService)
+        DatadogAuthMiddleware.clearCache()
+        stopTestKoin()
+    }
+
+    @Test
+    fun `ndm ingest returns forbidden when api key is missing`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { ndmIngestRoutes() }
+        }
+        val response = client.post("/dd/api/v1/ndm") {
+            contentType(ContentType.Application.Json)
+            setBody("{}")
+        }
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertTrue(response.bodyAsText().contains("API key"))
+    }
+
+    @Test
+    fun `ndm ingest returns forbidden when api key is invalid`() = testApplication {
+        every { DatadogService.validateApiKey("bad-key") } returns null
+        application {
+            install(ContentNegotiation) { json() }
+            routing { ndmIngestRoutes() }
+        }
+        val response = client.post("/dd/api/v1/ndm") {
+            header(DD_API_KEY_HEADER, "bad-key")
+            contentType(ContentType.Application.Json)
+            setBody("{}")
+        }
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+
+    @Test
+    fun `ndm ingest returns bad request when body is empty`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns 1
+        application {
+            install(ContentNegotiation) { json() }
+            routing { ndmIngestRoutes() }
+        }
+        val response = client.post("/dd/api/v1/ndm") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid payload"))
+    }
+
+    @Test
+    fun `ndm ingest returns bad request for invalid json body`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns 1
+        application {
+            install(ContentNegotiation) { json() }
+            routing { ndmIngestRoutes() }
+        }
+        val response = client.post("/api/v2/ndm") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("{not-json")
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid payload"))
+    }
+
+    @Test
+    fun `ndm ingest returns bad request when body is empty with valid api key`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns 1
+        application {
+            install(ContentNegotiation) { json() }
+            routing { ndmIngestRoutes() }
+        }
+        val response = client.post("/dd/api/v1/ndm") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(ByteArray(0))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid payload"))
+    }
+
+    @Test
+    fun `ndm ingest accepts valid payload with api key`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns 42
+        application {
+            install(ContentNegotiation) { json() }
+            routing { ndmIngestRoutes() }
+        }
+        val response = client.post("/dd/api/v1/ndm") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("""{"type":"ndm","devices":[]}""")
+        }
+        assertEquals(HttpStatusCode.Accepted, response.status)
+    }
+
+    @Test
+    fun `ndm api v2 netpath route exists and responds`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns 1
+        application {
+            install(ContentNegotiation) { json() }
+            routing { ndmIngestRoutes() }
+        }
+        val response = client.post("/api/v2/netpath") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("{}")
+        }
+        assertEquals(HttpStatusCode.Accepted, response.status)
+    }
+}

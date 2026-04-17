@@ -49,10 +49,7 @@ object TestDatabaseHelper {
 
     /**
      * Drops all H2 objects, resets auto-increment columns, and patches JSONB
-     * columns to TEXT for H2 compatibility. Use when tests create tables
-     * manually (raw SQL) and the tables use [JsonbColumnType] which relies
-     * on PostgreSQL's PGobject. H2 does not support JSONB; mapping to TEXT
-     * allows Exposed insert/select to work without PGobject.
+     * columns to TEXT for H2 compatibility, then creates all tables.
      *
      * Must be called after setting `TransactionManager.defaultDatabase`.
      */
@@ -62,6 +59,9 @@ object TestDatabaseHelper {
         }
         resetAutoIncNullable(*tables)
         patchJsonbForH2(*tables)
+        transaction {
+            SchemaUtils.create(*tables)
+        }
     }
 
     private fun resetAutoIncNullable(vararg tables: Table) {
@@ -90,6 +90,8 @@ object TestDatabaseHelper {
                 else -> value.toString()
             }
             override fun notNullValueToDB(value: String): Any = value
+            override fun nonNullValueToString(value: String): String =
+                "'${value.replace("'", "''")}'"
         }
         val field = Column::class.java.getDeclaredField("columnType")
         field.isAccessible = true
