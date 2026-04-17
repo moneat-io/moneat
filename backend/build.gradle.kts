@@ -160,6 +160,7 @@ dependencies {
     testRuntimeOnly(libs.junit.jupiter.engine)
     testImplementation(libs.h2)
     testImplementation(libs.mockk)
+    testImplementation(kotlin("reflect"))
 
     // Integration testing dependencies
     val integrationTestImplementation by configurations
@@ -280,6 +281,8 @@ val jacocoBackendMainExcludes =
         "**/logging/**", // log appender setup
         "**/enterprise/**", // on-call/feature-flag integration stubs in core
         "**/Application*", // entry point
+        "**/di/**", // Koin module assembly — pure wiring, no business logic
+        "**/monitoring/**", // monitoring module hook — framework wiring only
     )
 
 tasks.jacocoTestReport {
@@ -306,10 +309,10 @@ tasks.jacocoTestReport {
                 exclude(*jacocoBackendMainExcludes)
             }
         }
-    // All enterprise module classes: Sonar analyzes ../ee/backend/src/main/kotlin in full; the XML
-    // must map execution data to those sources or new-code coverage reads as 0%.
     val enterpriseClasses =
-        fileTree(eeProject.layout.buildDirectory.dir("classes/kotlin/main"))
+        fileTree(eeProject.layout.buildDirectory.dir("classes/kotlin/main")) {
+            exclude(*jacocoBackendMainExcludes)
+        }
     classDirectories.setFrom(files(backendFiltered, enterpriseClasses))
 
     sourceDirectories.setFrom(
@@ -334,8 +337,8 @@ tasks.jacocoTestCoverageVerification {
                     when(phase) {
                         "reporting-only" -> "0.00"
                         "soft" -> "0.55"
-                        "hard" -> "0.60"
-                        else -> "0.60"
+                        "hard" -> "0.65"
+                        else -> "0.65"
                     }
                 minimum = threshold.toBigDecimal()
             }
