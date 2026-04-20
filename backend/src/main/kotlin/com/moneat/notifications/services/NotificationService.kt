@@ -381,26 +381,46 @@ class NotificationService(
             return false
         }
 
-        val safePriorStats = priorStats ?: PeriodStats(totalEvents = 0, uniqueIssues = 0, uniqueUsers = 0)
-
         val totalEvents = currentStats.totalEvents
-        val eventsTrend = calculateTrend(currentStats.totalEvents, safePriorStats.totalEvents)
+        val eventsTrend = priorStats?.let {
+            calculateTrend(currentStats.totalEvents, it.totalEvents)
+        }
         val newIssues = currentStats.uniqueIssues
-        val issuesTrend = calculateTrend(currentStats.uniqueIssues, safePriorStats.uniqueIssues)
+        val issuesTrend = priorStats?.let {
+            calculateTrend(currentStats.uniqueIssues, it.uniqueIssues)
+        }
         val affectedUsers = currentStats.uniqueUsers
-        val usersTrend = calculateTrend(currentStats.uniqueUsers, safePriorStats.uniqueUsers)
+        val usersTrend = priorStats?.let {
+            calculateTrend(currentStats.uniqueUsers, it.uniqueUsers)
+        }
 
-        val topIssues = getTopIssues(projectIds, startDate, endDate, limit = 5) ?: emptyList()
+        val topIssues = getTopIssues(projectIds, startDate, endDate, limit = 5)
+        if (topIssues == null) {
+            logger.warn {
+                "Skipping weekly summary for $email: ClickHouse top issues query failed"
+            }
+            return false
+        }
+
+        val perProjectStats = getPerProjectStats(projectIds, startDate, endDate)
+        if (perProjectStats == null) {
+            logger.warn {
+                "Skipping weekly summary for $email: ClickHouse per-project stats query failed"
+            }
+            return false
+        }
 
         val projectSummaries =
             projects.map { (projectId, projectName) ->
-                val stats = getStatsForPeriod(listOf(projectId), startDate, endDate)
+                val stats = perProjectStats[projectId]
                 val crashFreeRate = getCrashFreeRate(projectId, startDate, endDate)
                 EmailService.ProjectSummary(
                     name = projectName,
                     events = formatNumber(stats?.totalEvents ?: 0),
                     issues = formatNumber(stats?.uniqueIssues ?: 0),
-                    crashFree = crashFreeRate?.let { String.format(Locale.US, "%.1f%%", it) } ?: "N/A"
+                    crashFree = crashFreeRate?.let {
+                        String.format(Locale.US, "%.1f%%", it)
+                    } ?: "N/A"
                 )
             }
 
@@ -468,6 +488,55 @@ class NotificationService(
             uniqueIssues = data?.get("unique_issues")?.jsonPrimitive?.longOrNull ?: 0,
             uniqueUsers = data?.get("unique_users")?.jsonPrimitive?.longOrNull ?: 0
         )
+    }
+
+    private suspend fun getPerProjectStats(
+        projectIds: List<Long>,
+        startDate: Instant,
+        endDate: Instant
+    ): Map<Long, PeriodStats>? {
+        val startMs = startDate.toEpochMilli()
+        val endMs = endDate.toEpochMilli()
+
+        val query =
+            """
+            SELECT 
+                project_id,
+                count() as total_events,
+                uniqIf(issue_id, issue_id != '') as unique_issues,
+                uniqIf(user_id, user_id != '') as unique_users
+            FROM `$clickhouseDb`.events
+            WHERE project_id IN (${projectIds.joinToString(",")})
+              AND timestamp >= fromUnixTimestamp64Milli($startMs)
+              AND timestamp < fromUnixTimestamp64Milli($endMs)
+            GROUP BY project_id
+            FORMAT JSON
+            """.trimIndent()
+
+        val response = ClickHouseClient.execute(query)
+        val responseBody = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            val preview = responseBody.take(ERROR_BODY_PREVIEW_CHARS)
+            logger.error(
+                "ClickHouse query failed in getPerProjectStats:" +
+                    " ${response.status} - $preview"
+            )
+            return null
+        }
+        val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
+        val rows = jsonResponse["data"]?.jsonArray ?: return emptyMap()
+
+        return rows.mapNotNull { row ->
+            val obj = row.jsonObject
+            val projectId =
+                obj["project_id"]?.jsonPrimitive?.longOrNull
+                    ?: return@mapNotNull null
+            projectId to PeriodStats(
+                totalEvents = obj["total_events"]?.jsonPrimitive?.longOrNull ?: 0,
+                uniqueIssues = obj["unique_issues"]?.jsonPrimitive?.longOrNull ?: 0,
+                uniqueUsers = obj["unique_users"]?.jsonPrimitive?.longOrNull ?: 0
+            )
+        }.toMap()
     }
 
     private suspend fun getCrashFreeRate(

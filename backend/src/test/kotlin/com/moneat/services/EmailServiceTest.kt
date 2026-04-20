@@ -190,4 +190,48 @@ class EmailServiceTest {
             organizationName = "Old Org"
         )
     }
+
+    @Test
+    fun `sendWeeklySummaryEmail handles null trends without throwing`() {
+        val service = EmailService()
+        val data =
+            EmailService.WeeklySummaryData(
+                startDate = "2026-04-06",
+                endDate = "2026-04-13",
+                totalEvents = "500",
+                eventsTrend = null,
+                newIssues = "10",
+                issuesTrend = null,
+                affectedUsers = "50",
+                usersTrend = null,
+                topIssues = emptyList(),
+                projects = emptyList(),
+                dashboardUrl = "https://app.example/dashboard",
+                settingsUrl = "https://app.example/settings",
+                unsubscribeUrl = "https://app.example/unsub"
+            )
+        service.sendWeeklySummaryEmail("lead@example.com", data)
+    }
+
+    @Test
+    fun `sendWeeklySummaryEmail handles mix of null and non-null trends`() {
+        val service = EmailService()
+        val data =
+            EmailService.WeeklySummaryData(
+                startDate = "2026-04-06",
+                endDate = "2026-04-13",
+                totalEvents = "200",
+                eventsTrend = 15,
+                newIssues = "3",
+                issuesTrend = null,
+                affectedUsers = "10",
+                usersTrend = -5,
+                topIssues = emptyList(),
+                projects = emptyList(),
+                dashboardUrl = "https://app.example/dashboard",
+                settingsUrl = "https://app.example/settings",
+                unsubscribeUrl = "https://app.example/unsub"
+            )
+        service.sendWeeklySummaryEmail("lead@example.com", data)
+    }
 }

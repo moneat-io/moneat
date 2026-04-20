@@ -44,6 +44,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class NotificationServiceWeeklySummaryTest {
     // ──── Constants & Mocks ────
@@ -131,6 +132,9 @@ class NotificationServiceWeeklySummaryTest {
         { exchange ->
             val query = exchange.requestBodyText()
             when {
+                query.contains("GROUP BY project_id") -> {
+                    exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
+                }
                 query.contains("countIf(errors = 0)") -> {
                     exchange.respond(sessionsStatus, sessionsJson, TEXT_PLAIN)
                 }
@@ -231,6 +235,201 @@ class NotificationServiceWeeklySummaryTest {
                 val service = NotificationService(emailService, slackService, discordService)
                 try {
                     service.sendWeeklySummaryForUser(userId, "weeklyskip@moneat.io")
+                } finally {
+                    service.shutdown()
+                    ClickHouseClient.close()
+                }
+            }
+
+            verify(exactly = 0) {
+                emailService.sendWeeklySummaryEmail(any(), any())
+            }
+        }
+
+    @Test
+    fun `sendWeeklySummaryForUser sets null trends when prior stats query fails`() =
+        runBlocking {
+            val orgId = seedOrg()
+            val userId = seedUser("nulltrend@moneat.io", "Null Trend User")
+            seedMembership(userId, orgId)
+            seedProject(orgId, "PT1")
+
+            var statsCallCount = 0
+            val handler: (HttpExchange) -> Unit = { exchange ->
+                val query = exchange.requestBodyText()
+                when {
+                    query.contains("GROUP BY project_id") -> {
+                        exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
+                    }
+                    query.contains("count() as total_events") -> {
+                        statsCallCount++
+                        if (statsCallCount == 1) {
+                            val body = """{"data":[{
+                                "total_events":$STATS_TOTAL_EVENTS,
+                                "unique_issues":$STATS_UNIQUE_ISSUES,
+                                "unique_users":$STATS_UNIQUE_USERS
+                            }]}""".replace("\n", "")
+                            exchange.respond(200, body, TEXT_PLAIN)
+                        } else {
+                            exchange.respond(
+                                500,
+                                "Internal Server Error",
+                                TEXT_PLAIN
+                            )
+                        }
+                    }
+                    query.contains("any(message) as title") -> {
+                        exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
+                    }
+                    query.contains("countIf(errors = 0)") -> {
+                        val body = """{"data":[{"rate":99.0}]}"""
+                        exchange.respond(200, body, TEXT_PLAIN)
+                    }
+                    else -> {
+                        exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
+                    }
+                }
+            }
+
+            MockHttpServer(handler).use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+                val service = NotificationService(
+                    emailService,
+                    slackService,
+                    discordService,
+                )
+                try {
+                    service.sendWeeklySummaryForUser(
+                        userId,
+                        "nulltrend@moneat.io",
+                    )
+                } finally {
+                    service.shutdown()
+                    ClickHouseClient.close()
+                }
+            }
+
+            val dataSlot = slot<EmailService.WeeklySummaryData>()
+            verify(exactly = 1) {
+                emailService.sendWeeklySummaryEmail(
+                    "nulltrend@moneat.io",
+                    capture(dataSlot),
+                )
+            }
+            assertNull(dataSlot.captured.eventsTrend)
+            assertNull(dataSlot.captured.issuesTrend)
+            assertNull(dataSlot.captured.usersTrend)
+            assertEquals(
+                STATS_TOTAL_EVENTS.toString(),
+                dataSlot.captured.totalEvents,
+            )
+        }
+
+    @Test
+    fun `sendWeeklySummaryForUser skips email when top issues query fails`() =
+        runBlocking {
+            val orgId = seedOrg()
+            val userId = seedUser("topfail@moneat.io", "TopFail User")
+            seedMembership(userId, orgId)
+            seedProject(orgId, "PT2")
+
+            val handler: (HttpExchange) -> Unit = { exchange ->
+                val query = exchange.requestBodyText()
+                when {
+                    query.contains("any(message) as title") -> {
+                        exchange.respond(
+                            500,
+                            "Internal Server Error",
+                            TEXT_PLAIN
+                        )
+                    }
+                    query.contains("count() as total_events") -> {
+                        val body = """{"data":[{
+                            "total_events":$STATS_TOTAL_EVENTS,
+                            "unique_issues":$STATS_UNIQUE_ISSUES,
+                            "unique_users":$STATS_UNIQUE_USERS
+                        }]}""".replace("\n", "")
+                        exchange.respond(200, body, TEXT_PLAIN)
+                    }
+                    else -> {
+                        exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
+                    }
+                }
+            }
+
+            MockHttpServer(handler).use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+                val service = NotificationService(
+                    emailService,
+                    slackService,
+                    discordService,
+                )
+                try {
+                    service.sendWeeklySummaryForUser(
+                        userId,
+                        "topfail@moneat.io",
+                    )
+                } finally {
+                    service.shutdown()
+                    ClickHouseClient.close()
+                }
+            }
+
+            verify(exactly = 0) {
+                emailService.sendWeeklySummaryEmail(any(), any())
+            }
+        }
+
+    @Test
+    fun `sendWeeklySummaryForUser skips email when per-project stats query fails`() =
+        runBlocking {
+            val orgId = seedOrg()
+            val userId = seedUser("projfail@moneat.io", "ProjFail User")
+            seedMembership(userId, orgId)
+            seedProject(orgId, "PT3")
+
+            val handler: (HttpExchange) -> Unit = { exchange ->
+                val query = exchange.requestBodyText()
+                when {
+                    query.contains("GROUP BY project_id") -> {
+                        exchange.respond(
+                            500,
+                            "Internal Server Error",
+                            TEXT_PLAIN
+                        )
+                    }
+                    query.contains("count() as total_events") -> {
+                        val body = """{"data":[{
+                            "total_events":$STATS_TOTAL_EVENTS,
+                            "unique_issues":$STATS_UNIQUE_ISSUES,
+                            "unique_users":$STATS_UNIQUE_USERS
+                        }]}""".replace("\n", "")
+                        exchange.respond(200, body, TEXT_PLAIN)
+                    }
+                    query.contains("any(message) as title") -> {
+                        exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
+                    }
+                    else -> {
+                        exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
+                    }
+                }
+            }
+
+            MockHttpServer(handler).use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+                val service = NotificationService(
+                    emailService,
+                    slackService,
+                    discordService,
+                )
+                try {
+                    service.sendWeeklySummaryForUser(
+                        userId,
+                        "projfail@moneat.io",
+                    )
                 } finally {
                     service.shutdown()
                     ClickHouseClient.close()
