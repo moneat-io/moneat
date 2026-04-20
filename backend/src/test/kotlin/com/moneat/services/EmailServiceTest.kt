@@ -17,8 +17,14 @@
 package com.moneat.services
 
 import com.moneat.notifications.services.EmailService
+import io.mockk.Runs
+import io.mockk.every
+import io.mockk.just
+import io.mockk.slot
+import io.mockk.spyk
 import kotlin.test.Test
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class EmailServiceTest {
 
@@ -233,5 +239,40 @@ class EmailServiceTest {
                 unsubscribeUrl = "https://app.example/unsub"
             )
         service.sendWeeklySummaryEmail("lead@example.com", data)
+    }
+
+    // ──── HTML Rendering Tests ────
+    @Test
+    fun `sendWeeklySummaryEmail renders mdash badge for null trends in HTML`() {
+        val service = spyk(EmailService())
+        val htmlSlot = slot<String>()
+        every {
+            service.sendEmail(
+                any(), any(), capture(htmlSlot), any(), any()
+            )
+        } just Runs
+
+        val data =
+            EmailService.WeeklySummaryData(
+                startDate = "2026-04-06",
+                endDate = "2026-04-13",
+                totalEvents = "500",
+                eventsTrend = null,
+                newIssues = "10",
+                issuesTrend = null,
+                affectedUsers = "50",
+                usersTrend = null,
+                topIssues = emptyList(),
+                projects = emptyList(),
+                dashboardUrl = "https://app.example/dashboard",
+                settingsUrl = "https://app.example/settings",
+                unsubscribeUrl = "https://app.example/unsub"
+            )
+        service.sendWeeklySummaryEmail("lead@example.com", data)
+
+        assertTrue(
+            htmlSlot.captured.contains("&mdash;"),
+            "HTML should contain mdash entity for null trends"
+        )
     }
 }
