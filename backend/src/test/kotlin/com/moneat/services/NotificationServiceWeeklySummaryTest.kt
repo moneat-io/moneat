@@ -41,6 +41,7 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import com.moneat.notifications.services.NotificationService.WeeklySummaryResult
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -166,7 +167,9 @@ class NotificationServiceWeeklySummaryTest {
 
             val sessionsBody = """{"data":[{"rate":$MOCK_CRASH_FREE_RATE}]}"""
 
-            MockHttpServer(weeklySummaryClickHouseHandler(sessionsBody)).use { server ->
+            val result = MockHttpServer(
+                weeklySummaryClickHouseHandler(sessionsBody)
+            ).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
                 val service = NotificationService(emailService, slackService, discordService)
@@ -178,6 +181,7 @@ class NotificationServiceWeeklySummaryTest {
                 }
             }
 
+            assertEquals(WeeklySummaryResult.SENT, result)
             val dataSlot = slot<EmailService.WeeklySummaryData>()
             verify(exactly = 1) {
                 emailService.sendWeeklySummaryEmail("weeklyuser@moneat.io", capture(dataSlot))
@@ -198,7 +202,9 @@ class NotificationServiceWeeklySummaryTest {
             seedMembership(userId, orgId)
             seedProject(orgId, "P2")
 
-            MockHttpServer(weeklySummaryClickHouseHandler("", sessionsStatus = 500)).use { server ->
+            val result = MockHttpServer(
+                weeklySummaryClickHouseHandler("", sessionsStatus = 500)
+            ).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
                 val service = NotificationService(emailService, slackService, discordService)
@@ -210,6 +216,7 @@ class NotificationServiceWeeklySummaryTest {
                 }
             }
 
+            assertEquals(WeeklySummaryResult.SENT, result)
             val dataSlot = slot<EmailService.WeeklySummaryData>()
             verify(exactly = 1) {
                 emailService.sendWeeklySummaryEmail("weeklyuser2@moneat.io", capture(dataSlot))
@@ -229,7 +236,7 @@ class NotificationServiceWeeklySummaryTest {
                 exchange.respond(500, "Internal Server Error", TEXT_PLAIN)
             }
 
-            MockHttpServer(failHandler).use { server ->
+            val result = MockHttpServer(failHandler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
                 val service = NotificationService(emailService, slackService, discordService)
@@ -241,6 +248,7 @@ class NotificationServiceWeeklySummaryTest {
                 }
             }
 
+            assertEquals(WeeklySummaryResult.FAILED, result)
             verify(exactly = 0) {
                 emailService.sendWeeklySummaryEmail(any(), any())
             }
@@ -291,7 +299,7 @@ class NotificationServiceWeeklySummaryTest {
                 }
             }
 
-            MockHttpServer(handler).use { server ->
+            val result = MockHttpServer(handler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
                 val service = NotificationService(
@@ -310,6 +318,7 @@ class NotificationServiceWeeklySummaryTest {
                 }
             }
 
+            assertEquals(WeeklySummaryResult.SENT, result)
             val dataSlot = slot<EmailService.WeeklySummaryData>()
             verify(exactly = 1) {
                 emailService.sendWeeklySummaryEmail(
@@ -358,7 +367,7 @@ class NotificationServiceWeeklySummaryTest {
                 }
             }
 
-            MockHttpServer(handler).use { server ->
+            val result = MockHttpServer(handler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
                 val service = NotificationService(
@@ -377,6 +386,7 @@ class NotificationServiceWeeklySummaryTest {
                 }
             }
 
+            assertEquals(WeeklySummaryResult.FAILED, result)
             verify(exactly = 0) {
                 emailService.sendWeeklySummaryEmail(any(), any())
             }
@@ -417,7 +427,7 @@ class NotificationServiceWeeklySummaryTest {
                 }
             }
 
-            MockHttpServer(handler).use { server ->
+            val result = MockHttpServer(handler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
                 val service = NotificationService(
@@ -434,6 +444,31 @@ class NotificationServiceWeeklySummaryTest {
                     service.shutdown()
                     ClickHouseClient.close()
                 }
+            }
+
+            assertEquals(WeeklySummaryResult.FAILED, result)
+            verify(exactly = 0) {
+                emailService.sendWeeklySummaryEmail(any(), any())
+            }
+        }
+
+    // ──── SKIPPED Result Tests ────
+    @Test
+    fun `sendWeeklySummaryForUser returns SKIPPED for user with no projects`() =
+        runBlocking {
+            val orgId = seedOrg("Empty Org")
+            val userId = seedUser("noproj@moneat.io", "No Proj User")
+            seedMembership(userId, orgId)
+
+            val service = NotificationService(emailService, slackService, discordService)
+            try {
+                val result = service.sendWeeklySummaryForUser(
+                    userId,
+                    "noproj@moneat.io",
+                )
+                assertEquals(WeeklySummaryResult.SKIPPED, result)
+            } finally {
+                service.shutdown()
             }
 
             verify(exactly = 0) {

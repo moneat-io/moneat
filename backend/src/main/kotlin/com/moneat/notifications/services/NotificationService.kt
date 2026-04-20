@@ -71,6 +71,7 @@ class NotificationService(
     private val slackService: SlackService = SlackService(),
     private val discordService: DiscordService = DiscordService(),
 ) {
+    enum class WeeklySummaryResult { SENT, SKIPPED, FAILED }
     private val config = ApplicationConfig("application.conf")
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val frontendUrl = config.property("email.frontendUrl").getString()
@@ -316,20 +317,26 @@ class NotificationService(
             logger.info { "Sending weekly summaries to ${usersToNotify.size} users" }
 
             var sentCount = 0
+            var skippedCount = 0
             var failedCount = 0
 
             for ((userId, email) in usersToNotify) {
-                val success = suspendRunCatching {
+                val result = suspendRunCatching {
                     sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
                 }.getOrElse { e ->
                     logger.error(e) { "Failed to send weekly summary to $email" }
-                    false
+                    WeeklySummaryResult.FAILED
                 }
-                if (success) sentCount++ else failedCount++
+                when (result) {
+                    WeeklySummaryResult.SENT -> sentCount++
+                    WeeklySummaryResult.SKIPPED -> skippedCount++
+                    WeeklySummaryResult.FAILED -> failedCount++
+                }
             }
 
             logger.info {
-                "Weekly summary complete: $sentCount sent, $failedCount failed" +
+                "Weekly summary complete: $sentCount sent," +
+                    " $skippedCount skipped, $failedCount failed" +
                     " out of ${usersToNotify.size} users"
             }
         }.getOrElse { e ->
@@ -337,12 +344,15 @@ class NotificationService(
         }
     }
 
-    suspend fun sendWeeklySummaryForUser(userId: Int, email: String) {
+    suspend fun sendWeeklySummaryForUser(
+        userId: Int,
+        email: String
+    ): WeeklySummaryResult {
         val now = Instant.now()
         val endDate = now
         val startDate = now.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
         val priorStartDate = startDate.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
-        sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
+        return sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
     }
 
     private suspend fun sendUserWeeklySummary(
@@ -351,7 +361,7 @@ class NotificationService(
         startDate: Instant,
         endDate: Instant,
         priorStartDate: Instant
-    ): Boolean {
+    ): WeeklySummaryResult {
         val projects =
             transaction {
                 val orgIds =
@@ -368,7 +378,7 @@ class NotificationService(
 
         if (projects.isEmpty()) {
             logger.debug { "User $userId has no projects, skipping summary" }
-            return false
+            return WeeklySummaryResult.SKIPPED
         }
 
         val projectIds = projects.map { it.first }
@@ -378,7 +388,7 @@ class NotificationService(
 
         if (currentStats == null) {
             logger.warn { "Skipping weekly summary for $email: ClickHouse stats query failed" }
-            return false
+            return WeeklySummaryResult.FAILED
         }
 
         val totalEvents = currentStats.totalEvents
@@ -399,7 +409,7 @@ class NotificationService(
             logger.warn {
                 "Skipping weekly summary for $email: ClickHouse top issues query failed"
             }
-            return false
+            return WeeklySummaryResult.FAILED
         }
 
         val perProjectStats = getPerProjectStats(projectIds, startDate, endDate)
@@ -407,7 +417,7 @@ class NotificationService(
             logger.warn {
                 "Skipping weekly summary for $email: ClickHouse per-project stats query failed"
             }
-            return false
+            return WeeklySummaryResult.FAILED
         }
 
         val projectSummaries =
@@ -443,7 +453,7 @@ class NotificationService(
 
         emailService.sendWeeklySummaryEmail(email, emailData)
         logger.info { "Sent weekly summary to $email" }
-        return true
+        return WeeklySummaryResult.SENT
     }
 
     private data class PeriodStats(
