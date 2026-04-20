@@ -124,7 +124,7 @@ class NotificationFormattingTest {
         val element = SlackService.SlackElement(
             type = "button",
             text = SlackService.SlackText(type = "plain_text", text = "Click"),
-            action_id = "btn_click"
+            actionId = "btn_click"
         )
         val encoded = json.encodeToString(element)
         val obj = Json.parseToJsonElement(encoded).jsonObject
@@ -188,7 +188,7 @@ class NotificationFormattingTest {
         val response = json.decodeFromString<SlackService.SlackOAuthResponse>(responseJson)
 
         assertTrue(response.ok)
-        assertEquals("xoxb-123", response.access_token)
+        assertEquals("xoxb-123", response.accessToken)
         assertEquals("T123", response.team?.id)
         assertEquals("Test Team", response.team?.name)
     }
@@ -200,7 +200,7 @@ class NotificationFormattingTest {
 
         assertEquals(false, response.ok)
         assertEquals("invalid_code", response.error)
-        assertNull(response.access_token)
+        assertNull(response.accessToken)
     }
 
     @Test
@@ -235,7 +235,7 @@ class NotificationFormattingTest {
         assertTrue(response.ok)
         assertEquals(2, response.channels?.size)
         assertEquals("C001", response.channels?.get(0)?.id)
-        assertEquals(true, response.channels?.get(1)?.is_private)
+        assertEquals(true, response.channels?.get(1)?.isPrivate)
     }
 
     @Test
@@ -395,8 +395,8 @@ class NotificationFormattingTest {
         """.trimIndent()
         val response = json.decodeFromString<DiscordService.DiscordOAuthResponse>(responseJson)
 
-        assertEquals("abc123", response.access_token)
-        assertEquals("Bearer", response.token_type)
+        assertEquals("abc123", response.accessToken)
+        assertEquals("Bearer", response.tokenType)
         assertEquals("G123", response.guild?.id)
         assertEquals("Test Guild", response.guild?.name)
         assertNull(response.error)
@@ -408,7 +408,7 @@ class NotificationFormattingTest {
         val response = json.decodeFromString<DiscordService.DiscordOAuthResponse>(responseJson)
 
         assertEquals("invalid_grant", response.error)
-        assertNull(response.access_token)
+        assertNull(response.accessToken)
         assertNull(response.guild)
     }
 

@@ -285,11 +285,11 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
             val metricsResponse = HistoricalMetricsResponse(
-                system_id = system.id.toString(),
+                systemId = system.id.toString(),
                 from = 1000L,
                 to = 2000L,
-                interval_seconds = 60,
-                data_points = emptyList()
+                intervalSeconds = 60,
+                dataPoints = emptyList()
             )
 
             every { mockMonitorService.getHostById(system.id) } returns system
@@ -326,12 +326,12 @@ class MonitorRoutesMockTest {
                 id = "abc123",
                 image = "nginx:latest",
                 status = "running",
-                cpu_percent = 1.5f,
-                mem_used = 100L,
-                mem_limit = 512L,
-                net_recv_bytes = 0L,
-                net_sent_bytes = 0L,
-                mem_percent = 0.2f
+                cpuPercent = 1.5f,
+                memUsed = 100L,
+                memLimit = 512L,
+                netRecvBytes = 0L,
+                netSentBytes = 0L,
+                memPercent = 0.2f
             )
 
             every { mockMonitorService.getHostById(system.id) } returns system
@@ -700,11 +700,11 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
             val containerMetrics = ContainerMetricsResponse(
-                container_name = "my-container",
+                containerName = "my-container",
                 from = 1000L,
                 to = 2000L,
-                interval_seconds = 60,
-                data_points = emptyList()
+                intervalSeconds = 60,
+                dataPoints = emptyList()
             )
 
             every { mockMonitorService.getHostById(system.id) } returns system

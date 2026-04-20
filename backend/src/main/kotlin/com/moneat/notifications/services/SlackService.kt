@@ -34,6 +34,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.and
@@ -80,7 +81,7 @@ class SlackService {
         val type: String,
         val text: SlackText? = null,
         val url: String? = null,
-        val action_id: String? = null
+        @SerialName("action_id") val actionId: String? = null
     )
 
     @Serializable
@@ -107,11 +108,11 @@ class SlackService {
     @Serializable
     data class SlackOAuthResponse(
         val ok: Boolean,
-        val access_token: String? = null,
-        val token_type: String? = null,
+        @SerialName("access_token") val accessToken: String? = null,
+        @SerialName("token_type") val tokenType: String? = null,
         val scope: String? = null,
-        val bot_user_id: String? = null,
-        val app_id: String? = null,
+        @SerialName("bot_user_id") val botUserId: String? = null,
+        @SerialName("app_id") val appId: String? = null,
         val team: SlackTeam? = null,
         val error: String? = null
     )
@@ -828,7 +829,7 @@ class SlackService {
     data class SlackChannel(
         val id: String,
         val name: String,
-        val is_private: Boolean? = null
+        @SerialName("is_private") val isPrivate: Boolean? = null
     )
 
     suspend fun listChannels(accessToken: String): List<SlackChannel> {
@@ -961,7 +962,7 @@ class SlackService {
                             SlackElement(
                                 type = "button",
                                 text = SlackText(type = "plain_text", text = "Acknowledge", emoji = false),
-                                action_id = "incident_acknowledge_$incidentId"
+                                actionId = "incident_acknowledge_$incidentId"
                             ),
                             SlackElement(
                                 type = "button",
@@ -970,7 +971,7 @@ class SlackService {
                                     "FRONTEND_URL",
                                     "https://moneat.io"
                                 )}/on-call/incidents/$incidentId",
-                                action_id = "incident_view_$incidentId"
+                                actionId = "incident_view_$incidentId"
                             )
                         )
                     )

@@ -313,11 +313,11 @@ class SummaryService(
         }
 
         val avgCpu = hostMetrics
-            .map { it.cpu_percent.toDouble() }
+            .map { it.cpuPercent.toDouble() }
             .takeIf { it.isNotEmpty() }?.average() ?: 0.0
 
         val avgMem = hostMetrics
-            .map { it.mem_percent.toDouble() }
+            .map { it.memPercent.toDouble() }
             .takeIf { it.isNotEmpty() }?.average() ?: 0.0
 
         WeeklyReportResponse(
@@ -383,10 +383,10 @@ class SummaryService(
                     hostMetrics = HostMetricsWindow(
                         systemId = host.id.toString(),
                         systemName = host.displayName ?: host.hostname,
-                        avgCpu = metrics.cpu_percent.toDouble(),
-                        maxCpu = metrics.cpu_percent.toDouble(),
-                        avgMemory = metrics.mem_percent.toDouble(),
-                        maxMemory = metrics.mem_percent.toDouble(),
+                        avgCpu = metrics.cpuPercent.toDouble(),
+                        maxCpu = metrics.cpuPercent.toDouble(),
+                        avgMemory = metrics.memPercent.toDouble(),
+                        maxMemory = metrics.memPercent.toDouble(),
                         windowStart = isoFormatter.format(windowStart),
                         windowEnd = isoFormatter.format(now)
                     )
@@ -415,10 +415,10 @@ class SummaryService(
                     hostMetrics = HostMetricsWindow(
                         systemId = host.id.toString(),
                         systemName = host.displayName ?: host.hostname,
-                        avgCpu = metrics.cpu_percent.toDouble(),
-                        maxCpu = metrics.cpu_percent.toDouble(),
-                        avgMemory = metrics.mem_percent.toDouble(),
-                        maxMemory = metrics.mem_percent.toDouble(),
+                        avgCpu = metrics.cpuPercent.toDouble(),
+                        maxCpu = metrics.cpuPercent.toDouble(),
+                        avgMemory = metrics.memPercent.toDouble(),
+                        maxMemory = metrics.memPercent.toDouble(),
                         windowStart = isoFormatter.format(windowStart),
                         windowEnd = isoFormatter.format(now)
                     )

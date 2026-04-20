@@ -17,6 +17,7 @@
 package com.moneat.events.models
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -249,7 +250,7 @@ data class EnvelopeItem(
 
 @Serializable
 data class SentryEvent(
-    val event_id: String? = null,
+    @SerialName("event_id") val eventId: String? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     val level: String? = null,
@@ -269,7 +270,7 @@ data class SentryEvent(
     val breadcrumbs: JsonArray? = null,
     val request: JsonObject? = null,
     val fingerprint: List<String>? = null,
-    val server_name: String? = null,
+    @SerialName("server_name") val serverName: String? = null,
     val threads: JsonObject? = null
 )
 
@@ -377,11 +378,11 @@ object FlexibleTimestampSerializer : KSerializer<Double?> {
 
 @Serializable
 data class SentryTransaction(
-    val event_id: String? = null,
+    @SerialName("event_id") val eventId: String? = null,
     val type: String? = null,
     val transaction: String? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
-    val start_timestamp: Double? = null,
+    @SerialName("start_timestamp") val startTimestamp: Double? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     val platform: String? = null,
@@ -393,7 +394,7 @@ data class SentryTransaction(
     val contexts: JsonObject? = null,
     val spans: List<SentrySpan>? = null,
     val sdk: SdkInfo? = null,
-    val server_name: String? = null,
+    @SerialName("server_name") val serverName: String? = null,
     val request: JsonObject? = null,
     @Serializable(with = BreadcrumbsSerializer::class)
     val breadcrumbs: JsonArray? = null,
@@ -402,13 +403,13 @@ data class SentryTransaction(
 
 @Serializable
 data class SentrySpan(
-    val span_id: String? = null,
-    val parent_span_id: String? = null,
-    val trace_id: String? = null,
+    @SerialName("span_id") val spanId: String? = null,
+    @SerialName("parent_span_id") val parentSpanId: String? = null,
+    @SerialName("trace_id") val traceId: String? = null,
     val op: String? = null,
     val description: String? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
-    val start_timestamp: Double? = null,
+    @SerialName("start_timestamp") val startTimestamp: Double? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     val status: String? = null,
@@ -447,11 +448,11 @@ data class StackFrame(
     val module: String? = null,
     val lineno: Int? = null,
     val colno: Int? = null,
-    val abs_path: String? = null,
-    val context_line: String? = null,
-    val pre_context: List<String>? = null,
-    val post_context: List<String>? = null,
-    val in_app: Boolean? = null,
+    @SerialName("abs_path") val absPath: String? = null,
+    @SerialName("context_line") val contextLine: String? = null,
+    @SerialName("pre_context") val preContext: List<String>? = null,
+    @SerialName("post_context") val postContext: List<String>? = null,
+    @SerialName("in_app") val inApp: Boolean? = null,
     val vars: JsonObject? = null
 )
 
@@ -460,20 +461,20 @@ data class UserInfo(
     val id: String? = null,
     val email: String? = null,
     val username: String? = null,
-    val ip_address: String? = null
+    @SerialName("ip_address") val ipAddress: String? = null
 )
 
 @Serializable
 data class SentryReplayEvent(
-    val replay_id: String? = null,
-    val segment_id: Int? = null,
+    @SerialName("replay_id") val replayId: String? = null,
+    @SerialName("segment_id") val segmentId: Int? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
-    val replay_start_timestamp: Double? = null,
+    @SerialName("replay_start_timestamp") val replayStartTimestamp: Double? = null,
     val urls: List<String>? = null,
-    val error_ids: List<String>? = null,
-    val trace_ids: List<String>? = null,
+    @SerialName("error_ids") val errorIds: List<String>? = null,
+    @SerialName("trace_ids") val traceIds: List<String>? = null,
     val platform: String? = null,
     val environment: String? = null,
     val release: String? = null,
@@ -481,12 +482,12 @@ data class SentryReplayEvent(
     val contexts: JsonObject? = null,
     val sdk: SdkInfo? = null,
     val tags: Map<String, String>? = null,
-    val replay_type: String? = null
+    @SerialName("replay_type") val replayType: String? = null
 )
 
 @Serializable
 data class SentryFeedback(
-    val event_id: String? = null,
+    @SerialName("event_id") val eventId: String? = null,
     val timestamp: String? = null,
     val platform: String? = null,
     val level: String? = null,

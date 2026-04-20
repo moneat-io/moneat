@@ -647,7 +647,7 @@ class DiscordServiceBuildersTest {
     @Test
     fun `DiscordOAuthResponse with error`() {
         val resp = DiscordService.DiscordOAuthResponse(error = "invalid_grant")
-        assertNull(resp.access_token)
+        assertNull(resp.accessToken)
         assertNull(resp.guild)
         assertTrue(resp.error == "invalid_grant")
     }

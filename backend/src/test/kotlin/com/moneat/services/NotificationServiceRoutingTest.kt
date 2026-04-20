@@ -163,7 +163,7 @@ class NotificationServiceRoutingTest {
         environment: String? = "production"
     ): SentryEvent =
         SentryEvent(
-            event_id = eventId,
+            eventId = eventId,
             timestamp = Clock.System.now().toEpochMilliseconds() / 1000.0,
             level = level,
             message = message,
@@ -172,7 +172,7 @@ class NotificationServiceRoutingTest {
 
     private fun buildEventWithException(): SentryEvent =
         SentryEvent(
-            event_id = "evt-exc-1",
+            eventId = "evt-exc-1",
             timestamp = Clock.System.now().toEpochMilliseconds() / 1000.0,
             level = "error",
             message = null,
@@ -188,13 +188,13 @@ class NotificationServiceRoutingTest {
                                     filename = "UserService.kt",
                                     function = "getUser",
                                     lineno = 42,
-                                    in_app = true
+                                    inApp = true
                                 ),
                                 StackFrame(
                                     filename = "UserRoute.kt",
                                     function = "handleGet",
                                     lineno = 15,
-                                    in_app = true
+                                    inApp = true
                                 )
                             )
                         )
@@ -521,7 +521,7 @@ class NotificationServiceRoutingTest {
             seedNotificationPrefs(userId, frequencyMinutes = 0)
 
             val event = SentryEvent(
-                event_id = "evt-nots",
+                eventId = "evt-nots",
                 timestamp = null,
                 level = "error",
                 message = "Timestamp-less error"

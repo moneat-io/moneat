@@ -31,6 +31,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -54,7 +55,7 @@ private data class VersionTarget(
 
 @Serializable
 private data class GitHubLatestReleaseResponse(
-    val tag_name: String? = null,
+    @SerialName("tag_name") val tagName: String? = null,
     val prerelease: Boolean = false,
     val draft: Boolean = false,
 )
@@ -215,7 +216,7 @@ object SdkVersionService {
             return null
         }
 
-        return normalizeVersionTag(release.tag_name.orEmpty())
+        return normalizeVersionTag(release.tagName.orEmpty())
     }
 
     private suspend fun fetchFromTags(repository: String): String? {

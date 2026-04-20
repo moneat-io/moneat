@@ -208,21 +208,21 @@ class SummaryServiceTest {
         cpu: Float = 55.0f,
         mem: Float = 70.0f
     ): LatestMetrics = LatestMetrics(
-        cpu_percent = cpu,
-        mem_total = 16000000L,
-        mem_used = 11200000L,
-        mem_percent = mem,
-        disk_total = 500000000L,
-        disk_used = 250000000L,
-        disk_percent = 50.0f,
-        net_recv_bytes = 1000L,
-        net_sent_bytes = 2000L,
-        net_recv_mbps = 1.0f,
-        net_sent_mbps = 2.0f,
-        load_1 = 1.5f,
-        temp_max = null,
-        gpu_percent = null,
-        battery_percent = null
+        cpuPercent = cpu,
+        memTotal = 16000000L,
+        memUsed = 11200000L,
+        memPercent = mem,
+        diskTotal = 500000000L,
+        diskUsed = 250000000L,
+        diskPercent = 50.0f,
+        netRecvBytes = 1000L,
+        netSentBytes = 2000L,
+        netRecvMbps = 1.0f,
+        netSentMbps = 2.0f,
+        load1 = 1.5f,
+        tempMax = null,
+        gpuPercent = null,
+        batteryPercent = null
     )
 
     private fun mockClickHouseHandler(

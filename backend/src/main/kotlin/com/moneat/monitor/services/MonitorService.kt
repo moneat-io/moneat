@@ -313,21 +313,21 @@ class MonitorService(
 
             val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
             return LatestMetrics(
-                cpu_percent = cpuPercent,
-                mem_total = memTotal,
-                mem_used = effectiveMemUsed,
-                mem_percent = if (memTotal > 0) (effectiveMemUsed.toFloat() / memTotal * PERCENT_MULTIPLIER) else 0f,
-                disk_total = diskTotal,
-                disk_used = diskUsed,
-                disk_percent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * PERCENT_MULTIPLIER) else 0f,
-                net_recv_bytes = netRecvBytes,
-                net_sent_bytes = netSentBytes,
-                net_recv_mbps = null,
-                net_sent_mbps = null,
-                load_1 = load1,
-                temp_max = tempMax,
-                gpu_percent = gpuPercent,
-                battery_percent = batteryPercent
+                cpuPercent = cpuPercent,
+                memTotal = memTotal,
+                memUsed = effectiveMemUsed,
+                memPercent = if (memTotal > 0) (effectiveMemUsed.toFloat() / memTotal * PERCENT_MULTIPLIER) else 0f,
+                diskTotal = diskTotal,
+                diskUsed = diskUsed,
+                diskPercent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * PERCENT_MULTIPLIER) else 0f,
+                netRecvBytes = netRecvBytes,
+                netSentBytes = netSentBytes,
+                netRecvMbps = null,
+                netSentMbps = null,
+                load1 = load1,
+                tempMax = tempMax,
+                gpuPercent = gpuPercent,
+                batteryPercent = batteryPercent
             )
         }.getOrElse { e ->
             logger.warn(e) { "Failed to parse latest metrics response" }
@@ -398,23 +398,23 @@ class MonitorService(
                 val batteryPercent = arr.getOrNull(BATCH_COL_BATTERY_PERCENT)?.toString()?.toFloatOrNull()
                 val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
                 result[rowHostId] = LatestMetrics(
-                    cpu_percent = cpuPercent,
-                    mem_total = memTotal,
-                    mem_used = effectiveMemUsed,
-                    mem_percent = if (memTotal > 0) {
+                    cpuPercent = cpuPercent,
+                    memTotal = memTotal,
+                    memUsed = effectiveMemUsed,
+                    memPercent = if (memTotal > 0) {
                         effectiveMemUsed.toFloat() / memTotal * PERCENT_MULTIPLIER
                     } else { 0f },
-                    disk_total = diskTotal,
-                    disk_used = diskUsed,
-                    disk_percent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * PERCENT_MULTIPLIER) else 0f,
-                    net_recv_bytes = netRecvBytes,
-                    net_sent_bytes = netSentBytes,
-                    net_recv_mbps = null,
-                    net_sent_mbps = null,
-                    load_1 = load1,
-                    temp_max = tempMax,
-                    gpu_percent = gpuPercent,
-                    battery_percent = batteryPercent
+                    diskTotal = diskTotal,
+                    diskUsed = diskUsed,
+                    diskPercent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * PERCENT_MULTIPLIER) else 0f,
+                    netRecvBytes = netRecvBytes,
+                    netSentBytes = netSentBytes,
+                    netRecvMbps = null,
+                    netSentMbps = null,
+                    load1 = load1,
+                    tempMax = tempMax,
+                    gpuPercent = gpuPercent,
+                    batteryPercent = batteryPercent
                 )
             }
             hostIds.associateWith { result[it] }
@@ -438,22 +438,22 @@ class MonitorService(
             MONITOR_HISTORY_CACHE_TTL_SECONDS
         ) {
             val host = getHostById(hostId) ?: return@cached HistoricalMetricsResponse(
-                system_id = "",
-                host_id = hostId,
+                systemId = "",
+                hostId = hostId,
                 from = fromTimestamp,
                 to = toTimestamp,
-                interval_seconds = intervalSeconds ?: 3600,
-                data_points = emptyList()
+                intervalSeconds = intervalSeconds ?: 3600,
+                dataPoints = emptyList()
             )
             val clampedWindow = clampRangeToRetention(hostId, fromTimestamp, toTimestamp)
             if (clampedWindow == null) {
                 return@cached HistoricalMetricsResponse(
-                    system_id = "",
-                    host_id = hostId,
+                    systemId = "",
+                    hostId = hostId,
                     from = fromTimestamp,
                     to = toTimestamp,
-                    interval_seconds = intervalSeconds ?: 3600,
-                    data_points = emptyList()
+                    intervalSeconds = intervalSeconds ?: 3600,
+                    dataPoints = emptyList()
                 )
             }
             val (effectiveFrom, effectiveTo) = clampedWindow
@@ -503,39 +503,39 @@ class MonitorService(
                     val result = json.parseToJsonElement(body).jsonObject
                     val data =
                         result["data"]?.jsonArray ?: return@cached HistoricalMetricsResponse(
-                            system_id = "",
-                            host_id = hostId,
+                            systemId = "",
+                            hostId = hostId,
                             from = effectiveFrom,
                             to = effectiveTo,
-                            interval_seconds = calculatedInterval,
-                            data_points = emptyList()
+                            intervalSeconds = calculatedInterval,
+                            dataPoints = emptyList()
                         )
 
                     data.map { row ->
                         val arr = row.jsonArray
                         MetricDataPoint(
                             timestamp = arr[0].toString().replace("\"", "").toLong(),
-                            cpu_percent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
-                            mem_percent = arr.getOrNull(2)?.toString()?.toFloatOrNull(),
-                            disk_percent = arr.getOrNull(HIST_COL_DISK_PERCENT)?.toString()?.toFloatOrNull(),
-                            net_recv_bytes =
+                            cpuPercent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
+                            memPercent = arr.getOrNull(2)?.toString()?.toFloatOrNull(),
+                            diskPercent = arr.getOrNull(HIST_COL_DISK_PERCENT)?.toString()?.toFloatOrNull(),
+                            netRecvBytes =
                             arr
                                 .getOrNull(HIST_COL_NET_RECV_BYTES)
                                 ?.toString()
                                 ?.replace("\"", "")
                                 ?.toLongOrNull(),
-                            net_sent_bytes =
+                            netSentBytes =
                             arr
                                 .getOrNull(HIST_COL_NET_SENT_BYTES)
                                 ?.toString()
                                 ?.replace("\"", "")
                                 ?.toLongOrNull(),
-                            load_1 = arr.getOrNull(HIST_COL_LOAD_1)?.toString()?.toFloatOrNull(),
-                            load_5 = arr.getOrNull(HIST_COL_LOAD_5)?.toString()?.toFloatOrNull(),
-                            load_15 = arr.getOrNull(HIST_COL_LOAD_15)?.toString()?.toFloatOrNull(),
-                            temp_max = arr.getOrNull(HIST_COL_TEMP_MAX)?.toString()?.toFloatOrNull(),
-                            gpu_percent = arr.getOrNull(HIST_COL_GPU_PERCENT)?.toString()?.toFloatOrNull(),
-                            battery_percent = arr.getOrNull(HIST_COL_BATTERY_PERCENT)?.toString()?.toFloatOrNull()
+                            load1 = arr.getOrNull(HIST_COL_LOAD_1)?.toString()?.toFloatOrNull(),
+                            load5 = arr.getOrNull(HIST_COL_LOAD_5)?.toString()?.toFloatOrNull(),
+                            load15 = arr.getOrNull(HIST_COL_LOAD_15)?.toString()?.toFloatOrNull(),
+                            tempMax = arr.getOrNull(HIST_COL_TEMP_MAX)?.toString()?.toFloatOrNull(),
+                            gpuPercent = arr.getOrNull(HIST_COL_GPU_PERCENT)?.toString()?.toFloatOrNull(),
+                            batteryPercent = arr.getOrNull(HIST_COL_BATTERY_PERCENT)?.toString()?.toFloatOrNull()
                         )
                     }
                 }.getOrElse { e ->
@@ -544,12 +544,12 @@ class MonitorService(
                 }
 
             HistoricalMetricsResponse(
-                system_id = "",
-                host_id = hostId,
+                systemId = "",
+                hostId = hostId,
                 from = effectiveFrom,
                 to = effectiveTo,
-                interval_seconds = calculatedInterval,
-                data_points = dataPoints
+                intervalSeconds = calculatedInterval,
+                dataPoints = dataPoints
             )
         }
 
@@ -602,12 +602,12 @@ class MonitorService(
                     id = arr[1].toString().replace("\"", ""),
                     image = arr[2].toString().replace("\"", ""),
                     status = arr[3].toString().replace("\"", ""),
-                    cpu_percent = arr[4].toString().toFloatOrNull() ?: 0f,
-                    mem_used = memUsed,
-                    mem_limit = memLimit,
-                    net_recv_bytes = netRecvBytes,
-                    net_sent_bytes = netSentBytes,
-                    mem_percent = if (memLimit > 0) (memUsed.toFloat() / memLimit * PERCENT_MULTIPLIER) else 0f
+                    cpuPercent = arr[4].toString().toFloatOrNull() ?: 0f,
+                    memUsed = memUsed,
+                    memLimit = memLimit,
+                    netRecvBytes = netRecvBytes,
+                    netSentBytes = netSentBytes,
+                    memPercent = if (memLimit > 0) (memUsed.toFloat() / memLimit * PERCENT_MULTIPLIER) else 0f
                 )
             }
         }.getOrElse { e ->
@@ -635,12 +635,12 @@ class MonitorService(
                             id = c.id,
                             image = c.image,
                             status = c.status,
-                            cpuPercent = c.cpu_percent,
-                            memUsed = c.mem_used,
-                            memLimit = c.mem_limit,
-                            netRecvBytes = c.net_recv_bytes,
-                            netSentBytes = c.net_sent_bytes,
-                            memPercent = c.mem_percent
+                            cpuPercent = c.cpuPercent,
+                            memUsed = c.memUsed,
+                            memLimit = c.memLimit,
+                            netRecvBytes = c.netRecvBytes,
+                            netSentBytes = c.netSentBytes,
+                            memPercent = c.memPercent
                         )
                     )
                 }
@@ -741,20 +741,20 @@ class MonitorService(
         intervalSeconds: Int?
     ): ContainerMetricsResponse {
         val host = getHostById(hostId) ?: return ContainerMetricsResponse(
-            container_name = containerName,
+            containerName = containerName,
             from = fromTimestamp,
             to = toTimestamp,
-            interval_seconds = intervalSeconds ?: 3600,
-            data_points = emptyList()
+            intervalSeconds = intervalSeconds ?: 3600,
+            dataPoints = emptyList()
         )
         val clampedWindow = clampRangeToRetention(hostId, fromTimestamp, toTimestamp)
         if (clampedWindow == null) {
             return ContainerMetricsResponse(
-                container_name = containerName,
+                containerName = containerName,
                 from = fromTimestamp,
                 to = toTimestamp,
-                interval_seconds = intervalSeconds ?: 3600,
-                data_points = emptyList()
+                intervalSeconds = intervalSeconds ?: 3600,
+                dataPoints = emptyList()
             )
         }
         val (effectiveFrom, effectiveTo) = clampedWindow
@@ -797,37 +797,37 @@ class MonitorService(
                 val result = json.parseToJsonElement(body).jsonObject
                 val data =
                     result["data"]?.jsonArray ?: return ContainerMetricsResponse(
-                        container_name = containerName,
+                        containerName = containerName,
                         from = effectiveFrom,
                         to = effectiveTo,
-                        interval_seconds = calculatedInterval,
-                        data_points = emptyList()
+                        intervalSeconds = calculatedInterval,
+                        dataPoints = emptyList()
                     )
 
                 data.map { row ->
                     val arr = row.jsonArray
                     ContainerMetricDataPoint(
                         timestamp = arr[0].toString().replace("\"", "").toLong(),
-                        cpu_percent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
-                        mem_used =
+                        cpuPercent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
+                        memUsed =
                         arr
                             .getOrNull(2)
                             ?.toString()
                             ?.replace("\"", "")
                             ?.toLongOrNull(),
-                        mem_limit =
+                        memLimit =
                         arr
                             .getOrNull(CONT_HIST_COL_MEM_LIMIT)
                             ?.toString()
                             ?.replace("\"", "")
                             ?.toLongOrNull(),
-                        net_recv_bytes =
+                        netRecvBytes =
                         arr
                             .getOrNull(CONT_HIST_COL_NET_RECV)
                             ?.toString()
                             ?.replace("\"", "")
                             ?.toLongOrNull(),
-                        net_sent_bytes =
+                        netSentBytes =
                         arr
                             .getOrNull(CONT_HIST_COL_NET_SENT)
                             ?.toString()
@@ -841,11 +841,11 @@ class MonitorService(
             }
 
         return ContainerMetricsResponse(
-            container_name = containerName,
+            containerName = containerName,
             from = effectiveFrom,
             to = effectiveTo,
-            interval_seconds = calculatedInterval,
-            data_points = dataPoints
+            intervalSeconds = calculatedInterval,
+            dataPoints = dataPoints
         )
     }
 

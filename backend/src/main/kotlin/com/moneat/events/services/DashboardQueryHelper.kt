@@ -194,7 +194,7 @@ class DashboardQueryHelper(
         val userEmail = obj["user_email"]?.jsonPrimitive?.contentOrNull
         val userUsername = obj["user_username"]?.jsonPrimitive?.contentOrNull
         return if (userId != null || userEmail != null || userUsername != null) {
-            UserInfo(id = userId, email = userEmail, username = userUsername, ip_address = null)
+            UserInfo(id = userId, email = userEmail, username = userUsername, ipAddress = null)
         } else {
             null
         }

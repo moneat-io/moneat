@@ -31,6 +31,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -93,7 +94,7 @@ class IncidentIoProvider : IncidentProvider {
 
             val payload =
                 AlertEventPayload(
-                    deduplication_key = event.deduplicationKey,
+                    deduplicationKey = event.deduplicationKey,
                     status =
                     when (event.status) {
                         IncidentStatus.FIRING -> "firing"
@@ -113,7 +114,7 @@ class IncidentIoProvider : IncidentProvider {
 
             if (response.status.value in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 val responseBody = response.body<AlertEventResponse>()
-                Result.success(responseBody.deduplication_key)
+                Result.success(responseBody.deduplicationKey)
             } else {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
@@ -135,7 +136,7 @@ class IncidentIoProvider : IncidentProvider {
 
             val payload =
                 AlertEventPayload(
-                    deduplication_key = deduplicationKey,
+                    deduplicationKey = deduplicationKey,
                     status = "resolved",
                     title = "Alert Resolved",
                     description = "This alert has been automatically resolved by Moneat",
@@ -151,7 +152,7 @@ class IncidentIoProvider : IncidentProvider {
 
             if (response.status.value in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 val responseBody = response.body<AlertEventResponse>()
-                Result.success(responseBody.deduplication_key)
+                Result.success(responseBody.deduplicationKey)
             } else {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
@@ -172,7 +173,7 @@ class IncidentIoProvider : IncidentProvider {
             val testDedup = "moneat-test-${System.currentTimeMillis()}"
             val payload =
                 AlertEventPayload(
-                    deduplication_key = testDedup,
+                    deduplicationKey = testDedup,
                     status = "firing",
                     title = "Moneat Test Alert",
                     description = "This is a test alert from Moneat to verify the integration",
@@ -202,7 +203,7 @@ class IncidentIoProvider : IncidentProvider {
 
     @Serializable
     private data class AlertEventPayload(
-        val deduplication_key: String,
+        @SerialName("deduplication_key") val deduplicationKey: String,
         val status: String,
         val title: String,
         val description: String,
@@ -211,7 +212,7 @@ class IncidentIoProvider : IncidentProvider {
 
     @Serializable
     private data class AlertEventResponse(
-        val deduplication_key: String
+        @SerialName("deduplication_key") val deduplicationKey: String
     )
 }
 

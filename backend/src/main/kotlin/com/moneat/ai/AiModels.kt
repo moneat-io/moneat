@@ -16,6 +16,7 @@
 
 package com.moneat.ai
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
@@ -99,9 +100,9 @@ data class AiResponse(
     val message: String = "",
     val actions: List<AiAction> = emptyList(),
     val clarifications: List<AiClarification> = emptyList(),
-    val data_queries: List<AiDataQuery> = emptyList(),
+    @SerialName("data_queries") val dataQueries: List<AiDataQuery> = emptyList(),
     val links: List<AiLink> = emptyList(),
-    val context_needed: List<String> = emptyList()
+    @SerialName("context_needed") val contextNeeded: List<String> = emptyList()
 )
 
 @Serializable
@@ -166,9 +167,9 @@ data class ActionResult(
 data class OpenAiChatRequest(
     val model: String,
     val messages: List<OpenAiMessage>,
-    val max_tokens: Int = 2048,
+    @SerialName("max_tokens") val maxTokens: Int = 2048,
     val temperature: Double = 0.3,
-    val response_format: OpenAiResponseFormat? = null
+    @SerialName("response_format") val responseFormat: OpenAiResponseFormat? = null
 )
 
 @Serializable
@@ -192,12 +193,12 @@ data class OpenAiChatResponse(
 @Serializable
 data class OpenAiChoice(
     val message: OpenAiMessage,
-    val finish_reason: String? = null
+    @SerialName("finish_reason") val finishReason: String? = null
 )
 
 @Serializable
 data class OpenAiUsage(
-    val prompt_tokens: Int = 0,
-    val completion_tokens: Int = 0,
-    val total_tokens: Int = 0
+    @SerialName("prompt_tokens") val promptTokens: Int = 0,
+    @SerialName("completion_tokens") val completionTokens: Int = 0,
+    @SerialName("total_tokens") val totalTokens: Int = 0
 )

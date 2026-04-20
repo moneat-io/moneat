@@ -273,8 +273,8 @@ class SummaryService(
             HostMetricSnapshot(
                 systemId = sys.id.toString(),
                 systemName = sys.displayName ?: sys.hostname,
-                cpuPercent = metrics?.cpu_percent,
-                memPercent = metrics?.mem_percent,
+                cpuPercent = metrics?.cpuPercent,
+                memPercent = metrics?.memPercent,
                 status = sys.status,
             )
         }

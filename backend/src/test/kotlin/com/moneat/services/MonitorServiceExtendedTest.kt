@@ -127,18 +127,18 @@ class MonitorServiceExtendedTest {
 
         val metrics = service.getLatestMetrics(1)
         assertNotNull(metrics)
-        assertEquals(75.5f, metrics.cpu_percent)
-        assertEquals(8589934592L, metrics.mem_total)
+        assertEquals(75.5f, metrics.cpuPercent)
+        assertEquals(8589934592L, metrics.memTotal)
         // mem_used = memTotal - memAvailable = 8589934592 - 4294967296 = 4294967296
-        assertEquals(4294967296L, metrics.mem_used)
-        assertEquals(107374182400L, metrics.disk_total)
-        assertEquals(53687091200L, metrics.disk_used)
-        assertEquals(123456L, metrics.net_recv_bytes)
-        assertEquals(654321L, metrics.net_sent_bytes)
-        assertEquals(1.5f, metrics.load_1)
-        assertEquals(62.0f, metrics.temp_max)
-        assertEquals(45.0f, metrics.gpu_percent)
-        assertEquals(85.0f, metrics.battery_percent)
+        assertEquals(4294967296L, metrics.memUsed)
+        assertEquals(107374182400L, metrics.diskTotal)
+        assertEquals(53687091200L, metrics.diskUsed)
+        assertEquals(123456L, metrics.netRecvBytes)
+        assertEquals(654321L, metrics.netSentBytes)
+        assertEquals(1.5f, metrics.load1)
+        assertEquals(62.0f, metrics.tempMax)
+        assertEquals(45.0f, metrics.gpuPercent)
+        assertEquals(85.0f, metrics.batteryPercent)
     }
 
     @Test
@@ -172,8 +172,8 @@ class MonitorServiceExtendedTest {
 
         val metrics = service.getLatestMetrics(1)
         assertNotNull(metrics)
-        assertEquals(400L, metrics.mem_used)
-        assertEquals(40.0f, metrics.mem_percent)
+        assertEquals(400L, metrics.memUsed)
+        assertEquals(40.0f, metrics.memPercent)
     }
 
     @Test
@@ -189,7 +189,7 @@ class MonitorServiceExtendedTest {
 
         val metrics = service.getLatestMetrics(1)
         assertNotNull(metrics)
-        assertEquals(800L, metrics.mem_used)
+        assertEquals(800L, metrics.memUsed)
     }
 
     @Test
@@ -237,9 +237,9 @@ class MonitorServiceExtendedTest {
         val result = service.getLatestMetricsForHosts(listOf(1, 2, 3), 10)
         assertEquals(3, result.size)
         assertNotNull(result[1])
-        assertEquals(80.0f, result[1]?.cpu_percent)
+        assertEquals(80.0f, result[1]?.cpuPercent)
         assertNotNull(result[2])
-        assertEquals(60.0f, result[2]?.cpu_percent)
+        assertEquals(60.0f, result[2]?.cpuPercent)
         assertNull(result[3])
     }
 
@@ -292,11 +292,11 @@ class MonitorServiceExtendedTest {
         assertEquals("abc123", containers[0].id)
         assertEquals("nginx:latest", containers[0].image)
         assertEquals("running", containers[0].status)
-        assertEquals(25.5f, containers[0].cpu_percent)
-        assertEquals(524288000L, containers[0].mem_used)
-        assertEquals(1073741824L, containers[0].mem_limit)
-        assertEquals(12345L, containers[0].net_recv_bytes)
-        assertEquals(67890L, containers[0].net_sent_bytes)
+        assertEquals(25.5f, containers[0].cpuPercent)
+        assertEquals(524288000L, containers[0].memUsed)
+        assertEquals(1073741824L, containers[0].memLimit)
+        assertEquals(12345L, containers[0].netRecvBytes)
+        assertEquals(67890L, containers[0].netSentBytes)
     }
 
     @Test
@@ -317,7 +317,7 @@ class MonitorServiceExtendedTest {
         """.trimIndent()
 
         val containers = service.getLatestContainers(1)
-        assertEquals(50.0f, containers[0].mem_percent)
+        assertEquals(50.0f, containers[0].memPercent)
     }
 
     @Test
@@ -370,8 +370,8 @@ class MonitorServiceExtendedTest {
         every { hostRepo.getById(999) } returns null
 
         val result = service.getHistoricalMetrics(999, 1000, 2000, null)
-        assertTrue(result.data_points.isEmpty())
-        assertEquals(999, result.host_id)
+        assertTrue(result.dataPoints.isEmpty())
+        assertEquals(999, result.hostId)
     }
 
     @Test
@@ -383,7 +383,7 @@ class MonitorServiceExtendedTest {
         val nowEpoch = Clock.System.now().epochSeconds
         val farPast = nowEpoch - 86400L * 30
         val result = service.getHistoricalMetrics(1, farPast, farPast + 100, null)
-        assertTrue(result.data_points.isEmpty())
+        assertTrue(result.dataPoints.isEmpty())
     }
 
     @Test
@@ -401,8 +401,8 @@ class MonitorServiceExtendedTest {
             nowEpoch,
             null
         )
-        assertEquals(10, result.interval_seconds)
-        assertTrue(result.data_points.isEmpty())
+        assertEquals(10, result.intervalSeconds)
+        assertTrue(result.dataPoints.isEmpty())
     }
 
     @Test
@@ -413,7 +413,7 @@ class MonitorServiceExtendedTest {
         coEvery { hostRepo.executeClickHouseQuery(any()) } returns DATA_EMPTY_JSON
 
         val result = service.getHistoricalMetrics(1, nowEpoch - 3600, nowEpoch, 120)
-        assertEquals(120, result.interval_seconds)
+        assertEquals(120, result.intervalSeconds)
     }
 
     @Test
@@ -433,10 +433,10 @@ class MonitorServiceExtendedTest {
         """.trimIndent()
 
         val result = service.getHistoricalMetrics(1, nowEpoch - 3600, nowEpoch, 60)
-        assertEquals(2, result.data_points.size)
-        assertEquals(55.0f, result.data_points[0].cpu_percent)
-        assertEquals(70.0f, result.data_points[0].mem_percent)
-        assertEquals(60.0f, result.data_points[1].cpu_percent)
+        assertEquals(2, result.dataPoints.size)
+        assertEquals(55.0f, result.dataPoints[0].cpuPercent)
+        assertEquals(70.0f, result.dataPoints[0].memPercent)
+        assertEquals(60.0f, result.dataPoints[1].cpuPercent)
     }
 
     // ──── getContainerHistoricalMetrics ────
@@ -446,8 +446,8 @@ class MonitorServiceExtendedTest {
         every { hostRepo.getById(999) } returns null
 
         val result = service.getContainerHistoricalMetrics(999, "nginx", 1000, 2000, null)
-        assertTrue(result.data_points.isEmpty())
-        assertEquals("nginx", result.container_name)
+        assertTrue(result.dataPoints.isEmpty())
+        assertEquals("nginx", result.containerName)
     }
 
     @Test
@@ -457,7 +457,7 @@ class MonitorServiceExtendedTest {
         val farPast = Clock.System.now().epochSeconds - 86400L * 30
 
         val result = service.getContainerHistoricalMetrics(1, "nginx", farPast, farPast + 100, null)
-        assertTrue(result.data_points.isEmpty())
+        assertTrue(result.dataPoints.isEmpty())
     }
 
     @Test
@@ -482,10 +482,10 @@ class MonitorServiceExtendedTest {
             nowEpoch,
             60
         )
-        assertEquals(1, result.data_points.size)
-        assertEquals(25.0f, result.data_points[0].cpu_percent)
-        assertEquals(524288000L, result.data_points[0].mem_used)
-        assertEquals(1073741824L, result.data_points[0].mem_limit)
+        assertEquals(1, result.dataPoints.size)
+        assertEquals(25.0f, result.dataPoints[0].cpuPercent)
+        assertEquals(524288000L, result.dataPoints[0].memUsed)
+        assertEquals(1073741824L, result.dataPoints[0].memLimit)
     }
 
     // ──── getLatestInfraContainers ────

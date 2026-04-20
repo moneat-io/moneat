@@ -125,17 +125,17 @@ fun Route.monitorRoutes(
                             name = host.displayName ?: host.hostname,
                             hostname = host.hostname,
                             status = host.status,
-                            last_seen_at = host.lastSeenAt?.toEpochMilliseconds(),
+                            lastSeenAt = host.lastSeenAt?.toEpochMilliseconds(),
                             firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
-                            agent_version = host.agentVersion,
+                            agentVersion = host.agentVersion,
                             os = host.os,
                             arch = host.arch,
                             platform = host.platform,
                             processor = host.processor,
                             cpuCores = host.cpuCores,
                             memoryTotalKb = host.memoryTotalKb,
-                            created_at = host.createdAt.toEpochMilliseconds(),
-                            latest_metrics = latestMetricsByHost[host.id]
+                            createdAt = host.createdAt.toEpochMilliseconds(),
+                            latestMetrics = latestMetricsByHost[host.id]
                         )
                     }
 
@@ -187,17 +187,17 @@ fun Route.monitorRoutes(
                         name = host.displayName ?: host.hostname,
                         hostname = host.hostname,
                         status = host.status,
-                        last_seen_at = host.lastSeenAt?.toEpochMilliseconds(),
+                        lastSeenAt = host.lastSeenAt?.toEpochMilliseconds(),
                         firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
-                        agent_version = host.agentVersion,
+                        agentVersion = host.agentVersion,
                         os = host.os,
                         arch = host.arch,
                         platform = host.platform,
                         processor = host.processor,
                         cpuCores = host.cpuCores,
                         memoryTotalKb = host.memoryTotalKb,
-                        created_at = host.createdAt.toEpochMilliseconds(),
-                        latest_metrics = monitorService.getLatestMetrics(host.id)
+                        createdAt = host.createdAt.toEpochMilliseconds(),
+                        latestMetrics = monitorService.getLatestMetrics(host.id)
                     )
                 )
             }
