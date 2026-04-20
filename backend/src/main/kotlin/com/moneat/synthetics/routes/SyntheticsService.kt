@@ -51,6 +51,7 @@ import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
+/** Manages synthetic HTTP checks, variables, execution, and ClickHouse result storage. */
 class SyntheticsService(
     private val emailService: EmailService = EmailService(),
     private val slackService: SlackService = SlackService(),
@@ -139,21 +140,19 @@ class SyntheticsService(
         }
     }
 
+    /** Applies partial updates to a synthetic test; validates retry fields when either count or interval is present. */
     fun updateTest(
         testId: UUID,
         organizationId: Int,
         request: UpdateSyntheticTestRequest
     ): SyntheticTestResponse? {
-        request.retryCount?.let { rc ->
-            request.retryIntervalMs?.let { ri ->
-                validateRetryParams(rc, ri)
-            } ?: validateRetryParams(rc, RETRY_INTERVAL_MS_DEFAULT)
+        val rc = request.retryCount
+        val ri = request.retryIntervalMs
+        if (rc != null) {
+            validateRetryParams(rc, ri ?: RETRY_INTERVAL_MS_DEFAULT)
         }
-        request.retryIntervalMs?.let { ri ->
-            validateRetryParams(
-                request.retryCount ?: RETRY_COUNT_DEFAULT,
-                ri
-            )
+        if (ri != null) {
+            validateRetryParams(rc ?: RETRY_COUNT_DEFAULT, ri)
         }
         val updated = transaction {
             SyntheticTests
@@ -527,6 +526,7 @@ class SyntheticsService(
         }
     }
 
+    /** Ensures retry count and interval are non-negative before create/update. */
     private fun validateRetryParams(retryCount: Int, retryIntervalMs: Int) {
         require(retryCount >= 0) {
             "retryCount must be non-negative, got $retryCount"

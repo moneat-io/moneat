@@ -45,6 +45,7 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
+/** Escapes HTML special characters for safe inclusion in email templates. */
 private fun String.escapeHtml(): String =
     replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -61,6 +62,7 @@ private const val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
     "border:1px solid #e5e5e5;color:#737373;"
 private const val TOP_ISSUES_COUNT = 5
 
+/** Sends transactional and notification email via Jakarta Mail and HTML templates. */
 class EmailService {
     private val config = ApplicationConfig("application.conf")
     private val fromEmail = config.property("email.from").getString()
@@ -90,6 +92,7 @@ class EmailService {
             Session.getInstance(
                 props,
                 object : Authenticator() {
+                    /** Credentials used for authenticated SMTP submission. */
                     override fun getPasswordAuthentication(): PasswordAuthentication {
                         return PasswordAuthentication(smtpUsername, smtpPassword)
                     }
@@ -188,6 +191,10 @@ class EmailService {
         sendEmail(toEmail, subject, htmlBody, textBody, "org_invitation")
     }
 
+    /**
+     * Sends a multipart alternative (plain text + HTML) message when SMTP is configured;
+     * otherwise logs a preview and records a failed send for metrics.
+     */
     fun sendEmail(
         to: String,
         subject: String,
@@ -215,29 +222,23 @@ class EmailService {
 
         var success = false
         try {
+            val textPart =
+                MimeBodyPart().apply {
+                    setText(textBody, "UTF-8")
+                }
+            val htmlPart =
+                MimeBodyPart().apply {
+                    setContent(htmlBody, "text/html; charset=UTF-8")
+                }
             val message =
                 MimeMessage(mailSession).apply {
                     setFrom(InternetAddress(fromEmail, "Moneat"))
                     setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
                     setSubject(subject)
 
-                    // Create multipart message with both HTML and text
                     val multipart = MimeMultipart("alternative")
-
-                    // Add text part
-                    val textPart =
-                        MimeBodyPart().apply {
-                            setText(textBody, "UTF-8")
-                        }
                     multipart.addBodyPart(textPart)
-
-                    // Add HTML part
-                    val htmlPart =
-                        MimeBodyPart().apply {
-                            setContent(htmlBody, "text/html; charset=UTF-8")
-                        }
                     multipart.addBodyPart(htmlPart)
-
                     setContent(multipart)
                 }
 
@@ -293,6 +294,7 @@ class EmailService {
         }
     }
 
+    /** Records send outcome in [EmailsSent] for the recipient's organization when resolvable. */
     private fun trackEmailSent(
         recipient: String,
         emailType: String,

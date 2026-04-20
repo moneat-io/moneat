@@ -67,6 +67,7 @@ class EventServiceTest {
     private val validPublicKey = "test-public-key-valid"
     private val inactivePublicKey = "test-public-key-inactive"
 
+    /** Constructs [EventService] with default and scenario-specific [EventRepository] mocks. */
     @BeforeTest
     fun setup() {
         eventService = EventService(eventRepository = eventRepository)
@@ -123,6 +124,7 @@ class EventServiceTest {
 
     // ──── EVENT FINGERPRINTING TESTS (P0) ────
 
+    /** Asserts identical primary exception metadata yields the same deduplication fingerprint. */
     @Test
     fun `same error with identical exception generates same fingerprint for deduplication`() {
         val event1 =
@@ -150,46 +152,40 @@ class EventServiceTest {
             )
 
         val fingerprint1 =
-            event1.let {
-                it.exception?.let { exc ->
-                    val firstException = exc.values.firstOrNull()
-                    listOf(
-                        firstException?.type,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.function,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.filename
-                    )
-                        .filterNotNull()
-                } ?: emptyList()
-            }
+            event1.exception?.let { exc ->
+                val firstException = exc.values.firstOrNull()
+                listOf(
+                    firstException?.type,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.function,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.filename
+                ).filterNotNull()
+            } ?: emptyList()
 
         val fingerprint2 =
-            event2.let {
-                it.exception?.let { exc ->
-                    val firstException = exc.values.firstOrNull()
-                    listOf(
-                        firstException?.type,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.function,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.filename
-                    )
-                        .filterNotNull()
-                } ?: emptyList()
-            }
+            event2.exception?.let { exc ->
+                val firstException = exc.values.firstOrNull()
+                listOf(
+                    firstException?.type,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.function,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.filename
+                ).filterNotNull()
+            } ?: emptyList()
 
         assertEquals(fingerprint1, fingerprint2, "Same errors should generate identical fingerprints for deduplication")
     }

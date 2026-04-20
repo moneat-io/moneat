@@ -28,6 +28,7 @@ import com.moneat.dashboards.models.GroupByType
 import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.WidgetResponse
+import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -42,7 +43,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
 import kotlin.math.roundToInt
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -58,6 +58,7 @@ private const val FILL_OPACITY_SCALE = 100.0
 private const val REGEX_THIRD_GROUP_IDX = 3
 private const val GRAFANA_SCHEMA_VERSION = 39
 
+/** Imports and exports dashboards between Grafana JSON and Moneat dashboard models. */
 class GrafanaTranslator : DashboardTranslator {
 
     private val widgetTypeMap = mapOf(
@@ -215,124 +216,162 @@ class GrafanaTranslator : DashboardTranslator {
     private fun scaleGridValue(grafanaUnits: Int): Int =
         (grafanaUnits * GRAFANA_ROW_PX / MONEAT_ROW_PX).roundToInt()
 
+    /** Builds Moneat display config key/value strings from Grafana panel fieldConfig, mappings, and options. */
     private fun extractDisplayConfig(panelJson: JsonObject): Map<String, String> {
         val config = mutableMapOf<String, String>()
-
-        val fieldConfig = panelJson["fieldConfig"]?.jsonObject
-        val fieldDefaults = fieldConfig?.get("defaults")?.jsonObject
-        val defaults = fieldDefaults?.get("custom")?.jsonObject
-
-        // Unit and decimals from fieldConfig.defaults
-        fieldDefaults?.get("unit")?.jsonPrimitive?.contentOrNull?.let { config["unit"] = it }
-        fieldDefaults?.get("decimals")?.jsonPrimitive?.intOrNull?.let { config["decimals"] = it.toString() }
-
-        // Thresholds from fieldConfig.defaults.thresholds
-        fieldDefaults?.get("thresholds")?.jsonObject?.let { thresholds ->
-            val steps = thresholds["steps"]?.jsonArray
-            if (steps != null && steps.size > 0) {
-                val moneatThresholds = steps.mapNotNull { step ->
-                    val stepObj = step.jsonObject
-                    val valuePrim = stepObj["value"]?.jsonPrimitive
-                    val value = valuePrim?.intOrNull
-                        ?: if (valuePrim?.contentOrNull == null) 0 else return@mapNotNull null
-                    val color = stepObj["color"]?.jsonPrimitive?.contentOrNull
-                        ?: return@mapNotNull null
-                    buildJsonObject {
-                        put("value", value)
-                        put("color", color)
-                    }
-                }
-                if (moneatThresholds.isNotEmpty()) {
-                    config["thresholds"] = JsonArray(moneatThresholds).toString()
-                }
-            }
-        }
-
-        // Value mappings from fieldConfig.defaults.mappings
-        fieldDefaults?.get("mappings")?.jsonArray?.let { mappings ->
-            val moneatMappings = mappings.mapNotNull { mapping ->
-                val mapObj = mapping.jsonObject
-                val type = mapObj["type"]?.jsonPrimitive?.contentOrNull
-                when (type) {
-                    "special" -> {
-                        val opts = mapObj["options"]?.jsonObject ?: return@mapNotNull null
-                        val match = opts["match"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                        val text = opts["result"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
-                            ?: return@mapNotNull null
-                        val color = opts["result"]?.jsonObject?.get("color")?.jsonPrimitive?.contentOrNull
-                        buildJsonObject {
-                            put("value", match)
-                            put("text", text)
-                            color?.let { put("color", it) }
-                        }
-                    }
-                    "value" -> {
-                        val opts = mapObj["options"]?.jsonObject ?: return@mapNotNull null
-                        opts.entries.firstOrNull()?.let { (key, entry) ->
-                            val result = entry.jsonObject["result"]?.jsonObject ?: return@let null
-                            val text = result["text"]?.jsonPrimitive?.contentOrNull ?: return@let null
-                            val color = result["color"]?.jsonPrimitive?.contentOrNull
-                            buildJsonObject {
-                                put("value", key)
-                                put("text", text)
-                                color?.let { put("color", it) }
-                            }
-                        }
-                    }
-                    else -> null
-                }
-            }
-            if (moneatMappings.isNotEmpty()) {
-                config["valueMappings"] = JsonArray(moneatMappings).toString()
-            }
-        }
-
-        // Draw style and line width from custom config
-        defaults?.get("drawStyle")?.jsonPrimitive?.contentOrNull?.let { config["drawStyle"] = it }
-        defaults?.get("lineWidth")?.jsonPrimitive?.intOrNull?.let { config["lineWidth"] = it.toString() }
-
-        // fillOpacity: Grafana uses 0-100 scale, Moneat uses 0-1
-        defaults?.get("fillOpacity")?.jsonPrimitive?.intOrNull?.let {
-            config["fillOpacity"] = (it / FILL_OPACITY_SCALE).toString()
-        }
-
-        // Stacking → stackMode (frontend key)
-        defaults?.get(
-            "stacking"
-        )?.jsonObject?.get("mode")?.jsonPrimitive?.contentOrNull?.let { config["stackMode"] = it }
-
-        defaults?.get(
-            "scaleDistribution"
-        )?.jsonObject?.get("type")?.jsonPrimitive?.contentOrNull?.let { config["scaleType"] = it }
-
-        val options = panelJson["options"]?.jsonObject
-        options?.get("legend")?.jsonObject?.let { legend ->
-            legend["placement"]?.jsonPrimitive?.contentOrNull?.let { config["legendPlacement"] = it }
-            legend["displayMode"]?.jsonPrimitive?.contentOrNull?.let { mode ->
-                config["legendMode"] = when (mode) {
-                    "hidden" -> "hidden"
-                    "table" -> "table"
-                    else -> "list"
-                }
-            }
-        }
-
-        // Gauge-specific: min/max range
-        fieldDefaults?.get("min")?.jsonPrimitive?.intOrNull?.let { config["gaugeMin"] = it.toString() }
-        fieldDefaults?.get("max")?.jsonPrimitive?.intOrNull?.let { config["gaugeMax"] = it.toString() }
-
-        // Bar gauge: orientation and display mode
-        options?.get("orientation")?.jsonPrimitive?.contentOrNull?.let {
-            config["orientation"] = it
-        }
-        options?.get("displayMode")?.jsonPrimitive?.contentOrNull?.let {
-            config["displayMode"] = it
-        }
-
-        // Extract field filters and renames from Grafana transformations
+        populateDisplayConfigFromPanel(panelJson, config)
         extractGrafanaTransformations(panelJson, config)
-
         return config
+    }
+
+    private fun populateDisplayConfigFromPanel(panelJson: JsonObject, config: MutableMap<String, String>) {
+        val fieldDefaults = panelJson["fieldConfig"]?.jsonObject?.get("defaults")?.jsonObject
+        val defaults = fieldDefaults?.get("custom")?.jsonObject
+        val options = panelJson["options"]?.jsonObject
+
+        putFieldDefaultUnitAndDecimals(fieldDefaults, config)
+        putThresholdsFromFieldDefaults(fieldDefaults, config)
+        putValueMappingsFromFieldDefaults(fieldDefaults, config)
+        putCustomDisplayDefaults(defaults, config)
+        putLegendFromOptions(options, config)
+        putGaugeRangeAndBarGaugeOptions(fieldDefaults, options, config)
+    }
+
+    private fun putFieldDefaultUnitAndDecimals(
+        fieldDefaults: JsonObject?,
+        config: MutableMap<String, String>
+    ) {
+        val unit = fieldDefaults?.get("unit")?.jsonPrimitive?.contentOrNull
+        if (unit != null) config["unit"] = unit
+        val decimals = fieldDefaults?.get("decimals")?.jsonPrimitive?.intOrNull
+        if (decimals != null) config["decimals"] = decimals.toString()
+    }
+
+    private fun putThresholdsFromFieldDefaults(
+        fieldDefaults: JsonObject?,
+        config: MutableMap<String, String>
+    ) {
+        val steps = fieldDefaults?.get("thresholds")?.jsonObject?.get("steps")?.jsonArray
+        if (steps.isNullOrEmpty()) return
+        applyParsedThresholdSteps(steps, config)
+    }
+
+    private fun applyParsedThresholdSteps(steps: JsonArray, config: MutableMap<String, String>) {
+        val moneatThresholds = steps.mapNotNull { thresholdStepToJsonObject(it) }
+        if (moneatThresholds.isEmpty()) return
+        config["thresholds"] = JsonArray(moneatThresholds).toString()
+    }
+
+    private fun thresholdStepToJsonObject(step: JsonElement): JsonObject? {
+        val stepObj = step.jsonObject
+        val valuePrim = stepObj["value"]?.jsonPrimitive
+        val intVal = valuePrim?.intOrNull
+        val value = when {
+            intVal != null -> intVal
+            valuePrim?.contentOrNull == null -> 0
+            else -> return null
+        }
+        val color = stepObj["color"]?.jsonPrimitive?.contentOrNull ?: return null
+        return buildJsonObject {
+            put("value", value)
+            put("color", color)
+        }
+    }
+
+    private fun grafanaValueMappingToJson(mapObj: JsonObject): JsonObject? {
+        val type = mapObj["type"]?.jsonPrimitive?.contentOrNull
+        return when (type) {
+            "special" -> grafanaSpecialValueMapping(mapObj)
+            "value" -> grafanaDiscreteValueMapping(mapObj)
+            else -> null
+        }
+    }
+
+    private fun grafanaSpecialValueMapping(mapObj: JsonObject): JsonObject? {
+        val opts = mapObj["options"]?.jsonObject ?: return null
+        val match = opts["match"]?.jsonPrimitive?.contentOrNull ?: return null
+        val result = opts["result"]?.jsonObject ?: return null
+        val text = result["text"]?.jsonPrimitive?.contentOrNull ?: return null
+        val color = result["color"]?.jsonPrimitive?.contentOrNull
+        return buildJsonObject {
+            put("value", match)
+            put("text", text)
+            if (color != null) put("color", color)
+        }
+    }
+
+    private fun grafanaDiscreteValueMapping(mapObj: JsonObject): JsonObject? {
+        val opts = mapObj["options"]?.jsonObject ?: return null
+        val firstEntry = opts.entries.firstOrNull() ?: return null
+        val key = firstEntry.key
+        val result = firstEntry.value.jsonObject["result"]?.jsonObject ?: return null
+        val text = result["text"]?.jsonPrimitive?.contentOrNull ?: return null
+        val color = result["color"]?.jsonPrimitive?.contentOrNull
+        return buildJsonObject {
+            put("value", key)
+            put("text", text)
+            if (color != null) put("color", color)
+        }
+    }
+
+    private fun putValueMappingsFromFieldDefaults(
+        fieldDefaults: JsonObject?,
+        config: MutableMap<String, String>
+    ) {
+        val mappings = fieldDefaults?.get("mappings")?.jsonArray ?: return
+        applyParsedValueMappings(mappings, config)
+    }
+
+    private fun applyParsedValueMappings(mappings: JsonArray, config: MutableMap<String, String>) {
+        val moneatMappings = mappings.mapNotNull { grafanaValueMappingToJson(it.jsonObject) }
+        if (moneatMappings.isEmpty()) return
+        config["valueMappings"] = JsonArray(moneatMappings).toString()
+    }
+
+    private fun putCustomDisplayDefaults(defaults: JsonObject?, config: MutableMap<String, String>) {
+        val drawStyle = defaults?.get("drawStyle")?.jsonPrimitive?.contentOrNull
+        if (drawStyle != null) config["drawStyle"] = drawStyle
+
+        val lineWidth = defaults?.get("lineWidth")?.jsonPrimitive?.intOrNull
+        if (lineWidth != null) config["lineWidth"] = lineWidth.toString()
+
+        val fillOpacity = defaults?.get("fillOpacity")?.jsonPrimitive?.intOrNull
+        if (fillOpacity != null) config["fillOpacity"] = (fillOpacity / FILL_OPACITY_SCALE).toString()
+
+        val stackMode = defaults?.get("stacking")?.jsonObject?.get("mode")?.jsonPrimitive?.contentOrNull
+        if (stackMode != null) config["stackMode"] = stackMode
+
+        val scaleType = defaults?.get("scaleDistribution")?.jsonObject?.get("type")
+            ?.jsonPrimitive?.contentOrNull
+        if (scaleType != null) config["scaleType"] = scaleType
+    }
+
+    private fun putLegendFromOptions(options: JsonObject?, config: MutableMap<String, String>) {
+        val legend = options?.get("legend")?.jsonObject ?: return
+        val placement = legend["placement"]?.jsonPrimitive?.contentOrNull
+        if (placement != null) config["legendPlacement"] = placement
+        val mode = legend["displayMode"]?.jsonPrimitive?.contentOrNull ?: return
+        config["legendMode"] = when (mode) {
+            "hidden" -> "hidden"
+            "table" -> "table"
+            else -> "list"
+        }
+    }
+
+    private fun putGaugeRangeAndBarGaugeOptions(
+        fieldDefaults: JsonObject?,
+        options: JsonObject?,
+        config: MutableMap<String, String>
+    ) {
+        val min = fieldDefaults?.get("min")?.jsonPrimitive?.intOrNull
+        if (min != null) config["gaugeMin"] = min.toString()
+        val max = fieldDefaults?.get("max")?.jsonPrimitive?.intOrNull
+        if (max != null) config["gaugeMax"] = max.toString()
+
+        val orientation = options?.get("orientation")?.jsonPrimitive?.contentOrNull
+        if (orientation != null) config["orientation"] = orientation
+        val displayMode = options?.get("displayMode")?.jsonPrimitive?.contentOrNull
+        if (displayMode != null) config["displayMode"] = displayMode
     }
 
     /**
@@ -353,34 +392,26 @@ class GrafanaTranslator : DashboardTranslator {
 
             when (id) {
                 "filterFieldsByName" -> applyFilterFieldsByNameTransform(opts, config)
-                "organize" -> applyOrganizeRenameTransform(opts, config)
+                "organize" -> applyOrganizeTransform(opts, config)
             }
         }
     }
 
-    private fun applyFilterFieldsByNameTransform(
-        opts: JsonObject,
-        config: MutableMap<String, String>,
-    ) {
-        val include = opts["include"]?.jsonObject
-        val names = include?.get("names")?.jsonArray
-        if (names != null && names.isNotEmpty()) {
-            config["visibleFields"] = names.joinToString(",") {
-                it.jsonPrimitive.content
-            }
-        }
+    private fun applyFilterFieldsByNameTransform(opts: JsonObject, config: MutableMap<String, String>) {
+        val names = opts["include"]?.jsonObject?.get("names")?.jsonArray
+        if (names == null || names.isEmpty()) return
+        config["visibleFields"] = names.joinToString(",") { it.jsonPrimitive.content }
     }
 
-    private fun applyOrganizeRenameTransform(
-        opts: JsonObject,
-        config: MutableMap<String, String>,
-    ) {
-        val renameByName = opts["renameByName"]?.jsonObject
-        if (renameByName == null || renameByName.isEmpty()) return
+    private fun applyOrganizeTransform(opts: JsonObject, config: MutableMap<String, String>) {
+        val renameByName = opts["renameByName"]?.jsonObject ?: return
+        if (renameByName.isEmpty()) return
+
         val renames = renameByName.entries
             .filter { it.value.jsonPrimitive.contentOrNull?.isNotEmpty() == true }
             .associate { it.key to it.value.jsonPrimitive.content }
         if (renames.isEmpty()) return
+
         config["fieldRenames"] = buildJsonObject {
             renames.forEach { (k, v) -> put(k, v) }
         }.toString()
@@ -449,94 +480,122 @@ class GrafanaTranslator : DashboardTranslator {
         panelIndex: Int,
         legendFormat: String?
     ): QueryDsl {
-        // Try PromQL first (takes priority — rawSql may be a Grafana default template)
+        tryParsePromqlGrafanaTarget(target, warnings, panelIndex, legendFormat)?.let { return it }
+        tryParseSqlGrafanaTarget(target, warnings, panelIndex)?.let { return it }
+        tryParseElasticsearchGrafanaTarget(target, legendFormat)?.let { return it }
+        tryParseGenericQueryGrafanaTarget(target, warnings, panelIndex, legendFormat)?.let { return it }
+        tryParseRedisGrafanaTarget(target, legendFormat)?.let { return it }
+        tryParseInfluxGrafanaTarget(target, legendFormat)?.let { return it }
+        tryParseCloudWatchGrafanaTarget(target, legendFormat)?.let { return it }
+        tryParseGraphiteGrafanaTarget(target, legendFormat)?.let { return it }
+        return parseGrafanaTargetFallback(target, warnings, panelIndex, legendFormat)
+    }
+
+    /** PromQL takes priority — rawSql may be a Grafana default template. */
+    private fun tryParsePromqlGrafanaTarget(
+        target: JsonObject,
+        warnings: MutableList<String>,
+        panelIndex: Int,
+        legendFormat: String?
+    ): QueryDsl? {
         val expr = target["expr"]?.jsonPrimitive?.contentOrNull
-        if (!expr.isNullOrBlank()) {
-            val parsed = parsePromQL(expr, warnings, panelIndex)
-            // Apply legendFormat as the metric alias so the chart uses it as series name
-            return if (legendFormat != null && parsed.metrics.isNotEmpty()) {
-                parsed.copy(metrics = parsed.metrics.map { it.copy(alias = legendFormat) })
-            } else {
-                parsed
-            }
+        if (expr.isNullOrBlank()) return null
+        val parsed = parsePromQL(expr, warnings, panelIndex)
+        return if (legendFormat != null && parsed.metrics.isNotEmpty()) {
+            parsed.copy(metrics = parsed.metrics.map { it.copy(alias = legendFormat) })
+        } else {
+            parsed
         }
+    }
 
-        // Try SQL
-        val rawSql = target["rawSql"]?.jsonPrimitive?.contentOrNull
-        if (rawSql != null) {
-            return parseGrafanaSql(rawSql, warnings, panelIndex)
-        }
+    private fun tryParseSqlGrafanaTarget(
+        target: JsonObject,
+        warnings: MutableList<String>,
+        panelIndex: Int
+    ): QueryDsl? {
+        val rawSql = target["rawSql"]?.jsonPrimitive?.contentOrNull ?: return null
+        return parseGrafanaSql(rawSql, warnings, panelIndex)
+    }
 
-        // Try Grafana Elasticsearch plugin format (metrics/bucketAggs arrays)
-        // Check before generic query so ES targets with Lucene query + aggregations
-        // get full translation instead of losing metrics/bucketAggs
+    /** ES targets with Lucene query + aggregations — before generic [query] handling. */
+    private fun tryParseElasticsearchGrafanaTarget(
+        target: JsonObject,
+        legendFormat: String?
+    ): QueryDsl? {
         val esMetrics = target["metrics"] as? JsonArray
         val esBucketAggs = target["bucketAggs"] as? JsonArray
-        if (esMetrics != null || esBucketAggs != null) {
-            val esQuery = translateGrafanaElasticsearchTarget(target)
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = esQuery
-            )
-        }
+        if (esMetrics == null && esBucketAggs == null) return null
+        val esQuery = translateGrafanaElasticsearchTarget(target)
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = esQuery
+        )
+    }
 
-        // Try generic query (skip empty strings from plugin-specific targets)
+    private fun tryParseGenericQueryGrafanaTarget(
+        target: JsonObject,
+        warnings: MutableList<String>,
+        panelIndex: Int,
+        legendFormat: String?
+    ): QueryDsl? {
         val query = target["query"]?.jsonPrimitive?.contentOrNull
-        if (!query.isNullOrBlank()) {
-            warnings.add("Panel $panelIndex: generic query stored as rawQuery")
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = query
-            )
-        }
+        if (query.isNullOrBlank()) return null
+        warnings.add("Panel $panelIndex: generic query stored as rawQuery")
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = query
+        )
+    }
 
-        // Try Grafana Redis datasource plugin format (command/section/type fields)
-        val redisCommand = target["command"]?.jsonPrimitive?.contentOrNull
-        if (redisCommand != null) {
-            val rawCmd = translateGrafanaRedisCommand(redisCommand, target)
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = rawCmd
-            )
-        }
+    private fun tryParseRedisGrafanaTarget(target: JsonObject, legendFormat: String?): QueryDsl? {
+        val redisCommand = target["command"]?.jsonPrimitive?.contentOrNull ?: return null
+        val rawCmd = translateGrafanaRedisCommand(redisCommand, target)
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = rawCmd
+        )
+    }
 
-        // Try Grafana InfluxDB plugin format (measurement/select/groupBy)
-        val measurement = target["measurement"]?.jsonPrimitive?.contentOrNull
-        if (measurement != null) {
-            val fluxFilter = translateGrafanaInfluxTarget(target)
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = fluxFilter
-            )
-        }
+    private fun tryParseInfluxGrafanaTarget(target: JsonObject, legendFormat: String?): QueryDsl? {
+        if (target["measurement"]?.jsonPrimitive?.contentOrNull == null) return null
+        val fluxFilter = translateGrafanaInfluxTarget(target)
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = fluxFilter
+        )
+    }
 
-        // Try Grafana CloudWatch plugin format (namespace/metricName)
-        val namespace = target["namespace"]?.jsonPrimitive?.contentOrNull
-        if (namespace != null && target.containsKey("metricName")) {
-            val cwJson = translateGrafanaCloudWatchTarget(target)
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = cwJson
-            )
-        }
+    private fun tryParseCloudWatchGrafanaTarget(target: JsonObject, legendFormat: String?): QueryDsl? {
+        val namespace = target["namespace"]?.jsonPrimitive?.contentOrNull ?: return null
+        if (!target.containsKey("metricName")) return null
+        val cwJson = translateGrafanaCloudWatchTarget(target)
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = cwJson
+        )
+    }
 
-        // Try Grafana Graphite plugin format (target field)
+    private fun tryParseGraphiteGrafanaTarget(target: JsonObject, legendFormat: String?): QueryDsl? {
         val graphiteTarget = target["target"]?.jsonPrimitive?.contentOrNull
-        if (!graphiteTarget.isNullOrBlank()) {
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
-                rawQuery = graphiteTarget
-            )
-        }
+        if (graphiteTarget.isNullOrBlank()) return null
+        return QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
+            rawQuery = graphiteTarget
+        )
+    }
 
-        // No standard query format found — serialize the full target as rawQuery
-        // so plugin-specific fields are preserved
+    private fun parseGrafanaTargetFallback(
+        target: JsonObject,
+        warnings: MutableList<String>,
+        panelIndex: Int,
+        legendFormat: String?
+    ): QueryDsl {
         val knownKeys = setOf("refId", "datasource", "legendFormat", "query")
         val hasExtraFields = target.keys.any { it !in knownKeys }
         if (hasExtraFields) {
@@ -549,7 +608,6 @@ class GrafanaTranslator : DashboardTranslator {
                 rawQuery = target.toString()
             )
         }
-
         warnings.add("Panel $panelIndex: no recognizable query target")
         return QueryDsl(
             dataSource = "events",
@@ -652,29 +710,31 @@ class GrafanaTranslator : DashboardTranslator {
             }
             val dims = target["dimensions"]
             if (dims is JsonObject) {
-                put(
-                    "Dimensions",
-                    buildJsonArray {
-                        for ((key, value) in dims) {
-                            val vals = if (value is JsonArray) {
-                                value.map { it.jsonPrimitive.content }
-                            } else {
-                                listOf(value.jsonPrimitive.content)
-                            }
-                            for (v in vals) {
-                                add(
-                                    buildJsonObject {
-                                        put("Name", key)
-                                        put("Value", v)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                )
+                put("Dimensions", buildCloudWatchDimensionsArray(dims))
             }
         }.toString()
     }
+
+    private fun buildCloudWatchDimensionsArray(dims: JsonObject): JsonArray = buildJsonArray {
+        for ((key, value) in dims) {
+            val vals = cloudWatchDimensionValueStrings(value)
+            for (v in vals) {
+                add(
+                    buildJsonObject {
+                        put("Name", key)
+                        put("Value", v)
+                    }
+                )
+            }
+        }
+    }
+
+    private fun cloudWatchDimensionValueStrings(value: JsonElement): List<String> =
+        if (value is JsonArray) {
+            value.map { it.jsonPrimitive.content }
+        } else {
+            listOf(value.jsonPrimitive.content)
+        }
 
     /**
      * Convert Grafana Elasticsearch plugin target to an ES query JSON body
@@ -817,54 +877,18 @@ class GrafanaTranslator : DashboardTranslator {
         // Try aggregation with by/without: sum by (labels) (inner_expr)
         val aggByMatch = Regex("""^(\w+)\s+(?:by|without)\s*\(([^)]*)\)\s*\((.+)\)$""").find(normalized)
 
-        val (metricName, labelStr, aggFunction) = when {
-            aggByMatch != null -> {
-                // Parse inner expression recursively for metric name
-                val innerExpr = aggByMatch.groupValues[REGEX_THIRD_GROUP_IDX].trim()
-                val innerFunc = Regex("""(\w+)\(([^{(]+?)(?:\{[^}]*\})?(?:\[[^]]*])?.*\)""").find(innerExpr)
-                val metric = innerFunc?.groupValues?.getOrNull(2)?.trim() ?: "unknown"
-                val innerLabels = Regex("""\{([^}]*)\}""").find(innerExpr)?.groupValues?.get(1) ?: ""
-                Triple(metric, innerLabels, mapPromFunction(aggByMatch.groupValues[1]))
-            }
-            funcMatch != null -> {
-                Triple(
-                    funcMatch.groupValues[2].trim(),
-                    funcMatch.groupValues[REGEX_THIRD_GROUP_IDX],
-                    mapPromFunction(funcMatch.groupValues[1])
-                )
-            }
-            bareMatch != null -> {
-                Triple(
-                    bareMatch.groupValues[1].trim(),
-                    bareMatch.groupValues[2],
-                    AggFunction.AVG
-                )
-            }
-            else -> {
-                warnings.add("Panel $panelIndex: couldn't parse PromQL '$expr', stored as rawQuery")
-                return QueryDsl(
-                    dataSource = "__prometheus",
-                    metrics = listOf(MetricDef(AggFunction.AVG, alias = "value")),
-                    rawQuery = expr,
-                    limit = 5000
-                )
-            }
+        val parsedMetric = resolvePromqlMetricAndLabels(aggByMatch, funcMatch, bareMatch)
+        if (parsedMetric == null) {
+            warnings.add("Panel $panelIndex: couldn't parse PromQL '$expr', stored as rawQuery")
+            return QueryDsl(
+                dataSource = "__prometheus",
+                metrics = listOf(MetricDef(AggFunction.AVG, alias = "value")),
+                rawQuery = expr,
+                limit = 5000
+            )
         }
-
-        val filters = mutableListOf<FilterDef>()
-        if (labelStr.isNotBlank()) {
-            // Parse label matchers: key="val", key=~"val", key!="val", key!~"val"
-            Regex("""(\w+)\s*(=~|!=|!~|=)\s*"([^"]*?)"""").findAll(labelStr).forEach { m ->
-                val key = m.groupValues[1]
-                val op = when (m.groupValues[2]) {
-                    "=~" -> FilterOp.LIKE
-                    "!~" -> FilterOp.NOT_LIKE
-                    "!=" -> FilterOp.NEQ
-                    else -> FilterOp.EQ
-                }
-                filters.add(FilterDef(key, op, m.groupValues[REGEX_THIRD_GROUP_IDX]))
-            }
-        }
+        val (metricName, labelStr, aggFunction) = parsedMetric
+        val filters = parsePromqlLabelMatchers(labelStr)
 
         return QueryDsl(
             dataSource = "__prometheus",
@@ -874,6 +898,49 @@ class GrafanaTranslator : DashboardTranslator {
             rawQuery = expr,
             limit = 5000
         )
+    }
+
+    private fun resolvePromqlMetricAndLabels(
+        aggByMatch: MatchResult?,
+        funcMatch: MatchResult?,
+        bareMatch: MatchResult?
+    ): Triple<String, String, AggFunction>? = when {
+        aggByMatch != null -> {
+            val innerExpr = aggByMatch.groupValues[REGEX_THIRD_GROUP_IDX].trim()
+            val innerFunc = Regex("""(\w+)\(([^{(]+?)(?:\{[^}]*\})?(?:\[[^]]*])?.*\)""").find(innerExpr)
+            val metric = innerFunc?.groupValues?.getOrNull(2)?.trim() ?: "unknown"
+            val innerLabels = Regex("""\{([^}]*)\}""").find(innerExpr)?.groupValues?.get(1) ?: ""
+            Triple(metric, innerLabels, mapPromFunction(aggByMatch.groupValues[1]))
+        }
+        funcMatch != null -> {
+            Triple(
+                funcMatch.groupValues[2].trim(),
+                funcMatch.groupValues[REGEX_THIRD_GROUP_IDX],
+                mapPromFunction(funcMatch.groupValues[1])
+            )
+        }
+        bareMatch != null -> {
+            Triple(
+                bareMatch.groupValues[1].trim(),
+                bareMatch.groupValues[2],
+                AggFunction.AVG
+            )
+        }
+        else -> null
+    }
+
+    private fun parsePromqlLabelMatchers(labelStr: String): List<FilterDef> {
+        if (labelStr.isBlank()) return emptyList()
+        val labelRegex = Regex("""(\w+)\s*(=~|!=|!~|=)\s*"([^"]*?)"""")
+        return labelRegex.findAll(labelStr).map { m ->
+            val op = when (m.groupValues[2]) {
+                "=~" -> FilterOp.LIKE
+                "!~" -> FilterOp.NOT_LIKE
+                "!=" -> FilterOp.NEQ
+                else -> FilterOp.EQ
+            }
+            FilterDef(m.groupValues[1], op, m.groupValues[REGEX_THIRD_GROUP_IDX])
+        }.toList()
     }
 
     private fun mapPromFunction(fn: String): AggFunction = when (fn.lowercase()) {
@@ -921,51 +988,53 @@ class GrafanaTranslator : DashboardTranslator {
 
         return list.mapNotNull { element ->
             suspendRunCatching {
-                val varObj = element.jsonObject
-                val name = varObj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                val type = varObj["type"]?.jsonPrimitive?.contentOrNull ?: "custom"
-                val label = varObj["label"]?.jsonPrimitive?.contentOrNull
-                val query = varObj["query"]?.let { q ->
-                    when (q) {
-                        is JsonPrimitive -> q.contentOrNull
-                        is JsonObject -> q["query"]?.jsonPrimitive?.contentOrNull
-                        else -> null
-                    }
-                }
-                val current = varObj["current"]?.jsonObject?.get("value")?.let { v ->
-                    when (v) {
-                        is JsonPrimitive -> v.contentOrNull
-                        else -> null
-                    }
-                }
-                val options = varObj["options"]?.jsonArray?.mapNotNull { opt ->
-                    opt.jsonObject["value"]?.jsonPrimitive?.contentOrNull
-                } ?: emptyList()
-
-                val datasource = varObj["datasource"]?.let { ds ->
-                    when (ds) {
-                        is JsonPrimitive -> ds.contentOrNull
-                        is JsonObject -> ds["type"]?.jsonPrimitive?.contentOrNull
-                        else -> null
-                    }
-                }
-
-                val supportedTypes = setOf("query", "custom", "textbox", "constant")
-                DashboardVariable(
-                    name = name,
-                    label = label,
-                    type = if (type in supportedTypes) type else "custom",
-                    query = query,
-                    defaultValue = current,
-                    current = current,
-                    options = options.filter { it != "\$__all" },
-                    datasource = datasource
-                )
+                parseSingleGrafanaVariable(element.jsonObject)
             }.getOrElse { e ->
                 logger.warn { "Failed to parse Grafana variable: ${e.message}" }
                 null
             }
         }
+    }
+
+    private fun parseSingleGrafanaVariable(varObj: JsonObject): DashboardVariable? {
+        val name = varObj["name"]?.jsonPrimitive?.contentOrNull ?: return null
+        val type = varObj["type"]?.jsonPrimitive?.contentOrNull ?: "custom"
+        val label = varObj["label"]?.jsonPrimitive?.contentOrNull
+        val query = varObj["query"]?.let(::grafanaVariableQueryFromJson)
+        val current = varObj["current"]?.jsonObject?.get("value")?.let(::grafanaVariableCurrentString)
+        val options = varObj["options"]?.jsonArray?.mapNotNull { opt ->
+            opt.jsonObject["value"]?.jsonPrimitive?.contentOrNull
+        } ?: emptyList()
+        val datasource = varObj["datasource"]?.let(::grafanaVariableDatasourceFromJson)
+
+        val supportedTypes = setOf("query", "custom", "textbox", "constant")
+        return DashboardVariable(
+            name = name,
+            label = label,
+            type = if (type in supportedTypes) type else "custom",
+            query = query,
+            defaultValue = current,
+            current = current,
+            options = options.filter { it != "\$__all" },
+            datasource = datasource
+        )
+    }
+
+    private fun grafanaVariableQueryFromJson(q: JsonElement): String? = when (q) {
+        is JsonPrimitive -> q.contentOrNull
+        is JsonObject -> q["query"]?.jsonPrimitive?.contentOrNull
+        else -> null
+    }
+
+    private fun grafanaVariableCurrentString(v: JsonElement): String? = when (v) {
+        is JsonPrimitive -> v.contentOrNull
+        else -> null
+    }
+
+    private fun grafanaVariableDatasourceFromJson(ds: JsonElement): String? = when (ds) {
+        is JsonPrimitive -> ds.contentOrNull
+        is JsonObject -> ds["type"]?.jsonPrimitive?.contentOrNull
+        else -> null
     }
 
     override fun export(dashboard: DashboardResponse): JsonObject {
