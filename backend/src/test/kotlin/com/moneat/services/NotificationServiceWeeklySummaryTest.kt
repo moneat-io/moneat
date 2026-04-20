@@ -212,4 +212,33 @@ class NotificationServiceWeeklySummaryTest {
             }
             assertEquals("N/A", dataSlot.captured.projects.single().crashFree)
         }
+
+    @Test
+    fun `sendWeeklySummaryForUser skips email when ClickHouse stats query fails`() =
+        runBlocking {
+            val orgId = seedOrg()
+            val userId = seedUser("weeklyskip@moneat.io", "Skip User")
+            seedMembership(userId, orgId)
+            seedProject(orgId, "P3")
+
+            val failHandler: (HttpExchange) -> Unit = { exchange ->
+                exchange.respond(500, "Internal Server Error", TEXT_PLAIN)
+            }
+
+            MockHttpServer(failHandler).use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+                val service = NotificationService(emailService, slackService, discordService)
+                try {
+                    service.sendWeeklySummaryForUser(userId, "weeklyskip@moneat.io")
+                } finally {
+                    service.shutdown()
+                    ClickHouseClient.close()
+                }
+            }
+
+            verify(exactly = 0) {
+                emailService.sendWeeklySummaryEmail(any(), any())
+            }
+        }
 }
