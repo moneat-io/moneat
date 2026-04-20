@@ -144,8 +144,8 @@ function ReleaseDetailPage() {
                         params={{ issueId: issue.issueId }}
                         className="flex items-center justify-between p-2 rounded-lg border hover:bg-accent transition-colors"
                       >
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-xs font-semibold">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex items-center justify-center w-5 h-5 shrink-0 rounded-full bg-primary/10 text-xs font-semibold">
                             {index + 1}
                           </div>
                           <div className="min-w-0">
