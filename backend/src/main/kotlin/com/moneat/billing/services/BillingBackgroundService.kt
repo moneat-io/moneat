@@ -141,19 +141,37 @@ class BillingBackgroundService(
         for (orgId in orgIds) {
             val usage = quotaService.getUsageForOrganization(orgId)
             val periodStart = usage.periodStart
-            val basePct =
+            val unitPct =
                 if (usage.baseLimitUnits > 0) {
                     usage.usedUnits.toDouble() / usage.baseLimitUnits.toDouble()
                 } else {
                     0.0
                 }
-            val paygPct =
+            val gbEligibleBytes =
+                kotlin.math.max(0L, usage.usedBytes - usage.usedApmSpanBytes)
+            val bytesPct =
+                if (usage.bytesLimit > 0) {
+                    gbEligibleBytes.toDouble() / usage.bytesLimit.toDouble()
+                } else {
+                    0.0
+                }
+            val basePct = maxOf(unitPct, bytesPct)
+
+            val unitPaygPct =
                 if (usage.paygLimitUnits > 0) {
                     val paygUsed = kotlin.math.max(0L, usage.usedUnits - usage.baseLimitUnits)
                     paygUsed.toDouble() / usage.paygLimitUnits.toDouble()
                 } else {
                     0.0
                 }
+            val bytesPaygPct =
+                if (usage.paygLimitBytes > 0) {
+                    val paygBytes = kotlin.math.max(0L, gbEligibleBytes - usage.bytesLimit)
+                    paygBytes.toDouble() / usage.paygLimitBytes.toDouble()
+                } else {
+                    0.0
+                }
+            val paygPct = maxOf(unitPaygPct, bytesPaygPct)
 
             if (basePct >= QUOTA_WARNING_THRESHOLD) {
                 maybeSendNotification(orgId, periodStart, "base_80", usage)
@@ -161,7 +179,9 @@ class BillingBackgroundService(
             if (basePct >= 1.0) {
                 maybeSendNotification(orgId, periodStart, "base_100", usage)
             }
-            if (usage.paygLimitUnits > 0 && paygPct >= QUOTA_WARNING_THRESHOLD) {
+            if ((usage.paygLimitUnits > 0 || usage.paygLimitBytes > 0) &&
+                paygPct >= QUOTA_WARNING_THRESHOLD
+            ) {
                 maybeSendNotification(orgId, periodStart, "payg_80", usage)
             }
         }
