@@ -86,8 +86,8 @@
     "@typescript-eslint/parser": "^8.0.0",
     "@vitejs/plugin-react": "^6.0.0",
     "@vitejs/plugin-react-swc": "^4.2.3",
-    "@vitest/coverage-v8": "^4.0.18",
-    "@vitest/ui": "^4.0.18",
+    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/ui": "^4.1.5",
     "autoprefixer": "^10.4.16",
     "eslint": "^10.0.0",
     "eslint-plugin-check-file": "^3.3.1",
@@ -105,6 +105,6 @@
     "typescript": "^5.3.3",
     "unist-util-visit": "^5.1.0",
     "vite": "^8.0.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.5"
   }
 }
