@@ -951,6 +951,7 @@ class BillingQuotaService(
             ingestionOverageRateCentsPerGb = state.overageRateCentsPerGb,
             baseLimitUnits = state.baseLimitUnits,
             paygLimitUnits = state.paygLimitUnits,
+            paygLimitBytes = state.paygLimitBytes,
             totalLimitUnits = state.totalLimitUnits,
             paygBudgetCents = state.paygBudgetCents,
             paygUsedUnits = state.paygUsedUnits,
@@ -978,6 +979,7 @@ class BillingQuotaService(
             analyticsPageviewOverageRateCentsPer100k =
             state.analyticsPageviewOverageRateCentsPer100k,
             usedApmSpans = state.usedApmSpans,
+            usedApmSpanBytes = state.usedApmSpanBytes,
             apmSpanLimit = state.apmSpanLimit,
             usedCustomMetrics = state.usedCustomMetrics,
             customMetricLimit = state.customMetricLimit,
