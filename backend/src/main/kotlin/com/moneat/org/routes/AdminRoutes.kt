@@ -114,6 +114,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
             argMax(ssl_enabled, received_at)     AS ssl_enabled
         FROM `$db`.telemetry_pulses
         GROUP BY deployment_id
+        HAVING max(received_at) > now() - INTERVAL 24 HOUR
         ORDER BY last_seen DESC
         LIMIT 500
         FORMAT JSONEachRow

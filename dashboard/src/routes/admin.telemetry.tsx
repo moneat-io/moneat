@@ -19,19 +19,9 @@ import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
-import {
-    Activity,
-    AlertTriangle,
-    Cpu,
-    Fingerprint,
-    FolderKanban,
-    HardDrive,
-    Lock,
-    Radio,
-    Server,
-    ShieldCheck,
-    Users,
-} from 'lucide-react'
+import {Button} from '@/components/ui/button'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
+import {Activity, Copy, Radio, Server} from 'lucide-react'
 import {AdminSkeleton, formatBytes, formatNumber, SectionHeader} from '@/components/AdminComponents'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime} from '@/lib/date-format'
@@ -114,70 +104,88 @@ function AdminTelemetryPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Deployments ({deploymentCount})
-          </h3>
-          {deployments.map((d) => (
-            <Card key={d.deploymentId}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <Fingerprint className="h-4 w-4 text-muted-foreground" />
-                    <CardTitle className="text-sm font-mono">{d.deploymentId}</CardTitle>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={d.sslEnabled ? 'default' : 'secondary'} className="text-xs">
-                      {d.sslEnabled ? <><Lock className="h-3 w-3 mr-1" />SSL</> : 'No SSL'}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider">
+              Deployments ({deploymentCount})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs">Deployment</TableHead>
+                  <TableHead className="text-xs">Environment</TableHead>
+                  <TableHead className="text-xs">SSL</TableHead>
+                  <TableHead className="text-xs text-right">CPU</TableHead>
+                  <TableHead className="text-xs text-right">Memory</TableHead>
+                  <TableHead className="text-xs text-right">Projects</TableHead>
+                  <TableHead className="text-xs text-right">Users</TableHead>
+                  <TableHead className="text-xs text-right">Events</TableHead>
+                  <TableHead className="text-xs text-right">Issues</TableHead>
+                  <TableHead className="text-xs text-right">Last Seen</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deployments.map((d) => (
+                  <TableRow key={d.deploymentId}>
+                    <TableCell className="font-mono text-xs">
+                      <div className="flex items-center gap-1">
+                        <span title={d.deploymentId}>
+                          {d.deploymentId.length > 12
+                            ? `${d.deploymentId.slice(0, 12)}…`
+                            : d.deploymentId}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          aria-label="Copy deployment ID"
+                          onClick={() => void navigator.clipboard.writeText(d.deploymentId)}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {d.osName} {d.osArch} · JVM {d.jvmVersion}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={d.sslEnabled ? 'default' : 'secondary'}
+                        className="text-xs"
+                      >
+                        {d.sslEnabled ? 'SSL' : 'No SSL'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">
+                      {d.cpuCount}
+                    </TableCell>
+                    <TableCell className="text-xs text-right tabular-nums whitespace-nowrap">
+                      {formatBytes(d.memUsedBytes)} / {formatBytes(d.memTotalBytes)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">
+                      {formatNumber(d.projectCount)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">
+                      {formatNumber(d.userCount)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">
+                      {formatNumber(d.eventCount)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">
+                      {formatNumber(d.issueCount)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right text-muted-foreground whitespace-nowrap">
                       {formatDateTime(new Date(d.receivedAt), timezone)}
-                    </span>
-                  </div>
-                </div>
-                <CardDescription className="flex items-center gap-1">
-                  <ShieldCheck className="h-3 w-3" />
-                  {d.osName} {d.osArch} · JVM {d.jvmVersion}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-sm">
-                  <div className="flex items-center gap-1.5">
-                    <Cpu className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                    <span className="text-muted-foreground">CPU:</span>
-                    <span className="font-medium">{d.cpuCount}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <HardDrive className="h-3.5 w-3.5 text-orange-500 shrink-0" />
-                    <span className="text-muted-foreground">Mem:</span>
-                    <span className="font-medium">{formatBytes(d.memUsedBytes)}</span>
-                    <span className="text-muted-foreground">/ {formatBytes(d.memTotalBytes)}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <FolderKanban className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                    <span className="text-muted-foreground">Projects:</span>
-                    <span className="font-medium">{formatNumber(d.projectCount)}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5 text-teal-500 shrink-0" />
-                    <span className="text-muted-foreground">Users:</span>
-                    <span className="font-medium">{formatNumber(d.userCount)}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Activity className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                    <span className="text-muted-foreground">Events:</span>
-                    <span className="font-medium">{formatNumber(d.eventCount)}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                    <span className="text-muted-foreground">Issues:</span>
-                    <span className="font-medium">{formatNumber(d.issueCount)}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       {/* What We Collect */}
