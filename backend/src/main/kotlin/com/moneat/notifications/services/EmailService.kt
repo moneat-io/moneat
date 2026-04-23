@@ -474,11 +474,11 @@ class EmailService {
         val startDate: String,
         val endDate: String,
         val totalEvents: String,
-        val eventsTrend: Int,
+        val eventsTrend: Int?,
         val newIssues: String,
-        val issuesTrend: Int,
+        val issuesTrend: Int?,
         val affectedUsers: String,
-        val usersTrend: Int,
+        val usersTrend: Int?,
         val topIssues: List<TopIssue>,
         val projects: List<ProjectSummary>,
         val dashboardUrl: String,
@@ -534,14 +534,17 @@ class EmailService {
         val htmlBody = loadWeeklySummaryTemplate(data)
         val topIssuesList = data.topIssues.take(TOP_ISSUES_COUNT)
             .joinToString("\n") { "- ${it.title} (${it.project}): ${it.count} events" }
+        val eventsTrendText = formatTrendText(data.eventsTrend)
+        val issuesTrendText = formatTrendText(data.issuesTrend)
+        val usersTrendText = formatTrendText(data.usersTrend)
         val textBody =
             """
             Your Weekly Summary (${data.startDate} – ${data.endDate})
             
             KEY STATS:
-            - Total Events: ${data.totalEvents} (${if (data.eventsTrend > 0) "+" else ""}${data.eventsTrend}%)
-            - New Issues: ${data.newIssues} (${if (data.issuesTrend > 0) "+" else ""}${data.issuesTrend}%)
-            - Affected Users: ${data.affectedUsers} (${if (data.usersTrend > 0) "+" else ""}${data.usersTrend}%)
+            - Total Events: ${data.totalEvents} ($eventsTrendText)
+            - New Issues: ${data.newIssues} ($issuesTrendText)
+            - Affected Users: ${data.affectedUsers} ($usersTrendText)
             
             TOP ISSUES:
             $topIssuesList
@@ -856,7 +859,15 @@ class EmailService {
         }
     }
 
-    private fun trendBadgeHtml(trend: Int, positiveIsGood: Boolean): String {
+    private fun formatTrendText(trend: Int?): String {
+        if (trend == null) return "\u2014"
+        return "${if (trend > 0) "+" else ""}$trend%"
+    }
+
+    private fun trendBadgeHtml(trend: Int?, positiveIsGood: Boolean): String {
+        if (trend == null) {
+            return """<p style="$BADGE_STYLE $BADGE_NEUTRAL">&mdash;</p>"""
+        }
         return when {
             trend > 0 && positiveIsGood ->
                 """<p style="$BADGE_STYLE $BADGE_POSITIVE">&uarr; $trend%</p>"""

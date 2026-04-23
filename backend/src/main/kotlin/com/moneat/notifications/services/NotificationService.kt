@@ -71,6 +71,7 @@ class NotificationService(
     private val slackService: SlackService = SlackService(),
     private val discordService: DiscordService = DiscordService(),
 ) {
+    enum class WeeklySummaryResult { SENT, SKIPPED, FAILED }
     private val config = ApplicationConfig("application.conf")
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val frontendUrl = config.property("email.frontendUrl").getString()
@@ -315,26 +316,43 @@ class NotificationService(
 
             logger.info { "Sending weekly summaries to ${usersToNotify.size} users" }
 
-            usersToNotify.forEach { (userId, email) ->
-                scope.launch {
-                    suspendRunCatching {
-                        sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
-                    }.getOrElse { e ->
-                        logger.error(e) { "Failed to send weekly summary to $email" }
-                    }
+            var sentCount = 0
+            var skippedCount = 0
+            var failedCount = 0
+
+            for ((userId, email) in usersToNotify) {
+                val result = suspendRunCatching {
+                    sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
+                }.getOrElse { e ->
+                    logger.error(e) { "Failed to send weekly summary to $email" }
+                    WeeklySummaryResult.FAILED
                 }
+                when (result) {
+                    WeeklySummaryResult.SENT -> sentCount++
+                    WeeklySummaryResult.SKIPPED -> skippedCount++
+                    WeeklySummaryResult.FAILED -> failedCount++
+                }
+            }
+
+            logger.info {
+                "Weekly summary complete: $sentCount sent," +
+                    " $skippedCount skipped, $failedCount failed" +
+                    " out of ${usersToNotify.size} users"
             }
         }.getOrElse { e ->
             logger.error(e) { "Error in sendWeeklySummary" }
         }
     }
 
-    suspend fun sendWeeklySummaryForUser(userId: Int, email: String) {
+    suspend fun sendWeeklySummaryForUser(
+        userId: Int,
+        email: String
+    ): WeeklySummaryResult {
         val now = Instant.now()
         val endDate = now
         val startDate = now.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
         val priorStartDate = startDate.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
-        sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
+        return sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
     }
 
     private suspend fun sendUserWeeklySummary(
@@ -343,8 +361,7 @@ class NotificationService(
         startDate: Instant,
         endDate: Instant,
         priorStartDate: Instant
-    ) {
-        // Get user's projects
+    ): WeeklySummaryResult {
         val projects =
             transaction {
                 val orgIds =
@@ -361,35 +378,59 @@ class NotificationService(
 
         if (projects.isEmpty()) {
             logger.debug { "User $userId has no projects, skipping summary" }
-            return
+            return WeeklySummaryResult.SKIPPED
         }
 
         val projectIds = projects.map { it.first }
 
-        // Query ClickHouse for stats
         val currentStats = getStatsForPeriod(projectIds, startDate, endDate)
         val priorStats = getStatsForPeriod(projectIds, priorStartDate, startDate)
 
+        if (currentStats == null) {
+            logger.warn { "Skipping weekly summary for $email: ClickHouse stats query failed" }
+            return WeeklySummaryResult.FAILED
+        }
+
         val totalEvents = currentStats.totalEvents
-        val eventsTrend = calculateTrend(currentStats.totalEvents, priorStats.totalEvents)
+        val eventsTrend = priorStats?.let {
+            calculateTrend(currentStats.totalEvents, it.totalEvents)
+        }
         val newIssues = currentStats.uniqueIssues
-        val issuesTrend = calculateTrend(currentStats.uniqueIssues, priorStats.uniqueIssues)
+        val issuesTrend = priorStats?.let {
+            calculateTrend(currentStats.uniqueIssues, it.uniqueIssues)
+        }
         val affectedUsers = currentStats.uniqueUsers
-        val usersTrend = calculateTrend(currentStats.uniqueUsers, priorStats.uniqueUsers)
+        val usersTrend = priorStats?.let {
+            calculateTrend(currentStats.uniqueUsers, it.uniqueUsers)
+        }
 
-        // Get top issues
         val topIssues = getTopIssues(projectIds, startDate, endDate, limit = 5)
+        if (topIssues == null) {
+            logger.warn {
+                "Skipping weekly summary for $email: ClickHouse top issues query failed"
+            }
+            return WeeklySummaryResult.FAILED
+        }
 
-        // Get per-project breakdown
+        val perProjectStats = getPerProjectStats(projectIds, startDate, endDate)
+        if (perProjectStats == null) {
+            logger.warn {
+                "Skipping weekly summary for $email: ClickHouse per-project stats query failed"
+            }
+            return WeeklySummaryResult.FAILED
+        }
+
         val projectSummaries =
             projects.map { (projectId, projectName) ->
-                val stats = getStatsForPeriod(listOf(projectId), startDate, endDate)
+                val stats = perProjectStats[projectId]
                 val crashFreeRate = getCrashFreeRate(projectId, startDate, endDate)
                 EmailService.ProjectSummary(
                     name = projectName,
-                    events = formatNumber(stats.totalEvents),
-                    issues = formatNumber(stats.uniqueIssues),
-                    crashFree = crashFreeRate?.let { String.format(Locale.US, "%.1f%%", it) } ?: "N/A"
+                    events = formatNumber(stats?.totalEvents ?: 0),
+                    issues = formatNumber(stats?.uniqueIssues ?: 0),
+                    crashFree = crashFreeRate?.let {
+                        String.format(Locale.US, "%.1f%%", it)
+                    } ?: "N/A"
                 )
             }
 
@@ -412,6 +453,7 @@ class NotificationService(
 
         emailService.sendWeeklySummaryEmail(email, emailData)
         logger.info { "Sent weekly summary to $email" }
+        return WeeklySummaryResult.SENT
     }
 
     private data class PeriodStats(
@@ -424,7 +466,7 @@ class NotificationService(
         projectIds: List<Long>,
         startDate: Instant,
         endDate: Instant
-    ): PeriodStats {
+    ): PeriodStats? {
         val startMs = startDate.toEpochMilli()
         val endMs = endDate.toEpochMilli()
 
@@ -432,8 +474,8 @@ class NotificationService(
             """
             SELECT 
                 count() as total_events,
-                uniq(issue_id) as unique_issues,
-                uniq(user_id) as unique_users
+                uniqIf(issue_id, issue_id != '') as unique_issues,
+                uniqIf(user_id, user_id != '') as unique_users
             FROM `$clickhouseDb`.events
             WHERE project_id IN (${projectIds.joinToString(",")})
               AND timestamp >= fromUnixTimestamp64Milli($startMs)
@@ -446,7 +488,7 @@ class NotificationService(
         if (!response.status.isSuccess()) {
             val preview = responseBody.take(ERROR_BODY_PREVIEW_CHARS)
             logger.error("ClickHouse query failed in getStatsForPeriod: ${response.status} - $preview")
-            return PeriodStats(totalEvents = 0, uniqueIssues = 0, uniqueUsers = 0)
+            return null
         }
         val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
         val data = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
@@ -456,6 +498,55 @@ class NotificationService(
             uniqueIssues = data?.get("unique_issues")?.jsonPrimitive?.longOrNull ?: 0,
             uniqueUsers = data?.get("unique_users")?.jsonPrimitive?.longOrNull ?: 0
         )
+    }
+
+    private suspend fun getPerProjectStats(
+        projectIds: List<Long>,
+        startDate: Instant,
+        endDate: Instant
+    ): Map<Long, PeriodStats>? {
+        val startMs = startDate.toEpochMilli()
+        val endMs = endDate.toEpochMilli()
+
+        val query =
+            """
+            SELECT 
+                project_id,
+                count() as total_events,
+                uniqIf(issue_id, issue_id != '') as unique_issues,
+                uniqIf(user_id, user_id != '') as unique_users
+            FROM `$clickhouseDb`.events
+            WHERE project_id IN (${projectIds.joinToString(",")})
+              AND timestamp >= fromUnixTimestamp64Milli($startMs)
+              AND timestamp < fromUnixTimestamp64Milli($endMs)
+            GROUP BY project_id
+            FORMAT JSON
+            """.trimIndent()
+
+        val response = ClickHouseClient.execute(query)
+        val responseBody = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            val preview = responseBody.take(ERROR_BODY_PREVIEW_CHARS)
+            logger.error(
+                "ClickHouse query failed in getPerProjectStats:" +
+                    " ${response.status} - $preview"
+            )
+            return null
+        }
+        val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
+        val rows = jsonResponse["data"]?.jsonArray ?: return emptyMap()
+
+        return rows.mapNotNull { row ->
+            val obj = row.jsonObject
+            val projectId =
+                obj["project_id"]?.jsonPrimitive?.longOrNull
+                    ?: return@mapNotNull null
+            projectId to PeriodStats(
+                totalEvents = obj["total_events"]?.jsonPrimitive?.longOrNull ?: 0,
+                uniqueIssues = obj["unique_issues"]?.jsonPrimitive?.longOrNull ?: 0,
+                uniqueUsers = obj["unique_users"]?.jsonPrimitive?.longOrNull ?: 0
+            )
+        }.toMap()
     }
 
     private suspend fun getCrashFreeRate(
@@ -495,7 +586,7 @@ class NotificationService(
         startDate: Instant,
         endDate: Instant,
         limit: Int
-    ): List<EmailService.TopIssue> {
+    ): List<EmailService.TopIssue>? {
         val startMs = startDate.toEpochMilli()
         val endMs = endDate.toEpochMilli()
 
@@ -523,7 +614,7 @@ class NotificationService(
         if (!response.status.isSuccess()) {
             val preview = responseBody.take(ERROR_BODY_PREVIEW_CHARS)
             logger.error("ClickHouse query failed in getTopIssues: ${response.status} - $preview")
-            return emptyList()
+            return null
         }
         val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
         val rows = jsonResponse["data"]?.jsonArray ?: return emptyList()
