@@ -595,16 +595,23 @@ class SsoService {
             .withIssuer(jwtIssuer)
             .withClaim("userId", userId)
             .withClaim("email", email)
-            .withExpiresAt(Date(System.currentTimeMillis() + 3600000))
+            .withExpiresAt(Date(System.currentTimeMillis() + SSO_JWT_EXPIRY_MS))
             .sign(Algorithm.HMAC256(jwtSecret))
 
     private companion object {
         private const val SSO_NONCE_PREFIX = "sso:nonce:"
         private const val SSO_NONCE_TTL_SECONDS = 600L // 10 minutes
+        private const val SSO_NONCE_TTL_MS = SSO_NONCE_TTL_SECONDS * 1000L
+        private const val SSO_JWT_EXPIRY_MS = 3_600_000L // 1 hour
+        private const val SSO_STATE_NONCE_BYTES = 16
+        private const val SSO_STATE_PART_COUNT = 4
+        private const val SSO_STATE_SIGNATURE_IDX = 3
+        private const val AES_GCM_IV_LENGTH = 12
+        private const val AES_GCM_TAG_BITS = 128
     }
 
     private fun generateSecureState(orgId: Int): String {
-        val nonce = ByteArray(16)
+        val nonce = ByteArray(SSO_STATE_NONCE_BYTES)
         secureRandom.nextBytes(nonce)
         val nonceB64 = Base64.getUrlEncoder().withoutPadding().encodeToString(nonce)
         val timestamp = System.currentTimeMillis()
@@ -641,14 +648,14 @@ class SsoService {
         try {
             val decoded = String(Base64.getUrlDecoder().decode(state))
             val parts = decoded.split(":")
-            if (parts.size != 4) {
+            if (parts.size != SSO_STATE_PART_COUNT) {
                 throw IllegalArgumentException("Invalid state format")
             }
 
             val orgId = parts[0].toInt()
             val nonceB64 = parts[1]
             val timestamp = parts[2].toLong()
-            val signature = parts[3]
+            val signature = parts[SSO_STATE_SIGNATURE_IDX]
 
             // Verify HMAC signature
             val payload = "${parts[0]}:${parts[1]}:${parts[2]}"
@@ -666,7 +673,7 @@ class SsoService {
             }
 
             // Check expiry (10 minutes)
-            if (System.currentTimeMillis() - timestamp > SSO_NONCE_TTL_SECONDS * 1000) {
+            if (System.currentTimeMillis() - timestamp > SSO_NONCE_TTL_MS) {
                 throw IllegalArgumentException("State expired")
             }
 
@@ -740,7 +747,10 @@ class SsoService {
         // SP settings
         samlProperties.setProperty("onelogin.saml2.sp.entityid", spEntityId)
         samlProperties.setProperty("onelogin.saml2.sp.assertion_consumer_service.url", acsUrl)
-        samlProperties.setProperty("onelogin.saml2.sp.nameidformat", "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress")
+        samlProperties.setProperty(
+            "onelogin.saml2.sp.nameidformat",
+            "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+        )
 
         // IDP settings
         samlProperties.setProperty("onelogin.saml2.idp.entityid", idpEntityId)
@@ -791,11 +801,11 @@ class SsoService {
 
     private fun encryptSecret(plaintext: String): String {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        val iv = ByteArray(12)
+        val iv = ByteArray(AES_GCM_IV_LENGTH)
         secureRandom.nextBytes(iv)
 
         val keySpec = SecretKeySpec(encryptionKey, "AES")
-        val gcmSpec = GCMParameterSpec(128, iv)
+        val gcmSpec = GCMParameterSpec(AES_GCM_TAG_BITS, iv)
         cipher.init(Cipher.ENCRYPT_MODE, keySpec, gcmSpec)
 
         val ciphertext = cipher.doFinal(plaintext.toByteArray())
@@ -808,12 +818,12 @@ class SsoService {
 
         try {
             val combined = Base64.getDecoder().decode(encrypted)
-            val iv = combined.copyOfRange(0, 12)
-            val ciphertext = combined.copyOfRange(12, combined.size)
+            val iv = combined.copyOfRange(0, AES_GCM_IV_LENGTH)
+            val ciphertext = combined.copyOfRange(AES_GCM_IV_LENGTH, combined.size)
 
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             val keySpec = SecretKeySpec(encryptionKey, "AES")
-            val gcmSpec = GCMParameterSpec(128, iv)
+            val gcmSpec = GCMParameterSpec(AES_GCM_TAG_BITS, iv)
             cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec)
 
             return String(cipher.doFinal(ciphertext))

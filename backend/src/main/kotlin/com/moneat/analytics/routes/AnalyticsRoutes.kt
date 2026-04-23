@@ -31,8 +31,15 @@ import io.ktor.server.routing.route
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
 import java.time.LocalDate
+import java.time.format.DateTimeParseException
 
 private val logger = KotlinLogging.logger {}
+
+private const val PERIOD_7D_OFFSET_DAYS = 6L
+private const val PERIOD_30D_OFFSET_DAYS = 29L
+private const val PERIOD_6MO_MONTHS = 6L
+private const val PERIOD_12MO_MONTHS = 12L
+private const val FILTER_PARTS_COUNT = 3
 
 /**
  * Authenticated dashboard API routes for product analytics.
@@ -252,22 +259,22 @@ private fun parseDateRange(call: io.ktor.server.application.ApplicationCall): Pa
 
     return when (period) {
         "today" -> now to now
-        "7d" -> now.minusDays(6) to now
-        "30d" -> now.minusDays(29) to now
+        "7d" -> now.minusDays(PERIOD_7D_OFFSET_DAYS) to now
+        "30d" -> now.minusDays(PERIOD_30D_OFFSET_DAYS) to now
         "month" -> now.withDayOfMonth(1) to now
-        "6mo" -> now.minusMonths(6) to now
-        "12mo" -> now.minusMonths(12) to now
+        "6mo" -> now.minusMonths(PERIOD_6MO_MONTHS) to now
+        "12mo" -> now.minusMonths(PERIOD_12MO_MONTHS) to now
         "custom" -> {
             val from = call.request.queryParameters["from"] ?: call.request.queryParameters["date_from"]
             val to = call.request.queryParameters["to"] ?: call.request.queryParameters["date_to"]
             if (from == null || to == null) return null
             try {
                 LocalDate.parse(from) to LocalDate.parse(to)
-            } catch (_: Exception) {
+            } catch (_: DateTimeParseException) {
                 null
             }
         }
-        else -> now.minusDays(29) to now
+        else -> now.minusDays(PERIOD_30D_OFFSET_DAYS) to now
     }
 }
 
@@ -299,7 +306,7 @@ private fun parseFilters(call: io.ktor.server.application.ApplicationCall): List
         ?: emptyList()
     return rawFilters.mapNotNull { filterStr ->
         val parts = filterStr.split(":", limit = 3)
-        if (parts.size == 3) {
+        if (parts.size == FILTER_PARTS_COUNT) {
             AnalyticsFilter(parts[0], parts[1], parts[2])
         } else {
             null

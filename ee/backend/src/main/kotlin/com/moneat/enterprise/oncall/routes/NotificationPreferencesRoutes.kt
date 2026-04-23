@@ -146,7 +146,10 @@ fun Route.notificationPreferencesRoutes(
                             (row?.get(Users.phone_number)) to (row?.get(Users.oncall_phone_opt_in) ?: false)
                         }
                         if (phone.isNullOrBlank() || !optedIn) {
-                            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Phone not configured or consent not given"))
+                            call.respond(
+                                HttpStatusCode.BadRequest,
+                                ErrorResponse("Phone not configured or consent not given"),
+                            )
                             return@post
                         }
                         // Send a minimal test SMS (reuses existing sendSms which validates consent again)
@@ -213,7 +216,10 @@ fun Route.notificationPreferencesRoutes(
                             "push" to ChannelAvailability(highUrgency.isChannelEnabled("push"), hasDevices),
                             "slack" to ChannelAvailability(highUrgency.isChannelEnabled("slack"), hasSlack),
                             "sms" to ChannelAvailability(highUrgency.isChannelEnabled("sms"), hasPhone && phoneOptIn),
-                            "phone_call" to ChannelAvailability(highUrgency.isChannelEnabled("phone_call"), hasPhone && phoneOptIn),
+                            "phone_call" to ChannelAvailability(
+                                highUrgency.isChannelEnabled("phone_call"),
+                                hasPhone && phoneOptIn,
+                            ),
                         ),
                     ),
                     "low_urgency" to NotificationRuleCategory(
@@ -249,7 +255,8 @@ fun Route.notificationPreferencesRoutes(
 
                 val validCategories = setOf("high_urgency", "low_urgency", "shift_change")
                 if (category == null || category !in validCategories) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid category. Use: ${validCategories.joinToString(", ")}"))
+                    val msg = "Invalid category. Use: ${validCategories.joinToString(", ")}"
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(msg))
                     return@put
                 }
 
@@ -262,10 +269,10 @@ fun Route.notificationPreferencesRoutes(
 
                 // Guard: for high_urgency, prevent disabling all channels
                 if (category == "high_urgency" && request.channels.values.none { it }) {
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        ErrorResponse("At least one high urgency channel must remain enabled. Push notifications cannot be fully disabled."),
-                    )
+                    val err =
+                        "At least one high urgency channel must remain enabled. " +
+                            "Push notifications cannot be fully disabled."
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(err))
                     return@put
                 }
 
@@ -411,7 +418,9 @@ private fun maskEmail(email: String): String {
     return "$masked@${parts[1]}"
 }
 
+private const val PHONE_VISIBLE_DIGITS = 4
+
 private fun maskPhone(phone: String): String {
-    if (phone.length <= 4) return phone
-    return "*".repeat(phone.length - 4) + phone.takeLast(4)
+    if (phone.length <= PHONE_VISIBLE_DIGITS) return phone
+    return "*".repeat(phone.length - PHONE_VISIBLE_DIGITS) + phone.takeLast(PHONE_VISIBLE_DIGITS)
 }

@@ -44,11 +44,16 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import com.moneat.utils.suspendRunCatching
 import java.util.*
 
 class ReleaseService {
     private val dateFormatter = DateTimeFormatter.ISO_INSTANT
     private val logger = KotlinLogging.logger {}
+
+    companion object {
+        private const val IO_BUFFER_SIZE = 8192
+    }
 
     /**
      * Create a new release for a project
@@ -466,7 +471,7 @@ class ReleaseService {
         // Verify checksum
         val digest = MessageDigest.getInstance("SHA-1")
         storage.openInputStream(storageKey)?.use { input ->
-            val buffer = ByteArray(8192)
+            val buffer = ByteArray(IO_BUFFER_SIZE)
             var read: Int
             while (input.read(buffer).also { read = it } != -1) {
                 digest.update(buffer, 0, read)
@@ -515,7 +520,7 @@ class ReleaseService {
         projectId: Long,
         newVersion: String
     ) {
-        try {
+        suspendRunCatching {
             val now = kotlin.time.Clock.System.now()
             val count = IssueStatuses.update(
                 where = {
@@ -543,7 +548,7 @@ class ReleaseService {
                     "cache:project_stats:$projectId:*"
                 )
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) {
                 "Failed to auto-resolve issues for project " +
                     "$projectId on release $newVersion"

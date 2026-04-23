@@ -16,7 +16,10 @@
 
 package com.moneat.ai
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+
+private val aiChatResponseJson = Json { ignoreUnknownKeys = true }
 
 /**
  * Legacy core AI service stub.
@@ -25,17 +28,22 @@ import kotlinx.serialization.json.Json
  */
 class AiChatService {
 
-    @Suppress("UnusedParameter")
+    companion object {
+        private const val MAX_USER_INPUT_LENGTH = 4000
+        private const val MAX_HISTORY_MESSAGES = 20
+    }
+
     suspend fun chat(userId: Int, orgId: Int, request: ChatRequest): ChatApiResponse {
         return unavailable(
             operation = "chat",
             userId = userId,
             orgId = orgId,
+            context = "messageLength=${request.message.length}",
         )
     }
 
-    private fun sanitizeUserInput(input: String): String {
-        val maxLength = 4000
+    /** Shared helpers for AI message shaping; `internal` for unit tests and enterprise module reuse. */
+    internal fun sanitizeUserInput(input: String): String {
         val injectionPatterns = listOf(
             Regex("ignore previous instructions", RegexOption.IGNORE_CASE),
             Regex("system:", RegexOption.IGNORE_CASE),
@@ -45,28 +53,24 @@ class AiChatService {
         for (pattern in injectionPatterns) {
             sanitized = pattern.replace(sanitized, "")
         }
-        return sanitized.take(maxLength)
+        return sanitized.take(MAX_USER_INPUT_LENGTH)
     }
 
-    private fun buildOpenAiMessages(
+    internal fun buildOpenAiMessages(
         systemPrompt: String,
         docBlock: String,
         history: List<OpenAiMessage>,
     ): List<OpenAiMessage> {
         val systemContent = "$systemPrompt\n\n== API DOCUMENTATION ==\n$docBlock"
         val systemMessage = OpenAiMessage(role = "system", content = systemContent)
-        val recentHistory = history.takeLast(20)
+        val recentHistory = history.takeLast(MAX_HISTORY_MESSAGES)
         return listOf(systemMessage) + recentHistory
     }
 
-    companion object {
-        private val json = Json { ignoreUnknownKeys = true }
-    }
-
-    private fun parseAiResponse(jsonStr: String): AiResponse {
+    internal fun parseAiResponse(jsonStr: String): AiResponse {
         return try {
-            json.decodeFromString<AiResponse>(jsonStr)
-        } catch (_: Exception) {
+            aiChatResponseJson.decodeFromString<AiResponse>(jsonStr)
+        } catch (_: SerializationException) {
             AiResponse(message = jsonStr)
         }
     }

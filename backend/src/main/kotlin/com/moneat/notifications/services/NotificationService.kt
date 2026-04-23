@@ -22,6 +22,7 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.server.config.ApplicationConfig
@@ -49,17 +50,28 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 private val logger = KotlinLogging.logger {}
 
+private const val STACK_FRAMES_COUNT = 5
+private const val EPOCH_SECONDS_TO_MILLIS = 1000
+private const val WEEKLY_SUMMARY_DAYS = 7L
+private const val ERROR_BODY_PREVIEW_CHARS = 500
+private const val WEEKLY_SUMMARY_HOUR = 9
+private const val FULL_PERCENTAGE = 100
+private const val MILLION = 1_000_000L
+private const val THOUSAND = 1_000L
+
 class NotificationService(
     private val emailService: EmailService,
     private val slackService: SlackService = SlackService(),
     private val discordService: DiscordService = DiscordService(),
 ) {
+    enum class WeeklySummaryResult { SENT, SKIPPED, FAILED }
     private val config = ApplicationConfig("application.conf")
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val frontendUrl = config.property("email.frontendUrl").getString()
@@ -81,7 +93,7 @@ class NotificationService(
         issueId: String,
         event: SentryEvent
     ) {
-        try {
+        suspendRunCatching {
             logger.info { "Processing new issue alert for issue=$issueId project=$projectId" }
 
             // Get project details
@@ -159,7 +171,7 @@ class NotificationService(
                     ?.firstOrNull()
                     ?.stacktrace
                     ?.frames
-                    ?.takeLast(5)
+                    ?.takeLast(STACK_FRAMES_COUNT)
                     ?.joinToString("\n") { frame ->
                         "  at ${frame.function ?: "unknown"} (${frame.filename}:${frame.lineno})"
                     } ?: "No stack trace available"
@@ -185,7 +197,7 @@ class NotificationService(
                     timestamp =
                     event.timestamp?.let {
                         java.time.Instant
-                            .ofEpochMilli((it * 1000).toLong())
+                            .ofEpochMilli((it * EPOCH_SECONDS_TO_MILLIS).toLong())
                             .toString()
                     } ?: java.time.Instant
                         .now()
@@ -198,10 +210,10 @@ class NotificationService(
             // Send emails asynchronously
             usersToNotify.forEach { (email, _) ->
                 scope.launch {
-                    try {
+                    suspendRunCatching {
                         emailService.sendErrorAlertEmail(email, emailData)
                         logger.info { "Sent issue alert to $email for issue $issueId" }
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to send issue alert to $email" }
                     }
                 }
@@ -223,7 +235,7 @@ class NotificationService(
                 }
 
             if (slackEnabled) {
-                try {
+                suspendRunCatching {
                     slackService.sendErrorAlert(
                         organizationId = orgId,
                         projectName = projectName,
@@ -237,7 +249,7 @@ class NotificationService(
                         timestamp = emailData.timestamp,
                         stackTrace = stackTrace
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to send Slack notification for new issue" }
                 }
             }
@@ -257,7 +269,7 @@ class NotificationService(
                 }
 
             if (discordEnabled) {
-                try {
+                suspendRunCatching {
                     val discordIssueUrl = "$frontendUrl/issues/$issueId"
                     discordService.sendErrorAlert(
                         organizationId = orgId,
@@ -269,23 +281,23 @@ class NotificationService(
                         userCount = 0,
                         issueUrl = discordIssueUrl
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to send Discord notification for new issue" }
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error in onNewIssue handler" }
         }
     }
 
     suspend fun sendWeeklySummary() {
-        try {
+        suspendRunCatching {
             logger.info { "Starting weekly summary generation" }
 
             val now = Instant.now()
             val endDate = now
-            val startDate = now.minus(Duration.ofDays(7))
-            val priorStartDate = startDate.minus(Duration.ofDays(7))
+            val startDate = now.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
+            val priorStartDate = startDate.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
 
             // Get all users with weekly summary enabled
             val usersToNotify =
@@ -298,43 +310,58 @@ class NotificationService(
                             val prefs = getPreferences(userId, null)
                             if (!prefs.weeklySummary) return@mapNotNull null
 
-                            Triple(userId, user[Users.email], user[Users.name])
+                            Pair(userId, user[Users.email])
                         }
                 }
 
             logger.info { "Sending weekly summaries to ${usersToNotify.size} users" }
 
-            usersToNotify.forEach { (userId, email, userName) ->
-                scope.launch {
-                    try {
-                        sendUserWeeklySummary(userId, email, userName, startDate, endDate, priorStartDate)
-                    } catch (e: Exception) {
-                        logger.error(e) { "Failed to send weekly summary to $email" }
-                    }
+            var sentCount = 0
+            var skippedCount = 0
+            var failedCount = 0
+
+            for ((userId, email) in usersToNotify) {
+                val result = suspendRunCatching {
+                    sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
+                }.getOrElse { e ->
+                    logger.error(e) { "Failed to send weekly summary to $email" }
+                    WeeklySummaryResult.FAILED
+                }
+                when (result) {
+                    WeeklySummaryResult.SENT -> sentCount++
+                    WeeklySummaryResult.SKIPPED -> skippedCount++
+                    WeeklySummaryResult.FAILED -> failedCount++
                 }
             }
-        } catch (e: Exception) {
+
+            logger.info {
+                "Weekly summary complete: $sentCount sent," +
+                    " $skippedCount skipped, $failedCount failed" +
+                    " out of ${usersToNotify.size} users"
+            }
+        }.getOrElse { e ->
             logger.error(e) { "Error in sendWeeklySummary" }
         }
     }
 
-    suspend fun sendWeeklySummaryForUser(userId: Int, email: String) {
+    suspend fun sendWeeklySummaryForUser(
+        userId: Int,
+        email: String
+    ): WeeklySummaryResult {
         val now = Instant.now()
         val endDate = now
-        val startDate = now.minus(Duration.ofDays(7))
-        val priorStartDate = startDate.minus(Duration.ofDays(7))
-        sendUserWeeklySummary(userId, email, null, startDate, endDate, priorStartDate)
+        val startDate = now.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
+        val priorStartDate = startDate.minus(Duration.ofDays(WEEKLY_SUMMARY_DAYS))
+        return sendUserWeeklySummary(userId, email, startDate, endDate, priorStartDate)
     }
 
     private suspend fun sendUserWeeklySummary(
         userId: Int,
         email: String,
-        @Suppress("UNUSED_PARAMETER") userName: String?,
         startDate: Instant,
         endDate: Instant,
         priorStartDate: Instant
-    ) {
-        // Get user's projects
+    ): WeeklySummaryResult {
         val projects =
             transaction {
                 val orgIds =
@@ -351,34 +378,59 @@ class NotificationService(
 
         if (projects.isEmpty()) {
             logger.debug { "User $userId has no projects, skipping summary" }
-            return
+            return WeeklySummaryResult.SKIPPED
         }
 
         val projectIds = projects.map { it.first }
 
-        // Query ClickHouse for stats
         val currentStats = getStatsForPeriod(projectIds, startDate, endDate)
         val priorStats = getStatsForPeriod(projectIds, priorStartDate, startDate)
 
+        if (currentStats == null) {
+            logger.warn { "Skipping weekly summary for $email: ClickHouse stats query failed" }
+            return WeeklySummaryResult.FAILED
+        }
+
         val totalEvents = currentStats.totalEvents
-        val eventsTrend = calculateTrend(currentStats.totalEvents, priorStats.totalEvents)
+        val eventsTrend = priorStats?.let {
+            calculateTrend(currentStats.totalEvents, it.totalEvents)
+        }
         val newIssues = currentStats.uniqueIssues
-        val issuesTrend = calculateTrend(currentStats.uniqueIssues, priorStats.uniqueIssues)
+        val issuesTrend = priorStats?.let {
+            calculateTrend(currentStats.uniqueIssues, it.uniqueIssues)
+        }
         val affectedUsers = currentStats.uniqueUsers
-        val usersTrend = calculateTrend(currentStats.uniqueUsers, priorStats.uniqueUsers)
+        val usersTrend = priorStats?.let {
+            calculateTrend(currentStats.uniqueUsers, it.uniqueUsers)
+        }
 
-        // Get top issues
         val topIssues = getTopIssues(projectIds, startDate, endDate, limit = 5)
+        if (topIssues == null) {
+            logger.warn {
+                "Skipping weekly summary for $email: ClickHouse top issues query failed"
+            }
+            return WeeklySummaryResult.FAILED
+        }
 
-        // Get per-project breakdown
+        val perProjectStats = getPerProjectStats(projectIds, startDate, endDate)
+        if (perProjectStats == null) {
+            logger.warn {
+                "Skipping weekly summary for $email: ClickHouse per-project stats query failed"
+            }
+            return WeeklySummaryResult.FAILED
+        }
+
         val projectSummaries =
             projects.map { (projectId, projectName) ->
-                val stats = getStatsForPeriod(listOf(projectId), startDate, endDate)
+                val stats = perProjectStats[projectId]
+                val crashFreeRate = getCrashFreeRate(projectId, startDate, endDate)
                 EmailService.ProjectSummary(
                     name = projectName,
-                    events = formatNumber(stats.totalEvents),
-                    issues = formatNumber(stats.uniqueIssues),
-                    crashFree = "99.5" // TODO: Calculate actual crash-free rate
+                    events = formatNumber(stats?.totalEvents ?: 0),
+                    issues = formatNumber(stats?.uniqueIssues ?: 0),
+                    crashFree = crashFreeRate?.let {
+                        String.format(Locale.US, "%.1f%%", it)
+                    } ?: "N/A"
                 )
             }
 
@@ -401,6 +453,7 @@ class NotificationService(
 
         emailService.sendWeeklySummaryEmail(email, emailData)
         logger.info { "Sent weekly summary to $email" }
+        return WeeklySummaryResult.SENT
     }
 
     private data class PeriodStats(
@@ -413,7 +466,7 @@ class NotificationService(
         projectIds: List<Long>,
         startDate: Instant,
         endDate: Instant
-    ): PeriodStats {
+    ): PeriodStats? {
         val startMs = startDate.toEpochMilli()
         val endMs = endDate.toEpochMilli()
 
@@ -421,8 +474,8 @@ class NotificationService(
             """
             SELECT 
                 count() as total_events,
-                uniq(issue_id) as unique_issues,
-                uniq(user_id) as unique_users
+                uniqIf(issue_id, issue_id != '') as unique_issues,
+                uniqIf(user_id, user_id != '') as unique_users
             FROM `$clickhouseDb`.events
             WHERE project_id IN (${projectIds.joinToString(",")})
               AND timestamp >= fromUnixTimestamp64Milli($startMs)
@@ -433,8 +486,9 @@ class NotificationService(
         val response = ClickHouseClient.execute(query)
         val responseBody = response.bodyAsText()
         if (!response.status.isSuccess()) {
-            logger.error("ClickHouse query failed in getStatsForPeriod: ${response.status} - ${responseBody.take(500)}")
-            return PeriodStats(totalEvents = 0, uniqueIssues = 0, uniqueUsers = 0)
+            val preview = responseBody.take(ERROR_BODY_PREVIEW_CHARS)
+            logger.error("ClickHouse query failed in getStatsForPeriod: ${response.status} - $preview")
+            return null
         }
         val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
         val data = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
@@ -446,12 +500,93 @@ class NotificationService(
         )
     }
 
+    private suspend fun getPerProjectStats(
+        projectIds: List<Long>,
+        startDate: Instant,
+        endDate: Instant
+    ): Map<Long, PeriodStats>? {
+        val startMs = startDate.toEpochMilli()
+        val endMs = endDate.toEpochMilli()
+
+        val query =
+            """
+            SELECT 
+                project_id,
+                count() as total_events,
+                uniqIf(issue_id, issue_id != '') as unique_issues,
+                uniqIf(user_id, user_id != '') as unique_users
+            FROM `$clickhouseDb`.events
+            WHERE project_id IN (${projectIds.joinToString(",")})
+              AND timestamp >= fromUnixTimestamp64Milli($startMs)
+              AND timestamp < fromUnixTimestamp64Milli($endMs)
+            GROUP BY project_id
+            FORMAT JSON
+            """.trimIndent()
+
+        val response = ClickHouseClient.execute(query)
+        val responseBody = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            val preview = responseBody.take(ERROR_BODY_PREVIEW_CHARS)
+            logger.error(
+                "ClickHouse query failed in getPerProjectStats:" +
+                    " ${response.status} - $preview"
+            )
+            return null
+        }
+        val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
+        val rows = jsonResponse["data"]?.jsonArray ?: return emptyMap()
+
+        return rows.mapNotNull { row ->
+            val obj = row.jsonObject
+            val projectId =
+                obj["project_id"]?.jsonPrimitive?.longOrNull
+                    ?: return@mapNotNull null
+            projectId to PeriodStats(
+                totalEvents = obj["total_events"]?.jsonPrimitive?.longOrNull ?: 0,
+                uniqueIssues = obj["unique_issues"]?.jsonPrimitive?.longOrNull ?: 0,
+                uniqueUsers = obj["unique_users"]?.jsonPrimitive?.longOrNull ?: 0
+            )
+        }.toMap()
+    }
+
+    private suspend fun getCrashFreeRate(
+        projectId: Long,
+        startDate: Instant,
+        endDate: Instant
+    ): Double? {
+        val startMs = startDate.toEpochMilli()
+        val endMs = endDate.toEpochMilli()
+
+        val query =
+            """
+            SELECT countIf(errors = 0) * 100.0 / count() as rate
+            FROM `$clickhouseDb`.sessions
+            WHERE project_id = $projectId
+              AND started >= fromUnixTimestamp64Milli($startMs)
+              AND started < fromUnixTimestamp64Milli($endMs)
+            FORMAT JSON
+            """.trimIndent()
+
+        return suspendRunCatching {
+            val response = ClickHouseClient.execute(query)
+            val responseBody = response.bodyAsText()
+            if (!response.status.isSuccess()) return null
+            val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
+            val data = jsonResponse["data"]?.jsonArray?.firstOrNull()?.jsonObject
+            val rate = data?.get("rate")?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+            if (rate == null || rate.isNaN() || rate.isInfinite()) null else rate
+        }.getOrElse { e ->
+            logger.warn(e) { "Failed to get crash-free rate for project $projectId" }
+            null
+        }
+    }
+
     private suspend fun getTopIssues(
         projectIds: List<Long>,
         startDate: Instant,
         endDate: Instant,
         limit: Int
-    ): List<EmailService.TopIssue> {
+    ): List<EmailService.TopIssue>? {
         val startMs = startDate.toEpochMilli()
         val endMs = endDate.toEpochMilli()
 
@@ -477,8 +612,9 @@ class NotificationService(
         val response = ClickHouseClient.execute(query)
         val responseBody = response.bodyAsText()
         if (!response.status.isSuccess()) {
-            logger.error("ClickHouse query failed in getTopIssues: ${response.status} - ${responseBody.take(500)}")
-            return emptyList()
+            val preview = responseBody.take(ERROR_BODY_PREVIEW_CHARS)
+            logger.error("ClickHouse query failed in getTopIssues: ${response.status} - $preview")
+            return null
         }
         val jsonResponse = Json.parseToJsonElement(responseBody).jsonObject
         val rows = jsonResponse["data"]?.jsonArray ?: return emptyList()
@@ -563,7 +699,7 @@ class NotificationService(
         var nextRun =
             now
                 .with(DayOfWeek.MONDAY)
-                .withHour(9)
+                .withHour(WEEKLY_SUMMARY_HOUR)
                 .withMinute(0)
                 .withSecond(0)
                 .withNano(0)
@@ -574,16 +710,16 @@ class NotificationService(
         }
 
         val initialDelay = Duration.between(now, nextRun).toMillis()
-        val period = Duration.ofDays(7).toMillis()
+        val period = Duration.ofDays(WEEKLY_SUMMARY_DAYS).toMillis()
 
         logger.info { "Scheduling weekly summary for $nextRun" }
 
         scheduler.scheduleAtFixedRate(
             {
                 runBlocking {
-                    try {
+                    suspendRunCatching {
                         sendWeeklySummary()
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Error in scheduled weekly summary" }
                     }
                 }
@@ -598,30 +734,20 @@ class NotificationService(
         current: Long,
         previous: Long
     ): Int {
-        if (previous == 0L) return if (current > 0) 100 else 0
-        return ((current - previous) * 100 / previous).toInt()
+        if (previous == 0L) return if (current > 0) FULL_PERCENTAGE else 0
+        return ((current - previous) * FULL_PERCENTAGE / previous).toInt()
     }
 
     private fun formatNumber(num: Long): String {
         return when {
-            num >= 1_000_000 -> String.format("%.1fM", num / 1_000_000.0)
-            num >= 1_000 -> String.format("%.1fK", num / 1_000.0)
+            num >= MILLION -> String.format(Locale.US, "%.1fM", num / MILLION.toDouble())
+            num >= THOUSAND -> String.format(Locale.US, "%.1fK", num / THOUSAND.toDouble())
             else -> num.toString()
         }
     }
 
-    private fun formatTimestamp(timestamp: String): String {
-        return try {
-            val instant = Instant.parse(timestamp)
-            val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm 'UTC'")
-            formatter.format(instant.atZone(ZoneId.of("UTC")))
-        } catch (e: Exception) {
-            timestamp
-        }
-    }
-
     private fun formatDate(instant: Instant): String {
-        val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy")
+        val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US)
         return formatter.format(instant.atZone(ZoneId.of("UTC")))
     }
 

@@ -16,8 +16,8 @@
 
 package com.moneat.datadog.services
 
-import com.moneat.datadog.models.DdProfileEvent
 import com.moneat.datadog.models.DdProfileEndpoint
+import com.moneat.datadog.models.DdProfileEvent
 import com.moneat.utils.ClickHouseSqlUtils
 import org.junit.jupiter.api.Test
 import java.lang.reflect.Method

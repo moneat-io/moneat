@@ -18,7 +18,6 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {TraceList} from '@/components/apm/TraceList'
-import {Badge} from '@/components/ui/badge'
 import {
   Activity,
   AlertTriangle,
@@ -77,10 +76,7 @@ function PerformanceTracesPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Distributed Traces</h1>
         <p className="text-muted-foreground text-sm mt-0.5">
-          Individual trace view from APM instrumentation
-          <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0 font-normal">
-            Datadog
-          </Badge>
+          Individual trace view from distributed tracing
         </p>
       </div>
 

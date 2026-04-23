@@ -27,6 +27,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -42,6 +43,11 @@ sealed class OpenAiError(override val message: String) : Exception(message) {
 }
 
 object OpenAiClient {
+    private const val HTTP_UNAUTHORIZED = 401
+    private const val HTTP_TOO_MANY_REQUESTS = 429
+    private const val HTTP_CLIENT_ERROR_MIN = 400
+    private const val HTTP_CLIENT_ERROR_MAX = 499
+
     private val json = Json { ignoreUnknownKeys = true }
 
     private val client =
@@ -71,19 +77,19 @@ object OpenAiClient {
             OpenAiChatRequest(
                 model = model,
                 messages = messages,
-                max_tokens = maxTokens,
+                maxTokens = maxTokens,
                 temperature = 0.3,
-                response_format = OpenAiResponseFormat(type = "json_object")
+                responseFormat = OpenAiResponseFormat(type = "json_object")
             )
 
         val response =
-            try {
+            suspendRunCatching {
                 client.post("https://api.openai.com/v1/chat/completions") {
                     contentType(ContentType.Application.Json)
                     header("Authorization", "Bearer $apiKey")
                     setBody(request)
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 throw OpenAiError.NetworkError("Failed to connect to OpenAI: ${e.message}", e)
             }
 
@@ -91,9 +97,10 @@ object OpenAiClient {
         if (response.status != HttpStatusCode.OK) {
             logger.error { "OpenAI API error (${response.status}): $body" }
             throw when (response.status.value) {
-                401 -> OpenAiError.AuthenticationError("Invalid or expired API key")
-                429 -> OpenAiError.RateLimitError("Rate limit exceeded — please try again later")
-                in 400..499 -> OpenAiError.ModelError("OpenAI request error (${response.status.value}): $body")
+                HTTP_UNAUTHORIZED -> OpenAiError.AuthenticationError("Invalid or expired API key")
+                HTTP_TOO_MANY_REQUESTS -> OpenAiError.RateLimitError("Rate limit exceeded — please try again later")
+                in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX ->
+                    OpenAiError.ModelError("OpenAI request error (${response.status.value}): $body")
                 else -> OpenAiError.ServerError("OpenAI server error (${response.status.value})")
             }
         }

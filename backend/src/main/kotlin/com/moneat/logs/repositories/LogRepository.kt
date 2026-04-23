@@ -18,7 +18,7 @@ package com.moneat.logs.repositories
 
 /**
  * Repository for log data access.
- * Abstracts ClickHouse log queries and PostgreSQL (LogIndexes, LogApiKeys).
+ * Abstracts ClickHouse log queries and PostgreSQL (LogIndexes, OtlpApiKeys).
  */
 interface LogRepository {
     suspend fun executeClickHouseInsert(sql: String): Boolean

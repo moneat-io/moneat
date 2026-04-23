@@ -1,6 +1,6 @@
 # Copilot Instructions for Moneat
 
-Moneat is a Sentry-compatible error monitoring platform built with Kotlin/Ktor backend, React frontend, PostgreSQL for operational data, and ClickHouse for high-performance event analytics.
+Moneat is a Sentry-compatible, OpenTelemetry-compatible observability platform built with Kotlin/Ktor backend, React frontend, PostgreSQL for operational data, and ClickHouse for high-performance event analytics.
 
 ## Build, Test, and Lint
 
@@ -70,9 +70,10 @@ Backend connects to services at (configurable via `.env`):
 ## Architecture Overview
 
 ### Request Flow
-1. **Ingestion path**: Client → `/api/{projectId}/envelope/` → `IngestRoutes.kt` → `EventService.kt` → PostgreSQL + ClickHouse
-2. **Dashboard API**: React → `/v1/*` → `ApiRoutes.kt` → `DashboardService.kt` → PostgreSQL/ClickHouse
-3. **Authentication**: All `/v1/*` endpoints require JWT (except `/auth/*`)
+1. **Sentry ingestion**: Client → `/api/{projectId}/envelope/` → `IngestRoutes.kt` → `EventService.kt` → PostgreSQL + ClickHouse
+2. **OTLP ingestion**: Client → `/v1/{logs,traces,metrics}/otlp` → `OtlpTraceRoutes.kt` / `OtlpMetricsRoutes.kt` / `LogRoutes.kt` → ClickHouse (authenticated via `Authorization: Bearer <OTLP API key>`)
+3. **Dashboard API**: React → `/v1/*` → `ApiRoutes.kt` → `DashboardService.kt` → PostgreSQL/ClickHouse
+4. **Authentication**: All `/v1/*` endpoints require JWT (except `/auth/*` and OTLP ingestion endpoints which use OTLP API keys)
 
 ### Data Storage Strategy
 - **PostgreSQL**: Users, organizations, projects, project_keys, subscriptions (relational data)
@@ -88,6 +89,10 @@ com.moneat/
 ├── routes/                  # HTTP endpoints: IngestRoutes, ApiRoutes, AuthRoutes
 ├── services/                # Business logic: EventService, DashboardService, AuthService
 ├── models/                  # Data classes: SentryModels, ApiModels, database tables
+├── otlp/                    # OpenTelemetry (OTLP) ingestion: routes, services, auth, parsing
+│   ├── routes/              # OtlpTraceRoutes, OtlpMetricsRoutes
+│   ├── services/            # OtlpTraceService, OtlpMetricsService, OtlpApiKeyService
+│   └── models/              # OtlpApiKeyModels
 ├── utils/                   # Shared utilities
 └── logging/                 # Custom logging configuration
 ```
@@ -132,6 +137,17 @@ To avoid Sonar/ESLint code smells in `dashboard/`:
 
 ## Key Conventions
 
+### Warnings and lint fixes (suppress rarely)
+
+**CRITICAL:** When asked to fix a compiler warning, linter finding, or static analysis issue (Detekt, ESLint, Sonar, Kotlin compiler, etc.):
+
+- ❌ **Do not suppress to defer work** — do not use `@Suppress`, `eslint-disable`, `// NOSONAR`, `SuppressWarnings`, file- or line-level ignores, or similar because fixing the finding properly is too large or inconvenient right now. That is not a valid reason to silence the tool.
+- ✅ **Fix the root cause** — refactor, correct types, satisfy the rule, or extract helpers so the violation is resolved properly.
+- ✅ **Suppress only when it is appropriate forever** — e.g. a documented false positive, or a case where the rule genuinely does not apply on that line and a short comment explains why. **New feature code** should not ship with suppressions that are really “TODO fix later”; land the feature clean or fix the underlying issue before merge.
+- ✅ **When the rule genuinely does not fit the file** — e.g. a demo data seeder may trigger hundreds of “magic number” findings: those literals *are* the seed data, not something that should become hundreds of named constants in one file. Prefer **configuration** (exclude that file or path in `detekt.yml`, ESLint `overrides`, etc.) so the tool skips that context, rather than line-level suppressions or a wall of constants that add no clarity.
+
+If a rule is wrong for the whole project, **adjust the tool configuration** (e.g. `detekt.yml`, ESLint config) deliberately — do not mask individual violations with suppressions.
+
 ### Detekt Code Style Guidelines
 **CRITICAL:** Follow detekt rules to maintain code quality. The project enforces these via CI:
 
@@ -151,7 +167,7 @@ To avoid Sonar/ESLint code smells in `dashboard/`:
   ./gradlew detektFormat    # Auto-fix formatting
   ```
 
-- **SonarQube** runs in CI (`.github/workflows/sonar.yml`). Follow the "Kotlin: Validation & Control Flow" and "Dashboard: TypeScript & ESLint" guidelines below to avoid common Sonar code smells.
+- **SonarQube** runs in CI as the `sonarqube` job in `.github/workflows/test.yml` (after `backend-unit`). Follow the "Kotlin: Validation & Control Flow" and "Dashboard: TypeScript & ESLint" guidelines below to avoid common Sonar code smells.
 
 While some rules are currently disabled in `detekt.yml`, always follow best practices for new code:
 - Use explicit imports (no wildcards)
@@ -183,7 +199,7 @@ To avoid Sonar code smells and keep code consistent:
 - **Remove unused local variables** – delete any variable that is never read.
 
 - **Keep cognitive complexity low (≤15)** – extract helper functions when logic gets nested:
-  - Use `runCatching { }.getOrNull()` only in non-suspending, synchronous helpers (e.g., parsing/mapping functions). **Avoid in suspending/coroutine contexts**: `runCatching` swallows all `Throwable`s including `CancellationException`, which can break coroutine cancellation. In suspend functions, use try/catch that rethrows `CancellationException`, or avoid `runCatching` entirely.
+  - Use `runCatching { }.getOrNull()` only in non-suspending, synchronous helpers (e.g., parsing/mapping functions). **Avoid in suspending/coroutine contexts**: `runCatching` swallows all `Throwable`s including `CancellationException`, which can break coroutine cancellation. In suspend functions, use `suspendRunCatching` from `com.moneat.utils` instead — it rethrows `CancellationException` automatically and composes with the `Result` API (`getOrElse`, `getOrNull`, `getOrDefault`, `onFailure`). Keep the manual `catch (e: CancellationException) { throw e }` pattern only when `Result` doesn't compose cleanly (e.g. the catch block mutates state and then rethrows).
   - Extract complex parsing or mapping into private functions
   - Prefer early returns over nested conditionals
 
@@ -276,9 +292,8 @@ Moneat can monitor itself using Sentry SDK:
 4. Backend validates JWT in `Security.kt` plugin
 
 ### Ingestion Authentication
-- Uses Sentry DSN format: `http://{public_key}@{host}/api/{project_id}`
-- `X-Sentry-Auth` header contains `sentry_key={public_key}`
-- Public key validated against `project_keys` table in PostgreSQL
+- **Sentry**: Uses DSN format: `http://{public_key}@{host}/api/{project_id}` with `X-Sentry-Auth` header containing `sentry_key={public_key}`. Public key validated against `project_keys` table in PostgreSQL.
+- **OTLP**: Uses `Authorization: Bearer <OTLP API key>` header. OTLP API keys are organization-level and shared across logs, traces, and metrics. Managed via `OtlpApiKeyService` and the Settings → OTLP API Keys UI.
 
 ### E2E Testing
 The `e2e/` directory contains Android and KMP test apps:

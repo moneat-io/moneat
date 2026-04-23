@@ -19,6 +19,7 @@ package com.moneat.ai
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -43,7 +44,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 class AiChatRoutesTest {
     private val jwtSecret = "ai-chat-routes-secret"

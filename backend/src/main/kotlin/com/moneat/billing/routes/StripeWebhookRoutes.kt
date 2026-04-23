@@ -28,6 +28,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -51,9 +52,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleStripeWebhook(st
     logger.info { "Webhook payload received, signature present: ${!signature.isNullOrBlank()}" }
 
     val event =
-        try {
+        suspendRunCatching {
             stripeService.verifyAndParseEvent(payload, signature)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.debug { "Stripe webhook signature verification failed: ${e.message}" }
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid webhook signature"))
             return
@@ -66,11 +67,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleStripeWebhook(st
         return
     }
 
-    try {
+    suspendRunCatching {
         dispatchStripeEvent(stripeService, event)
         stripeService.markEventProcessed(event, "processed")
         call.respond(HttpStatusCode.OK, mapOf("received" to true))
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed handling Stripe webhook ${event.id} (${event.type})" }
         stripeService.markEventProcessed(event, "failed", e.message)
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Webhook handling failed"))

@@ -16,6 +16,9 @@
 
 package com.moneat.events.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.auth.services.AuthTokenService
 import com.moneat.events.models.AssembleArtifactBundleRequest
 import com.moneat.events.models.AssembleResponse
@@ -45,11 +48,14 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.io.ByteArrayOutputStream
 import org.koin.core.context.GlobalContext
+import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPInputStream
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+private const val FAILED_TO_UPLOAD_SOURCE_MAP = "Failed to upload source map"
+private const val UPLOAD_FAILED = "Upload failed"
 
 fun Route.releaseRoutes(
     releaseService: ReleaseService = GlobalContext.get().get(),
@@ -387,9 +393,15 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
         call.respond(HttpStatusCode.Created, fileResponse)
     } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-    } catch (e: Exception) {
-        logger.error(e) { "Failed to upload source map" }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Upload failed"))
+    } catch (e: SerializationException) {
+        logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
+    } catch (e: IOException) {
+        logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
+    } catch (e: IllegalStateException) {
+        logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
     }
 }
 
@@ -504,11 +516,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
             // Handle gzip-compressed chunks
             val bytes =
                 if (part.name == "file_gzip") {
-                    try {
+                    suspendRunCatching {
                         val bos = ByteArrayOutputStream()
                         GZIPInputStream(rawBytes.inputStream()).use { it.copyTo(bos) }
                         bos.toByteArray()
-                    } catch (e: Exception) {
+                    }.getOrElse { _ ->
                         rawBytes
                     }
                 } else {
@@ -582,7 +594,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifact
     }
 
     // Assemble the bundle
-    try {
+    suspendRunCatching {
         releaseService.assembleArtifactBundle(
             orgId = orgId,
             checksum = request.checksum,
@@ -600,7 +612,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifact
                 missingChunks = emptyList()
             )
         )
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         logger.error(e) { "Failed to assemble artifact bundle" }
         call.respond(
             AssembleResponse(

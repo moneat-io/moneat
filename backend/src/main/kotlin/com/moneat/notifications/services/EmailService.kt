@@ -16,6 +16,9 @@
 
 package com.moneat.notifications.services
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.shared.models.EmailsSent
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
@@ -38,9 +41,11 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.*
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
+/** Escapes HTML special characters for safe inclusion in email templates. */
 private fun String.escapeHtml(): String =
     replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -55,7 +60,9 @@ private const val BADGE_NEGATIVE =
     "background-color:#fef2f2;border:1px solid #fecaca;color:#dc2626;"
 private const val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
     "border:1px solid #e5e5e5;color:#737373;"
+private const val TOP_ISSUES_COUNT = 5
 
+/** Sends transactional and notification email via Jakarta Mail and HTML templates. */
 class EmailService {
     private val config = ApplicationConfig("application.conf")
     private val fromEmail = config.property("email.from").getString()
@@ -85,6 +92,7 @@ class EmailService {
             Session.getInstance(
                 props,
                 object : Authenticator() {
+                    /** Credentials used for authenticated SMTP submission. */
                     override fun getPasswordAuthentication(): PasswordAuthentication {
                         return PasswordAuthentication(smtpUsername, smtpPassword)
                     }
@@ -183,6 +191,10 @@ class EmailService {
         sendEmail(toEmail, subject, htmlBody, textBody, "org_invitation")
     }
 
+    /**
+     * Sends a multipart alternative (plain text + HTML) message when SMTP is configured;
+     * otherwise logs a preview and records a failed send for metrics.
+     */
     fun sendEmail(
         to: String,
         subject: String,
@@ -210,29 +222,23 @@ class EmailService {
 
         var success = false
         try {
+            val textPart =
+                MimeBodyPart().apply {
+                    setText(textBody, "UTF-8")
+                }
+            val htmlPart =
+                MimeBodyPart().apply {
+                    setContent(htmlBody, "text/html; charset=UTF-8")
+                }
             val message =
                 MimeMessage(mailSession).apply {
                     setFrom(InternetAddress(fromEmail, "Moneat"))
                     setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
                     setSubject(subject)
 
-                    // Create multipart message with both HTML and text
                     val multipart = MimeMultipart("alternative")
-
-                    // Add text part
-                    val textPart =
-                        MimeBodyPart().apply {
-                            setText(textBody, "UTF-8")
-                        }
                     multipart.addBodyPart(textPart)
-
-                    // Add HTML part
-                    val htmlPart =
-                        MimeBodyPart().apply {
-                            setContent(htmlBody, "text/html; charset=UTF-8")
-                        }
                     multipart.addBodyPart(htmlPart)
-
                     setContent(multipart)
                 }
 
@@ -247,13 +253,40 @@ class EmailService {
                     "type" to emailType
                 )
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
             logger.error("Failed to send email to $to", e)
             Sentry.captureException(e) { scope ->
-                scope.setTag("email.operation", "send")
-                scope.setExtra("email.to", to)
-                scope.setExtra("email.subject", subject)
-                scope.setExtra("email.type", emailType)
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
+            }
+            throw e
+        } catch (e: IOException) {
+            logger.error("Failed to send email to $to", e)
+            Sentry.captureException(e) { scope ->
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
+            }
+            throw e
+        } catch (e: IllegalStateException) {
+            logger.error("Failed to send email to $to", e)
+            Sentry.captureException(e) { scope ->
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
+            }
+            throw e
+        } catch (e: IllegalArgumentException) {
+            logger.error("Failed to send email to $to", e)
+            Sentry.captureException(e) { scope ->
+                scope.setTag(EMAIL_OPERATION_TAG, "send")
+                scope.setExtra(EMAIL_TO_TAG, to)
+                scope.setExtra(EMAIL_SUBJECT_TAG, subject)
+                scope.setExtra(EMAIL_TYPE_TAG, emailType)
             }
             throw e
         } finally {
@@ -261,12 +294,13 @@ class EmailService {
         }
     }
 
+    /** Records send outcome in [EmailsSent] for the recipient's organization when resolvable. */
     private fun trackEmailSent(
         recipient: String,
         emailType: String,
         success: Boolean
     ) {
-        try {
+        suspendRunCatching {
             val normalizedEmail = recipient.lowercase().trim()
             transaction {
                 // Try to find organization for the recipient
@@ -291,7 +325,7 @@ class EmailService {
                     it[EmailsSent.success] = success
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to track email sent to $recipient" }
         }
     }
@@ -440,11 +474,11 @@ class EmailService {
         val startDate: String,
         val endDate: String,
         val totalEvents: String,
-        val eventsTrend: Int,
+        val eventsTrend: Int?,
         val newIssues: String,
-        val issuesTrend: Int,
+        val issuesTrend: Int?,
         val affectedUsers: String,
-        val usersTrend: Int,
+        val usersTrend: Int?,
         val topIssues: List<TopIssue>,
         val projects: List<ProjectSummary>,
         val dashboardUrl: String,
@@ -498,17 +532,22 @@ class EmailService {
     ) {
         val subject = "Your Weekly Summary: ${data.totalEvents} events, ${data.newIssues} new issues"
         val htmlBody = loadWeeklySummaryTemplate(data)
+        val topIssuesList = data.topIssues.take(TOP_ISSUES_COUNT)
+            .joinToString("\n") { "- ${it.title} (${it.project}): ${it.count} events" }
+        val eventsTrendText = formatTrendText(data.eventsTrend)
+        val issuesTrendText = formatTrendText(data.issuesTrend)
+        val usersTrendText = formatTrendText(data.usersTrend)
         val textBody =
             """
             Your Weekly Summary (${data.startDate} – ${data.endDate})
             
             KEY STATS:
-            - Total Events: ${data.totalEvents} (${if (data.eventsTrend > 0) "+" else ""}${data.eventsTrend}%)
-            - New Issues: ${data.newIssues} (${if (data.issuesTrend > 0) "+" else ""}${data.issuesTrend}%)
-            - Affected Users: ${data.affectedUsers} (${if (data.usersTrend > 0) "+" else ""}${data.usersTrend}%)
+            - Total Events: ${data.totalEvents} ($eventsTrendText)
+            - New Issues: ${data.newIssues} ($issuesTrendText)
+            - Affected Users: ${data.affectedUsers} ($usersTrendText)
             
             TOP ISSUES:
-            ${data.topIssues.take(5).joinToString("\n") { "- ${it.title} (${it.project}): ${it.count} events" }}
+            $topIssuesList
             
             Open Dashboard: ${data.dashboardUrl}
             Manage preferences: ${data.settingsUrl}
@@ -791,7 +830,7 @@ class EmailService {
                           </td>
                           <td style="width:33%;">
                             <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Crash-Free</p>
-                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#16a34a;">${project.crashFree.escapeHtml()}%</p>
+                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#16a34a;">${project.crashFree.escapeHtml()}</p>
                           </td>
                         </tr>
                       </table>
@@ -820,7 +859,15 @@ class EmailService {
         }
     }
 
-    private fun trendBadgeHtml(trend: Int, positiveIsGood: Boolean): String {
+    private fun formatTrendText(trend: Int?): String {
+        if (trend == null) return "\u2014"
+        return "${if (trend > 0) "+" else ""}$trend%"
+    }
+
+    private fun trendBadgeHtml(trend: Int?, positiveIsGood: Boolean): String {
+        if (trend == null) {
+            return """<p style="$BADGE_STYLE $BADGE_NEUTRAL">&mdash;</p>"""
+        }
         return when {
             trend > 0 && positiveIsGood ->
                 """<p style="$BADGE_STYLE $BADGE_POSITIVE">&uarr; $trend%</p>"""
@@ -917,5 +964,12 @@ class EmailService {
             """.trimIndent()
 
         sendEmail(email, subject, htmlBody, textBody, "organization_deletion")
+    }
+
+    companion object {
+        private const val EMAIL_OPERATION_TAG = "email.operation"
+        private const val EMAIL_TO_TAG = "email.to"
+        private const val EMAIL_SUBJECT_TAG = "email.subject"
+        private const val EMAIL_TYPE_TAG = "email.type"
     }
 }

@@ -16,12 +16,13 @@
 
 package com.moneat.analytics.services
 
+import com.moneat.analytics.models.EnrichedAnalyticsEvent
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.config.isClickHouseError
-import com.moneat.analytics.models.EnrichedAnalyticsEvent
 import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.client.statement.bodyAsText
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import java.io.IOException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -63,36 +66,50 @@ class AnalyticsIngestionWorker(
     }
 
     private suspend fun runWorker(workerId: Int) {
-        val redis = RedisConfig.newBlockingConnection()
-        while (scope.isActive) {
-            try {
-                val result = redis.brpop(
-                    BRPOP_TIMEOUT,
-                    queueKey
-                )
-                val value = result?.value ?: continue
-                processMessage(workerId, value)
-            } catch (_: CancellationException) {
-                break
-            } catch (e: Exception) {
-                logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
-                delay(ERROR_BACKOFF_MS)
+        val conn = RedisConfig.newBlockingConnection()
+        try {
+            val redis = conn.sync()
+            while (scope.isActive) {
+                try {
+                    val result = redis.brpop(
+                        BRPOP_TIMEOUT,
+                        queueKey
+                    )
+                    val value = result?.value ?: continue
+                    processMessage(workerId, value)
+                } catch (_: CancellationException) {
+                    break
+                } catch (e: RedisException) {
+                    logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
+                    delay(ERROR_BACKOFF_MS)
+                } catch (e: IOException) {
+                    logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
+                    delay(ERROR_BACKOFF_MS)
+                }
             }
+        } finally {
+            RedisConfig.closeBlockingConnection(conn)
+        }
+    }
+    internal suspend fun processMessage(workerId: Int, value: String) {
+        suspendRunCatching {
+            val event = json.decodeFromString<EnrichedAnalyticsEvent>(value)
+            insertEvent(event)
+        }.getOrElse { e ->
+            logProcessFailureAndDlq(workerId, value, e)
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    internal suspend fun processMessage(workerId: Int, value: String) {
+    private fun logProcessFailureAndDlq(workerId: Int, value: String, e: Throwable) {
+        logger.error(e) { "Analytics worker $workerId failed to process message, sending to DLQ" }
+        pushToAnalyticsDlq(workerId, value)
+    }
+
+    private fun pushToAnalyticsDlq(workerId: Int, value: String) {
         try {
-            val event = json.decodeFromString<EnrichedAnalyticsEvent>(value)
-            insertEvent(event)
-        } catch (e: Exception) {
-            logger.error(e) { "Analytics worker $workerId failed to process message, sending to DLQ" }
-            try {
-                RedisConfig.sync().rpush(dlqKey, value)
-            } catch (dlqError: Exception) {
-                logger.error(dlqError) { "Failed to push to analytics DLQ" }
-            }
+            RedisConfig.sync().rpush(dlqKey, value)
+        } catch (e: RedisException) {
+            logger.error(e) { "Failed to push to analytics DLQ (worker $workerId)" }
         }
     }
 
@@ -140,7 +157,7 @@ class AnalyticsIngestionWorker(
         val response = ClickHouseClient.execute(sql)
         val body = response.bodyAsText()
         if (response.isClickHouseError(body)) {
-            throw RuntimeException("ClickHouse insert failed: $body")
+            throw IOException("ClickHouse insert failed: ${body.take(ERROR_BODY_MAX_LENGTH)}")
         }
     }
 
@@ -151,6 +168,7 @@ class AnalyticsIngestionWorker(
         private const val DEFAULT_WORKER_COUNT = 2
         private const val BRPOP_TIMEOUT = 5L
         private const val ERROR_BACKOFF_MS = 1000L
+        private const val ERROR_BODY_MAX_LENGTH = 500
 
         fun escapeCH(s: String): String = ClickHouseSqlUtils.escapeSql(s)
     }

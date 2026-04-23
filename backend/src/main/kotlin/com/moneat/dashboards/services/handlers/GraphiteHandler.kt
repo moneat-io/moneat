@@ -32,6 +32,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -42,9 +43,15 @@ private val logger = KotlinLogging.logger {}
  */
 class GraphiteHandler : HttpApiHandler() {
 
+    companion object {
+        private const val GRAPHITE_DEFAULT_PORT = 80
+        private const val GRAPHITE_SCHEMA_LIMIT = 100
+        private const val MILLIS_PER_SECOND = 1_000
+    }
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        return try {
-            val baseUrl = buildUrl(request.host, request.port ?: 80)
+        return suspendRunCatching {
+            val baseUrl = buildUrl(request.host, request.port ?: GRAPHITE_DEFAULT_PORT)
             val response = httpClient.get("$baseUrl/render") {
                 parameter("target", "constantLine(1)")
                 parameter("format", "json")
@@ -56,7 +63,7 @@ class GraphiteHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Graphite returned ${response.status}")
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Graphite connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -72,13 +79,13 @@ class GraphiteHandler : HttpApiHandler() {
         limit: Int,
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
-        val baseUrl = buildUrl(host, port ?: 80)
+        val baseUrl = buildUrl(host, port ?: GRAPHITE_DEFAULT_PORT)
         val from = timeRange?.from ?: "-24h"
         val until = timeRange?.to ?: "now"
         val targets = query.split(",").map { it.trim() }.filter { it.isNotBlank() }
             .ifEmpty { listOf("*") }
 
-        return try {
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/render") {
                 targets.forEach { parameter("target", it) }
                 parameter("format", "json")
@@ -91,7 +98,7 @@ class GraphiteHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseGraphiteResponse(response.bodyAsText(), limit)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Graphite query failed" }
             emptyList()
         }
@@ -103,18 +110,20 @@ class GraphiteHandler : HttpApiHandler() {
         databaseName: String?,
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
-        val baseUrl = buildUrl(host, port ?: 80)
-        return try {
+        val baseUrl = buildUrl(host, port ?: GRAPHITE_DEFAULT_PORT)
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/metrics/index.json") {
                 credentials.apiKey?.let { header("Authorization", "Bearer $it") }
             }
             if (response.status.isSuccess()) {
                 val arr = json.parseToJsonElement(response.bodyAsText()).jsonArray
-                arr.map { DataSourceField(it.jsonPrimitive.content, "metric", "Graphite metric") }.take(100)
+                arr.map {
+                    DataSourceField(it.jsonPrimitive.content, "metric", "Graphite metric")
+                }.take(GRAPHITE_SCHEMA_LIMIT)
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Graphite schema fetch failed" }
             emptyList()
         }
@@ -133,7 +142,7 @@ class GraphiteHandler : HttpApiHandler() {
                 val value = pair.getOrNull(0)?.jsonPrimitive?.content?.toDoubleOrNull()
                 rows.add(
                     mapOf(
-                        "time_bucket" to JsonPrimitive(ts * 1000),
+                        "time_bucket" to JsonPrimitive(ts * MILLIS_PER_SECOND),
                         target to JsonPrimitive(value ?: 0.0)
                     )
                 )

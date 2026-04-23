@@ -25,6 +25,8 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.minutes
 
+private const val ONE_HOUR_SECONDS = 3600L
+
 /**
  * Background service that syncs on-call schedules to Slack user groups.
  * Runs every 60 seconds and updates Slack user groups to contain:
@@ -134,7 +136,8 @@ class SlackUserGroupSyncService(
                     add(onCallSlackId)
                 } else if (currentOnCall != null) {
                     logger.warn(
-                        "On-call user ${currentOnCall.userId} (${currentOnCall.userName}) has no Slack mapping for schedule ${schedule.scheduleName}",
+                        "On-call user ${currentOnCall.userId} (${currentOnCall.userName}) has no Slack " +
+                            "mapping for schedule ${schedule.scheduleName}",
                     )
                 } else {
                     logger.warn("Schedule ${schedule.scheduleName} has no current on-call user")
@@ -161,13 +164,16 @@ class SlackUserGroupSyncService(
 
         if (success) {
             logger.info(
-                "Synced Slack usergroup ${schedule.usergroupHandle} for schedule ${schedule.scheduleName} with ${targetMembers.size} member(s)",
+                "Synced Slack usergroup ${schedule.usergroupHandle} for schedule ${schedule.scheduleName} " +
+                    "with ${targetMembers.size} member(s)",
             )
             // Cache the new state
             redisClient.set(cacheKey, targetState)
-            redisClient.expire(cacheKey, 3600) // Expire in 1 hour as a safety net
+            redisClient.expire(cacheKey, ONE_HOUR_SECONDS) // Expire in 1 hour as a safety net
         } else {
-            logger.error("Failed to sync Slack usergroup ${schedule.usergroupHandle} for schedule ${schedule.scheduleName}")
+            logger.error(
+                "Failed to sync Slack usergroup ${schedule.usergroupHandle} for schedule ${schedule.scheduleName}",
+            )
         }
     }
 

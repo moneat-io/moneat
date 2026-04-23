@@ -16,6 +16,7 @@
 
 package com.moneat.statuspage.services
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.statuspage.models.AddCustomDomainRequest
 import com.moneat.statuspage.models.AddMonitorsRequest
@@ -35,7 +36,6 @@ import com.moneat.statuspage.models.StatusPageMonitorResponse
 import com.moneat.statuspage.models.StatusPageMonitors
 import com.moneat.statuspage.models.StatusPageResponse
 import com.moneat.statuspage.models.StatusPages
-import com.moneat.billing.services.BillingQuotaService
 import com.moneat.statuspage.models.UpdateIncidentRequest
 import com.moneat.statuspage.models.UpdateStatusPageRequest
 import com.moneat.statuspage.models.UptimeDataPoint
@@ -43,6 +43,7 @@ import com.moneat.uptime.models.UptimeMonitors
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import io.ktor.client.statement.bodyAsText
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -61,10 +62,16 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.security.SecureRandom
 import java.util.*
+import javax.naming.NamingException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+
+private const val HOURS_PER_DAY = 24
+private const val PERCENT_MULTIPLIER = 100.0
+private const val TOKEN_BYTES_SIZE = 32
 
 class StatusPageService(
     private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
@@ -663,7 +670,7 @@ class StatusPageService(
                 val currentStatus = getCurrentMonitorStatus(data.monitorId)
 
                 // Calculate uptime percentage
-                val uptimePercentage = uptimeService.getUptimePercentage(data.monitorId, historyDays * 24)
+                val uptimePercentage = uptimeService.getUptimePercentage(data.monitorId, historyDays * HOURS_PER_DAY)
 
                 // Get uptime history if enabled
                 val uptimeHistory =
@@ -739,7 +746,7 @@ class StatusPageService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
 
@@ -753,7 +760,7 @@ class StatusPageService(
                 0 -> "down"
                 else -> "unknown"
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to get monitor status for $monitorId" }
             "unknown"
         }
@@ -764,7 +771,7 @@ class StatusPageService(
         days: Int
     ): List<UptimeDataPoint> {
         val now = Clock.System.now()
-        val from = now.minus((days * 24).hours)
+        val from = now.minus((days * HOURS_PER_DAY).hours)
 
         // Get daily uptime percentages
         val query =
@@ -781,7 +788,7 @@ class StatusPageService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
 
@@ -794,15 +801,16 @@ class StatusPageService(
                     val upCount = json["up_count"]?.jsonPrimitive?.long ?: 0L
                     val totalCount = json["total_count"]?.jsonPrimitive?.long ?: 0L
 
-                    val uptime = if (totalCount == 0L) 0.0 else (upCount.toDouble() / totalCount.toDouble() * 100.0)
+                    val uptime =
+                        if (totalCount == 0L) 0.0 else (upCount.toDouble() / totalCount.toDouble() * PERCENT_MULTIPLIER)
 
                     UptimeDataPoint(date = date, uptime = uptime)
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
                     logger.error(e) { "Failed to parse uptime history line: $line" }
                     null
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to get uptime history for monitor $monitorId" }
             emptyList()
         }
@@ -812,7 +820,7 @@ class StatusPageService(
 
     private fun generateVerificationToken(): String {
         val random = SecureRandom()
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(TOKEN_BYTES_SIZE)
         random.nextBytes(bytes)
         return bytes.joinToString("") { "%02x".format(it) }
     }
@@ -846,7 +854,7 @@ class StatusPageService(
             }
 
             found
-        } catch (e: Exception) {
+        } catch (e: NamingException) {
             logger.error(e) { "Failed to verify DNS TXT record for $domain" }
             false
         }

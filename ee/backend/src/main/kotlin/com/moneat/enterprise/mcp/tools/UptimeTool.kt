@@ -21,6 +21,7 @@ private val uptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRe
 private const val DEFAULT_HEARTBEAT_HOURS = 24
 private const val MAX_HEARTBEAT_HOURS = 168
 private const val DEFAULT_INTERVAL = 60
+private const val MILLIS_PER_HOUR = 3_600_000L
 
 class ListUptimeMonitorsTool : McpTool {
     override val name = "list_uptime_monitors"
@@ -68,7 +69,7 @@ class GetMonitorHeartbeatsTool : McpTool {
             System.currentTimeMillis()
         )
         val from = kotlin.time.Instant.fromEpochMilliseconds(
-            System.currentTimeMillis() - hrs * 3600 * 1000L
+            System.currentTimeMillis() - hrs * MILLIS_PER_HOUR
         )
         val heartbeats = uptimeService.getHeartbeats(uuid, from, to)
         return jsonResult(heartbeats)

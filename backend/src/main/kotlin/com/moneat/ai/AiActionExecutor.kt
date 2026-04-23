@@ -18,6 +18,7 @@ package com.moneat.ai
 
 import com.moneat.utils.SentryUtils
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -39,7 +40,7 @@ class AiActionExecutor {
                 )
             )
 
-            try {
+            suspendRunCatching {
                 // Actions are executed by the frontend calling the real API endpoints
                 // with the user's existing JWT auth. This executor is a placeholder for
                 // any future server-side-only action orchestration.
@@ -47,10 +48,11 @@ class AiActionExecutor {
                     logger.info { "Action $actionId executed by user $userId in org $orgId" }
                     ActionResult(
                         success = true,
-                        message = "Action submitted successfully. The operation will be performed using your existing permissions."
+                        message = "Action submitted successfully. The operation will be performed using " +
+                            "your existing permissions."
                     )
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to execute action $actionId" }
                 ActionResult(
                     success = false,

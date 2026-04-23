@@ -33,6 +33,8 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
 
+private const val DEFAULT_PAGE_SIZE = 25
+
 fun Route.llmRoutes(
     dashboardService: DashboardService = GlobalContext.get().get(),
     llmService: LlmDashboardService = GlobalContext.get().get(),
@@ -90,7 +92,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLlmGenerations(
     val type = call.request.queryParameters["type"]
     val status = call.request.queryParameters["status"]
     val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-    val pageSize = call.request.queryParameters["pageSize"]?.toIntOrNull() ?: 25
+    val pageSize = call.request.queryParameters["pageSize"]?.toIntOrNull() ?: DEFAULT_PAGE_SIZE
     val demoEpochMs = call.getDemoEpochMs()
     call.respond(
         llmService.getGenerations(projectId, range, model, provider, type, status, page, pageSize, demoEpochMs)

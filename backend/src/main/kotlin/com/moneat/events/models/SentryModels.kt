@@ -17,7 +17,9 @@
 package com.moneat.events.models
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -35,7 +37,10 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import java.time.format.DateTimeParseException
 import java.util.*
+
+private const val NANOS_PER_SECOND = 1_000_000_000.0
 
 @Serializable
 data class SentryEnvelope(
@@ -69,19 +74,27 @@ data class SentryEnvelope(
             val items = mutableListOf<EnvelopeItem>()
             while (bytePos < bodyBytes.size) {
                 // Skip blank lines
-                while (bytePos < bodyBytes.size && (bodyBytes[bytePos] == '\n'.code.toByte() || bodyBytes[bytePos] == '\r'.code.toByte())) {
+                while (
+                    bytePos < bodyBytes.size &&
+                    (
+                        bodyBytes[bytePos] == '\n'.code.toByte() ||
+                            bodyBytes[bytePos] == '\r'.code.toByte()
+                        )
+                ) {
                     bytePos++
                 }
                 if (bytePos >= bodyBytes.size) break
 
                 // Parse item header line
-                val itemHeaderEnd = (bytePos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() } ?: -1
+                val itemHeaderEnd =
+                    (bytePos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() }
+                        ?: -1
                 if (itemHeaderEnd == -1) break
                 val itemHeaderLine = bodyBytes.copyOfRange(bytePos, itemHeaderEnd).toString(Charsets.UTF_8)
                 val itemHeader =
                     try {
                         Json.parseToJsonElement(itemHeaderLine).jsonObject
-                    } catch (e: Exception) {
+                    } catch (e: SerializationException) {
                         bytePos = itemHeaderEnd + 1
                         continue
                     }
@@ -89,72 +102,138 @@ data class SentryEnvelope(
                 val explicitLength =
                     try {
                         itemHeader["length"]?.jsonPrimitive?.long?.toInt()
-                    } catch (e: Exception) {
+                    } catch (e: NumberFormatException) {
                         null
                     }
                 bytePos = itemHeaderEnd + 1
 
                 if (explicitLength != null && explicitLength > 0 && bytePos + explicitLength <= bodyBytes.size) {
-                    // Explicit length provided - read exact bytes
-                    val payloadBytes = bodyBytes.copyOfRange(bytePos, bytePos + explicitLength)
-                    if (itemType == "replay_video" || itemType == "replay_recording") {
-                        val payload =
-                            java.util.Base64
-                                .getEncoder()
-                                .encodeToString(payloadBytes)
-                        items.add(EnvelopeItem(itemType, payload, payloadBytes, itemHeader))
-                    } else {
-                        val payload = payloadBytes.toString(Charsets.UTF_8)
-                        items.add(EnvelopeItem(itemType, payload, null, itemHeader))
-                    }
-                    bytePos += explicitLength
+                    bytePos += appendExplicitLengthEnvelopeItem(
+                        bodyBytes,
+                        bytePos,
+                        explicitLength,
+                        itemType,
+                        itemHeader,
+                        items
+                    )
                 } else if (itemType != "unknown" && itemType in knownItemTypes) {
-                    // No explicit length - scan forward for the next item header or end of envelope.
-                    // This handles SDKs (like Android) that omit `length` for text-based items.
-                    val payloadStart = bytePos
-                    var payloadEnd = bodyBytes.size
-
-                    var scanPos = bytePos
-                    while (scanPos < bodyBytes.size) {
-                        val lineEnd = (scanPos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() } ?: bodyBytes.size
-                        val line = bodyBytes.copyOfRange(scanPos, lineEnd).toString(Charsets.UTF_8).trim()
-                        if (line.isNotEmpty()) {
-                            try {
-                                val possibleHeader = Json.parseToJsonElement(line).jsonObject
-                                val possibleType = possibleHeader["type"]?.jsonPrimitive?.content
-                                if (possibleType != null && possibleType in knownItemTypes && possibleType != itemType) {
-                                    // Found the next item header - payload ends here
-                                    payloadEnd = scanPos
-                                    break
-                                }
-                                // Also detect next item header if it has the same type but includes a length field
-                                if (possibleType != null && possibleType in knownItemTypes && possibleHeader.containsKey("length")) {
-                                    payloadEnd = scanPos
-                                    break
-                                }
-                            } catch (_: Exception) {
-                                // Not valid JSON - still part of current payload
-                            }
-                        }
-                        scanPos = if (lineEnd < bodyBytes.size) lineEnd + 1 else bodyBytes.size
-                    }
-
-                    if (payloadStart < payloadEnd) {
-                        // Trim trailing newlines from payload
-                        var trimmedEnd = payloadEnd
-                        while (trimmedEnd > payloadStart && (bodyBytes[trimmedEnd - 1] == '\n'.code.toByte() || bodyBytes[trimmedEnd - 1] == '\r'.code.toByte())) {
-                            trimmedEnd--
-                        }
-                        val payloadBytes = bodyBytes.copyOfRange(payloadStart, trimmedEnd)
-                        val payload = payloadBytes.toString(Charsets.UTF_8)
-                        items.add(EnvelopeItem(itemType, payload, null, itemHeader))
-                    }
-                    bytePos = payloadEnd
+                    bytePos = appendImplicitLengthEnvelopeItem(
+                        bodyBytes,
+                        bytePos,
+                        knownItemTypes,
+                        itemType,
+                        itemHeader,
+                        items
+                    )
                 } else {
                     // Unknown type with no length - skip
                 }
             }
             return SentryEnvelope(eventId, items)
+        }
+
+        private fun appendExplicitLengthEnvelopeItem(
+            bodyBytes: ByteArray,
+            bytePos: Int,
+            explicitLength: Int,
+            itemType: String,
+            itemHeader: JsonObject,
+            items: MutableList<EnvelopeItem>,
+        ): Int {
+            val payloadBytes = bodyBytes.copyOfRange(bytePos, bytePos + explicitLength)
+            if (itemType == "replay_video" || itemType == "replay_recording") {
+                val payload =
+                    java.util.Base64
+                        .getEncoder()
+                        .encodeToString(payloadBytes)
+                items.add(EnvelopeItem(itemType, payload, payloadBytes, itemHeader))
+            } else {
+                val payload = payloadBytes.toString(Charsets.UTF_8)
+                items.add(EnvelopeItem(itemType, payload, null, itemHeader))
+            }
+            return explicitLength
+        }
+
+        /**
+         * No explicit length — scan forward for the next item header or end of envelope
+         * (SDKs like Android may omit `length` for text-based items).
+         */
+        private fun appendImplicitLengthEnvelopeItem(
+            bodyBytes: ByteArray,
+            bytePos: Int,
+            knownItemTypes: Set<String>,
+            itemType: String,
+            itemHeader: JsonObject,
+            items: MutableList<EnvelopeItem>,
+        ): Int {
+            val payloadStart = bytePos
+            val payloadEnd = findImplicitEnvelopePayloadEnd(bodyBytes, bytePos, knownItemTypes, itemType)
+            if (payloadStart < payloadEnd) {
+                val trimmedEnd = trimTrailingEnvelopeNewlines(bodyBytes, payloadStart, payloadEnd)
+                val payloadBytes = bodyBytes.copyOfRange(payloadStart, trimmedEnd)
+                val payload = payloadBytes.toString(Charsets.UTF_8)
+                items.add(EnvelopeItem(itemType, payload, null, itemHeader))
+            }
+            return payloadEnd
+        }
+
+        private fun implicitScanStopsAtLine(
+            line: String,
+            knownItemTypes: Set<String>,
+            currentItemType: String,
+        ): Boolean {
+            val possibleHeader = Json.parseToJsonElement(line).jsonObject
+            val possibleType = possibleHeader["type"]?.jsonPrimitive?.content ?: return false
+            if (possibleType !in knownItemTypes) return false
+            if (possibleType != currentItemType) return true
+            return possibleHeader.containsKey("length")
+        }
+
+        private fun findImplicitEnvelopePayloadEnd(
+            bodyBytes: ByteArray,
+            bytePos: Int,
+            knownItemTypes: Set<String>,
+            currentItemType: String,
+        ): Int {
+            var payloadEnd = bodyBytes.size
+            var scanPos = bytePos
+            while (scanPos < bodyBytes.size) {
+                val lineEnd =
+                    (scanPos until bodyBytes.size).firstOrNull { bodyBytes[it] == '\n'.code.toByte() }
+                        ?: bodyBytes.size
+                val line = bodyBytes.copyOfRange(scanPos, lineEnd).toString(Charsets.UTF_8).trim()
+                if (line.isNotEmpty()) {
+                    val stop = try {
+                        implicitScanStopsAtLine(line, knownItemTypes, currentItemType)
+                    } catch (_: SerializationException) {
+                        false
+                    }
+                    if (stop) {
+                        payloadEnd = scanPos
+                        break
+                    }
+                }
+                scanPos = if (lineEnd < bodyBytes.size) lineEnd + 1 else bodyBytes.size
+            }
+            return payloadEnd
+        }
+
+        private fun trimTrailingEnvelopeNewlines(
+            bodyBytes: ByteArray,
+            payloadStart: Int,
+            payloadEnd: Int,
+        ): Int {
+            var trimmedEnd = payloadEnd
+            while (
+                trimmedEnd > payloadStart &&
+                (
+                    bodyBytes[trimmedEnd - 1] == '\n'.code.toByte() ||
+                        bodyBytes[trimmedEnd - 1] == '\r'.code.toByte()
+                    )
+            ) {
+                trimmedEnd--
+            }
+            return trimmedEnd
         }
     }
 }
@@ -171,7 +250,7 @@ data class EnvelopeItem(
 
 @Serializable
 data class SentryEvent(
-    val event_id: String? = null,
+    @SerialName("event_id") val eventId: String? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     val level: String? = null,
@@ -191,7 +270,7 @@ data class SentryEvent(
     val breadcrumbs: JsonArray? = null,
     val request: JsonObject? = null,
     val fingerprint: List<String>? = null,
-    val server_name: String? = null,
+    @SerialName("server_name") val serverName: String? = null,
     val threads: JsonObject? = null
 )
 
@@ -276,8 +355,8 @@ object FlexibleTimestampSerializer : KSerializer<Double?> {
                     val isoString = element.contentOrNull ?: return null
                     try {
                         val instant = java.time.Instant.parse(isoString)
-                        instant.epochSecond.toDouble() + instant.nano / 1_000_000_000.0
-                    } catch (_: Exception) {
+                        instant.epochSecond.toDouble() + instant.nano / NANOS_PER_SECOND
+                    } catch (_: DateTimeParseException) {
                         null
                     }
                 }
@@ -299,11 +378,11 @@ object FlexibleTimestampSerializer : KSerializer<Double?> {
 
 @Serializable
 data class SentryTransaction(
-    val event_id: String? = null,
+    @SerialName("event_id") val eventId: String? = null,
     val type: String? = null,
     val transaction: String? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
-    val start_timestamp: Double? = null,
+    @SerialName("start_timestamp") val startTimestamp: Double? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     val platform: String? = null,
@@ -315,7 +394,7 @@ data class SentryTransaction(
     val contexts: JsonObject? = null,
     val spans: List<SentrySpan>? = null,
     val sdk: SdkInfo? = null,
-    val server_name: String? = null,
+    @SerialName("server_name") val serverName: String? = null,
     val request: JsonObject? = null,
     @Serializable(with = BreadcrumbsSerializer::class)
     val breadcrumbs: JsonArray? = null,
@@ -324,13 +403,13 @@ data class SentryTransaction(
 
 @Serializable
 data class SentrySpan(
-    val span_id: String? = null,
-    val parent_span_id: String? = null,
-    val trace_id: String? = null,
+    @SerialName("span_id") val spanId: String? = null,
+    @SerialName("parent_span_id") val parentSpanId: String? = null,
+    @SerialName("trace_id") val traceId: String? = null,
     val op: String? = null,
     val description: String? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
-    val start_timestamp: Double? = null,
+    @SerialName("start_timestamp") val startTimestamp: Double? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     val status: String? = null,
@@ -369,11 +448,11 @@ data class StackFrame(
     val module: String? = null,
     val lineno: Int? = null,
     val colno: Int? = null,
-    val abs_path: String? = null,
-    val context_line: String? = null,
-    val pre_context: List<String>? = null,
-    val post_context: List<String>? = null,
-    val in_app: Boolean? = null,
+    @SerialName("abs_path") val absPath: String? = null,
+    @SerialName("context_line") val contextLine: String? = null,
+    @SerialName("pre_context") val preContext: List<String>? = null,
+    @SerialName("post_context") val postContext: List<String>? = null,
+    @SerialName("in_app") val inApp: Boolean? = null,
     val vars: JsonObject? = null
 )
 
@@ -382,20 +461,20 @@ data class UserInfo(
     val id: String? = null,
     val email: String? = null,
     val username: String? = null,
-    val ip_address: String? = null
+    @SerialName("ip_address") val ipAddress: String? = null
 )
 
 @Serializable
 data class SentryReplayEvent(
-    val replay_id: String? = null,
-    val segment_id: Int? = null,
+    @SerialName("replay_id") val replayId: String? = null,
+    @SerialName("segment_id") val segmentId: Int? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
-    val replay_start_timestamp: Double? = null,
+    @SerialName("replay_start_timestamp") val replayStartTimestamp: Double? = null,
     val urls: List<String>? = null,
-    val error_ids: List<String>? = null,
-    val trace_ids: List<String>? = null,
+    @SerialName("error_ids") val errorIds: List<String>? = null,
+    @SerialName("trace_ids") val traceIds: List<String>? = null,
     val platform: String? = null,
     val environment: String? = null,
     val release: String? = null,
@@ -403,12 +482,12 @@ data class SentryReplayEvent(
     val contexts: JsonObject? = null,
     val sdk: SdkInfo? = null,
     val tags: Map<String, String>? = null,
-    val replay_type: String? = null
+    @SerialName("replay_type") val replayType: String? = null
 )
 
 @Serializable
 data class SentryFeedback(
-    val event_id: String? = null,
+    @SerialName("event_id") val eventId: String? = null,
     val timestamp: String? = null,
     val platform: String? = null,
     val level: String? = null,

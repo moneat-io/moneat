@@ -77,6 +77,13 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
+
+private const val DEFAULT_PAGE_LIMIT = 25
+private const val DEFAULT_EVENTS_LIMIT = 50
+private const val DEFAULT_TRANSACTIONS_LIMIT = 20
+private const val DEFAULT_REPLAYS_LIMIT = 10
+private const val DEFAULT_ALERT_FREQUENCY_MINUTES = 30
 
 fun Route.apiRoutes() {
     val koin = GlobalContext.get()
@@ -280,7 +287,11 @@ fun Route.apiRoutes() {
                     }
                     call.respond(
                         com.moneat.utils.MessageResponse(
-                            if (request.consentAccepted) "On-call contact saved and opted in" else "On-call contact saved"
+                            if (request.consentAccepted) {
+                                "On-call contact saved and opted in"
+                            } else {
+                                "On-call contact saved"
+                            }
                         )
                     )
                 }
@@ -550,7 +561,7 @@ fun Route.apiRoutes() {
                     }
 
                     val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
                     val status = call.request.queryParameters["status"]
 
                     val issues = dashboardService.getIssues(projectId, page, limit, status, demoEpochMs)
@@ -598,7 +609,7 @@ fun Route.apiRoutes() {
                     val demoEpochMs = call.getDemoEpochMs()
 
                     val issueId = call.parameters["issueId"]
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_EVENTS_LIMIT
                     val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
 
                     if (issueId == null) {
@@ -629,7 +640,7 @@ fun Route.apiRoutes() {
                     val demoEpochMs = call.getDemoEpochMs()
 
                     val issueId = call.parameters["issueId"]
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 20
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_TRANSACTIONS_LIMIT
                     val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
 
                     if (issueId == null) {
@@ -831,7 +842,7 @@ fun Route.apiRoutes() {
                         return@get
                     }
 
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 20
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_TRANSACTIONS_LIMIT
                     val relatedErrors = dashboardService.getRelatedErrorsForTransaction(eventId, limit)
                     call.respond(relatedErrors)
                 }
@@ -907,7 +918,7 @@ fun Route.apiRoutes() {
                     }
 
                     val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
                     val environment = call.request.queryParameters["environment"]
                     val period = call.request.queryParameters["period"] ?: "7d"
 
@@ -1003,7 +1014,7 @@ fun Route.apiRoutes() {
                     }
 
                     val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
                     val status = call.request.queryParameters["status"]
 
                     val feedback = dashboardService.getFeedback(projectId, page, limit, status, demoEpochMs)
@@ -1099,7 +1110,7 @@ fun Route.apiRoutes() {
                         return@get
                     }
 
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_REPLAYS_LIMIT
                     val replays = dashboardService.getReplaysForIssue(issueId, limit)
                     call.respond(replays)
                 }
@@ -1204,7 +1215,8 @@ fun Route.apiRoutes() {
                                             issueAlerts = pref[NotificationPreferences.issue_alerts],
                                             errorAlerts = pref[NotificationPreferences.error_alerts],
                                             weeklySummary = pref[NotificationPreferences.weekly_summary],
-                                            alertFrequencyMinutes = pref[NotificationPreferences.alert_frequency_minutes]
+                                            alertFrequencyMinutes =
+                                            pref[NotificationPreferences.alert_frequency_minutes]
                                         )
                                     }
 
@@ -1232,10 +1244,19 @@ fun Route.apiRoutes() {
                                         (NotificationPreferences.project_id.isNull())
                                 }.firstOrNull()
 
-                        val issueAlerts = request["issueAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
-                        val errorAlerts = request["errorAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.error_alerts) ?: true
-                        val weeklySummary = request["weeklySummary"] as? Boolean ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
-                        val alertFrequency = (request["alertFrequencyMinutes"] as? Number)?.toInt() ?: existing?.get(NotificationPreferences.alert_frequency_minutes) ?: 30
+                        val issueAlerts =
+                            request["issueAlerts"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
+                        val errorAlerts =
+                            request["errorAlerts"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.error_alerts) ?: true
+                        val weeklySummary =
+                            request["weeklySummary"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
+                        val alertFrequency =
+                            (request["alertFrequencyMinutes"] as? Number)?.toInt()
+                                ?: existing?.get(NotificationPreferences.alert_frequency_minutes)
+                                ?: DEFAULT_ALERT_FREQUENCY_MINUTES // NOSONAR kotlin:S6619
 
                         if (existing != null) {
                             NotificationPreferences.update({
@@ -1291,10 +1312,19 @@ fun Route.apiRoutes() {
                                         (NotificationPreferences.project_id eq projectId)
                                 }.firstOrNull()
 
-                        val issueAlerts = request["issueAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
-                        val errorAlerts = request["errorAlerts"] as? Boolean ?: existing?.get(NotificationPreferences.error_alerts) ?: true
-                        val weeklySummary = request["weeklySummary"] as? Boolean ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
-                        val alertFrequency = (request["alertFrequencyMinutes"] as? Number)?.toInt() ?: existing?.get(NotificationPreferences.alert_frequency_minutes) ?: 30
+                        val issueAlerts =
+                            request["issueAlerts"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
+                        val errorAlerts =
+                            request["errorAlerts"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.error_alerts) ?: true
+                        val weeklySummary =
+                            request["weeklySummary"] as? Boolean
+                                ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
+                        val alertFrequency =
+                            (request["alertFrequencyMinutes"] as? Number)?.toInt()
+                                ?: existing?.get(NotificationPreferences.alert_frequency_minutes)
+                                ?: DEFAULT_ALERT_FREQUENCY_MINUTES // NOSONAR kotlin:S6619
 
                         if (existing != null) {
                             NotificationPreferences.update({
@@ -1376,9 +1406,9 @@ fun Route.apiRoutes() {
                     }
 
                     val request =
-                        try {
+                        suspendRunCatching {
                             call.receive<UpdateAlertNotificationPreferenceRequest>()
-                        } catch (e: Exception) {
+                        }.getOrElse { _ ->
                             call.respond(HttpStatusCode.BadRequest, "Invalid request body")
                             return@put
                         }

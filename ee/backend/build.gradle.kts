@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.detekt)
+    jacoco
 }
 
 kotlin {
@@ -50,15 +51,48 @@ dependencies {
     detektPlugins(libs.detekt.formatting)
 
     // Unit tests
-    testImplementation(libs.kotlin.test.junit)
+    testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.junit.jupiter.api)
     testImplementation(libs.h2)
+    testImplementation(libs.ktor.server.test.host)
     testRuntimeOnly(libs.junit.jupiter.engine)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
+jacoco {
+    toolVersion = libs.versions.jacoco.get()
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    executionData.setFrom(
+        fileTree(layout.buildDirectory.asFile).include("jacoco/test.exec")
+    )
+    classDirectories.setFrom(
+        sourceSets["main"].output.classesDirs.map { dir ->
+            fileTree(dir) {
+                include("**/com/moneat/enterprise/sso/**")
+            }
+        }
+    )
+    sourceDirectories.setFrom(
+        files("$projectDir/src/main/kotlin/com/moneat/enterprise/sso")
+    )
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+}
+
+// Line gate is enforced on the core backend project; ee only publishes SSO-focused coverage HTML/XML.
+tasks.jacocoTestCoverageVerification {
+    enabled = false
+}
+
 tasks.test {
     useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
     testLogging {
         events("passed", "skipped", "failed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

@@ -1,0 +1,97 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.analytics
+
+import com.moneat.analytics.services.AnalyticsIngestionWorker
+import com.moneat.config.RedisConfig
+import com.moneat.utils.ClickHouseSqlUtils
+import io.lettuce.core.api.sync.RedisCommands
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class AnalyticsIngestionWorkerTest {
+
+    private val mockRedis = mockk<RedisCommands<String, String>>(relaxed = true)
+
+    @BeforeTest
+    fun setup() {
+        mockkObject(RedisConfig)
+        every { RedisConfig.sync() } returns mockRedis
+        every { mockRedis.rpush(any(), any<String>()) } returns 1L
+    }
+
+    @AfterTest
+    fun teardown() {
+        unmockkObject(RedisConfig)
+    }
+
+    @Test
+    fun `companion exposes queue and dlq keys`() {
+        assertTrue(AnalyticsIngestionWorker.QUEUE_KEY.isNotBlank())
+        assertTrue(AnalyticsIngestionWorker.DLQ_KEY.isNotBlank())
+        assertEquals("moneat:analytics:queue", AnalyticsIngestionWorker.QUEUE_KEY)
+        assertEquals("moneat:analytics:dlq", AnalyticsIngestionWorker.DLQ_KEY)
+    }
+
+    @Test
+    fun `companion exposes realtime key prefix`() {
+        assertTrue(AnalyticsIngestionWorker.REALTIME_KEY_PREFIX.startsWith("moneat:analytics:realtime:"))
+    }
+
+    @Test
+    fun `escapeCH delegates to ClickHouseSqlUtils`() {
+        val raw = "a'b\\c\n"
+        assertEquals(ClickHouseSqlUtils.escapeSql(raw), AnalyticsIngestionWorker.escapeCH(raw))
+    }
+
+    @Test
+    fun `processMessage with invalid JSON does not throw`() {
+        val worker = AnalyticsIngestionWorker(workerCount = 0)
+        runBlocking {
+            worker.processMessage(1, "{not valid json for EnrichedAnalyticsEvent")
+        }
+    }
+
+    @Test
+    fun `processMessage with empty string does not throw`() {
+        val worker = AnalyticsIngestionWorker(workerCount = 0)
+        runBlocking {
+            worker.processMessage(2, "")
+        }
+    }
+
+    @Test
+    fun `stop without start does not throw`() {
+        val worker = AnalyticsIngestionWorker(workerCount = 0)
+        worker.stop()
+    }
+
+    @Test
+    fun `start and stop lifecycle with zero workers does not throw`() {
+        val worker = AnalyticsIngestionWorker(workerCount = 0)
+        worker.start()
+        worker.stop()
+    }
+}

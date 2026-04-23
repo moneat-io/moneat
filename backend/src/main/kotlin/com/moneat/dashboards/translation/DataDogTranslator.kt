@@ -38,6 +38,12 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import com.moneat.utils.suspendRunCatching
+
+private const val DD_DEFAULT_WIDGET_W = 6
+private const val DD_DEFAULT_WIDGET_H = 4
+private const val DD_MAX_GRID_COL = 11
+private const val DD_GRID_COLS = 12
 
 class DataDogTranslator : DashboardTranslator {
 
@@ -83,9 +89,9 @@ class DataDogTranslator : DashboardTranslator {
         val ddWidgets = json["widgets"]?.jsonArray ?: JsonArray(emptyList())
 
         val widgets = ddWidgets.mapIndexedNotNull { index, element ->
-            try {
+            suspendRunCatching {
                 importWidget(element.jsonObject, index, warnings)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 warnings.add("Widget $index: failed to import - ${e.message}")
                 null
             }
@@ -127,8 +133,8 @@ class DataDogTranslator : DashboardTranslator {
         // Parse grid position from DD layout (DD uses 12-col grid)
         val gridX = layout?.get("x")?.jsonPrimitive?.intOrNull ?: 0
         val gridY = layout?.get("y")?.jsonPrimitive?.intOrNull ?: 0
-        val gridW = layout?.get("width")?.jsonPrimitive?.intOrNull ?: 6
-        val gridH = layout?.get("height")?.jsonPrimitive?.intOrNull ?: 4
+        val gridW = layout?.get("width")?.jsonPrimitive?.intOrNull ?: DD_DEFAULT_WIDGET_W
+        val gridH = layout?.get("height")?.jsonPrimitive?.intOrNull ?: DD_DEFAULT_WIDGET_H
 
         val queryConfig = parseDataDogQuery(definition, warnings, index)
 
@@ -137,10 +143,10 @@ class DataDogTranslator : DashboardTranslator {
             dashboardId = 0,
             title = widgetTitle,
             widgetType = moneatType ?: "text",
-            gridX = gridX.coerceIn(0, 11),
+            gridX = gridX.coerceIn(0, DD_MAX_GRID_COL),
             gridY = gridY,
-            gridW = gridW.coerceIn(1, 12),
-            gridH = gridH.coerceIn(1, 12),
+            gridW = gridW.coerceIn(1, DD_GRID_COLS),
+            gridH = gridH.coerceIn(1, DD_GRID_COLS),
             queryConfigs = listOf(queryConfig),
             sortOrder = index
         )
@@ -269,7 +275,7 @@ class DataDogTranslator : DashboardTranslator {
         val templateVars = json["template_variables"]?.jsonArray ?: return emptyList()
 
         return templateVars.mapNotNull { element ->
-            try {
+            suspendRunCatching {
                 val varObj = element.jsonObject
                 val name = varObj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
                 val defaultValue = varObj["default"]?.jsonPrimitive?.contentOrNull
@@ -287,7 +293,7 @@ class DataDogTranslator : DashboardTranslator {
                     options = availableValues,
                     datasource = null
                 )
-            } catch (_: Exception) {
+            }.getOrElse { _ ->
                 null
             }
         }

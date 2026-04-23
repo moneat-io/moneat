@@ -30,6 +30,8 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.slf4j.LoggerFactory
 import kotlin.time.Clock
 
+private const val TOKEN_LOG_PREFIX_LENGTH = 40
+
 class PushNotificationService {
     private val logger = LoggerFactory.getLogger(PushNotificationService::class.java)
 
@@ -122,12 +124,18 @@ class PushNotificationService {
                 val result = Json.decodeFromString<ExpoResponse>(body)
                 result.data?.forEachIndexed { index, ticket ->
                     if (ticket.status == "error") {
-                        logger.error("Push failed for token ${tokens[index]}: ${ticket.message} (details: ${ticket.details})")
+                        logger.error(
+                            "Push failed for token ${tokens[index]}: ${ticket.message} " +
+                                "(details: ${ticket.details})",
+                        )
                         if (ticket.details?.get("error") == "DeviceNotRegistered") {
                             removeDeviceToken(tokens[index])
                         }
                     } else {
-                        logger.info("Push ticket ok for user $userId, ticketId=${ticket.id}, token prefix=${tokens[index].take(40)}")
+                        val prefix = tokens[index].take(TOKEN_LOG_PREFIX_LENGTH)
+                        logger.info(
+                            "Push ticket ok for user $userId, ticketId=${ticket.id}, token prefix=$prefix",
+                        )
                     }
                 }
             } else {

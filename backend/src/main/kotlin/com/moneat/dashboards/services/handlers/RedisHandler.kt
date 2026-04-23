@@ -28,6 +28,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -39,17 +40,17 @@ private val logger = KotlinLogging.logger {}
 class RedisHandler : DataSourceHandler {
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        val uri = buildRedisUri(request.host, request.port ?: 6379, request.password ?: request.apiKey)
+        val uri = buildRedisUri(request.host, request.port ?: REDIS_DEFAULT_PORT, request.password ?: request.apiKey)
 
-        return try {
+        return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     conn.sync().ping()
-                    val keys = scanKeys(conn.sync(), "*", 20)
+                    val keys = scanKeys(conn.sync(), "*", REDIS_SAMPLE_KEY_LIMIT)
                     TestConnectionResult(true, "Connected successfully", keys = keys)
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Redis connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -65,10 +66,10 @@ class RedisHandler : DataSourceHandler {
         limit: Int,
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
-        val uri = buildRedisUri(host, port ?: 6379, credentials.password ?: credentials.apiKey)
+        val uri = buildRedisUri(host, port ?: REDIS_DEFAULT_PORT, credentials.password ?: credentials.apiKey)
         val db = databaseName?.toIntOrNull() ?: 0
 
-        return try {
+        return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     if (db != 0) conn.sync().select(db)
@@ -140,7 +141,7 @@ class RedisHandler : DataSourceHandler {
                         "LRANGE" -> {
                             val key = parts.getOrNull(1) ?: return emptyList()
                             val start = parts.getOrNull(2)?.toLongOrNull() ?: 0L
-                            val stop = parts.getOrNull(3)?.toLongOrNull() ?: -1L
+                            val stop = parts.getOrNull(LRANGE_STOP_ARG_INDEX)?.toLongOrNull() ?: -1L
                             cmd.lrange(key, start, stop).take(limit).mapIndexed { i, v ->
                                 mapOf(
                                     "index" to JsonPrimitive(i),
@@ -184,7 +185,7 @@ class RedisHandler : DataSourceHandler {
                     result.take(limit)
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Redis query failed" }
             emptyList()
         }
@@ -196,27 +197,20 @@ class RedisHandler : DataSourceHandler {
         databaseName: String?,
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
-        val uri = buildRedisUri(host, port ?: 6379, credentials.password ?: credentials.apiKey)
+        val uri = buildRedisUri(host, port ?: REDIS_DEFAULT_PORT, credentials.password ?: credentials.apiKey)
         val dbIndex = databaseName?.toIntOrNull() ?: 0
-        return try {
+        return suspendRunCatching {
             RedisClient.create(uri).use { client ->
                 client.connect().use { conn ->
                     if (dbIndex != 0) conn.sync().select(dbIndex)
-                    val keys = scanKeys(conn.sync(), "*", 100)
+                    val keys = scanKeys(conn.sync(), "*", REDIS_SCHEMA_KEY_LIMIT)
                     keys.map { DataSourceField(it, "key", "Redis key") }
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Redis schema fetch failed" }
             emptyList()
         }
-    }
-
-    private fun buildRedisUri(host: String, port: Int, password: String?): String {
-        val scheme = if (host.startsWith("rediss://")) "rediss://" else "redis://"
-        val cleanHost = host.removePrefix("rediss://").removePrefix("redis://")
-        val auth = if (!password.isNullOrBlank()) ":$password@" else ""
-        return "$scheme$auth$cleanHost:$port"
     }
 
     /**
@@ -240,6 +234,52 @@ class RedisHandler : DataSourceHandler {
     }
 
     companion object {
+        /**
+         * Build a Lettuce-compatible Redis URI from connection parameters.
+         *
+         * Bare IPv6 literals (e.g. `2001:db8::5`) are bracketed per RFC 2732 before
+         * being passed to [java.net.URI]; otherwise the URI parser returns null for
+         * the host and the fallback truncates the address at the first colon.
+         */
+        internal fun buildRedisUri(host: String, port: Int, password: String?): String {
+            val scheme = if (host.startsWith(REDISS_SCHEME)) REDISS_SCHEME else REDIS_SCHEME
+            val hostPart = host.removePrefix(REDISS_SCHEME).removePrefix(REDIS_SCHEME)
+            // RFC 2732: IPv6 literals require brackets in the authority component.
+            // Detect bare IPv6 by multiple colons and no leading '['.
+            val bracketed = if (!hostPart.startsWith('[') && hostPart.count { it == ':' } > 1) {
+                "[$hostPart]"
+            } else {
+                hostPart
+            }
+            val normalized = "$scheme$bracketed"
+            val parsed = runCatching { java.net.URI(normalized) }.getOrNull()
+            // java.net.URI.getHost() may return IPv6 with or without brackets depending on JVM.
+            // Normalise: strip any brackets, then re-bracket only when the host contains a colon.
+            val rawHost = parsed?.host ?: run {
+                val stripped = bracketed.removePrefix("[")
+                if (stripped.contains(']')) stripped.substringBefore(']') else stripped.substringBefore(':')
+            }
+            val bareHost = rawHost.removePrefix("[").removeSuffix("]")
+            val cleanHost = if (bareHost.contains(':')) "[$bareHost]" else bareHost
+            val resolvedPort = if (parsed != null && parsed.port != -1) parsed.port else port
+            val auth = if (!password.isNullOrBlank()) ":$password@" else ""
+            return "$scheme$auth$cleanHost:$resolvedPort"
+        }
+
+        private const val REDIS_SCHEME = "redis://"
+        private const val REDISS_SCHEME = "rediss://"
+        private const val REDIS_DEFAULT_PORT = 6379
+        private const val REDIS_SAMPLE_KEY_LIMIT = 20
+        private const val REDIS_SCHEMA_KEY_LIMIT = 100
+        private const val LRANGE_STOP_ARG_INDEX = 3
+        private const val SLOWLOG_ARGS_INDEX = 3
+        private const val CLUSTER_NODE_MASTER_IDX = 3
+        private const val CLUSTER_NODE_PING_IDX = 4
+        private const val CLUSTER_NODE_PONG_IDX = 5
+        private const val CLUSTER_NODE_EPOCH_IDX = 6
+        private const val CLUSTER_NODE_LINK_IDX = 7
+        private const val CLUSTER_NODE_SLOT_IDX = 8
+
         /**
          * Parse Redis INFO output (key:value lines grouped by sections)
          * into a single flat map row.
@@ -312,12 +352,12 @@ class RedisHandler : DataSourceHandler {
         @Suppress("UNCHECKED_CAST")
         internal fun parseSlowlog(entries: List<Any>): List<Map<String, JsonElement>> {
             return entries.mapNotNull { entry ->
-                try {
+                suspendRunCatching {
                     val fields = entry as? List<*> ?: return@mapNotNull null
                     val id = (fields.getOrNull(0) as? Number)?.toLong() ?: 0L
                     val ts = (fields.getOrNull(1) as? Number)?.toLong() ?: 0L
                     val duration = (fields.getOrNull(2) as? Number)?.toLong() ?: 0L
-                    val args = (fields.getOrNull(3) as? List<*>)
+                    val args = (fields.getOrNull(SLOWLOG_ARGS_INDEX) as? List<*>)
                         ?.joinToString(" ") ?: ""
                     mapOf(
                         "Id" to JsonPrimitive(id),
@@ -325,7 +365,7 @@ class RedisHandler : DataSourceHandler {
                         "Duration" to JsonPrimitive(duration),
                         "Command" to JsonPrimitive(args)
                     )
-                } catch (e: Exception) {
+                }.getOrElse { _ ->
                     null
                 }
             }
@@ -342,12 +382,12 @@ class RedisHandler : DataSourceHandler {
                     "Id" to JsonPrimitive(parts.getOrElse(0) { "" }),
                     "Address" to JsonPrimitive(parts.getOrElse(1) { "" }),
                     "Flags" to JsonPrimitive(parts.getOrElse(2) { "" }),
-                    "Master" to JsonPrimitive(parts.getOrElse(3) { "" }),
-                    "Ping" to JsonPrimitive(parts.getOrElse(4) { "" }),
-                    "Pong" to JsonPrimitive(parts.getOrElse(5) { "" }),
-                    "Epoch" to JsonPrimitive(parts.getOrElse(6) { "" }),
-                    "Link" to JsonPrimitive(parts.getOrElse(7) { "" }),
-                    "Slot" to JsonPrimitive(parts.getOrElse(8) { "" })
+                    "Master" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_MASTER_IDX) { "" }),
+                    "Ping" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_PING_IDX) { "" }),
+                    "Pong" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_PONG_IDX) { "" }),
+                    "Epoch" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_EPOCH_IDX) { "" }),
+                    "Link" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_LINK_IDX) { "" }),
+                    "Slot" to JsonPrimitive(parts.getOrElse(CLUSTER_NODE_SLOT_IDX) { "" })
                 )
             }
         }

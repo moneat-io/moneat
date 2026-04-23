@@ -28,6 +28,14 @@ import java.time.format.DateTimeFormatter
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
+private const val MAX_ALERTS_DISPLAY = 10
+private const val HOURS_IN_7_DAYS = 168
+private const val HOURS_IN_30_DAYS = 720
+private const val DEFAULT_PERIOD_HOURS = 24
+private const val OVERNIGHT_END_HOUR = 8
+private const val OVERNIGHT_WINDOW_HOURS = 10L
+private const val DAYS_IN_WEEK = 7L
+
 class SummaryService(
     private val monitorService: MonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl()),
     private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl()),
@@ -65,7 +73,7 @@ class SummaryService(
 
         val topAlerts = systems.flatMap { sys ->
             collectAlertsForSystem(sys)
-        }.sortedByDescending { it.lastTriggeredAt }.take(10)
+        }.sortedByDescending { it.lastTriggeredAt }.take(MAX_ALERTS_DISPLAY)
 
         val topErrorHosts = queryTopErrorHosts(organizationId, normalizedPeriod)
 
@@ -83,9 +91,9 @@ class SummaryService(
         period: String,
     ): List<HostErrorSummary> {
         val intervalHours = when (period) {
-            "7d" -> 168
-            "30d" -> 720
-            else -> 24
+            "7d" -> HOURS_IN_7_DAYS
+            "30d" -> HOURS_IN_30_DAYS
+            else -> DEFAULT_PERIOD_HOURS
         }
         return try {
             val query = """
@@ -130,9 +138,9 @@ class SummaryService(
             }
         val resolvedTimezone = resolvedZoneId.id
         val now = ZonedDateTime.now(resolvedZoneId)
-        val windowEnd = now.with(LocalTime.of(8, 0))
+        val windowEnd = now.with(LocalTime.of(OVERNIGHT_END_HOUR, 0))
             .let { if (it.isAfter(now)) it.minusDays(1) else it }
-        val windowStart = windowEnd.minusHours(10)
+        val windowStart = windowEnd.minusHours(OVERNIGHT_WINDOW_HOURS)
 
         val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         val startStr = windowStart.withZoneSameInstant(ZoneId.of("UTC")).format(fmt)
@@ -188,7 +196,7 @@ class SummaryService(
 
     suspend fun getWeeklyReport(organizationId: Int): WeeklyReportResponse {
         val today = LocalDate.now()
-        val weekAgo = today.minusDays(7)
+        val weekAgo = today.minusDays(DAYS_IN_WEEK)
 
         val uptimeMonitors = uptimeService.listMonitors(organizationId).map { m ->
             UptimeMonitorSummary(
@@ -265,15 +273,15 @@ class SummaryService(
             HostMetricSnapshot(
                 systemId = sys.id.toString(),
                 systemName = sys.displayName ?: sys.hostname,
-                cpuPercent = metrics?.cpu_percent,
-                memPercent = metrics?.mem_percent,
+                cpuPercent = metrics?.cpuPercent,
+                memPercent = metrics?.memPercent,
                 status = sys.status,
             )
         }
 
         val relatedAlerts = systems.flatMap { sys ->
             collectAlertsForSystem(sys)
-        }.sortedByDescending { it.lastTriggeredAt }.take(10)
+        }.sortedByDescending { it.lastTriggeredAt }.take(MAX_ALERTS_DISPLAY)
 
         val recentLogErrors = queryRecentLogErrors(organizationId)
 

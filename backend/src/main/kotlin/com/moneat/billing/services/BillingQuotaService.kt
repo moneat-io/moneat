@@ -43,6 +43,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.math.max
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -58,6 +59,10 @@ class BillingQuotaService(
 ) {
     companion object {
         private const val BYTES_PER_GB = 1_073_741_824L
+        private const val MICROS_PER_CENT = 10_000L
+        private const val UNITS_PER_THOUSAND = 1_000L
+        private const val UNITS_PER_MILLION = 1_000_000L
+        private const val UNITS_PER_HUNDRED_THOUSAND = 100_000L
     }
 
     fun isEnforcementEnabled(): Boolean {
@@ -713,7 +718,7 @@ class BillingQuotaService(
         val paygEnabled = tier.paygEnabled
         val paygLimitUnits =
             if (paygEnabled && paygBudgetCents > 0 && paygRateMicros > 0) {
-                (paygBudgetCents.toLong() * 10_000L) / paygRateMicros
+                (paygBudgetCents.toLong() * MICROS_PER_CENT) / paygRateMicros
             } else {
                 0
             }
@@ -830,7 +835,7 @@ class BillingQuotaService(
         val errorOverageUnits = max(0, state.usedErrors - state.errorLimit)
         val errorOverageCents =
             if (state.errorOverageRateCentsPer1k > 0 && errorOverageUnits > 0) {
-                ((errorOverageUnits * state.errorOverageRateCentsPer1k) / 1000).toInt()
+                ((errorOverageUnits * state.errorOverageRateCentsPer1k) / UNITS_PER_THOUSAND).toInt()
             } else {
                 0
             }
@@ -862,7 +867,7 @@ class BillingQuotaService(
         val llmOverageUnits = max(0, state.usedLlmEvents - state.llmEventLimit)
         val llmOverageCents =
             if (state.llmOverageRateCentsPer1k > 0 && llmOverageUnits > 0) {
-                ((llmOverageUnits * state.llmOverageRateCentsPer1k) / 1000).toInt()
+                ((llmOverageUnits * state.llmOverageRateCentsPer1k) / UNITS_PER_THOUSAND).toInt()
             } else {
                 0
             }
@@ -877,7 +882,7 @@ class BillingQuotaService(
                     (
                         analyticsPageviewOverageUnits *
                             state.analyticsPageviewOverageRateCentsPer100k
-                        ) / 100_000
+                        ) / UNITS_PER_HUNDRED_THOUSAND
                     ).toInt()
             } else {
                 0
@@ -890,7 +895,7 @@ class BillingQuotaService(
         }
         val apmSpanOverageCents =
             if (state.apmSpanOverageRateCentsPer1m > 0 && apmSpanOverageUnits > 0) {
-                ((apmSpanOverageUnits * state.apmSpanOverageRateCentsPer1m) / 1_000_000).toInt()
+                ((apmSpanOverageUnits * state.apmSpanOverageRateCentsPer1m) / UNITS_PER_MILLION).toInt()
             } else {
                 0
             }
@@ -906,7 +911,7 @@ class BillingQuotaService(
                     (
                         customMetricOverageUnits *
                             state.customMetricOverageRateCentsPer100k
-                        ) / 100_000
+                        ) / UNITS_PER_HUNDRED_THOUSAND
                     ).toInt()
             } else {
                 0
@@ -946,6 +951,7 @@ class BillingQuotaService(
             ingestionOverageRateCentsPerGb = state.overageRateCentsPerGb,
             baseLimitUnits = state.baseLimitUnits,
             paygLimitUnits = state.paygLimitUnits,
+            paygLimitBytes = state.paygLimitBytes,
             totalLimitUnits = state.totalLimitUnits,
             paygBudgetCents = state.paygBudgetCents,
             paygUsedUnits = state.paygUsedUnits,
@@ -973,6 +979,7 @@ class BillingQuotaService(
             analyticsPageviewOverageRateCentsPer100k =
             state.analyticsPageviewOverageRateCentsPer100k,
             usedApmSpans = state.usedApmSpans,
+            usedApmSpanBytes = state.usedApmSpanBytes,
             apmSpanLimit = state.apmSpanLimit,
             usedCustomMetrics = state.usedCustomMetrics,
             customMetricLimit = state.customMetricLimit,
@@ -1036,7 +1043,8 @@ class BillingQuotaService(
             maxAnalyticsSites = row[PricingTierConfigs.max_analytics_sites],
             analyticsRetentionDays = row[PricingTierConfigs.analytics_retention_days],
             monthlyAnalyticsPageviewLimit = row[PricingTierConfigs.monthly_analytics_pageview_limit],
-            analyticsPageviewOverageRateCentsPer100k = row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
+            analyticsPageviewOverageRateCentsPer100k =
+            row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
             monthlyApmSpanLimit = row[PricingTierConfigs.monthly_apm_span_limit],
             apmSpanOverageRateCentsPer1m = row[PricingTierConfigs.apm_span_overage_rate_cents_per_1m],
             monthlyCustomMetricLimit = row[PricingTierConfigs.monthly_custom_metric_limit],
@@ -1174,10 +1182,6 @@ class BillingQuotaService(
         }
     }
 
-    private fun isStripeMeteredUnitType(eventType: String): Boolean {
-        return eventType == "error" || eventType == "transaction" || eventType == "replay" || eventType == "feedback"
-    }
-
     private fun usedUnitsForType(state: QuotaState, eventType: String): Long {
         return when (eventType) {
             "error" -> state.usedErrors
@@ -1209,14 +1213,12 @@ class BillingQuotaService(
      * Returns on-call used seats from the enterprise module if available, otherwise 0.
      */
     private fun getOnCallUsedSeatsIfAvailable(organizationId: Int): Int {
-        return try {
+        return suspendRunCatching {
             val clazz = Class.forName("com.moneat.enterprise.services.oncall.OnCallScheduleService")
             val instance = clazz.getDeclaredConstructor().newInstance()
             val method = clazz.getMethod("getOnCallUsedSeats", Int::class.java)
             method.invoke(instance, organizationId) as? Int ?: 0
-        } catch (_: ClassNotFoundException) {
-            0
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             0
         }
     }

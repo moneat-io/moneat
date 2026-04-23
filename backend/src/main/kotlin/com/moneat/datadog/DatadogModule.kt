@@ -16,7 +16,9 @@
 
 package com.moneat.datadog
 
-import com.moneat.enterprise.EnterpriseModule
+import com.moneat.datadog.networkdevices.NdmIngestionWorker
+import com.moneat.datadog.networkdevices.ndmIngestRoutes
+import com.moneat.datadog.networkdevices.ndmQueryRoutes
 import com.moneat.datadog.routes.datadogDogStatsDRoutes
 import com.moneat.datadog.routes.datadogEventQueryRoutes
 import com.moneat.datadog.routes.datadogEventRoutes
@@ -37,11 +39,8 @@ import com.moneat.datadog.routes.profileIngestRoutes
 import com.moneat.datadog.routes.telemetryProxyRoutes
 import com.moneat.datadog.routes.traceDashboardRoutes
 import com.moneat.datadog.routes.traceIngestRoutes
-import com.moneat.datadog.networkdevices.ndmIngestRoutes
-import com.moneat.datadog.networkdevices.ndmQueryRoutes
-import com.moneat.datadog.networkdevices.NdmIngestionWorker
-import com.moneat.datadog.security.securityIngestRoutes
 import com.moneat.datadog.security.SecurityIngestionWorker
+import com.moneat.datadog.security.securityIngestRoutes
 import com.moneat.datadog.services.ProfileStorageService
 import com.moneat.datadog.workers.DatadogEventIngestionWorker
 import com.moneat.datadog.workers.DatadogInfraIngestionWorker
@@ -51,6 +50,7 @@ import com.moneat.datadog.workers.DebuggerIngestionWorker
 import com.moneat.datadog.workers.MiscIngestionWorker
 import com.moneat.datadog.workers.OrchestratorIngestionWorker
 import com.moneat.datadog.workers.TraceIngestionWorker
+import com.moneat.enterprise.EnterpriseModule
 import io.ktor.server.application.Application
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit

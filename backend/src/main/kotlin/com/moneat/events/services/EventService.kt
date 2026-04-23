@@ -16,6 +16,7 @@
 
 package com.moneat.events.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.ExceptionInfo
@@ -33,11 +34,15 @@ import com.moneat.events.repositories.models.ProfileInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
 import com.moneat.events.repositories.models.ReplayRecordingInsertData
-import com.moneat.events.repositories.models.SpanInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.notifications.services.NotificationService
+import com.moneat.otlp.hexToULongPair
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.UsageTrackingService
+import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
@@ -58,6 +63,7 @@ import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -68,6 +74,20 @@ class EventService(
 ) {
     companion object {
         private const val DEFAULT_PROFILE_MAX_PAYLOAD_BYTES = 10 * 1024 * 1024 // 10 MiB
+
+        private const val LOG_PAYLOAD_PREVIEW_CHARS = 500
+        private const val MAX_REPLAY_SEGMENT_COUNTERS = 10_000
+        private const val MAX_REPLAY_URLS = 100
+        private const val FINGERPRINT_HASH_LENGTH = 16
+        private const val MS_PER_SECOND = 1000.0
+        private const val NS_PER_SECOND = 1_000_000_000.0
+        private const val UUID_SEG1 = 8
+        private const val UUID_SEG2 = 12
+        private const val UUID_SEG3 = 16
+        private const val UUID_SEG4 = 20
+
+        /** Keys set by the server for apm_spans; must not be overwritten by SDK tag maps. */
+        private val SENTRY_APM_META_RESERVED_KEYS = setOf("sentry.transaction_id", "sentry.project_id")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -92,8 +112,8 @@ class EventService(
     private val projectKeyCache = ConcurrentHashMap<String, CachedEntry<ProjectKeyVerification>>()
     private val orgIdCache = ConcurrentHashMap<Long, CachedEntry<Int?>>()
     private val knownIssueIds = ConcurrentHashMap.newKeySet<String>()
-    private val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
-    private val MAX_KNOWN_ISSUES = 100_000
+    private val cacheTtlMs = 5 * 60 * 1000L // 5 minutes
+    private val maxKnownIssues = 100_000
 
     // Track replay segment counters for mobile replays that lack a separate replay_event item.
     // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
@@ -108,7 +128,7 @@ class EventService(
         projectKeyCache[cacheKey]?.let { if (it.expiresAt > now) return it.value }
 
         val result = eventRepository.verifyProjectKey(projectId, publicKey)
-        projectKeyCache[cacheKey] = CachedEntry(result, now + CACHE_TTL_MS)
+        projectKeyCache[cacheKey] = CachedEntry(result, now + cacheTtlMs)
         return result
     }
 
@@ -117,7 +137,7 @@ class EventService(
         orgIdCache[projectId]?.let { if (it.expiresAt > now) return it.value }
 
         val result = eventRepository.getOrganizationIdForProject(projectId)
-        orgIdCache[projectId] = CachedEntry(result, now + CACHE_TTL_MS)
+        orgIdCache[projectId] = CachedEntry(result, now + cacheTtlMs)
         return result
     }
 
@@ -131,7 +151,7 @@ class EventService(
             logger.debug { "Processing envelope item type: ${item.type}" }
             when (item.type) {
                 "event" -> {
-                    logger.debug { "Event payload: ${item.payload.take(500)}" }
+                    logger.debug { "Event payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
                     val event = json.decodeFromString<SentryEvent>(item.payload)
                     if (storeEvent(projectId, event)) {
                         recordUsage(projectId, "error", item)
@@ -139,7 +159,7 @@ class EventService(
                 }
 
                 "transaction" -> {
-                    logger.debug { "Transaction payload: ${item.payload.take(500)}" }
+                    logger.debug { "Transaction payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
                     val transaction = parseTransactionPayload(item.payload)
                     if (storeTransaction(projectId, transaction)) {
                         recordUsage(projectId, "transaction", item)
@@ -147,14 +167,14 @@ class EventService(
                 }
 
                 "session" -> {
-                    // TODO: Handle sessions
+                    // Session envelope items are accepted for usage accounting only; persistence not implemented.
                     logger.debug { "Received session (not yet implemented)" }
                 }
 
                 "replay_event" -> {
                     val replayEvent = parseReplayEventPayload(item.payload)
-                    lastReplayId = replayEvent.replay_id
-                    lastSegmentId = replayEvent.segment_id ?: 0
+                    lastReplayId = replayEvent.replayId
+                    lastSegmentId = replayEvent.segmentId ?: 0
                     if (storeReplayEvent(projectId, replayEvent)) {
                         recordUsage(projectId, "replay", item)
                     }
@@ -169,56 +189,75 @@ class EventService(
                 }
 
                 "replay_video" -> {
-                    // Mobile replay uses replay_video instead of replay_recording.
-                    // The SDK may send a preceding replay_event item (with replay_id & segment_id)
-                    // or just a standalone replay_video. Handle both cases.
-                    val rid = lastReplayId ?: envelope.eventId
-
-                    val segmentId =
-                        if (lastReplayId != null) {
-                            // A replay_event was parsed in this envelope - use its segment_id
-                            lastSegmentId
-                        } else {
-                            // No replay_event - derive segment_id from an in-memory counter.
-                            // Evict stale entries if the map grows too large.
-                            if (replaySegmentCounters.size > 10_000) {
-                                replaySegmentCounters.clear()
-                            }
-                            replaySegmentCounters
-                                .computeIfAbsent(rid) { AtomicInteger(0) }
-                                .getAndIncrement()
-                        }
-
-                    // Only create a synthetic replay event for the first segment of a session
-                    if (lastReplayId == null && segmentId == 0) {
-                        storeSyntheticReplayEvent(projectId, rid, segmentId, envelope)
-                    }
-
-                    storeReplayRecording(projectId, rid, segmentId, item.payload)
-                    recordUsage(projectId, "replay", item)
-                    lastReplayId = null
-                    lastSegmentId = 0
+                    val (newReplayId, newSegmentId) = handleReplayVideoItem(
+                        projectId,
+                        item,
+                        envelope,
+                        lastReplayId,
+                        lastSegmentId,
+                    )
+                    lastReplayId = newReplayId
+                    lastSegmentId = newSegmentId
                 }
 
-                "profile" -> {
-                    logger.debug { "Profile payload: ${item.payload.take(500)}" }
-                    if (storeProfile(projectId, item.payload)) {
-                        recordUsage(projectId, "profile", item)
-                    }
-                }
+                "profile" -> handleProfileItem(projectId, item)
 
-                "feedback" -> {
-                    logger.debug { "Feedback payload: ${item.payload.take(500)}" }
-                    val feedback = json.decodeFromString<SentryFeedback>(item.payload)
-                    if (storeFeedback(projectId, feedback)) {
-                        recordUsage(projectId, "feedback", item)
-                    }
-                }
+                "feedback" -> handleFeedbackItem(projectId, item)
 
                 else -> {
                     logger.debug { "Unknown item type: ${item.type}" }
                 }
             }
+        }
+    }
+
+    private suspend fun handleReplayVideoItem(
+        projectId: Long,
+        item: EnvelopeItem,
+        envelope: SentryEnvelope,
+        lastReplayId: String?,
+        lastSegmentId: Int,
+    ): Pair<String?, Int> {
+        // Mobile replay uses replay_video instead of replay_recording.
+        // The SDK may send a preceding replay_event item (with replay_id & segment_id)
+        // or just a standalone replay_video. Handle both cases.
+        val rid = lastReplayId ?: envelope.eventId
+
+        val segmentId =
+            if (lastReplayId != null) {
+                // A replay_event was parsed in this envelope - use its segment_id
+                lastSegmentId
+            } else {
+                // No replay_event - derive segment_id from an in-memory counter.
+                // Evict stale entries if the map grows too large.
+                if (replaySegmentCounters.size > MAX_REPLAY_SEGMENT_COUNTERS) {
+                    replaySegmentCounters.clear()
+                }
+                replaySegmentCounters.computeIfAbsent(rid) { AtomicInteger(0) }.getAndIncrement()
+            }
+
+        // Only create a synthetic replay event for the first segment of a session
+        if (lastReplayId == null && segmentId == 0) {
+            storeSyntheticReplayEvent(projectId, rid, segmentId, envelope)
+        }
+
+        storeReplayRecording(projectId, rid, segmentId, item.payload)
+        recordUsage(projectId, "replay", item)
+        return null to 0
+    }
+
+    private suspend fun handleProfileItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Profile payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        if (storeProfile(projectId, item.payload)) {
+            recordUsage(projectId, "profile", item)
+        }
+    }
+
+    private suspend fun handleFeedbackItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Feedback payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        val feedback = json.decodeFromString<SentryFeedback>(item.payload)
+        if (storeFeedback(projectId, feedback)) {
+            recordUsage(projectId, "feedback", item)
         }
     }
 
@@ -245,7 +284,7 @@ class EventService(
         projectId: Long,
         transaction: SentryTransaction
     ): Boolean {
-        val rawEventId = transaction.event_id ?: UUID.randomUUID().toString()
+        val rawEventId = transaction.eventId ?: UUID.randomUUID().toString()
         val eventId = normalizeUuid(rawEventId)
         val traceContext = transaction.contexts?.get("trace") as? JsonObject
         val traceId = traceContext?.get("trace_id")?.jsonPrimitive?.contentOrNull ?: ""
@@ -253,8 +292,8 @@ class EventService(
         val traceStatus = traceContext?.get("status")?.jsonPrimitive?.contentOrNull
         val transactionLevel = if (traceStatus == null || traceStatus == "ok") "info" else "error"
 
-        val endTimestampMs = unixSecondsToMillis(transaction.timestamp ?: (System.currentTimeMillis() / 1000.0))
-        val durationMs = durationMs(transaction.start_timestamp, transaction.timestamp)
+        val endTimestampMs = unixSecondsToMillis(transaction.timestamp ?: (System.currentTimeMillis() / MS_PER_SECOND))
+        val durationMs = durationMs(transaction.startTimestamp, transaction.timestamp)
 
         val contexts = transaction.contexts?.toString() ?: "{}"
         val breadcrumbs = transaction.breadcrumbs?.toString() ?: "[]"
@@ -271,11 +310,11 @@ class EventService(
             environment = transaction.environment ?: "production",
             release = transaction.release ?: "",
             dist = transaction.dist ?: "",
-            serverName = transaction.server_name ?: "",
+            serverName = transaction.serverName ?: "",
             userId = transaction.user?.id ?: "",
             userEmail = transaction.user?.email ?: "",
             userUsername = transaction.user?.username ?: "",
-            userIpAddress = transaction.user?.ip_address ?: "",
+            userIpAddress = transaction.user?.ipAddress ?: "",
             transactionName = transaction.transaction ?: "",
             transactionOp = transactionOp,
             durationMs = durationMs,
@@ -287,36 +326,25 @@ class EventService(
             sdkVersion = transaction.sdk?.version ?: ""
         )
 
-        try {
+        suspendRunCatching {
             if (!eventRepository.insertTransaction(transactionData)) {
                 return false
             }
 
             val spans = transaction.spans.orEmpty()
-            if (spans.isNotEmpty()) {
-                val spanRows = spans.mapNotNull { span ->
-                    val spanStart = span.start_timestamp ?: transaction.start_timestamp
-                    val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
-                    if (spanStart == null || spanEnd == null) return@mapNotNull null
 
-                    val spanId = span.span_id?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
-                    SpanInsertData(
-                        spanId = spanId,
-                        parentSpanId = span.parent_span_id ?: "",
-                        traceId = span.trace_id ?: traceId,
-                        transactionId = eventId,
-                        projectId = projectId,
-                        op = span.op ?: "",
-                        description = span.description ?: "",
-                        startTimestampMs = unixSecondsToMillis(spanStart),
-                        endTimestampMs = unixSecondsToMillis(spanEnd),
-                        durationMs = durationMs(spanStart, spanEnd),
-                        status = span.status ?: "",
-                        tags = span.tags,
-                        data = span.data?.toString() ?: "{}"
-                    )
-                }
-                eventRepository.insertSpans(spanRows)
+            suspendRunCatching {
+                insertSentrySpansToApm(
+                    projectId = projectId,
+                    eventId = eventId,
+                    traceId = traceId,
+                    transactionOp = transactionOp,
+                    traceStatus = traceStatus,
+                    transaction = transaction,
+                    childSpans = spans
+                )
+            }.getOrElse { e ->
+                logger.warn(e) { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
             }
 
             logger.debug { "Transaction stored: $eventId for project $projectId (spans=${spans.size})" }
@@ -328,14 +356,14 @@ class EventService(
             }
 
             transaction.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
-                try {
+                suspendRunCatching {
                     releaseService.upsertReleaseFromEvent(projectId, releaseVersion, endTimestampMs)
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                 }
             }
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error storing transaction in ClickHouse" }
             return false
         }
@@ -345,10 +373,11 @@ class EventService(
         projectId: Long,
         event: SentryEvent
     ): Boolean {
-        val eventId = event.event_id ?: UUID.randomUUID().toString()
+        val eventId = event.eventId ?: UUID.randomUUID().toString()
 
         logger.debug {
-            "Full event structure - exception: ${event.exception}, message: ${event.message}, platform: ${event.platform}"
+            "Full event structure - exception: ${event.exception}, message: ${event.message}, " +
+                "platform: ${event.platform}"
         }
 
         // Convert Unix timestamp (seconds with fractional part) to milliseconds
@@ -401,11 +430,11 @@ class EventService(
             environment = event.environment ?: "production",
             release = event.release ?: "",
             dist = event.dist ?: "",
-            serverName = event.server_name ?: "",
+            serverName = event.serverName ?: "",
             userId = event.user?.id ?: "",
             userEmail = event.user?.email ?: "",
             userUsername = event.user?.username ?: "",
-            userIpAddress = event.user?.ip_address ?: "",
+            userIpAddress = event.user?.ipAddress ?: "",
             exceptionType = exceptionType,
             exceptionValue = exceptionValue,
             stackTrace = stackTrace,
@@ -419,32 +448,32 @@ class EventService(
             sdkVersion = event.sdk?.version ?: ""
         )
 
-        try {
+        suspendRunCatching {
             val success = eventRepository.insertErrorEvent(eventData)
             if (!success) return false
-            logger.info { "Event stored: $eventId for project $projectId" }
+            logger.trace { "Event stored: $eventId for project $projectId" }
             CacheService.invalidatePattern("cache:issues:$projectId:*")
             event.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
-                try {
+                suspendRunCatching {
                     releaseService.upsertReleaseFromEvent(projectId, releaseVersion, timestamp)
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.warn(e) { "Failed to upsert release $releaseVersion for project $projectId" }
                 }
             }
 
             // Check if this is a new issue and trigger notifications
             scope.launch {
-                try {
+                suspendRunCatching {
                     if (isNewIssue(projectId, issueId)) {
                         logger.info { "New issue detected: $issueId for project $projectId" }
                         notificationService?.onNewIssue(projectId, issueId, event)
                     }
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Error checking for new issue notifications" }
                 }
             }
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error storing event in ClickHouse" }
             return false
         }
@@ -460,14 +489,14 @@ class EventService(
             return false
         }
 
-        val feedbackId = feedback.event_id ?: UUID.randomUUID().toString()
+        val feedbackId = feedback.eventId ?: UUID.randomUUID().toString()
         val timestamp =
             feedback.timestamp?.let {
-                try {
+                suspendRunCatching {
                     java.time.Instant
                         .parse(it)
                         .toEpochMilli()
-                } catch (e: Exception) {
+                }.getOrElse { _ ->
                     logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
                     System.currentTimeMillis()
                 }
@@ -484,7 +513,7 @@ class EventService(
         val userId = feedback.user?.id ?: ""
         val userEmail = feedback.user?.email ?: contactEmail
         val userUsername = feedback.user?.username ?: ""
-        val userIpAddress = feedback.user?.ip_address ?: ""
+        val userIpAddress = feedback.user?.ipAddress ?: ""
 
         val feedbackData = FeedbackInsertData(
             feedbackId = normalizeUuid(feedbackId),
@@ -508,12 +537,12 @@ class EventService(
             tags = feedback.tags
         )
 
-        try {
+        suspendRunCatching {
             val success = eventRepository.insertFeedback(feedbackData)
             if (!success) return false
             logger.info { "Feedback stored: $feedbackId for project $projectId" }
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error storing feedback in ClickHouse" }
             return false
         }
@@ -529,14 +558,14 @@ class EventService(
             return false
         }
 
-        val replayId = replayEvent.replay_id ?: UUID.randomUUID().toString()
-        val segmentId = replayEvent.segment_id ?: 0
+        val replayId = replayEvent.replayId ?: UUID.randomUUID().toString()
+        val segmentId = replayEvent.segmentId ?: 0
         val ts = replayEvent.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
-        val startTs = replayEvent.replay_start_timestamp?.let { unixSecondsToMillis(it) } ?: ts
+        val startTs = replayEvent.replayStartTimestamp?.let { unixSecondsToMillis(it) } ?: ts
 
-        val urls = replayEvent.urls?.take(100) ?: emptyList()
-        val errorIds = replayEvent.error_ids ?: emptyList()
-        val traceIds = replayEvent.trace_ids ?: emptyList()
+        val urls = replayEvent.urls?.take(MAX_REPLAY_URLS) ?: emptyList()
+        val errorIds = replayEvent.errorIds ?: emptyList()
+        val traceIds = replayEvent.traceIds ?: emptyList()
         val tags = replayEvent.tags?.let { JsonObject(it.mapValues { (_, v) -> JsonPrimitive(v) }).toString() } ?: "{}"
 
         val contexts = replayEvent.contexts
@@ -572,7 +601,7 @@ class EventService(
             userId = replayEvent.user?.id ?: "",
             userEmail = replayEvent.user?.email ?: "",
             userUsername = replayEvent.user?.username ?: "",
-            userIpAddress = replayEvent.user?.ip_address ?: "",
+            userIpAddress = replayEvent.user?.ipAddress ?: "",
             sdkName = replayEvent.sdk?.name ?: "",
             sdkVersion = replayEvent.sdk?.version ?: "",
             browserName = browserName,
@@ -585,12 +614,12 @@ class EventService(
             tags = tags
         )
 
-        try {
+        suspendRunCatching {
             val success = eventRepository.insertReplayEvent(replayData)
             if (!success) return false
-            logger.info { "Replay event stored: $replayId segment $segmentId for project $projectId" }
+            logger.trace { "Replay event stored: $replayId segment $segmentId for project $projectId" }
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Error storing replay event in ClickHouse" }
             return false
         }
@@ -602,7 +631,7 @@ class EventService(
         segmentId: Int,
         payload: String
     ) {
-        try {
+        suspendRunCatching {
             eventRepository.insertReplayRecording(
                 ReplayRecordingInsertData(
                     replayId = normalizeUuid(replayId),
@@ -612,8 +641,8 @@ class EventService(
                     recordingData = payload
                 )
             )
-            logger.info { "Replay recording stored: $replayId segment $segmentId for project $projectId" }
-        } catch (e: Exception) {
+            logger.trace { "Replay recording stored: $replayId segment $segmentId for project $projectId" }
+        }.getOrElse { e ->
             logger.error(e) { "Error storing replay recording in ClickHouse" }
         }
     }
@@ -638,7 +667,7 @@ class EventService(
         val sdkVersion = ""
         val platform = "android"
 
-        try {
+        suspendRunCatching {
             eventRepository.insertReplayEvent(
                 ReplayEventInsertData(
                     replayId = normalizedReplayId,
@@ -668,8 +697,8 @@ class EventService(
                     tags = "{}"
                 )
             )
-            logger.info { "Synthetic replay event stored: $replayId for project $projectId" }
-        } catch (e: Exception) {
+            logger.trace { "Synthetic replay event stored: $replayId for project $projectId" }
+        }.getOrElse { e ->
             logger.error(e) { "Error storing synthetic replay event in ClickHouse" }
         }
     }
@@ -770,26 +799,26 @@ class EventService(
     private fun parseTimestampString(raw: String): Double? {
         raw.toDoubleOrNull()?.let { return it }
         val instant = runCatching { Instant.parse(raw) }.getOrNull() ?: return null
-        return instant.epochSecond.toDouble() + instant.nano / 1_000_000_000.0
+        return instant.epochSecond.toDouble() + instant.nano / NS_PER_SECOND
     }
 
     private fun generateFingerprint(event: SentryEvent): List<String> {
         val firstException = event.exception?.values?.firstOrNull()
         val type = firstException?.type
 
-        logger.info { "=== FINGERPRINT GENERATION ===" }
-        logger.info { "Exception type: $type" }
-        logger.info { "Total frames: ${firstException?.stacktrace?.frames?.size}" }
+        logger.trace { "=== FINGERPRINT GENERATION ===" }
+        logger.trace { "Exception type: $type" }
+        logger.trace { "Total frames: ${firstException?.stacktrace?.frames?.size}" }
 
         // Find the last in_app frame (innermost/actual error location), or fall back to the last frame
         val relevantFrame =
-            firstException?.stacktrace?.frames?.findLast { it.in_app == true }
+            firstException?.stacktrace?.frames?.findLast { it.inApp == true }
                 ?: firstException?.stacktrace?.frames?.lastOrNull()
 
         val function = relevantFrame?.function
         val filename = relevantFrame?.filename
 
-        logger.info { "Selected frame: filename=$filename, function=$function, in_app=${relevantFrame?.in_app}" }
+        logger.trace { "Selected frame: filename=$filename, function=$function, in_app=${relevantFrame?.inApp}" }
 
         val fingerprint =
             buildList {
@@ -798,7 +827,7 @@ class EventService(
                 filename?.let { add(it) }
             }
 
-        logger.info { "Final fingerprint: $fingerprint" }
+        logger.trace { "Final fingerprint: $fingerprint" }
 
         return fingerprint.ifEmpty { listOf("{{ default }}") }
     }
@@ -807,7 +836,7 @@ class EventService(
         val combined = fingerprint.joinToString("::")
         val digest = MessageDigest.getInstance("SHA-256")
         val hash = digest.digest(combined.toByteArray())
-        return hash.joinToString("") { "%02x".format(it) }.take(16)
+        return hash.joinToString("") { "%02x".format(it) }.take(FINGERPRINT_HASH_LENGTH)
     }
 
     private fun normalizeUuid(value: String): String {
@@ -817,13 +846,9 @@ class EventService(
 
         val hexRegex = Regex("^[0-9a-f]{32}$")
         if (hexRegex.matches(trimmed)) {
-            return "${trimmed.substring(
-                0,
-                8
-            )}-${trimmed.substring(
-                8,
-                12
-            )}-${trimmed.substring(12, 16)}-${trimmed.substring(16, 20)}-${trimmed.substring(20)}"
+            return "${trimmed.substring(0, UUID_SEG1)}-${trimmed.substring(UUID_SEG1, UUID_SEG2)}" +
+                "-${trimmed.substring(UUID_SEG2, UUID_SEG3)}-${trimmed.substring(UUID_SEG3, UUID_SEG4)}" +
+                "-${trimmed.substring(UUID_SEG4)}"
         }
 
         return UUID.randomUUID().toString()
@@ -835,9 +860,9 @@ class EventService(
         transaction: SentryTransaction,
         aiSpans: List<SentrySpan>
     ) {
-        try {
+        suspendRunCatching {
             val generations = aiSpans.mapNotNull { span ->
-                val spanStart = span.start_timestamp ?: return@mapNotNull null
+                val spanStart = span.startTimestamp ?: return@mapNotNull null
                 val spanEnd = span.timestamp ?: return@mapNotNull null
                 val op = span.op ?: ""
                 val data = span.data
@@ -865,8 +890,8 @@ class EventService(
                     generationId = UUID.randomUUID().toString(),
                     projectId = projectId,
                     traceId = traceId,
-                    spanId = span.span_id ?: "",
-                    parentSpanId = span.parent_span_id ?: "",
+                    spanId = span.spanId ?: "",
+                    parentSpanId = span.parentSpanId ?: "",
                     timestampMs = unixSecondsToMillis(spanEnd),
                     durationMs = durationMs(spanStart, spanEnd),
                     name = span.description ?: op,
@@ -892,15 +917,17 @@ class EventService(
             if (!success) {
                 logger.error { "Failed to insert ai.* spans as LLM generations" }
             } else {
-                logger.info { "Cross-inserted ${generations.size} ai.* spans as LLM generations for project $projectId" }
+                logger.info {
+                    "Cross-inserted ${generations.size} ai.* spans as LLM generations for project $projectId"
+                }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to cross-insert ai.* spans as LLM generations" }
         }
     }
 
     private fun unixSecondsToMillis(value: Double): Long {
-        return (value * 1000).toLong()
+        return (value * MS_PER_SECOND).toLong()
     }
 
     private fun unixSecondsToMillis(value: Double?): Long? {
@@ -912,7 +939,243 @@ class EventService(
         end: Double?
     ): Double {
         if (start == null || end == null) return 0.0
-        return ((end - start) * 1000.0).coerceAtLeast(0.0)
+        return ((end - start) * MS_PER_SECOND).coerceAtLeast(0.0)
+    }
+
+    private fun unixSecondsToNanos(value: Double): Long =
+        (value * NS_PER_SECOND).toLong()
+
+    private fun durationNanos(start: Double?, end: Double?): Long {
+        if (start == null || end == null) return 0L
+        return ((end - start) * NS_PER_SECOND).toLong().coerceAtLeast(0L)
+    }
+
+    private fun sentryStatusToError(status: String?): Int =
+        if (status == null || status == "ok" || status == "cancelled") 0 else 1
+
+    private class ApmSpanContext(
+        val orgId: Int,
+        val clickhouseDb: String,
+        val service: String,
+        val host: String,
+        val env: String,
+        val version: String,
+        val transactionName: String,
+        val baseMeta: Map<String, String>,
+    )
+
+    private suspend fun insertSentrySpansToApm(
+        projectId: Long,
+        eventId: String,
+        traceId: String,
+        transactionOp: String,
+        traceStatus: String?,
+        transaction: SentryTransaction,
+        childSpans: List<SentrySpan>
+    ) {
+        if (traceId.isBlank()) {
+            logger.debug { "No trace_id in transaction $eventId, skipping apm_spans insert" }
+            return
+        }
+
+        val orgId = getOrganizationIdForProject(projectId)
+        if (orgId == null) {
+            logger.warn { "Missing organization for projectId $projectId, skipping apm_spans insert" }
+            return
+        }
+
+        val baseMeta = mutableMapOf(
+            "sentry.transaction_id" to eventId,
+            "sentry.project_id" to projectId.toString()
+        )
+        transaction.tags?.let { mergeNonReservedTags(baseMeta, it) }
+
+        val ctx = ApmSpanContext(
+            orgId = orgId,
+            clickhouseDb = ClickHouseClient.getDatabase(),
+            service = transaction.serverName?.takeIf { it.isNotBlank() }
+                ?: transaction.sdk?.name?.takeIf { it.isNotBlank() }
+                ?: "sentry",
+            host = transaction.serverName ?: "",
+            env = transaction.environment ?: "production",
+            version = transaction.release ?: "",
+            transactionName = transaction.transaction ?: transactionOp.ifBlank { "transaction" },
+            baseMeta = baseMeta,
+        )
+
+        val rows = mutableListOf<String>()
+        buildRootSpanRow(ctx, traceId, transactionOp, traceStatus, transaction)?.let { rows.add(it) }
+        for (span in childSpans) {
+            buildChildSpanRow(ctx, span, traceId, transaction)?.let { rows.add(it) }
+        }
+
+        if (rows.isNotEmpty()) {
+            executeApmSpanInsert(ctx, rows, eventId)
+        }
+    }
+
+    private fun buildRootSpanRow(
+        ctx: ApmSpanContext,
+        traceId: String,
+        transactionOp: String,
+        traceStatus: String?,
+        transaction: SentryTransaction
+    ): String? {
+        val rootSpanId = transaction.contexts?.get("trace")?.jsonObject
+            ?.get("span_id")?.jsonPrimitive?.contentOrNull ?: ""
+        if (rootSpanId.isBlank()) return null
+
+        val startTs = transaction.startTimestamp ?: (System.currentTimeMillis() / MS_PER_SECOND)
+        val (traceIdHigh, traceIdLow) = hexToULongPair(traceId)
+        val (spanIdHigh, spanIdLow) = hexToULongPair(rootSpanId)
+        val rootMetrics = extractMeasurementMetrics(transaction)
+
+        return """
+            (
+            $spanIdLow, $spanIdHigh,
+            $traceIdLow, $traceIdHigh,
+            0, 0,
+            ${ctx.orgId},
+            '${escapeSql(ctx.transactionName)}',
+            '${escapeSql(ctx.service)}',
+            '${escapeSql(ctx.transactionName)}',
+            '${escapeSql(transactionOp)}',
+            fromUnixTimestamp64Nano(${unixSecondsToNanos(startTs)}),
+            ${durationNanos(transaction.startTimestamp, transaction.timestamp)},
+            ${sentryStatusToError(traceStatus)},
+            ${mapToSqlMap(ctx.baseMeta)},
+            ${doubleMapToSqlMap(rootMetrics)},
+            '${escapeSql(ctx.host)}',
+            '${escapeSql(ctx.env)}',
+            '${escapeSql(ctx.version)}',
+            '$traceId',
+            '$rootSpanId',
+            '',
+            'sentry'
+            )
+        """.trimIndent()
+    }
+
+    private fun buildChildSpanRow(
+        ctx: ApmSpanContext,
+        span: SentrySpan,
+        fallbackTraceId: String,
+        transaction: SentryTransaction
+    ): String? {
+        val spanStart = span.startTimestamp ?: transaction.startTimestamp ?: return null
+        val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
+        val spanId = span.spanId?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
+        val spanTraceId = span.traceId ?: fallbackTraceId
+
+        val (traceIdHigh, traceIdLow) = hexToULongPair(spanTraceId)
+        val (spanIdHigh, spanIdLow) = hexToULongPair(spanId)
+        val parentHex = span.parentSpanId ?: ""
+        val (parentIdHigh, parentIdLow) = hexToULongPair(parentHex)
+
+        val spanMeta = extractSpanMeta(span, ctx.baseMeta)
+        val spanMetrics = extractSpanMetrics(span)
+
+        return """
+            (
+            $spanIdLow, $spanIdHigh,
+            $traceIdLow, $traceIdHigh,
+            $parentIdLow, $parentIdHigh,
+            ${ctx.orgId},
+            '${escapeSql(ctx.transactionName)}',
+            '${escapeSql(ctx.service)}',
+            '${escapeSql(span.description ?: "")}',
+            '${escapeSql(span.op ?: "")}',
+            fromUnixTimestamp64Nano(${unixSecondsToNanos(spanStart)}),
+            ${durationNanos(spanStart, spanEnd)},
+            ${sentryStatusToError(span.status)},
+            ${mapToSqlMap(spanMeta)},
+            ${doubleMapToSqlMap(spanMetrics)},
+            '${escapeSql(ctx.host)}',
+            '${escapeSql(ctx.env)}',
+            '${escapeSql(ctx.version)}',
+            '${escapeSql(spanTraceId)}',
+            '${escapeSql(spanId)}',
+            '${escapeSql(parentHex)}',
+            'sentry'
+            )
+        """.trimIndent()
+    }
+
+    private fun extractMeasurementMetrics(transaction: SentryTransaction): Map<String, Double> {
+        val metrics = mutableMapOf<String, Double>()
+        transaction.measurements?.let { measurements ->
+            for ((key, value) in measurements) {
+                suspendRunCatching {
+                    val numericValue = value.jsonObject["value"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+                    if (numericValue != null) metrics["measurement.$key"] = numericValue
+                }.getOrElse { e ->
+                    logger.debug(e) { "Skipping malformed measurement '$key'" }
+                }
+            }
+        }
+        return metrics
+    }
+
+    private fun mergeNonReservedTags(target: MutableMap<String, String>, tags: Map<String, String>) {
+        for ((key, value) in tags) {
+            if (key !in SENTRY_APM_META_RESERVED_KEYS) {
+                target[key] = value
+            }
+        }
+    }
+
+    private fun extractSpanMeta(span: SentrySpan, baseMeta: Map<String, String>): Map<String, String> {
+        val meta = baseMeta.toMutableMap()
+        span.tags?.let { mergeNonReservedTags(meta, it) }
+        span.data?.let { data ->
+            for ((key, value) in data) {
+                suspendRunCatching {
+                    val str = value.jsonPrimitive.contentOrNull
+                    if (str != null) meta["data.$key"] = str
+                }.getOrElse { e ->
+                    logger.debug(e) { "Skipping malformed span data key '$key'" }
+                }
+            }
+        }
+        return meta
+    }
+
+    private fun extractSpanMetrics(span: SentrySpan): Map<String, Double> {
+        val metrics = mutableMapOf<String, Double>()
+        span.data?.let { data ->
+            for ((key, value) in data) {
+                suspendRunCatching {
+                    val num = value.jsonPrimitive.contentOrNull?.toDoubleOrNull()
+                    if (num != null) metrics["data.$key"] = num
+                }.getOrElse { e ->
+                    logger.debug(e) { "Skipping non-numeric span data key '$key'" }
+                }
+            }
+        }
+        return metrics
+    }
+
+    private suspend fun executeApmSpanInsert(ctx: ApmSpanContext, rows: List<String>, eventId: String) {
+        val insert = """
+            INSERT INTO `${ctx.clickhouseDb}`.apm_spans (
+                span_id, span_id_high,
+                trace_id, trace_id_high,
+                parent_id, parent_id_high,
+                organization_id,
+                name, service, resource, type,
+                start, duration, error,
+                meta, metrics, host, env, version,
+                trace_id_hex, span_id_hex, parent_id_hex, source
+            ) VALUES
+            ${rows.joinToString(",\n")}
+        """.trimIndent()
+
+        val response = ClickHouseClient.execute(insert)
+        if (response.status.isSuccess()) {
+            usageTracker.recordOrgUsage(ctx.orgId, "sentry_trace", rows.sumOf { it.length })
+        } else {
+            logger.error { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
+        }
     }
 
     private suspend fun storeProfile(
@@ -928,7 +1191,7 @@ class EventService(
             logger.error { "Missing organization for projectId $projectId, skipping profile insert" }
             return false
         }
-        try {
+        suspendRunCatching {
             val payloadBytes = payload.toByteArray(StandardCharsets.UTF_8)
             val payloadSize = payloadBytes.size
             if (payloadSize > maxProfilePayloadBytes) {
@@ -995,7 +1258,7 @@ class EventService(
                 return false
             }
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to store Sentry profile" }
             return false
         }
@@ -1008,15 +1271,15 @@ class EventService(
         val cacheKey = "$projectId:$issueId"
         if (!knownIssueIds.add(cacheKey)) return false
 
-        val count = try {
+        val count = suspendRunCatching {
             eventRepository.getEventCountForIssue(projectId, issueId)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             knownIssueIds.remove(cacheKey)
             throw e
         }
 
         return if (count > 1) {
-            if (knownIssueIds.size > MAX_KNOWN_ISSUES) {
+            if (knownIssueIds.size > maxKnownIssues) {
                 knownIssueIds.clear()
             }
             false

@@ -54,6 +54,13 @@ Thumbs.db
 # Log files
 *.log
 
+# Python (moneat-agent local venv)
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+
 # Environment
 .env
 .env.local
@@ -114,3 +121,17 @@ deploy/certbot/
 
 # Enterprise (build helper may temporarily create this directory at the repo root)
 /enterprise/
+
+# moneat-agent worktrees and runtime artifacts
+.moneat-worktrees/
+.moneat-agent/
+
+# Ephemeral root-level dumps from local line-length / agent tooling (not project source)
+.auto-agent/
+.d*.txt
+.l*.txt
+.line*.txt
+.t*.txt
+.run-git.sh
+.tmp_linecheck.py
+.line_len_report.py

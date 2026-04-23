@@ -11,7 +11,14 @@ comments:
 # Mirror core's disabled rules for consistency.
 style:
   MagicNumber:
-    active: false
+    active: true
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/DemoDataReseeder.kt'
+    ignorePropertyDeclaration: true
+    ignoreEnums: true
+    ignoreRanges: true
   WildcardImport:
     active: false
   ReturnCount:
@@ -19,7 +26,8 @@ style:
   ThrowsCount:
     active: false
   MaxLineLength:
-    active: false
+    active: true
+    maxLineLength: 120
   UseRequire:
     active: false
   UseCheckOrError:
@@ -44,14 +52,26 @@ complexity:
     active: false
   CyclomaticComplexMethod:
     active: false
+  # Mirror core backend: LargeClass enabled (issue #296); threshold raised during incremental splits.
   LargeClass:
-    active: false
+    active: true
+    threshold: 1700
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
   ComplexCondition:
     active: false
   NestedBlockDepth:
     active: false
   NestedScopeFunctions:
-    active: false
+    active: true
 
 exceptions:
   TooGenericExceptionCaught:

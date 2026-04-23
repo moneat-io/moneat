@@ -47,6 +47,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.net.URI
+import java.net.URISyntaxException
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -126,7 +127,7 @@ private suspend fun processAndEnqueueEvent(
     geoIpService: GeoIpService,
     enqueueEvent: (String) -> Unit,
 ) {
-    val payload = try {
+    val payload = runCatching {
         // Accept both application/json (API clients) and text/plain (browser tracking
         // script / sendBeacon). text/plain avoids a CORS preflight, which means the
         // request succeeds even when the browser can't verify the preflight first.
@@ -137,11 +138,10 @@ private suspend fun processAndEnqueueEvent(
         } else {
             call.receive<AnalyticsEventPayload>()
         }
-    } catch (e: Exception) {
+    }.onFailure { e ->
         logger.debug { "Invalid analytics payload: ${e.message}" }
         call.respond(HttpStatusCode.BadRequest, "Invalid payload")
-        return
-    }
+    }.getOrNull() ?: return
     val ip = call.request.header("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
         ?: call.request.header("X-Real-IP")
         ?: "0.0.0.0"
@@ -183,11 +183,11 @@ private suspend fun processAndEnqueueEvent(
 }
 
 private fun updateRealtimeCounter(projectId: Long, sessionId: String) {
-    try {
+    runCatching {
         val key = "${AnalyticsIngestionWorker.REALTIME_KEY_PREFIX}$projectId"
         RedisConfig.sync().pfadd(key, sessionId)
         RedisConfig.sync().expire(key, REALTIME_TTL_SECONDS)
-    } catch (e: Exception) {
+    }.onFailure { e ->
         logger.debug { "Failed to update realtime counter: ${e.message}" }
     }
 }
@@ -205,7 +205,7 @@ internal fun extractAnalyticsPublicKey(authHeader: String?, sentryKeyParam: Stri
 internal fun extractPathname(url: String): String {
     return try {
         URI(url).path ?: "/"
-    } catch (_: Exception) {
+    } catch (_: URISyntaxException) {
         "/"
     }
 }
@@ -223,7 +223,7 @@ internal fun extractUtmParams(url: String): Map<String, String> {
                 }
             }
             .toMap()
-    } catch (_: Exception) {
+    } catch (_: URISyntaxException) {
         emptyMap()
     }
 }
@@ -234,7 +234,16 @@ private const val REALTIME_TTL_SECONDS = 300L
  * Minimal inline tracking script (~800 bytes minified).
  * Served at /js/m.js. Bundled inline to avoid needing the NPM build at runtime.
  */
-@Suppress("MaxLineLength")
-private val TRACKING_SCRIPT = """
-!function(){"use strict";var t=document.currentScript,a=t&&t.getAttribute("data-domain"),o=t&&(t.getAttribute("data-api")||new URL(t.src).origin);function e(e,n){if(!window._phantom&&!window.__nightmare&&!window.navigator.webdriver&&!window.__puppeteer&&("doNotTrack"in navigator&&"1"!==navigator.doNotTrack||!0)){var r={n:e,u:location.href,d:a,r:document.referrer,w:window.innerWidth};n&&(r.p=n);var i=new XMLHttpRequest;i.open("POST",o+"/api/"+a+"/analytics/event?sentry_key="+t.getAttribute("data-key"),!0),i.send(JSON.stringify(r))}}function n(){e("pageview")}var r=history.pushState;history.pushState=function(){r.apply(this,arguments),n()};var i=history.replaceState;history.replaceState=function(){i.apply(this,arguments),n()},window.addEventListener("popstate",n),"prerender"===document.visibilityState?document.addEventListener("visibilitychange",function(){r||"visible"!==document.visibilityState||(r=!0,n())}):n(),window.moneat={track:function(t,a){e(t,a)}}}();
-""".trimIndent()
+private const val TRACKING_SCRIPT =
+    "!function(){\"use strict\";var t=document.currentScript,a=t&&t.getAttribute(\"data-domai" +
+        "n\"),o=t&&(t.getAttribute(\"data-api\")||new URL(t.src).origin);function e(e,n){if(!wind" +
+        "ow._phantom&&!window.__nightmare&&!window.navigator.webdriver&&!window.__puppeteer&&(" +
+        "\"doNotTrack\"in navigator&&\"1\"!==navigator.doNotTrack||!0)){var r={n:e,u:location.href" +
+        ",d:a,r:document.referrer,w:window.innerWidth};n&&(r.p=n);var i=new XMLHttpRequest;i.o" +
+        "pen(\"POST\",o+\"/api/\"+a+\"/analytics/event?sentry_key=\"+t.getAttribute(\"data-key\"),!0)," +
+        "i.send(JSON.stringify(r))}}function n(){e(\"pageview\")}var r=history.pushState;history" +
+        ".pushState=function(){r.apply(this,arguments),n()};var i=history.replaceState;history" +
+        ".replaceState=function(){i.apply(this,arguments),n()},window.addEventListener(\"popsta" +
+        "te\",n),\"prerender\"===document.visibilityState?document.addEventListener(\"visibilitych" +
+        "ange\",function(){r||\"visible\"!==document.visibilityState||(r=!0,n())}):n(),window.mon" +
+        "eat={track:function(t,a){e(t,a)}}}();"

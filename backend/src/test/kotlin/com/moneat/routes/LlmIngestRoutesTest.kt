@@ -17,18 +17,18 @@
 package com.moneat.routes
 
 import com.moneat.llm.routes.llmIngestRoutes
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import com.moneat.testsupport.startTestKoin
-import com.moneat.testsupport.stopTestKoin
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 
 class LlmIngestRoutesTest {
     @BeforeTest

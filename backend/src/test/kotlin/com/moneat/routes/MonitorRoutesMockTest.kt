@@ -16,23 +16,25 @@
 
 package com.moneat.routes
 
-import com.moneat.monitor.routes.monitorRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.logs.models.LogQueryResponse
 import com.moneat.logs.services.LogService
-import com.moneat.monitor.services.MonitorAlertService
-import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.models.AlertConfigResponse
 import com.moneat.monitor.models.AlertResponse
-import com.moneat.monitor.models.ContainerStats
 import com.moneat.monitor.models.ContainerMetricsResponse
+import com.moneat.monitor.models.ContainerStats
 import com.moneat.monitor.models.HistoricalMetricsResponse
-import com.moneat.logs.models.LogQueryResponse
+import com.moneat.monitor.models.HostData
+import com.moneat.monitor.routes.monitorRoutes
+import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.monitor.services.MonitorService
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
-import com.moneat.monitor.models.HostData
-import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -64,8 +66,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
-import com.moneat.testsupport.RouteTestSupport
-import com.moneat.testsupport.TestDatabaseHelper
 
 class MonitorRoutesMockTest {
     companion object {
@@ -285,11 +285,11 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
             val metricsResponse = HistoricalMetricsResponse(
-                system_id = system.id.toString(),
+                systemId = system.id.toString(),
                 from = 1000L,
                 to = 2000L,
-                interval_seconds = 60,
-                data_points = emptyList()
+                intervalSeconds = 60,
+                dataPoints = emptyList()
             )
 
             every { mockMonitorService.getHostById(system.id) } returns system
@@ -326,12 +326,12 @@ class MonitorRoutesMockTest {
                 id = "abc123",
                 image = "nginx:latest",
                 status = "running",
-                cpu_percent = 1.5f,
-                mem_used = 100L,
-                mem_limit = 512L,
-                net_recv_bytes = 0L,
-                net_sent_bytes = 0L,
-                mem_percent = 0.2f
+                cpuPercent = 1.5f,
+                memUsed = 100L,
+                memLimit = 512L,
+                netRecvBytes = 0L,
+                netSentBytes = 0L,
+                memPercent = 0.2f
             )
 
             every { mockMonitorService.getHostById(system.id) } returns system
@@ -700,11 +700,11 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
             val containerMetrics = ContainerMetricsResponse(
-                container_name = "my-container",
+                containerName = "my-container",
                 from = 1000L,
                 to = 2000L,
-                interval_seconds = 60,
-                data_points = emptyList()
+                intervalSeconds = 60,
+                dataPoints = emptyList()
             )
 
             every { mockMonitorService.getHostById(system.id) } returns system

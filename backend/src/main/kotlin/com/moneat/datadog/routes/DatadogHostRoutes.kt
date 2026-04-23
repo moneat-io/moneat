@@ -16,12 +16,12 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DatadogHostMetadata
 import com.moneat.datadog.models.DatadogIntakePayload
 import com.moneat.datadog.services.DatadogHostService
-import com.moneat.config.ClickHouseClient
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
@@ -44,8 +44,11 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+
+private const val PERCENTAGE_SCALE = 100.0
 
 private val json = Json {
     ignoreUnknownKeys = true
@@ -70,11 +73,11 @@ fun Route.datadogHostIngestRoutes() {
                 )
                 val bodyStr = body.decodeToString()
 
-                val metadata = try {
+                val metadata = suspendRunCatching {
                     json.decodeFromString<DatadogHostMetadata>(
                         bodyStr
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.warn(e) {
                         "Failed to parse DD host metadata"
                     }
@@ -118,11 +121,11 @@ fun Route.datadogHostIngestRoutes() {
                 )
                 val bodyStr = body.decodeToString()
 
-                val metadata = try {
+                val metadata = suspendRunCatching {
                     json.decodeFromString<DatadogHostMetadata>(
                         bodyStr
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.warn(e) {
                         "Failed to parse DD V2 host metadata"
                     }
@@ -159,11 +162,11 @@ fun Route.datadogHostIngestRoutes() {
             )
             val bodyStr = body.decodeToString()
 
-            val payload = try {
+            val payload = suspendRunCatching {
                 json.decodeFromString<DatadogIntakePayload>(
                     bodyStr
                 )
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn(e) {
                     "Failed to parse DD intake payload"
                 }
@@ -325,19 +328,19 @@ fun Route.datadogHostQueryRoutes() {
                         // cpu: sum user+system, capped at 100
                         val cpuUser = m["system.cpu.user"] ?: 0.0
                         val cpuSys = m["system.cpu.system"] ?: 0.0
-                        put("cpu_percent", minOf(cpuUser + cpuSys, 100.0))
+                        put("cpu_percent", minOf(cpuUser + cpuSys, PERCENTAGE_SCALE))
                         // mem: prefer pct_usable → derive used%, else skip
                         val pctUsable = m["system.mem.pct_usable"]
                         if (pctUsable != null) {
-                            put("mem_percent", (1.0 - pctUsable) * 100.0)
+                            put("mem_percent", (1.0 - pctUsable) * PERCENTAGE_SCALE)
                         } else {
                             val used = m["system.mem.used"]
                             val total = m["system.mem.total"]
                             if (used != null && total != null && total > 0) {
-                                put("mem_percent", (used / total) * 100.0)
+                                put("mem_percent", (used / total) * PERCENTAGE_SCALE)
                             }
                         }
-                        m["system.disk.in_use"]?.let { put("disk_percent", it * 100.0) }
+                        m["system.disk.in_use"]?.let { put("disk_percent", it * PERCENTAGE_SCALE) }
                         m["system.net.bytes_rcvd"]?.let { put("net_recv_bytes", it) }
                         m["system.net.bytes_sent"]?.let { put("net_sent_bytes", it) }
                         m["system.load.1"]?.let { put("load_1", it) }

@@ -73,6 +73,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import java.util.*
 import kotlin.time.Clock
 import kotlin.time.Instant
+import com.moneat.utils.suspendRunCatching
 import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
 
 private val logger = KotlinLogging.logger {}
@@ -85,7 +86,8 @@ class StripeService(
     private val allowMeteringWhenStripeDisabled: Boolean = false
 ) {
     private val config = ApplicationConfig("application.conf")
-    private val stripeEnabled = config.propertyOrNull("billing.stripeEnabled")?.getString()?.toBooleanStrictOrNull() ?: false
+    private val stripeEnabled =
+        config.propertyOrNull("billing.stripeEnabled")?.getString()?.toBooleanStrictOrNull() ?: false
     private val secretKey = config.propertyOrNull("stripe.secretKey")?.getString()
     private val webhookSecret = config.propertyOrNull("stripe.webhookSecret")?.getString()
 
@@ -202,7 +204,7 @@ class StripeService(
         }
         val params = paramsBuilder.build()
 
-        return try {
+        return suspendRunCatching {
             val session =
                 com.stripe.model.checkout.Session
                     .create(params)
@@ -218,7 +220,7 @@ class StripeService(
                 sessionId = session.id,
                 url = session.url ?: ""
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to create Stripe checkout session" }
             Sentry.captureException(e) { scope ->
                 scope.setTag("stripe.operation", "create_checkout_session")
@@ -241,7 +243,7 @@ class StripeService(
                 InvoiceListParams
                     .builder()
                     .setCustomer(customerId)
-                    .setLimit(limit.coerceIn(1, 100))
+                    .setLimit(limit.coerceIn(1, MAX_INVOICES_LIMIT))
                     .build()
             )
         return invoices.data.map { invoice ->
@@ -301,7 +303,9 @@ class StripeService(
                     .putMetadata("organization_id", organizationId.toString())
                     .build()
             )
-        val clientSecret = intent.clientSecret ?: throw IllegalStateException("Stripe setup intent missing client secret")
+        val clientSecret =
+            intent.clientSecret
+                ?: throw IllegalStateException("Stripe setup intent missing client secret")
         return SetupIntentResponse(clientSecret = clientSecret)
     }
 
@@ -318,7 +322,9 @@ class StripeService(
         // Retrieve the setup intent to get the payment method and customer
         val setupIntent = SetupIntent.retrieve(setupIntentId)
         val customerId = setupIntent.customer ?: throw IllegalStateException("Setup intent has no customer")
-        val paymentMethodId = setupIntent.paymentMethod ?: throw IllegalStateException("Setup intent has no payment method")
+        val paymentMethodId =
+            setupIntent.paymentMethod
+                ?: throw IllegalStateException("Setup intent has no payment method")
 
         // Verify this customer belongs to the organization
         val expectedCustomerId = getOrCreateCustomer(organizationId)
@@ -491,19 +497,7 @@ class StripeService(
             }
         }
 
-        // Fetch upcoming invoice to estimate proration cost if any
-        // NOTE: Commented out due to compilation issues with Invoice.upcoming in current SDK setup
         val upcomingInvoice: com.stripe.model.Invoice? = null
-        /* try {
-            com.stripe.model.Invoice.upcoming(
-                com.stripe.param.InvoiceUpcomingParams.builder()
-                    .setCustomer(subRow.stripeCustomerId)
-                    .setSubscription(stripeSubId)
-                    .build()
-            )
-        } catch (e: Exception) {
-            null
-        } */
 
         // We trigger a sync to update DB state immediately
         val updatedSub = Subscription.retrieve(stripeSubId)
@@ -511,20 +505,24 @@ class StripeService(
 
         return UpdateOnCallSeatsResponse(
             seats = seats,
-            proratedAmountCents = upcomingInvoice?.amountDue?.toInt() // This is a rough estimate, usually user sees next invoice
+            // Rough estimate; user usually sees actual amount on next invoice
+            proratedAmountCents = upcomingInvoice?.amountDue?.toInt()
         )
     }
 
     fun syncSubscriptionFromStripe(subscription: Subscription) {
         val metadataOrgId = subscription.metadata?.get("organization_id")
         logger.info {
-            "syncSubscriptionFromStripe: subscription=${subscription.id}, customer=${subscription.customer}, metadata_org_id='$metadataOrgId'"
+            "syncSubscriptionFromStripe: subscription=${subscription.id}, customer=${subscription.customer}, " +
+                "metadata_org_id='$metadataOrgId'"
         }
 
         val organizationId = resolveOrganizationId(metadataOrgId, subscription.customer)
         if (organizationId == null) {
             logger.error {
-                "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}. metadata_org_id='$metadataOrgId', customer=${subscription.customer}, full_metadata=${subscription.metadata}"
+                "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}. " +
+                    "metadata_org_id='$metadataOrgId', customer=${subscription.customer}, " +
+                    "full_metadata=${subscription.metadata}"
             }
             return
         }
@@ -614,7 +612,9 @@ class StripeService(
             logger.info { "Updating existing subscription row ${existing.id} for org $organizationId" }
             subscriptionRepository.updateFromStripe(existing.id, stripeData)
         } else {
-            logger.info { "Creating new subscription row for org $organizationId, plan=$planName, status=${subscription.status}" }
+            logger.info {
+                "Creating new subscription row for org $organizationId, plan=$planName, status=${subscription.status}"
+            }
             subscriptionRepository.insertFromStripe(organizationId, subscription.id, stripeData)
         }
     }
@@ -669,7 +669,8 @@ class StripeService(
 
     fun handleCheckoutCompleted(session: com.stripe.model.checkout.Session) {
         logger.info {
-            "handleCheckoutCompleted: session=${session.id}, customer=${session.customer}, subscription=${session.subscription}"
+            "handleCheckoutCompleted: session=${session.id}, customer=${session.customer}, " +
+                "subscription=${session.subscription}"
         }
         val customerId = session.customer
         val subscriptionId = session.subscription
@@ -685,7 +686,8 @@ class StripeService(
         val organizationId = resolveOrganizationId(metadataOrgId, customerId)
         if (organizationId == null) {
             logger.error {
-                "CRITICAL: Could not resolve organization ID from checkout session ${session.id}. metadata_org_id='$metadataOrgId', customer=$customerId"
+                "CRITICAL: Could not resolve organization ID from checkout session ${session.id}. " +
+                    "metadata_org_id='$metadataOrgId', customer=$customerId"
             }
             return
         }
@@ -725,7 +727,7 @@ class StripeService(
             )
         )
 
-        try {
+        suspendRunCatching {
             // Update customer's default payment method
             Customer.retrieve(customerId).update(
                 CustomerUpdateParams
@@ -739,7 +741,7 @@ class StripeService(
             )
 
             logger.info { "Updated default payment method for customer $customerId" }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to update default payment method for customer $customerId" }
             Sentry.captureException(e) { scope ->
                 scope.setTag("stripe.operation", "update_default_payment_method")
@@ -751,7 +753,9 @@ class StripeService(
     }
 
     fun handleSubscriptionDeleted(subscription: Subscription) {
-        val organizationId = resolveOrganizationId(subscription.metadata["organization_id"], subscription.customer) ?: return
+        val organizationId =
+            resolveOrganizationId(subscription.metadata["organization_id"], subscription.customer)
+                ?: return
         val freeTier = pricingTierService.getCurrentTier("FREE")
         transaction {
             Subscriptions.update({
@@ -766,7 +770,7 @@ class StripeService(
                 it[plan] = "free"
                 it[status] = "active"
                 it[current_period_start] = Clock.System.now()
-                it[current_period_end] = addDays(Clock.System.now(), 30)
+                it[current_period_end] = addDays(Clock.System.now(), FREE_TIER_PERIOD_DAYS)
                 it[payg_budget_cents] = 0
                 it[payg_used_units] = 0
                 it[payg_used_micros] = 0
@@ -823,9 +827,9 @@ class StripeService(
                 // that cannot form a full unit remain in pending_overage_bytes for the
                 // next flush cycle rather than being silently dropped.
                 val pendingBytes = row[Subscriptions.pending_overage_bytes]
-                val drainableUnits = pendingBytes / (BYTES_PER_GB / 100)
+                val drainableUnits = pendingBytes / (BYTES_PER_GB / GB_METER_UNITS_PER_GB)
                 if (drainableUnits > 0) {
-                    val remainingBytes = pendingBytes - drainableUnits * (BYTES_PER_GB / 100)
+                    val remainingBytes = pendingBytes - drainableUnits * (BYTES_PER_GB / GB_METER_UNITS_PER_GB)
                     Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
                         it[pending_meter_units] = row[Subscriptions.pending_meter_units] + drainableUnits
                         it[pending_overage_bytes] = remainingBytes
@@ -858,7 +862,7 @@ class StripeService(
                 PendingMeterBatch(subscriptionId, customerId, batchId, batchUnits)
             } ?: continue
 
-            try {
+            suspendRunCatching {
                 val params = MeterEventCreateParams
                     .builder()
                     .setEventName(meterEventName)
@@ -886,9 +890,10 @@ class StripeService(
                     }
                 }
                 flushed++
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) {
-                    "Failed to report metered usage for subscription ${batch.subscriptionId} (batchUnits=${batch.batchUnits})"
+                    "Failed to report metered usage for subscription ${batch.subscriptionId} " +
+                        "(batchUnits=${batch.batchUnits})"
                 }
             }
         }
@@ -971,7 +976,7 @@ class StripeService(
                 PendingMeterBatch(subscriptionId, customerId, batchId, batchUnits)
             } ?: continue
 
-            try {
+            suspendRunCatching {
                 val params = MeterEventCreateParams
                     .builder()
                     .setEventName(meterEventName)
@@ -999,7 +1004,7 @@ class StripeService(
                     }
                 }
                 flushed++
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) {
                     "Failed to report $meterEventName metered usage for subscription ${batch.subscriptionId} " +
                         "(batchUnits=${batch.batchUnits})"
@@ -1034,7 +1039,7 @@ class StripeService(
                         it[plan] = "free"
                         it[status] = "active"
                         it[current_period_start] = now
-                        it[current_period_end] = addDays(now, 30)
+                        it[current_period_end] = addDays(now, FREE_TIER_PERIOD_DAYS)
                         it[pricing_tier_config_id] = freeTier?.id?.takeIf { id -> id > 0 }
                         it[payg_budget_cents] = 0
                         it[payg_used_units] = 0
@@ -1136,7 +1141,7 @@ class StripeService(
         instant: Instant,
         days: Int
     ): Instant {
-        return Instant.fromEpochSeconds(instant.epochSeconds + (days * 86_400L))
+        return Instant.fromEpochSeconds(instant.epochSeconds + (days * SECONDS_PER_DAY))
     }
 
     private fun epochSecondsToIso(epochSeconds: Long?): String? {
@@ -1158,5 +1163,9 @@ class StripeService(
     companion object {
         private val TERMINAL_WEBHOOK_STATUSES = listOf("processed", "success", "skipped")
         private const val BYTES_PER_GB = 1_073_741_824L
+        private const val MAX_INVOICES_LIMIT = 100L
+        private const val FREE_TIER_PERIOD_DAYS = 30
+        private const val GB_METER_UNITS_PER_GB = 100
+        private const val SECONDS_PER_DAY = 86_400L
     }
 }

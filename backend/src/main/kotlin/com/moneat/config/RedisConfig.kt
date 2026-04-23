@@ -20,13 +20,14 @@ import io.ktor.events.*
 import io.ktor.server.application.*
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
-import io.lettuce.core.resource.ClientResources
-import io.netty.resolver.DefaultAddressResolverGroup
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.async.RedisAsyncCommands
 import io.lettuce.core.api.reactive.RedisReactiveCommands
 import io.lettuce.core.api.sync.RedisCommands
+import io.lettuce.core.resource.ClientResources
+import io.netty.resolver.DefaultAddressResolverGroup
 import java.time.Duration
+import com.moneat.utils.suspendRunCatching
 
 const val BRPOP_TIMEOUT_SECONDS = 5L
 
@@ -57,11 +58,31 @@ object RedisConfig {
     }
 
     /** Returns a dedicated blocking connection for a single worker. Each call creates a new connection. */
-    fun newBlockingConnection(): RedisCommands<String, String> {
+    fun newStatefulBlockingConnection(): StatefulRedisConnection<String, String> {
         val c = checkNotNull(client) { "RedisConfig is not initialized. Call init() first." }
         val conn = c.connect().also { it.timeout = BLOCKING_COMMAND_TIMEOUT }
         synchronized(blockingConnections) { blockingConnections.add(conn) }
-        return conn.sync()
+        return conn
+    }
+
+    /**
+     * Returns a dedicated blocking connection for a single worker (same as [newStatefulBlockingConnection]).
+     * Callers must pass the returned connection to [closeBlockingConnection] when the worker stops.
+     */
+    fun newBlockingConnection(): StatefulRedisConnection<String, String> =
+        newStatefulBlockingConnection()
+
+    /**
+     * Closes a blocking worker connection and removes it from the shutdown list so it is not closed twice.
+     */
+    fun closeBlockingConnection(conn: StatefulRedisConnection<String, String>) {
+        val removed =
+            synchronized(blockingConnections) {
+                blockingConnections.remove(conn)
+            }
+        if (removed) {
+            conn.close()
+        }
     }
 
     fun async(): RedisAsyncCommands<String, String> {
@@ -93,20 +114,20 @@ object RedisConfig {
 fun Application.configureRedis() {
     // Skip Redis in test environment if REDIS_URL is not set
     val redisUrl =
-        try {
+        suspendRunCatching {
             environment.config.property("redis.url").getString()
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             log.warn("Redis URL not configured, skipping Redis initialization (test environment)")
             return
         }
 
-    try {
+    suspendRunCatching {
         log.info("Connecting to Redis at $redisUrl...")
         RedisConfig.init(redisUrl)
         log.info("Redis connection established")
         // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering
         // (workers must stop before Redis connection is closed)
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         log.error("Failed to connect to Redis. Make sure Redis is running and accessible.", e)
         throw e
     }

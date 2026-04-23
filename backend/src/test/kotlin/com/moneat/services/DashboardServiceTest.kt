@@ -24,6 +24,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
@@ -36,7 +37,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 class DashboardServiceTest {
     companion object {
@@ -190,12 +190,12 @@ class DashboardServiceTest {
         runBlocking {
             MockHttpServer { exchange ->
                 val query = exchange.requestBodyText()
-                if (query.contains("FROM `test`.spans") && query.contains("trace_id = 'trace-1'")) {
+                if (query.contains("FROM `test`.apm_spans") && query.contains("trace_id_hex = 'trace-1'")) {
                     exchange.respond(
                         200,
                         """
-                    {"span_id":"s1","parent_span_id":"","trace_id":"trace-1","transaction_id":"tx-1","op":"http.server","description":"GET /","start_ts_ms":"1000","end_ts_ms":"2500","duration_ms":"1500","status":"ok","tags":{"component":"api"},"data":"{}"}
-                    {"span_id":"s2","parent_span_id":"s1","trace_id":"trace-1","transaction_id":"tx-1","op":"db","description":"SELECT","start_ts_ms":"2600","end_ts_ms":"5000","duration_ms":"2400","status":"ok","tags":{"db":"main"},"data":"{}"}
+                    {"span_id":"s1","parent_span_id":"","trace_id":"trace-1","meta":{"sentry.transaction_id":"tx-1"},"op":"http.server","description":"GET /","start_ns":"1000000000","duration_ns":"1500000000","error":0}
+                    {"span_id":"s2","parent_span_id":"s1","trace_id":"trace-1","meta":{"sentry.transaction_id":"tx-1"},"op":"db","description":"SELECT","start_ns":"2600000000","duration_ns":"2400000000","error":0}
                         """.trimIndent(),
                         contentType = "text/plain"
                     )
@@ -205,6 +205,20 @@ class DashboardServiceTest {
             }.use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+                transaction {
+                    Organizations.insert {
+                        it[id] = 1
+                        it[name] = "Test Org"
+                        it[slug] = "test-org"
+                    }
+                    Projects.insert {
+                        it[id] = -1
+                        it[organization_id] = 1
+                        it[name] = "Test Project"
+                        it[slug] = "test-project"
+                    }
+                }
 
                 val service = DashboardService.create()
                 val trace = service.getTraceDetails(projectId = -1, traceId = "trace-1")

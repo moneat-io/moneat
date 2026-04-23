@@ -25,6 +25,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import kotlin.time.Duration.Companion.hours
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -40,21 +41,25 @@ class ArtifactCleanupService(
 ) {
     private var cleanupJob: Job? = null
 
+    companion object {
+        private const val INVITATION_EXPIRY_DAYS = 90
+    }
+
     fun start(scope: CoroutineScope) {
         logger.info { "Starting artifact cleanup service (auth tokens, invitations)" }
         cleanupJob =
             scope.launch {
                 while (isActive) {
-                    try {
+                    suspendRunCatching {
                         val authDeleted = authTokenService.cleanupExpiredTokens()
                         if (authDeleted > 0) {
                             logger.info { "Cleaned up $authDeleted expired auth tokens" }
                         }
-                        val inviteDeleted = orgInvitationService.purgeOldInvitations(90)
+                        val inviteDeleted = orgInvitationService.purgeOldInvitations(INVITATION_EXPIRY_DAYS)
                         if (inviteDeleted > 0) {
                             logger.info { "Purged $inviteDeleted old invitations" }
                         }
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Error during artifact cleanup" }
                     }
                     delay(cleanupInterval)

@@ -33,6 +33,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -42,9 +43,14 @@ private val logger = KotlinLogging.logger {}
  */
 class InfluxDBHandler : HttpApiHandler() {
 
+    companion object {
+        private const val INFLUXDB_DEFAULT_PORT = 8086
+        private const val FIELDS_PAGE_SIZE = 100
+    }
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        return try {
-            val baseUrl = buildUrl(request.host, request.port ?: 8086)
+        return suspendRunCatching {
+            val baseUrl = buildUrl(request.host, request.port ?: INFLUXDB_DEFAULT_PORT)
             val org = request.databaseName ?: "moneat"
             val query = "buckets()"
             val body = "org=$org&query=${java.net.URLEncoder.encode(query, "UTF-8")}"
@@ -58,7 +64,7 @@ class InfluxDBHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "InfluxDB returned ${response.status}")
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "InfluxDB connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -74,7 +80,7 @@ class InfluxDBHandler : HttpApiHandler() {
         limit: Int,
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
-        val baseUrl = buildUrl(host, port ?: 8086)
+        val baseUrl = buildUrl(host, port ?: INFLUXDB_DEFAULT_PORT)
         val org = databaseName ?: "moneat"
         val fluxQuery = if (timeRange != null) {
             val from = timeRange.from
@@ -85,7 +91,7 @@ class InfluxDBHandler : HttpApiHandler() {
             "$query |> limit(n: $limit)"
         }
 
-        return try {
+        return suspendRunCatching {
             val body = "org=$org&query=${java.net.URLEncoder.encode(fluxQuery, "UTF-8")}"
             val response = httpClient.post("$baseUrl/api/v2/query") {
                 contentType(ContentType.Application.FormUrlEncoded)
@@ -97,7 +103,7 @@ class InfluxDBHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseFluxCsv(response.bodyAsText(), limit)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "InfluxDB query failed" }
             emptyList()
         }
@@ -109,9 +115,9 @@ class InfluxDBHandler : HttpApiHandler() {
         databaseName: String?,
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
-        val baseUrl = buildUrl(host, port ?: 8086)
+        val baseUrl = buildUrl(host, port ?: INFLUXDB_DEFAULT_PORT)
         val org = databaseName ?: "moneat"
-        return try {
+        return suspendRunCatching {
             val bucket = databaseName ?: "moneat"
             val query = "import \"influxdata/influxdb/schema\" schema.measurements(bucket: \"$bucket\")"
             val body = "org=$org&query=${java.net.URLEncoder.encode(query, "UTF-8")}"
@@ -124,7 +130,7 @@ class InfluxDBHandler : HttpApiHandler() {
                 val csv = response.bodyAsText()
                 val lines = csv.lines().filter { it.isNotBlank() }
                 if (lines.size >= 2) {
-                    lines.drop(1).take(100).mapNotNull { line ->
+                    lines.drop(1).take(FIELDS_PAGE_SIZE).mapNotNull { line ->
                         val vals = line.split(",").map { it.trim() }
                         val name = vals.getOrNull(1) ?: return@mapNotNull null
                         DataSourceField(name, "measurement", "InfluxDB measurement")
@@ -135,7 +141,7 @@ class InfluxDBHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "InfluxDB schema fetch failed" }
             emptyList()
         }

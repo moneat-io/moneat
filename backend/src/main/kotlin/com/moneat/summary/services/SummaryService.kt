@@ -16,6 +16,7 @@
 
 package com.moneat.summary.services
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.services.DashboardService
 import com.moneat.events.services.ReleaseService
@@ -42,13 +43,13 @@ import com.moneat.summary.models.IssueSummaryItem
 import com.moneat.summary.models.LogVolumeComparison
 import com.moneat.summary.models.OvernightSummaryResponse
 import com.moneat.summary.models.RelatedLogEntry
-import com.moneat.billing.services.BillingQuotaService
 import com.moneat.summary.models.TransactionLatencySummary
 import com.moneat.summary.models.UptimeIncidentSummary
 import com.moneat.summary.models.UptimeMonitorSummary
 import com.moneat.summary.models.WeeklyReportResponse
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
+import com.moneat.utils.recoverOnExpectedFailures
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -66,6 +67,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import com.moneat.utils.TimeConstants.MILLIS_PER_DAY
 
 private val logger = KotlinLogging.logger {}
 
@@ -85,6 +87,11 @@ private const val STATUS_DOWN = "down"
 private const val SPIKE_FACTOR = 2
 private const val WEEK_SECONDS = 7 * 24 * 3600L
 private const val TWO_WEEKS_SECONDS = 14 * 24 * 3600L
+private const val SECONDS_PER_MINUTE = 60L
+private const val DAYS_IN_WEEK = 7L
+private const val DAYS_IN_MONTH = 30L
+private const val MILLIS_7_DAYS = DAYS_IN_WEEK * MILLIS_PER_DAY
+private const val MILLIS_30_DAYS = DAYS_IN_MONTH * MILLIS_PER_DAY
 
 class SummaryService(
     private val monitorService: MonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl()),
@@ -306,11 +313,11 @@ class SummaryService(
         }
 
         val avgCpu = hostMetrics
-            .map { it.cpu_percent.toDouble() }
+            .map { it.cpuPercent.toDouble() }
             .takeIf { it.isNotEmpty() }?.average() ?: 0.0
 
         val avgMem = hostMetrics
-            .map { it.mem_percent.toDouble() }
+            .map { it.memPercent.toDouble() }
             .takeIf { it.isNotEmpty() }?.average() ?: 0.0
 
         WeeklyReportResponse(
@@ -341,7 +348,7 @@ class SummaryService(
         val projectIds = getProjectIds(organizationId)
 
         val now = Instant.now()
-        val windowStart = now.minusSeconds(METRICS_WINDOW_MINUTES * 60)
+        val windowStart = now.minusSeconds(METRICS_WINDOW_MINUTES * SECONDS_PER_MINUTE)
 
         // Load the specific incident from IncidentEventLog by ID and org, then
         // parse the deduplication key to find the exact triggering host/alert.
@@ -376,10 +383,10 @@ class SummaryService(
                     hostMetrics = HostMetricsWindow(
                         systemId = host.id.toString(),
                         systemName = host.displayName ?: host.hostname,
-                        avgCpu = metrics.cpu_percent.toDouble(),
-                        maxCpu = metrics.cpu_percent.toDouble(),
-                        avgMemory = metrics.mem_percent.toDouble(),
-                        maxMemory = metrics.mem_percent.toDouble(),
+                        avgCpu = metrics.cpuPercent.toDouble(),
+                        maxCpu = metrics.cpuPercent.toDouble(),
+                        avgMemory = metrics.memPercent.toDouble(),
+                        maxMemory = metrics.memPercent.toDouble(),
                         windowStart = isoFormatter.format(windowStart),
                         windowEnd = isoFormatter.format(now)
                     )
@@ -408,10 +415,10 @@ class SummaryService(
                     hostMetrics = HostMetricsWindow(
                         systemId = host.id.toString(),
                         systemName = host.displayName ?: host.hostname,
-                        avgCpu = metrics.cpu_percent.toDouble(),
-                        maxCpu = metrics.cpu_percent.toDouble(),
-                        avgMemory = metrics.mem_percent.toDouble(),
-                        maxMemory = metrics.mem_percent.toDouble(),
+                        avgCpu = metrics.cpuPercent.toDouble(),
+                        maxCpu = metrics.cpuPercent.toDouble(),
+                        avgMemory = metrics.memPercent.toDouble(),
+                        maxMemory = metrics.memPercent.toDouble(),
                         windowStart = isoFormatter.format(windowStart),
                         windowEnd = isoFormatter.format(now)
                     )
@@ -580,10 +587,10 @@ class SummaryService(
 
     private fun periodToMillis(period: String): Long {
         return when (period) {
-            "24h" -> 24L * 3600 * 1000
-            "7d" -> 7L * 24 * 3600 * 1000
-            "30d" -> 30L * 24 * 3600 * 1000
-            else -> 24L * 3600 * 1000
+            "24h" -> MILLIS_PER_DAY
+            "7d" -> MILLIS_7_DAYS
+            "30d" -> MILLIS_30_DAYS
+            else -> MILLIS_PER_DAY
         }
     }
 
@@ -779,28 +786,25 @@ class SummaryService(
     // --- Query execution helpers ---
 
     private suspend fun executeScalar(query: String): Long {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary scalar query", 0) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return 0
+            if (body.isBlank()) return@recoverOnExpectedFailures 0
             val obj = json.parseToJsonElement(body.lines().first())
                 .jsonObject
             obj["total"]?.jsonPrimitive?.long ?: 0
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary scalar query failed" }
-            0
         }
     }
 
     private suspend fun executeIssueQuery(
         query: String
     ): List<IssueSummaryItem> {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary issue query", emptyList()) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+            if (body.isBlank()) return@recoverOnExpectedFailures emptyList()
             val root = json.parseToJsonElement(body).jsonObject
-            val data = root["data"]?.jsonArray ?: return emptyList()
+            val data = root["data"]?.jsonArray ?: return@recoverOnExpectedFailures emptyList()
             data.map { row ->
                 val obj = row.jsonObject
                 IssueSummaryItem(
@@ -813,21 +817,18 @@ class SummaryService(
                         ?.jsonPrimitive?.long ?: 0
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary issue query failed" }
-            emptyList()
         }
     }
 
     private suspend fun executeDailyErrorQuery(
         query: String
     ): List<DailyErrorCount> {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary daily error query", emptyList()) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+            if (body.isBlank()) return@recoverOnExpectedFailures emptyList()
             val root = json.parseToJsonElement(body).jsonObject
-            val data = root["data"]?.jsonArray ?: return emptyList()
+            val data = root["data"]?.jsonArray ?: return@recoverOnExpectedFailures emptyList()
             data.map { row ->
                 val obj = row.jsonObject
                 DailyErrorCount(
@@ -835,21 +836,18 @@ class SummaryService(
                     count = obj["count"]?.jsonPrimitive?.long ?: 0
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary daily error query failed" }
-            emptyList()
         }
     }
 
     private suspend fun executeLatencyQuery(
         query: String
     ): List<TransactionLatencySummary> {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary latency query", emptyList()) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+            if (body.isBlank()) return@recoverOnExpectedFailures emptyList()
             val root = json.parseToJsonElement(body).jsonObject
-            val data = root["data"]?.jsonArray ?: return emptyList()
+            val data = root["data"]?.jsonArray ?: return@recoverOnExpectedFailures emptyList()
             data.map { row ->
                 val obj = row.jsonObject
                 TransactionLatencySummary(
@@ -859,21 +857,18 @@ class SummaryService(
                     count = obj["cnt"]?.jsonPrimitive?.long ?: 0
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary latency query failed" }
-            emptyList()
         }
     }
 
     private suspend fun executeLogQuery(
         query: String
     ): List<RelatedLogEntry> {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary log query", emptyList()) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+            if (body.isBlank()) return@recoverOnExpectedFailures emptyList()
             val root = json.parseToJsonElement(body).jsonObject
-            val data = root["data"]?.jsonArray ?: return emptyList()
+            val data = root["data"]?.jsonArray ?: return@recoverOnExpectedFailures emptyList()
             data.map { row ->
                 val obj = row.jsonObject
                 RelatedLogEntry(
@@ -885,21 +880,18 @@ class SummaryService(
                     service = obj["service"]?.jsonPrimitive?.content
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary log query failed" }
-            emptyList()
         }
     }
 
     private suspend fun executeErrorSpikeQuery(
         query: String
     ): List<ErrorSpikeEntry> {
-        return try {
+        return recoverOnExpectedFailures(logger, "Summary error spike query", emptyList()) {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return emptyList()
+            if (body.isBlank()) return@recoverOnExpectedFailures emptyList()
             val root = json.parseToJsonElement(body).jsonObject
-            val data = root["data"]?.jsonArray ?: return emptyList()
+            val data = root["data"]?.jsonArray ?: return@recoverOnExpectedFailures emptyList()
             data.map { row ->
                 val obj = row.jsonObject
                 ErrorSpikeEntry(
@@ -911,9 +903,6 @@ class SummaryService(
                         ?.jsonPrimitive?.content ?: ""
                 )
             }
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            logger.error(e) { "Summary error spike query failed" }
-            emptyList()
         }
     }
 

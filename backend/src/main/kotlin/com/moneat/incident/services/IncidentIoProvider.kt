@@ -25,11 +25,13 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -37,6 +39,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 /**
  * incident.io provider implementation using Alert Events V2 API.
@@ -67,7 +71,7 @@ class IncidentIoProvider : IncidentProvider {
         event: IncidentEvent,
         config: ProviderConfig
     ): Result<String> {
-        return try {
+        return suspendRunCatching {
             val alertSourceConfigId =
                 config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
                     ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
@@ -90,7 +94,7 @@ class IncidentIoProvider : IncidentProvider {
 
             val payload =
                 AlertEventPayload(
-                    deduplication_key = event.deduplicationKey,
+                    deduplicationKey = event.deduplicationKey,
                     status =
                     when (event.status) {
                         IncidentStatus.FIRING -> "firing"
@@ -108,14 +112,14 @@ class IncidentIoProvider : IncidentProvider {
                     setBody(payload)
                 }
 
-            if (response.status.value in 200..299) {
+            if (response.status.value in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 val responseBody = response.body<AlertEventResponse>()
-                Result.success(responseBody.deduplication_key)
+                Result.success(responseBody.deduplicationKey)
             } else {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error("Error sending alert to incident.io", e)
             Result.failure(e)
         }
@@ -125,14 +129,14 @@ class IncidentIoProvider : IncidentProvider {
         deduplicationKey: String,
         config: ProviderConfig
     ): Result<String> {
-        return try {
+        return suspendRunCatching {
             val alertSourceConfigId =
                 config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
                     ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
 
             val payload =
                 AlertEventPayload(
-                    deduplication_key = deduplicationKey,
+                    deduplicationKey = deduplicationKey,
                     status = "resolved",
                     title = "Alert Resolved",
                     description = "This alert has been automatically resolved by Moneat",
@@ -146,21 +150,21 @@ class IncidentIoProvider : IncidentProvider {
                     setBody(payload)
                 }
 
-            if (response.status.value in 200..299) {
+            if (response.status.value in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 val responseBody = response.body<AlertEventResponse>()
-                Result.success(responseBody.deduplication_key)
+                Result.success(responseBody.deduplicationKey)
             } else {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error("Error resolving alert with incident.io", e)
             Result.failure(e)
         }
     }
 
     override suspend fun testConnection(config: ProviderConfig): Result<Boolean> {
-        return try {
+        return suspendRunCatching {
             val alertSourceConfigId =
                 config.configJson["alert_source_config_id"]?.jsonPrimitive?.content
                     ?: return Result.failure(Exception("Missing alert_source_config_id in provider config"))
@@ -169,7 +173,7 @@ class IncidentIoProvider : IncidentProvider {
             val testDedup = "moneat-test-${System.currentTimeMillis()}"
             val payload =
                 AlertEventPayload(
-                    deduplication_key = testDedup,
+                    deduplicationKey = testDedup,
                     status = "firing",
                     title = "Moneat Test Alert",
                     description = "This is a test alert from Moneat to verify the integration",
@@ -183,7 +187,7 @@ class IncidentIoProvider : IncidentProvider {
                     setBody(payload)
                 }
 
-            if (response.status.value in 200..299) {
+            if (response.status.value in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 // Immediately resolve the test alert
                 resolveAlert(testDedup, config)
                 Result.success(true)
@@ -191,7 +195,7 @@ class IncidentIoProvider : IncidentProvider {
                 val errorBody = response.bodyAsText()
                 Result.failure(Exception("incident.io API error (${response.status}): $errorBody"))
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error("Error testing incident.io connection", e)
             Result.failure(e)
         }
@@ -199,7 +203,7 @@ class IncidentIoProvider : IncidentProvider {
 
     @Serializable
     private data class AlertEventPayload(
-        val deduplication_key: String,
+        @SerialName("deduplication_key") val deduplicationKey: String,
         val status: String,
         val title: String,
         val description: String,
@@ -208,7 +212,7 @@ class IncidentIoProvider : IncidentProvider {
 
     @Serializable
     private data class AlertEventResponse(
-        val deduplication_key: String
+        @SerialName("deduplication_key") val deduplicationKey: String
     )
 }
 

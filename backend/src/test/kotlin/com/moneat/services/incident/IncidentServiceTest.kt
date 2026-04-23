@@ -22,6 +22,7 @@ import com.moneat.incident.models.IncidentRoutingRules
 import com.moneat.incident.models.IncidentSeverity
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.models.Organizations
+import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -31,7 +32,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.time.Clock
-import com.moneat.testsupport.TestDatabaseHelper
 
 class IncidentServiceTest {
     private var providerConfigId: Int = 0

@@ -10,6 +10,7 @@ import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
@@ -19,6 +20,10 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
+
+private const val DEFAULT_INCIDENT_LIMIT = 50
+private const val MIN_INCIDENT_LIMIT = 1
+private const val MAX_INCIDENT_LIMIT = 200
 
 @Serializable
 data class DeclareIncidentRequest(
@@ -59,7 +64,14 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
 
                 val status = call.request.queryParameters["status"]
                 val priorityLevel = call.request.queryParameters["priority"]
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                val rawLimit = call.request.queryParameters["limit"]?.toIntOrNull()
+                val limit =
+                    when {
+                        rawLimit == null -> DEFAULT_INCIDENT_LIMIT
+                        rawLimit < MIN_INCIDENT_LIMIT ->
+                            throw BadRequestException("limit must be >= $MIN_INCIDENT_LIMIT")
+                        else -> rawLimit.coerceAtMost(MAX_INCIDENT_LIMIT)
+                    }
                 val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
 
                 val incidentService = incidentServiceProvider()

@@ -29,6 +29,7 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
@@ -54,6 +55,11 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
+
+private const val PROVIDER_TYPE_MAX_LENGTH = 50
+private const val PROVIDER_NAME_MAX_LENGTH = 255
+private const val DEFAULT_INCIDENT_PAGE_LIMIT = 50
 
 fun Route.incidentProviderRoutes() {
     val json =
@@ -90,12 +96,12 @@ fun Route.incidentProviderRoutes() {
                                     providerType = row[IncidentProviderConfigs.providerType],
                                     name = row[IncidentProviderConfigs.name],
                                     configJson =
-                                    try {
+                                    suspendRunCatching {
                                         val jsonStr = row[IncidentProviderConfigs.configJson]
                                         json.parseToJsonElement(jsonStr).jsonObject.toMap().mapValues {
                                             it.value.toString().trim('"')
                                         }
-                                    } catch (e: Exception) {
+                                    }.getOrElse { _ ->
                                         emptyMap()
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled],
@@ -109,168 +115,13 @@ fun Route.incidentProviderRoutes() {
             }
 
             // Create provider config
-            post {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
-
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    } ?: return@post call.respond(HttpStatusCode.Forbidden)
-
-                val request = call.receive<CreateProviderConfigRequest>()
-
-                val configId =
-                    transaction {
-                        // Custom SQL for JSONB insertion
-                        val jsonString = request.configJson.toString()
-                        val sql =
-                            """
-                        INSERT INTO incident_provider_configs 
-                        (organization_id, provider_type, name, api_key, config_json, enabled, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, CAST(? AS JSONB), ?, CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP))
-                        RETURNING id
-                            """.trimIndent()
-
-                        val now = Clock.System.now()
-                        val nowStr = now.toString()
-
-                        var resultId: Int? = null
-                        TransactionManager.current().exec(
-                            sql,
-                            listOf(
-                                IntegerColumnType() to organizationId,
-                                VarCharColumnType(50) to request.providerType,
-                                VarCharColumnType(255) to request.name,
-                                TextColumnType() to request.apiKey,
-                                TextColumnType() to jsonString,
-                                BooleanColumnType() to true,
-                                TextColumnType() to nowStr,
-                                TextColumnType() to nowStr
-                            )
-                        ) { rs ->
-                            if (rs.next()) {
-                                resultId = rs.getInt(1)
-                            }
-                        }
-
-                        resultId ?: throw Exception("Failed to insert provider config")
-                    }
-
-                call.respond(HttpStatusCode.Created, mapOf("id" to configId))
-            }
+            post { handleCreateProviderConfig() }
 
             // Update provider config
-            put("/{id}") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
-                val configId =
-                    call.parameters["id"]?.toIntOrNull()
-                        ?: return@put call.respond(HttpStatusCode.BadRequest)
-
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    } ?: return@put call.respond(HttpStatusCode.Forbidden)
-
-                val request = call.receive<UpdateProviderConfigRequest>()
-
-                val updated =
-                    transaction {
-                        val exists =
-                            IncidentProviderConfigs
-                                .selectAll()
-                                .where {
-                                    (IncidentProviderConfigs.id eq configId) and
-                                        (IncidentProviderConfigs.organizationId eq organizationId)
-                                }.count() > 0
-
-                        if (!exists) return@transaction false
-
-                        // Build update SQL dynamically based on what's provided
-                        val setClauses = mutableListOf<String>()
-                        val params = mutableListOf<Pair<IColumnType<*>, Any?>>()
-
-                        request.name?.let {
-                            setClauses.add("name = ?")
-                            params.add(VarCharColumnType(255) to it)
-                        }
-                        request.apiKey?.let {
-                            setClauses.add("api_key = ?")
-                            params.add(TextColumnType() to it)
-                        }
-                        request.configJson?.let {
-                            setClauses.add("config_json = CAST(? AS JSONB)")
-                            params.add(TextColumnType() to it.toString())
-                        }
-                        request.enabled?.let {
-                            setClauses.add("enabled = ?")
-                            params.add(BooleanColumnType() to it)
-                        }
-
-                        if (setClauses.isNotEmpty()) {
-                            setClauses.add("updated_at = CAST(? AS TIMESTAMP)")
-                            params.add(TextColumnType() to Clock.System.now().toString())
-                            params.add(IntegerColumnType() to configId)
-
-                            val updateSql =
-                                """
-                            UPDATE incident_provider_configs
-                            SET ${setClauses.joinToString(", ")}
-                            WHERE id = ?
-                                """.trimIndent()
-
-                            TransactionManager.current().exec(updateSql, params) {}
-                        }
-
-                        true
-                    }
-
-                if (updated) {
-                    call.respond(HttpStatusCode.OK)
-                } else {
-                    call.respond(HttpStatusCode.NotFound)
-                }
-            }
+            put("/{id}") { handleUpdateProviderConfig() }
 
             // Delete provider config
-            delete("/{id}") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
-                val configId =
-                    call.parameters["id"]?.toIntOrNull()
-                        ?: return@delete call.respond(HttpStatusCode.BadRequest)
-
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    } ?: return@delete call.respond(HttpStatusCode.Forbidden)
-
-                val deleted =
-                    transaction {
-                        IncidentProviderConfigs.deleteWhere {
-                            (id eq configId) and (IncidentProviderConfigs.organizationId eq organizationId)
-                        } > 0
-                    }
-
-                if (deleted) {
-                    call.respond(HttpStatusCode.OK)
-                } else {
-                    call.respond(HttpStatusCode.NotFound)
-                }
-            }
+            delete("/{id}") { handleDeleteProviderConfig() }
 
             // Test connection
             post("/{id}/test") {
@@ -305,10 +156,10 @@ fun Route.incidentProviderRoutes() {
                                     name = row[IncidentProviderConfigs.name],
                                     apiKey = row[IncidentProviderConfigs.apiKey],
                                     configJson =
-                                    try {
+                                    suspendRunCatching {
                                         val jsonStr = row[IncidentProviderConfigs.configJson]
                                         json.parseToJsonElement(jsonStr).jsonObject
-                                    } catch (e: Exception) {
+                                    }.getOrElse { _ ->
                                         buildJsonObject {}
                                     },
                                     enabled = row[IncidentProviderConfigs.enabled]
@@ -381,116 +232,284 @@ fun Route.incidentProviderRoutes() {
             }
 
             // Bulk upsert routing rules
-            put("/{id}/rules") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
-                val configId =
-                    call.parameters["id"]?.toIntOrNull()
-                        ?: return@put call.respond(HttpStatusCode.BadRequest)
-
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    } ?: return@put call.respond(HttpStatusCode.Forbidden)
-
-                val hasAccess =
-                    transaction {
-                        IncidentProviderConfigs
-                            .selectAll()
-                            .where {
-                                (IncidentProviderConfigs.id eq configId) and
-                                    (IncidentProviderConfigs.organizationId eq organizationId)
-                            }.count() > 0
-                    }
-
-                if (!hasAccess) return@put call.respond(HttpStatusCode.NotFound)
-
-                val request = call.receive<List<UpsertRoutingRuleRequest>>()
-
-                transaction {
-                    // Delete existing rules for this provider
-                    IncidentRoutingRules.deleteWhere {
-                        providerConfigId eq configId
-                    }
-
-                    // Insert new rules
-                    request.forEach { rule ->
-                        IncidentRoutingRules.insert {
-                            it[IncidentRoutingRules.providerConfigId] = configId
-                            it[IncidentRoutingRules.alertSource] = rule.alertSource
-                            it[IncidentRoutingRules.alertType] = rule.alertType
-                            it[IncidentRoutingRules.incidentSeverity] = rule.incidentSeverity
-                            it[IncidentRoutingRules.createdAt] = Clock.System.now()
-                            it[IncidentRoutingRules.updatedAt] = Clock.System.now()
-                        }
-                    }
-                }
-
-                call.respond(HttpStatusCode.OK)
-            }
+            put("/{id}/rules") { handleUpsertRoutingRules() }
 
             // Get event log
-            get("/{id}/events") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
-                val configId =
-                    call.parameters["id"]?.toIntOrNull()
-                        ?: return@get call.respond(HttpStatusCode.BadRequest)
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+            get("/{id}/events") { handleGetEventLog() }
+        }
+    }
+}
 
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    } ?: return@get call.respond(HttpStatusCode.Forbidden)
+private suspend fun io.ktor.server.routing.RoutingContext.handleCreateProviderConfig() {
+    val principal = call.principal<JWTPrincipal>()!!
+    val userId = principal.payload.getClaim("userId").asInt()
 
-                val hasAccess =
-                    transaction {
-                        IncidentProviderConfigs
-                            .selectAll()
-                            .where {
-                                (IncidentProviderConfigs.id eq configId) and
-                                    (IncidentProviderConfigs.organizationId eq organizationId)
-                            }.count() > 0
-                    }
+    val organizationId =
+        transaction {
+            Memberships
+                .selectAll()
+                .where { Memberships.user_id eq userId }
+                .firstOrNull()
+                ?.get(Memberships.organization_id)
+        } ?: return call.respond(HttpStatusCode.Forbidden)
 
-                if (!hasAccess) return@get call.respond(HttpStatusCode.NotFound)
+    val request = call.receive<CreateProviderConfigRequest>()
 
-                val events =
-                    transaction {
-                        IncidentEventLog
-                            .selectAll()
-                            .where { IncidentEventLog.providerConfigId eq configId }
-                            .orderBy(IncidentEventLog.createdAt to SortOrder.DESC)
-                            .limit(limit)
-                            .map { row ->
-                                EventLogResponse(
-                                    id = row[IncidentEventLog.id].value,
-                                    alertSource = row[IncidentEventLog.alertSource],
-                                    deduplicationKey = row[IncidentEventLog.deduplicationKey],
-                                    incidentSeverity = row[IncidentEventLog.incidentSeverity],
-                                    incidentStatus = row[IncidentEventLog.incidentStatus],
-                                    title = row[IncidentEventLog.title],
-                                    description = row[IncidentEventLog.description],
-                                    providerIncidentId = row[IncidentEventLog.providerIncidentId],
-                                    success = row[IncidentEventLog.success],
-                                    errorMessage = row[IncidentEventLog.errorMessage],
-                                    createdAt = row[IncidentEventLog.createdAt].toEpochMilliseconds()
-                                )
-                            }
-                    }
+    val configId =
+        transaction {
+            // Custom SQL for JSONB insertion
+            val jsonString = request.configJson.toString()
+            val sql =
+                """
+                INSERT INTO incident_provider_configs
+                (organization_id, provider_type, name, api_key, config_json, enabled, created_at, updated_at)
+                VALUES (?, ?, ?, ?, CAST(? AS JSONB), ?, CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP))
+                RETURNING id
+                """.trimIndent()
 
-                call.respond(events)
+            val now = Clock.System.now()
+            val nowStr = now.toString()
+
+            var resultId: Int? = null
+            TransactionManager.current().exec(
+                sql,
+                listOf(
+                    IntegerColumnType() to organizationId,
+                    VarCharColumnType(PROVIDER_TYPE_MAX_LENGTH) to request.providerType,
+                    VarCharColumnType(PROVIDER_NAME_MAX_LENGTH) to request.name,
+                    TextColumnType() to request.apiKey,
+                    TextColumnType() to jsonString,
+                    BooleanColumnType() to true,
+                    TextColumnType() to nowStr,
+                    TextColumnType() to nowStr
+                )
+            ) { rs ->
+                if (rs.next()) {
+                    resultId = rs.getInt(1)
+                }
+            }
+
+            resultId ?: throw Exception("Failed to insert provider config")
+        }
+
+    call.respond(HttpStatusCode.Created, mapOf("id" to configId))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateProviderConfig() {
+    val principal = call.principal<JWTPrincipal>()!!
+    val userId = principal.payload.getClaim("userId").asInt()
+    val configId =
+        call.parameters["id"]?.toIntOrNull()
+            ?: return call.respond(HttpStatusCode.BadRequest)
+
+    val organizationId =
+        transaction {
+            Memberships
+                .selectAll()
+                .where { Memberships.user_id eq userId }
+                .firstOrNull()
+                ?.get(Memberships.organization_id)
+        } ?: return call.respond(HttpStatusCode.Forbidden)
+
+    val request = call.receive<UpdateProviderConfigRequest>()
+
+    val updated =
+        transaction {
+            val exists =
+                IncidentProviderConfigs
+                    .selectAll()
+                    .where {
+                        (IncidentProviderConfigs.id eq configId) and
+                            (IncidentProviderConfigs.organizationId eq organizationId)
+                    }.count() > 0
+
+            if (!exists) return@transaction false
+
+            // Build update SQL dynamically based on what's provided
+            val setClauses = mutableListOf<String>()
+            val params = mutableListOf<Pair<IColumnType<*>, Any?>>()
+
+            request.name?.let {
+                setClauses.add("name = ?")
+                params.add(VarCharColumnType(PROVIDER_NAME_MAX_LENGTH) to it)
+            }
+            request.apiKey?.let {
+                setClauses.add("api_key = ?")
+                params.add(TextColumnType() to it)
+            }
+            request.configJson?.let {
+                setClauses.add("config_json = CAST(? AS JSONB)")
+                params.add(TextColumnType() to it.toString())
+            }
+            request.enabled?.let {
+                setClauses.add("enabled = ?")
+                params.add(BooleanColumnType() to it)
+            }
+
+            if (setClauses.isNotEmpty()) {
+                setClauses.add("updated_at = CAST(? AS TIMESTAMP)")
+                params.add(TextColumnType() to Clock.System.now().toString())
+                params.add(IntegerColumnType() to configId)
+
+                val updateSql =
+                    """
+                    UPDATE incident_provider_configs
+                    SET ${setClauses.joinToString(", ")}
+                    WHERE id = ?
+                    """.trimIndent()
+
+                TransactionManager.current().exec(updateSql, params) {}
+            }
+
+            true
+        }
+
+    if (updated) {
+        call.respond(HttpStatusCode.OK)
+    } else {
+        call.respond(HttpStatusCode.NotFound)
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteProviderConfig() {
+    val principal = call.principal<JWTPrincipal>()!!
+    val userId = principal.payload.getClaim("userId").asInt()
+    val configId =
+        call.parameters["id"]?.toIntOrNull()
+            ?: return call.respond(HttpStatusCode.BadRequest)
+
+    val organizationId =
+        transaction {
+            Memberships
+                .selectAll()
+                .where { Memberships.user_id eq userId }
+                .firstOrNull()
+                ?.get(Memberships.organization_id)
+        } ?: return call.respond(HttpStatusCode.Forbidden)
+
+    val deleted =
+        transaction {
+            IncidentProviderConfigs.deleteWhere {
+                (id eq configId) and (IncidentProviderConfigs.organizationId eq organizationId)
+            } > 0
+        }
+
+    if (deleted) {
+        call.respond(HttpStatusCode.OK)
+    } else {
+        call.respond(HttpStatusCode.NotFound)
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleUpsertRoutingRules() {
+    val principal = call.principal<JWTPrincipal>()!!
+    val userId = principal.payload.getClaim("userId").asInt()
+    val configId =
+        call.parameters["id"]?.toIntOrNull()
+            ?: return call.respond(HttpStatusCode.BadRequest)
+
+    val organizationId =
+        transaction {
+            Memberships
+                .selectAll()
+                .where { Memberships.user_id eq userId }
+                .firstOrNull()
+                ?.get(Memberships.organization_id)
+        } ?: return call.respond(HttpStatusCode.Forbidden)
+
+    val hasAccess =
+        transaction {
+            IncidentProviderConfigs
+                .selectAll()
+                .where {
+                    (IncidentProviderConfigs.id eq configId) and
+                        (IncidentProviderConfigs.organizationId eq organizationId)
+                }.count() > 0
+        }
+
+    if (!hasAccess) return call.respond(HttpStatusCode.NotFound)
+
+    val request = call.receive<List<UpsertRoutingRuleRequest>>()
+
+    transaction {
+        // Delete existing rules for this provider
+        IncidentRoutingRules.deleteWhere {
+            providerConfigId eq configId
+        }
+
+        // Insert new rules
+        request.forEach { rule ->
+            IncidentRoutingRules.insert {
+                it[IncidentRoutingRules.providerConfigId] = configId
+                it[IncidentRoutingRules.alertSource] = rule.alertSource
+                it[IncidentRoutingRules.alertType] = rule.alertType
+                it[IncidentRoutingRules.incidentSeverity] = rule.incidentSeverity
+                it[IncidentRoutingRules.createdAt] = Clock.System.now()
+                it[IncidentRoutingRules.updatedAt] = Clock.System.now()
             }
         }
     }
+
+    call.respond(HttpStatusCode.OK)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleGetEventLog() {
+    val principal = call.principal<JWTPrincipal>()!!
+    val userId = principal.payload.getClaim("userId").asInt()
+    val configId =
+        call.parameters["id"]?.toIntOrNull()
+            ?: return call.respond(HttpStatusCode.BadRequest)
+    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_INCIDENT_PAGE_LIMIT
+    if (limit <= 0) {
+        throw BadRequestException("limit must be a positive integer")
+    }
+
+    val organizationId =
+        transaction {
+            Memberships
+                .selectAll()
+                .where { Memberships.user_id eq userId }
+                .firstOrNull()
+                ?.get(Memberships.organization_id)
+        } ?: return call.respond(HttpStatusCode.Forbidden)
+
+    val hasAccess =
+        transaction {
+            IncidentProviderConfigs
+                .selectAll()
+                .where {
+                    (IncidentProviderConfigs.id eq configId) and
+                        (IncidentProviderConfigs.organizationId eq organizationId)
+                }.count() > 0
+        }
+
+    if (!hasAccess) return call.respond(HttpStatusCode.NotFound)
+
+    val events =
+        transaction {
+            IncidentEventLog
+                .selectAll()
+                .where { IncidentEventLog.providerConfigId eq configId }
+                .orderBy(IncidentEventLog.createdAt to SortOrder.DESC)
+                .limit(limit)
+                .map { row ->
+                    EventLogResponse(
+                        id = row[IncidentEventLog.id].value,
+                        alertSource = row[IncidentEventLog.alertSource],
+                        deduplicationKey = row[IncidentEventLog.deduplicationKey],
+                        incidentSeverity = row[IncidentEventLog.incidentSeverity],
+                        incidentStatus = row[IncidentEventLog.incidentStatus],
+                        title = row[IncidentEventLog.title],
+                        description = row[IncidentEventLog.description],
+                        providerIncidentId = row[IncidentEventLog.providerIncidentId],
+                        success = row[IncidentEventLog.success],
+                        errorMessage = row[IncidentEventLog.errorMessage],
+                        createdAt = row[IncidentEventLog.createdAt].toEpochMilliseconds()
+                    )
+                }
+        }
+
+    call.respond(events)
 }
 
 @Serializable

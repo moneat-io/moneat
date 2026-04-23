@@ -18,9 +18,9 @@ package com.moneat.datadog.routes
 
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.services.DatadogJfrFlamegraphService
+import com.moneat.datadog.services.DatadogPprofFlamegraphService
 import com.moneat.datadog.services.ProfileIngestionService
 import com.moneat.datadog.services.ProfileStorageService
-import com.moneat.datadog.services.DatadogPprofFlamegraphService
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -42,6 +42,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import com.moneat.utils.suspendRunCatching
 
 private const val DEFAULT_LIMIT = 50
 private const val MAX_LIMIT = 200
@@ -235,7 +236,7 @@ private fun isGzip(data: ByteArray): Boolean {
 private fun parseSentryProfileToFrames(
     data: ByteArray,
 ): Map<String, Any> {
-    return try {
+    return suspendRunCatching {
         val root = profileJson.parseToJsonElement(
             String(data)
         ).jsonObject
@@ -320,7 +321,7 @@ private fun parseSentryProfileToFrames(
                 }
             )
         }
-    } catch (e: Exception) {
+    }.getOrElse { _ ->
         buildJsonObject { put("frames", buildJsonArray {}) }
     }
 }

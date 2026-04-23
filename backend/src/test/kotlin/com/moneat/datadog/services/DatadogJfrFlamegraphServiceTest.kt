@@ -16,9 +16,6 @@
 
 package com.moneat.datadog.services
 
-import java.io.ByteArrayOutputStream
-import java.nio.file.Files
-import java.util.zip.GZIPOutputStream
 import jdk.jfr.Event
 import jdk.jfr.Label
 import jdk.jfr.Name
@@ -26,6 +23,9 @@ import jdk.jfr.Recording
 import jdk.jfr.StackTrace
 import kotlinx.serialization.json.jsonArray
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.nio.file.Files
+import java.util.zip.GZIPOutputStream
 import kotlin.test.assertTrue
 
 class DatadogJfrFlamegraphServiceTest {

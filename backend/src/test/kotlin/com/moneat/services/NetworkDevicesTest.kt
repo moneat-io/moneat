@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-@file:Suppress("LargeClass")
-
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
@@ -34,8 +32,8 @@ import com.moneat.datadog.networkdevices.QueuedNdmFlowEntry
 import com.moneat.datadog.networkdevices.QueuedNdmPathEntry
 import com.moneat.datadog.networkdevices.QueuedNdmTrapEntry
 import com.moneat.testsupport.MockHttpServer
-import com.moneat.testsupport.TestOidConstants
 import com.moneat.testsupport.TestIpConstants
+import com.moneat.testsupport.TestOidConstants
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import io.lettuce.core.api.sync.RedisCommands

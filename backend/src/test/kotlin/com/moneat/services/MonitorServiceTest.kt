@@ -6,16 +6,17 @@ import com.moneat.config.EnvConfig
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
 import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
+import com.moneat.shared.models.HostAlertSettings
+import com.moneat.shared.models.HostAlertTemplateStates
+import com.moneat.shared.models.HostAlerts
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
-import com.moneat.shared.models.HostAlerts
-import com.moneat.shared.models.HostAlertSettings
-import com.moneat.shared.models.HostAlertTemplateStates
-import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
 import io.mockk.coEvery
@@ -23,12 +24,11 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.*
-import kotlinx.coroutines.runBlocking
-import com.moneat.testsupport.TestDatabaseHelper
 
 class MonitorServiceTest {
     private val service = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())

@@ -17,7 +17,6 @@
 package com.moneat.datadog.services
 
 import com.moneat.datadog.decompression.DecompressionService
-import java.nio.file.Files
 import jdk.jfr.consumer.RecordedFrame
 import jdk.jfr.consumer.RecordedStackTrace
 import jdk.jfr.consumer.RecordingFile
@@ -27,10 +26,13 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
+import java.nio.file.Files
 
 private val logger = KotlinLogging.logger {}
 
 object DatadogJfrFlamegraphService {
+
+    private const val JFR_MAGIC_LAST_BYTE_INDEX = 3
 
     private data class MutableFrame(
         val name: String,
@@ -119,7 +121,7 @@ object DatadogJfrFlamegraphService {
             data[0] == JFR_MAGIC[0] &&
             data[1] == JFR_MAGIC[1] &&
             data[2] == JFR_MAGIC[2] &&
-            data[3] == JFR_MAGIC[3]
+            data[JFR_MAGIC_LAST_BYTE_INDEX] == JFR_MAGIC[JFR_MAGIC_LAST_BYTE_INDEX]
     }
 
     private fun toJson(frame: MutableFrame): JsonObject = buildJsonObject {

@@ -24,6 +24,8 @@ import java.util.zip.InflaterInputStream
 
 private const val BUFFER_SIZE = 8192
 private const val MAX_DECOMPRESSED_SIZE = 50 * 1024 * 1024 // 50 MB
+private const val ZSTD_MAGIC_BYTE_COUNT = 4
+private const val ZSTD_MAGIC_LAST_BYTE_IDX = 3
 
 object DecompressionService {
 
@@ -40,8 +42,8 @@ object DecompressionService {
         if (data.size >= 2 && data[0] == 0x1F.toByte() && data[1] == 0x8B.toByte()) {
             return decompressGzip(data)
         }
-        if (data.size >= 4 && data[0] == 0x28.toByte() && data[1] == 0xB5.toByte() &&
-            data[2] == 0x2F.toByte() && data[3] == 0xFD.toByte()
+        if (data.size >= ZSTD_MAGIC_BYTE_COUNT && data[0] == 0x28.toByte() && data[1] == 0xB5.toByte() &&
+            data[2] == 0x2F.toByte() && data[ZSTD_MAGIC_LAST_BYTE_IDX] == 0xFD.toByte()
         ) {
             return decompressZstd(data)
         }

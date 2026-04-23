@@ -16,8 +16,6 @@
 
 package com.moneat.analytics.services
 
-import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.analytics.models.AnalyticsFilter
 import com.moneat.analytics.models.AnalyticsOverviewResponse
 import com.moneat.analytics.models.BreakdownResponse
@@ -26,6 +24,10 @@ import com.moneat.analytics.models.FunnelResponse
 import com.moneat.analytics.models.FunnelStep
 import com.moneat.analytics.models.RealtimeResponse
 import com.moneat.analytics.models.TimeseriesPoint
+import com.moneat.config.ClickHouseClient
+import com.moneat.config.RedisConfig
+import com.moneat.utils.suspendRunCatching
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -36,6 +38,10 @@ import java.time.format.DateTimeFormatter
 
 private val logger = KotlinLogging.logger {}
 private val jsonParser = Json { ignoreUnknownKeys = true }
+
+private const val ERROR_TRUNCATE_LENGTH = 500
+private const val PERCENTAGE_MULTIPLIER = 100
+private const val DEFAULT_LIMIT = 100
 
 /**
  * Query builder for analytics dashboard endpoints.
@@ -157,7 +163,7 @@ class AnalyticsService {
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
         dimension: String,
-        limit: Int = 100,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse {
         val (column, table, alias) = resolveDimension(dimension)
         val timeColumn = if (alias == "s") "hour" else "timestamp"
@@ -193,7 +199,7 @@ class AnalyticsService {
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
-        limit: Int = 100,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse = getBreakdown(projectId, dateFrom, dateTo, filters, "pathname", limit)
 
     suspend fun getEntryPages(
@@ -201,7 +207,7 @@ class AnalyticsService {
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
-        limit: Int = 100,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse = getBreakdown(projectId, dateFrom, dateTo, filters, "entry_page", limit)
 
     suspend fun getExitPages(
@@ -209,17 +215,18 @@ class AnalyticsService {
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
-        limit: Int = 100,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse = getBreakdown(projectId, dateFrom, dateTo, filters, "exit_page", limit)
 
     // --- Realtime ---
 
     fun getRealtime(projectId: Long): RealtimeResponse {
         val key = "${AnalyticsIngestionWorker.REALTIME_KEY_PREFIX}$projectId"
-        val count = try {
+        val count = suspendRunCatching {
             RedisConfig.sync().pfcount(key)
-        } catch (e: Exception) {
-            logger.debug { "Failed to read realtime counter: ${e.message}" }
+        }.getOrElse { e ->
+            val errorMsg = e.toString().take(ERROR_TRUNCATE_LENGTH)
+            logger.debug { "Failed to read realtime counter: $errorMsg" }
             0L
         }
         return RealtimeResponse(count)
@@ -281,7 +288,7 @@ class AnalyticsService {
                 step
             } else {
                 val prev = funnelSteps[i - 1].visitors
-                val dropoff = if (prev > 0) ((prev - step.visitors).toDouble() / prev * 100) else 0.0
+                val dropoff = if (prev > 0) ((prev - step.visitors).toDouble() / prev * PERCENTAGE_MULTIPLIER) else 0.0
                 step.copy(dropoff = dropoff)
             }
         }
@@ -295,7 +302,7 @@ class AnalyticsService {
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
-        limit: Int = 100,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse {
         val where = buildWhere(projectId, dateFrom, dateTo, filters, "e", "timestamp")
         val sql = """
@@ -416,7 +423,7 @@ class AnalyticsService {
             try {
                 val row = jsonParser.parseToJsonElement(line).jsonObject
                 mapper(row)
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
                 logger.debug { "Failed to parse row: ${e.message}" }
                 null
             }

@@ -29,6 +29,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -39,18 +40,22 @@ private val logger = KotlinLogging.logger {}
  */
 class BigQueryHandler : DataSourceHandler {
 
+    companion object {
+        private const val BIGQUERY_MAX_RESULTS = 10_000L
+    }
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val projectId = request.projectId ?: request.host.ifBlank { null }
             ?: return TestConnectionResult(false, "Project ID is required")
         val serviceAccountJson = request.serviceAccountJson
             ?: return TestConnectionResult(false, "Service account JSON is required")
 
-        return try {
+        return suspendRunCatching {
             val bigQuery = createBigQueryClient(projectId, serviceAccountJson)
             val queryConfig = QueryJobConfiguration.newBuilder("SELECT 1 AS test").build()
             bigQuery.query(queryConfig)
             TestConnectionResult(true, "Connected successfully")
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "BigQuery connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -73,16 +78,16 @@ class BigQueryHandler : DataSourceHandler {
 
         validateSqlQuery(query)
 
-        return try {
+        return suspendRunCatching {
             val bigQuery = createBigQueryClient(projectId, serviceAccountJson)
             val config = QueryJobConfiguration.newBuilder(query)
-                .setMaxResults(limit.toLong().coerceIn(1, 10000))
+                .setMaxResults(limit.toLong().coerceIn(1, BIGQUERY_MAX_RESULTS))
                 .build()
             val results = bigQuery.query(config)
             val schema = results.schema ?: return emptyList()
             val columns = schema.fields.map { it.name }
             results.values.toList().map { row -> rowToMap(row, columns) }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "BigQuery query failed" }
             emptyList()
         }
@@ -100,7 +105,7 @@ class BigQueryHandler : DataSourceHandler {
             ?: return emptyList()
         val dataset = databaseName ?: "INFORMATION_SCHEMA"
 
-        return try {
+        return suspendRunCatching {
             val bigQuery = createBigQueryClient(projectId, serviceAccountJson)
             val datasetId = validateBigQueryIdentifier(dataset.ifBlank { "INFORMATION_SCHEMA" })
             val validatedProjectId = validateBigQueryIdentifier(projectId)
@@ -120,7 +125,7 @@ class BigQueryHandler : DataSourceHandler {
                     description = ""
                 )
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "BigQuery schema fetch failed" }
             emptyList()
         }

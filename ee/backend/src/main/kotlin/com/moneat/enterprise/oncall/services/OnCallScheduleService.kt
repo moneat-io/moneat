@@ -33,6 +33,8 @@ import java.time.temporal.ChronoUnit
 import kotlin.time.Clock
 import kotlin.time.Instant
 
+private const val WEEKLY_ROTATION_DAYS = 7
+
 class OnCallScheduleService {
     fun getOnCallUsedSeats(organizationId: Int): Int =
         transaction {
@@ -185,12 +187,12 @@ class OnCallScheduleService {
                 when (rotationType) {
                     "DAILY" -> 1
 
-                    "WEEKLY" -> 7
+                    "WEEKLY" -> WEEKLY_ROTATION_DAYS
 
-                    "CUSTOM" -> 7
+                    "CUSTOM" -> WEEKLY_ROTATION_DAYS
 
                     // default to weekly for custom
-                    else -> 7
+                    else -> WEEKLY_ROTATION_DAYS
                 }
 
             // Calculate days since epoch using schedule timezone and handoffTime

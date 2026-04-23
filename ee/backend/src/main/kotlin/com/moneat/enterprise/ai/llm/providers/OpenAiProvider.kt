@@ -84,7 +84,16 @@ class OpenAiProvider : LlmProvider {
 
     @Serializable data class OpenAiChoice(val message: OpenAiMsg, val finish_reason: String? = null)
 
-    @Serializable data class OpenAiUsage(val prompt_tokens: Int = 0, val completion_tokens: Int = 0, val total_tokens: Int = 0)
+    @Serializable
+    data class OpenAiUsage(
+        val prompt_tokens: Int = 0,
+        val completion_tokens: Int = 0,
+        val total_tokens: Int = 0,
+    )
 
-    @Serializable data class OpenAiResponse(val choices: List<OpenAiChoice> = emptyList(), val usage: OpenAiUsage? = null)
+    @Serializable
+    data class OpenAiResponse(
+        val choices: List<OpenAiChoice> = emptyList(),
+        val usage: OpenAiUsage? = null,
+    )
 }

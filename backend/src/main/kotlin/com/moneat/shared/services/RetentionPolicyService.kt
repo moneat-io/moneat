@@ -31,6 +31,8 @@ class RetentionPolicyService(
 ) {
     companion object {
         const val RETENTION_CACHE_TTL_SECONDS = 300L
+        private const val FREE_TIER_LOG_RETENTION_DAYS = 3
+        private const val DEFAULT_ANALYTICS_RETENTION_DAYS = 1095
     }
 
     suspend fun getRetentionDaysForOrganization(organizationId: Int): Int {
@@ -110,7 +112,7 @@ class RetentionPolicyService(
             logRetentionByOrg[orgId] =
                 runCatching {
                     getLogRetentionDaysForOrganization(orgId)
-                }.getOrDefault(3) // Default to FREE tier log retention (3 days)
+                }.getOrDefault(FREE_TIER_LOG_RETENTION_DAYS) // Default to FREE tier log retention
         }
         return logRetentionByOrg
     }
@@ -164,7 +166,7 @@ class RetentionPolicyService(
         for (orgId in orgIds) {
             analyticsRetentionByOrg[orgId] =
                 runCatching { getAnalyticsRetentionDaysForOrganization(orgId) }
-                    .getOrDefault(1095) // Default 3 years for analytics
+                    .getOrDefault(DEFAULT_ANALYTICS_RETENTION_DAYS) // Default 3 years for analytics
         }
         return analyticsRetentionByOrg
     }

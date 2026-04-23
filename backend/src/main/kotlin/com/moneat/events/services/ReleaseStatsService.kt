@@ -17,18 +17,19 @@
 package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
-import io.ktor.client.statement.bodyAsText
 import com.moneat.events.models.ReleaseDetailStats
 import com.moneat.events.models.ReleaseListResponse
 import com.moneat.shared.services.CacheService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import io.ktor.client.statement.bodyAsText
 import io.sentry.ISpan
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -44,11 +45,16 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
     private val clickhouseDb: String get() = queryHelper.clickhouseDb
     private val json get() = queryHelper.json
 
+    companion object {
+        private const val RELEASES_CACHE_TTL_SECONDS = 120L
+        private const val RELEASE_STATS_INTERVAL_MINUTES = 360
+    }
+
     suspend fun getReleases(
         projectId: Long,
         parentSpan: ISpan? = null
     ): List<ReleaseListResponse> =
-        CacheService.cached("cache:releases:$projectId", 120, parentSpan) {
+        CacheService.cached("cache:releases:$projectId", RELEASES_CACHE_TTL_SECONDS, parentSpan) {
             val retentionDays = queryHelper.getProjectRetentionDays(projectId)
             val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
             val releasesQuery =
@@ -67,7 +73,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
                 """.trimIndent()
 
-            try {
+            suspendRunCatching {
                 val releases = executeReleasesListQuery(releasesQuery, parentSpan)
                 val versions = releases.map { it.version }
                 val newIssueCountByVersion = getNewIssueCountForReleases(projectId, versions, retentionDays, parentSpan)
@@ -83,7 +89,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                         userCount = r.userCount
                     )
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to fetch releases for project $projectId" }
                 emptyList()
             }
@@ -108,7 +114,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(releasesQuery)
             val body = response.bodyAsText()
             if (body.isBlank()) return null
@@ -122,10 +128,10 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             val newIssues = getNewIssueCountForRelease(projectId, version, retentionDays)
             val resolvedIssues = 0L
             val crashFreeSessionRate = getCrashFreeRateForRelease(projectId, version, retentionDays)
-            // TODO: implement getCrashFreeUserRateForRelease when user-based query exists
+            // Crash-free user rate stays null until a user-based ClickHouse query is implemented.
             val crashFreeUserRate: Double? = null
 
-            val intervalMinutes = 360
+            val intervalMinutes = RELEASE_STATS_INTERVAL_MINUTES
             val eventsTimelineQuery =
                 """
                 SELECT
@@ -175,7 +181,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 eventsByLevel = queryHelper.executeMapQuery(eventsByLevelQuery, "level"),
                 topIssues = queryHelper.executeTopIssuesQuery(topIssuesQuery)
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch release stats for $version" }
             null
         }
@@ -295,14 +301,14 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 AND ${queryHelper.timestampRetentionClause("started", retentionDays)}
             FORMAT JSONEachRow
             """.trimIndent()
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (body.isBlank()) return null
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: return null
             if (rate.isNaN() || rate.isInfinite()) null else rate
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             null
         }
     }

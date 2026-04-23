@@ -17,6 +17,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 private val monitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 private val agentApiKeyService = AgentApiKeyService()
+private const val KEY_LOG_PREFIX_LENGTH = 4
 
 class ListHostsTool : McpTool {
     override val name = "list_hosts"
@@ -86,7 +87,7 @@ class CreateAgentKeyTool : McpTool {
         )
         return textResult(
             "Agent API key created: ${response.name} " +
-                "(id=${response.id}, key=${response.key.take(4)}***)"
+                "(id=${response.id}, key=${response.key.take(KEY_LOG_PREFIX_LENGTH)}***)"
         )
     }
 }

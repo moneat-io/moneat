@@ -1,6 +1,6 @@
 [versions]
-kotlin = "2.3.10"
-ktor = "3.4.1"
+kotlin = "2.3.20"
+ktor = "3.4.3"
 exposed = "1.1.1"
 logback = "1.5.32"
 hikari = "7.0.2"
@@ -8,7 +8,7 @@ kotlinx-datetime = "0.7.1-0.6.x-compat"
 junit = "6.0.3"
 testcontainers = "2.0.3"
 detekt = "1.23.8"
-shadow = "9.3.2"
+shadow = "9.4.1"
 jacoco = "0.8.14"
 opentelemetry = "1.60.1"
 opentelemetry-instrumentation = "2.1.0-alpha"
@@ -83,6 +83,7 @@ java-jwt = { module = "com.auth0:java-jwt", version = "4.5.1" }
 msgpack-core = { module = "org.msgpack:msgpack-core", version = "0.9.11" }
 zstd-jni = { module = "com.github.luben:zstd-jni", version = "1.5.7-7" }
 protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "4.34.0" }
+opentelemetry-proto = { module = "io.opentelemetry.proto:opentelemetry-proto", version = "1.10.0-alpha" }
 jsonpath = { module = "com.jayway.jsonpath:json-path", version = "3.0.0" }
 
 # Environment
@@ -126,7 +127,7 @@ snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "4.0.2" }
 
 # Non-JDBC data clients / SDKs
 mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version = "5.6.4" }
-aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.36" }
+aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.62" }
 google-cloud-bigquery = { module = "com.google.cloud:google-cloud-bigquery", version = "2.61.0" }
 
 # Detekt

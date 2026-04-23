@@ -21,6 +21,7 @@ import com.moneat.shared.models.AlertNotificationPreferences
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -30,7 +31,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 class AlertNotificationPreferencesServiceTest {
     private val service = AlertNotificationPreferencesService()

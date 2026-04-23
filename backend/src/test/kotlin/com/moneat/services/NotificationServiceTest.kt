@@ -25,6 +25,7 @@ import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -34,7 +35,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Clock
-import com.moneat.testsupport.TestDatabaseHelper
 
 class NotificationServiceTest {
     companion object {
@@ -112,7 +112,7 @@ class NotificationServiceTest {
             try {
                 val event =
                     SentryEvent(
-                        event_id = "evt-1",
+                        eventId = "evt-1",
                         timestamp = Clock.System.now().toEpochMilliseconds() / 1000.0,
                         level = "error",
                         message = "NullPointerException in checkout flow",
@@ -123,7 +123,7 @@ class NotificationServiceTest {
                 waitForEmailRows(expectedCount = 1)
 
                 // Second issue alert for the same project/user should be throttled by alert frequency.
-                notificationService.onNewIssue(projectId, "1002", event.copy(event_id = "evt-2"))
+                notificationService.onNewIssue(projectId, "1002", event.copy(eventId = "evt-2"))
                 waitForEmailRows(expectedCount = 1)
 
                 val sentRows =

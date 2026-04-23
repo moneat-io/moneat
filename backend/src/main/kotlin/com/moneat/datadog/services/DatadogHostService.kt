@@ -19,8 +19,6 @@ package com.moneat.datadog.services
 import com.moneat.datadog.models.DatadogHostMeta
 import com.moneat.datadog.models.DatadogHostMetadata
 import com.moneat.datadog.models.DatadogIntakePayload
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.minutes
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -29,15 +27,18 @@ import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.and
-import org.postgresql.util.PGobject
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import org.postgresql.util.PGobject
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private const val BYTES_PER_KB = 1024L
@@ -45,13 +46,13 @@ private const val BYTES_PER_KB = 1024L
 /** Parse cpu_cores and processor name from the gohai JSON string sent by the DD agent. */
 private fun parseCpuCoresFromGohai(gohai: String): Int {
     if (gohai.isBlank()) return 0
-    return try {
+    return suspendRunCatching {
         val root = Json.parseToJsonElement(gohai).jsonObject
         val cpu = root["cpu"]?.jsonObject ?: return 0
         cpu["cpu_logical_processors"]?.jsonPrimitive?.content?.toIntOrNull()
             ?: cpu["cpu_cores"]?.jsonPrimitive?.content?.toIntOrNull()
             ?: 0
-    } catch (_: Exception) {
+    }.getOrElse { _ ->
         0
     }
 }
@@ -59,25 +60,25 @@ private fun parseCpuCoresFromGohai(gohai: String): Int {
 /** Parse total memory in KB from the gohai JSON string sent by the DD agent. */
 private fun parseMemoryKbFromGohai(gohai: String): Long {
     if (gohai.isBlank()) return 0L
-    return try {
+    return suspendRunCatching {
         val root = Json.parseToJsonElement(gohai).jsonObject
         val memory = root["memory"]?.jsonObject ?: return 0L
         val totalBytes = memory["total"]?.jsonPrimitive?.content?.toLongOrNull() ?: return 0L
         totalBytes / BYTES_PER_KB
-    } catch (_: Exception) {
+    }.getOrElse { _ ->
         0L
     }
 }
 
 private fun parseProcessorFromGohai(gohai: String): String {
     if (gohai.isBlank()) return ""
-    return try {
+    return suspendRunCatching {
         val root = Json.parseToJsonElement(gohai).jsonObject
         val cpu = root["cpu"]?.jsonObject ?: return ""
         cpu["model_name"]?.jsonPrimitive?.content
             ?: cpu["cpu_brand"]?.jsonPrimitive?.content
             ?: ""
-    } catch (_: Exception) {
+    }.getOrElse { _ ->
         ""
     }
 }
@@ -396,9 +397,9 @@ object DatadogHostService {
 
     private fun rowToDdHostInfo(row: org.jetbrains.exposed.v1.core.ResultRow): DdHostInfo {
         val tagsStr = row[DdHostsTable.tags]
-        val tags = try {
+        val tags = suspendRunCatching {
             json.decodeFromString<Map<String, String>>(tagsStr)
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             emptyMap()
         }
         val lastSeenAt = row[DdHostsTable.lastSeenAt]

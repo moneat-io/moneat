@@ -28,9 +28,9 @@ import com.moneat.events.models.StackFrame
 import com.moneat.events.models.StackTrace
 import com.moneat.events.models.UserInfo
 import com.moneat.events.repositories.EventRepository
-import com.moneat.testsupport.TestIpConstants
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.services.EventService
+import com.moneat.testsupport.TestIpConstants
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.serialization.json.Json
@@ -67,6 +67,7 @@ class EventServiceTest {
     private val validPublicKey = "test-public-key-valid"
     private val inactivePublicKey = "test-public-key-inactive"
 
+    /** Constructs [EventService] with default and scenario-specific [EventRepository] mocks. */
     @BeforeTest
     fun setup() {
         eventService = EventService(eventRepository = eventRepository)
@@ -123,6 +124,7 @@ class EventServiceTest {
 
     // ──── EVENT FINGERPRINTING TESTS (P0) ────
 
+    /** Asserts identical primary exception metadata yields the same deduplication fingerprint. */
     @Test
     fun `same error with identical exception generates same fingerprint for deduplication`() {
         val event1 =
@@ -150,46 +152,40 @@ class EventServiceTest {
             )
 
         val fingerprint1 =
-            event1.let {
-                it.exception?.let { exc ->
-                    val firstException = exc.values.firstOrNull()
-                    listOf(
-                        firstException?.type,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.function,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.filename
-                    )
-                        .filterNotNull()
-                } ?: emptyList()
-            }
+            event1.exception?.let { exc ->
+                val firstException = exc.values.firstOrNull()
+                listOf(
+                    firstException?.type,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.function,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.filename
+                ).filterNotNull()
+            } ?: emptyList()
 
         val fingerprint2 =
-            event2.let {
-                it.exception?.let { exc ->
-                    val firstException = exc.values.firstOrNull()
-                    listOf(
-                        firstException?.type,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.function,
-                        firstException
-                            ?.stacktrace
-                            ?.frames
-                            ?.lastOrNull()
-                            ?.filename
-                    )
-                        .filterNotNull()
-                } ?: emptyList()
-            }
+            event2.exception?.let { exc ->
+                val firstException = exc.values.firstOrNull()
+                listOf(
+                    firstException?.type,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.function,
+                    firstException
+                        ?.stacktrace
+                        ?.frames
+                        ?.lastOrNull()
+                        ?.filename
+                ).filterNotNull()
+            } ?: emptyList()
 
         assertEquals(fingerprint1, fingerprint2, "Same errors should generate identical fingerprints for deduplication")
     }
@@ -338,7 +334,7 @@ class EventServiceTest {
                 platform = "javascript"
             )
 
-        assertNotNull(event.event_id, "Event ID should be present")
+        assertNotNull(event.eventId, "Event ID should be present")
         assertNotNull(event.exception, "Exception should be present")
         assertEquals("error", event.level, "Level should be error")
         assertEquals("javascript", event.platform, "Platform should be set")
@@ -365,7 +361,7 @@ class EventServiceTest {
                 id = "user-123",
                 email = "test@example.com",
                 username = "testuser",
-                ip_address = TestIpConstants.IP_1
+                ipAddress = TestIpConstants.IP_1
             )
 
         val tags =
@@ -486,7 +482,7 @@ class EventServiceTest {
                 id = userId,
                 email = userEmail,
                 username = username,
-                ip_address = ipAddress
+                ipAddress = ipAddress
             )
 
         val event = createSentryEvent(user = userInfo)
@@ -494,7 +490,7 @@ class EventServiceTest {
         assertEquals(userId, event.user?.id, "User ID should be extracted")
         assertEquals(userEmail, event.user?.email, "User email should be extracted")
         assertEquals(username, event.user?.username, "Username should be extracted")
-        assertEquals(ipAddress, event.user?.ip_address, "IP address should be extracted")
+        assertEquals(ipAddress, event.user?.ipAddress, "IP address should be extracted")
     }
 
     @Test
@@ -694,7 +690,7 @@ class EventServiceTest {
                 .stacktrace
                 ?.frames
                 ?.get(0)
-                ?.in_app
+                ?.inApp
         )
         assertEquals(
             false,
@@ -702,7 +698,7 @@ class EventServiceTest {
                 .stacktrace
                 ?.frames
                 ?.get(2)
-                ?.in_app
+                ?.inApp
         )
     }
 
@@ -744,7 +740,7 @@ class EventServiceTest {
             }
 
         return SentryEvent(
-            event_id = eventId ?: UUID.randomUUID().toString(),
+            eventId = eventId ?: UUID.randomUUID().toString(),
             timestamp = timestamp,
             level = level,
             message = message,
@@ -772,8 +768,8 @@ class EventServiceTest {
             filename = filename,
             function = function,
             lineno = lineno,
-            in_app = inApp,
-            abs_path = "/app/$filename"
+            inApp = inApp,
+            absPath = "/app/$filename"
         )
     }
 }

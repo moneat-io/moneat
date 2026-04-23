@@ -17,6 +17,7 @@
 package com.moneat.logs.services
 
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.suspendRunCatching
 
 /**
  * Datadog-compatible log search query parser.
@@ -114,7 +115,7 @@ class LogQueryParser {
 
         val errors = mutableListOf<String>()
 
-        try {
+        suspendRunCatching {
             val tokens = tokenize(query)
 
             // Debug logging (remove after testing)
@@ -129,7 +130,7 @@ class LogQueryParser {
 
             val node = parseExpression(tokens)
             return ParsedQuery(node, errors)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             errors.add("Parse error: ${e.message}")
             // Fallback to simple full-text search
             return ParsedQuery(
@@ -267,7 +268,13 @@ class LogQueryParser {
         // First, check if this token contains a field:value pattern with potential quoted value
         // Look ahead for colon
         var tempI = i
-        while (tempI < query.length && !query[tempI].isWhitespace() && query[tempI] != ')' && query[tempI] != ':' && query[tempI] != '"') {
+        while (
+            tempI < query.length &&
+            !query[tempI].isWhitespace() &&
+            query[tempI] != ')' &&
+            query[tempI] != ':' &&
+            query[tempI] != '"'
+        ) {
             tempI++
         }
 
@@ -417,48 +424,7 @@ class LogQueryParser {
                 QueryNode.FullTextNode(token.value, false, isPhrase = true)
             }
 
-            is Token.Field -> {
-                // Strip @ prefix if present
-                val field = if (token.name.startsWith('@')) token.name.substring(1) else token.name
-
-                if (token.isRange && token.rangeEnd != null) {
-                    QueryNode.RangeNode(field, token.value, token.rangeEnd)
-                } else {
-                    // Existence check: @field:* (value is exactly "*" and not quoted)
-                    if (token.value == "*" && !token.isQuoted) {
-                        // Special case: tags:MY_TAG — check tag key existence
-                        if (token.name == "tags") {
-                            return QueryNode.FullTextNode("*", true)
-                        }
-                        return QueryNode.ExistsNode(field)
-                    }
-
-                    // tags:MY_TAG syntax — tag key existence
-                    if (token.name == "tags") {
-                        return QueryNode.TagExistsNode(token.value)
-                    }
-
-                    // Numerical comparison operators: >N, >=N, <N, <=N (only for non-quoted values)
-                    if (!token.isQuoted) {
-                        val comparisonMatch = Regex("""^(>=|<=|>|<)(.+)$""").find(token.value)
-                        if (comparisonMatch != null) {
-                            val op = comparisonMatch.groupValues[1]
-                            val numValue = comparisonMatch.groupValues[2]
-                            return QueryNode.ComparisonNode(field, op, numValue)
-                        }
-                    }
-
-                    val isFullText = field == "*"
-                    // Quoted values are never treated as wildcards
-                    val isWildcard = !token.isQuoted && (token.value.contains('*') || token.value.contains('?'))
-
-                    if (isFullText) {
-                        QueryNode.FullTextNode(token.value, isWildcard, isPhrase = token.isQuoted)
-                    } else {
-                        QueryNode.FieldNode(field, token.value, isWildcard)
-                    }
-                }
-            }
+            is Token.Field -> parseFieldToken(token)
 
             is Token.FieldGroup -> {
                 // field:(val1 OR val2) — parse group tokens as values for this field
@@ -479,6 +445,44 @@ class LogQueryParser {
             else -> {
                 null
             }
+        }
+    }
+
+    /** Parses a single field token (e.g. `service:api`, `@field:*`, `tags:MY_TAG`). */
+    private fun parseFieldToken(token: Token.Field): QueryNode? {
+        val field = if (token.name.startsWith('@')) token.name.substring(1) else token.name
+
+        if (token.isRange && token.rangeEnd != null) {
+            return QueryNode.RangeNode(field, token.value, token.rangeEnd)
+        }
+
+        if (token.value == "*" && !token.isQuoted) {
+            if (token.name == "tags") {
+                return QueryNode.FullTextNode("*", true)
+            }
+            return QueryNode.ExistsNode(field)
+        }
+
+        if (token.name == "tags") {
+            return QueryNode.TagExistsNode(token.value)
+        }
+
+        if (!token.isQuoted) {
+            val comparisonMatch = Regex("""^(>=|<=|>|<)(.+)$""").find(token.value)
+            if (comparisonMatch != null) {
+                val op = comparisonMatch.groupValues[1]
+                val numValue = comparisonMatch.groupValues[2]
+                return QueryNode.ComparisonNode(field, op, numValue)
+            }
+        }
+
+        val isFullText = field == "*"
+        val isWildcard = !token.isQuoted && (token.value.contains('*') || token.value.contains('?'))
+
+        return if (isFullText) {
+            QueryNode.FullTextNode(token.value, isWildcard, isPhrase = token.isQuoted)
+        } else {
+            QueryNode.FieldNode(field, token.value, isWildcard)
         }
     }
 
@@ -646,7 +650,8 @@ class LogQueryParser {
                 val pattern = wildcardToLikePattern(value)
                 val escapedPattern = escapeFn(pattern)
                 "((has(tags, '$escapedField') AND tags['$escapedField'] ILIKE '$escapedPattern') OR " +
-                    "(has(resource_attributes, '$escapedField') AND resource_attributes['$escapedField'] ILIKE '$escapedPattern'))"
+                    "(has(resource_attributes, " +
+                    "'$escapedField') AND resource_attributes['$escapedField'] ILIKE '$escapedPattern'))"
             } else {
                 "((has(tags, '$escapedField') AND tags['$escapedField'] = '$escaped') OR " +
                     "(has(resource_attributes, '$escapedField') AND resource_attributes['$escapedField'] = '$escaped'))"
@@ -679,8 +684,11 @@ class LogQueryParser {
             "($fieldRef >= $minVal AND $fieldRef <= $maxVal)"
         } else {
             val escapedField = escapeFn(actualField)
-            "(has(tags, '$escapedField') AND toInt32OrNull(tags['$escapedField']) >= $minVal AND toInt32OrNull(tags['$escapedField']) <= $maxVal) OR " +
-                "(has(resource_attributes, '$escapedField') AND toInt32OrNull(resource_attributes['$escapedField']) >= $minVal AND toInt32OrNull(resource_attributes['$escapedField']) <= $maxVal)"
+            "(has(tags, '$escapedField') AND toInt32OrNull(tags['$escapedField']) >= $minVal AND " +
+                "toInt32OrNull(tags['$escapedField']) <= $maxVal) OR " +
+                "(has(resource_attributes, " +
+                "'$escapedField') AND toInt32OrNull(resource_attributes['$escapedField']) >= $minVal AND " +
+                "toInt32OrNull(resource_attributes['$escapedField']) <= $maxVal)"
         }
     }
 
@@ -718,11 +726,13 @@ class LogQueryParser {
             val escapedField = escapeFn(actualField)
             if (numVal != null) {
                 "(has(tags, '$escapedField') AND toFloat64OrNull(tags['$escapedField']) $operator $numVal) OR " +
-                    "(has(resource_attributes, '$escapedField') AND toFloat64OrNull(resource_attributes['$escapedField']) $operator $numVal)"
+                    "(has(resource_attributes, " +
+                    "'$escapedField') AND toFloat64OrNull(resource_attributes['$escapedField']) $operator $numVal)"
             } else {
                 val escaped = escapeFn(value)
                 "(has(tags, '$escapedField') AND tags['$escapedField'] $operator '$escaped') OR " +
-                    "(has(resource_attributes, '$escapedField') AND resource_attributes['$escapedField'] $operator '$escaped')"
+                    "(has(resource_attributes, " +
+                    "'$escapedField') AND resource_attributes['$escapedField'] $operator '$escaped')"
             }
         }
     }

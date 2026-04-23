@@ -17,13 +17,14 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.EnvConfig
-import java.io.ByteArrayOutputStream
 import mu.KotlinLogging
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.UUID
 import java.util.zip.GZIPOutputStream
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -118,12 +119,12 @@ object ProfileStorageService {
             val legacyData = dir.readBytes()
             val legacyName = dir.name
             Files.move(dir.toPath(), backup.toPath(), StandardCopyOption.ATOMIC_MOVE)
-            try {
+            suspendRunCatching {
                 tempDir.mkdirs()
                 File(tempDir, legacyName).writeBytes(legacyData)
                 Files.move(tempDir.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)
                 backup.delete()
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 // Restore backup if migration fails
                 if (!dir.exists() && backup.exists()) {
                     Files.move(backup.toPath(), dir.toPath(), StandardCopyOption.ATOMIC_MOVE)
@@ -183,7 +184,7 @@ object ProfileStorageService {
 
     private fun sanitizeFilename(name: String): String {
         val sanitized = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-        if (sanitized.isBlank()) return "profile_${UUID.randomUUID().toString().take(8)}"
+        if (sanitized.isBlank()) return "profile_${UUID.randomUUID().toString().take(PROFILE_FALLBACK_ID_LENGTH)}"
         return sanitized
     }
 
@@ -219,4 +220,5 @@ object ProfileStorageService {
 
     private const val GZIP_MAGIC_0: Byte = 0x1f
     private const val GZIP_MAGIC_1: Byte = 0x8b.toByte()
+    private const val PROFILE_FALLBACK_ID_LENGTH = 8
 }

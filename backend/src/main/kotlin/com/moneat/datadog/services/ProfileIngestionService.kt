@@ -24,18 +24,19 @@ import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import mu.KotlinLogging
 import java.time.Instant
 import java.time.format.DateTimeParseException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -43,6 +44,9 @@ object ProfileIngestionService {
     private val clickhouseDb by lazy { ClickHouseClient.getDatabase() }
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracking = UsageTrackingService.instance
+
+    private const val NANOS_PER_MILLI = 1_000_000L
+    private const val MIN_PROFILE_PARTS = 3
 
     private data class LockEntry(val mutex: Mutex = Mutex(), val refs: AtomicInteger = AtomicInteger(0))
     private val sessionLocks = ConcurrentHashMap<String, LockEntry>()
@@ -162,7 +166,7 @@ object ProfileIngestionService {
             runtime.substringBefore(" ").trim()
         }
 
-        val durationNs = (endMs - startMs) * 1_000_000
+        val durationNs = (endMs - startMs) * NANOS_PER_MILLI
 
         val insert = """
             INSERT INTO `$clickhouseDb`.profiles (
@@ -358,7 +362,7 @@ object ProfileIngestionService {
         val result = ClickHouseClient.executeWithFormat(query, "")
         val line = result.trim().takeIf { it.isNotBlank() } ?: return null
         val parts = line.split("\t")
-        return if (parts.size >= 3) {
+        return if (parts.size >= MIN_PROFILE_PARTS) {
             ProfileMeta(parts[0], parts[1], parts[2])
         } else if (parts.size >= 2) {
             ProfileMeta(parts[0], parts[1], "datadog")
@@ -468,11 +472,11 @@ object ProfileIngestionService {
         element: kotlinx.serialization.json.JsonElement?,
     ): Map<String, String> {
         if (element == null) return emptyMap()
-        return try {
+        return suspendRunCatching {
             element.jsonObject.mapValues {
                 it.value.jsonPrimitive.content
             }
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             emptyMap()
         }
     }

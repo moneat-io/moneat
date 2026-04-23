@@ -29,6 +29,7 @@ import java.security.SecureRandom
 import java.util.Base64
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import com.moneat.utils.suspendRunCatching
 
 class OrgInvitationService(
     private val membershipService: OrgMembershipService,
@@ -38,8 +39,12 @@ class OrgInvitationService(
     private val logger = LoggerFactory.getLogger(OrgInvitationService::class.java)
     private val random = SecureRandom()
 
+    companion object {
+        private const val TOKEN_BYTES_SIZE = 32
+    }
+
     private fun generateToken(): String {
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(TOKEN_BYTES_SIZE)
         random.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
@@ -127,10 +132,10 @@ class OrgInvitationService(
         val failed = mutableListOf<BulkInviteFailure>()
 
         for (email in emails) {
-            try {
+            suspendRunCatching {
                 inviteMember(orgId, email.trim(), role, invitedByUserId)
                 success.add(email)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn("Failed to invite $email: ${e.message}")
                 failed.add(BulkInviteFailure(email, e.message ?: "Unknown error"))
             }

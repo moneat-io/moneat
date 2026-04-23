@@ -29,8 +29,8 @@ import com.moneat.monitor.models.ContainerStats
 import com.moneat.monitor.models.ContainerWithSystem
 import com.moneat.monitor.models.CreateAlertData
 import com.moneat.monitor.models.CreateAlertRequest
-import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.HistoricalMetricsResponse
+import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.MetricDataPoint
 import com.moneat.monitor.models.UpdateAlertData
@@ -47,6 +47,8 @@ import mu.KotlinLogging
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -70,6 +72,97 @@ class MonitorService(
         const val ALERT_SCOPE_HOST = "host"
         const val INFRA_LOOKBACK_DAYS = 7
         const val MONITOR_HISTORY_CACHE_TTL_SECONDS = 30L
+
+        // Time-range thresholds for historical downsampling (in seconds)
+        private const val ONE_HOUR_SECONDS = 3600L
+        private const val SIX_HOURS_SECONDS = 21600L
+        private const val ONE_DAY_SECONDS = 86400L
+        private const val ONE_WEEK_SECONDS = 604800L
+
+        // Interval step sizes returned by the downsampling selector (in seconds)
+        private const val INTERVAL_TEN_SECONDS = 10
+        private const val INTERVAL_ONE_MINUTE = 60
+        private const val INTERVAL_FIVE_MINUTES = 300
+        private const val INTERVAL_THIRTY_MINUTES = 1800
+        private const val INTERVAL_ONE_HOUR = 3600
+
+        // Container freshness: keep rows within (monitorInterval * multiplier) seconds,
+        // but never less than the minimum window.
+        private const val FRESHNESS_MONITOR_MULTIPLIER = 3
+        private const val FRESHNESS_MIN_WINDOW_SECONDS = 300
+
+        // JSONCompact column indices — single-host latest metrics query
+        // SELECT: cpu_percent(0), mem_total(1), mem_used(2), mem_available(3),
+        //         disk_total(4), disk_used(5), net_recv_bytes(6), net_sent_bytes(7),
+        //         load_1(8), temp_max(9), gpu_percent(10), battery_percent(11)
+        private const val LATEST_COL_MEM_AVAILABLE = 3
+        private const val LATEST_COL_DISK_TOTAL = 4
+        private const val LATEST_COL_DISK_USED = 5
+        private const val LATEST_COL_NET_RECV_BYTES = 6
+        private const val LATEST_COL_NET_SENT_BYTES = 7
+        private const val LATEST_COL_LOAD_1 = 8
+        private const val LATEST_COL_TEMP_MAX = 9
+        private const val LATEST_COL_GPU_PERCENT = 10
+        private const val LATEST_COL_BATTERY_PERCENT = 11
+
+        // JSONCompact column indices — multi-host batch latest metrics query
+        // SELECT: host_id(0), cpu_percent(1), mem_total(2), mem_used(3),
+        //         mem_available(4), disk_total(5), disk_used(6), net_recv_bytes(7),
+        //         net_sent_bytes(8), load_1(9), temp_max(10), gpu_percent(11),
+        //         battery_percent(12)
+        private const val BATCH_COL_MEM_USED = 3
+        private const val BATCH_COL_MEM_AVAILABLE = 4
+        private const val BATCH_COL_DISK_TOTAL = 5
+        private const val BATCH_COL_DISK_USED = 6
+        private const val BATCH_COL_NET_RECV_BYTES = 7
+        private const val BATCH_COL_NET_SENT_BYTES = 8
+        private const val BATCH_COL_LOAD_1 = 9
+        private const val BATCH_COL_TEMP_MAX = 10
+        private const val BATCH_COL_GPU_PERCENT = 11
+        private const val BATCH_COL_BATTERY_PERCENT = 12
+
+        // JSONCompact column indices — historical metrics query
+        // SELECT: ts(0), cpu(1), mem(2), disk(3), net_recv(4), net_sent(5),
+        //         load1(6), load5(7), load15(8), temp(9), gpu(10), battery(11)
+        private const val HIST_COL_DISK_PERCENT = 3
+        private const val HIST_COL_NET_RECV_BYTES = 4
+        private const val HIST_COL_NET_SENT_BYTES = 5
+        private const val HIST_COL_LOAD_1 = 6
+        private const val HIST_COL_LOAD_5 = 7
+        private const val HIST_COL_LOAD_15 = 8
+        private const val HIST_COL_TEMP_MAX = 9
+        private const val HIST_COL_GPU_PERCENT = 10
+        private const val HIST_COL_BATTERY_PERCENT = 11
+
+        // JSONCompact column indices — single-host container stats query
+        // SELECT: name(0), container_id(1), image(2), state(3), cpu_percent(4),
+        //         mem_usage(5), mem_limit(6), net_rx_bytes(7), net_tx_bytes(8)
+        private const val CONTAINER_COL_MEM_USAGE = 5
+        private const val CONTAINER_COL_MEM_LIMIT = 6
+        private const val CONTAINER_COL_NET_RX_BYTES = 7
+        private const val CONTAINER_COL_NET_TX_BYTES = 8
+
+        // JSONCompact column indices — infra containers query
+        // SELECT: host(0), container_id(1), name(2), image(3), state(4), cpu_percent(5),
+        //         mem_usage(6), mem_limit(7), net_rx_bytes(8), net_tx_bytes(9),
+        //         tags(10), timestamp(11)
+        private const val INFRA_COL_IMAGE = 3
+        private const val INFRA_COL_STATE = 4
+        private const val INFRA_COL_CPU_PERCENT = 5
+        private const val INFRA_COL_MEM_USAGE = 6
+        private const val INFRA_COL_MEM_LIMIT = 7
+        private const val INFRA_COL_NET_RX_BYTES = 8
+        private const val INFRA_COL_NET_TX_BYTES = 9
+        private const val INFRA_COL_TAGS = 10
+        private const val INFRA_COL_TIMESTAMP = 11
+
+        // JSONCompact column indices — container historical metrics query
+        // SELECT: ts(0), cpu(1), mem_used(2), mem_limit(3), net_recv(4), net_sent(5)
+        private const val CONT_HIST_COL_MEM_LIMIT = 3
+        private const val CONT_HIST_COL_NET_RECV = 4
+        private const val CONT_HIST_COL_NET_SENT = 5
+
+        private const val PERCENT_MULTIPLIER = 100
     }
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -165,7 +258,7 @@ class MonitorService(
         val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return null
 
-        try {
+        suspendRunCatching {
             val json = Json { ignoreUnknownKeys = true }
             val result = json.parseToJsonElement(body).jsonObject
             val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return null
@@ -185,58 +278,58 @@ class MonitorService(
                     ?.toLongOrNull() ?: 0
             val memAvailable =
                 data
-                    .getOrNull(3)
+                    .getOrNull(LATEST_COL_MEM_AVAILABLE)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
             val diskTotal =
                 data
-                    .getOrNull(4)
+                    .getOrNull(LATEST_COL_DISK_TOTAL)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
             val diskUsed =
                 data
-                    .getOrNull(5)
+                    .getOrNull(LATEST_COL_DISK_USED)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
             val netRecvBytes =
                 data
-                    .getOrNull(6)
+                    .getOrNull(LATEST_COL_NET_RECV_BYTES)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
             val netSentBytes =
                 data
-                    .getOrNull(7)
+                    .getOrNull(LATEST_COL_NET_SENT_BYTES)
                     ?.toString()
                     ?.replace("\"", "")
                     ?.toLongOrNull() ?: 0
-            val load1 = data.getOrNull(8)?.toString()?.toFloatOrNull() ?: 0f
-            val tempMax = data.getOrNull(9)?.toString()?.toFloatOrNull()
-            val gpuPercent = data.getOrNull(10)?.toString()?.toFloatOrNull()
-            val batteryPercent = data.getOrNull(11)?.toString()?.toFloatOrNull()
+            val load1 = data.getOrNull(LATEST_COL_LOAD_1)?.toString()?.toFloatOrNull() ?: 0f
+            val tempMax = data.getOrNull(LATEST_COL_TEMP_MAX)?.toString()?.toFloatOrNull()
+            val gpuPercent = data.getOrNull(LATEST_COL_GPU_PERCENT)?.toString()?.toFloatOrNull()
+            val batteryPercent = data.getOrNull(LATEST_COL_BATTERY_PERCENT)?.toString()?.toFloatOrNull()
 
             val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
             return LatestMetrics(
-                cpu_percent = cpuPercent,
-                mem_total = memTotal,
-                mem_used = effectiveMemUsed,
-                mem_percent = if (memTotal > 0) (effectiveMemUsed.toFloat() / memTotal * 100) else 0f,
-                disk_total = diskTotal,
-                disk_used = diskUsed,
-                disk_percent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * 100) else 0f,
-                net_recv_bytes = netRecvBytes,
-                net_sent_bytes = netSentBytes,
-                net_recv_mbps = null,
-                net_sent_mbps = null,
-                load_1 = load1,
-                temp_max = tempMax,
-                gpu_percent = gpuPercent,
-                battery_percent = batteryPercent
+                cpuPercent = cpuPercent,
+                memTotal = memTotal,
+                memUsed = effectiveMemUsed,
+                memPercent = if (memTotal > 0) (effectiveMemUsed.toFloat() / memTotal * PERCENT_MULTIPLIER) else 0f,
+                diskTotal = diskTotal,
+                diskUsed = diskUsed,
+                diskPercent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * PERCENT_MULTIPLIER) else 0f,
+                netRecvBytes = netRecvBytes,
+                netSentBytes = netSentBytes,
+                netRecvMbps = null,
+                netSentMbps = null,
+                load1 = load1,
+                tempMax = tempMax,
+                gpuPercent = gpuPercent,
+                batteryPercent = batteryPercent
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to parse latest metrics response" }
             return null
         }
@@ -277,46 +370,55 @@ class MonitorService(
         val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return hostIds.associateWith { null }
 
-        return try {
+        return suspendRunCatching {
             val json = Json { ignoreUnknownKeys = true }
-            val rows = json.parseToJsonElement(body).jsonObject["data"]?.jsonArray ?: return hostIds.associateWith { null }
+            val rows = json.parseToJsonElement(body).jsonObject["data"]?.jsonArray
+                ?: return hostIds.associateWith { null }
             val result = mutableMapOf<Int, LatestMetrics?>()
             for (row in rows) {
                 val arr = row.jsonArray
                 val rowHostId = arr.getOrNull(0)?.toString()?.replace("\"", "")?.toIntOrNull() ?: continue
                 val cpuPercent = arr.getOrNull(1)?.toString()?.toFloatOrNull() ?: 0f
                 val memTotal = arr.getOrNull(2)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val memUsed = arr.getOrNull(3)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val memAvailable = arr.getOrNull(4)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val diskTotal = arr.getOrNull(5)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val diskUsed = arr.getOrNull(6)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val netRecvBytes = arr.getOrNull(7)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val netSentBytes = arr.getOrNull(8)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val load1 = arr.getOrNull(9)?.toString()?.toFloatOrNull() ?: 0f
-                val tempMax = arr.getOrNull(10)?.toString()?.toFloatOrNull()
-                val gpuPercent = arr.getOrNull(11)?.toString()?.toFloatOrNull()
-                val batteryPercent = arr.getOrNull(12)?.toString()?.toFloatOrNull()
+                val memUsed =
+                    arr.getOrNull(BATCH_COL_MEM_USED)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val memAvailable =
+                    arr.getOrNull(BATCH_COL_MEM_AVAILABLE)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val diskTotal =
+                    arr.getOrNull(BATCH_COL_DISK_TOTAL)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val diskUsed =
+                    arr.getOrNull(BATCH_COL_DISK_USED)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val netRecvBytes =
+                    arr.getOrNull(BATCH_COL_NET_RECV_BYTES)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val netSentBytes =
+                    arr.getOrNull(BATCH_COL_NET_SENT_BYTES)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
+                val load1 = arr.getOrNull(BATCH_COL_LOAD_1)?.toString()?.toFloatOrNull() ?: 0f
+                val tempMax = arr.getOrNull(BATCH_COL_TEMP_MAX)?.toString()?.toFloatOrNull()
+                val gpuPercent = arr.getOrNull(BATCH_COL_GPU_PERCENT)?.toString()?.toFloatOrNull()
+                val batteryPercent = arr.getOrNull(BATCH_COL_BATTERY_PERCENT)?.toString()?.toFloatOrNull()
                 val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
                 result[rowHostId] = LatestMetrics(
-                    cpu_percent = cpuPercent,
-                    mem_total = memTotal,
-                    mem_used = effectiveMemUsed,
-                    mem_percent = if (memTotal > 0) (effectiveMemUsed.toFloat() / memTotal * 100) else 0f,
-                    disk_total = diskTotal,
-                    disk_used = diskUsed,
-                    disk_percent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * 100) else 0f,
-                    net_recv_bytes = netRecvBytes,
-                    net_sent_bytes = netSentBytes,
-                    net_recv_mbps = null,
-                    net_sent_mbps = null,
-                    load_1 = load1,
-                    temp_max = tempMax,
-                    gpu_percent = gpuPercent,
-                    battery_percent = batteryPercent
+                    cpuPercent = cpuPercent,
+                    memTotal = memTotal,
+                    memUsed = effectiveMemUsed,
+                    memPercent = if (memTotal > 0) {
+                        effectiveMemUsed.toFloat() / memTotal * PERCENT_MULTIPLIER
+                    } else { 0f },
+                    diskTotal = diskTotal,
+                    diskUsed = diskUsed,
+                    diskPercent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * PERCENT_MULTIPLIER) else 0f,
+                    netRecvBytes = netRecvBytes,
+                    netSentBytes = netSentBytes,
+                    netRecvMbps = null,
+                    netSentMbps = null,
+                    load1 = load1,
+                    tempMax = tempMax,
+                    gpuPercent = gpuPercent,
+                    batteryPercent = batteryPercent
                 )
             }
             hostIds.associateWith { result[it] }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to parse batch latest metrics response" }
             hostIds.associateWith { null }
         }
@@ -336,22 +438,22 @@ class MonitorService(
             MONITOR_HISTORY_CACHE_TTL_SECONDS
         ) {
             val host = getHostById(hostId) ?: return@cached HistoricalMetricsResponse(
-                system_id = "",
-                host_id = hostId,
+                systemId = "",
+                hostId = hostId,
                 from = fromTimestamp,
                 to = toTimestamp,
-                interval_seconds = intervalSeconds ?: 3600,
-                data_points = emptyList()
+                intervalSeconds = intervalSeconds ?: 3600,
+                dataPoints = emptyList()
             )
             val clampedWindow = clampRangeToRetention(hostId, fromTimestamp, toTimestamp)
             if (clampedWindow == null) {
                 return@cached HistoricalMetricsResponse(
-                    system_id = "",
-                    host_id = hostId,
+                    systemId = "",
+                    hostId = hostId,
                     from = fromTimestamp,
                     to = toTimestamp,
-                    interval_seconds = intervalSeconds ?: 3600,
-                    data_points = emptyList()
+                    intervalSeconds = intervalSeconds ?: 3600,
+                    dataPoints = emptyList()
                 )
             }
             val (effectiveFrom, effectiveTo) = clampedWindow
@@ -360,11 +462,11 @@ class MonitorService(
             val timeRange = effectiveTo - effectiveFrom
             val calculatedInterval =
                 intervalSeconds ?: when {
-                    timeRange <= 3600 -> 10
-                    timeRange <= 21600 -> 60
-                    timeRange <= 86400 -> 300
-                    timeRange <= 604800 -> 1800
-                    else -> 3600
+                    timeRange <= ONE_HOUR_SECONDS -> INTERVAL_TEN_SECONDS
+                    timeRange <= SIX_HOURS_SECONDS -> INTERVAL_ONE_MINUTE
+                    timeRange <= ONE_DAY_SECONDS -> INTERVAL_FIVE_MINUTES
+                    timeRange <= ONE_WEEK_SECONDS -> INTERVAL_THIRTY_MINUTES
+                    else -> INTERVAL_ONE_HOUR
                 }
 
             val query =
@@ -387,8 +489,8 @@ class MonitorService(
             FROM `$clickhouseDb`.metrics
             WHERE organization_id = ${host.organizationId}
               AND tags['host_id'] = '$hostId'
-              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * 1000})
-              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * 1000})
+              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
+              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
@@ -396,58 +498,58 @@ class MonitorService(
 
             val body = hostRepository.executeClickHouseQuery(query)
             val dataPoints =
-                try {
+                suspendRunCatching {
                     val json = Json { ignoreUnknownKeys = true }
                     val result = json.parseToJsonElement(body).jsonObject
                     val data =
                         result["data"]?.jsonArray ?: return@cached HistoricalMetricsResponse(
-                            system_id = "",
-                            host_id = hostId,
+                            systemId = "",
+                            hostId = hostId,
                             from = effectiveFrom,
                             to = effectiveTo,
-                            interval_seconds = calculatedInterval,
-                            data_points = emptyList()
+                            intervalSeconds = calculatedInterval,
+                            dataPoints = emptyList()
                         )
 
                     data.map { row ->
                         val arr = row.jsonArray
                         MetricDataPoint(
                             timestamp = arr[0].toString().replace("\"", "").toLong(),
-                            cpu_percent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
-                            mem_percent = arr.getOrNull(2)?.toString()?.toFloatOrNull(),
-                            disk_percent = arr.getOrNull(3)?.toString()?.toFloatOrNull(),
-                            net_recv_bytes =
+                            cpuPercent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
+                            memPercent = arr.getOrNull(2)?.toString()?.toFloatOrNull(),
+                            diskPercent = arr.getOrNull(HIST_COL_DISK_PERCENT)?.toString()?.toFloatOrNull(),
+                            netRecvBytes =
                             arr
-                                .getOrNull(4)
+                                .getOrNull(HIST_COL_NET_RECV_BYTES)
                                 ?.toString()
                                 ?.replace("\"", "")
                                 ?.toLongOrNull(),
-                            net_sent_bytes =
+                            netSentBytes =
                             arr
-                                .getOrNull(5)
+                                .getOrNull(HIST_COL_NET_SENT_BYTES)
                                 ?.toString()
                                 ?.replace("\"", "")
                                 ?.toLongOrNull(),
-                            load_1 = arr.getOrNull(6)?.toString()?.toFloatOrNull(),
-                            load_5 = arr.getOrNull(7)?.toString()?.toFloatOrNull(),
-                            load_15 = arr.getOrNull(8)?.toString()?.toFloatOrNull(),
-                            temp_max = arr.getOrNull(9)?.toString()?.toFloatOrNull(),
-                            gpu_percent = arr.getOrNull(10)?.toString()?.toFloatOrNull(),
-                            battery_percent = arr.getOrNull(11)?.toString()?.toFloatOrNull()
+                            load1 = arr.getOrNull(HIST_COL_LOAD_1)?.toString()?.toFloatOrNull(),
+                            load5 = arr.getOrNull(HIST_COL_LOAD_5)?.toString()?.toFloatOrNull(),
+                            load15 = arr.getOrNull(HIST_COL_LOAD_15)?.toString()?.toFloatOrNull(),
+                            tempMax = arr.getOrNull(HIST_COL_TEMP_MAX)?.toString()?.toFloatOrNull(),
+                            gpuPercent = arr.getOrNull(HIST_COL_GPU_PERCENT)?.toString()?.toFloatOrNull(),
+                            batteryPercent = arr.getOrNull(HIST_COL_BATTERY_PERCENT)?.toString()?.toFloatOrNull()
                         )
                     }
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to parse historical metrics" }
                     emptyList()
                 }
 
             HistoricalMetricsResponse(
-                system_id = "",
-                host_id = hostId,
+                systemId = "",
+                hostId = hostId,
                 from = effectiveFrom,
                 to = effectiveTo,
-                interval_seconds = calculatedInterval,
-                data_points = dataPoints
+                intervalSeconds = calculatedInterval,
+                dataPoints = dataPoints
             )
         }
 
@@ -458,7 +560,10 @@ class MonitorService(
         val host = getHostById(hostId) ?: return emptyList()
         val retentionDays = retentionPolicyService.getRetentionDaysForHost(hostId) ?: PricingTier.FREE.retentionDays
         val monitorIntervalSeconds = getTierConfig(host.organizationId).monitorIntervalSeconds
-        val freshnessWindowSeconds = max(monitorIntervalSeconds * 3, 300)
+        val freshnessWindowSeconds = max(
+            monitorIntervalSeconds * FRESHNESS_MONITOR_MULTIPLIER,
+            FRESHNESS_MIN_WINDOW_SECONDS,
+        )
 
         val query =
             """
@@ -478,32 +583,34 @@ class MonitorService(
         val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return emptyList()
 
-        return try {
+        return suspendRunCatching {
             val json = Json { ignoreUnknownKeys = true }
             val result = json.parseToJsonElement(body).jsonObject
             val data = result["data"]?.jsonArray ?: return emptyList()
 
             data.map { row ->
                 val arr = row.jsonArray
-                val memUsed = arr[5].toString().replace("\"", "").toLongOrNull() ?: 0
-                val memLimit = arr[6].toString().replace("\"", "").toLongOrNull() ?: 1
-                val netRecvBytes = arr.getOrNull(7)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
-                val netSentBytes = arr.getOrNull(8)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
+                val memUsed = arr[CONTAINER_COL_MEM_USAGE].toString().replace("\"", "").toLongOrNull() ?: 0
+                val memLimit = arr[CONTAINER_COL_MEM_LIMIT].toString().replace("\"", "").toLongOrNull() ?: 1
+                val netRecvBytes =
+                    arr.getOrNull(CONTAINER_COL_NET_RX_BYTES)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
+                val netSentBytes =
+                    arr.getOrNull(CONTAINER_COL_NET_TX_BYTES)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0
 
                 ContainerStats(
                     name = arr[0].toString().replace("\"", ""),
                     id = arr[1].toString().replace("\"", ""),
                     image = arr[2].toString().replace("\"", ""),
                     status = arr[3].toString().replace("\"", ""),
-                    cpu_percent = arr[4].toString().toFloatOrNull() ?: 0f,
-                    mem_used = memUsed,
-                    mem_limit = memLimit,
-                    net_recv_bytes = netRecvBytes,
-                    net_sent_bytes = netSentBytes,
-                    mem_percent = if (memLimit > 0) (memUsed.toFloat() / memLimit * 100) else 0f
+                    cpuPercent = arr[4].toString().toFloatOrNull() ?: 0f,
+                    memUsed = memUsed,
+                    memLimit = memLimit,
+                    netRecvBytes = netRecvBytes,
+                    netSentBytes = netSentBytes,
+                    memPercent = if (memLimit > 0) (memUsed.toFloat() / memLimit * PERCENT_MULTIPLIER) else 0f
                 )
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to parse container stats" }
             emptyList()
         }
@@ -528,12 +635,12 @@ class MonitorService(
                             id = c.id,
                             image = c.image,
                             status = c.status,
-                            cpuPercent = c.cpu_percent,
-                            memUsed = c.mem_used,
-                            memLimit = c.mem_limit,
-                            netRecvBytes = c.net_recv_bytes,
-                            netSentBytes = c.net_sent_bytes,
-                            memPercent = c.mem_percent
+                            cpuPercent = c.cpuPercent,
+                            memUsed = c.memUsed,
+                            memLimit = c.memLimit,
+                            netRecvBytes = c.netRecvBytes,
+                            netSentBytes = c.netSentBytes,
+                            memPercent = c.memPercent
                         )
                     )
                 }
@@ -576,48 +683,48 @@ class MonitorService(
         val body = hostRepository.executeClickHouseQuery(query)
         if (body.isBlank()) return emptyList()
 
-        return try {
+        return suspendRunCatching {
             val json = Json { ignoreUnknownKeys = true }
             val result = json.parseToJsonElement(body).jsonObject
             val data = result["data"]?.jsonArray ?: return emptyList()
 
             data.map { row ->
                 val arr = row.jsonArray
-                val tagsObj = try {
-                    arr.getOrNull(10)?.toString()?.let { t ->
+                val tagsObj = suspendRunCatching {
+                    arr.getOrNull(INFRA_COL_TAGS)?.toString()?.let { t ->
                         json.parseToJsonElement(t.replace("\\\"", "\""))
                             .jsonObject
                             .entries
                             .associate { (k, v) -> k to v.toString().trim('"') }
                     } ?: emptyMap<String, String>()
-                } catch (_: Exception) {
+                }.getOrElse { _ ->
                     emptyMap<String, String>()
                 }
-                val ts = arr.getOrNull(11)?.toString()?.replace("\"", "") ?: ""
+                val ts = arr.getOrNull(INFRA_COL_TIMESTAMP)?.toString()?.replace("\"", "") ?: ""
 
                 mapOf(
                     "host" to arr.getOrNull(0)?.toString()?.replace("\"", ""),
                     "container_id" to arr.getOrNull(1)?.toString()?.replace("\"", ""),
                     "containerId" to arr.getOrNull(1)?.toString()?.replace("\"", ""),
                     "name" to arr.getOrNull(2)?.toString()?.replace("\"", ""),
-                    "image" to arr.getOrNull(3)?.toString()?.replace("\"", ""),
-                    "state" to arr.getOrNull(4)?.toString()?.replace("\"", ""),
-                    "cpu_percent" to (arr.getOrNull(5)?.toString()?.toFloatOrNull() ?: 0f),
-                    "cpuPercent" to (arr.getOrNull(5)?.toString()?.toFloatOrNull() ?: 0f),
-                    "mem_usage" to (arr.getOrNull(6)?.toString()?.toLongOrNull() ?: 0L),
-                    "memUsage" to (arr.getOrNull(6)?.toString()?.toLongOrNull() ?: 0L),
-                    "mem_limit" to (arr.getOrNull(7)?.toString()?.toLongOrNull() ?: 0L),
-                    "memLimit" to (arr.getOrNull(7)?.toString()?.toLongOrNull() ?: 0L),
-                    "net_rx_bytes" to (arr.getOrNull(8)?.toString()?.toLongOrNull() ?: 0L),
-                    "netRxBytes" to (arr.getOrNull(8)?.toString()?.toLongOrNull() ?: 0L),
-                    "net_tx_bytes" to (arr.getOrNull(9)?.toString()?.toLongOrNull() ?: 0L),
-                    "netTxBytes" to (arr.getOrNull(9)?.toString()?.toLongOrNull() ?: 0L),
+                    "image" to arr.getOrNull(INFRA_COL_IMAGE)?.toString()?.replace("\"", ""),
+                    "state" to arr.getOrNull(INFRA_COL_STATE)?.toString()?.replace("\"", ""),
+                    "cpu_percent" to (arr.getOrNull(INFRA_COL_CPU_PERCENT)?.toString()?.toFloatOrNull() ?: 0f),
+                    "cpuPercent" to (arr.getOrNull(INFRA_COL_CPU_PERCENT)?.toString()?.toFloatOrNull() ?: 0f),
+                    "mem_usage" to (arr.getOrNull(INFRA_COL_MEM_USAGE)?.toString()?.toLongOrNull() ?: 0L),
+                    "memUsage" to (arr.getOrNull(INFRA_COL_MEM_USAGE)?.toString()?.toLongOrNull() ?: 0L),
+                    "mem_limit" to (arr.getOrNull(INFRA_COL_MEM_LIMIT)?.toString()?.toLongOrNull() ?: 0L),
+                    "memLimit" to (arr.getOrNull(INFRA_COL_MEM_LIMIT)?.toString()?.toLongOrNull() ?: 0L),
+                    "net_rx_bytes" to (arr.getOrNull(INFRA_COL_NET_RX_BYTES)?.toString()?.toLongOrNull() ?: 0L),
+                    "netRxBytes" to (arr.getOrNull(INFRA_COL_NET_RX_BYTES)?.toString()?.toLongOrNull() ?: 0L),
+                    "net_tx_bytes" to (arr.getOrNull(INFRA_COL_NET_TX_BYTES)?.toString()?.toLongOrNull() ?: 0L),
+                    "netTxBytes" to (arr.getOrNull(INFRA_COL_NET_TX_BYTES)?.toString()?.toLongOrNull() ?: 0L),
                     "tags" to tagsObj,
                     "timestamp" to ts,
                     "id" to arr.getOrNull(1)?.toString()?.replace("\"", "")
                 )
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to parse infra container stats" }
             emptyList()
         }
@@ -634,20 +741,20 @@ class MonitorService(
         intervalSeconds: Int?
     ): ContainerMetricsResponse {
         val host = getHostById(hostId) ?: return ContainerMetricsResponse(
-            container_name = containerName,
+            containerName = containerName,
             from = fromTimestamp,
             to = toTimestamp,
-            interval_seconds = intervalSeconds ?: 3600,
-            data_points = emptyList()
+            intervalSeconds = intervalSeconds ?: 3600,
+            dataPoints = emptyList()
         )
         val clampedWindow = clampRangeToRetention(hostId, fromTimestamp, toTimestamp)
         if (clampedWindow == null) {
             return ContainerMetricsResponse(
-                container_name = containerName,
+                containerName = containerName,
                 from = fromTimestamp,
                 to = toTimestamp,
-                interval_seconds = intervalSeconds ?: 3600,
-                data_points = emptyList()
+                intervalSeconds = intervalSeconds ?: 3600,
+                dataPoints = emptyList()
             )
         }
         val (effectiveFrom, effectiveTo) = clampedWindow
@@ -655,11 +762,11 @@ class MonitorService(
         val timeRange = effectiveTo - effectiveFrom
         val calculatedInterval =
             intervalSeconds ?: when {
-                timeRange <= 3600 -> 10
-                timeRange <= 21600 -> 60
-                timeRange <= 86400 -> 300
-                timeRange <= 604800 -> 1800
-                else -> 3600
+                timeRange <= ONE_HOUR_SECONDS -> INTERVAL_TEN_SECONDS
+                timeRange <= SIX_HOURS_SECONDS -> INTERVAL_ONE_MINUTE
+                timeRange <= ONE_DAY_SECONDS -> INTERVAL_FIVE_MINUTES
+                timeRange <= ONE_WEEK_SECONDS -> INTERVAL_THIRTY_MINUTES
+                else -> INTERVAL_ONE_HOUR
             }
 
         val escapedName = escapeSql(containerName)
@@ -676,8 +783,8 @@ class MonitorService(
             WHERE organization_id = ${host.organizationId}
               AND tags['host_id'] = '$hostId'
               AND name = '$escapedName'
-              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * 1000})
-              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * 1000})
+              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
+              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
@@ -685,60 +792,60 @@ class MonitorService(
 
         val body = hostRepository.executeClickHouseQuery(query)
         val dataPoints =
-            try {
+            suspendRunCatching {
                 val json = Json { ignoreUnknownKeys = true }
                 val result = json.parseToJsonElement(body).jsonObject
                 val data =
                     result["data"]?.jsonArray ?: return ContainerMetricsResponse(
-                        container_name = containerName,
+                        containerName = containerName,
                         from = effectiveFrom,
                         to = effectiveTo,
-                        interval_seconds = calculatedInterval,
-                        data_points = emptyList()
+                        intervalSeconds = calculatedInterval,
+                        dataPoints = emptyList()
                     )
 
                 data.map { row ->
                     val arr = row.jsonArray
                     ContainerMetricDataPoint(
                         timestamp = arr[0].toString().replace("\"", "").toLong(),
-                        cpu_percent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
-                        mem_used =
+                        cpuPercent = arr.getOrNull(1)?.toString()?.toFloatOrNull(),
+                        memUsed =
                         arr
                             .getOrNull(2)
                             ?.toString()
                             ?.replace("\"", "")
                             ?.toLongOrNull(),
-                        mem_limit =
+                        memLimit =
                         arr
-                            .getOrNull(3)
+                            .getOrNull(CONT_HIST_COL_MEM_LIMIT)
                             ?.toString()
                             ?.replace("\"", "")
                             ?.toLongOrNull(),
-                        net_recv_bytes =
+                        netRecvBytes =
                         arr
-                            .getOrNull(4)
+                            .getOrNull(CONT_HIST_COL_NET_RECV)
                             ?.toString()
                             ?.replace("\"", "")
                             ?.toLongOrNull(),
-                        net_sent_bytes =
+                        netSentBytes =
                         arr
-                            .getOrNull(5)
+                            .getOrNull(CONT_HIST_COL_NET_SENT)
                             ?.toString()
                             ?.replace("\"", "")
                             ?.toLongOrNull()
                     )
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to parse container historical metrics" }
                 emptyList()
             }
 
         return ContainerMetricsResponse(
-            container_name = containerName,
+            containerName = containerName,
             from = effectiveFrom,
             to = effectiveTo,
-            interval_seconds = calculatedInterval,
-            data_points = dataPoints
+            intervalSeconds = calculatedInterval,
+            dataPoints = dataPoints
         )
     }
 
@@ -1007,7 +1114,7 @@ class MonitorService(
     ): Pair<Long, Long>? {
         val retentionDays = retentionPolicyService.getRetentionDaysForHost(hostId) ?: PricingTier.FREE.retentionDays
         val nowEpochSeconds = Clock.System.now().epochSeconds
-        val oldestAllowed = nowEpochSeconds - (retentionDays * 86_400L)
+        val oldestAllowed = nowEpochSeconds - (retentionDays * ONE_DAY_SECONDS)
         val clampedFrom = max(fromTimestamp, oldestAllowed)
         val clampedTo = min(toTimestamp, nowEpochSeconds)
         if (clampedFrom > clampedTo) return null

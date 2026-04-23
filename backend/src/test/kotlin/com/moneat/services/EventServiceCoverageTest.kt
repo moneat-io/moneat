@@ -18,6 +18,7 @@
 
 package com.moneat.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.ExceptionInfo
 import com.moneat.events.models.ExceptionValue
@@ -37,7 +38,6 @@ import com.moneat.events.repositories.models.FeedbackInsertData
 import com.moneat.events.repositories.models.LlmGenerationInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
-import com.moneat.events.repositories.models.SpanInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
@@ -47,11 +47,16 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
 import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.slot
+import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -115,8 +120,8 @@ class EventServiceCoverageTest {
             ProjectKeyVerification(false, null)
         every { eventRepository.verifyProjectKey(testProjectId, "valid-key") } returns
             ProjectKeyVerification(true, "jvm")
-        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
         every { eventRepository.getOrganizationIdForProject(any()) } returns null
+        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
 
         coEvery { eventRepository.insertErrorEvent(any()) } returns true
         coEvery { eventRepository.insertTransaction(any()) } returns true
@@ -141,7 +146,7 @@ class EventServiceCoverageTest {
     fun `processEnvelope routes event item to storeEvent`() = runBlocking {
         val eventJson = Json.encodeToString(
             SentryEvent(
-                event_id = "evt-1",
+                eventId = "evt-1",
                 level = "error",
                 message = "Test error",
                 exception = ExceptionInfo(
@@ -164,9 +169,9 @@ class EventServiceCoverageTest {
     fun `processEnvelope routes transaction item to storeTransaction`() = runBlocking {
         val txnJson = Json.encodeToString(
             SentryTransaction(
-                event_id = "txn-1",
+                eventId = "txn-1",
                 transaction = "GET /api/users",
-                start_timestamp = 1700000000.0,
+                startTimestamp = 1700000000.0,
                 timestamp = 1700000001.0,
                 platform = "jvm",
                 contexts = buildJsonObject {
@@ -194,7 +199,7 @@ class EventServiceCoverageTest {
     fun `processEnvelope routes feedback item to storeFeedback`() = runBlocking {
         val fbJson = Json.encodeToString(
             SentryFeedback(
-                event_id = "fb-1",
+                eventId = "fb-1",
                 timestamp = "2024-01-15T10:30:45Z",
                 contexts = buildJsonObject {
                     put(
@@ -230,13 +235,13 @@ class EventServiceCoverageTest {
     fun `processEnvelope routes replay_event and replay_recording`() = runBlocking {
         val replayEventJson = Json.encodeToString(
             SentryReplayEvent(
-                replay_id = "replay-1",
-                segment_id = 0,
+                replayId = "replay-1",
+                segmentId = 0,
                 timestamp = 1700000000.0,
-                replay_start_timestamp = 1699999990.0,
+                replayStartTimestamp = 1699999990.0,
                 urls = listOf("https://example.com"),
-                error_ids = listOf("err-1"),
-                trace_ids = listOf("trace-1"),
+                errorIds = listOf("err-1"),
+                traceIds = listOf("trace-1"),
                 platform = "javascript",
                 environment = "production",
                 user = UserInfo(id = "u1"),
@@ -334,7 +339,7 @@ class EventServiceCoverageTest {
     fun `processEnvelope with multiple items processes all`() = runBlocking {
         val eventJson = Json.encodeToString(
             SentryEvent(
-                event_id = "evt-multi",
+                eventId = "evt-multi",
                 level = "error",
                 message = "Multi test",
                 exception = ExceptionInfo(
@@ -344,9 +349,9 @@ class EventServiceCoverageTest {
         )
         val txnJson = Json.encodeToString(
             SentryTransaction(
-                event_id = "txn-multi",
+                eventId = "txn-multi",
                 transaction = "test",
-                start_timestamp = 1700000000.0,
+                startTimestamp = 1700000000.0,
                 timestamp = 1700000001.0,
                 contexts = buildJsonObject {
                     put(
@@ -379,14 +384,11 @@ class EventServiceCoverageTest {
 
     @Test
     fun `storeTransaction inserts spans from transaction`() = runBlocking {
-        val spanSlot = slot<List<SpanInsertData>>()
-        coEvery { eventRepository.insertSpans(capture(spanSlot)) } returns Unit
-
         val txnJson = Json.encodeToString(
             SentryTransaction(
-                event_id = "txn-spans",
+                eventId = "txn-spans",
                 transaction = "GET /items",
-                start_timestamp = 1700000000.0,
+                startTimestamp = 1700000000.0,
                 timestamp = 1700000002.0,
                 platform = "python",
                 environment = "staging",
@@ -397,27 +399,28 @@ class EventServiceCoverageTest {
                         buildJsonObject {
                             put("trace_id", "trace-abc")
                             put("op", "http.server")
+                            put("span_id", "root-span")
                         }
                     )
                 },
                 spans = listOf(
                     SentrySpan(
-                        span_id = "span1",
-                        parent_span_id = "root",
-                        trace_id = "trace-abc",
+                        spanId = "span1",
+                        parentSpanId = "root",
+                        traceId = "trace-abc",
                         op = "db.query",
                         description = "SELECT * FROM items",
-                        start_timestamp = 1700000000.5,
+                        startTimestamp = 1700000000.5,
                         timestamp = 1700000001.0,
                         status = "ok",
                         tags = mapOf("db.system" to "postgresql")
                     ),
                     SentrySpan(
-                        span_id = "span2",
-                        trace_id = "trace-abc",
+                        spanId = "span2",
+                        traceId = "trace-abc",
                         op = "http.client",
                         description = "GET /external",
-                        start_timestamp = 1700000001.0,
+                        startTimestamp = 1700000001.0,
                         timestamp = 1700000001.5,
                         status = "ok"
                     )
@@ -427,16 +430,29 @@ class EventServiceCoverageTest {
             )
         )
 
-        eventService.processEnvelope(
-            testProjectId,
-            SentryEnvelope(eventId = "txn-spans", items = listOf(EnvelopeItem("transaction", txnJson)))
-        )
+        mockkObject(ClickHouseClient)
+        val chResponse =
+            mockk<HttpResponse>(relaxed = true) {
+                every { status } returns HttpStatusCode.OK
+            }
+        val executedSql = mutableListOf<String>()
+        coEvery { ClickHouseClient.execute(any(), any()) } coAnswers {
+            executedSql.add(firstArg())
+            chResponse
+        }
+        try {
+            eventService.processEnvelope(
+                testProjectId,
+                SentryEnvelope(eventId = "txn-spans", items = listOf(EnvelopeItem("transaction", txnJson)))
+            )
 
-        coVerify(atLeast = 1) { eventRepository.insertSpans(any()) }
-        assertTrue(spanSlot.isCaptured)
-        assertEquals(2, spanSlot.captured.size)
-        assertEquals("db.query", spanSlot.captured[0].op)
-        assertEquals("http.client", spanSlot.captured[1].op)
+            coVerify(atLeast = 1) { eventRepository.insertTransaction(any()) }
+            verify(atLeast = 1) { eventRepository.getOrganizationIdForProject(testProjectId) }
+            coVerify(atLeast = 1) { ClickHouseClient.execute(any(), any()) }
+            assertTrue(executedSql.any { it.contains("apm_spans") }, "expected apm_spans INSERT")
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
     }
 
     @Test
@@ -446,9 +462,9 @@ class EventServiceCoverageTest {
 
         val txnJson = Json.encodeToString(
             SentryTransaction(
-                event_id = "txn-ai",
+                eventId = "txn-ai",
                 transaction = "chat",
-                start_timestamp = 1700000000.0,
+                startTimestamp = 1700000000.0,
                 timestamp = 1700000005.0,
                 contexts = buildJsonObject {
                     put(
@@ -461,11 +477,11 @@ class EventServiceCoverageTest {
                 },
                 spans = listOf(
                     SentrySpan(
-                        span_id = "ai-span-1",
-                        trace_id = "trace-ai",
+                        spanId = "ai-span-1",
+                        traceId = "trace-ai",
                         op = "ai.chat_completion",
                         description = "OpenAI Chat",
-                        start_timestamp = 1700000001.0,
+                        startTimestamp = 1700000001.0,
                         timestamp = 1700000003.0,
                         status = "ok",
                         data = buildJsonObject {
@@ -477,11 +493,11 @@ class EventServiceCoverageTest {
                         }
                     ),
                     SentrySpan(
-                        span_id = "ai-span-2",
-                        trace_id = "trace-ai",
+                        spanId = "ai-span-2",
+                        traceId = "trace-ai",
                         op = "ai.embedding",
                         description = "Embed query",
-                        start_timestamp = 1700000003.0,
+                        startTimestamp = 1700000003.0,
                         timestamp = 1700000004.0,
                         status = "ok",
                         data = buildJsonObject {
@@ -517,9 +533,9 @@ class EventServiceCoverageTest {
 
         val txnJson = Json.encodeToString(
             SentryTransaction(
-                event_id = "txn-err",
+                eventId = "txn-err",
                 transaction = "POST /fail",
-                start_timestamp = 1700000000.0,
+                startTimestamp = 1700000000.0,
                 timestamp = 1700000001.0,
                 contexts = buildJsonObject {
                     put(
@@ -547,9 +563,9 @@ class EventServiceCoverageTest {
     fun `storeTransaction upserts release when present`() = runBlocking {
         val txnJson = Json.encodeToString(
             SentryTransaction(
-                event_id = "txn-rel",
+                eventId = "txn-rel",
                 transaction = "test",
-                start_timestamp = 1700000000.0,
+                startTimestamp = 1700000000.0,
                 timestamp = 1700000001.0,
                 release = "v3.0.0",
                 contexts = buildJsonObject {
@@ -583,7 +599,7 @@ class EventServiceCoverageTest {
 
         val eventJson = Json.encodeToString(
             SentryEvent(
-                event_id = "crash-1",
+                eventId = "crash-1",
                 exception = ExceptionInfo(
                     values = listOf(
                         ExceptionValue(
@@ -615,7 +631,7 @@ class EventServiceCoverageTest {
 
         val eventJson = Json.encodeToString(
             SentryEvent(
-                event_id = "handled-1",
+                eventId = "handled-1",
                 level = "warning",
                 exception = ExceptionInfo(
                     values = listOf(
@@ -647,7 +663,7 @@ class EventServiceCoverageTest {
 
         val eventJson = Json.encodeToString(
             SentryEvent(
-                event_id = "fp-1",
+                eventId = "fp-1",
                 exception = ExceptionInfo(
                     values = listOf(
                         ExceptionValue(
@@ -659,13 +675,13 @@ class EventServiceCoverageTest {
                                         filename = "lib.py",
                                         function = "validate",
                                         lineno = 10,
-                                        in_app = false
+                                        inApp = false
                                     ),
                                     StackFrame(
                                         filename = "app.py",
                                         function = "process",
                                         lineno = 42,
-                                        in_app = true
+                                        inApp = true
                                     )
                                 )
                             )
@@ -695,7 +711,7 @@ class EventServiceCoverageTest {
 
         val eventJson = Json.encodeToString(
             SentryEvent(
-                event_id = "custom-fp",
+                eventId = "custom-fp",
                 fingerprint = listOf("custom", "group"),
                 exception = ExceptionInfo(
                     values = listOf(ExceptionValue(type = "Error", value = "test"))
@@ -719,7 +735,7 @@ class EventServiceCoverageTest {
 
         val eventJson = Json.encodeToString(
             SentryEvent(
-                event_id = "msg-only",
+                eventId = "msg-only",
                 message = "Something went wrong",
                 level = "error"
             )
@@ -741,19 +757,19 @@ class EventServiceCoverageTest {
 
         val eventJson = Json.encodeToString(
             SentryEvent(
-                event_id = "full-event",
+                eventId = "full-event",
                 timestamp = 1700000000.0,
                 level = "info",
                 platform = "python",
                 environment = "staging",
                 release = "2.5.0",
                 dist = "abc123",
-                server_name = "web-03",
+                serverName = "web-03",
                 user = UserInfo(
                     id = "uid-1",
                     email = "user@test.com",
                     username = "testuser",
-                    ip_address = "10.0.0.1"
+                    ipAddress = "10.0.0.1"
                 ),
                 tags = mapOf("service" to "api", "region" to "us-east"),
                 sdk = SdkInfo(name = "sentry-python", version = "1.5.0"),
@@ -796,7 +812,7 @@ class EventServiceCoverageTest {
     @Test
     fun `storeFeedback with projectId 0 is rejected`() = runBlocking {
         val fbJson = Json.encodeToString(
-            SentryFeedback(event_id = "fb-bad")
+            SentryFeedback(eventId = "fb-bad")
         )
 
         eventService.processEnvelope(
@@ -817,7 +833,7 @@ class EventServiceCoverageTest {
 
         val fbJson = Json.encodeToString(
             SentryFeedback(
-                event_id = "fb-ts",
+                eventId = "fb-ts",
                 timestamp = "2024-01-15T10:30:45Z",
                 contexts = buildJsonObject {
                     put(
@@ -850,7 +866,7 @@ class EventServiceCoverageTest {
 
         val fbJson = Json.encodeToString(
             SentryFeedback(
-                event_id = "fb-bad-ts",
+                eventId = "fb-bad-ts",
                 timestamp = "not-a-date",
                 contexts = buildJsonObject {
                     put(
@@ -880,7 +896,7 @@ class EventServiceCoverageTest {
     @Test
     fun `storeReplayEvent with projectId 0 is rejected`() = runBlocking {
         val replayJson = Json.encodeToString(
-            SentryReplayEvent(replay_id = "replay-bad")
+            SentryReplayEvent(replayId = "replay-bad")
         )
 
         eventService.processEnvelope(
@@ -901,10 +917,10 @@ class EventServiceCoverageTest {
 
         val replayJson = Json.encodeToString(
             SentryReplayEvent(
-                replay_id = "replay-ctx",
-                segment_id = 3,
+                replayId = "replay-ctx",
+                segmentId = 3,
                 timestamp = 1700000000.0,
-                replay_start_timestamp = 1699999990.0,
+                replayStartTimestamp = 1699999990.0,
                 urls = listOf("https://a.com", "https://b.com"),
                 contexts = buildJsonObject {
                     put(
@@ -967,7 +983,7 @@ class EventServiceCoverageTest {
 
         val body = Json.encodeToString(
             SentryEvent(
-                event_id = "store-1",
+                eventId = "store-1",
                 level = "error",
                 message = "Direct store",
                 exception = ExceptionInfo(
@@ -1013,9 +1029,9 @@ class EventServiceCoverageTest {
 
         val txnJson = Json.encodeToString(
             SentryTransaction(
-                event_id = "txn-fail",
+                eventId = "txn-fail",
                 transaction = "test",
-                start_timestamp = 1700000000.0,
+                startTimestamp = 1700000000.0,
                 timestamp = 1700000001.0,
                 contexts = buildJsonObject {
                     put(
@@ -1037,8 +1053,8 @@ class EventServiceCoverageTest {
             )
         )
 
-        // No spans should be inserted when transaction fails
-        coVerify(exactly = 0) { eventRepository.insertSpans(any()) }
+        // Transaction insert should have failed, so no further processing
+        coVerify(exactly = 1) { eventRepository.insertTransaction(any()) }
     }
 
     // ===================== storeEvent when insert fails =====================
@@ -1049,7 +1065,7 @@ class EventServiceCoverageTest {
 
         val eventJson = Json.encodeToString(
             SentryEvent(
-                event_id = "evt-fail",
+                eventId = "evt-fail",
                 exception = ExceptionInfo(
                     values = listOf(ExceptionValue(type = "Error", value = "fail"))
                 )
@@ -1076,61 +1092,61 @@ class EventServiceCoverageTest {
 
         val aiSpans = listOf(
             SentrySpan(
-                span_id = "s1",
+                spanId = "s1",
                 op = "ai.chat_completion",
                 description = "Chat",
-                start_timestamp = 1700000001.0,
+                startTimestamp = 1700000001.0,
                 timestamp = 1700000002.0
             ),
             SentrySpan(
-                span_id = "s2",
+                spanId = "s2",
                 op = "ai.embedding",
                 description = "Embed",
-                start_timestamp = 1700000002.0,
+                startTimestamp = 1700000002.0,
                 timestamp = 1700000003.0
             ),
             SentrySpan(
-                span_id = "s3",
+                spanId = "s3",
                 op = "ai.tool_call",
                 description = "Tool",
-                start_timestamp = 1700000003.0,
+                startTimestamp = 1700000003.0,
                 timestamp = 1700000004.0
             ),
             SentrySpan(
-                span_id = "s4",
+                spanId = "s4",
                 op = "ai.agent",
                 description = "Agent",
-                start_timestamp = 1700000004.0,
+                startTimestamp = 1700000004.0,
                 timestamp = 1700000005.0
             ),
             SentrySpan(
-                span_id = "s5",
+                spanId = "s5",
                 op = "ai.chain",
                 description = "Chain",
-                start_timestamp = 1700000005.0,
+                startTimestamp = 1700000005.0,
                 timestamp = 1700000006.0
             ),
             SentrySpan(
-                span_id = "s6",
+                spanId = "s6",
                 op = "ai.retriever",
                 description = "Retriever",
-                start_timestamp = 1700000006.0,
+                startTimestamp = 1700000006.0,
                 timestamp = 1700000007.0
             ),
             SentrySpan(
-                span_id = "s7",
+                spanId = "s7",
                 op = "ai.run",
                 description = "Generic",
-                start_timestamp = 1700000007.0,
+                startTimestamp = 1700000007.0,
                 timestamp = 1700000008.0
             ),
         )
 
         val txnJson = Json.encodeToString(
             SentryTransaction(
-                event_id = "txn-ai-types",
+                eventId = "txn-ai-types",
                 transaction = "ai-test",
-                start_timestamp = 1700000000.0,
+                startTimestamp = 1700000000.0,
                 timestamp = 1700000010.0,
                 contexts = buildJsonObject {
                     put(

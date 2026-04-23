@@ -34,6 +34,7 @@ import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -70,7 +71,7 @@ fun Route.llmIngestRoutes() {
                 return@post
             }
 
-            try {
+            suspendRunCatching {
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
                 val decompressedBytes = DecompressionService.decompress(bodyBytes, contentEncoding)
@@ -109,7 +110,7 @@ fun Route.llmIngestRoutes() {
                 RedisConfig.sync().lpush(queueKey, message)
 
                 call.respond(HttpStatusCode.Accepted, mapOf("accepted" to payload.generations.size))
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to process LLM ingest payload: ${e.message}" }
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid LLM payload"))
             }

@@ -55,8 +55,6 @@ fun Route.ndmQueryRoutes() {
         }
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleListDevices() {
     val orgId = extractOrgId() ?: return
     val limit = paramLimit()
@@ -99,8 +97,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListDevices() {
         }
     )
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleDeviceDetail() {
     val orgId = extractOrgId() ?: return
     val deviceId = call.parameters["deviceId"] ?: return call.respond(
@@ -140,8 +136,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeviceDetail() {
         call.respond(rows.first())
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleListTraps() {
     val orgId = extractOrgId() ?: return
     val limit = paramLimit()
@@ -178,8 +172,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListTraps() {
         }
     )
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleListFlows() {
     val orgId = extractOrgId() ?: return
     val limit = paramLimit()
@@ -222,8 +214,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFlows() {
         }
     )
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleListPaths() {
     val orgId = extractOrgId() ?: return
     val limit = paramLimit()

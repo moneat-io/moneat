@@ -20,11 +20,12 @@ import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.models.StripeWebhookEvents
 import com.moneat.billing.repositories.SubscriptionRepositoryImpl
 import com.moneat.billing.services.StripeService
-import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.shared.repositories.OrganizationRepositoryImpl
+import com.moneat.testsupport.TestDatabaseHelper
 import com.stripe.exception.SignatureVerificationException
 import com.stripe.model.Event
 import com.stripe.model.Invoice
@@ -37,7 +38,6 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.test.*
 import kotlin.time.Clock
 import kotlin.time.Instant
-import com.moneat.testsupport.TestDatabaseHelper
 
 class StripeServiceWebhookTest {
     private val stripeService = StripeService(SubscriptionRepositoryImpl(), OrganizationRepositoryImpl())
@@ -601,7 +601,8 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.payg_used_units] = 500
                 it[Subscriptions.payg_used_micros] = 200000000
                 it[Subscriptions.status] = "past_due"
-                it[Subscriptions.billing_grace_until] = Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
+                it[Subscriptions.billing_grace_until] =
+                    Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
             }
         }
 
@@ -640,7 +641,8 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.payg_used_micros] = 200000000
                 it[Subscriptions.pending_meter_units] = 100
                 it[Subscriptions.status] = "past_due"
-                it[Subscriptions.billing_grace_until] = Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
+                it[Subscriptions.billing_grace_until] =
+                    Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
             }
         }
 
@@ -978,7 +980,8 @@ class StripeServiceWebhookTest {
                 customerId = customerId,
                 status = "active",
                 organizationId = testOrgId, // Use valid org
-                withOrgMetadata = false // Don't include org_id in metadata so it will be resolved by customer ID but customer not linked
+                // Omit org_id in metadata; resolve by customer ID when customer not linked
+                withOrgMetadata = false
             )
 
         // Should not throw - handles gracefully when customer has no linked subscription

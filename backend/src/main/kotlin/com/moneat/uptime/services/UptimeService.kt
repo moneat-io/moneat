@@ -27,6 +27,7 @@ import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.models.UptimeMonitorResponse
 import com.moneat.uptime.repositories.UptimeMonitorRepository
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -38,6 +39,7 @@ import kotlin.math.roundToInt
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -54,6 +56,12 @@ class UptimeService(
         private const val TEAM_TIER_QUOTA = 25
         private const val BUSINESS_TIER_QUOTA = Int.MAX_VALUE
         private const val DEFAULT_TIER_QUOTA = 3
+        private const val MILLIS_PER_SECOND = 1000
+        private const val PERCENT_MULTIPLIER = 100f
+        private const val HOURS_PER_DAY = 24
+        private const val HOURS_PER_WEEK = 168
+        private const val HOURS_PER_MONTH = 720
+        private const val TOKEN_BYTES_SIZE = 32
     }
 
     /**
@@ -159,7 +167,7 @@ class UptimeService(
         monitorId: UUID,
         result: CheckResult
     ) {
-        val timestamp = Clock.System.now().toEpochMilliseconds() / 1000.0
+        val timestamp = Clock.System.now().toEpochMilliseconds() / MILLIS_PER_SECOND.toDouble()
 
         val sql =
             """
@@ -167,7 +175,7 @@ class UptimeService(
             (monitor_id, timestamp, status, response_time_ms, status_code, message, ping_ms)
             VALUES (
                 '$monitorId',
-                fromUnixTimestamp64Milli(${(timestamp * 1000).toLong()}),
+                fromUnixTimestamp64Milli(${(timestamp * MILLIS_PER_SECOND).toLong()}),
                 ${result.status},
                 ${result.responseTimeMs},
                 ${result.statusCode},
@@ -176,9 +184,9 @@ class UptimeService(
             )
             """.trimIndent()
 
-        try {
+        suspendRunCatching {
             uptimeMonitorRepository.executeClickHouseInsert(sql)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to record heartbeat for monitor $monitorId" }
         }
     }
@@ -219,7 +227,7 @@ class UptimeService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val body = uptimeMonitorRepository.executeClickHouseQuery(query)
 
             if (body.isBlank()) return emptyList()
@@ -235,12 +243,12 @@ class UptimeService(
                         message = json["message"]?.jsonPrimitive?.content ?: "",
                         pingMs = json["ping_ms"]?.jsonPrimitive?.content?.toFloatOrNull()
                     )
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
                     logger.warn(e) { "Failed to parse heartbeat: $line" }
                     null
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to query heartbeats for monitor $monitorId" }
             emptyList()
         }
@@ -268,7 +276,7 @@ class UptimeService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val body = uptimeMonitorRepository.executeClickHouseQuery(query)
 
             if (body.isBlank()) return 0f
@@ -277,8 +285,8 @@ class UptimeService(
             val upCount = json["up_count"]?.jsonPrimitive?.long ?: 0L
             val totalCount = json["total_count"]?.jsonPrimitive?.long ?: 0L
 
-            if (totalCount == 0L) 0f else (upCount.toFloat() / totalCount.toFloat() * 100f)
-        } catch (e: Exception) {
+            if (totalCount == 0L) 0f else (upCount.toFloat() / totalCount.toFloat() * PERCENT_MULTIPLIER)
+        }.getOrElse { e ->
             logger.error(e) { "Failed to calculate uptime for monitor $monitorId" }
             0f
         }
@@ -304,7 +312,7 @@ class UptimeService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val body = uptimeMonitorRepository.executeClickHouseQuery(query)
 
             if (body.isBlank()) return 0
@@ -315,7 +323,7 @@ class UptimeService(
                 ?.content
                 ?.toDoubleOrNull()
                 ?.roundToInt() ?: 0
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to calculate avg response time for monitor $monitorId" }
             0
         }
@@ -362,9 +370,9 @@ class UptimeService(
                 // Run async calls synchronously (in real impl, could be suspended)
                 kotlinx.coroutines.runBlocking {
                     Triple(
-                        getUptimePercentage(monitor.id, 24),
-                        getUptimePercentage(monitor.id, 168),
-                        getUptimePercentage(monitor.id, 720)
+                        getUptimePercentage(monitor.id, HOURS_PER_DAY),
+                        getUptimePercentage(monitor.id, HOURS_PER_WEEK),
+                        getUptimePercentage(monitor.id, HOURS_PER_MONTH)
                     )
                 }
             } else {
@@ -374,7 +382,7 @@ class UptimeService(
         val avgResponseTime =
             if (includeStats) {
                 kotlinx.coroutines.runBlocking {
-                    getAverageResponseTime(monitor.id, 24)
+                    getAverageResponseTime(monitor.id, HOURS_PER_DAY)
                 }
             } else {
                 null
@@ -392,7 +400,11 @@ class UptimeService(
             method = monitor.method,
             headers =
             monitor.headers?.let {
-                try { Json.decodeFromString<Map<String, String>>(it) } catch (e: Exception) { null }
+                try {
+                    Json.decodeFromString<Map<String, String>>(it)
+                } catch (e: SerializationException) {
+                    null
+                }
             },
             body = monitor.body,
             authMethod = monitor.authMethod,
@@ -432,7 +444,7 @@ class UptimeService(
 
     private fun generatePushToken(): String {
         val random = SecureRandom()
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(TOKEN_BYTES_SIZE)
         random.nextBytes(bytes)
         return bytes.joinToString("") { "%02x".format(it) }
     }

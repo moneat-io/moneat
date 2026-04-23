@@ -19,15 +19,19 @@ package com.moneat.services
 import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.DiscordService
 import com.moneat.shared.models.OrganizationIntegrations
-import com.moneat.testsupport.MockHttpServer
-import com.moneat.testsupport.respond
 import com.moneat.shared.models.Organizations
+import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.respond
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,10 +40,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
-import io.mockk.every
-import io.mockk.mockkObject
-import io.mockk.unmockkObject
-import kotlin.test.AfterTest
 
 class DiscordServiceBuildersTest {
     companion object {
@@ -647,7 +647,7 @@ class DiscordServiceBuildersTest {
     @Test
     fun `DiscordOAuthResponse with error`() {
         val resp = DiscordService.DiscordOAuthResponse(error = "invalid_grant")
-        assertNull(resp.access_token)
+        assertNull(resp.accessToken)
         assertNull(resp.guild)
         assertTrue(resp.error == "invalid_grant")
     }

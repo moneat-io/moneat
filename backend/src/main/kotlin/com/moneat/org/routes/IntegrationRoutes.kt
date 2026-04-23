@@ -61,6 +61,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.abs
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = LoggerFactory.getLogger("IntegrationRoutes")
 
@@ -109,6 +110,14 @@ data class SlackChannel(
 )
 
 // Helper functions for secure state management
+private const val MILLIS_PER_SECOND = 1000
+private const val SLACK_REQUEST_MAX_AGE_SECONDS = 300
+private const val NONCE_BYTES_SIZE = 16
+private const val OAUTH_PARTS_COUNT = 5
+private const val OAUTH_STATE_NONCE_INDEX = 3
+private const val OAUTH_STATE_SIGNATURE_INDEX = 4
+private const val OAUTH_STATE_MAX_AGE_MS = 600_000
+private const val DISCORD_BOT_PERMISSIONS = 85504 // 0x14C00
 private val secureRandom = SecureRandom()
 
 private fun getStateSecret(): String {
@@ -143,10 +152,10 @@ private fun verifySlackRequestSignature(
     val timestamp = headers["X-Slack-Request-Timestamp"] ?: return false
     val signature = headers["X-Slack-Signature"] ?: return false
     val requestTs = timestamp.toLongOrNull() ?: return false
-    val nowTs = System.currentTimeMillis() / 1000
+    val nowTs = System.currentTimeMillis() / MILLIS_PER_SECOND
 
     // Reject stale/replayed payloads.
-    if (abs(nowTs - requestTs) > 60 * 5) return false
+    if (abs(nowTs - requestTs) > SLACK_REQUEST_MAX_AGE_SECONDS) return false
 
     val secret =
         getSlackSigningSecret() ?: run {
@@ -165,7 +174,7 @@ private fun generateSecureState(
     userId: Int,
     organizationId: Int
 ): String {
-    val nonce = ByteArray(16)
+    val nonce = ByteArray(NONCE_BYTES_SIZE)
     secureRandom.nextBytes(nonce)
     val timestamp = System.currentTimeMillis()
     val payload = "$userId:$organizationId:$timestamp:${Base64.getUrlEncoder().withoutPadding().encodeToString(nonce)}"
@@ -180,19 +189,19 @@ private fun generateSecureState(
 }
 
 private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
-    try {
+    suspendRunCatching {
         val decoded = String(Base64.getUrlDecoder().decode(state))
         val parts = decoded.split(":")
-        if (parts.size != 5) return null
+        if (parts.size != OAUTH_PARTS_COUNT) return null
 
         val userId = parts[0].toInt()
         val organizationId = parts[1].toInt()
         val timestamp = parts[2].toLong()
-        val nonce = parts[3]
-        val signature = parts[4]
+        val nonce = parts[OAUTH_STATE_NONCE_INDEX]
+        val signature = parts[OAUTH_STATE_SIGNATURE_INDEX]
 
         // Check if state is expired (10 minutes)
-        if (System.currentTimeMillis() - timestamp > 10 * 60 * 1000) {
+        if (System.currentTimeMillis() - timestamp > OAUTH_STATE_MAX_AGE_MS) {
             return null
         }
 
@@ -211,7 +220,7 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
         }
 
         return Pair(userId, organizationId)
-    } catch (e: Exception) {
+    }.getOrElse { _ ->
         return null
     }
 }
@@ -223,7 +232,7 @@ fun Route.integrationRoutes() {
     route("/integrations") {
         // List all integrations for the organization
         get {
-            try {
+            suspendRunCatching {
                 val principal = call.principal<JWTPrincipal>()
                 if (principal == null) {
                     logger.error("No JWT principal found")
@@ -266,7 +275,7 @@ fun Route.integrationRoutes() {
 
                 logger.info("Returning ${integrations.size} integrations")
                 call.respond(integrations)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error("Error fetching integrations", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -274,7 +283,7 @@ fun Route.integrationRoutes() {
 
         // Start Slack OAuth flow
         get("/slack/oauth/start") {
-            try {
+            suspendRunCatching {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
@@ -307,7 +316,9 @@ fun Route.integrationRoutes() {
                     )
                 }
 
-                val scopes = "chat:write,channels:read,channels:join,groups:read,groups:write,usergroups:read,usergroups:write"
+                val scopes =
+                    "chat:write,channels:read,channels:join,groups:read,groups:write,usergroups:read," +
+                        "usergroups:write"
 
                 // Generate secure state parameter bound to user and org
                 val state = generateSecureState(userId, organizationId)
@@ -320,7 +331,7 @@ fun Route.integrationRoutes() {
                         "state=$state"
 
                 call.respond(SlackOAuthStartResponse(authUrl))
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error("Error starting Slack OAuth", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -508,7 +519,7 @@ fun Route.integrationRoutes() {
 
         // Discord OAuth Start
         get("/discord/oauth/start") {
-            try {
+            suspendRunCatching {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
@@ -527,14 +538,21 @@ fun Route.integrationRoutes() {
 
                 val clientId =
                     EnvConfig.get("DISCORD_CLIENT_ID")
-                        ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord client ID not configured"))
+                        ?: return@get call.respond(
+                            HttpStatusCode.InternalServerError,
+                            MessageResponse("Discord client ID not configured")
+                        )
 
                 val redirectUri =
                     EnvConfig.get("DISCORD_REDIRECT_URI")
-                        ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord redirect URI not configured"))
+                        ?: return@get call.respond(
+                            HttpStatusCode.InternalServerError,
+                            MessageResponse("Discord redirect URI not configured")
+                        )
 
-                // Discord permissions: Send Messages (0x800), Embed Links (0x4000), Read Message History (0x10000), View Channels (0x400)
-                val permissions = 85504 // 0x14C00
+                // Discord permissions: Send Messages (0x800), Embed Links (0x4000),
+                // Read Message History (0x10000), View Channels (0x400)
+                val permissions = DISCORD_BOT_PERMISSIONS
                 val scopes = "bot+guilds"
 
                 val state = generateSecureState(userId, organizationId)
@@ -549,7 +567,7 @@ fun Route.integrationRoutes() {
                         "state=$state"
 
                 call.respond(SlackOAuthStartResponse(authUrl))
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error("Error starting Discord OAuth", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -584,10 +602,10 @@ fun Route.integrationRoutes() {
                 return@get call.respond(HttpStatusCode.NotFound, MessageResponse("Discord not configured"))
             }
 
-            try {
+            suspendRunCatching {
                 val channels = discordService.listChannels(guildId).map { SlackChannel(it.id, it.name) }
                 call.respond(SlackChannelList(channels))
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error("Error fetching Discord channels", e)
                 call.respond(HttpStatusCode.InternalServerError, MessageResponse("Error: ${e.message}"))
             }
@@ -743,7 +761,10 @@ fun Route.integrationCallbackRoutes() {
             // Validate and decode the signed state
             val (userId, organizationId) =
                 validateAndDecodeState(state)
-                    ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse("Invalid or expired state parameter"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        MessageResponse("Invalid or expired state parameter")
+                    )
 
             // Verify user still has access to the organization
             val hasAccess =
@@ -762,17 +783,26 @@ fun Route.integrationCallbackRoutes() {
 
             val clientId =
                 EnvConfig.get("SLACK_CLIENT_ID")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Slack client ID not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Slack client ID not configured")
+                    )
             val clientSecret =
                 EnvConfig.get("SLACK_CLIENT_SECRET")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Slack client secret not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Slack client secret not configured")
+                    )
             val redirectUri =
                 EnvConfig.get("SLACK_REDIRECT_URI")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Slack redirect URI not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Slack redirect URI not configured")
+                    )
 
             val oauthResponse = slackService.exchangeOAuthCode(code, clientId, clientSecret, redirectUri)
 
-            if (oauthResponse.ok && oauthResponse.access_token != null) {
+            if (oauthResponse.ok && oauthResponse.accessToken != null) {
                 val now = Clock.System.now()
 
                 transaction {
@@ -790,8 +820,8 @@ fun Route.integrationCallbackRoutes() {
                             (OrganizationIntegrations.organization_id eq organizationId) and
                                 (OrganizationIntegrations.integration_type eq "slack")
                         }) {
-                            it[access_token] = oauthResponse.access_token
-                            it[bot_user_id] = oauthResponse.bot_user_id
+                            it[access_token] = oauthResponse.accessToken
+                            it[bot_user_id] = oauthResponse.botUserId
                             it[team_id] = oauthResponse.team?.id
                             it[team_name] = oauthResponse.team?.name
                             it[enabled] = true
@@ -802,8 +832,8 @@ fun Route.integrationCallbackRoutes() {
                         OrganizationIntegrations.insert {
                             it[organization_id] = organizationId
                             it[integration_type] = "slack"
-                            it[access_token] = oauthResponse.access_token
-                            it[bot_user_id] = oauthResponse.bot_user_id
+                            it[access_token] = oauthResponse.accessToken
+                            it[bot_user_id] = oauthResponse.botUserId
                             it[team_id] = oauthResponse.team?.id
                             it[team_name] = oauthResponse.team?.name
                             it[enabled] = true
@@ -842,7 +872,10 @@ fun Route.integrationCallbackRoutes() {
 
             val (userId, organizationId) =
                 validateAndDecodeState(state)
-                    ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse("Invalid or expired state parameter"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        MessageResponse("Invalid or expired state parameter")
+                    )
 
             val hasAccess =
                 transaction {
@@ -860,18 +893,27 @@ fun Route.integrationCallbackRoutes() {
 
             val clientId =
                 EnvConfig.get("DISCORD_CLIENT_ID")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord client ID not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Discord client ID not configured")
+                    )
             val clientSecret =
                 EnvConfig.get("DISCORD_CLIENT_SECRET")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord client secret not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Discord client secret not configured")
+                    )
             val redirectUri =
                 EnvConfig.get("DISCORD_REDIRECT_URI")
-                    ?: return@get call.respond(HttpStatusCode.InternalServerError, MessageResponse("Discord redirect URI not configured"))
+                    ?: return@get call.respond(
+                        HttpStatusCode.InternalServerError,
+                        MessageResponse("Discord redirect URI not configured")
+                    )
 
             // Exchange code for access token
             val oauthResponse = discordService.exchangeOAuthCode(code, clientId, clientSecret, redirectUri)
 
-            if (oauthResponse.access_token != null && oauthResponse.guild != null) {
+            if (oauthResponse.accessToken != null && oauthResponse.guild != null) {
                 val now = Clock.System.now()
 
                 transaction {
@@ -888,7 +930,7 @@ fun Route.integrationCallbackRoutes() {
                             (OrganizationIntegrations.organization_id eq organizationId) and
                                 (OrganizationIntegrations.integration_type eq "discord")
                         }) {
-                            it[access_token] = oauthResponse.access_token
+                            it[access_token] = oauthResponse.accessToken
                             it[team_id] = oauthResponse.guild.id
                             it[team_name] = oauthResponse.guild.name
                             it[enabled] = true
@@ -898,7 +940,7 @@ fun Route.integrationCallbackRoutes() {
                         OrganizationIntegrations.insert {
                             it[organization_id] = organizationId
                             it[integration_type] = "discord"
-                            it[access_token] = oauthResponse.access_token
+                            it[access_token] = oauthResponse.accessToken
                             it[team_id] = oauthResponse.guild.id
                             it[team_name] = oauthResponse.guild.name
                             it[enabled] = true
@@ -926,7 +968,7 @@ fun Route.integrationCallbackRoutes() {
 
         // Slack Interactivity Endpoint (for interactive message buttons)
         post("/slack/interactions") {
-            try {
+            suspendRunCatching {
                 val rawBody = call.receiveText()
                 if (!verifySlackRequestSignature(call.request.headers, rawBody)) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid Slack signature"))
@@ -999,7 +1041,10 @@ fun Route.integrationCallbackRoutes() {
                                                     ?.get(Memberships.organization_id)
                                             }
 
-                                        if (incident == null || userOrgId == null || incident.organizationId != userOrgId) {
+                                        if (incident == null ||
+                                            userOrgId == null ||
+                                            incident.organizationId != userOrgId
+                                        ) {
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "ephemeral",
@@ -1037,7 +1082,7 @@ fun Route.integrationCallbackRoutes() {
 
                 // Default response for unhandled actions
                 call.respond(HttpStatusCode.OK, mapOf("text" to "Action received"))
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error("Error processing Slack interaction", e)
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal error"))
             }
@@ -1059,7 +1104,7 @@ fun Route.integrationCallbackRoutes() {
 
                 val request = call.receive<LinkUserRequest>()
 
-                try {
+                suspendRunCatching {
                     transaction {
                         // Check if mapping exists
                         val existing =
@@ -1090,7 +1135,7 @@ fun Route.integrationCallbackRoutes() {
                     }
 
                     call.respond(HttpStatusCode.OK, MessageResponse("User linked successfully"))
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error("Error linking Slack user", e)
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to link user"))
                 }

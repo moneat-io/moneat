@@ -27,9 +27,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 private const val EVENT_QUEUE_KEY = "moneat:infra_events:queue"
+private const val ERROR_BODY_MAX_LEN = 600
 
 @Serializable
 data class QueuedEventBatch(
@@ -74,7 +76,6 @@ object DatadogEventService {
         encodeDefaults = true
     }
 
-    @Suppress("MagicNumber")
     fun mapEvents(
         organizationId: Long,
         events: List<DatadogEvent>
@@ -83,7 +84,7 @@ object DatadogEventService {
         val entries = events.map { event ->
             val tags = DatadogMetricService.parseDdTagList(event.tags)
             val timestampMs = if (event.dateHappened != null) {
-                event.dateHappened * 1000
+                event.dateHappened * MILLIS_PER_SECOND_LONG
             } else {
                 now
             }
@@ -113,7 +114,6 @@ object DatadogEventService {
         )
     }
 
-    @Suppress("MagicNumber")
     fun mapServiceChecks(
         organizationId: Long,
         checks: List<DatadogServiceCheck>
@@ -122,7 +122,7 @@ object DatadogEventService {
         val entries = checks.map { sc ->
             val tags = DatadogMetricService.parseDdTagList(sc.tags)
             val timestampMs = if (sc.timestamp != null) {
-                sc.timestamp * 1000
+                sc.timestamp * MILLIS_PER_SECOND_LONG
             } else {
                 now
             }
@@ -191,7 +191,7 @@ object DatadogEventService {
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             throw IllegalStateException(
-                "Failed to insert DD events: ${errorBody.take(600)}"
+                "Failed to insert DD events: ${errorBody.take(ERROR_BODY_MAX_LEN)}"
             )
         }
     }
@@ -235,7 +235,7 @@ object DatadogEventService {
             val errorBody = response.bodyAsText()
             throw IllegalStateException(
                 "Failed to insert DD service checks: " +
-                    errorBody.take(600)
+                    errorBody.take(ERROR_BODY_MAX_LEN)
             )
         }
     }

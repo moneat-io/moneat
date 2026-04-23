@@ -35,6 +35,10 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import kotlin.collections.filter
+import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_DAY
+import com.moneat.utils.TimeConstants.MILLIS_PER_HOUR
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -72,16 +76,30 @@ class DashboardQueryEngine {
 
         private val TIME_RANGE_REGEX = Regex("""^now-(\d+)([smhdwMy])$""")
 
+        private const val MILLIS_PER_MINUTE = 60_000L
+        private const val MILLIS_PER_WEEK = 604_800_000L
+        private const val MILLIS_PER_MONTH = 2_592_000_000L
+        private const val MILLIS_PER_YEAR = 31_536_000_000L
+        private const val MINUTES_IN_1_HOUR = 60L
+        private const val MINUTES_IN_6_HOURS = 360L
+        private const val MINUTES_IN_1_DAY = 1440L
+        private const val MINUTES_IN_1_WEEK = 10080L
+        private const val MINUTES_IN_30_DAYS = 43200L
+        private const val MINUTES_IN_90_DAYS = 129600L
+        private const val MAX_QUERY_RESULT_LIMIT = 10000
+        private const val EPOCH_MS_TO_SECONDS_DIVISOR = 1000.0
+        private const val DATETIME64_MILLIS_PRECISION = 3
+
         fun resolveTimeInterval(from: String, to: String): String {
             val rangeMs = parseRelativeTime(to) - parseRelativeTime(from)
-            val rangeMinutes = rangeMs / 60_000
+            val rangeMinutes = rangeMs / MILLIS_PER_MINUTE
             return when {
-                rangeMinutes <= 60 -> "1 MINUTE"
-                rangeMinutes <= 360 -> "5 MINUTE"
-                rangeMinutes <= 1440 -> "15 MINUTE"
-                rangeMinutes <= 10080 -> "1 HOUR"
-                rangeMinutes <= 43200 -> "4 HOUR"
-                rangeMinutes <= 129600 -> "1 DAY"
+                rangeMinutes <= MINUTES_IN_1_HOUR -> "1 MINUTE"
+                rangeMinutes <= MINUTES_IN_6_HOURS -> "5 MINUTE"
+                rangeMinutes <= MINUTES_IN_1_DAY -> "15 MINUTE"
+                rangeMinutes <= MINUTES_IN_1_WEEK -> "1 HOUR"
+                rangeMinutes <= MINUTES_IN_30_DAYS -> "4 HOUR"
+                rangeMinutes <= MINUTES_IN_90_DAYS -> "1 DAY"
                 else -> "1 WEEK"
             }
         }
@@ -92,13 +110,13 @@ class DashboardQueryEngine {
             val amount = match.groupValues[1].toLong()
             val unit = match.groupValues[2]
             val ms = when (unit) {
-                "s" -> amount * 1000
-                "m" -> amount * 60_000
-                "h" -> amount * 3_600_000
-                "d" -> amount * 86_400_000
-                "w" -> amount * 604_800_000
-                "M" -> amount * 2_592_000_000
-                "y" -> amount * 31_536_000_000
+                "s" -> amount * MILLIS_PER_SECOND_LONG
+                "m" -> amount * MILLIS_PER_MINUTE
+                "h" -> amount * MILLIS_PER_HOUR
+                "d" -> amount * MILLIS_PER_DAY
+                "w" -> amount * MILLIS_PER_WEEK
+                "M" -> amount * MILLIS_PER_MONTH
+                "y" -> amount * MILLIS_PER_YEAR
                 else -> 0
             }
             return System.currentTimeMillis() - ms
@@ -179,7 +197,7 @@ class DashboardQueryEngine {
             if (orderByClause.isNotEmpty()) {
                 append(" ORDER BY $orderByClause")
             }
-            append(" LIMIT ${dsl.limit.coerceIn(1, 10000)}")
+            append(" LIMIT ${dsl.limit.coerceIn(1, MAX_QUERY_RESULT_LIMIT)}")
             append(" FORMAT JSONEachRow")
         }
     }
@@ -251,7 +269,7 @@ class DashboardQueryEngine {
     ): List<String> {
         val clauses = mutableListOf<String>()
         val nowExpr = if (demoEpochMs != null) {
-            "toDateTime64(${demoEpochMs / 1000.0}, 3)"
+            "toDateTime64(${demoEpochMs / EPOCH_MS_TO_SECONDS_DIVISOR}, $DATETIME64_MILLIS_PRECISION)"
         } else {
             "now()"
         }
@@ -343,14 +361,17 @@ class DashboardQueryEngine {
         }
 
         val sql = buildQuery(dsl, projectId, demoEpochMs, retentionDays)
-        logger.debug { "Executing dashboard query: ${sql.take(500)}" }
+        logger.debug {
+            "Executing dashboard query dataSource=${dsl.dataSource} " +
+                "metrics=${dsl.metrics.size} filters=${dsl.filters.size} groupBy=${dsl.groupBy.size}"
+        }
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(sql)
             val body = response.bodyAsText()
 
             if (response.isClickHouseError(body)) {
-                logger.error { "ClickHouse error: ${body.take(400)}" }
+                logger.error { "ClickHouse returned an error body (length=${body.length})" }
                 return emptyList()
             }
 
@@ -359,7 +380,7 @@ class DashboardQueryEngine {
             body.lines()
                 .filter { it.isNotBlank() }
                 .map { line -> json.parseToJsonElement(line).jsonObject.toMap() }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to execute dashboard query" }
             emptyList()
         }

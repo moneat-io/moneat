@@ -10,6 +10,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api, type ApmTraceListItem} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
+import {SourceBadge} from '@/components/apm/SourceBadge'
 import {
   Tooltip,
   TooltipContent,
@@ -198,7 +199,7 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
             <Clock className="h-10 w-10 mb-3 text-muted-foreground/40" />
             <p className="font-medium">No traces found</p>
             <p className="text-sm mt-1">
-              Configure a Datadog agent to start sending APM traces.
+              Send traces via a Datadog agent or OpenTelemetry SDK.
             </p>
           </div>
         ) : (
@@ -251,6 +252,7 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
                       <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">
                         {trace.rootService}
                       </span>
+                      <SourceBadge source={trace.source} />
                     </div>
 
                     {/* Resource */}

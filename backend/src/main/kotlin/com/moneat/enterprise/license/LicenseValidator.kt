@@ -112,11 +112,13 @@ class LicenseValidator(publicKeyPem: String = PRODUCTION_PUBLIC_KEY_PEM) {
 
     // Base64url strings from openssl may omit padding — add it back for Java's decoder
     private fun padBase64Url(s: String): String {
-        val pad = (4 - s.length % 4) % 4
+        val pad = (BASE64_PADDING_SIZE - s.length % BASE64_PADDING_SIZE) % BASE64_PADDING_SIZE
         return s + "=".repeat(pad)
     }
 
     companion object {
+        private const val BASE64_PADDING_SIZE = 4
+
         // Public key corresponding to the Moneat license signing private key.
         // The private key is held only by Moneat and is never distributed.
         private val PRODUCTION_PUBLIC_KEY_PEM = """

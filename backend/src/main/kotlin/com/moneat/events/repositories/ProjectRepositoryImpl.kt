@@ -16,11 +16,12 @@
 
 package com.moneat.events.repositories
 
+import com.moneat.utils.suspendRunCatching
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.ProjectKeyResponse
-import com.moneat.events.repositories.models.ProjectRow
 import com.moneat.events.models.UpdateProjectRequest
+import com.moneat.events.repositories.models.ProjectRow
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
@@ -30,7 +31,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
-import kotlinx.coroutines.CancellationException
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -45,6 +45,8 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
@@ -219,16 +221,18 @@ class ProjectRepositoryImpl(
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (response.status.value !in 200..299 || body.trimStart().startsWith("Code:")) return 0
+            if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX ||
+                body.trimStart().startsWith("Code:")
+            ) {
+                return 0
+            }
             if (body.isBlank()) return 0
             val obj = json.parseToJsonElement(body.lines().first()).jsonObject
             obj["total"]?.jsonPrimitive?.long ?: 0
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to get issue count for project $projectId" }
             0
         }

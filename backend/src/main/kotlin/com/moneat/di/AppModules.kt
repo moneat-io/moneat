@@ -60,7 +60,6 @@ import com.moneat.incident.services.IncidentService
 import com.moneat.llm.services.LlmDashboardService
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.logs.repositories.LogRepositoryImpl
-import com.moneat.logs.services.LogApiKeyService
 import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.repositories.HostAlertRepository
@@ -70,7 +69,6 @@ import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
-import com.moneat.synthetics.routes.SyntheticsService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
@@ -83,6 +81,7 @@ import com.moneat.org.repositories.OrgMembershipRepositoryImpl
 import com.moneat.org.services.AdminService
 import com.moneat.org.services.OrgInvitationService
 import com.moneat.org.services.OrgMembershipService
+import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.shared.repositories.MembershipRepository
 import com.moneat.shared.repositories.MembershipRepositoryImpl
 import com.moneat.shared.repositories.OrganizationRepository
@@ -93,6 +92,7 @@ import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.statuspage.services.StatusPageService
 import com.moneat.summary.services.SummaryService
+import com.moneat.synthetics.routes.SyntheticsService
 import com.moneat.uptime.repositories.UptimeMonitorRepository
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeCheckExecutor
@@ -204,7 +204,7 @@ val logsModule = module {
     single<LogRepository> { LogRepositoryImpl() }
 
     single { LogService(get()) }
-    single { LogApiKeyService() }
+    single { OtlpApiKeyService() }
     single { LogIndexService() }
 }
 

@@ -16,7 +16,11 @@
 
 package com.moneat.plugins
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.config.SentryConfig
+import com.moneat.utils.ErrorResponse
 import com.moneat.utils.SentryUtils
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -24,6 +28,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.httpMethod
@@ -36,12 +41,19 @@ import io.sentry.Sentry
 import io.sentry.SpanStatus
 import mu.KotlinLogging
 import org.slf4j.event.Level
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
 // Attribute key for storing Sentry transaction in call
 private val SentryTransactionKey = AttributeKey<ITransaction>("SentryTransaction")
 private val ingestPathRegex = Regex("^/api/[^/]+/(envelope|logs|store|security)/?$")
+
+private const val HTTP_CLIENT_ERROR_MIN = 400
+private const val HTTP_CLIENT_ERROR_MAX = 499
+private const val HTTP_SERVER_ERROR_MIN = 500
+private const val HTTP_SERVER_ERROR_MAX = 599
 
 fun Application.configureMonitoring() {
     // Sentry transaction interceptor for non-ingestion, non-health requests
@@ -50,7 +62,7 @@ fun Application.configureMonitoring() {
             val method = call.request.httpMethod.value
             val path = call.request.path()
 
-            if (shouldSkipTracing(path)) {
+            if (shouldSkipTracing(path, method)) {
                 proceed()
                 return@intercept
             }
@@ -85,9 +97,9 @@ fun Application.configureMonitoring() {
                 // Determine transaction status based on HTTP status code
                 transaction.status =
                     when (status?.value) {
-                        in 200..299 -> SpanStatus.OK
-                        in 400..499 -> SpanStatus.INVALID_ARGUMENT
-                        in 500..599 -> SpanStatus.INTERNAL_ERROR
+                        in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX -> SpanStatus.OK
+                        in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX -> SpanStatus.INVALID_ARGUMENT
+                        in HTTP_SERVER_ERROR_MIN..HTTP_SERVER_ERROR_MAX -> SpanStatus.INTERNAL_ERROR
                         else -> SpanStatus.UNKNOWN_ERROR
                     }
 
@@ -100,7 +112,19 @@ fun Application.configureMonitoring() {
                         "description" to (status?.description ?: "")
                     )
                 )
-            } catch (e: Exception) {
+            } catch (e: SerializationException) {
+                transaction.status = SpanStatus.INTERNAL_ERROR
+                transaction.throwable = e
+                throw e
+            } catch (e: IOException) {
+                transaction.status = SpanStatus.INTERNAL_ERROR
+                transaction.throwable = e
+                throw e
+            } catch (e: IllegalStateException) {
+                transaction.status = SpanStatus.INTERNAL_ERROR
+                transaction.throwable = e
+                throw e
+            } catch (e: IllegalArgumentException) {
                 transaction.status = SpanStatus.INTERNAL_ERROR
                 transaction.throwable = e
                 throw e
@@ -113,34 +137,38 @@ fun Application.configureMonitoring() {
     }
 
     install(StatusPages) {
+        exception<BadRequestException> { call, cause ->
+            if (!call.response.isCommitted) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponse(cause.message ?: "Bad request"),
+                )
+            }
+        }
         exception<Throwable> { call, cause ->
             logger.error(cause) { "Unhandled exception: ${cause.message}" }
 
             // Send to Sentry if enabled
             if (SentryConfig.isEnabled()) {
-                try {
-                    Sentry.captureException(cause) { scope ->
-                        scope.setTag("http.method", call.request.httpMethod.value)
-                        scope.setTag("http.path", call.request.path())
-                        scope.setTag("http.status_code", "500")
+                Sentry.captureException(cause) { scope ->
+                    scope.setTag("http.method", call.request.httpMethod.value)
+                    scope.setTag("http.path", call.request.path())
+                    scope.setTag("http.status_code", "500")
 
-                        val userAgent = call.request.headers["User-Agent"] ?: "unknown"
-                        scope.setExtra("user_agent", userAgent)
-                        scope.setExtra("remote_host", call.request.local.remoteHost)
-                        scope.setExtra("query_string", call.request.queryString())
+                    val userAgent = call.request.headers["User-Agent"] ?: "unknown"
+                    scope.setExtra("user_agent", userAgent)
+                    scope.setExtra("remote_host", call.request.local.remoteHost)
+                    scope.setExtra("query_string", call.request.queryString())
 
-                        // Add request headers as extra context (excluding sensitive ones)
-                        val safeHeaders =
-                            call.request.headers
-                                .entries()
-                                .filter { (key, _) ->
-                                    !key.equals("Authorization", ignoreCase = true) &&
-                                        !key.equals("Cookie", ignoreCase = true)
-                                }.associate { (key, values) -> key to values.joinToString(", ") }
-                        scope.setExtra("request_headers", safeHeaders.toString())
-                    }
-                } catch (e: Throwable) {
-                    logger.error(e) { "Failed to capture exception to Sentry" }
+                    // Add request headers as extra context (excluding sensitive ones)
+                    val safeHeaders =
+                        call.request.headers
+                            .entries()
+                            .filter { (key, _) ->
+                                !key.equals("Authorization", ignoreCase = true) &&
+                                    !key.equals("Cookie", ignoreCase = true)
+                            }.associate { (key, values) -> key to values.joinToString(", ") }
+                    scope.setExtra("request_headers", safeHeaders.toString())
                 }
             }
 
@@ -170,12 +198,24 @@ fun Application.configureMonitoring() {
     }
 }
 
-private fun shouldSkipTracing(path: String): Boolean {
+private fun shouldSkipTracing(path: String, method: String): Boolean {
     if (path == "/health" || path == "/health/" || path.startsWith("/health/")) {
         return true
     }
-    if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/") {
-        return true
+    if (method == "POST") {
+        if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/" || path == "/v1/logs" || path == "/v1/logs/") {
+            return true
+        }
+        if (path == "/v1/traces" || path == "/v1/traces/otlp" ||
+            path == "/v1/traces/" || path == "/v1/traces/otlp/"
+        ) {
+            return true
+        }
+        if (path == "/v1/metrics" || path == "/v1/metrics/otlp" ||
+            path == "/v1/metrics/" || path == "/v1/metrics/otlp/"
+        ) {
+            return true
+        }
     }
     return ingestPathRegex.matches(path)
 }

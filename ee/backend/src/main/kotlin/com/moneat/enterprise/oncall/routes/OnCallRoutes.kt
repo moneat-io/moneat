@@ -47,6 +47,8 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
+private const val WEEKLY_ROTATION_DAYS = 7L
+
 @Serializable
 data class ScheduleTimelineEntry(
     val userId: Int,
@@ -549,7 +551,8 @@ fun Route.onCallRoutes(
                 data class CallerNumberResponse(
                     val phoneNumber: String?,
                 )
-                call.respond(CallerNumberResponse(if (twilioService.isEnabled()) twilioService.getFromNumber() else null))
+                val number = if (twilioService.isEnabled()) twilioService.getFromNumber() else null
+                call.respond(CallerNumberResponse(number))
             }
         }
     }
@@ -585,7 +588,7 @@ private fun buildScheduleTimeline(
     }
 
     val rotationType = scheduleRow[OnCallSchedules.rotationType]
-    val rotationDays = when (rotationType) { "DAILY" -> 1L; else -> 7L }
+    val rotationDays = when (rotationType) { "DAILY" -> 1L; else -> WEEKLY_ROTATION_DAYS }
     val zoneId = ZoneId.of(scheduleRow[OnCallSchedules.timezone])
     val handoffLocalTime = scheduleRow[OnCallSchedules.handoffTime]
 
@@ -608,7 +611,12 @@ private fun buildScheduleTimeline(
         val periodStart = LocalDate.EPOCH.plusDays(periodStartDays).atTime(handoffLocalTime).atZone(zoneId).toInstant()
         if (periodStart.toEpochMilli() >= endEpochMs) break
 
-        val periodEnd = LocalDate.EPOCH.plusDays(periodStartDays + rotationDays).atTime(handoffLocalTime).atZone(zoneId).toInstant()
+        val periodEnd =
+            LocalDate.EPOCH
+                .plusDays(periodStartDays + rotationDays)
+                .atTime(handoffLocalTime)
+                .atZone(zoneId)
+                .toInstant()
         val rotationCycle = ((periodStartDays / rotationDays) % participants.size).toInt()
         val (userId, userName) = participants[rotationCycle]
 

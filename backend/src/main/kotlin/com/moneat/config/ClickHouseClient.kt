@@ -27,9 +27,17 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.sentry.ISpan
 import io.sentry.Sentry
+import com.moneat.utils.suspendRunCatching
 
 object ClickHouseClient {
     private const val MIGRATION_TIMEOUT_MS = 600_000L
+    private const val HTTP_MAX_CONNECTIONS = 100
+    private const val KEEP_ALIVE_MS = 5_000L
+    private const val CONNECT_TIMEOUT_MS = 10_000L
+    private const val SOCKET_TIMEOUT_MS = 30_000L
+    private const val MIGRATION_MAX_CONNECTIONS = 4
+    private const val QUERY_LOG_MAX_LEN = 200
+    private const val ERROR_BODY_MAX_LEN = 500
 
     @Volatile
     private var httpClient: HttpClient? = null
@@ -55,27 +63,27 @@ object ClickHouseClient {
         this.httpClient =
             HttpClient(CIO) {
                 engine {
-                    maxConnectionsCount = 100
+                    maxConnectionsCount = HTTP_MAX_CONNECTIONS
                     endpoint {
-                        keepAliveTime = 5000
-                        connectTimeout = 10_000
-                        socketTimeout = 30_000
+                        keepAliveTime = KEEP_ALIVE_MS
+                        connectTimeout = CONNECT_TIMEOUT_MS
+                        socketTimeout = SOCKET_TIMEOUT_MS
                     }
                 }
             }
         this.migrationClient =
             HttpClient(CIO) {
                 engine {
-                    maxConnectionsCount = 4
+                    maxConnectionsCount = MIGRATION_MAX_CONNECTIONS
                     endpoint {
-                        keepAliveTime = 5000
-                        connectTimeout = 10_000
+                        keepAliveTime = KEEP_ALIVE_MS
+                        connectTimeout = CONNECT_TIMEOUT_MS
                         socketTimeout = MIGRATION_TIMEOUT_MS
                     }
                 }
                 install(HttpTimeout) {
                     requestTimeoutMillis = MIGRATION_TIMEOUT_MS
-                    connectTimeoutMillis = 10_000
+                    connectTimeoutMillis = CONNECT_TIMEOUT_MS
                     socketTimeoutMillis = MIGRATION_TIMEOUT_MS
                 }
             }
@@ -90,7 +98,7 @@ object ClickHouseClient {
             SentryUtils.withSpan(span, "db.clickhouse", "ClickHouse query") { childSpan ->
                 childSpan?.setData("db.system", "clickhouse")
                 childSpan?.setData("db.name", database)
-                childSpan?.setData("db.statement", query.take(200)) // Truncate long queries
+                childSpan?.setData("db.statement", query.take(QUERY_LOG_MAX_LEN)) // Truncate long queries
 
                 client.post(baseUrl) {
                     parameter("database", database)
@@ -120,7 +128,7 @@ object ClickHouseClient {
         val response = execute(queryWithFormat, span)
         val body = response.bodyAsText()
         check(!response.isClickHouseError(body)) {
-            "ClickHouse query failed (${response.status.value}): ${body.take(500)}"
+            "ClickHouse query failed (${response.status.value}): ${body.take(ERROR_BODY_MAX_LEN)}"
         }
         return body
     }
@@ -141,10 +149,10 @@ object ClickHouseClient {
     }
 
     suspend fun ping(): Boolean {
-        return try {
+        return suspendRunCatching {
             val response = httpClient!!.get("$baseUrl/ping")
             response.status == HttpStatusCode.OK
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             false
         }
     }
@@ -170,14 +178,14 @@ fun HttpResponse.isClickHouseError(body: String): Boolean = !status.isSuccess() 
 fun Application.configureClickHouse() {
     // Skip ClickHouse in test environment if not configured
     val url =
-        try {
+        suspendRunCatching {
             environment.config.property("database.clickhouse.url").getString()
-        } catch (e: Exception) {
+        }.getOrElse { _ ->
             log.warn("ClickHouse URL not configured, skipping ClickHouse initialization (test environment)")
             return
         }
 
-    try {
+    suspendRunCatching {
         val config = environment.config
         val database = config.property("database.clickhouse.database").getString()
         val user = config.property("database.clickhouse.user").getString()
@@ -187,7 +195,7 @@ fun Application.configureClickHouse() {
         log.info("ClickHouse client initialized")
         // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering
         // (workers must stop before ClickHouse client is closed)
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         log.error("Failed to initialize ClickHouse client. Make sure ClickHouse is running and accessible.", e)
         throw e
     }

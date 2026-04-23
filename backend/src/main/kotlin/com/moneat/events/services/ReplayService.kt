@@ -17,15 +17,16 @@
 package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
-import io.ktor.client.statement.bodyAsText
 import com.moneat.events.models.ReplayDetailResponse
 import com.moneat.events.models.ReplayListItem
 import com.moneat.events.models.ReplayRecordingResponse
 import com.moneat.events.models.ReplayTimelineItem
 import com.moneat.events.models.ReplayTimelineResponse
+import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
-import kotlinx.coroutines.CancellationException
+import com.moneat.utils.suspendRunCatching
+import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -37,11 +38,15 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.msgpack.core.MessagePack
 import org.msgpack.core.MessageUnpacker
 import org.msgpack.value.ValueType
 import java.time.Instant
 import java.util.Base64
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_RANGE
 
 private val logger = KotlinLogging.logger {}
 
@@ -111,11 +116,11 @@ class ReplayService(
     }
 
     private fun isClickHouseError(statusCode: Int, body: String, context: String): Boolean {
-        if (statusCode !in 200..299 || body.trimStart().startsWith("Code:")) {
-            if (statusCode !in 200..299) {
-                logger.error { "$context failed: $statusCode ${body.take(400)}" }
+        if (statusCode !in HTTP_SUCCESS_RANGE || body.trimStart().startsWith("Code:")) {
+            if (statusCode !in HTTP_SUCCESS_RANGE) {
+                logger.error { "$context failed: $statusCode ${body.take(LOG_BODY_PREVIEW_LENGTH)}" }
             } else {
-                logger.error { "$context (ClickHouse): ${body.take(400)}" }
+                logger.error { "$context (ClickHouse): ${body.take(LOG_BODY_PREVIEW_LENGTH)}" }
             }
             return true
         }
@@ -206,13 +211,13 @@ class ReplayService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = queryHelper.extractClickHouseBody(response) ?: return 0
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return 0
             val obj = json.parseToJsonElement(line).jsonObject
             obj["count"]?.jsonPrimitive?.intOrNull ?: 0
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to count replay window errors for project $projectId" }
             0
         }
@@ -243,7 +248,7 @@ class ReplayService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = queryHelper.extractClickHouseBody(response) ?: return emptyList()
             body
@@ -258,7 +263,7 @@ class ReplayService(
                             ?.contentOrNull
                     }.getOrNull()
                 }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch replay window error IDs for project $projectId" }
             emptyList()
         }
@@ -274,9 +279,9 @@ class ReplayService(
         payload: String,
         segmentIdx: Int
     ): List<JsonElement> {
-        return try {
+        return suspendRunCatching {
             parsedToJsonElementList(json.parseToJsonElement(payload))
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Segment $segmentIdx: Failed to parse replay payload as JSON" }
             emptyList()
         }
@@ -301,10 +306,10 @@ class ReplayService(
     }
 
     private fun extractSegmentIdFromJsonPayload(payload: String): Int? {
-        return try {
+        return suspendRunCatching {
             val obj = json.parseToJsonElement(payload).jsonObject
             obj["segment_id"]?.jsonPrimitive?.intOrNull
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             null
         }
     }
@@ -343,8 +348,8 @@ class ReplayService(
     }
 
     private fun isLikelyMp4(payloadBytes: ByteArray): Boolean {
-        if (payloadBytes.size < 8) return false
-        val boxType = String(payloadBytes.copyOfRange(4, 8), Charsets.US_ASCII)
+        if (payloadBytes.size < MP4_HEADER_MIN_BYTES) return false
+        val boxType = String(payloadBytes.copyOfRange(MP4_BOX_TYPE_OFFSET, MP4_HEADER_MIN_BYTES), Charsets.US_ASCII)
         return boxType == "ftyp"
     }
 
@@ -371,7 +376,7 @@ class ReplayService(
     }
 
     private fun decodeMsgpackReplaySegment(rawBytes: ByteArray, segmentIdx: Int): SegmentDecodeResult {
-        return try {
+        return suspendRunCatching {
             val unpacker = MessagePack.newDefaultUnpacker(rawBytes)
             val topMapSize = unpacker.unpackMapHeader()
             val events = mutableListOf<JsonElement>()
@@ -383,7 +388,7 @@ class ReplayService(
 
             unpacker.close()
             SegmentDecodeResult(events = events, isMobileReplay = true)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Segment $segmentIdx: Failed to parse msgpack replay segment" }
             SegmentDecodeResult(events = emptyList(), isMobileReplay = true)
         }
@@ -451,13 +456,13 @@ class ReplayService(
         val nowMs = demoEpochMs ?: System.currentTimeMillis()
         val periodMs =
             when (period) {
-                "24h" -> 24 * 60 * 60 * 1000L
-                "30d" -> 30 * 24 * 60 * 60 * 1000L
-                "90d" -> 90 * 24 * 60 * 60 * 1000L
-                else -> 7 * 24 * 60 * 60 * 1000L
+                "24h" -> PERIOD_24H_MS
+                "30d" -> PERIOD_30D_MS
+                "90d" -> PERIOD_90D_MS
+                else -> PERIOD_7D_MS
             }
         val periodStartMs = nowMs - periodMs
-        val retentionStartMs = nowMs - (retentionDays * 24 * 60 * 60 * 1000L)
+        val retentionStartMs = nowMs - (retentionDays * MILLIS_PER_DAY)
 
         val envClause =
             if (environment != null && environment.isNotBlank()) {
@@ -497,10 +502,10 @@ class ReplayService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val rows = queryHelper.executeJsonEachRowQuery(query, "Replays") ?: return emptyList()
             rows.mapNotNull { obj ->
-                try {
+                suspendRunCatching {
                     val startedMs = obj["started_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                     val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                     val rawErrorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
@@ -517,12 +522,12 @@ class ReplayService(
                             0
                         }
                     buildReplayListItemFromJson(obj, projectId, maxOf(rawErrorCount, fallbackErrorCount))
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to parse replay list row" }
                     null
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch replays for project $projectId" }
             emptyList()
         }
@@ -539,10 +544,12 @@ class ReplayService(
         val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
         val tagsStr = obj["tags"]?.jsonPrimitive?.contentOrNull ?: "{}"
         val tagsMap =
-            try {
+            suspendRunCatching {
                 val tagsObj = json.parseToJsonElement(tagsStr) as? JsonObject ?: return null
                 tagsObj.mapValues { it.value.jsonPrimitive.content }
-            } catch (_: Exception) { emptyMap<String, String>() }
+            }.getOrElse { _ ->
+                emptyMap<String, String>()
+            }
         val replayErrorIds = parseStringArray(obj["error_ids"]).distinct()
         val fallbackErrorIds =
             if (replayErrorIds.isEmpty() && startedMs != null && finishedMs != null) {
@@ -637,13 +644,13 @@ class ReplayService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = queryHelper.extractClickHouseBody(response) ?: return null
             val line = body.lines().firstOrNull { it.isNotBlank() } ?: return null
             val obj = json.parseToJsonElement(line).jsonObject
             buildReplayDetailFromRow(obj, retentionDays)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch replay $replayId" }
             null
         }
@@ -658,7 +665,7 @@ class ReplayService(
         items: MutableList<ReplayTimelineItem>,
         addedIds: MutableSet<String>
     ) {
-        try {
+        suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
             if (isClickHouseError(response.status.value, body, errorContext)) return
@@ -672,9 +679,7 @@ class ReplayService(
                     if (!addedIds.add(item.id)) return@forEach
                     items.add(item)
                 }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.onFailure { e ->
             logger.error(e) { "Failed to fetch $failureMessage" }
         }
     }
@@ -726,27 +731,38 @@ class ReplayService(
         FORMAT JSONEachRow
         """.trimIndent()
 
+    private fun getOrganizationIdForProject(projectId: Long): Int? =
+        transaction {
+            Projects
+                .selectAll()
+                .where { Projects.id eq projectId }
+                .firstOrNull()
+                ?.get(Projects.organization_id)
+        }
+
     private fun buildSpansByTraceQuery(
         projectId: Long,
+        orgId: Int,
         traceIdList: String,
         retentionDays: Int,
         demoEpochMs: Long?
-    ): String =
-        """
+    ): String = """
         SELECT
-            span_id,
-            trace_id,
-            toString(transaction_id) as transaction_id,
-            description,
-            op,
-            toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
-            duration_ms
-        FROM `$clickhouseDb`.spans
-        WHERE project_id = $projectId
-            AND trace_id IN ($traceIdList)
-            AND ${queryHelper.timestampRetentionClause("start_timestamp", retentionDays, demoEpochMs)}
+            span_id_hex as span_id,
+            trace_id_hex as trace_id,
+            meta['sentry.transaction_id'] as transaction_id,
+            resource as description,
+            type as op,
+            toUnixTimestamp64Milli(start) as start_ts_ms,
+            duration / 1000000.0 as duration_ms
+        FROM `$clickhouseDb`.apm_spans
+        WHERE organization_id = $orgId
+            AND trace_id_hex IN ($traceIdList)
+            AND meta['sentry.project_id'] = '$projectId'
+            AND source = 'sentry'
+            AND ${queryHelper.timestampRetentionClause("start", retentionDays, demoEpochMs)}
         FORMAT JSONEachRow
-        """.trimIndent()
+    """.trimIndent()
 
     suspend fun getReplayTimeline(
         replayId: String,
@@ -754,16 +770,16 @@ class ReplayService(
     ): ReplayTimelineResponse {
         val replay = getReplay(replayId, demoEpochMs) ?: return ReplayTimelineResponse(emptyList(), 0L)
         val replayStartMs =
-            try {
+            suspendRunCatching {
                 Instant.parse(replay.startedAt).toEpochMilli()
-            } catch (_: Exception) {
+            }.getOrElse { _ ->
                 return ReplayTimelineResponse(emptyList(), 0L)
             }
         val replayEndMs =
-            try {
+            suspendRunCatching {
                 Instant.parse(replay.finishedAt).toEpochMilli()
-            } catch (_: Exception) {
-                replayStartMs + 86400_000L
+            }.getOrElse { _ ->
+                replayStartMs + MILLIS_PER_DAY
             }
         val projectId = replay.projectId
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
@@ -790,6 +806,8 @@ class ReplayService(
             )
         }
 
+        val spansOrgId = getOrganizationIdForProject(projectId)
+
         if (replay.traceIds.isNotEmpty()) {
             val traceIdList = replay.traceIds.distinct().map { "'${escapeSql(it)}'" }.joinToString(",")
             val traceConditions = "JSONExtractString(e.contexts, 'trace', 'trace_id') IN ($traceIdList)"
@@ -804,16 +822,18 @@ class ReplayService(
                 addedIds = addedIds
             )
 
-            val spansQuery = buildSpansByTraceQuery(projectId, traceIdList, retentionDays, demoEpochMs)
-            fetchAndAddTimelineItems(
-                query = spansQuery,
-                errorContext = "Replay timeline spans by trace IDs",
-                failureMessage = "replay timeline spans",
-                replayStartMs = replayStartMs,
-                mapper = ::mapSpanTimelineItem,
-                items = items,
-                addedIds = addedIds
-            )
+            if (spansOrgId != null) {
+                val spansQuery = buildSpansByTraceQuery(projectId, spansOrgId, traceIdList, retentionDays, demoEpochMs)
+                fetchAndAddTimelineItems(
+                    query = spansQuery,
+                    errorContext = "Replay timeline spans by trace IDs",
+                    failureMessage = "replay timeline spans",
+                    replayStartMs = replayStartMs,
+                    mapper = ::mapSpanTimelineItem,
+                    items = items,
+                    addedIds = addedIds
+                )
+            }
         }
 
         // Link by time range: include errors/transactions/spans that occurred during the replay
@@ -874,34 +894,41 @@ class ReplayService(
             addedIds = addedIds
         )
 
-        val spansInRangeQuery =
+        val spansInRangeQuery = if (spansOrgId != null) {
             """
             SELECT
-                span_id,
-                trace_id,
-                toString(transaction_id) as transaction_id,
-                description,
-                op,
-                toUnixTimestamp64Milli(start_timestamp) as start_ts_ms,
-                duration_ms
-            FROM `$clickhouseDb`.spans
-            WHERE project_id = $projectId
-                AND start_timestamp >= fromUnixTimestamp64Milli($replayStartMs)
-                AND start_timestamp <= fromUnixTimestamp64Milli($replayEndMs)
-                AND ${queryHelper.timestampRetentionClause("start_timestamp", retentionDays, demoEpochMs)}
-            ORDER BY start_timestamp ASC
+                span_id_hex as span_id,
+                trace_id_hex as trace_id,
+                meta['sentry.transaction_id'] as transaction_id,
+                resource as description,
+                type as op,
+                toUnixTimestamp64Milli(start) as start_ts_ms,
+                duration / 1000000.0 as duration_ms
+            FROM `$clickhouseDb`.apm_spans
+            WHERE organization_id = $spansOrgId
+                AND meta['sentry.project_id'] = '$projectId'
+                AND source = 'sentry'
+                AND start >= fromUnixTimestamp64Milli($replayStartMs)
+                AND start <= fromUnixTimestamp64Milli($replayEndMs)
+                AND ${queryHelper.timestampRetentionClause("start", retentionDays, demoEpochMs)}
+            ORDER BY start ASC
             LIMIT 200
             FORMAT JSONEachRow
             """.trimIndent()
-        fetchAndAddTimelineItems(
-            query = spansInRangeQuery,
-            errorContext = "Replay timeline spans by time range",
-            failureMessage = "replay timeline spans by time range",
-            replayStartMs = replayStartMs,
-            mapper = ::mapSpanTimelineItem,
-            items = items,
-            addedIds = addedIds
-        )
+        } else {
+            ""
+        }
+        if (spansInRangeQuery.isNotBlank()) {
+            fetchAndAddTimelineItems(
+                query = spansInRangeQuery,
+                errorContext = "Replay timeline spans by time range",
+                failureMessage = "replay timeline spans by time range",
+                replayStartMs = replayStartMs,
+                mapper = ::mapSpanTimelineItem,
+                items = items,
+                addedIds = addedIds
+            )
+        }
 
         val sorted = items.sortedBy { it.offsetMs }
         return ReplayTimelineResponse(items = sorted, replayStartMs = replayStartMs)
@@ -924,7 +951,7 @@ class ReplayService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = queryHelper.extractClickHouseBody(response) ?: return null
 
@@ -969,7 +996,7 @@ class ReplayService(
                 logger.info { "Returning response with ${allEvents.size} events, isMobileReplay=$isMobileReplay" }
                 ReplayRecordingResponse(events = allEvents)
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch replay recording $replayId" }
             null
         }
@@ -1018,23 +1045,34 @@ class ReplayService(
             FORMAT JSONEachRow
             """.trimIndent()
 
-        return try {
+        return suspendRunCatching {
             val rows = queryHelper.executeJsonEachRowQuery(query, "Replays for issue") ?: return emptyList()
             rows.mapNotNull { obj ->
-                try {
+                suspendRunCatching {
                     buildReplayListItemFromJson(
                         obj,
                         projectId,
                         obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to parse replay list row for issue" }
                     null
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch replays for issue $issueId" }
             emptyList()
         }
+    }
+
+    companion object {
+        private const val LOG_BODY_PREVIEW_LENGTH = 400
+        private const val MP4_HEADER_MIN_BYTES = 8
+        private const val MP4_BOX_TYPE_OFFSET = 4
+        private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
+        private const val PERIOD_24H_MS = MILLIS_PER_DAY
+        private const val PERIOD_7D_MS = 7 * MILLIS_PER_DAY
+        private const val PERIOD_30D_MS = 30 * MILLIS_PER_DAY
+        private const val PERIOD_90D_MS = 90 * MILLIS_PER_DAY
     }
 }

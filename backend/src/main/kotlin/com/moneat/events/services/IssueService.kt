@@ -25,6 +25,7 @@ import com.moneat.events.repositories.IssueRepository
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.server.plugins.BadRequestException
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -32,6 +33,10 @@ class IssueService(
     private val issueRepository: IssueRepository,
     private val queryHelper: DashboardQueryHelper
 ) {
+
+    companion object {
+        private const val ISSUE_OVERFETCH_MULTIPLIER = 5
+    }
 
     suspend fun getProjectIdForIssue(issueId: String): Long? =
         issueRepository.getProjectIdForIssue(issueId)
@@ -51,7 +56,7 @@ class IssueService(
 
         val pgOverrides = issueRepository.getIssueStatusOverrides(projectId)
 
-        val overfetch = if (status != null) (limit + offset) * 5 else limit + offset
+        val overfetch = if (status != null) (limit + offset) * ISSUE_OVERFETCH_MULTIPLIER else limit + offset
         val rows = issueRepository.getIssuesRaw(
             projectId = projectId,
             offset = offset,
@@ -61,7 +66,7 @@ class IssueService(
             projectIdClause = projectIdClause
         )
 
-        return try {
+        return suspendRunCatching {
             var skipped = 0
             val result = mutableListOf<IssueResponse>()
             for (row in rows) {
@@ -93,7 +98,7 @@ class IssueService(
                 if (result.size >= limit) break
             }
             result
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch issues for project $projectId" }
             emptyList()
         }

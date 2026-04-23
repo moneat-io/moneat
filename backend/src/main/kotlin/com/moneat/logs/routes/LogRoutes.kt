@@ -16,21 +16,23 @@
 
 package com.moneat.logs.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.decompression.DecompressionService
-import com.moneat.events.routes.extractPublicKey
-import com.moneat.events.routes.extractPublicKeyFromDsn
 import com.moneat.events.services.EventService
-import com.moneat.logs.models.CreateLogApiKeyRequest
 import com.moneat.logs.models.CreateLogIndexRequest
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.models.LogTailFilters
 import com.moneat.logs.models.UpdateLogIndexRequest
-import com.moneat.logs.services.LogApiKeyService
 import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogService
+import com.moneat.otlp.OtlpAuth
+import com.moneat.otlp.models.CreateOtlpApiKeyRequest
+import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.plugins.isDemoUser
 import com.moneat.utils.ErrorResponse
@@ -61,13 +63,17 @@ import org.koin.core.context.GlobalContext
 import java.time.Instant
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
+private const val MILLIS_IN_24_HOURS = 24L * 60 * 60 * 1000
+private const val SSE_POLL_TIMEOUT_SECONDS = 15L
+
 fun Route.logRoutes(
     logService: LogService = GlobalContext.get().get(),
-    logApiKeyService: LogApiKeyService = GlobalContext.get().get(),
+    otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
     logIndexService: LogIndexService = GlobalContext.get().get(),
 ) {
     route("/v1") {
@@ -77,14 +83,14 @@ fun Route.logRoutes(
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val orgId = principal.payload.getClaim("orgId").asInt()
 
-                val request = call.receive<CreateLogApiKeyRequest>()
+                val request = call.receive<CreateOtlpApiKeyRequest>()
                 val name = request.name.trim()
                 if (name.isBlank()) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Name is required"))
                     return@post
                 }
 
-                val response = logApiKeyService.createKey(organizationId = orgId, name = name, createdBy = userId)
+                val response = otlpApiKeyService.createKey(organizationId = orgId, name = name, createdBy = userId)
                 call.respond(HttpStatusCode.Created, response)
             }
 
@@ -92,7 +98,7 @@ fun Route.logRoutes(
                 val principal = call.principal<JWTPrincipal>()
                 val orgId = principal!!.payload.getClaim("orgId").asInt()
 
-                val keys = logApiKeyService.listKeys(orgId)
+                val keys = otlpApiKeyService.listKeys(orgId)
                 call.respond(HttpStatusCode.OK, mapOf("keys" to keys))
             }
 
@@ -106,7 +112,7 @@ fun Route.logRoutes(
                     return@delete
                 }
 
-                val deleted = logApiKeyService.deleteKey(organizationId = orgId, keyId = id)
+                val deleted = otlpApiKeyService.deleteKey(organizationId = orgId, keyId = id)
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
                     return@delete
@@ -211,7 +217,7 @@ fun Route.logRoutes(
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
                     if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
                         Instant.ofEpochMilli(twentyFourHoursAgo).toString()
                     } else {
                         call.request.queryParameters["from"]
@@ -275,7 +281,7 @@ fun Route.logRoutes(
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
                     if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
                         Instant.ofEpochMilli(twentyFourHoursAgo).toString()
                     } else {
                         call.request.queryParameters["from"]
@@ -306,7 +312,7 @@ fun Route.logRoutes(
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
                     if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
                         Instant.ofEpochMilli(twentyFourHoursAgo).toString()
                     } else {
                         call.request.queryParameters["from"]
@@ -337,7 +343,9 @@ fun Route.logRoutes(
                         groupBy = call.request.queryParameters["groupBy"]
                     )
                 logger.debug {
-                    "Aggregate logs response for org $orgId: ${result.buckets.size} buckets, totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom, to=$defaultTo, isDemo=$isDemo"
+                    "Aggregate logs response for org $orgId: ${result.buckets.size} buckets, " +
+                        "totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom, " +
+                        "to=$defaultTo, isDemo=$isDemo"
                 }
                 call.respond(HttpStatusCode.OK, result)
             }
@@ -357,7 +365,7 @@ fun Route.logRoutes(
                 // For demo mode, if no time range specified, default to last 24 hours from demo epoch
                 val defaultFrom =
                     if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - (24 * 60 * 60 * 1000)
+                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
                         Instant.ofEpochMilli(twentyFourHoursAgo).toString()
                     } else {
                         call.request.queryParameters["from"]
@@ -471,7 +479,7 @@ fun Route.logRoutes(
                     flush()
 
                     while (true) {
-                        val next = queue.poll(15, TimeUnit.SECONDS)
+                        val next = queue.poll(SSE_POLL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                         if (next == null) {
                             write(": heartbeat\n\n")
                             flush()
@@ -484,12 +492,25 @@ fun Route.logRoutes(
                         write("data: $next\n\n")
                         flush()
                     }
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+                } catch (e: IOException) {
+                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+                } catch (e: IllegalStateException) {
+                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+                } catch (e: IllegalArgumentException) {
                     logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
                 } finally {
                     try {
                         connection.sync().unsubscribe(channel)
-                    } catch (_: Exception) {
+                    } catch (_: SerializationException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
+                    } catch (_: IOException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
+                    } catch (_: IllegalStateException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
+                    } catch (_: IllegalArgumentException) {
+                        // Ignored: cleanup failure should not mask SSE disconnect
                     }
                     connection.removeListener(listener)
                     connection.close()
@@ -538,53 +559,6 @@ private fun parseExcludeTagQueryParams(call: ApplicationCall): Map<String, Strin
         }.toMap()
 }
 
-private fun extractOrgIdFromLogApiKey(
-    call: io.ktor.server.application.ApplicationCall,
-    logApiKeyService: LogApiKeyService
-): Int? {
-    val authHeader = call.request.header(HttpHeaders.Authorization)
-    val bearerPrefix = "Bearer "
-    val key =
-        authHeader
-            ?.takeIf { it.startsWith(bearerPrefix, ignoreCase = true) }
-            ?.substring(bearerPrefix.length)
-            ?.trim()
-            ?: return null
-    return logApiKeyService.validateKey(key)
-}
-
-private fun extractOrgIdFromLegacyDsn(
-    call: io.ktor.server.application.ApplicationCall,
-    eventService: EventService
-): Int? {
-    val dsnLikeHeader =
-        call.request.header("x-moneat-dsn")
-            ?: call.request.header("X-Moneat-Dsn")
-            ?: call.request.header(HttpHeaders.Authorization)
-    val projectId =
-        extractProjectIdFromDsn(dsnLikeHeader)
-            ?: call.request.queryParameters["projectId"]?.toLongOrNull()
-            ?: return null
-    val publicKey =
-        extractPublicKey(call.request.header("X-Sentry-Auth"), call.request.queryParameters["sentry_key"])
-            ?: extractPublicKeyFromDsn(dsnLikeHeader)
-            ?: return null
-    val verification = eventService.verifyProjectKey(projectId, publicKey)
-    if (!verification.isValid) return null
-    return eventService.getOrganizationIdForProject(projectId)
-}
-
-private fun extractProjectIdFromDsn(dsnLike: String?): Long? {
-    if (dsnLike.isNullOrBlank()) return null
-    val cleaned = dsnLike.removePrefix("DSN ").trim()
-    val regex = "https?://[^@]+@[^/]+/([0-9]+)".toRegex(RegexOption.IGNORE_CASE)
-    return regex
-        .find(cleaned)
-        ?.groupValues
-        ?.getOrNull(1)
-        ?.toLongOrNull()
-}
-
 private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
     val authHeader = call.request.header(HttpHeaders.Authorization)
     val bearerPrefix = "Bearer "
@@ -598,7 +572,7 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
 
     if (token.isNullOrBlank()) return null
 
-    return try {
+    return suspendRunCatching {
         val config = call.application.environment.config
         val secret = config.property("jwt.secret").getString()
         val issuer = config.property("jwt.issuer").getString()
@@ -615,7 +589,7 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
         val userId = decoded.getClaim("userId").asInt()
         val orgId = decoded.getClaim("orgId").asInt().toLong()
         Pair(userId, orgId)
-    } catch (_: Exception) {
+    }.getOrElse { _ ->
         null
     }
 }
@@ -623,89 +597,41 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
 fun Route.logIngestRoutes(
     logService: LogService = GlobalContext.get().get(),
     quotaService: BillingQuotaService = GlobalContext.get().get(),
-    logApiKeyService: LogApiKeyService = GlobalContext.get().get(),
+    otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
     eventService: EventService = GlobalContext.get().get(),
 ) {
     route("/v1") {
+        // Standard OTLP/HTTP path alias
+        post("/logs") {
+            handleOtlpLogIngest(call, logService, quotaService, otlpApiKeyService, eventService)
+        }
+        // Moneat convention path
         post("/logs/otlp") {
-            val organizationId: Int? =
-                extractOrgIdFromLogApiKey(call, logApiKeyService)
-                    ?: extractOrgIdFromLegacyDsn(call, eventService)
-
-            if (organizationId == null) {
-                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid log API key or DSN"))
-                return@post
-            }
-
-            val bodyBytes = call.receive<ByteArray>()
-            val encoding = call.request.header(HttpHeaders.ContentEncoding)
-            val payloadBytes = try {
-                DecompressionService.decompress(bodyBytes, encoding)
-            } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
-                return@post
-            }
-
-            val payload = payloadBytes.decodeToString()
-            val parsedEntries = logService.parseOtlpJson(payload)
-            if (parsedEntries.isEmpty()) {
-                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
-                return@post
-            }
-
-            if (quotaService.isEnforcementEnabled()) {
-                val billableBytes = logService.estimateBillableBytes(parsedEntries)
-                val reservation =
-                    quotaService.reserveUnits(
-                        organizationId = organizationId,
-                        requestedUnits = parsedEntries.size,
-                        eventType = "log",
-                        requestedBytes = billableBytes
-                    )
-                if (!reservation.allowed) {
-                    call.respond(
-                        HttpStatusCode.TooManyRequests,
-                        mapOf(
-                            "error" to "Quota exceeded",
-                            "reason" to reservation.reason,
-                            "usage" to reservation.usage
-                        )
-                    )
-                    return@post
-                }
-            }
-
-            val queueKey =
-                call.application.environment.config
-                    .propertyOrNull("logs.queueKey")
-                    ?.getString()
-                    ?: "moneat:logs:queue"
-            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), parsedEntries, queueKey)
-            call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
+            handleOtlpLogIngest(call, logService, quotaService, otlpApiKeyService, eventService)
         }
 
         post("/logs/ingest") {
-            val organizationId = extractOrgIdFromLogApiKey(call, logApiKeyService)
+            val organizationId = OtlpAuth.extractOrgId(call, otlpApiKeyService)
             if (organizationId == null) {
-                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid log API key"))
+                call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid OTLP API key"))
                 return@post
             }
 
             val bodyBytes = call.receive<ByteArray>()
             val encoding = call.request.header(HttpHeaders.ContentEncoding)
-            val payloadBytes = try {
+            val payloadBytes = suspendRunCatching {
                 DecompressionService.decompress(bodyBytes, encoding)
-            } catch (e: Exception) {
+            }.getOrElse { _ ->
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
                 return@post
             }
 
             val entries =
-                try {
+                suspendRunCatching {
                     json.decodeFromString<List<com.moneat.logs.models.LogIngestEntry>>(
                         payloadBytes.decodeToString()
                     )
-                } catch (e: Exception) {
+                }.getOrElse { _ ->
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid log payload"))
                     return@post
                 }
@@ -746,4 +672,82 @@ fun Route.logIngestRoutes(
             call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
         }
     }
+}
+
+private suspend fun handleOtlpLogIngest(
+    call: io.ktor.server.application.ApplicationCall,
+    logService: LogService,
+    quotaService: BillingQuotaService,
+    otlpApiKeyService: OtlpApiKeyService,
+    eventService: EventService,
+) {
+    val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
+    val isJson = contentType.contains("application/json", ignoreCase = true)
+    val isProtobuf = contentType.contains("application/x-protobuf", ignoreCase = true)
+    if (!isJson && !isProtobuf) {
+        call.respond(
+            HttpStatusCode.UnsupportedMediaType,
+            ErrorResponse(
+                "OTLP logs endpoint requires Content-Type: application/json or application/x-protobuf."
+            )
+        )
+        return
+    }
+
+    val organizationId: Int? =
+        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService)
+
+    if (organizationId == null) {
+        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid OTLP API key or DSN"))
+        return
+    }
+
+    val bodyBytes = call.receive<ByteArray>()
+    val encoding = call.request.header(HttpHeaders.ContentEncoding)
+    val payloadBytes = suspendRunCatching {
+        DecompressionService.decompress(bodyBytes, encoding)
+    }.getOrElse { _ ->
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Failed to decompress request body"))
+        return
+    }
+
+    val parsedEntries = if (isProtobuf) {
+        logService.parseOtlpProtobuf(payloadBytes)
+    } else {
+        logService.parseOtlpJson(payloadBytes.decodeToString())
+    }
+    if (parsedEntries.isEmpty()) {
+        call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
+        return
+    }
+
+    if (quotaService.isEnforcementEnabled()) {
+        val billableBytes = logService.estimateBillableBytes(parsedEntries)
+        val reservation =
+            quotaService.reserveUnits(
+                organizationId = organizationId,
+                requestedUnits = parsedEntries.size,
+                eventType = "log",
+                requestedBytes = billableBytes
+            )
+        if (!reservation.allowed) {
+            call.respond(
+                HttpStatusCode.TooManyRequests,
+                mapOf(
+                    "error" to "Quota exceeded",
+                    "reason" to reservation.reason,
+                    "usage" to reservation.usage
+                )
+            )
+            return
+        }
+    }
+
+    val queueKey =
+        call.application.environment.config
+            .propertyOrNull("logs.queueKey")
+            ?.getString()
+            ?: "moneat:logs:queue"
+    val accepted = logService.enqueueSdkLogs(organizationId.toLong(), parsedEntries, queueKey)
+    call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
 }

@@ -92,7 +92,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@b13d25e5fcf2e04305d8aedc9a6c28ebe258e934
+        uses: docker/metadata-action@4378dc6be7f72231dfe78ac7e0364a44f1c9f54b
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-backend
           tags: |
@@ -102,7 +102,7 @@ jobs:
             type=sha,format=long
 
       - name: Build and push backend image
-        uses: docker/build-push-action@dbac3ca1e5410ec04d2cce48cfbcfa3175fb8f4f
+        uses: docker/build-push-action@b66d8774c665b789105b440514f0c97e6f19b06f
         with:
           context: .
           file: backend/Dockerfile
@@ -140,7 +140,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@b13d25e5fcf2e04305d8aedc9a6c28ebe258e934
+        uses: docker/metadata-action@4378dc6be7f72231dfe78ac7e0364a44f1c9f54b
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-dashboard
           tags: |
@@ -150,7 +150,7 @@ jobs:
             type=sha,format=long
 
       - name: Build and push dashboard image
-        uses: docker/build-push-action@dbac3ca1e5410ec04d2cce48cfbcfa3175fb8f4f
+        uses: docker/build-push-action@b66d8774c665b789105b440514f0c97e6f19b06f
         with:
           context: .
           file: dashboard/Dockerfile

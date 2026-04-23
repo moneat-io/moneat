@@ -23,6 +23,8 @@ import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.utils.SentryUtils
+import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.suspendRunCatching
 import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -30,13 +32,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
+import java.nio.ByteBuffer
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
+private const val ERROR_DELAY_MS = 1000L
 
 /**
  * Background worker that drains the ingestion queue (Redis list),
@@ -86,21 +91,31 @@ class IngestionWorker(
     }
 
     private suspend fun runWorker(workerId: Int) {
-        val redis = RedisConfig.newBlockingConnection()
-        while (scope.isActive) {
-            try {
-                // BRPOP block with 5s timeout so we can check isActive periodically
-                val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-                val value = result?.value ?: continue
-                processMessageForTest(workerId, value) { message ->
-                    RedisConfig.sync().rpush(dlqKey, message)
+        val conn = RedisConfig.newBlockingConnection()
+        try {
+            val redis = conn.sync()
+            while (scope.isActive) {
+                try {
+                    // BRPOP block with 5s timeout so we can check isActive periodically
+                    val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
+                    val value = result?.value ?: continue
+                    processMessageForTest(workerId, value) { message ->
+                        RedisConfig.sync().rpush(dlqKey, message)
+                    }
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: SerializationException) {
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
+                } catch (e: IOException) {
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
+                } catch (e: IllegalStateException) {
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
+                } catch (e: IllegalArgumentException) {
+                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
                 }
-            } catch (e: CancellationException) {
-                break
-            } catch (e: Exception) {
-                logger.error(e) { "Worker $workerId error in BRPOP loop" }
-                delay(1000)
             }
+        } finally {
+            RedisConfig.closeBlockingConnection(conn)
         }
     }
 
@@ -109,7 +124,7 @@ class IngestionWorker(
         value: String,
         onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
-        try {
+        suspendRunCatching {
             val (projectId, envelopeBytes) = decodeMessage(value)
 
             SentryUtils.breadcrumb(
@@ -123,10 +138,9 @@ class IngestionWorker(
 
             val envelope = SentryEnvelope.parse(envelopeBytes)
             eventService.processEnvelope(projectId, envelope)
-        } catch (e: Exception) {
+        }.onFailure { e ->
             logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
             onDlq(value)
-
             Sentry.captureException(e) { scope ->
                 scope.setTag("worker.operation", "process_message")
                 scope.setTag("worker.id", workerId.toString())
@@ -136,22 +150,16 @@ class IngestionWorker(
     }
 
     companion object {
+        private const val PROJECT_ID_BYTE_LENGTH = 8
+
         /**
          * Decode a queue message: Base64(8 bytes projectId big-endian + envelope bytes).
          */
         fun decodeMessage(encoded: String): Pair<Long, ByteArray> {
             val bytes = Base64.getDecoder().decode(encoded)
-            if (bytes.size < 8) throw IllegalArgumentException("Message too short")
-            val projectId =
-                ((bytes[0].toLong() and 0xFF) shl 56) or
-                    ((bytes[1].toLong() and 0xFF) shl 48) or
-                    ((bytes[2].toLong() and 0xFF) shl 40) or
-                    ((bytes[3].toLong() and 0xFF) shl 32) or
-                    ((bytes[4].toLong() and 0xFF) shl 24) or
-                    ((bytes[5].toLong() and 0xFF) shl 16) or
-                    ((bytes[6].toLong() and 0xFF) shl 8) or
-                    (bytes[7].toLong() and 0xFF)
-            val envelopeBytes = bytes.copyOfRange(8, bytes.size)
+            require(bytes.size >= PROJECT_ID_BYTE_LENGTH) { "Message too short" }
+            val projectId = ByteBuffer.wrap(bytes, 0, PROJECT_ID_BYTE_LENGTH).long
+            val envelopeBytes = bytes.copyOfRange(PROJECT_ID_BYTE_LENGTH, bytes.size)
             return projectId to envelopeBytes
         }
 
@@ -162,16 +170,9 @@ class IngestionWorker(
             projectId: Long,
             envelopeBytes: ByteArray
         ): String {
-            val bytes = ByteArray(8 + envelopeBytes.size)
-            bytes[0] = (projectId shr 56).toByte()
-            bytes[1] = (projectId shr 48).toByte()
-            bytes[2] = (projectId shr 40).toByte()
-            bytes[3] = (projectId shr 32).toByte()
-            bytes[4] = (projectId shr 24).toByte()
-            bytes[5] = (projectId shr 16).toByte()
-            bytes[6] = (projectId shr 8).toByte()
-            bytes[7] = projectId.toByte()
-            envelopeBytes.copyInto(bytes, 8)
+            val bytes = ByteArray(PROJECT_ID_BYTE_LENGTH + envelopeBytes.size)
+            ByteBuffer.wrap(bytes).putLong(projectId)
+            envelopeBytes.copyInto(bytes, PROJECT_ID_BYTE_LENGTH)
             return Base64.getEncoder().encodeToString(bytes)
         }
     }

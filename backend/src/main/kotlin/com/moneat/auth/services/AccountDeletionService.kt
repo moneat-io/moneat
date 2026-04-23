@@ -39,6 +39,7 @@ import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -88,7 +89,8 @@ class AccountDeletionService(
             if (ownedOrgs.isNotEmpty()) {
                 DeletionValidationResult(
                     canDelete = false,
-                    errorMessage = "You are the last owner of ${ownedOrgs.size} organization(s). You must delete these organizations or transfer ownership before deleting your account.",
+                    errorMessage = "You are the last owner of ${ownedOrgs.size} organization(s). " +
+                        "You must delete these organizations or transfer ownership before deleting your account.",
                     organizationsAsLastOwner = ownedOrgs
                 )
             } else {
@@ -149,7 +151,7 @@ class AccountDeletionService(
      * - Revokes any pending invitations sent by the user
      */
     suspend fun deleteUserAccount(userId: Int): Boolean {
-        try {
+        suspendRunCatching {
             // First validate
             val validation = validateUserDeletion(userId)
             if (!validation.canDelete) {
@@ -185,7 +187,7 @@ class AccountDeletionService(
             }
 
             // Send confirmation email (async)
-            try {
+            suspendRunCatching {
                 val userEmail =
                     transaction {
                         Users
@@ -197,12 +199,12 @@ class AccountDeletionService(
                 if (userEmail != null) {
                     emailService.sendAccountDeletionConfirmation(userEmail)
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send account deletion confirmation email" }
             }
 
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to delete user account $userId" }
             return false
         }
@@ -220,7 +222,7 @@ class AccountDeletionService(
         organizationId: Int,
         deletedByUserId: Int
     ): Boolean {
-        try {
+        suspendRunCatching {
             // First validate
             val validation = validateOrganizationDeletion(organizationId, deletedByUserId)
             if (!validation.canDelete) {
@@ -255,7 +257,9 @@ class AccountDeletionService(
                         .map { it[Users.email] }
                 }
 
-            logger.info { "Starting deletion of organization $organizationId ($orgName) with ${projectIds.size} projects" }
+            logger.info {
+                "Starting deletion of organization $organizationId ($orgName) with ${projectIds.size} projects"
+            }
 
             // Delete ClickHouse data for all projects
             if (projectIds.isNotEmpty()) {
@@ -264,7 +268,7 @@ class AccountDeletionService(
 
             // Cancel Stripe subscription if exists
             if (stripeService.isStripeEnabled()) {
-                try {
+                suspendRunCatching {
                     transaction {
                         val subscription =
                             Subscriptions
@@ -277,7 +281,7 @@ class AccountDeletionService(
                             logger.info { "Cancelled Stripe subscription $stripeSubId for org $organizationId" }
                         }
                     }
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     logger.error(e) { "Failed to cancel Stripe subscription for org $organizationId" }
                     // Continue with deletion even if Stripe fails
                 }
@@ -309,20 +313,20 @@ class AccountDeletionService(
             }
 
             // Send confirmation emails to all members
-            try {
+            suspendRunCatching {
                 memberEmails.forEach { email ->
-                    try {
+                    suspendRunCatching {
                         emailService.sendOrganizationDeletionNotification(email, orgName)
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to send deletion notification to $email" }
                     }
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send organization deletion notifications" }
             }
 
             return true
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to delete organization $organizationId" }
             return false
         }
@@ -333,7 +337,7 @@ class AccountDeletionService(
      */
     private suspend fun deleteClickHouseDataForProjects(projectIds: List<Int>) =
         withContext(Dispatchers.IO) {
-            try {
+            suspendRunCatching {
                 val projectIdsList = projectIds.joinToString(",")
 
                 // Delete from all ClickHouse tables (including LLM and analytics)
@@ -354,7 +358,7 @@ class AccountDeletionService(
                     )
 
                 tables.forEach { table ->
-                    try {
+                    suspendRunCatching {
                         val query = "ALTER TABLE $table DELETE WHERE project_id IN ($projectIdsList)"
                         val response = ClickHouseClient.execute(query)
 
@@ -363,7 +367,7 @@ class AccountDeletionService(
                         } else {
                             logger.warn { "ClickHouse deletion from $table returned status ${response.status}" }
                         }
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.error(e) { "Failed to delete ClickHouse data from $table" }
                     }
                 }
@@ -383,18 +387,18 @@ class AccountDeletionService(
                 if (orgId != null) {
                     val monitoringTables = listOf("metrics", "containers")
                     monitoringTables.forEach { table ->
-                        try {
+                        suspendRunCatching {
                             val query = "ALTER TABLE $table DELETE WHERE organization_id = $orgId"
                             ClickHouseClient.execute(query)
                             logger.info { "Deleted ClickHouse monitoring data from $table for org $orgId" }
-                        } catch (e: Exception) {
+                        }.getOrElse { e ->
                             logger.error(e) { "Failed to delete monitoring data from $table" }
                         }
                     }
                 }
 
                 logger.info { "Completed ClickHouse data deletion for ${projectIds.size} projects" }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to delete ClickHouse data" }
                 throw e
             }

@@ -25,6 +25,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -65,24 +66,25 @@ fun Route.telemetryIngestRoutes(
 ) {
     route("/v1/pulse") {
         post {
-            val payload = try {
-                call.receive<PulsePayload>()
-            } catch (e: Exception) {
-                logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
-                return@post
-            }
+            val payload =
+                suspendRunCatching {
+                    call.receive<PulsePayload>()
+                }.getOrElse { e ->
+                    logger.warn { "Invalid telemetry pulse payload: ${e.message}" }
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+                    return@post
+                }
 
             if (payload.deploymentId.isBlank()) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "deploymentId is required"))
                 return@post
             }
 
-            try {
+            suspendRunCatching {
                 insertPulse(payload)
                 logger.debug { "Telemetry pulse stored for deployment=${payload.deploymentId}" }
                 call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-            } catch (e: Exception) {
+            }.onFailure { e ->
                 logger.error(e) { "Failed to store telemetry pulse: ${e.message}" }
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to store pulse"))
             }

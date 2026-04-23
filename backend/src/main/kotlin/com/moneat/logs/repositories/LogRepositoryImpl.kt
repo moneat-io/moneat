@@ -20,26 +20,27 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
 class LogRepositoryImpl : LogRepository {
 
     override suspend fun executeClickHouseInsert(sql: String): Boolean =
-        try {
+        suspendRunCatching {
             val response = ClickHouseClient.execute(sql)
             val body = response.bodyAsText()
             !response.isClickHouseError(body)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "ClickHouse log insert failed" }
             false
         }
 
     override suspend fun executeClickHouseQuery(sql: String): String =
-        try {
+        suspendRunCatching {
             val response = ClickHouseClient.execute(sql)
             response.bodyAsText()
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "ClickHouse log query failed" }
             ""
         }

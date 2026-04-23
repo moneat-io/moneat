@@ -34,6 +34,7 @@ private val dataDogTranslator = DataDogTranslator()
 private val grafanaTranslator = GrafanaTranslator()
 private val jsonParser = Json { ignoreUnknownKeys = true }
 private val logger = mu.KotlinLogging.logger {}
+private const val DEFAULT_RETENTION_DAYS = 90
 
 class GetDashboardTemplatesTool : McpTool {
     override val name = "get_dashboard_templates"
@@ -163,7 +164,7 @@ class ExecuteDashboardQueryTool : McpTool {
         val queryConfigJson = args["query_config"] as? JsonObject
             ?: return errorResult("query_config must be an object")
         val retentionDays = args["retention_days"]?.jsonPrimitive
-            ?.content?.toIntOrNull() ?: 90
+            ?.content?.toIntOrNull() ?: DEFAULT_RETENTION_DAYS
 
         val dsl = try {
             jsonParser.decodeFromJsonElement(

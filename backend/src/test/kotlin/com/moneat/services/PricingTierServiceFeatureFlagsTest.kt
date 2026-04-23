@@ -19,6 +19,7 @@ package com.moneat.services
 import com.moneat.billing.models.CreateTierVersionRequest
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.services.PricingTierService
+import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -30,7 +31,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import com.moneat.testsupport.TestDatabaseHelper
 
 class PricingTierServiceFeatureFlagsTest {
     companion object {
@@ -145,10 +145,22 @@ class PricingTierServiceFeatureFlagsTest {
     fun `getCurrentPlans returns retention and feature flag matrix`() {
         val tiers =
             listOf(
-                SeedTier("FREE", 0, 3, 3, saml = false, oidc = false, priority = false, sla = false, customRetention = false),
-                SeedTier("PRO", 2900, 30, 30, saml = false, oidc = false, priority = false, sla = false, customRetention = false),
-                SeedTier("TEAM", 7900, 30, 30, saml = true, oidc = true, priority = false, sla = false, customRetention = false),
-                SeedTier("BUSINESS", 19900, 90, 90, saml = true, oidc = true, priority = true, sla = true, customRetention = true)
+                SeedTier(
+                    "FREE", 0, 3, 3,
+                    saml = false, oidc = false, priority = false, sla = false, customRetention = false
+                ),
+                SeedTier(
+                    "PRO", 2900, 30, 30,
+                    saml = false, oidc = false, priority = false, sla = false, customRetention = false
+                ),
+                SeedTier(
+                    "TEAM", 7900, 30, 30,
+                    saml = true, oidc = true, priority = false, sla = false, customRetention = false
+                ),
+                SeedTier(
+                    "BUSINESS", 19900, 90, 90,
+                    saml = true, oidc = true, priority = true, sla = true, customRetention = true
+                )
             )
 
         transaction {

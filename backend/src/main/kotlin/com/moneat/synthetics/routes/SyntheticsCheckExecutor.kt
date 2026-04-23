@@ -16,6 +16,9 @@
 
 package com.moneat.synthetics.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
 import com.moneat.utils.UrlValidator
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -27,13 +30,6 @@ import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.Socket
-import javax.net.ssl.SSLSocket
-import javax.net.ssl.SSLSocketFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
@@ -42,6 +38,15 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
+import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -68,13 +73,13 @@ open class SyntheticsCheckExecutor {
                 authority.split(":").firstOrNull()?.takeIf { it.isNotBlank() }
             }
 
-        return try {
+        return suspendRunCatching {
             java.net.URI(url).host?.takeIf { it.isNotBlank() }
                 ?: extractFromAuthority(
                     url.removePrefix("https://").removePrefix("http://")
                         .split("/").firstOrNull() ?: ""
                 )
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             extractFromAuthority(
                 url.removePrefix("https://").removePrefix("http://")
                     .split("/").firstOrNull() ?: ""
@@ -112,7 +117,7 @@ open class SyntheticsCheckExecutor {
             )
         }
 
-        val timeoutMs = test.timeoutSeconds * 1000L
+        val timeoutMs = test.timeoutSeconds * MILLIS_PER_SECOND_LONG
         val client = buildClient(timeoutMs)
 
         val totalStart = System.nanoTime()
@@ -170,13 +175,37 @@ open class SyntheticsCheckExecutor {
                     timings = timings
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
             val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
             logger.warn { "API test failed for ${test.id}: ${e.message}" }
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = durationMs,
-                errorMessage = e.message ?: "Request failed"
+                errorMessage = e.message ?: REQUEST_FAILED
+            )
+        } catch (e: IOException) {
+            val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
+            logger.warn { "API test failed for ${test.id}: ${e.message}" }
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = e.message ?: REQUEST_FAILED
+            )
+        } catch (e: IllegalStateException) {
+            val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
+            logger.warn { "API test failed for ${test.id}: ${e.message}" }
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = e.message ?: REQUEST_FAILED
+            )
+        } catch (e: IllegalArgumentException) {
+            val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
+            logger.warn { "API test failed for ${test.id}: ${e.message}" }
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = e.message ?: REQUEST_FAILED
             )
         } finally {
             client.close()
@@ -187,9 +216,9 @@ open class SyntheticsCheckExecutor {
         test: SyntheticTestData
     ): SyntheticCheckResult {
         val config: SyntheticTestConfig? = test.config?.let {
-            try {
-                Json.decodeFromString(it)
-            } catch (_: Exception) {
+            suspendRunCatching {
+                Json.decodeFromString<SyntheticTestConfig>(it)
+            }.getOrElse { _ ->
                 null
             }
         }
@@ -203,7 +232,7 @@ open class SyntheticsCheckExecutor {
         val port = config?.port ?: SSL_DEFAULT_PORT
         val startTime = System.currentTimeMillis()
 
-        return try {
+        return suspendRunCatching {
             val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
             val tlsStart = System.currentTimeMillis()
             val socket = factory.createSocket(
@@ -263,7 +292,7 @@ open class SyntheticsCheckExecutor {
                     )
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = System.currentTimeMillis() - startTime,
@@ -327,7 +356,25 @@ open class SyntheticsCheckExecutor {
                 durationMs = System.currentTimeMillis() - startTime,
                 errorMessage = "DNS resolution timed out after ${DNS_TIMEOUT_MS}ms"
             )
-        } catch (e: Exception) {
+        } catch (e: SerializationException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "DNS resolution failed: ${e.message}"
+            )
+        } catch (e: IOException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "DNS resolution failed: ${e.message}"
+            )
+        } catch (e: IllegalStateException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = System.currentTimeMillis() - startTime,
+                errorMessage = "DNS resolution failed: ${e.message}"
+            )
+        } catch (e: IllegalArgumentException) {
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = System.currentTimeMillis() - startTime,
@@ -340,9 +387,9 @@ open class SyntheticsCheckExecutor {
         test: SyntheticTestData
     ): SyntheticCheckResult {
         val config: SyntheticTestConfig? = test.config?.let {
-            try {
-                Json.decodeFromString(it)
-            } catch (_: Exception) {
+            suspendRunCatching {
+                Json.decodeFromString<SyntheticTestConfig>(it)
+            }.getOrElse { _ ->
                 null
             }
         }
@@ -358,7 +405,7 @@ open class SyntheticsCheckExecutor {
         )
 
         val startTime = System.currentTimeMillis()
-        return try {
+        return suspendRunCatching {
             val socket = Socket()
             val connectStart = System.currentTimeMillis()
             socket.connect(
@@ -393,7 +440,7 @@ open class SyntheticsCheckExecutor {
                     timings = timings
                 )
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = System.currentTimeMillis() - startTime,
@@ -406,9 +453,9 @@ open class SyntheticsCheckExecutor {
         test: SyntheticTestData
     ): SyntheticCheckResult {
         val config: SyntheticTestConfig? = test.config?.let {
-            try {
-                Json.decodeFromString(it)
-            } catch (_: Exception) {
+            suspendRunCatching {
+                Json.decodeFromString<SyntheticTestConfig>(it)
+            }.getOrElse { _ ->
                 null
             }
         }
@@ -424,7 +471,7 @@ open class SyntheticsCheckExecutor {
         )
 
         val startTime = System.currentTimeMillis()
-        return try {
+        return suspendRunCatching {
             val address = InetAddress.getByName(hostname)
             val sendData = ByteArray(1) { 0 }
             val packet = DatagramPacket(
@@ -478,7 +525,7 @@ open class SyntheticsCheckExecutor {
                     timings = timings
                 )
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             SyntheticCheckResult(
                 status = "failed",
                 durationMs = System.currentTimeMillis() - startTime,
@@ -488,9 +535,9 @@ open class SyntheticsCheckExecutor {
     }
 
     private suspend fun executeMultistepTest(test: SyntheticTestData): SyntheticCheckResult {
-        val steps: List<SyntheticStep> = try {
-            test.steps?.let { Json.decodeFromString(it) } ?: emptyList()
-        } catch (_: Exception) {
+        val steps: List<SyntheticStep> = suspendRunCatching {
+            test.steps?.let { Json.decodeFromString<List<SyntheticStep>>(it) } ?: emptyList()
+        }.getOrElse { _ ->
             emptyList()
         }
 
@@ -498,75 +545,87 @@ open class SyntheticsCheckExecutor {
             return SyntheticCheckResult(status = "failed", durationMs = 0, errorMessage = "No steps configured")
         }
 
-        val timeoutMs = test.timeoutSeconds * 1000L
+        val timeoutMs = test.timeoutSeconds * MILLIS_PER_SECOND_LONG
         val client = buildClient(timeoutMs)
         val variables = mutableMapOf<String, String>()
         val startTime = System.currentTimeMillis()
 
         return try {
             for (step in steps) {
-                val stepUrl = substituteVariables(step.url, variables)
-                try {
-                    UrlValidator.validateExternalUrl(stepUrl)
-                } catch (e: UrlValidator.SsrfException) {
-                    val durationMs = System.currentTimeMillis() - startTime
-                    return SyntheticCheckResult(
-                        status = "failed",
-                        durationMs = durationMs,
-                        errorMessage = "Step '${step.name}' blocked: ${e.message}"
-                    )
-                }
-                val stepBody = step.body?.let { substituteVariables(it, variables) }
-                val stepHeaders = step.headers?.mapValues { (_, v) -> substituteVariables(v, variables) }
-
-                val stepStart = System.currentTimeMillis()
-                val response = try {
-                    client.request(stepUrl) {
-                        method = resolveHttpMethod(step.method)
-                        stepHeaders?.forEach { (k, v) -> header(k, v) }
-                        stepBody?.let { b -> setBody(b) }
-                    }
-                } catch (e: Exception) {
-                    val durationMs = System.currentTimeMillis() - startTime
-                    return SyntheticCheckResult(
-                        status = "failed",
-                        durationMs = durationMs,
-                        errorMessage = "Step '${step.name}' failed: ${e.message}"
-                    )
-                }
-
-                val stepDurationMs = System.currentTimeMillis() - stepStart
-                val statusCode = response.status.value
-                val body = response.bodyAsText()
-                val responseHeaders = response.headers.entries()
-                    .associate { (k, v) -> k to v.firstOrNull().orEmpty() }
-
-                // Evaluate step assertions
-                val allPassed = step.assertions.all { assertion ->
-                    evaluateAssertion(assertion, statusCode, body, stepDurationMs, responseHeaders)
-                }
-                if (!allPassed) {
-                    val durationMs = System.currentTimeMillis() - startTime
-                    return SyntheticCheckResult(
-                        status = "failed",
-                        durationMs = durationMs,
-                        errorMessage = "Step '${step.name}' assertion failed"
-                    )
-                }
-
-                // Extract variables for subsequent steps
-                step.extractVariables.forEach { extraction ->
-                    val extracted = extractVariable(extraction.source, extraction.path, body, responseHeaders)
-                    if (extracted != null) {
-                        variables[extraction.name] = extracted
-                    }
-                }
+                val stepOutcome = runSingleMultistepStep(step, client, variables, startTime)
+                if (stepOutcome != null) return stepOutcome
             }
 
             SyntheticCheckResult(status = "passed", durationMs = System.currentTimeMillis() - startTime)
         } finally {
             client.close()
         }
+    }
+
+    /**
+     * Runs one synthetic multistep step. Returns a terminal [SyntheticCheckResult] on failure, or null to continue.
+     */
+    private suspend fun runSingleMultistepStep(
+        step: SyntheticStep,
+        client: HttpClient,
+        variables: MutableMap<String, String>,
+        startTime: Long,
+    ): SyntheticCheckResult? {
+        val stepUrl = substituteVariables(step.url, variables)
+        try {
+            UrlValidator.validateExternalUrl(stepUrl)
+        } catch (e: UrlValidator.SsrfException) {
+            val durationMs = System.currentTimeMillis() - startTime
+            return SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = "Step '${step.name}' blocked: ${e.message}"
+            )
+        }
+        val stepBody = step.body?.let { substituteVariables(it, variables) }
+        val stepHeaders = step.headers?.mapValues { (_, v) -> substituteVariables(v, variables) }
+
+        val stepStart = System.currentTimeMillis()
+        val response = suspendRunCatching {
+            client.request(stepUrl) {
+                method = resolveHttpMethod(step.method)
+                stepHeaders?.forEach { (k, v) -> header(k, v) }
+                stepBody?.let { b -> setBody(b) }
+            }
+        }.getOrElse { e ->
+            val durationMs = System.currentTimeMillis() - startTime
+            return SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = "Step '${step.name}' failed: ${e.message}"
+            )
+        }
+
+        val stepDurationMs = System.currentTimeMillis() - stepStart
+        val statusCode = response.status.value
+        val body = response.bodyAsText()
+        val responseHeaders = response.headers.entries()
+            .associate { (k, v) -> k to v.firstOrNull().orEmpty() }
+
+        val allPassed = step.assertions.all { assertion ->
+            evaluateAssertion(assertion, statusCode, body, stepDurationMs, responseHeaders)
+        }
+        if (!allPassed) {
+            val durationMs = System.currentTimeMillis() - startTime
+            return SyntheticCheckResult(
+                status = "failed",
+                durationMs = durationMs,
+                errorMessage = "Step '${step.name}' assertion failed"
+            )
+        }
+
+        step.extractVariables.forEach { extraction ->
+            val extracted = extractVariable(extraction.source, extraction.path, body, responseHeaders)
+            if (extracted != null) {
+                variables[extraction.name] = extracted
+            }
+        }
+        return null
     }
 
     private fun evaluateAssertion(
@@ -576,7 +635,7 @@ open class SyntheticsCheckExecutor {
         responseTimeMs: Long,
         headers: Map<String, String>
     ): Boolean {
-        return try {
+        return suspendRunCatching {
             when (assertion.type) {
                 "status_code" -> {
                     val expected = assertion.value.toIntOrNull() ?: return false
@@ -613,7 +672,7 @@ open class SyntheticsCheckExecutor {
                     false
                 }
             }
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             false
         }
     }
@@ -629,7 +688,7 @@ open class SyntheticsCheckExecutor {
     }
 
     private fun extractJsonPath(body: String, path: String): String? {
-        return try {
+        return suspendRunCatching {
             val json = Json.parseToJsonElement(body).jsonObject
             val segments = path.removePrefix("$.").split(".")
             var current = json
@@ -637,7 +696,7 @@ open class SyntheticsCheckExecutor {
                 current = current[segments[i]]?.jsonObject ?: return null
             }
             current[segments.last()]?.jsonPrimitive?.content
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             null
         }
     }
@@ -676,17 +735,17 @@ open class SyntheticsCheckExecutor {
     }
 
     private fun parseHeaders(headersJson: String?): Map<String, String> {
-        return try {
-            headersJson?.let { Json.decodeFromString(it) } ?: emptyMap()
-        } catch (_: Exception) {
+        return suspendRunCatching {
+            headersJson?.let { Json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
+        }.getOrElse { _ ->
             emptyMap()
         }
     }
 
     private fun parseAssertions(assertionsJson: String): List<SyntheticAssertion> {
-        return try {
-            Json.decodeFromString(assertionsJson)
-        } catch (_: Exception) {
+        return suspendRunCatching {
+            Json.decodeFromString<List<SyntheticAssertion>>(assertionsJson)
+        }.getOrElse { _ ->
             emptyList()
         }
     }
@@ -714,10 +773,10 @@ open class SyntheticsCheckExecutor {
             "certificate_valid" -> {
                 val expected = assertion.value.toBooleanStrictOrNull()
                     ?: true
-                val valid = try {
+                val valid = suspendRunCatching {
                     cert.checkValidity()
                     true
-                } catch (_: Exception) {
+                }.getOrElse { _ ->
                     false
                 }
                 valid == expected
@@ -800,5 +859,6 @@ open class SyntheticsCheckExecutor {
 
     companion object {
         private const val NS_PER_MS = 1_000_000L
+        private const val REQUEST_FAILED = "Request failed"
     }
 }

@@ -43,6 +43,7 @@ private val json = Json { ignoreUnknownKeys = true }
 
 private const val DEFAULT_LIMIT = 50
 private const val MAX_LIMIT = 200
+private const val LOG_BODY_MAX_LEN = 200
 
 fun Route.datadogInfraQueryRoutes() {
     route("/v1/infra") {
@@ -304,7 +305,7 @@ private suspend fun executeCount(sql: String): Long {
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
     if (resp.isClickHouseError(body)) {
-        logger.warn { "ClickHouse query failed (${resp.status.value}): ${body.take(200)}" }
+        logger.warn { "ClickHouse query failed (${resp.status.value}): ${body.take(LOG_BODY_MAX_LEN)}" }
         return 0L
     }
     return body.trim().lines().firstOrNull()?.let {
@@ -322,7 +323,7 @@ private suspend fun executeRows(
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
     if (resp.isClickHouseError(body)) {
-        logger.warn { "ClickHouse query failed (${resp.status.value}): ${body.take(200)}" }
+        logger.warn { "ClickHouse query failed (${resp.status.value}): ${body.take(LOG_BODY_MAX_LEN)}" }
         return emptyList()
     }
     return body.trim()

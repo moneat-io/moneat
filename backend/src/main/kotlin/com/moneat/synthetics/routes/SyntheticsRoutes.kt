@@ -34,7 +34,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import java.util.UUID
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -47,6 +46,9 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
+import java.util.UUID
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
@@ -97,7 +99,7 @@ private fun parseJsonEachRow(body: String): List<JsonObject> {
 private suspend fun executeChQuery(query: String): List<JsonObject>? {
     return runCatching {
         val response = ClickHouseClient.execute(query)
-        if (response.status.value !in 200..299) {
+        if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
             logger.warn { "ClickHouse query failed: ${response.status}" }
             return null
         }
@@ -219,7 +221,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -255,7 +257,7 @@ fun Route.syntheticsRoutes() {
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                         .toString()
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -321,7 +323,7 @@ fun Route.syntheticsRoutes() {
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                         .toString()
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -384,7 +386,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -421,7 +423,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -456,7 +458,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
-                } catch (_: Exception) {
+                } catch (_: IllegalArgumentException) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")

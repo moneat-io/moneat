@@ -66,6 +66,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val adminJson = Json { ignoreUnknownKeys = true }
@@ -113,6 +114,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
             argMax(ssl_enabled, received_at)     AS ssl_enabled
         FROM `$db`.telemetry_pulses
         GROUP BY deployment_id
+        HAVING max(received_at) > now() - INTERVAL 24 HOUR
         ORDER BY last_seen DESC
         LIMIT 500
         FORMAT JSONEachRow
@@ -122,14 +124,14 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
     val body = response.bodyAsText().trim()
 
     if (response.isClickHouseError(body)) {
-        logger.warn { "Failed to query telemetry_pulses: ${body.take(200)}" }
+        logger.warn { "Failed to query telemetry_pulses: ${body.take(LOG_BODY_PREVIEW_LENGTH)}" }
         return ReceivedTelemetryStatus(deploymentCount = 0, lastSeenAt = null, deployments = emptyList())
     }
 
     val deployments = body.lines()
         .filter { it.isNotBlank() }
         .mapNotNull { line ->
-            try {
+            suspendRunCatching {
                 val obj = adminJson.parseToJsonElement(line).jsonObject
                 ReceivedPulse(
                     deploymentId = obj["deployment_id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null,
@@ -146,7 +148,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
                     issueCount = obj["issue_count"]?.jsonPrimitive?.longOrNull ?: 0,
                     sslEnabled = (obj["ssl_enabled"]?.jsonPrimitive?.intOrNull ?: 0) == 1,
                 )
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.warn { "Failed to parse telemetry pulse row: ${e.message}" }
                 null
             }
@@ -166,6 +168,12 @@ private data class AdminUsersResponse(
     val page: Int,
     val limit: Int
 )
+
+private const val LOG_BODY_PREVIEW_LENGTH = 200
+private const val DEFAULT_PAGE_LIMIT = 25
+private const val SMALL_PAGE_LIMIT = 10
+private const val LARGE_PAGE_LIMIT = 500
+private const val MEDIUM_PAGE_LIMIT = 100
 
 @Serializable
 private data class AdminImpersonationTokenResponse(
@@ -216,7 +224,9 @@ fun Route.adminRoutes() {
                                     ?.get(Users.is_admin) ?: false
                             }
                         if (!isAdmin) {
-                            logger.warn { "Admin access denied: user $userId is not admin (path=${call.request.path()})" }
+                            logger.warn {
+                                "Admin access denied: user $userId is not admin (path=${call.request.path()})"
+                            }
                             call.respond(
                                 HttpStatusCode.Forbidden,
                                 com.moneat.utils.ErrorResponse("Admin access required")
@@ -233,7 +243,7 @@ fun Route.adminRoutes() {
 
             get("/organizations") {
                 val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
                 val orgs = adminService.getAllOrganizations(page, limit)
                 call.respond(orgs)
             }
@@ -289,7 +299,7 @@ fun Route.adminRoutes() {
             }
 
             get("/top-consumers") {
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: SMALL_PAGE_LIMIT
                 val consumers = adminService.getTopConsumers(limit)
                 call.respond(consumers)
             }
@@ -303,12 +313,18 @@ fun Route.adminRoutes() {
             post("/impersonate/{userId}") {
                 val targetUserId =
                     call.parameters["userId"]?.toIntOrNull()
-                        ?: return@post call.respond(HttpStatusCode.BadRequest, com.moneat.utils.ErrorResponse("Invalid user ID"))
+                        ?: return@post call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.utils.ErrorResponse("Invalid user ID")
+                        )
 
                 val targetUser =
                     transaction {
                         Users.selectAll().where { Users.id eq targetUserId }.firstOrNull()
-                    } ?: return@post call.respond(HttpStatusCode.NotFound, com.moneat.utils.ErrorResponse("User not found"))
+                    } ?: return@post call.respond(
+                        HttpStatusCode.NotFound,
+                        com.moneat.utils.ErrorResponse("User not found")
+                    )
 
                 val token =
                     authService.generateImpersonationToken(
@@ -335,11 +351,14 @@ fun Route.adminRoutes() {
                             .firstOrNull()
                             ?.get(com.moneat.shared.models.Memberships.organization_id)
                     } ?: run {
-                        call.respond(HttpStatusCode.BadRequest, com.moneat.utils.ErrorResponse("User has no organization"))
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.utils.ErrorResponse("User has no organization")
+                        )
                         return@post
                     }
 
-                try {
+                suspendRunCatching {
                     val request = call.receive<TriggerIncidentRequest>()
 
                     val config = ApplicationConfig("application.conf")
@@ -347,9 +366,9 @@ fun Route.adminRoutes() {
 
                     val severityEnum = IncidentSeverity.fromString(request.severity) ?: IncidentSeverity.MEDIUM
                     val sourceEnum =
-                        try {
+                        suspendRunCatching {
                             AlertSource.valueOf(request.source)
-                        } catch (e: Exception) {
+                        }.getOrElse { e ->
                             val msg = "Invalid AlertSource '${request.source}', defaulting to HOST_ALERT: ${e.message}"
                             logger.warn { msg }
                             AlertSource.HOST_ALERT
@@ -370,7 +389,7 @@ fun Route.adminRoutes() {
 
                     incidentService.fireAlert(event)
                     call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         com.moneat.utils.ErrorResponse(e.message ?: "Unknown error")
@@ -386,7 +405,7 @@ fun Route.adminRoutes() {
                         return@post
                     }
 
-                try {
+                suspendRunCatching {
                     val request = call.receive<com.moneat.events.models.TestNotificationRequest>()
 
                     // Get user email for testing - use testEmail from request if provided
@@ -430,7 +449,7 @@ fun Route.adminRoutes() {
 
                     // Send email notification if requested
                     if (testEmail) {
-                        try {
+                        suspendRunCatching {
                             when (request.type) {
                                 "error_alert" -> {
                                     val testData =
@@ -447,7 +466,10 @@ fun Route.adminRoutes() {
                                             java.time.Instant
                                                 .now()
                                                 .toString(),
-                                            stackTrace = "  at UserService.getUser (UserService.kt:45)\n  at UserController.handleRequest (UserController.kt:23)\n  at Router.dispatch (Router.kt:89)",
+                                            stackTrace =
+                                            "  at UserService.getUser (UserService.kt:45)\n" +
+                                                "  at UserController.handleRequest (UserController.kt:23)\n" +
+                                                "  at Router.dispatch (Router.kt:89)",
                                             settingsUrl = "$frontendUrl/settings/notifications",
                                             unsubscribeUrl = "$frontendUrl/settings/notifications"
                                         )
@@ -499,7 +521,7 @@ fun Route.adminRoutes() {
                                     errors.add("Email type '${request.type}' not supported for email channel")
                                 }
                             }
-                        } catch (e: Exception) {
+                        }.getOrElse { e ->
                             errors.add("Email failed: ${e.message}")
                         }
                     }
@@ -509,7 +531,7 @@ fun Route.adminRoutes() {
                         if (orgId == null) {
                             errors.add("No organization found for Slack testing")
                         } else {
-                            try {
+                            suspendRunCatching {
                                 when (request.type) {
                                     "error_alert" -> {
                                         slackSent =
@@ -527,7 +549,10 @@ fun Route.adminRoutes() {
                                                 java.time.Instant
                                                     .now()
                                                     .toString(),
-                                                stackTrace = "  at UserService.getUser (UserService.kt:45)\n  at UserController.handleRequest (UserController.kt:23)\n  at Router.dispatch (Router.kt:89)"
+                                                stackTrace =
+                                                "  at UserService.getUser (UserService.kt:45)\n" +
+                                                    "  at UserController.handleRequest (UserController.kt:23)\n" +
+                                                    "  at Router.dispatch (Router.kt:89)"
                                             )
                                     }
 
@@ -576,7 +601,7 @@ fun Route.adminRoutes() {
                                         "Slack notification failed (no Slack integration configured or error occurred)"
                                     )
                                 }
-                            } catch (e: Exception) {
+                            }.getOrElse { e ->
                                 errors.add("Slack failed: ${e.message}")
                             }
                         }
@@ -587,7 +612,7 @@ fun Route.adminRoutes() {
                         if (orgId == null) {
                             errors.add("No organization found for Discord testing")
                         } else {
-                            try {
+                            suspendRunCatching {
                                 when (request.type) {
                                     "error_alert" -> {
                                         discordSent =
@@ -646,10 +671,11 @@ fun Route.adminRoutes() {
                                 }
                                 if (!discordSent && errors.isEmpty()) {
                                     errors.add(
-                                        "Discord notification failed (no Discord integration configured or error occurred)"
+                                        "Discord notification failed (no Discord integration configured or error " +
+                                            "occurred)"
                                     )
                                 }
-                            } catch (e: Exception) {
+                            }.getOrElse { e ->
                                 errors.add("Discord failed: ${e.message}")
                             }
                         }
@@ -668,7 +694,7 @@ fun Route.adminRoutes() {
                         if (emailSent || slackSent || discordSent) HttpStatusCode.OK else HttpStatusCode.BadRequest,
                         response
                     )
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         com.moneat.events.models.TestNotificationResponse(
@@ -692,7 +718,7 @@ fun Route.adminRoutes() {
                 @Serializable
                 data class TestSmsCallRequest(val channel: String)
 
-                try {
+                suspendRunCatching {
                     val request = call.receive<TestSmsCallRequest>()
 
                     // TwilioService is in the enterprise module — access via reflection
@@ -713,7 +739,8 @@ fun Route.adminRoutes() {
                         call.respond(
                             HttpStatusCode.BadRequest,
                             com.moneat.utils.ErrorResponse(
-                                "Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM_NUMBER)"
+                                "Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, " +
+                                    "or TWILIO_FROM_NUMBER)"
                             )
                         )
                         return@post
@@ -731,7 +758,8 @@ fun Route.adminRoutes() {
                         call.respond(
                             HttpStatusCode.BadRequest,
                             com.moneat.utils.ErrorResponse(
-                                "No consented on-call phone number configured. Please set up your on-call contact in notification settings first."
+                                "No consented on-call phone number configured. Please set up your on-call contact " +
+                                    "in notification settings first."
                             )
                         )
                         return@post
@@ -756,7 +784,7 @@ fun Route.adminRoutes() {
                     }
 
                     call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         com.moneat.utils.ErrorResponse(e.message ?: "Unknown error")
@@ -766,7 +794,7 @@ fun Route.adminRoutes() {
 
             get("/users") {
                 val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
                 val search = call.request.queryParameters["search"]
                 val users = adminService.getAllUsers(page, limit, search)
                 val total = adminService.getTotalUserCount(search)
@@ -786,7 +814,7 @@ fun Route.adminRoutes() {
                     call.respond(HttpStatusCode.BadRequest, com.moneat.utils.ErrorResponse("Invalid user ID"))
                     return@patch
                 }
-                try {
+                suspendRunCatching {
                     val request = call.receive<com.moneat.org.services.UpdateUserRequest>()
                     val success = adminService.updateUser(userId, request)
                     if (success) {
@@ -794,7 +822,7 @@ fun Route.adminRoutes() {
                     } else {
                         call.respond(HttpStatusCode.NotFound, com.moneat.utils.ErrorResponse("User not found"))
                     }
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     call.respond(
                         HttpStatusCode.BadRequest,
                         com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
@@ -803,11 +831,11 @@ fun Route.adminRoutes() {
             }
 
             delete("/users") {
-                try {
+                suspendRunCatching {
                     val request = call.receive<com.moneat.org.services.DeleteUsersRequest>()
                     val result = adminService.deleteUsers(request.userIds)
                     call.respond(HttpStatusCode.OK, result)
-                } catch (e: Exception) {
+                }.getOrElse { e ->
                     call.respond(
                         HttpStatusCode.BadRequest,
                         com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
@@ -866,7 +894,7 @@ fun Route.adminRoutes() {
                 }
 
                 get("/subscriptions") {
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: LARGE_PAGE_LIMIT
                     call.respond(pricingTierService.listAdminSubscriptions(limit))
                 }
 
@@ -951,7 +979,7 @@ fun Route.adminRoutes() {
                 }
 
                 get("/promotional-credits") {
-                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: MEDIUM_PAGE_LIMIT
                     val grants = adminBillingService.getAllPromotionalCreditGrants(limit)
                     call.respond(grants)
                 }

@@ -16,9 +16,9 @@
 
 package com.moneat.config
 
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.server.application.Application
-import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
@@ -32,6 +32,7 @@ import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
 import kotlin.io.path.nameWithoutExtension
 import kotlin.io.path.readText
+import com.moneat.utils.suspendRunCatching
 
 /**
  * ClickHouse migration system similar to Flyway for PostgreSQL.
@@ -40,6 +41,7 @@ import kotlin.io.path.readText
 object ClickHouseMigrations {
     private const val MIGRATIONS_TABLE = "schema_migrations"
     private const val MIGRATIONS_PATH = "db/clickhouse_migration"
+    private const val ERROR_BODY_MAX_LEN = 500
 
     data class Migration(
         val version: Int,
@@ -60,7 +62,7 @@ object ClickHouseMigrations {
      * Runs all pending migrations on application startup.
      */
     suspend fun migrate(logger: org.slf4j.Logger) {
-        try {
+        suspendRunCatching {
             // Create migrations tracking table if it doesn't exist
             createMigrationsTable()
 
@@ -93,7 +95,7 @@ object ClickHouseMigrations {
             }
 
             logger.info("ClickHouse migrations complete (${migrations.size} total migrations)")
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error("ClickHouse migration failed: ${e.message}", e)
             throw RuntimeException("ClickHouse migration failed", e)
         }
@@ -179,7 +181,7 @@ object ClickHouseMigrations {
         val response = ClickHouseClient.executeMigration(query)
         val body = response.bodyAsText()
         if (response.isClickHouseError(body)) {
-            throw RuntimeException("ClickHouse error reading applied migrations: ${body.take(500)}")
+            throw RuntimeException("ClickHouse error reading applied migrations: ${body.take(ERROR_BODY_MAX_LEN)}")
         }
         if (body.isBlank()) return emptyList()
 

@@ -33,7 +33,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
-
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
@@ -47,7 +46,12 @@ import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
+/** Manages synthetic HTTP checks, variables, execution, and ClickHouse result storage. */
 class SyntheticsService(
     private val emailService: EmailService = EmailService(),
     private val slackService: SlackService = SlackService(),
@@ -62,6 +66,7 @@ class SyntheticsService(
         private const val PRO_TIER_LIMIT = 20
         private const val TEAM_TIER_LIMIT = 50
         private const val BUSINESS_TIER_LIMIT = Int.MAX_VALUE
+        private const val TIMEOUT_BUFFER_MS = 5000L
     }
 
     fun createTest(
@@ -135,21 +140,19 @@ class SyntheticsService(
         }
     }
 
+    /** Applies partial updates to a synthetic test; validates retry fields when either count or interval is present. */
     fun updateTest(
         testId: UUID,
         organizationId: Int,
         request: UpdateSyntheticTestRequest
     ): SyntheticTestResponse? {
-        request.retryCount?.let { rc ->
-            request.retryIntervalMs?.let { ri ->
-                validateRetryParams(rc, ri)
-            } ?: validateRetryParams(rc, RETRY_INTERVAL_MS_DEFAULT)
+        val rc = request.retryCount
+        val ri = request.retryIntervalMs
+        if (rc != null) {
+            validateRetryParams(rc, ri ?: RETRY_INTERVAL_MS_DEFAULT)
         }
-        request.retryIntervalMs?.let { ri ->
-            validateRetryParams(
-                request.retryCount ?: RETRY_COUNT_DEFAULT,
-                ri
-            )
+        if (ri != null) {
+            validateRetryParams(rc ?: RETRY_COUNT_DEFAULT, ri)
         }
         val updated = transaction {
             SyntheticTests
@@ -282,23 +285,23 @@ class SyntheticsService(
         val resolvedTest = resolveGlobalVariables(test)
         val result = executeWithRetries(resolvedTest, executor)
 
-        try {
+        suspendRunCatching {
             recordResult(test, result)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) {
                 "Failed to record synthetic result for ${test.id}"
             }
         }
 
         val oldStatus = test.lastStatus
-        try {
+        suspendRunCatching {
             updateTestStatus(
                 test.id,
                 result.status,
                 result.status,
                 oldStatus
             )
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) {
                 "Failed to update synthetic test status for ${test.id}"
             }
@@ -309,9 +312,9 @@ class SyntheticsService(
             result.status == "failed" &&
             oldStatus != "failed"
         ) {
-            try {
+            suspendRunCatching {
                 sendFailureAlert(test, result)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) {
                     "Failed to send alert for synthetic test ${test.id}"
                 }
@@ -327,11 +330,11 @@ class SyntheticsService(
         var lastResult: SyntheticCheckResult? = null
 
         for (attempt in 1..maxAttempts) {
-            lastResult = try {
-                withTimeout(test.timeoutSeconds * 1000L + 5000) {
+            lastResult = suspendRunCatching {
+                withTimeout(test.timeoutSeconds * MILLIS_PER_SECOND_LONG + TIMEOUT_BUFFER_MS) {
                     executor.executeTest(test)
                 }
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) {
                     "Synthetic test execution failed for ${test.id} " +
                         "(attempt $attempt): ${e.message}"
@@ -456,9 +459,9 @@ class SyntheticsService(
     private fun resolveGlobalVariables(
         test: SyntheticTestData
     ): SyntheticTestData {
-        val vars = try {
+        val vars = suspendRunCatching {
             getVariablesMap(test.organizationId)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) {
                 "Failed to load global variables for org ${test.organizationId}"
             }
@@ -523,6 +526,7 @@ class SyntheticsService(
         }
     }
 
+    /** Ensures retry count and interval are non-negative before create/update. */
     private fun validateRetryParams(retryCount: Int, retryIntervalMs: Int) {
         require(retryCount >= 0) {
             "retryCount must be non-negative, got $retryCount"
@@ -533,14 +537,14 @@ class SyntheticsService(
     }
 
     private fun rowToData(row: ResultRow): SyntheticTestData {
-        val tagsList: List<String> = try {
-            Json.decodeFromString(row[SyntheticTests.tags])
-        } catch (_: Exception) {
+        val tagsList: List<String> = suspendRunCatching {
+            Json.decodeFromString<List<String>>(row[SyntheticTests.tags])
+        }.getOrElse { _ ->
             emptyList()
         }
-        val alertChannelsList: List<String> = try {
-            Json.decodeFromString(row[SyntheticTests.alertChannels])
-        } catch (_: Exception) {
+        val alertChannelsList: List<String> = suspendRunCatching {
+            Json.decodeFromString<List<String>>(row[SyntheticTests.alertChannels])
+        }.getOrElse { _ ->
             emptyList()
         }
         return SyntheticTestData(
@@ -576,40 +580,40 @@ class SyntheticsService(
     }
 
     private fun rowToResponse(row: ResultRow): SyntheticTestResponse {
-        val assertionsList: List<SyntheticAssertion> = try {
-            Json.decodeFromString(row[SyntheticTests.assertions])
-        } catch (_: Exception) {
+        val assertionsList: List<SyntheticAssertion> = suspendRunCatching {
+            Json.decodeFromString<List<SyntheticAssertion>>(row[SyntheticTests.assertions])
+        }.getOrElse { _ ->
             emptyList()
         }
-        val stepsList: List<SyntheticStep> = try {
+        val stepsList: List<SyntheticStep> = suspendRunCatching {
             row[SyntheticTests.steps]?.let {
-                Json.decodeFromString(it)
+                Json.decodeFromString<List<SyntheticStep>>(it)
             } ?: emptyList()
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             emptyList()
         }
-        val headersMap: Map<String, String>? = try {
+        val headersMap: Map<String, String>? = suspendRunCatching {
             row[SyntheticTests.headers]?.let {
-                Json.decodeFromString(it)
+                Json.decodeFromString<Map<String, String>>(it)
             }
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             null
         }
-        val tagsList: List<String> = try {
-            Json.decodeFromString(row[SyntheticTests.tags])
-        } catch (_: Exception) {
+        val tagsList: List<String> = suspendRunCatching {
+            Json.decodeFromString<List<String>>(row[SyntheticTests.tags])
+        }.getOrElse { _ ->
             emptyList()
         }
-        val alertChannelsList: List<String> = try {
-            Json.decodeFromString(row[SyntheticTests.alertChannels])
-        } catch (_: Exception) {
+        val alertChannelsList: List<String> = suspendRunCatching {
+            Json.decodeFromString<List<String>>(row[SyntheticTests.alertChannels])
+        }.getOrElse { _ ->
             emptyList()
         }
-        val testConfig: SyntheticTestConfig? = try {
+        val testConfig: SyntheticTestConfig? = suspendRunCatching {
             row[SyntheticTests.config]?.let {
-                Json.decodeFromString(it)
+                Json.decodeFromString<SyntheticTestConfig>(it)
             }
-        } catch (_: Exception) {
+        }.getOrElse { _ ->
             null
         }
 
@@ -673,7 +677,7 @@ class SyntheticsService(
             ClickHouseClient.execute(query)
         }.getOrNull() ?: return null
 
-        if (response.status.value !in 200..299) {
+        if (response.status.value !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
             logger.warn {
                 "ClickHouse summary query failed: ${response.status}"
             }

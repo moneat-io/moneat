@@ -17,14 +17,15 @@
 package com.moneat.billing.services
 
 import com.moneat.billing.models.BillingUsageResponse
-import com.moneat.billing.repositories.SubscriptionRepositoryImpl
-import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.billing.models.QuotaNotificationsSent
+import com.moneat.billing.repositories.SubscriptionRepositoryImpl
 import com.moneat.notifications.services.EmailService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.shared.repositories.OrganizationRepositoryImpl
+import com.moneat.shared.services.TaskLock
 import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +33,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import com.moneat.shared.services.TaskLock
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -44,8 +44,13 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+
+private const val BILLING_JOB_INTERVAL_MS = 60_000L
+private const val QUOTA_WARNING_THRESHOLD = 0.8
+private const val CENTS_PER_DOLLAR = 100.0
 
 class BillingBackgroundService(
     private val stripeService: StripeService = StripeService(
@@ -57,7 +62,8 @@ class BillingBackgroundService(
     private val pricingTierService: PricingTierService = PricingTierService()
 ) {
     private val config = ApplicationConfig("application.conf")
-    private val billingEnabled = config.propertyOrNull("billing.backgroundJobsEnabled")?.getString()?.toBooleanStrictOrNull() ?: true
+    private val billingEnabled =
+        config.propertyOrNull("billing.backgroundJobsEnabled")?.getString()?.toBooleanStrictOrNull() ?: true
 
     private var meteredUsageJob: Job? = null
     private var dunningDowngradeJob: Job? = null
@@ -72,21 +78,29 @@ class BillingBackgroundService(
         meteredUsageJob =
             scope.launch(Dispatchers.IO) {
                 while (isActive) {
-                    TaskLock.tryWithLock("billing-metered-flush", lockAtMostFor = 5.minutes, lockAtLeastFor = 55.seconds) {
+                    TaskLock.tryWithLock(
+                        "billing-metered-flush",
+                        lockAtMostFor = 5.minutes,
+                        lockAtLeastFor = 55.seconds
+                    ) {
                         val flushed = stripeService.flushPendingMeteredUsage()
                         if (flushed > 0) logger.info { "Flushed pending metered usage for $flushed subscription(s)" }
                     }
-                    delay(60_000L)
+                    delay(BILLING_JOB_INTERVAL_MS)
                 }
             }
 
         dunningDowngradeJob =
             scope.launch(Dispatchers.IO) {
                 while (isActive) {
-                    TaskLock.tryWithLock("billing-dunning-downgrade", lockAtMostFor = 5.minutes, lockAtLeastFor = 55.seconds) {
+                    TaskLock.tryWithLock(
+                        "billing-dunning-downgrade",
+                        lockAtMostFor = 5.minutes,
+                        lockAtLeastFor = 55.seconds
+                    ) {
                         stripeService.applyDunningDowngrade()
                     }
-                    delay(60_000L)
+                    delay(BILLING_JOB_INTERVAL_MS)
                 }
             }
 
@@ -100,7 +114,7 @@ class BillingBackgroundService(
                     ) {
                         processQuotaThresholdNotifications()
                     }
-                    delay(60_000L)
+                    delay(BILLING_JOB_INTERVAL_MS)
                 }
             }
     }
@@ -127,22 +141,47 @@ class BillingBackgroundService(
         for (orgId in orgIds) {
             val usage = quotaService.getUsageForOrganization(orgId)
             val periodStart = usage.periodStart
-            val basePct = if (usage.baseLimitUnits > 0) (usage.usedUnits.toDouble() / usage.baseLimitUnits.toDouble()) else 0.0
-            val paygPct =
+            val unitPct =
+                if (usage.baseLimitUnits > 0) {
+                    usage.usedUnits.toDouble() / usage.baseLimitUnits.toDouble()
+                } else {
+                    0.0
+                }
+            val gbEligibleBytes =
+                kotlin.math.max(0L, usage.usedBytes - usage.usedApmSpanBytes)
+            val bytesPct =
+                if (usage.bytesLimit > 0) {
+                    gbEligibleBytes.toDouble() / usage.bytesLimit.toDouble()
+                } else {
+                    0.0
+                }
+            val basePct = maxOf(unitPct, bytesPct)
+
+            val unitPaygPct =
                 if (usage.paygLimitUnits > 0) {
                     val paygUsed = kotlin.math.max(0L, usage.usedUnits - usage.baseLimitUnits)
                     paygUsed.toDouble() / usage.paygLimitUnits.toDouble()
                 } else {
                     0.0
                 }
+            val bytesPaygPct =
+                if (usage.paygLimitBytes > 0) {
+                    val paygBytes = kotlin.math.max(0L, gbEligibleBytes - usage.bytesLimit)
+                    paygBytes.toDouble() / usage.paygLimitBytes.toDouble()
+                } else {
+                    0.0
+                }
+            val paygPct = maxOf(unitPaygPct, bytesPaygPct)
 
-            if (basePct >= 0.8) {
+            if (basePct >= QUOTA_WARNING_THRESHOLD) {
                 maybeSendNotification(orgId, periodStart, "base_80", usage)
             }
             if (basePct >= 1.0) {
                 maybeSendNotification(orgId, periodStart, "base_100", usage)
             }
-            if (usage.paygLimitUnits > 0 && paygPct >= 0.8) {
+            if ((usage.paygLimitUnits > 0 || usage.paygLimitBytes > 0) &&
+                paygPct >= QUOTA_WARNING_THRESHOLD
+            ) {
                 maybeSendNotification(orgId, periodStart, "payg_80", usage)
             }
         }
@@ -178,7 +217,10 @@ class BillingBackgroundService(
                     if (ownerIds.isNotEmpty()) {
                         ownerIds
                     } else {
-                        Memberships.selectAll().where { Memberships.organization_id eq organizationId }.map { it[Memberships.user_id] }
+                        Memberships
+                            .selectAll()
+                            .where { Memberships.organization_id eq organizationId }
+                            .map { it[Memberships.user_id] }
                     }
                 Users
                     .selectAll()
@@ -211,13 +253,13 @@ class BillingBackgroundService(
                 appendLine("Plan: ${usage.plan}")
                 appendLine("Usage: ${usage.usedUnits}/${usage.totalLimitUnits} units")
                 appendLine("Base limit: ${usage.baseLimitUnits} units")
-                appendLine("PAYG budget: $${"%.2f".format(usage.paygBudgetCents / 100.0)}")
-                appendLine("PAYG used estimate: $${"%.2f".format(usage.paygUsedCentsEstimate / 100.0)}")
+                appendLine("PAYG budget: $${"%.2f".format(usage.paygBudgetCents / CENTS_PER_DOLLAR)}")
+                appendLine("PAYG used estimate: $${"%.2f".format(usage.paygUsedCentsEstimate / CENTS_PER_DOLLAR)}")
                 appendLine("Billing period: ${usage.periodStart} to ${usage.periodEnd}")
             }
 
         for (email in recipients) {
-            try {
+            suspendRunCatching {
                 emailService.sendEmail(
                     to = email,
                     subject = subject,
@@ -225,7 +267,7 @@ class BillingBackgroundService(
                     textBody = body,
                     emailType = "quota_notification"
                 )
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to send quota notification to $email" }
             }
         }

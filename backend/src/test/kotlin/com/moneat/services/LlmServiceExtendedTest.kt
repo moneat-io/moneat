@@ -37,7 +37,6 @@ import kotlin.test.assertTrue
 
 class LlmServiceExtendedTest {
     companion object {
-        @Suppress("MaximumLineLength")
         private const val EMPTY_STATS_JSON =
             """{"total_generations":0,"total_tokens":0,"total_cost":0,"avg_duration_ms":0,"error_rate":0}"""
         private const val GPT_4O = "gpt-4o"
@@ -62,7 +61,12 @@ class LlmServiceExtendedTest {
         runBlocking {
             val handler = queryBasedClickHouseHandler(
                 "count() as total" to """{"total":42}""",
-                "ORDER BY timestamp DESC" to buildGenerationRow("gen-1", "gpt-4o-mini", "openai")
+                "ORDER BY timestamp DESC" to
+                    """{"generation_id":"gen-1","trace_id":"t1","span_id":"s1","parent_span_id":"",""" +
+                    """"ts":"2026-03-01T10:00:00.000Z","duration_ms":100.0,"name":"test",""" +
+                    """"model":"gpt-4o-mini","provider":"openai","type":"chat","input_tokens":10,""" +
+                    """"output_tokens":20,"total_tokens":30,"cost_usd":0.01,"status":"success",""" +
+                    """"error_message":"","user_id":"u1","environment":"prod","release":"v1"}"""
             )
             withClickHouseMockServer(handler) { _ ->
                 val result = LlmDashboardService().getGenerations(
@@ -105,7 +109,7 @@ class LlmServiceExtendedTest {
                     pageSize = 10
                 )
                 val dataQuery = queries.find { it.contains("ORDER BY timestamp DESC") } ?: ""
-                assertTrue(dataQuery.contains("model = '$GPT_4O'"), "model filter missing")
+                assertTrue(dataQuery.contains("model = '${GPT_4O}'"), "model filter missing")
                 assertTrue(dataQuery.contains("provider = 'openai'"), "provider filter missing")
                 assertTrue(dataQuery.contains("type = 'chat'"), "type filter missing")
                 assertTrue(dataQuery.contains("status = 'error'"), "status filter missing")
@@ -141,8 +145,14 @@ class LlmServiceExtendedTest {
     @Test
     fun `getGenerationDetail parses full detail response`() =
         runBlocking {
-            @Suppress("MaximumLineLength")
-            val detailJson = """{"generation_id":"gen-99","trace_id":"t1","span_id":"s1","parent_span_id":"ps1","ts":"2026-03-01T12:00:00.000Z","duration_ms":200.0,"name":"summarize","model":"claude-3","provider":"anthropic","type":"chat","input":"hello","output":"world","input_tokens":5,"output_tokens":10,"total_tokens":15,"cost_usd":0.005,"temperature":0.7,"max_tokens":512,"top_p":0.9,"status":"success","error_message":"","status_code":200,"user_id":"user-1","session_id":"sess-1","environment":"production","release":"v2.0","tags":{"env":"prod","team":"ml"},"metadata":"{}"}"""
+            val detailJson =
+                """{"generation_id":"gen-99","trace_id":"t1","span_id":"s1","parent_span_id":"ps1",""" +
+                    """"ts":"2026-03-01T12:00:00.000Z","duration_ms":200.0,"name":"summarize","model":"claude-3",""" +
+                    """"provider":"anthropic","type":"chat","input":"hello","output":"world",""" +
+                    """"input_tokens":5,"output_tokens":10,"total_tokens":15,"cost_usd":0.005,""" +
+                    """"temperature":0.7,"max_tokens":512,"top_p":0.9,"status":"success",""" +
+                    """"error_message":"","status_code":200,"user_id":"user-1","session_id":"sess-1",""" +
+                    """"environment":"production","release":"v2.0","tags":{"env":"prod","team":"ml"},"metadata":{}}"""
             withClickHouseMockServer(
                 queryBasedClickHouseHandler(defaultBody = detailJson)
             ) { _ ->
@@ -202,12 +212,15 @@ class LlmServiceExtendedTest {
                 val query = exchange.requestBodyText()
                 when {
                     query.contains("GROUP BY model, provider") -> {
+                        val costsRow1 =
+                            """{"model":"gpt-4o","provider":"openai","total_cost":1.5,""" +
+                                """"total_tokens":3000,"call_count":10}"""
+                        val costsRow2 =
+                            """{"model":"claude-3","provider":"anthropic","total_cost":0.8,""" +
+                                """"total_tokens":1600,"call_count":5}"""
                         exchange.respond(
                             200,
-                            """
-                            {"model":"$GPT_4O","provider":"openai","total_cost":1.5,"total_tokens":3000,"call_count":10}
-                            {"model":"claude-3","provider":"anthropic","total_cost":0.8,"total_tokens":1600,"call_count":5}
-                            """.trimIndent(),
+                            "$costsRow1\n$costsRow2",
                             contentType = TEXT_PLAIN
                         )
                     }
@@ -234,11 +247,13 @@ class LlmServiceExtendedTest {
     @Test
     fun `getModels returns model stats list`() =
         runBlocking {
-            @Suppress("MaximumLineLength")
-            val modelsJson = """
-                {"model":"$GPT_4O","provider":"openai","call_count":100,"total_tokens":20000,"total_cost":5.0,"avg_duration_ms":400.0,"error_rate":2.0}
-                {"model":"claude-3","provider":"anthropic","call_count":50,"total_tokens":10000,"total_cost":2.5,"avg_duration_ms":300.0,"error_rate":0.0}
-            """.trimIndent()
+            val modelsRow1 =
+                """{"model":"gpt-4o","provider":"openai","call_count":100,"total_tokens":20000,""" +
+                    """"total_cost":5.0,"avg_duration_ms":400.0,"error_rate":2.0}"""
+            val modelsRow2 =
+                """{"model":"claude-3","provider":"anthropic","call_count":50,"total_tokens":10000,""" +
+                    """"total_cost":2.5,"avg_duration_ms":300.0,"error_rate":0.0}"""
+            val modelsJson = "$modelsRow1\n$modelsRow2"
             withClickHouseMockServer({ exchange ->
                 exchange.requestBodyText()
                 exchange.respond(200, modelsJson, contentType = TEXT_PLAIN)
@@ -666,16 +681,4 @@ class LlmServiceExtendedTest {
                 assertTrue(queries.any { it.contains("toDateTime64(") })
             }
         }
-
-    // ──── Helper ────
-
-    private fun buildGenerationRow(
-        genId: String,
-        model: String,
-        provider: String
-    ): String {
-        return """
-{"generation_id":"$genId","trace_id":"t1","span_id":"s1","parent_span_id":"","ts":"2026-03-01T10:00:00.000Z","duration_ms":100.0,"name":"test","model":"$model","provider":"$provider","type":"chat","input_tokens":10,"output_tokens":20,"total_tokens":30,"cost_usd":0.01,"status":"success","error_message":"","user_id":"u1","environment":"prod","release":"v1"}
-        """.trimIndent()
-    }
 }

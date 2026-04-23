@@ -18,16 +18,20 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogInfraService
+import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.pushToDlq
+import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
+import java.io.IOException
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -62,43 +66,52 @@ class DatadogInfraIngestionWorker(
     }
 
     private suspend fun runWorker(workerId: Int) {
-        val redis = RedisConfig.newBlockingConnection()
-        while (scope.isActive) {
-            try {
-                val result = redis.brpop(
-                    BRPOP_TIMEOUT_SECONDS,
-                    queueKey
-                )
-                val payload = result?.value ?: continue
-                processMessage(workerId, payload)
-            } catch (e: CancellationException) {
-                break
-            } catch (e: Exception) {
-                logger.error(e) {
-                    "DD infra worker $workerId error in BRPOP loop"
+        val conn = RedisConfig.newBlockingConnection()
+        try {
+            val redis = conn.sync()
+            while (scope.isActive) {
+                try {
+                    val result = redis.brpop(
+                        BRPOP_TIMEOUT_SECONDS,
+                        queueKey
+                    )
+                    val payload = result?.value ?: continue
+                    processMessage(workerId, payload)
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: RedisException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DD infra",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
+                } catch (e: IOException) {
+                    brpopLoopBackoff(
+                        logger,
+                        workerId,
+                        "DD infra",
+                        ERROR_DELAY_MS,
+                        e,
+                    )
                 }
-                delay(ERROR_DELAY_MS)
             }
+        } finally {
+            RedisConfig.closeBlockingConnection(conn)
         }
     }
 
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
-        onDlq: (String) -> Unit = { message ->
-            RedisConfig.sync().rpush(dlqKey, message)
-        }
     ) {
-        try {
+        suspendRunCatching {
             val batch =
                 DatadogInfraService.decodeInfraBatch(payload)
             DatadogInfraService.insertInfraBatch(batch)
-        } catch (e: Exception) {
-            logger.error(e) {
-                "DD infra worker $workerId failed, " +
-                    "pushing to DLQ"
-            }
-            onDlq(payload)
+        }.getOrElse { e ->
+            pushToDlq(logger, dlqKey, payload, workerId, "DD infra", e)
         }
     }
 }

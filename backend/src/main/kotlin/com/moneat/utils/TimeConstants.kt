@@ -14,30 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.logs.models
+package com.moneat.utils
 
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-
-@Serializable
-data class CreateLogApiKeyRequest(
-    val name: String
-)
-
-@Serializable
-data class CreateLogApiKeyResponse(
-    val id: Int,
-    val name: String,
-    @SerialName("key_prefix") val keyPrefix: String,
-    @SerialName("key") val key: String,
-    @SerialName("created_at") val createdAt: String
-)
-
-@Serializable
-data class LogApiKeyResponse(
-    val id: Int,
-    val name: String,
-    @SerialName("key_prefix") val keyPrefix: String,
-    @SerialName("created_at") val createdAt: String,
-    @SerialName("last_used_at") val lastUsedAt: String? = null
-)
+object TimeConstants {
+    const val MILLIS_PER_SECOND = 1_000
+    const val MILLIS_PER_SECOND_LONG = 1_000L
+    const val MILLIS_PER_HOUR = 3_600_000L
+    const val MILLIS_PER_DAY = 86_400_000L
+    const val SECONDS_PER_MINUTE = 60L
+    const val SECONDS_PER_HOUR = 3_600L
+    const val SECONDS_PER_DAY = 86_400L
+    const val SECONDS_PER_WEEK = 604_800L
+    const val SECONDS_PER_MONTH_30 = 2_592_000L
+    const val SECONDS_PER_YEAR_365 = 31_536_000L
+}

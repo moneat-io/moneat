@@ -26,6 +26,8 @@ import com.moneat.events.services.IngestionWorker
 import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.logs.services.LogIngestionWorker
 import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.otlp.services.OtlpMetricsIngestionWorker
+import com.moneat.otlp.services.OtlpTraceIngestionWorker
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionBackgroundService
@@ -34,15 +36,18 @@ import com.moneat.shared.services.UsageTrackingService
 import com.moneat.uptime.services.UptimeScheduler
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
-import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
+import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import org.koin.core.context.GlobalContext
 import kotlin.time.Duration.Companion.hours
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+private const val DEFAULT_WORKER_THREADS = 4
 
 fun Application.configureBackgroundJobs() {
     val backgroundJobsEnabled =
@@ -98,6 +103,30 @@ fun Application.configureBackgroundJobs() {
             ?.toIntOrNull() ?: 2
     val llmIngestionWorker = LlmIngestionWorker(llmQueueKey, llmDlqKey, llmWorkerCount)
 
+    val otlpTracesQueueKey = environment.config.propertyOrNull("otlp.tracesQueueKey")
+        ?.getString() ?: "moneat:otlp-traces:queue"
+    val otlpTracesDlqKey = environment.config.propertyOrNull("otlp.tracesDlqKey")
+        ?.getString() ?: "moneat:otlp-traces:dlq"
+    val otlpTracesWorkerCount = environment.config.propertyOrNull("otlp.tracesWorkerCount")
+        ?.getString()?.toIntOrNull() ?: 2
+    val otlpTraceIngestionWorker = OtlpTraceIngestionWorker(
+        otlpTracesQueueKey,
+        otlpTracesDlqKey,
+        otlpTracesWorkerCount
+    )
+
+    val otlpMetricsQueueKey = environment.config.propertyOrNull("otlp.metricsQueueKey")
+        ?.getString() ?: "moneat:otlp-metrics:queue"
+    val otlpMetricsDlqKey = environment.config.propertyOrNull("otlp.metricsDlqKey")
+        ?.getString() ?: "moneat:otlp-metrics:dlq"
+    val otlpMetricsWorkerCount = environment.config.propertyOrNull("otlp.metricsWorkerCount")
+        ?.getString()?.toIntOrNull() ?: 2
+    val otlpMetricsIngestionWorker = OtlpMetricsIngestionWorker(
+        otlpMetricsQueueKey,
+        otlpMetricsDlqKey,
+        otlpMetricsWorkerCount
+    )
+
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
@@ -113,6 +142,8 @@ fun Application.configureBackgroundJobs() {
     ingestionWorker.start()
     logIngestionWorker.start()
     llmIngestionWorker.start()
+    otlpTraceIngestionWorker.start()
+    otlpMetricsIngestionWorker.start()
 
     // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
     FeatureRegistry.startBackgroundJobs(this)
@@ -124,7 +155,7 @@ fun Application.configureBackgroundJobs() {
                 .propertyOrNull("pulse.intervalHours")
                 ?.getString()
                 ?.toIntOrNull()
-                ?.takeIf { it > 0 } ?: 4
+                ?.takeIf { it > 0 } ?: DEFAULT_WORKER_THREADS
         PulseService(interval = telemetryIntervalHours.hours).also {
             logger.info { "Telemetry pulse enabled for self-hosted deployment" }
             it.start(jobScope)
@@ -136,10 +167,10 @@ fun Application.configureBackgroundJobs() {
     // Register shutdown hook
     monitor.subscribe(ApplicationStopping) {
         // Flush buffered usage data before stopping to prevent data loss
-        try {
+        suspendRunCatching {
             UsageTrackingService.instance.flushBuffer()
             logger.info { "Flushed usage tracking buffer on shutdown" }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
         }
         monitorAlertService.stop()
@@ -152,6 +183,10 @@ fun Application.configureBackgroundJobs() {
         ingestionWorker.stop()
         logIngestionWorker.stop()
         llmIngestionWorker.stop()
+        runBlocking {
+            otlpTraceIngestionWorker.stop()
+            otlpMetricsIngestionWorker.stop()
+        }
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
 

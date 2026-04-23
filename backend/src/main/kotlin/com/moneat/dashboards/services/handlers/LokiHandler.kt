@@ -33,6 +33,14 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND
+import com.moneat.utils.TimeConstants.SECONDS_PER_DAY
+import com.moneat.utils.TimeConstants.SECONDS_PER_HOUR
+import com.moneat.utils.TimeConstants.SECONDS_PER_MINUTE
+import com.moneat.utils.TimeConstants.SECONDS_PER_MONTH_30
+import com.moneat.utils.TimeConstants.SECONDS_PER_WEEK
+import com.moneat.utils.TimeConstants.SECONDS_PER_YEAR_365
 
 private val logger = KotlinLogging.logger {}
 
@@ -43,9 +51,15 @@ private val logger = KotlinLogging.logger {}
  */
 class LokiHandler : HttpApiHandler() {
 
+    companion object {
+        private const val LOKI_DEFAULT_PORT = 3100
+        private const val LOKI_MAX_QUERY_LIMIT = 5_000
+        private const val LOKI_TIMESTAMP_MS_LENGTH = 13
+    }
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        return try {
-            val baseUrl = buildUrl(request.host, request.port ?: 3100)
+        return suspendRunCatching {
+            val baseUrl = buildUrl(request.host, request.port ?: LOKI_DEFAULT_PORT)
             val response = httpClient.get("$baseUrl/ready") {
                 request.apiKey?.let { header("X-Scope-OrgID", it) }
             }
@@ -54,7 +68,7 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 TestConnectionResult(false, "Loki returned ${response.status}")
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Loki connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -70,13 +84,13 @@ class LokiHandler : HttpApiHandler() {
         limit: Int,
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
-        val baseUrl = buildUrl(host, port ?: 3100)
-        val nowSec = System.currentTimeMillis() / 1000
-        val fromSec = timeRange?.from?.let { resolveRelativeTimeSec(it, nowSec) } ?: nowSec - 3600
+        val baseUrl = buildUrl(host, port ?: LOKI_DEFAULT_PORT)
+        val nowSec = System.currentTimeMillis() / MILLIS_PER_SECOND
+        val fromSec = timeRange?.from?.let { resolveRelativeTimeSec(it, nowSec) } ?: nowSec - SECONDS_PER_HOUR
         val toSec = timeRange?.to?.let { resolveRelativeTimeSec(it, nowSec) } ?: nowSec
 
-        return try {
-            val boundedLimit = limit.coerceIn(1, 5000)
+        return suspendRunCatching {
+            val boundedLimit = limit.coerceIn(1, LOKI_MAX_QUERY_LIMIT)
             val response = httpClient.get("$baseUrl/loki/api/v1/query_range") {
                 parameter("query", query)
                 parameter("start", fromSec.toString() + "000000000")
@@ -89,7 +103,7 @@ class LokiHandler : HttpApiHandler() {
                 return emptyList()
             }
             parseLokiResponse(response.bodyAsText(), boundedLimit)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Loki query failed" }
             emptyList()
         }
@@ -101,8 +115,8 @@ class LokiHandler : HttpApiHandler() {
         databaseName: String?,
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
-        val baseUrl = buildUrl(host, port ?: 3100)
-        return try {
+        val baseUrl = buildUrl(host, port ?: LOKI_DEFAULT_PORT)
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/loki/api/v1/labels") {
                 credentials.apiKey?.let { header("X-Scope-OrgID", it) }
             }
@@ -114,7 +128,7 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Loki schema fetch failed" }
             emptyList()
         }
@@ -130,8 +144,8 @@ class LokiHandler : HttpApiHandler() {
             ?: return emptyList()
         val matcher = labelMatch.groupValues[1].trim()
         val labelName = labelMatch.groupValues[2].trim()
-        val baseUrl = buildUrl(host, port ?: 3100)
-        return try {
+        val baseUrl = buildUrl(host, port ?: LOKI_DEFAULT_PORT)
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/loki/api/v1/label/$labelName/values") {
                 if (matcher.isNotBlank()) parameter("query", matcher)
                 credentials.apiKey?.let { header("X-Scope-OrgID", it) }
@@ -142,7 +156,7 @@ class LokiHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Loki label_values failed" }
             emptyList()
         }
@@ -162,7 +176,7 @@ class LokiHandler : HttpApiHandler() {
                 val tsNs = arr.getOrNull(0)?.jsonPrimitive?.contentOrNull ?: "0"
                 val log = arr.getOrNull(1)?.jsonPrimitive?.content ?: ""
                 val row = mutableMapOf<String, JsonElement>()
-                row["time_bucket"] = JsonPrimitive(tsNs.take(13).toLongOrNull() ?: 0L)
+                row["time_bucket"] = JsonPrimitive(tsNs.take(LOKI_TIMESTAMP_MS_LENGTH).toLongOrNull() ?: 0L)
                 row["log"] = JsonPrimitive(log)
                 for ((k, v) in metric) row[k] = v
                 rows.add(row)
@@ -177,12 +191,12 @@ class LokiHandler : HttpApiHandler() {
         val amount = match.groupValues[1].toLong()
         val offsetSec = when (match.groupValues[2]) {
             "s" -> amount
-            "m" -> amount * 60
-            "h" -> amount * 3600
-            "d" -> amount * 86400
-            "w" -> amount * 604800
-            "M" -> amount * 2592000
-            "y" -> amount * 31536000
+            "m" -> amount * SECONDS_PER_MINUTE
+            "h" -> amount * SECONDS_PER_HOUR
+            "d" -> amount * SECONDS_PER_DAY
+            "w" -> amount * SECONDS_PER_WEEK
+            "M" -> amount * SECONDS_PER_MONTH_30
+            "y" -> amount * SECONDS_PER_YEAR_365
             else -> 0
         }
         return nowSec - offsetSec

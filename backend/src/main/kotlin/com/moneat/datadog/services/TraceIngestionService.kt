@@ -16,22 +16,32 @@
 
 package com.moneat.datadog.services
 
+import com.google.protobuf.CodedInputStream
 import com.moneat.config.ClickHouseClient
-import com.moneat.datadog.models.DdResourceStatsItem
-import com.moneat.datadog.models.DdResourceStatsResponse
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_7
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_8
+import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import com.moneat.datadog.models.DdApmErrorGroup
 import com.moneat.datadog.models.DdApmErrorsResponse
+import com.moneat.datadog.models.DdResourceStatsItem
+import com.moneat.datadog.models.DdResourceStatsResponse
+import com.moneat.datadog.models.DdServiceMapEntry
+import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.datadog.models.DdSpan
 import com.moneat.datadog.models.DdSpanResponse
 import com.moneat.datadog.models.DdStatsPayload
 import com.moneat.datadog.models.DdTraceDetailResponse
 import com.moneat.datadog.models.DdTraceListItem
 import com.moneat.datadog.models.DdTraceListResponse
-import com.moneat.datadog.models.DdServiceMapEntry
-import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -41,16 +51,25 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
-import com.google.protobuf.CodedInputStream
 import mu.KotlinLogging
 import org.msgpack.core.MessagePack
 import org.msgpack.core.MessageUnpacker
 
 private val logger = KotlinLogging.logger {}
 
+/** Public trace id: prefer hex when stored, else numeric string. */
+private const val CANONICAL_TRACE_ID_SQL =
+    "if(trace_id_hex != '', trace_id_hex, toString(trace_id))"
+
 private const val MAX_META_VALUE_LENGTH = 5000
 private const val DEFAULT_QUERY_LIMIT = 50
 private const val MAX_QUERY_LIMIT = 200
+private const val HEX_RADIX = 16
+private const val NANOSECONDS_PER_MILLISECOND = 1_000_000L
+private const val PROTO_FIELD_9 = 9
+private const val PROTO_FIELD_10 = 10
+private const val PROTO_FIELD_11 = 11
+private const val PROTO_FIELD_12 = 12
 
 object TraceIngestionService {
     private val clickhouseDb by lazy { ClickHouseClient.getDatabase() }
@@ -125,11 +144,19 @@ object TraceIngestionService {
                 ?: hostname
             val spanEnv = span.meta["env"] ?: env
             val ver = span.meta["version"] ?: appVersion
+            val parentIdHex = if (span.parentId != 0UL) {
+                java.lang.Long.toUnsignedString(span.parentId.toLong(), HEX_RADIX)
+            } else {
+                ""
+            }
 
             """(
                 ${span.spanId},
+                0,
                 ${span.traceId},
+                0,
                 ${span.parentId},
+                0,
                 $organizationId,
                 '${escapeSql(span.name)}',
                 '${escapeSql(span.service)}',
@@ -142,16 +169,21 @@ object TraceIngestionService {
                 ${doubleMapToSqlMap(span.metrics)},
                 '${escapeSql(host)}',
                 '${escapeSql(spanEnv)}',
-                '${escapeSql(ver)}'
+                '${escapeSql(ver)}',
+                '${java.lang.Long.toUnsignedString(span.traceId.toLong(), HEX_RADIX)}',
+                '${java.lang.Long.toUnsignedString(span.spanId.toLong(), HEX_RADIX)}',
+                '$parentIdHex',
+                'datadog'
             )"""
         }
 
         val insert = """
             INSERT INTO `$clickhouseDb`.apm_spans (
-                span_id, trace_id, parent_id, organization_id,
+                span_id, span_id_high, trace_id, trace_id_high, parent_id, parent_id_high, organization_id,
                 name, service, resource, type,
                 start, duration, error,
-                meta, metrics, host, env, version
+                meta, metrics, host, env, version,
+                trace_id_hex, span_id_hex, parent_id_hex, source
             ) VALUES
             $rows
         """.trimIndent()
@@ -185,7 +217,7 @@ object TraceIngestionService {
         if (entries.isEmpty()) return
 
         val rows = entries.joinToString(",\n") { (bucket, entry) ->
-            val startMs = bucket.start / 1_000_000 // ns to ms
+            val startMs = bucket.start / NANOSECONDS_PER_MILLISECOND // ns to ms
             """(
                 $organizationId,
                 '${escapeSql(entry.service)}',
@@ -246,7 +278,7 @@ object TraceIngestionService {
         val whereClause = filters.joinToString(" AND ")
 
         val countQuery = """
-            SELECT count(DISTINCT trace_id)
+            SELECT count(DISTINCT $CANONICAL_TRACE_ID_SQL)
             FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
         """.trimIndent()
@@ -258,17 +290,18 @@ object TraceIngestionService {
 
         val query = """
             SELECT
-                trace_id,
+                $CANONICAL_TRACE_ID_SQL as trace_id_canonical,
                 argMin(service, if(parent_id = 0, 0, 1)) as root_service,
                 argMin(resource, if(parent_id = 0, 0, 1)) as root_resource,
                 argMin(name, if(parent_id = 0, 0, 1)) as root_name,
                 count() as span_count,
                 max(duration) as duration_ns,
                 toInt64(toUnixTimestamp64Nano(min(start))) as start_ns,
-                max(error) as has_error
+                max(error) as has_error,
+                argMin(source, if(parent_id = 0, 0, 1)) as source
             FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
-            GROUP BY trace_id
+            GROUP BY trace_id_canonical
             ORDER BY start_ns DESC
             LIMIT $limit OFFSET $offset
             FORMAT JSONEachRow
@@ -283,7 +316,7 @@ object TraceIngestionService {
                 .map { line ->
                     val obj = json.parseToJsonElement(line).jsonObject
                     DdTraceListItem(
-                        traceId = obj["trace_id"]!!
+                        traceId = obj["trace_id_canonical"]!!
                             .jsonPrimitive.content,
                         rootService = obj["root_service"]!!
                             .jsonPrimitive.content,
@@ -301,6 +334,8 @@ object TraceIngestionService {
                             obj["has_error"]
                                 ?.jsonPrimitive?.int ?: 0
                             ) > 0,
+                        source = obj["source"]
+                            ?.jsonPrimitive?.content ?: "datadog",
                     )
                 }
         }
@@ -312,23 +347,37 @@ object TraceIngestionService {
         organizationId: Int,
         traceId: String,
     ): DdTraceDetailResponse? {
-        val parsedTraceId = parseTraceId(traceId) ?: return null
-        val query = """
+        val orgClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+
+        fun detailQuery(traceClause: String) = """
             SELECT
-                span_id, trace_id, parent_id,
+                if(span_id_hex != '', span_id_hex, toString(span_id)) as span_id_out,
+                if(trace_id_hex != '', trace_id_hex, toString(trace_id)) as trace_id_out,
+                if(parent_id_hex != '', parent_id_hex, toString(parent_id)) as parent_id_out,
                 name, service, resource, type,
                 toInt64(toUnixTimestamp64Nano(start)) as start_ns,
                 duration, error,
                 meta, metrics,
-                host, env, version
+                host, env, version,
+                source, kind, status_code, status_message,
+                events, links, resource_attributes
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
-              AND trace_id = $parsedTraceId
+            WHERE $orgClause
+              AND $traceClause
             ORDER BY start_ns ASC
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val result = ClickHouseClient.executeWithFormat(query, "")
+        var result = ClickHouseClient.executeWithFormat(
+            detailQuery("trace_id_hex = '${escapeSql(traceId)}'"),
+            "",
+        )
+        if (result.isBlank() && parseTraceId(traceId) != null) {
+            result = ClickHouseClient.executeWithFormat(
+                detailQuery("trace_id = ${parseTraceId(traceId)}"),
+                "",
+            )
+        }
         if (result.isBlank()) return null
 
         val spans = result.trim().lines()
@@ -336,9 +385,9 @@ object TraceIngestionService {
             .map { line ->
                 val obj = json.parseToJsonElement(line).jsonObject
                 DdSpanResponse(
-                    spanId = obj["span_id"]!!.jsonPrimitive.content,
-                    traceId = obj["trace_id"]!!.jsonPrimitive.content,
-                    parentId = obj["parent_id"]!!.jsonPrimitive.content,
+                    spanId = obj["span_id_out"]!!.jsonPrimitive.content,
+                    traceId = obj["trace_id_out"]!!.jsonPrimitive.content,
+                    parentId = obj["parent_id_out"]!!.jsonPrimitive.content,
                     name = obj["name"]!!.jsonPrimitive.content,
                     service = obj["service"]!!.jsonPrimitive.content,
                     resource = obj["resource"]!!.jsonPrimitive.content,
@@ -350,8 +399,14 @@ object TraceIngestionService {
                     metrics = parseDoubleMap(obj["metrics"]),
                     host = obj["host"]?.jsonPrimitive?.content ?: "",
                     env = obj["env"]?.jsonPrimitive?.content ?: "",
-                    version = obj["version"]?.jsonPrimitive?.content
-                        ?: "",
+                    version = obj["version"]?.jsonPrimitive?.content ?: "",
+                    source = obj["source"]?.jsonPrimitive?.content ?: "datadog",
+                    kind = obj["kind"]?.jsonPrimitive?.content ?: "",
+                    statusCode = obj["status_code"]?.jsonPrimitive?.int ?: 0,
+                    statusMessage = obj["status_message"]?.jsonPrimitive?.content ?: "",
+                    events = obj["events"]?.jsonPrimitive?.content ?: "[]",
+                    links = obj["links"]?.jsonPrimitive?.content ?: "[]",
+                    resourceAttributes = parseStringMap(obj["resource_attributes"]),
                 )
             }
         if (spans.isEmpty()) return null
@@ -407,7 +462,9 @@ object TraceIngestionService {
             FROM `$clickhouseDb`.apm_spans child
             INNER JOIN `$clickhouseDb`.apm_spans parent
                 ON child.parent_id = parent.span_id
+                AND child.parent_id_high = parent.span_id_high
                 AND child.trace_id = parent.trace_id
+                AND child.trace_id_high = parent.trace_id_high
                 AND child.organization_id = parent.organization_id
             WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong(), "child.organization_id")}
               AND child.start >= now() - INTERVAL 1 HOUR
@@ -480,7 +537,7 @@ object TraceIngestionService {
                 meta['error.type'] as error_type,
                 count() as error_count,
                 max(start) as last_seen,
-                any(trace_id) as sample_trace_id
+                any($CANONICAL_TRACE_ID_SQL) as sample_trace_id
             FROM `$clickhouseDb`.apm_spans
             WHERE $whereClause
             GROUP BY service, resource,
@@ -696,22 +753,6 @@ object TraceIngestionService {
         return element.mapValues { it.value.jsonPrimitive.double }
     }
 
-    private fun mapToSqlMap(map: Map<String, String>): String {
-        if (map.isEmpty()) return "map()"
-        val entries = map.entries.joinToString(", ") { (k, v) ->
-            "'${escapeSql(k)}', '${escapeSql(v)}'"
-        }
-        return "map($entries)"
-    }
-
-    private fun doubleMapToSqlMap(map: Map<String, Double>): String {
-        if (map.isEmpty()) return "map()"
-        val entries = map.entries.joinToString(", ") { (k, v) ->
-            "'${escapeSql(k)}', $v"
-        }
-        return "map($entries)"
-    }
-
     /**
      * Parse a protobuf AgentPayload (v0.2 format sent by dd-agent trace writer).
      * AgentPayload fields:
@@ -722,13 +763,9 @@ object TraceIngestionService {
     fun parseProtobufAgentPayload(bytes: ByteArray): List<List<DdSpan>> {
         val input = CodedInputStream.newInstance(bytes)
         val traces = mutableListOf<List<DdSpan>>()
-        var hostname = ""
-        var env = ""
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl 3) or 2 -> hostname = input.readString()
-                (2 shl 3) or 2 -> env = input.readString()
-                (5 shl 3) or 2 -> {
+                (FIELD_5 shl FIELD_SHIFT) or 2 -> {
                     val payloadBytes = input.readBytes().toByteArray()
                     traces.addAll(decodeTracerPayload(payloadBytes))
                 }
@@ -744,7 +781,7 @@ object TraceIngestionService {
         val traces = mutableListOf<List<DdSpan>>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (6 shl 3) or 2 -> {
+                (FIELD_6 shl FIELD_SHIFT) or 2 -> {
                     val chunkBytes = input.readBytes().toByteArray()
                     val spans = decodeTraceChunk(chunkBytes)
                     if (spans.isNotEmpty()) traces.add(spans)
@@ -761,7 +798,7 @@ object TraceIngestionService {
         val spans = mutableListOf<DdSpan>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (3 shl 3) or 2 -> {
+                (FIELD_3 shl FIELD_SHIFT) or 2 -> {
                     val spanBytes = input.readBytes().toByteArray()
                     spans.add(decodeProtobufSpan(spanBytes))
                 }
@@ -791,24 +828,24 @@ object TraceIngestionService {
         val metrics = mutableMapOf<String, Double>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl 3) or 2 -> service = input.readString()
-                (2 shl 3) or 2 -> name = input.readString()
-                (3 shl 3) or 2 -> resource = input.readString()
-                (4 shl 3) or 0 -> traceId = input.readUInt64().toULong()
-                (5 shl 3) or 0 -> spanId = input.readUInt64().toULong()
-                (6 shl 3) or 0 -> parentId = input.readUInt64().toULong()
-                (7 shl 3) or 0 -> start = input.readInt64()
-                (8 shl 3) or 0 -> duration = input.readInt64()
-                (9 shl 3) or 0 -> error = input.readInt32()
-                (10 shl 3) or 2 -> {
+                (1 shl FIELD_SHIFT) or 2 -> service = input.readString()
+                (2 shl FIELD_SHIFT) or 2 -> name = input.readString()
+                (FIELD_3 shl FIELD_SHIFT) or 2 -> resource = input.readString()
+                (FIELD_4 shl FIELD_SHIFT) or 0 -> traceId = input.readUInt64().toULong()
+                (FIELD_5 shl FIELD_SHIFT) or 0 -> spanId = input.readUInt64().toULong()
+                (FIELD_6 shl FIELD_SHIFT) or 0 -> parentId = input.readUInt64().toULong()
+                (FIELD_7 shl FIELD_SHIFT) or 0 -> start = input.readInt64()
+                (FIELD_8 shl FIELD_SHIFT) or 0 -> duration = input.readInt64()
+                (PROTO_FIELD_9 shl FIELD_SHIFT) or 0 -> error = input.readInt32()
+                (PROTO_FIELD_10 shl FIELD_SHIFT) or 2 -> {
                     val (k, v) = decodeStringStringEntry(input.readBytes().toByteArray())
                     meta[k] = v
                 }
-                (11 shl 3) or 2 -> {
+                (PROTO_FIELD_11 shl FIELD_SHIFT) or 2 -> {
                     val (k, v) = decodeStringDoubleEntry(input.readBytes().toByteArray())
                     metrics[k] = v
                 }
-                (12 shl 3) or 2 -> type = input.readString()
+                (PROTO_FIELD_12 shl FIELD_SHIFT) or 2 -> type = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -827,8 +864,8 @@ object TraceIngestionService {
         var value = ""
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl 3) or 2 -> key = input.readString()
-                (2 shl 3) or 2 -> value = input.readString()
+                (1 shl FIELD_SHIFT) or 2 -> key = input.readString()
+                (2 shl FIELD_SHIFT) or 2 -> value = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -842,8 +879,8 @@ object TraceIngestionService {
         var value = 0.0
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl 3) or 2 -> key = input.readString()
-                (2 shl 3) or 1 -> value = input.readDouble()
+                (1 shl FIELD_SHIFT) or 2 -> key = input.readString()
+                (2 shl FIELD_SHIFT) or 1 -> value = input.readDouble()
                 else -> input.skipField(tag)
             }
         }

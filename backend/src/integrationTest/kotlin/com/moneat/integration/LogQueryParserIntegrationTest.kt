@@ -163,31 +163,95 @@ class LogQueryParserIntegrationTest {
     private suspend fun insertSeedData() {
         logger.info { "Inserting seed data..." }
 
-        val cols = "log_id, project_id, timestamp, level, message, body, service, environment, host, source, container_name, container_id, container_image, trace_id, span_id, tags, resource_attributes"
+        val cols =
+            "log_id, project_id, timestamp, level, message, body, service, environment, host, source," +
+                "container_name, container_id, container_image, trace_id, span_id, tags, resource_attributes"
 
         // Batch all 20 rows in a single INSERT
         val insertSql =
             "INSERT INTO logs ($cols) VALUES " +
-                "('00000000-0000-0000-0000-000000000001', 1, '2025-01-15 10:00:00.000', 'error', 'Connection refused to database', 'ConnectException Connection refused', 'api-gateway', 'production', 'server1', 'sdk', 'api-container', 'abc123', 'myapp:latest', 'trace-001', 'span-001', {'env':'prod','region':'us-east-1','http.status_code':'500','http.response_time':'1500','urgent':'1'}, {'sdk.name':'sentry-java'}), " +
-                "('00000000-0000-0000-0000-000000000002', 1, '2025-01-15 10:01:00.000', 'error', 'Authentication failed for user admin', 'AuthenticationException Invalid credentials', 'auth-service', 'production', 'server2', 'sdk', 'auth-container', 'def456', 'myapp:latest', 'trace-002', 'span-002', {'env':'prod','region':'us-west-2','http.status_code':'401','http.response_time':'50'}, {'sdk.name':'sentry-java'}), " +
-                "('00000000-0000-0000-0000-000000000003', 1, '2025-01-15 10:02:00.000', 'warn', 'High memory usage detected 85 percent', 'Memory threshold exceeded', 'web-app', 'staging', 'server1', 'agent_stdout', 'web-container', 'ghi789', 'webapp:v2', '', '', {'env':'staging','region':'eu-west-1','memory_percent':'85'}, {}), " +
-                "('00000000-0000-0000-0000-000000000004', 1, '2025-01-15 10:03:00.000', 'info', 'User login successful', 'Login event processed', 'auth-service', 'production', 'serverA', 'sdk', '', '', '', 'trace-003', 'span-003', {'env':'prod','user.id':'user-42'}, {'sdk.name':'sentry-python'}), " +
-                "('00000000-0000-0000-0000-000000000005', 1, '2025-01-15 10:04:00.000', 'debug', 'Cache hit for key user 123', 'Redis GET returned value', 'web-app', 'development', 'server3', 'sdk', '', '', '', '', '', {'env':'dev','cache.hit':'true'}, {}), " +
-                "('00000000-0000-0000-0000-000000000006', 1, '2025-01-15 10:05:00.000', 'error', 'Timeout waiting for response', 'TimeoutException at FutureTask.get()', 'api-gateway', 'production', 'server2', 'sdk', 'api-container', 'jkl012', 'myapp:latest', 'trace-004', 'span-004', {'env':'prod','http.status_code':'504','http.response_time':'30000'}, {'sdk.name':'sentry-java'}), " +
-                "('00000000-0000-0000-0000-000000000007', 1, '2025-01-15 10:06:00.000', 'info', 'Request processed successfully', 'GET /api/v1/users returned 200', 'web-server', 'production', 'server1', 'otlp', '', '', '', 'trace-005', 'span-005', {'env':'prod','http.status_code':'200','http.response_time':'45','http.method':'GET'}, {'service.version':'1.2.3'}), " +
-                "('00000000-0000-0000-0000-000000000008', 1, '2025-01-15 10:07:00.000', 'fatal', 'Out of memory error', 'OutOfMemoryError Java heap space', 'worker', 'production', 'server4', 'sdk', 'worker-container', 'mno345', 'worker:latest', '', '', {'env':'prod','http.response_time':'0'}, {}), " +
-                "('00000000-0000-0000-0000-000000000009', 1, '2025-01-15 10:08:00.000', 'info', 'Scheduled task completed', 'Cron job finished in 5200ms', 'worker', 'staging', 'server3', 'agent_stderr', '', '', '', '', '', {'env':'staging','duration_ms':'5200'}, {}), " +
-                "('00000000-0000-0000-0000-000000000010', 1, '2025-01-15 10:09:00.000', 'warn', 'Deprecated API endpoint called', 'Client used /api/v0/legacy', 'web-app', 'production', 'serverA', 'sdk', '', '', '', 'trace-006', '', {'env':'prod','http.status_code':'200','deprecated':'true'}, {}), " +
-                "('00000000-0000-0000-0000-000000000011', 1, '2025-01-15 10:10:00.000', 'error', 'Database connection pool exhausted', 'HikariPool-1 Connection is not available', 'api-gateway', 'staging', 'server2', 'sdk', 'api-container', 'pqr678', 'myapp:v2', '', '', {'env':'staging','pool.active':'50','pool.max':'50'}, {}), " +
-                "('00000000-0000-0000-0000-000000000012', 1, '2025-01-15 10:11:00.000', 'trace', 'Entering method processPayment', 'Method entry with args amount=99.99', 'payment-service', 'development', 'server1', 'sdk', '', '', '', 'trace-007', 'span-007', {'env':'dev'}, {}), " +
-                "('00000000-0000-0000-0000-000000000013', 1, '2025-01-15 10:12:00.000', 'info', 'Health check passed', 'All services healthy', 'web-app', 'production', 'server1', 'otlp', '', '', '', '', '', {'env':'prod','check':'health'}, {}), " +
-                "('00000000-0000-0000-0000-000000000014', 1, '2025-01-15 10:13:00.000', 'error', 'File not found config.yaml', 'FileNotFoundException config.yaml', 'worker', 'production', 'server4', 'sdk', 'worker-container', 'stu901', 'worker:latest', '', '', {'env':'prod'}, {}), " +
-                "('00000000-0000-0000-0000-000000000015', 1, '2025-01-15 10:14:00.000', 'info', 'Email sent to user at example.com', 'SMTP delivery confirmed', 'notification-service', 'production', 'server3', 'sdk', '', '', '', 'trace-008', 'span-008', {'env':'prod','email.type':'welcome'}, {}), " +
-                "('00000000-0000-0000-0000-000000000016', 1, '2025-01-15 10:15:00.000', 'warn', 'Rate limit approaching for client', 'Client xyz has used 90 percent of quota', 'api-gateway', 'production', 'server1', 'sdk', 'api-container', 'vwx234', 'myapp:latest', '', '', {'env':'prod','rate_limit.percent':'90','client.id':'xyz'}, {}), " +
-                "('00000000-0000-0000-0000-000000000017', 1, '2025-01-15 10:16:00.000', 'debug', 'SQL query executed in 12ms', 'SELECT FROM users WHERE id = 42', 'web-server', 'development', 'server3', 'sdk', '', '', '', '', '', {'env':'dev','db.duration_ms':'12'}, {}), " +
-                "('00000000-0000-0000-0000-000000000018', 1, '2025-01-15 10:17:00.000', 'info', 'New deployment started v2.1.0', 'Rolling update initiated', 'web-app', 'production', 'server1', 'agent_stdout', '', '', '', '', '', {'env':'prod','version':'2.1.0'}, {}), " +
-                "('00000000-0000-0000-0000-000000000019', 1, '2025-01-15 10:18:00.000', 'error', 'SSL certificate expires in 7 days', 'Certificate for example.com expiring soon', 'web-server', 'production', 'serverA', 'otlp', '', '', '', '', '', {'env':'prod','cert.days_remaining':'7'}, {}), " +
-                "('00000000-0000-0000-0000-000000000020', 1, '2025-01-15 10:19:00.000', 'info', 'Message contains special chars and *test* value', 'Body with special characters key=val', 'web-app', 'production', 'server1', 'sdk', '', '', '', '', '', {'env':'prod','special.attr':'hello:world'}, {})"
+                "('00000000-0000-0000-0000-000000000001', 1, '2025-01-15 10:00:00.000', 'error'," +
+                "'Connection refused to database', 'ConnectException Connection refused', 'api-gateway'," +
+                "'production', 'server1', 'sdk', 'api-container', 'abc123', 'myapp:latest', 'trace-001'," +
+                "'span-001'," +
+                "{'env':'prod','region':'us-east-1','http.status_code':'500','http.response_time'" +
+                ":'1500','urgent':'1'}, {'sdk.name':'sentry-java'}), " +
+                "('00000000-0000-0000-0000-000000000002', 1, '2025-01-15 10:01:00.000', 'error'," +
+                "'Authentication failed for user admin', 'AuthenticationException Invalid credentials'," +
+                "'auth-service', 'production', 'server2', 'sdk', 'auth-container', 'def456'," +
+                "'myapp:latest', 'trace-002', 'span-002'," +
+                "{'env':'prod','region':'us-west-2','http.status_code':'401','http.response_time'" +
+                ":'50'}, {'sdk.name':'sentry-java'}), " +
+                "('00000000-0000-0000-0000-000000000003', 1, '2025-01-15 10:02:00.000', 'warn'," +
+                "'High memory usage detected 85 percent', 'Memory threshold exceeded', 'web-app', 'staging'," +
+                "'server1', 'agent_stdout', 'web-container', 'ghi789', 'webapp:v2', '', ''," +
+                "{'env':'staging','region':'eu-west-1','memory_percent':'85'}, {}), " +
+                "('00000000-0000-0000-0000-000000000004', 1, '2025-01-15 10:03:00.000', 'info'," +
+                "'User login successful', 'Login event processed', 'auth-service', 'production', 'serverA'," +
+                "'sdk', '', '', '', 'trace-003', 'span-003', {'env':'prod','user.id':'user-42'}," +
+                "{'sdk.name':'sentry-python'}), " +
+                "('00000000-0000-0000-0000-000000000005', 1, '2025-01-15 10:04:00.000', 'debug'," +
+                "'Cache hit for key user 123', 'Redis GET returned value', 'web-app', 'development'," +
+                "'server3', 'sdk', '', '', '', '', '', {'env':'dev','cache.hit':'true'}, {}), " +
+                "('00000000-0000-0000-0000-000000000006', 1, '2025-01-15 10:05:00.000', 'error'," +
+                "'Timeout waiting for response', 'TimeoutException at FutureTask.get()', 'api-gateway'," +
+                "'production', 'server2', 'sdk', 'api-container', 'jkl012', 'myapp:latest', 'trace-004'," +
+                "'span-004', {'env':'prod','http.status_code':'504','http.response_time':'30000'}," +
+                "{'sdk.name':'sentry-java'}), " +
+                "('00000000-0000-0000-0000-000000000007', 1, '2025-01-15 10:06:00.000', 'info'," +
+                "'Request processed successfully', 'GET /api/v1/users returned 200', 'web-server'," +
+                "'production', 'server1', 'otlp', '', '', '', 'trace-005', 'span-005'," +
+                "{'env':'prod','http.status_code':'200','http.response_time':'45','http.method':'GET'" +
+                "}, {'service.version':'1.2.3'}), " +
+                "('00000000-0000-0000-0000-000000000008', 1, '2025-01-15 10:07:00.000', 'fatal'," +
+                "'Out of memory error', 'OutOfMemoryError Java heap space', 'worker', 'production'," +
+                "'server4', 'sdk', 'worker-container', 'mno345', 'worker:latest', '', ''," +
+                "{'env':'prod','http.response_time':'0'}, {}), " +
+                "('00000000-0000-0000-0000-000000000009', 1, '2025-01-15 10:08:00.000', 'info'," +
+                "'Scheduled task completed', 'Cron job finished in 5200ms', 'worker', 'staging', 'server3'," +
+                "'agent_stderr', '', '', '', '', '', {'env':'staging','duration_ms':'5200'}, {}), " +
+                "('00000000-0000-0000-0000-000000000010', 1, '2025-01-15 10:09:00.000', 'warn'," +
+                "'Deprecated API endpoint called', 'Client used /api/v0/legacy', 'web-app', 'production'," +
+                "'serverA', 'sdk', '', '', '', 'trace-006', ''," +
+                "{'env':'prod','http.status_code':'200','deprecated':'true'}, {}), " +
+                "('00000000-0000-0000-0000-000000000011', 1, '2025-01-15 10:10:00.000', 'error'," +
+                "'Database connection pool exhausted', 'HikariPool-1 Connection is not available'," +
+                "'api-gateway', 'staging', 'server2', 'sdk', 'api-container', 'pqr678', 'myapp:v2', ''," +
+                "'', {'env':'staging','pool.active':'50','pool.max':'50'}, {}), " +
+                "('00000000-0000-0000-0000-000000000012', 1, '2025-01-15 10:11:00.000', 'trace'," +
+                "'Entering method processPayment', 'Method entry with args amount=99.99', 'payment-service'," +
+                "'development', 'server1', 'sdk', '', '', '', 'trace-007', 'span-007', {'env':'dev'}, {}), " +
+                "('00000000-0000-0000-0000-000000000013', 1, '2025-01-15 10:12:00.000', 'info'," +
+                "'Health check passed', 'All services healthy', 'web-app', 'production', 'server1', 'otlp'," +
+                "'', '', '', '', '', {'env':'prod','check':'health'}, {}), " +
+                "('00000000-0000-0000-0000-000000000014', 1, '2025-01-15 10:13:00.000', 'error'," +
+                "'File not found config.yaml', 'FileNotFoundException config.yaml', 'worker', 'production'," +
+                "'server4', 'sdk', 'worker-container', 'stu901', 'worker:latest', '', '', {'env':'prod'}," +
+                "{}), " +
+                "('00000000-0000-0000-0000-000000000015', 1, '2025-01-15 10:14:00.000', 'info'," +
+                "'Email sent to user at example.com', 'SMTP delivery confirmed', 'notification-service'," +
+                "'production', 'server3', 'sdk', '', '', '', 'trace-008', 'span-008'," +
+                "{'env':'prod','email.type':'welcome'}, {}), " +
+                "('00000000-0000-0000-0000-000000000016', 1, '2025-01-15 10:15:00.000', 'warn'," +
+                "'Rate limit approaching for client', 'Client xyz has used 90 percent of quota'," +
+                "'api-gateway', 'production', 'server1', 'sdk', 'api-container', 'vwx234'," +
+                "'myapp:latest', '', '', {'env':'prod','rate_limit.percent':'90','client.id':'xyz'}," +
+                "{}), " +
+                "('00000000-0000-0000-0000-000000000017', 1, '2025-01-15 10:16:00.000', 'debug'," +
+                "'SQL query executed in 12ms', 'SELECT FROM users WHERE id = 42', 'web-server'," +
+                "'development', 'server3', 'sdk', '', '', '', '', ''," +
+                "{'env':'dev','db.duration_ms':'12'}, {}), " +
+                "('00000000-0000-0000-0000-000000000018', 1, '2025-01-15 10:17:00.000', 'info'," +
+                "'New deployment started v2.1.0', 'Rolling update initiated', 'web-app', 'production'," +
+                "'server1', 'agent_stdout', '', '', '', '', '', {'env':'prod','version':'2.1.0'}, {}), " +
+                "('00000000-0000-0000-0000-000000000019', 1, '2025-01-15 10:18:00.000', 'error'," +
+                "'SSL certificate expires in 7 days', 'Certificate for example.com expiring soon'," +
+                "'web-server', 'production', 'serverA', 'otlp', '', '', '', '', ''," +
+                "{'env':'prod','cert.days_remaining':'7'}, {}), " +
+                "('00000000-0000-0000-0000-000000000020', 1, '2025-01-15 10:19:00.000', 'info'," +
+                "'Message contains special chars and *test* value', 'Body with special characters key=val'," +
+                "'web-app', 'production', 'server1', 'sdk', '', '', '', '', ''," +
+                "{'env':'prod','special.attr':'hello:world'}, {})"
 
         logger.info { "INSERT SQL length = ${insertSql.length}" }
         executeRawQuery(insertSql)

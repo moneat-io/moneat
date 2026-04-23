@@ -22,15 +22,14 @@ import com.moneat.monitor.models.AllContainersResponse
 import com.moneat.monitor.models.ContainerStatsResponse
 import com.moneat.monitor.models.CreateAlertRequest
 import com.moneat.monitor.models.CreateSilencePeriodRequest
+import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.HostResponse
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
-import com.moneat.monitor.models.HostData
 import com.moneat.shared.models.Memberships
-import com.moneat.shared.models.Projects
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -45,16 +44,13 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.SortOrder
-import org.koin.core.context.GlobalContext
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.koin.core.context.GlobalContext
 
-private val logger = KotlinLogging.logger {}
 private const val DEFAULT_PROJECT_ID = 0L
+private const val DEFAULT_LIMIT = 100
 
 /**
  * Helper function to get organization IDs for a user from their memberships.
@@ -67,31 +63,6 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
             .where { Memberships.user_id eq userId }
             .map { it[Memberships.organization_id] }
             .distinct()
-    }
-}
-
-private fun resolveProjectForOrganization(
-    organizationId: Int,
-    requestedProjectId: Long?
-): Long? {
-    return transaction {
-        if (requestedProjectId != null) {
-            val exists =
-                Projects
-                    .selectAll()
-                    .where { (Projects.id eq requestedProjectId) and (Projects.organization_id eq organizationId) }
-                    .count() > 0
-            if (exists) {
-                return@transaction requestedProjectId
-            }
-        }
-
-        Projects
-            .selectAll()
-            .where { Projects.organization_id eq organizationId }
-            .orderBy(Projects.id to SortOrder.ASC)
-            .firstOrNull()
-            ?.get(Projects.id)
     }
 }
 
@@ -154,17 +125,17 @@ fun Route.monitorRoutes(
                             name = host.displayName ?: host.hostname,
                             hostname = host.hostname,
                             status = host.status,
-                            last_seen_at = host.lastSeenAt?.toEpochMilliseconds(),
+                            lastSeenAt = host.lastSeenAt?.toEpochMilliseconds(),
                             firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
-                            agent_version = host.agentVersion,
+                            agentVersion = host.agentVersion,
                             os = host.os,
                             arch = host.arch,
                             platform = host.platform,
                             processor = host.processor,
                             cpuCores = host.cpuCores,
                             memoryTotalKb = host.memoryTotalKb,
-                            created_at = host.createdAt.toEpochMilliseconds(),
-                            latest_metrics = latestMetricsByHost[host.id]
+                            createdAt = host.createdAt.toEpochMilliseconds(),
+                            latestMetrics = latestMetricsByHost[host.id]
                         )
                     }
 
@@ -216,17 +187,17 @@ fun Route.monitorRoutes(
                         name = host.displayName ?: host.hostname,
                         hostname = host.hostname,
                         status = host.status,
-                        last_seen_at = host.lastSeenAt?.toEpochMilliseconds(),
+                        lastSeenAt = host.lastSeenAt?.toEpochMilliseconds(),
                         firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
-                        agent_version = host.agentVersion,
+                        agentVersion = host.agentVersion,
                         os = host.os,
                         arch = host.arch,
                         platform = host.platform,
                         processor = host.processor,
                         cpuCores = host.cpuCores,
                         memoryTotalKb = host.memoryTotalKb,
-                        created_at = host.createdAt.toEpochMilliseconds(),
-                        latest_metrics = monitorService.getLatestMetrics(host.id)
+                        createdAt = host.createdAt.toEpochMilliseconds(),
+                        latestMetrics = monitorService.getLatestMetrics(host.id)
                     )
                 )
             }
@@ -393,7 +364,7 @@ fun Route.monitorRoutes(
                     ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
                         ?: return@get
 
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT
                 val cursor = call.request.queryParameters["cursor"]
                 val query = call.request.queryParameters["query"]
                 val levels = call.request.queryParameters.getAll("levels") ?: emptyList()

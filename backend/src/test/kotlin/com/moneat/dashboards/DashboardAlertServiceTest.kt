@@ -83,7 +83,7 @@ class DashboardAlertServiceTest {
         }
         TransactionManager.defaultDatabase = db
 
-        TestDatabaseHelper.resetSchemaForH2WithJsonb(
+        TestDatabaseHelper.dropAndPatchJsonb(
             Dashboards,
             DashboardWidgets,
             DashboardWidgetAlerts

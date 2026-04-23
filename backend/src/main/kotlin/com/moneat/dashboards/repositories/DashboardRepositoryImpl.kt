@@ -43,6 +43,9 @@ private val json = Json {
 }
 
 class DashboardRepositoryImpl : DashboardRepository {
+    companion object {
+        private const val RECENTLY_VIEWED_LIMIT = 10
+    }
 
     override fun list(orgId: Long, projectId: Long?, userId: Int?): List<DashboardWithFavoriteFlag> =
         transaction {
@@ -221,7 +224,7 @@ class DashboardRepositoryImpl : DashboardRepository {
                         )
                 }
                 .orderBy(Dashboards.updatedAt, SortOrder.DESC)
-                .limit(10)
+                .limit(RECENTLY_VIEWED_LIMIT)
                 .map { row ->
                     val did = row[Dashboards.id]
                     val isFav = userId?.let { uid ->

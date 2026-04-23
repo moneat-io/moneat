@@ -37,6 +37,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.encodeURLParameter
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.config.ApplicationConfig
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
@@ -51,13 +52,14 @@ import java.security.KeyFactory
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.RSAPublicKeySpec
 import java.util.*
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_RANGE
 
 private val logger = KotlinLogging.logger {}
 
 @Serializable
 data class GitHubAccessTokenResponse(
-    val access_token: String,
-    val token_type: String,
+    @SerialName("access_token") val accessToken: String,
+    @SerialName("token_type") val tokenType: String,
     val scope: String
 )
 
@@ -108,6 +110,12 @@ class OAuthService {
     private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
     private val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
 
+    companion object {
+        private const val ORG_SLUG_SUFFIX_LENGTH = 8
+        private const val ONE_HOUR_MILLIS = 3_600_000L
+        private const val STATE_BYTE_LENGTH = 32
+    }
+
     private val githubClientId = EnvConfig.get("GITHUB_OAUTH_CLIENT_ID")
     private val githubClientSecret = EnvConfig.get("GITHUB_OAUTH_CLIENT_SECRET")
     private val githubOauthBaseUrl = EnvConfig.get("GITHUB_OAUTH_BASE_URL", "https://github.com").trimEnd('/')
@@ -133,7 +141,11 @@ class OAuthService {
 
     fun isGitHubEnabled(): Boolean = githubClientId != null && githubClientSecret != null
 
-    fun isAppleEnabled(): Boolean = appleClientId != null && appleTeamId != null && appleKeyId != null && applePrivateKey != null
+    fun isAppleEnabled(): Boolean =
+        appleClientId != null &&
+            appleTeamId != null &&
+            appleKeyId != null &&
+            applePrivateKey != null
 
     fun generateGitHubAuthUrl(state: String): String {
         if (!isGitHubEnabled()) {
@@ -164,13 +176,13 @@ class OAuthService {
                 parameter("code", code)
             }
 
-        if (tokenResponse.status.value !in 200..299) {
+        if (tokenResponse.status.value !in HTTP_SUCCESS_RANGE) {
             logger.error { "GitHub token exchange failed: ${tokenResponse.status}" }
             throw IllegalArgumentException("Failed to exchange code for token")
         }
 
         val tokenData: GitHubAccessTokenResponse = tokenResponse.body()
-        val accessToken = tokenData.access_token
+        val accessToken = tokenData.accessToken
 
         // Fetch user info
         val userResponse: HttpResponse =
@@ -181,7 +193,7 @@ class OAuthService {
                 }
             }
 
-        if (userResponse.status.value !in 200..299) {
+        if (userResponse.status.value !in HTTP_SUCCESS_RANGE) {
             logger.error { "GitHub user fetch failed: ${userResponse.status}" }
             throw IllegalArgumentException("Failed to fetch user info")
         }
@@ -201,7 +213,7 @@ class OAuthService {
                     }
                 }
 
-            if (emailsResponse.status.value in 200..299) {
+            if (emailsResponse.status.value in HTTP_SUCCESS_RANGE) {
                 val emails: List<GitHubEmail> = emailsResponse.body()
                 val primaryEmail =
                     emails.firstOrNull { it.primary && it.verified }
@@ -415,7 +427,8 @@ class OAuthService {
                 } else if (existingProvider != userData.provider) {
                     // Different OAuth provider
                     throw IllegalArgumentException(
-                        "This email is already registered with $existingProvider. Please sign in with $existingProvider."
+                        "This email is already registered with $existingProvider. Please sign in with " +
+                            "$existingProvider."
                     )
                 } else {
                     // Same provider but different ID? Shouldn't happen, but log them in
@@ -463,7 +476,7 @@ class OAuthService {
             val orgId =
                 Organizations.insert {
                     it[name] = "${userData.name ?: userData.email}'s Organization"
-                    it[slug] = "org-${UUID.randomUUID().toString().take(8)}"
+                    it[slug] = "org-${UUID.randomUUID().toString().take(ORG_SLUG_SUFFIX_LENGTH)}"
                 }[Organizations.id]
 
             // Add membership
@@ -504,12 +517,12 @@ class OAuthService {
             .withClaim("email", email)
             .withClaim("orgId", orgId)
             .withClaim("orgRole", orgRole)
-            .withExpiresAt(Date(System.currentTimeMillis() + 3600000))
+            .withExpiresAt(Date(System.currentTimeMillis() + ONE_HOUR_MILLIS))
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 
     fun generateState(): String {
-        val bytes = ByteArray(32)
+        val bytes = ByteArray(STATE_BYTE_LENGTH)
         java.security.SecureRandom().nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }

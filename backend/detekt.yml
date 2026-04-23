@@ -11,7 +11,16 @@ comments:
 # These can be enabled incrementally as the codebase is cleaned up.
 style:
   MagicNumber:
-    active: false
+    active: true
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/DemoDataReseeder.kt'
+      # Demo reseed modules: many intentional numeric literals (intervals, layout, sample data).
+      - '**/com/moneat/config/DemoReseed*.kt'
+    ignorePropertyDeclaration: true
+    ignoreEnums: true
+    ignoreRanges: true
   WildcardImport:
     active: false
   ReturnCount:
@@ -19,7 +28,12 @@ style:
   ThrowsCount:
     active: false
   MaxLineLength:
-    active: false
+    active: true
+    maxLineLength: 120
+    # Demo seed data: long literals are intentional.
+    excludes:
+      - '**/com/moneat/config/DemoReseedCore.kt'
+      - '**/com/moneat/config/DemoReseedDatadog.kt'
   UseRequire:
     active: false
   UseCheckOrError:
@@ -46,12 +60,26 @@ complexity:
     active: false
   ComplexCondition:
     active: false
+  # Enforced (issue #296): flag types over threshold so large classes are split intentionally.
+  # Threshold above default 600 while a few large production types are migrated incrementally.
   LargeClass:
-    active: false
+    active: true
+    threshold: 1700
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
+  # Enforced (issue #297): flag deeply-nested blocks so functions are kept flat.
   NestedBlockDepth:
-    active: false
+    active: true
   NestedScopeFunctions:
-    active: false
+    active: true
 
 exceptions:
   TooGenericExceptionCaught:
@@ -63,11 +91,21 @@ exceptions:
 
 naming:
   MatchingDeclarationName:
-    active: false
+    active: true
   ConstructorParameterNaming:
-    active: false
+    active: true
   FunctionNaming:
-    active: false
+    active: true
+    excludes:
+      - '**/test/**'
+      - '**/integrationTest/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
   VariableNaming:
     active: false
 
@@ -89,3 +127,7 @@ potential-bugs:
 formatting:
   ImportOrdering:
     active: false
+  # ktlint line-length; demo seed strings in DemoReseedCore exceed 120 chars by design.
+  MaximumLineLength:
+    excludes:
+      - '**/com/moneat/config/DemoReseedCore.kt'

@@ -16,6 +16,10 @@
 
 package com.moneat.synthetics.routes
 
+import kotlinx.serialization.SerializationException
+import java.io.IOException
+
+import com.moneat.shared.services.TaskLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,14 +27,16 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import com.moneat.shared.services.TaskLock
 import mu.KotlinLogging
 import java.util.Collections
 import java.util.UUID
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+
+private const val SCHEDULER_STARTUP_DELAY_MS = 2000L
 
 class SyntheticsScheduler(
     private val service: SyntheticsService = SyntheticsService(),
@@ -54,7 +60,7 @@ class SyntheticsScheduler(
                 TaskLock.tryWithLock("synthetics-scheduler", lockAtMostFor = 5.minutes, lockAtLeastFor = 1.seconds) {
                     checkTests(this)
                 }
-                delay(2000)
+                delay(SCHEDULER_STARTUP_DELAY_MS)
             }
         }
 
@@ -69,9 +75,9 @@ class SyntheticsScheduler(
     }
 
     private suspend fun checkTests(schedulerScope: CoroutineScope) {
-        val tests = try {
+        val tests = suspendRunCatching {
             service.getTestsDueForRun()
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch synthetic tests due for run: ${e.message}" }
             return
         }
@@ -84,7 +90,13 @@ class SyntheticsScheduler(
             schedulerScope.launch {
                 try {
                     performCheck(test)
-                } catch (e: Exception) {
+                } catch (e: SerializationException) {
+                    logger.error(e) { "Failed to perform synthetic test ${test.id}: ${e.message}" }
+                } catch (e: IOException) {
+                    logger.error(e) { "Failed to perform synthetic test ${test.id}: ${e.message}" }
+                } catch (e: IllegalStateException) {
+                    logger.error(e) { "Failed to perform synthetic test ${test.id}: ${e.message}" }
+                } catch (e: IllegalArgumentException) {
                     logger.error(e) { "Failed to perform synthetic test ${test.id}: ${e.message}" }
                 } finally {
                     runningTests.remove(test.id)

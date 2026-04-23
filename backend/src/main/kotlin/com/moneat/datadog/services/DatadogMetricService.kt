@@ -28,9 +28,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 private const val METRIC_QUEUE_KEY = "moneat:metrics:queue"
+private const val ERROR_BODY_MAX_LEN = 600
 
 @Serializable
 data class QueuedMetricBatch(
@@ -100,8 +102,7 @@ object DatadogMetricService {
 
         return series.points.mapNotNull { point ->
             if (point.size < 2) return@mapNotNull null
-            @Suppress("MagicNumber")
-            val timestampMs = (point[0] * 1000).toLong()
+            val timestampMs = (point[0] * MILLIS_PER_SECOND_LONG).toLong()
             val value = point[1]
             QueuedMetricEntry(
                 name = series.metric,
@@ -123,10 +124,9 @@ object DatadogMetricService {
         val sketches = payload.sketches.flatMap { sketch ->
             val tags = parseDdTagList(sketch.tags)
             sketch.distributions.map { dist ->
-                @Suppress("MagicNumber")
                 QueuedSketchEntry(
                     name = sketch.metric,
-                    timestampMs = dist.ts * 1000,
+                    timestampMs = dist.ts * MILLIS_PER_SECOND_LONG,
                     host = sketch.host,
                     tags = tags,
                     count = dist.cnt,
@@ -178,14 +178,16 @@ object DatadogMetricService {
                 '${escapeSql(m.host)}',
                 map($tagsMap),
                 '${escapeSql(m.unit)}',
-                '${escapeSql(m.sourceTypeName)}'
+                '${escapeSql(m.sourceTypeName)}',
+                'datadog'
             )"""
         }
 
         val insert = """
             INSERT INTO `$db`.metrics (
                 organization_id, metric_name, metric_type, timestamp,
-                value, host, tags, unit, source_type_name
+                value, host, tags, unit, source_type_name,
+                source
             ) VALUES $rows
         """.trimIndent()
 
@@ -193,7 +195,7 @@ object DatadogMetricService {
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             throw IllegalStateException(
-                "Failed to insert DD metrics: ${errorBody.take(600)}"
+                "Failed to insert DD metrics: ${errorBody.take(ERROR_BODY_MAX_LEN)}"
             )
         }
     }
@@ -236,7 +238,7 @@ object DatadogMetricService {
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             throw IllegalStateException(
-                "Failed to insert DD sketches: ${errorBody.take(600)}"
+                "Failed to insert DD sketches: ${errorBody.take(ERROR_BODY_MAX_LEN)}"
             )
         }
     }

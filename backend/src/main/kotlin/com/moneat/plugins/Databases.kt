@@ -28,12 +28,16 @@ import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.sql.Connection
+import com.moneat.utils.suspendRunCatching
 
 private const val CLICKHOUSE_MIGRATION_LOCK_KEY = 8675309L
 
 val ExposedDatabaseKey = AttributeKey<org.jetbrains.exposed.v1.jdbc.Database>("ExposedDatabase")
 private const val CLICKHOUSE_MIGRATION_LOCK_WAIT_TIMEOUT_MS = 120_000L
 private const val CLICKHOUSE_MIGRATION_LOCK_POLL_INTERVAL_MS = 1_000L
+private const val DB_POOL_MIN_IDLE = 5
+private const val DB_CONNECTION_TIMEOUT_MS = 10000L
+private const val DB_LEAK_DETECTION_THRESHOLD_MS = 30000L
 
 private fun tryAcquireAdvisoryLock(connection: Connection, lockKey: Long): Boolean =
     connection.createStatement().use { statement ->
@@ -99,7 +103,7 @@ private fun verifyCriticalColumnsPresent(dataSource: HikariDataSource) {
 fun Application.configureDatabases() {
     val config = environment.config
 
-    try {
+    suspendRunCatching {
         // PostgreSQL connection pool
         val hikariConfig =
             HikariConfig().apply {
@@ -108,9 +112,9 @@ fun Application.configureDatabases() {
                 username = config.property("database.postgres.user").getString()
                 password = config.property("database.postgres.password").getString()
                 maximumPoolSize = config.property("database.postgres.maxPoolSize").getString().toInt()
-                minimumIdle = 5
-                connectionTimeout = 10000
-                leakDetectionThreshold = 30000
+                minimumIdle = DB_POOL_MIN_IDLE
+                connectionTimeout = DB_CONNECTION_TIMEOUT_MS
+                leakDetectionThreshold = DB_LEAK_DETECTION_THRESHOLD_MS
                 isAutoCommit = false
                 transactionIsolation = "TRANSACTION_READ_COMMITTED"
                 validate()
@@ -167,17 +171,17 @@ fun Application.configureDatabases() {
                 if (tryAcquireAdvisoryLock(conn, CLICKHOUSE_MIGRATION_LOCK_KEY)) {
                     try {
                         runBlocking {
-                            try {
+                            suspendRunCatching {
                                 configureClickHouseMigrations()
-                            } catch (e: Exception) {
+                            }.getOrElse { e ->
                                 log.error("Failed to run ClickHouse migrations.", e)
                                 throw e
                             }
                             // Reseed demo data if stale (prevents ClickHouse TTL from deleting demo rows)
-                            try {
+                            suspendRunCatching {
                                 com.moneat.config.DemoDataReseeder
                                     .reseedIfNeeded()
-                            } catch (e: Exception) {
+                            }.getOrElse { e ->
                                 log.warn("Demo data reseed failed (non-fatal)", e)
                             }
                         }
@@ -202,7 +206,7 @@ fun Application.configureDatabases() {
         monitor.subscribe(ApplicationStopping) {
             log.info("Stopping background services...")
         }
-    } catch (e: Exception) {
+    }.getOrElse { e ->
         if (e.message?.contains("ClickHouse") == true) {
             // Already logged above
             throw e

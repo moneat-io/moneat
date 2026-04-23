@@ -43,6 +43,8 @@ private val json = Json { ignoreUnknownKeys = true }
 
 private const val DEFAULT_LIMIT = 50
 private const val MAX_LIMIT = 200
+private const val LOG_SQL_MAX_LEN = 200
+private const val LOG_BODY_MAX_LEN = 300
 
 fun Route.securityQueryRoutes() {
     route("/v1/security") {
@@ -54,8 +56,6 @@ fun Route.securityQueryRoutes() {
         }
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
     val orgId = extractOrgId() ?: return
     val limit = paramLimit()
@@ -111,8 +111,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
         }
     )
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
     val orgId = extractOrgId() ?: return
     val eventId = call.parameters["eventId"] ?: return call.respond(
@@ -153,8 +151,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
         call.respond(rows.first())
     }
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
     val orgId = extractOrgId() ?: return
     val limit = paramLimit()
@@ -204,8 +200,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
         }
     )
 }
-
-@Suppress("TooGenericExceptionCaught")
 private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummary() {
     val orgId = extractOrgId() ?: return
     val db = ClickHouseClient.getDatabase()
@@ -248,8 +242,10 @@ private suspend fun executeCount(sql: String): Long {
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
     if (resp.isClickHouseError(body)) {
-        logger.error { "ClickHouse error in executeCount. SQL: ${sql.take(200)} Body: ${body.take(300)}" }
-        throw IllegalStateException("ClickHouse query error: ${body.take(300)}")
+        logger.error {
+            "ClickHouse error in executeCount. SQL: ${sql.take(LOG_SQL_MAX_LEN)} Body: ${body.take(LOG_BODY_MAX_LEN)}"
+        }
+        throw IllegalStateException("ClickHouse query error: ${body.take(LOG_BODY_MAX_LEN)}")
     }
     return body.trim().lines().firstOrNull()?.let {
         json.parseToJsonElement(it).jsonObject["cnt"]
@@ -264,8 +260,10 @@ private suspend fun executeRows(
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
     if (resp.isClickHouseError(body)) {
-        logger.error { "ClickHouse error in executeRows. SQL: ${sql.take(200)} Body: ${body.take(300)}" }
-        throw IllegalStateException("ClickHouse query error: ${body.take(300)}")
+        logger.error {
+            "ClickHouse error in executeRows. SQL: ${sql.take(LOG_SQL_MAX_LEN)} Body: ${body.take(LOG_BODY_MAX_LEN)}"
+        }
+        throw IllegalStateException("ClickHouse query error: ${body.take(LOG_BODY_MAX_LEN)}")
     }
     return body.trim().lines().filter { it.isNotBlank() }.map { line ->
         mapper(json.parseToJsonElement(line).jsonObject)

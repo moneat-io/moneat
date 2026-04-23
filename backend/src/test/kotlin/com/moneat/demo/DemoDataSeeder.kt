@@ -17,20 +17,20 @@
 package com.moneat.demo
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.testsupport.TestIpConstants
 import com.moneat.config.EnvConfig
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Releases
 import com.moneat.shared.models.Subscriptions
-import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Users
 import com.moneat.statuspage.models.StatusPageIncidentUpdates
 import com.moneat.statuspage.models.StatusPageIncidents
 import com.moneat.statuspage.models.StatusPageMonitors
 import com.moneat.statuspage.models.StatusPages
+import com.moneat.testsupport.TestIpConstants
 import com.moneat.uptime.models.UptimeMonitors
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -326,13 +326,13 @@ object DemoDataSeeder {
             println("\nIssues already exist ($issueCount found). Skipping issue/event seeding.")
         }
 
+        val projectIdsCsv = projects.values.map { it.first }.joinToString(",")
+
         // Check if other data already exists
         val feedbackCountResult =
             kotlinx.coroutines.runBlocking {
                 ClickHouseClient.executeWithFormat(
-                    "SELECT count() FROM `$db`.user_feedback WHERE project_id IN (${projects.values.map { it.first }.joinToString(
-                        ","
-                    )})",
+                    "SELECT count() FROM `$db`.user_feedback WHERE project_id IN ($projectIdsCsv)",
                     "TabSeparated"
                 )
             }
@@ -341,9 +341,7 @@ object DemoDataSeeder {
         val replayCountResult =
             kotlinx.coroutines.runBlocking {
                 ClickHouseClient.executeWithFormat(
-                    "SELECT count() FROM `$db`.replay_events WHERE project_id IN (${projects.values.map { it.first }.joinToString(
-                        ","
-                    )})",
+                    "SELECT count() FROM `$db`.replay_events WHERE project_id IN ($projectIdsCsv)",
                     "TabSeparated"
                 )
             }
@@ -367,9 +365,8 @@ object DemoDataSeeder {
         val transactionCountResult =
             kotlinx.coroutines.runBlocking {
                 ClickHouseClient.executeWithFormat(
-                    "SELECT count() FROM `$db`.events WHERE event_type = 'transaction' AND project_id IN (${projects.values.map { it.first }.joinToString(
-                        ","
-                    )})",
+                    "SELECT count() FROM `$db`.events WHERE event_type = 'transaction' " +
+                        "AND project_id IN ($projectIdsCsv)",
                     "TabSeparated"
                 )
             }
@@ -459,7 +456,8 @@ object DemoDataSeeder {
                 IssueTemplate(
                     "NullPointerException in ProductDetailFragment",
                     "java.lang.NullPointerException",
-                    "Attempt to invoke virtual method 'java.lang.String com.acme.Product.getName()' on a null object reference",
+                    "Attempt to invoke virtual method 'java.lang.String com.acme.Product.getName()' on a null " +
+                        "object reference",
                     "android",
                     listOf(
                         "at com.acme.shopping.ui.ProductDetailFragment.updateUI(ProductDetailFragment.kt:87)",
@@ -816,7 +814,8 @@ object DemoDataSeeder {
                     "android",
                     listOf(
                         "at java.net.SocketInputStream.socketRead0(Native Method)",
-                        "at okhttp3.internal.http.RetryAndFollowUpInterceptor.intercept(RetryAndFollowUpInterceptor.kt:89)",
+                        "at okhttp3.internal.http.RetryAndFollowUpInterceptor.intercept(RetryAndFollowUpInterceptor" +
+                            ".kt:89)",
                         "at com.acme.shopping.api.ApiClient.syncInventory(ApiClient.kt:234)"
                     ),
                     eventCount = 143,
@@ -1397,7 +1396,13 @@ object DemoDataSeeder {
                     append(",'platform':'${template.platform}'")
                     append(",'level':'${template.level}'")
                     append(
-                        ",'os.name':'${if (template.platform == "android") "Android" else if (template.platform == "cocoa") "iOS" else "JavaScript"}'"
+                        ",'os.name':'${
+                            when (template.platform) {
+                                "android" -> "Android"
+                                "cocoa" -> "iOS"
+                                else -> "JavaScript"
+                            }
+                        }'"
                     )
                     append(",'os.version':'$osVersion'")
                     append(",'device':'$device'")
@@ -1431,13 +1436,12 @@ object DemoDataSeeder {
 
                     else -> "https://acmeshopping.com/${listOf("products","cart","checkout","profile").random(random)}"
                 }
-            val requestBody = """{"url":"$requestUrl","method":"${listOf(
-                "GET",
-                "POST",
-                "PUT"
-            ).random(
-                random
-            )}","headers":{"User-Agent":"$sdkName/$sdkVersion","Content-Type":"application/json"},"env":{"REMOTE_ADDR":"$userIp"}}"""
+            val method = listOf("GET", "POST", "PUT").random(random)
+            val requestBody =
+                """{"url":"$requestUrl","method":"$method",""" +
+                    """"headers":{"User-Agent":"$sdkName/$sdkVersion",""" +
+                    """"Content-Type":"application/json"},""" +
+                    """"env":{"REMOTE_ADDR":"$userIp"}}"""
 
             val eventQuery =
                 """
@@ -2209,11 +2213,15 @@ object DemoDataSeeder {
                         it[UptimeMonitors.retries] = 2
                         it[UptimeMonitors.method] = "GET"
                         it[UptimeMonitors.status] = if (random.nextFloat() < 0.9) "up" else "down"
-                        it[UptimeMonitors.lastCheckAt] = kotlin.time.Instant.fromEpochMilliseconds(lastCheckAt.toEpochMilli())
-                        it[UptimeMonitors.consecutiveFailures] = if (random.nextFloat() < 0.9) 0 else random.nextInt(1, 5)
+                        it[UptimeMonitors.lastCheckAt] =
+                            kotlin.time.Instant.fromEpochMilliseconds(lastCheckAt.toEpochMilli())
+                        it[UptimeMonitors.consecutiveFailures] =
+                            if (random.nextFloat() < 0.9) 0 else random.nextInt(1, 5)
                         it[UptimeMonitors.pushToken] = pushToken
-                        it[UptimeMonitors.createdAt] = kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
-                        it[UptimeMonitors.updatedAt] = kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
+                        it[UptimeMonitors.createdAt] =
+                            kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
+                        it[UptimeMonitors.updatedAt] =
+                            kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
                     }
 
                     Triple(monitorId, intervalSeconds, monitors.indexOf(Triple(name, url, intervalSeconds)))
@@ -2656,7 +2664,8 @@ object DemoDataSeeder {
                     it[StatusPageMonitors.monitorId] = monitorId
                     it[StatusPageMonitors.displayName] = null // Use actual monitor name
                     it[StatusPageMonitors.sortOrder] = index
-                    it[StatusPageMonitors.createdAt] = kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
+                    it[StatusPageMonitors.createdAt] =
+                        kotlin.time.Instant.fromEpochMilliseconds(Instant.now().toEpochMilli())
                 }
             }
         }
@@ -2667,8 +2676,14 @@ object DemoDataSeeder {
                 // Resolved incident from 2 days ago
                 listOf(
                     "Database Connection Pool Exhausted" to "resolved",
-                    "Our primary database experienced connection pool exhaustion causing degraded performance." to "investigating",
-                    "Database team has identified the issue as a connection leak in the payment service." to "identified",
+                    (
+                        "Our primary database experienced connection pool exhaustion " +
+                            "causing degraded performance."
+                        ) to "investigating",
+                    (
+                        "Database team has identified the issue as a connection leak " +
+                            "in the payment service."
+                        ) to "identified",
                     "Fix deployed to production. Monitoring for stability." to "monitoring",
                     "All systems operating normally. Connection pool has stabilized." to "resolved"
                 ) to Pair("major", 2),
@@ -2684,15 +2699,24 @@ object DemoDataSeeder {
                 // Ongoing minor incident
                 listOf(
                     "Elevated Error Rates on Mobile API" to "monitoring",
-                    "We're seeing elevated error rates on the mobile API endpoint. Investigating the root cause." to "investigating",
+                    (
+                        "We're seeing elevated error rates on the mobile API endpoint. " +
+                            "Investigating the root cause."
+                        ) to "investigating",
                     "Issue identified as a cache invalidation problem. Applying fix now." to "identified",
-                    "Fix applied. Monitoring error rates for the next hour to ensure stability." to "monitoring"
+                    (
+                        "Fix applied. Monitoring error rates for the next hour " +
+                            "to ensure stability."
+                        ) to "monitoring"
                 ) to Pair("minor", 0),
 
                 // Scheduled maintenance (future)
                 listOf(
                     "Database Maintenance Window" to "scheduled",
-                    "We will be performing routine database maintenance. Services may experience brief interruptions." to "scheduled"
+                    (
+                        "We will be performing routine database maintenance. " +
+                            "Services may experience brief interruptions."
+                        ) to "scheduled"
                 ) to Pair("none", -1)
             )
 
@@ -2755,7 +2779,8 @@ object DemoDataSeeder {
                         resolvedAt?.let { resolved ->
                             kotlin.time.Instant.fromEpochMilliseconds(resolved.toEpochMilli())
                         }
-                    it[StatusPageIncidents.createdAt] = kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
+                    it[StatusPageIncidents.createdAt] =
+                        kotlin.time.Instant.fromEpochMilliseconds(createdAt.toEpochMilli())
                     it[StatusPageIncidents.updatedAt] =
                         kotlin.time.Instant.fromEpochMilliseconds(
                             resolvedAt?.toEpochMilli() ?: createdAt.toEpochMilli()
@@ -2771,7 +2796,8 @@ object DemoDataSeeder {
                         it[StatusPageIncidentUpdates.incidentId] = incidentId
                         it[StatusPageIncidentUpdates.status] = status
                         it[StatusPageIncidentUpdates.message] = message
-                        it[StatusPageIncidentUpdates.createdAt] = kotlin.time.Instant.fromEpochMilliseconds(updateTime.toEpochMilli())
+                        it[StatusPageIncidentUpdates.createdAt] =
+                            kotlin.time.Instant.fromEpochMilliseconds(updateTime.toEpochMilli())
                     }
                 }
             }
@@ -2788,124 +2814,192 @@ object DemoDataSeeder {
         val now = System.currentTimeMillis()
 
         // Determine flow variant based on error title for diversity
-        val isAuthError = errorTitle.contains("auth", ignoreCase = true) || errorTitle.contains("login", ignoreCase = true) || errorTitle.contains("token", ignoreCase = true)
-        val isNetworkError = errorTitle.contains("network", ignoreCase = true) || errorTitle.contains("timeout", ignoreCase = true) || errorTitle.contains("connection", ignoreCase = true)
-        val isCheckoutError = errorTitle.contains("payment", ignoreCase = true) || errorTitle.contains("checkout", ignoreCase = true) || errorTitle.contains("cart", ignoreCase = true)
+        val isAuthError =
+            errorTitle.contains("auth", ignoreCase = true) ||
+                errorTitle.contains("login", ignoreCase = true) ||
+                errorTitle.contains("token", ignoreCase = true)
+        val isNetworkError =
+            errorTitle.contains("network", ignoreCase = true) ||
+                errorTitle.contains("timeout", ignoreCase = true) ||
+                errorTitle.contains("connection", ignoreCase = true)
+        val isCheckoutError =
+            errorTitle.contains("payment", ignoreCase = true) ||
+                errorTitle.contains("checkout", ignoreCase = true) ||
+                errorTitle.contains("cart", ignoreCase = true)
         val productId = random.nextInt(100, 999)
 
         when (platform) {
             "android" -> {
                 if (isAuthError) {
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"SplashActivity -> LoginActivity","level":"info","timestamp":${now - 45000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"SplashActivity -> LoginActivity","level":"info","timestamp":${now - 45000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"User tapped email field","level":"info","timestamp":${now - 38000}}"""
+                        """{"type":"user","category":"ui.click","message":"User tapped email field",""" +
+                            """"level":"info","timestamp":${now - 38000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"User tapped password field","level":"info","timestamp":${now - 32000}}"""
+                        """{"type":"user","category":"ui.click","message":"User tapped password field",""" +
+                            """"level":"info","timestamp":${now - 32000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"User tapped Sign In button","level":"info","timestamp":${now - 25000}}"""
+                        """{"type":"user","category":"ui.click","message":"User tapped Sign In button",""" +
+                            """"level":"info","timestamp":${now - 25000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"http","message":"POST /api/auth/login","level":"info","data":{"status_code":401,"method":"POST","url":"https://api.acmeshopping.com/v1/auth/login"},"timestamp":${now - 22000}}"""
+                        """{"type":"http","category":"http","message":"POST /api/auth/login","level":"info",""" +
+                            """"data":{"status_code":401,"method":"POST",""" +
+                            """"url":"https://api.acmeshopping.com/v1/auth/login"},"timestamp":${now - 22000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"debug","category":"auth","message":"Token refresh attempted","level":"debug","timestamp":${now - 18000}}"""
+                        """{"type":"debug","category":"auth","message":"Token refresh attempted",""" +
+                            """"level":"debug","timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"http","message":"POST /api/auth/refresh","level":"info","data":{"status_code":403,"method":"POST"},"timestamp":${now - 15000}}"""
+                        """{"type":"http","category":"http","message":"POST /api/auth/refresh",""" +
+                            """"level":"info","data":{"status_code":403,"method":"POST"},"timestamp":${now - 15000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"error","category":"auth","message":"Authentication failed: invalid credentials","level":"error","timestamp":${now - 12000}}"""
+                        """{"type":"error","category":"auth",""" +
+                            """"message":"Authentication failed: invalid credentials","level":"error",""" +
+                            """"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"debug","category":"lifecycle","message":"LoginActivity.onResume called","level":"debug","timestamp":${now - 5000}}"""
+                        """{"type":"debug","category":"lifecycle","message":"LoginActivity.onResume called",""" +
+                            """"level":"debug","timestamp":${now - 5000}}"""
                     )
                 } else if (isNetworkError) {
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"MainActivity -> ProductListFragment","level":"info","timestamp":${now - 40000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"MainActivity -> ProductListFragment","level":"info",""" +
+                            """"timestamp":${now - 40000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"debug","category":"network","message":"Network connectivity: WIFI connected","level":"debug","timestamp":${now - 35000}}"""
+                        """{"type":"debug","category":"network",""" +
+                            """"message":"Network connectivity: WIFI connected","level":"debug",""" +
+                            """"timestamp":${now - 35000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"http","message":"GET /api/products?page=1","level":"info","data":{"status_code":200,"method":"GET","duration_ms":134},"timestamp":${now - 30000}}"""
+                        """{"type":"http","category":"http","message":"GET /api/products?page=1",""" +
+                            """"level":"info","data":{"status_code":200,"method":"GET","duration_ms":134},""" +
+                            """"timestamp":${now - 30000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"User scrolled to bottom of list","level":"info","timestamp":${now - 22000}}"""
+                        """{"type":"user","category":"ui.click","message":"User scrolled to bottom of list",""" +
+                            """"level":"info","timestamp":${now - 22000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"http","message":"GET /api/products?page=2","level":"info","data":{"status_code":200,"method":"GET","duration_ms":156},"timestamp":${now - 18000}}"""
+                        """{"type":"http","category":"http","message":"GET /api/products?page=2",""" +
+                            """"level":"info","data":{"status_code":200,"method":"GET","duration_ms":156},""" +
+                            """"timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"debug","category":"network","message":"Network connectivity: switching to cellular","level":"warning","timestamp":${now - 12000}}"""
+                        """{"type":"debug","category":"network",""" +
+                            """"message":"Network connectivity: switching to cellular","level":"warning",""" +
+                            """"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"http","message":"GET /api/products?page=3","level":"error","data":{"status_code":0,"method":"GET","reason":"Connection timed out"},"timestamp":${now - 8000}}"""
+                        """{"type":"http","category":"http","message":"GET /api/products?page=3",""" +
+                            """"level":"error","data":{"status_code":0,"method":"GET",""" +
+                            """"reason":"Connection timed out"},"timestamp":${now - 8000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"error","category":"network","message":"Request failed: java.net.SocketTimeoutException","level":"error","timestamp":${now - 5000}}"""
+                        """{"type":"error","category":"network",""" +
+                            """"message":"Request failed: java.net.SocketTimeoutException","level":"error",""" +
+                            """"timestamp":${now - 5000}}"""
                     )
                 } else if (isCheckoutError) {
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"MainActivity -> ProductListFragment","level":"info","timestamp":${now - 60000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"MainActivity -> ProductListFragment","level":"info",""" +
+                            """"timestamp":${now - 60000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"User tapped product #$productId","level":"info","timestamp":${now - 52000}}"""
+                        """{"type":"user","category":"ui.click","message":"User tapped product #$productId",""" +
+                            """"level":"info","timestamp":${now - 52000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"ProductListFragment -> ProductDetailFragment","level":"info","timestamp":${now - 50000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"ProductListFragment -> ProductDetailFragment","level":"info",""" +
+                            """"timestamp":${now - 50000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"http","message":"GET /api/products/$productId","level":"info","data":{"status_code":200,"method":"GET","duration_ms":89},"timestamp":${now - 48000}}"""
+                        """{"type":"http","category":"http","message":"GET /api/products/$productId",""" +
+                            """"level":"info","data":{"status_code":200,"method":"GET","duration_ms":89},""" +
+                            """"timestamp":${now - 48000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"User tapped Add to Cart","level":"info","timestamp":${now - 35000}}"""
+                        """{"type":"user","category":"ui.click","message":"User tapped Add to Cart",""" +
+                            """"level":"info","timestamp":${now - 35000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"http","message":"POST /api/cart/items","level":"info","data":{"status_code":200,"method":"POST"},"timestamp":${now - 33000}}"""
+                        """{"type":"http","category":"http","message":"POST /api/cart/items","level":"info",""" +
+                            """"data":{"status_code":200,"method":"POST"},"timestamp":${now - 33000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"ProductDetailFragment -> CartFragment","level":"info","timestamp":${now - 28000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"ProductDetailFragment -> CartFragment","level":"info",""" +
+                            """"timestamp":${now - 28000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"User tapped Proceed to Checkout","level":"info","timestamp":${now - 18000}}"""
+                        """{"type":"user","category":"ui.click","message":"User tapped Proceed to Checkout",""" +
+                            """"level":"info","timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"CartFragment -> CheckoutFragment","level":"info","timestamp":${now - 16000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"CartFragment -> CheckoutFragment","level":"info",""" +
+                            """"timestamp":${now - 16000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"http","message":"POST /api/orders/checkout","level":"error","data":{"status_code":500,"method":"POST","url":"https://api.acmeshopping.com/v1/orders/checkout"},"timestamp":${now - 8000}}"""
+                        """{"type":"http","category":"http","message":"POST /api/orders/checkout",""" +
+                            """"level":"error","data":{"status_code":500,"method":"POST",""" +
+                            """"url":"https://api.acmeshopping.com/v1/orders/checkout"},""" +
+                            """"timestamp":${now - 8000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"error","category":"payment","message":"Payment processing failed: gateway timeout","level":"error","timestamp":${now - 5000}}"""
+                        """{"type":"error","category":"payment",""" +
+                            """"message":"Payment processing failed: gateway timeout","level":"error",""" +
+                            """"timestamp":${now - 5000}}"""
                     )
                 } else {
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"MainActivity -> ProductListFragment","level":"info","timestamp":${now - 30000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"MainActivity -> ProductListFragment","level":"info",""" +
+                            """"timestamp":${now - 30000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"User tapped product item #$productId","level":"info","timestamp":${now - 25000}}"""
+                        """{"type":"user","category":"ui.click",""" +
+                            """"message":"User tapped product item #$productId","level":"info",""" +
+                            """"timestamp":${now - 25000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"ProductListFragment -> ProductDetailFragment","level":"info","timestamp":${now - 20000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"ProductListFragment -> ProductDetailFragment","level":"info",""" +
+                            """"timestamp":${now - 20000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"http","message":"GET /api/products/$productId","level":"info","data":{"status_code":200,"method":"GET","duration_ms":112},"timestamp":${now - 18000}}"""
+                        """{"type":"http","category":"http","message":"GET /api/products/$productId",""" +
+                            """"level":"info","data":{"status_code":200,"method":"GET","duration_ms":112},""" +
+                            """"timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"User tapped add to cart button","level":"info","timestamp":${now - 12000}}"""
+                        """{"type":"user","category":"ui.click","message":"User tapped add to cart button",""" +
+                            """"level":"info","timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"http","message":"POST /api/cart/items","level":"info","data":{"status_code":200,"method":"POST"},"timestamp":${now - 10000}}"""
+                        """{"type":"http","category":"http","message":"POST /api/cart/items","level":"info",""" +
+                            """"data":{"status_code":200,"method":"POST"},"timestamp":${now - 10000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"ProductDetailFragment -> CartFragment","level":"info","timestamp":${now - 5000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"ProductDetailFragment -> CartFragment","level":"info",""" +
+                            """"timestamp":${now - 5000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"debug","category":"lifecycle","message":"CartFragment.onViewCreated called","level":"debug","timestamp":${now - 3000}}"""
+                        """{"type":"debug","category":"lifecycle",""" +
+                            """"message":"CartFragment.onViewCreated called","level":"debug",""" +
+                            """"timestamp":${now - 3000}}"""
                     )
                 }
             }
@@ -2913,66 +3007,95 @@ object DemoDataSeeder {
             "cocoa" -> {
                 if (isAuthError) {
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"LaunchScreen -> LoginViewController","level":"info","timestamp":${now - 42000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"LaunchScreen -> LoginViewController","level":"info",""" +
+                            """"timestamp":${now - 42000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"touch","message":"User tapped email field","level":"info","timestamp":${now - 35000}}"""
+                        """{"type":"user","category":"touch","message":"User tapped email field",""" +
+                            """"level":"info","timestamp":${now - 35000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"touch","message":"User tapped Sign In","level":"info","timestamp":${now - 25000}}"""
+                        """{"type":"user","category":"touch","message":"User tapped Sign In","level":"info",""" +
+                            """"timestamp":${now - 25000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"network","message":"POST /api/auth/login","level":"info","data":{"status_code":401,"url":"https://api.acmeshopping.com/v1/auth/login"},"timestamp":${now - 22000}}"""
+                        """{"type":"http","category":"network","message":"POST /api/auth/login",""" +
+                            """"level":"info","data":{"status_code":401,""" +
+                            """"url":"https://api.acmeshopping.com/v1/auth/login"},"timestamp":${now - 22000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"debug","category":"app.lifecycle","message":"Keychain read failed: item not found","level":"warning","timestamp":${now - 18000}}"""
+                        """{"type":"debug","category":"app.lifecycle",""" +
+                            """"message":"Keychain read failed: item not found","level":"warning",""" +
+                            """"timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"network","message":"POST /api/auth/refresh","level":"error","data":{"status_code":403},"timestamp":${now - 12000}}"""
+                        """{"type":"http","category":"network","message":"POST /api/auth/refresh",""" +
+                            """"level":"error","data":{"status_code":403},"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"error","category":"auth","message":"Token refresh failed, user must re-authenticate","level":"error","timestamp":${now - 8000}}"""
+                        """{"type":"error","category":"auth","message":"Token refresh failed, """ +
+                            """user must re-authenticate","level":"error","timestamp":${now - 8000}}"""
                     )
                 } else if (isNetworkError) {
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"HomeViewController -> ProductListViewController","level":"info","timestamp":${now - 38000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"HomeViewController -> ProductListViewController","level":"info",""" +
+                            """"timestamp":${now - 38000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"debug","category":"network","message":"URLSession configuration: .default","level":"debug","timestamp":${now - 33000}}"""
+                        """{"type":"debug","category":"network",""" +
+                            """"message":"URLSession configuration: .default","level":"debug",""" +
+                            """"timestamp":${now - 33000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"network","message":"GET /api/products","level":"info","data":{"status_code":200,"duration_ms":98},"timestamp":${now - 30000}}"""
+                        """{"type":"http","category":"network","message":"GET /api/products","level":"info",""" +
+                            """"data":{"status_code":200,"duration_ms":98},"timestamp":${now - 30000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"touch","message":"User tapped product cell","level":"info","timestamp":${now - 20000}}"""
+                        """{"type":"user","category":"touch","message":"User tapped product cell",""" +
+                            """"level":"info","timestamp":${now - 20000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"network","message":"GET /api/products/$productId","level":"error","data":{"status_code":0,"reason":"The network connection was lost"},"timestamp":${now - 12000}}"""
+                        """{"type":"http","category":"network","message":"GET /api/products/$productId",""" +
+                            """"level":"error","data":{"status_code":0,""" +
+                            """"reason":"The network connection was lost"},"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"debug","category":"app.lifecycle","message":"Reachability changed: notReachable","level":"warning","timestamp":${now - 8000}}"""
+                        """{"type":"debug","category":"app.lifecycle",""" +
+                            """"message":"Reachability changed: notReachable","level":"warning",""" +
+                            """"timestamp":${now - 8000}}"""
                     )
                 } else {
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"HomeViewController -> ProductListViewController","level":"info","timestamp":${now - 28000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"HomeViewController -> ProductListViewController","level":"info",""" +
+                            """"timestamp":${now - 28000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"touch","message":"User tapped product cell","level":"info","timestamp":${now - 22000}}"""
+                        """{"type":"user","category":"touch","message":"User tapped product cell",""" +
+                            """"level":"info","timestamp":${now - 22000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"network","message":"GET /api/products/$productId","level":"info","data":{"status_code":200,"duration_ms":75},"timestamp":${now - 20000}}"""
+                        """{"type":"http","category":"network","message":"GET /api/products/$productId",""" +
+                            """"level":"info","data":{"status_code":200,"duration_ms":75},"timestamp":${now - 20000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"ProductListViewController -> ProductDetailViewController","level":"info","timestamp":${now - 15000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"ProductListViewController -> ProductDetailViewController",""" +
+                            """"level":"info","timestamp":${now - 15000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"touch","message":"User tapped Add to Cart","level":"info","timestamp":${now - 8000}}"""
+                        """{"type":"user","category":"touch","message":"User tapped Add to Cart",""" +
+                            """"level":"info","timestamp":${now - 8000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"network","message":"POST /api/cart/items","level":"info","data":{"status_code":200,"duration_ms":143},"timestamp":${now - 5000}}"""
+                        """{"type":"http","category":"network","message":"POST /api/cart/items",""" +
+                            """"level":"info","data":{"status_code":200,"duration_ms":143},"timestamp":${now - 5000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"debug","category":"app.lifecycle","message":"viewWillDisappear called","level":"debug","timestamp":${now - 2000}}"""
+                        """{"type":"debug","category":"app.lifecycle","message":"viewWillDisappear called",""" +
+                            """"level":"debug","timestamp":${now - 2000}}"""
                     )
                 }
             }
@@ -2980,63 +3103,87 @@ object DemoDataSeeder {
             else -> {
                 if (isAuthError) {
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"Navigate to /login","level":"info","timestamp":${now - 35000}}"""
+                        """{"type":"navigation","category":"navigation","message":"Navigate to /login",""" +
+                            """"level":"info","timestamp":${now - 35000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"Click Sign In button","level":"info","timestamp":${now - 25000}}"""
+                        """{"type":"user","category":"ui.click","message":"Click Sign In button",""" +
+                            """"level":"info","timestamp":${now - 25000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"fetch","message":"POST /api/auth/login","level":"info","data":{"status":401,"url":"/api/auth/login"},"timestamp":${now - 22000}}"""
+                        """{"type":"http","category":"fetch","message":"POST /api/auth/login","level":"info",""" +
+                            """"data":{"status":401,"url":"/api/auth/login"},"timestamp":${now - 22000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"console","category":"console","message":"AuthService: token validation failed","level":"warn","timestamp":${now - 18000}}"""
+                        """{"type":"console","category":"console",""" +
+                            """"message":"AuthService: token validation failed","level":"warn",""" +
+                            """"timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"fetch","message":"POST /api/auth/refresh","level":"error","data":{"status":403},"timestamp":${now - 12000}}"""
+                        """{"type":"http","category":"fetch","message":"POST /api/auth/refresh",""" +
+                            """"level":"error","data":{"status":403},"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"console","category":"console","message":"Redirecting to login: session expired","level":"log","timestamp":${now - 6000}}"""
+                        """{"type":"console","category":"console",""" +
+                            """"message":"Redirecting to login: session expired","level":"log",""" +
+                            """"timestamp":${now - 6000}}"""
                     )
                 } else if (isNetworkError) {
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"Navigate to /products","level":"info","timestamp":${now - 30000}}"""
+                        """{"type":"navigation","category":"navigation","message":"Navigate to /products",""" +
+                            """"level":"info","timestamp":${now - 30000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"fetch","message":"GET /api/products","level":"info","data":{"status":200,"duration_ms":87},"timestamp":${now - 27000}}"""
+                        """{"type":"http","category":"fetch","message":"GET /api/products","level":"info",""" +
+                            """"data":{"status":200,"duration_ms":87},"timestamp":${now - 27000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"Click on product item","level":"info","timestamp":${now - 18000}}"""
+                        """{"type":"user","category":"ui.click","message":"Click on product item",""" +
+                            """"level":"info","timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"fetch","message":"GET /api/products/$productId","level":"error","data":{"status":0,"reason":"Failed to fetch"},"timestamp":${now - 12000}}"""
+                        """{"type":"http","category":"fetch","message":"GET /api/products/$productId",""" +
+                            """"level":"error","data":{"status":0,"reason":"Failed to fetch"},""" +
+                            """"timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"console","category":"console","message":"Unhandled promise rejection: NetworkError","level":"error","timestamp":${now - 8000}}"""
+                        """{"type":"console","category":"console",""" +
+                            """"message":"Unhandled promise rejection: NetworkError","level":"error",""" +
+                            """"timestamp":${now - 8000}}"""
                     )
                 } else {
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"Navigate to /products","level":"info","timestamp":${now - 25000}}"""
+                        """{"type":"navigation","category":"navigation","message":"Navigate to /products",""" +
+                            """"level":"info","timestamp":${now - 25000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"fetch","message":"GET /api/products","level":"info","data":{"status":200,"duration_ms":92},"timestamp":${now - 23000}}"""
+                        """{"type":"http","category":"fetch","message":"GET /api/products","level":"info",""" +
+                            """"data":{"status":200,"duration_ms":92},"timestamp":${now - 23000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"Click on product item","level":"info","timestamp":${now - 18000}}"""
+                        """{"type":"user","category":"ui.click","message":"Click on product item",""" +
+                            """"level":"info","timestamp":${now - 18000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"navigation","category":"navigation","message":"Navigate to /products/$productId","level":"info","timestamp":${now - 15000}}"""
+                        """{"type":"navigation","category":"navigation",""" +
+                            """"message":"Navigate to /products/$productId","level":"info",""" +
+                            """"timestamp":${now - 15000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"fetch","message":"GET /api/products/$productId","level":"info","data":{"status":200,"duration_ms":65},"timestamp":${now - 13000}}"""
+                        """{"type":"http","category":"fetch","message":"GET /api/products/$productId",""" +
+                            """"level":"info","data":{"status":200,"duration_ms":65},"timestamp":${now - 13000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"console","category":"console","message":"Product data loaded successfully","level":"log","timestamp":${now - 12000}}"""
+                        """{"type":"console","category":"console",""" +
+                            """"message":"Product data loaded successfully","level":"log","timestamp":${now - 12000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"user","category":"ui.click","message":"Click add to cart","level":"info","timestamp":${now - 6000}}"""
+                        """{"type":"user","category":"ui.click","message":"Click add to cart","level":"info",""" +
+                            """"timestamp":${now - 6000}}"""
                     )
                     breadcrumbs.add(
-                        """{"type":"http","category":"fetch","message":"POST /api/cart/items","level":"info","data":{"status":200},"timestamp":${now - 4000}}"""
+                        """{"type":"http","category":"fetch","message":"POST /api/cart/items","level":"info",""" +
+                            """"data":{"status":200},"timestamp":${now - 4000}}"""
                     )
                 }
             }
@@ -3334,7 +3481,9 @@ object DemoDataSeeder {
             spanRows.add(
                 "($rootSpanId, $traceId, 0, $orgId, 'http.request', 'api-gateway', " +
                     "'$rootResource', 'web', $rootTs, $rootDuration, ${if (isError) 1 else 0}, " +
-                    "map('http.method','${rootResource.substringBefore(" ")}','http.url','${rootResource.substringAfter(" ")}','http.status_code','${if (isError) "500" else "200"}'), " +
+                    "map('http.method','${rootResource.substringBefore(" ")}'," +
+                    "'http.url','${rootResource.substringAfter(" ")}'," +
+                    "'http.status_code','${if (isError) "500" else "200"}'), " +
                     "map('_sample_rate', 1.0), 'prod-web-01', 'production', '1.3.0')",
             )
 
@@ -3363,7 +3512,8 @@ object DemoDataSeeder {
                 spanRows.add(
                     "($childSpanId, $traceId, $rootSpanId, $orgId, '$opName', '${svc.name}', " +
                         "'${resource.replace("'", "''")}', '${svc.type}', $childTs, $childDuration, $childError, " +
-                        "map('component','${svc.name}'), map('_sample_rate', 1.0), '${svc.host}', 'production', '1.3.0')",
+                        "map('component','${svc.name}'), map('_sample_rate', 1.0)," +
+                        "'${svc.host}', 'production', '1.3.0')",
                 )
                 elapsed += childDuration + random.nextLong(500_000L, 2_000_000L)
             }
@@ -3569,7 +3719,10 @@ object DemoDataSeeder {
                     proc.name == "postgres" -> host.hostname.contains("db")
                     proc.name == "redis-server" -> host.hostname.contains("cache")
                     proc.name in listOf("nginx", "datadog-agent", "containerd") -> true
-                    else -> host.hostname.contains("web") || host.hostname.contains("api") || host.hostname.contains("worker")
+                    else ->
+                        host.hostname.contains("web") ||
+                            host.hostname.contains("api") ||
+                            host.hostname.contains("worker")
                 }
             }.forEachIndexed { idx, proc ->
                 val pid = 1000 + idx * 100 + random.nextInt(0, 50)
@@ -3620,7 +3773,10 @@ object DemoDataSeeder {
                     c.name == "postgres" -> host.hostname.contains("db")
                     c.name == "redis" -> host.hostname.contains("cache")
                     c.name in listOf("datadog-agent", "fluentd") -> true
-                    else -> host.hostname.contains("web") || host.hostname.contains("api") || host.hostname.contains("worker")
+                    else ->
+                        host.hostname.contains("web") ||
+                            host.hostname.contains("api") ||
+                            host.hostname.contains("worker")
                 }
             }.forEach { c ->
                 val containerId = UUID.randomUUID().toString().replace("-", "").take(12)
@@ -3736,6 +3892,63 @@ object DemoDataSeeder {
         val level: String
     )
 
+    private suspend fun deleteClickHouseDemoDataForOrganization(orgId: Int) {
+        println("Deleting ClickHouse demo data...")
+        val projectIds =
+            transaction {
+                Projects
+                    .selectAll()
+                    .where { Projects.organization_id eq orgId }
+                    .map { it[Projects.id] }
+            }
+
+        if (projectIds.isNotEmpty()) {
+            val projectIdList = projectIds.joinToString(",")
+            println("Deleting ClickHouse data for projects: $projectIdList")
+
+            val clickhouseQueries =
+                listOf(
+                    "ALTER TABLE issues DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE events DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE logs DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE user_feedback DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE replay_events DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE replay_segments DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE sessions DELETE WHERE project_id IN ($projectIdList)",
+                    "ALTER TABLE spans DELETE WHERE project_id IN ($projectIdList)"
+                )
+
+            for (query in clickhouseQueries) {
+                try {
+                    ClickHouseClient.execute(query)
+                } catch (e: Exception) {
+                    // Silently continue
+                }
+            }
+        }
+
+        println("Deleting Datadog agent ClickHouse data...")
+        val ddClickhouseQueries =
+            listOf(
+                "ALTER TABLE apm_spans DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE trace_stats DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE profiles DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE infra_events DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE service_checks DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE processes DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE containers DELETE WHERE toInt64(organization_id) = $orgId",
+                "ALTER TABLE network_connections DELETE WHERE toInt64(organization_id) = $orgId",
+            )
+
+        for (query in ddClickhouseQueries) {
+            try {
+                ClickHouseClient.execute(query)
+            } catch (_: Exception) {
+                // Silently continue - table may not exist
+            }
+        }
+    }
+
     suspend fun deleteDemoData() {
         println("🗑️  Deleting existing demo data...")
 
@@ -3787,9 +4000,11 @@ object DemoDataSeeder {
                     "DELETE FROM subscriptions WHERE organization_id = $orgId",
                     "DELETE FROM uptime_monitors WHERE organization_id = $orgId",
                     // Project-related data
-                    "DELETE FROM release_files WHERE release_id IN (SELECT id FROM releases WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId))",
+                    "DELETE FROM release_files WHERE release_id IN (SELECT id FROM releases WHERE project_id IN" +
+                        "(SELECT id FROM projects WHERE organization_id = $orgId))",
                     "DELETE FROM releases WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId)",
-                    "DELETE FROM project_keys WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $orgId)",
+                    "DELETE FROM project_keys WHERE project_id IN (SELECT id FROM projects WHERE organization_id =" +
+                        "$orgId)",
                     "DELETE FROM projects WHERE organization_id = $orgId",
                     // Memberships and organization itself
                     "DELETE FROM memberships WHERE organization_id = $orgId",
@@ -3817,64 +4032,7 @@ object DemoDataSeeder {
             }
         }
 
-        // Delete ClickHouse data - get actual project IDs
-        if (orgId != null) {
-            println("Deleting ClickHouse demo data...")
-            val projectIds =
-                transaction {
-                    Projects
-                        .selectAll()
-                        .where { Projects.organization_id eq orgId }
-                        .map { it[Projects.id] }
-                }
-
-            if (projectIds.isNotEmpty()) {
-                val projectIdList = projectIds.joinToString(",")
-                println("Deleting ClickHouse data for projects: $projectIdList")
-
-                val clickhouseQueries =
-                    listOf(
-                        "ALTER TABLE issues DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE events DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE logs DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE user_feedback DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE replay_events DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE replay_segments DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE sessions DELETE WHERE project_id IN ($projectIdList)",
-                        "ALTER TABLE spans DELETE WHERE project_id IN ($projectIdList)"
-                    )
-
-                for (query in clickhouseQueries) {
-                    try {
-                        ClickHouseClient.execute(query)
-                    } catch (e: Exception) {
-                        // Silently continue
-                    }
-                }
-            }
-
-            // Delete Datadog agent ClickHouse data (keyed by organization_id)
-            println("Deleting Datadog agent ClickHouse data...")
-            val ddClickhouseQueries =
-                listOf(
-                    "ALTER TABLE apm_spans DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE trace_stats DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE profiles DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE infra_events DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE service_checks DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE processes DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE containers DELETE WHERE toInt64(organization_id) = $orgId",
-                    "ALTER TABLE network_connections DELETE WHERE toInt64(organization_id) = $orgId",
-                )
-
-            for (query in ddClickhouseQueries) {
-                try {
-                    ClickHouseClient.execute(query)
-                } catch (_: Exception) {
-                    // Silently continue - table may not exist
-                }
-            }
-        }
+        orgId?.let { deleteClickHouseDemoDataForOrganization(it) }
 
         println("✅ Demo data deleted")
     }

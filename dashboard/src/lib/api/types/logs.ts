@@ -82,7 +82,7 @@ export interface LogTopResponse {
   totalCount: number
 }
 
-export interface LogApiKey {
+export interface OtlpApiKey {
   id: number
   name: string
   keyPrefix: string
@@ -90,13 +90,19 @@ export interface LogApiKey {
   lastUsedAt?: string
 }
 
-export interface CreateLogApiKeyResponse {
+/** @deprecated Use OtlpApiKey instead */
+export type LogApiKey = OtlpApiKey
+
+export interface CreateOtlpApiKeyResponse {
   id: number
   name: string
   keyPrefix: string
   key: string
   createdAt: string
 }
+
+/** @deprecated Use CreateOtlpApiKeyResponse instead */
+export type CreateLogApiKeyResponse = CreateOtlpApiKeyResponse
 
 export interface LogIndex {
   id: number

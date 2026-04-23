@@ -27,6 +27,7 @@ import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -36,27 +37,41 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND
+import com.moneat.utils.TimeConstants.SECONDS_PER_DAY
+import com.moneat.utils.TimeConstants.SECONDS_PER_HOUR
+import com.moneat.utils.TimeConstants.SECONDS_PER_MINUTE
+import com.moneat.utils.TimeConstants.SECONDS_PER_MONTH_30
+import com.moneat.utils.TimeConstants.SECONDS_PER_WEEK
+import com.moneat.utils.TimeConstants.SECONDS_PER_YEAR_365
 
 private val logger = KotlinLogging.logger {}
 
 class PrometheusHandler : HttpApiHandler() {
+
+    companion object {
+        private const val PROMETHEUS_LABEL_LIMIT = 20
+        private const val SECONDS_SIX_HOURS = 21_600L
+    }
+
     override val defaultPort: Int = 9090
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
-        return try {
+        return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port)
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
                 request.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
-                parameter("limit", 20)
+                parameter("limit", PROMETHEUS_LABEL_LIMIT)
             }
             if (response.status.isSuccess()) {
                 val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
                 val metrics = body["data"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
-                TestConnectionResult(true, "Connected successfully", metrics = metrics.take(20))
+                TestConnectionResult(true, "Connected successfully", metrics = metrics.take(PROMETHEUS_LABEL_LIMIT))
             } else {
                 TestConnectionResult(false, "Prometheus returned ${response.status}")
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Prometheus connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -88,7 +103,7 @@ class PrometheusHandler : HttpApiHandler() {
         }
 
         val baseUrl = buildUrl(host, port)
-        return try {
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/api/v1/label/$labelName/values") {
                 credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
                 if (!matcher.isNullOrEmpty()) parameter("match[]", matcher)
@@ -100,7 +115,7 @@ class PrometheusHandler : HttpApiHandler() {
                 logger.warn { "Prometheus label_values query failed: ${response.status}" }
                 emptyList()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn(e) { "Failed to execute label_values query" }
             emptyList()
         }
@@ -119,9 +134,9 @@ class PrometheusHandler : HttpApiHandler() {
         val baseUrl = buildUrl(host, port)
         val promLimit = limit
 
-        return try {
+        return suspendRunCatching {
             val response = if (timeRange != null) {
-                val nowSec = System.currentTimeMillis() / 1000
+                val nowSec = System.currentTimeMillis() / MILLIS_PER_SECOND
                 val fromSec = resolveRelativeTimeSec(timeRange.from, nowSec)
                 val toSec = resolveRelativeTimeSec(timeRange.to, nowSec)
                 val step = resolvePrometheusStep(toSec - fromSec)
@@ -145,7 +160,7 @@ class PrometheusHandler : HttpApiHandler() {
                 return emptyList()
             }
             parsePrometheusResponse(response.bodyAsText(), promLimit)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to execute Prometheus query" }
             emptyList()
         }
@@ -158,7 +173,7 @@ class PrometheusHandler : HttpApiHandler() {
         credentials: DataSourceCredentials,
     ): List<DataSourceField> {
         val baseUrl = buildUrl(host, port)
-        return try {
+        return suspendRunCatching {
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
                 credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             }
@@ -170,7 +185,7 @@ class PrometheusHandler : HttpApiHandler() {
             } else {
                 emptyList()
             }
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error(e) { "Failed to fetch Prometheus metrics" }
             emptyList()
         }
@@ -191,39 +206,54 @@ class PrometheusHandler : HttpApiHandler() {
             when (resultType) {
                 "matrix" -> {
                     val values = result.jsonObject["values"]?.jsonArray ?: continue
-                    for (point in values) {
-                        val arr = point.jsonArray
-                        val row = mutableMapOf<String, JsonElement>()
-                        row["time_bucket"] = promTimestampToMs(arr[0])
-                        row[metricName] = promValueToNumber(arr[1])
-                        for ((k, v) in metric) {
-                            if (k != "__name__") row[k] = v
-                        }
-                        rows.add(row)
-                        if (rows.size >= limit) return rows
-                    }
+                    appendPrometheusMatrixPoints(values, metric, metricName, rows, limit)
                 }
-                "vector" -> {
-                    val value = result.jsonObject["value"]?.jsonArray
-                    if (value != null) {
-                        val row = mutableMapOf<String, JsonElement>()
-                        row["time_bucket"] = promTimestampToMs(value[0])
-                        row[metricName] = promValueToNumber(value[1])
-                        for ((k, v) in metric) {
-                            if (k != "__name__") row[k] = v
-                        }
-                        rows.add(row)
-                    }
-                }
+                "vector" -> appendPrometheusVectorRow(result.jsonObject, metric, metricName, rows)
             }
             if (rows.size >= limit) break
         }
         return rows
     }
 
+    private fun appendPrometheusMatrixPoints(
+        values: JsonArray,
+        metric: JsonObject,
+        metricName: String,
+        rows: MutableList<Map<String, JsonElement>>,
+        limit: Int,
+    ) {
+        for (point in values) {
+            val arr = point.jsonArray
+            val row = mutableMapOf<String, JsonElement>()
+            row["time_bucket"] = promTimestampToMs(arr[0])
+            row[metricName] = promValueToNumber(arr[1])
+            for ((k, v) in metric) {
+                if (k != "__name__") row[k] = v
+            }
+            rows.add(row)
+            if (rows.size >= limit) return
+        }
+    }
+
+    private fun appendPrometheusVectorRow(
+        resultObj: JsonObject,
+        metric: JsonObject,
+        metricName: String,
+        rows: MutableList<Map<String, JsonElement>>,
+    ) {
+        val value = resultObj["value"]?.jsonArray ?: return
+        val row = mutableMapOf<String, JsonElement>()
+        row["time_bucket"] = promTimestampToMs(value[0])
+        row[metricName] = promValueToNumber(value[1])
+        for ((k, v) in metric) {
+            if (k != "__name__") row[k] = v
+        }
+        rows.add(row)
+    }
+
     private fun promTimestampToMs(element: JsonElement): JsonElement {
         val sec = element.jsonPrimitive.doubleOrNull ?: return element
-        return JsonPrimitive((sec * 1000).toLong())
+        return JsonPrimitive((sec * MILLIS_PER_SECOND).toLong())
     }
 
     private fun promValueToNumber(element: JsonElement): JsonElement {
@@ -238,22 +268,22 @@ class PrometheusHandler : HttpApiHandler() {
         val amount = match.groupValues[1].toLong()
         val offsetSec = when (match.groupValues[2]) {
             "s" -> amount
-            "m" -> amount * 60
-            "h" -> amount * 3600
-            "d" -> amount * 86400
-            "w" -> amount * 604800
-            "M" -> amount * 2592000
-            "y" -> amount * 31536000
+            "m" -> amount * SECONDS_PER_MINUTE
+            "h" -> amount * SECONDS_PER_HOUR
+            "d" -> amount * SECONDS_PER_DAY
+            "w" -> amount * SECONDS_PER_WEEK
+            "M" -> amount * SECONDS_PER_MONTH_30
+            "y" -> amount * SECONDS_PER_YEAR_365
             else -> 0
         }
         return nowSec - offsetSec
     }
 
     internal fun resolvePrometheusStep(rangeSec: Long): String = when {
-        rangeSec <= 3600 -> "15s"
-        rangeSec <= 21600 -> "1m"
-        rangeSec <= 86400 -> "5m"
-        rangeSec <= 604800 -> "1h"
+        rangeSec <= SECONDS_PER_HOUR -> "15s"
+        rangeSec <= SECONDS_SIX_HOURS -> "1m"
+        rangeSec <= SECONDS_PER_DAY -> "5m"
+        rangeSec <= SECONDS_PER_WEEK -> "1h"
         else -> "1d"
     }
 }

@@ -17,16 +17,16 @@
 package com.moneat.events.repositories
 
 import com.moneat.events.models.EventResponse
+import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.repositories.models.IssueDetailRow
 import com.moneat.events.repositories.models.IssueRow
-import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Projects
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.long
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
@@ -36,6 +36,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -104,7 +105,7 @@ class IssueRepositoryImpl(
 
         val rows = queryHelper.executeJsonEachRowQuery(query, "Issues") ?: return emptyList()
         return rows.mapNotNull { obj ->
-            try {
+            suspendRunCatching {
                 IssueRow(
                     issueId = obj["issue_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
                     projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
@@ -119,7 +120,7 @@ class IssueRepositoryImpl(
                     status = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved",
                     fingerprint = null
                 )
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 logger.error(e) { "Failed to parse issue row" }
                 null
             }

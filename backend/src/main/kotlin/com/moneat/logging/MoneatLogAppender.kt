@@ -24,6 +24,9 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionHandler
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import com.moneat.utils.suspendRunCatching
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
     var endpoint: String = "https://api.moneat.io/v1/logs/otlp"
@@ -33,6 +36,8 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
 
     companion object {
         private const val QUEUE_CAPACITY = 10_000
+        private const val LOG_HTTP_TIMEOUT_MS = 1000
+        private const val SHUTDOWN_TIMEOUT_SECONDS = 5L
     }
 
     private val executor =
@@ -60,7 +65,8 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
         }
         if (environment == "development" && isProdEndpoint) {
             System.err.println(
-                "[MoneatLogAppender] SAFETY: endpoint points to production but environment=development - logs will NOT be shipped. Set MONEAT_LOGS_ENDPOINT to your local instance."
+                "[MoneatLogAppender] SAFETY: endpoint points to production but environment=development - logs will " +
+                    "NOT be shipped. Set MONEAT_LOGS_ENDPOINT to your local instance."
             )
             return
         }
@@ -68,7 +74,8 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             System.err.println("[MoneatLogAppender] WARNING: token is blank - logs will NOT be shipped to remote")
         } else {
             System.err.println(
-                "[MoneatLogAppender] Initialized: endpoint=$endpoint, serviceName=$serviceName, environment=$environment, token=<set>"
+                "[MoneatLogAppender] Initialized: endpoint=$endpoint, serviceName=$serviceName, " +
+                    "environment=$environment, token=<set>"
             )
         }
     }
@@ -79,9 +86,9 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
         (event as? DeferredProcessingAware)?.prepareForDeferredProcessing()
 
         executor.submit {
-            try {
+            suspendRunCatching {
                 sendLog(event)
-            } catch (e: Exception) {
+            }.getOrElse { e ->
                 // Use stderr to avoid log loops
                 System.err.println("[MoneatLogAppender] Failed to ship log: ${e.javaClass.simpleName}: ${e.message}")
             }
@@ -120,12 +127,12 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Authorization", "Bearer $token")
             connection.doOutput = true
-            connection.connectTimeout = 1000
-            connection.readTimeout = 1000
+            connection.connectTimeout = LOG_HTTP_TIMEOUT_MS
+            connection.readTimeout = LOG_HTTP_TIMEOUT_MS
 
             connection.outputStream.use { it.write(payload.toByteArray()) }
             val responseCode = connection.responseCode
-            if (responseCode !in 200..299) {
+            if (responseCode !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 val body = runCatching { connection.errorStream?.bufferedReader()?.readText() }.getOrNull()
                 System.err.println(
                     "[MoneatLogAppender] Non-2xx response: $responseCode${if (body != null) " - $body" else ""}"
@@ -148,7 +155,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
 
     override fun stop() {
         executor.shutdown()
-        executor.awaitTermination(5, TimeUnit.SECONDS)
+        executor.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         super.stop()
     }
 }

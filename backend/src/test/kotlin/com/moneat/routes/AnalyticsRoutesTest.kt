@@ -18,9 +18,6 @@ package com.moneat.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.moneat.testsupport.RouteTestSupport
-import com.moneat.testsupport.RouteTestSupport.installJwtAuth
-import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.analytics.models.AnalyticsOverviewResponse
 import com.moneat.analytics.models.BreakdownResponse
 import com.moneat.analytics.models.BreakdownRow
@@ -35,6 +32,9 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installJwtAuth
+import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.get
 import io.ktor.client.request.header

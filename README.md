@@ -6,14 +6,14 @@
 
 <p align="center">
   Open-source, self-hostable observability.<br>
-  Errors, replays, performance, logs, uptime, and incidents in one place.
+  Errors, replays, performance, logs, metrics, uptime, and incidents in one place.
 </p>
 
 <p align="center">
   <a href="#license"><img src="https://img.shields.io/badge/License-AGPLv3%20%2B%20Enterprise-blue.svg?style=flat-square" alt="License: AGPLv3 + Enterprise"></a>
   <a href="https://github.com/moneat-io/moneat/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome"></a>
   <a href="https://github.com/moneat-io/moneat/actions/workflows/test.yml"><img src="https://img.shields.io/endpoint?style=flat-square&url=https://raw.githubusercontent.com/moneat-io/moneat/develop/badges/coverage-badge.json" alt="Global Code Coverage"></a>
-  <a href="https://discord.gg/gwsZkckf"><img src="https://img.shields.io/badge/Discord-community-5865F2.svg?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://discord.com/invite/dTsahnJeyH"><img src="https://img.shields.io/badge/Discord-community-5865F2.svg?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/moneat-io/moneat/commits"><img src="https://img.shields.io/github/commit-activity/m/moneat-io/moneat?style=flat-square" alt="Commit Activity"></a>
   <a href="https://github.com/moneat-io/moneat/stargazers"><img src="https://img.shields.io/github/stars/moneat-io/moneat?style=flat-square" alt="GitHub Stars"></a>
 </p>
@@ -21,7 +21,7 @@
 <p align="center">
   <a href="https://moneat.io/docs"><b>Docs</b></a> ·
   <a href="https://moneat.io/pricing"><b>Enterprise</b></a> ·
-  <a href="https://discord.gg/gwsZkckf"><b>Discord</b></a> ·
+  <a href="https://discord.com/invite/dTsahnJeyH"><b>Discord</b></a> ·
   <a href="https://github.com/moneat-io/moneat/issues/new?labels=bug&template=bug_report.md"><b>Bug Report</b></a> ·
   <a href="https://github.com/moneat-io/moneat/issues/new?labels=enhancement&template=feature_request.md"><b>Feature Request</b></a>
 </p>
@@ -81,7 +81,7 @@ cd dashboard && npm install && npm run dev
 
 ## Features
 
-Moneat is Sentry SDK and Datadog Agent compatible. Point your existing SDKs and agents at your Moneat instance with no code changes.
+Moneat is Sentry SDK, Datadog Agent, and OpenTelemetry (OTLP) compatible. Point your existing SDKs, agents, or OTLP exporters at your Moneat instance with no code changes.
 
 | Feature | Description | Docs |
 |---------|-------------|------|
@@ -89,7 +89,8 @@ Moneat is Sentry SDK and Datadog Agent compatible. Point your existing SDKs and 
 | Session Replay | DOM-based recordings linked to error events | [Docs](https://moneat.io/docs) |
 | Performance Monitoring | Distributed tracing with transaction and span breakdowns | [Docs](https://moneat.io/docs) |
 | Continuous Profiling | Flamegraph visualization (pprof, JFR, Sentry formats) | [Docs](https://moneat.io/docs) |
-| Logging | Centralized, searchable log management via ClickHouse | [Docs](https://moneat.io/docs) |
+| Logging | Centralized, searchable log management via OTLP and ClickHouse | [Docs](https://moneat.io/docs) |
+| OpenTelemetry (OTLP) | Ingest logs, traces, and metrics via standard OTLP/HTTP endpoints | [Docs](https://moneat.io/docs) |
 | Uptime & Status Pages | HTTP/TCP/ping checks with public status pages | [Docs](https://moneat.io/docs) |
 | Synthetics | API, multi-step, SSL, DNS, TCP, and UDP synthetic tests | [Docs](https://moneat.io/docs) |
 | Custom Dashboards | Drag-and-drop widgets, Grafana dashboard import | [Docs](https://moneat.io/docs) |
@@ -111,6 +112,18 @@ Sentry.init({
 ```
 
 Works with `@sentry/browser`, `@sentry/node`, `@sentry/react`, `@sentry/nextjs`, `sentry-sdk` (Python), `sentry-kotlin`, `sentry-java`, `sentry-android`, `sentry-cocoa`, `sentry-go`, `sentry-ruby`, `Sentry.NET`, and any SDK that sends to the standard Sentry envelope endpoint.
+
+### OpenTelemetry (OTLP) Compatibility
+
+Send logs, traces, and metrics to Moneat using any OpenTelemetry SDK or Collector via standard OTLP/HTTP endpoints:
+
+```text
+Logs:    POST https://<your-moneat-host>/v1/logs/otlp
+Traces:  POST https://<your-moneat-host>/v1/traces/otlp
+Metrics: POST https://<your-moneat-host>/v1/metrics/otlp
+```
+
+Authenticate with an OTLP API key (created in **Settings → OTLP API Keys**) passed as a `Bearer` token in the `Authorization` header.
 
 ## Screenshots
 

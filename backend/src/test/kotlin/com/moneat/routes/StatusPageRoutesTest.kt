@@ -16,18 +16,22 @@
 
 package com.moneat.routes
 
-import com.moneat.statuspage.routes.statusPageRoutes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import com.moneat.statuspage.models.StatusPageCustomDomains
 import com.moneat.statuspage.models.StatusPageIncidentUpdates
 import com.moneat.statuspage.models.StatusPageIncidents
 import com.moneat.statuspage.models.StatusPageMonitors
 import com.moneat.statuspage.models.StatusPages
+import com.moneat.statuspage.routes.statusPageRoutes
+import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
 import com.moneat.uptime.models.UptimeMonitors
-import com.moneat.shared.models.Users
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -53,18 +57,14 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
 import java.util.UUID
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
-import com.moneat.testsupport.RouteTestSupport
-import com.moneat.testsupport.TestDatabaseHelper
-import com.moneat.testsupport.startTestKoin
-import com.moneat.testsupport.stopTestKoin
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
 
 class StatusPageRoutesTest {
     companion object {
