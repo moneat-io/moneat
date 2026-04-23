@@ -141,12 +141,19 @@ class BillingBackgroundService(
         for (orgId in orgIds) {
             val usage = quotaService.getUsageForOrganization(orgId)
             val periodStart = usage.periodStart
-            val basePct =
+            val unitPct =
                 if (usage.baseLimitUnits > 0) {
                     usage.usedUnits.toDouble() / usage.baseLimitUnits.toDouble()
                 } else {
                     0.0
                 }
+            val bytesPct =
+                if (usage.bytesLimit > 0) {
+                    usage.usedBytes.toDouble() / usage.bytesLimit.toDouble()
+                } else {
+                    0.0
+                }
+            val basePct = maxOf(unitPct, bytesPct)
             val paygPct =
                 if (usage.paygLimitUnits > 0) {
                     val paygUsed = kotlin.math.max(0L, usage.usedUnits - usage.baseLimitUnits)

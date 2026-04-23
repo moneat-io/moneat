@@ -202,6 +202,146 @@ class BillingBackgroundServiceTest {
         }
     }
 
+    @Test
+    fun `bytes-only tier triggers notifications when unit limit is zero`() {
+        transaction {
+            TestDatabaseHelper.resetSchema(
+                Users,
+                Organizations,
+                Memberships,
+                Subscriptions,
+                EmailsSent,
+                PricingTierConfigs,
+                OrgUsageCounters,
+                QuotaNotificationsSent
+            )
+
+            val orgId =
+                Organizations.insert {
+                    it[name] = "Bytes Org"
+                    it[slug] = "bytes-org"
+                }[Organizations.id]
+
+            val ownerId =
+                Users.insert {
+                    it[email] = "bytes-owner@moneat.test"
+                    it[password_hash] = "hash"
+                    it[name] = "Bytes Owner"
+                }[Users.id]
+
+            Memberships.insert {
+                it[user_id] = ownerId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+
+            val gbLimit = 1_073_741_824L // 1 GB
+            val tierId =
+                PricingTierConfigs.insert {
+                    it[tier_name] = "PRO_GB"
+                    it[version] = 1
+                    it[monthly_unit_limit] = 0
+                    it[monthly_error_limit] = 0
+                    it[monthly_transaction_limit] = 0
+                    it[monthly_replay_limit] = 0
+                    it[monthly_feedback_limit] = 0
+                    it[monthly_llm_event_limit] = 0
+                    it[monthly_gb_limit] = gbLimit
+                    it[retention_days] = 30
+                    it[log_retention_days] = 30
+                    it[replay_retention_days] = 30
+                    it[llm_retention_days] = 30
+                    it[status_pages_enabled] = true
+                    it[status_page_custom_domain_enabled] = true
+                    it[session_replay_enabled] = true
+                    it[slack_enabled] = false
+                    it[discord_enabled] = false
+                    it[incident_io_enabled] = false
+                    it[saml_enabled] = false
+                    it[oidc_enabled] = false
+                    it[priority_support_enabled] = false
+                    it[sla_enabled] = false
+                    it[custom_retention_enabled] = false
+                    it[max_projects] = 10
+                    it[max_systems] = 10
+                    it[monitor_interval_seconds] = 60
+                    it[monthly_price_cents] = 2900
+                    it[yearly_price_cents] = 28800
+                    it[trial_days] = 14
+                    it[payg_enabled] = false
+                    it[payg_rate_micros_per_unit] = 0
+                    it[overage_rate_cents_per_gb] = 0
+                    it[error_overage_rate_cents_per_1k] = 0
+                    it[replay_overage_rate_cents_per_gb] = 0
+                    it[llm_overage_rate_cents_per_1k] = 0
+                    it[oncall_per_user_monthly_cents] = 0
+                    it[oncall_per_user_yearly_cents] = 0
+                    it[oncall_enabled] = false
+                    it[stripe_base_price_id] = null
+                    it[stripe_overage_price_id] = null
+                    it[stripe_yearly_base_price_id] = null
+                    it[stripe_yearly_overage_price_id] = null
+                    it[stripe_oncall_price_id] = null
+                    it[stripe_oncall_yearly_price_id] = null
+                    it[is_current] = true
+                }[PricingTierConfigs.id]
+
+            val now = Clock.System.now()
+            val periodStart = now.toLocalDateTime(TimeZone.UTC).date
+            val periodEnd = periodStart.plus(DatePeriod(months = 1, days = -1))
+
+            Subscriptions.insert {
+                it[organization_id] = orgId
+                it[plan] = "PRO_GB"
+                it[status] = "active"
+                it[billing_interval] = "monthly"
+                it[current_period_start] = now
+                it[current_period_end] = Instant.fromEpochSeconds(now.epochSeconds + 2_592_000)
+                it[pricing_tier_config_id] = tierId
+                it[payg_budget_cents] = 0
+                it[payg_used_units] = 0
+                it[payg_used_micros] = 0
+                it[pending_meter_units] = 0
+            }
+
+            OrgUsageCounters.insert {
+                it[organization_id] = orgId
+                it[period_start] = periodStart
+                it[period_end] = periodEnd
+                it[used_units] = 0
+                it[used_errors] = 0
+                it[used_transactions] = 0
+                it[used_replays] = 0
+                it[used_feedback] = 0
+                it[used_llm_events] = 0
+                it[used_logs] = 0
+                it[used_bytes] = gbLimit + 100_000
+                it[used_error_bytes] = gbLimit + 100_000
+                it[used_replay_bytes] = 0
+                it[used_log_bytes] = 0
+                it[used_llm_bytes] = 0
+                it[updated_at] = now
+            }
+
+            testOrgId = orgId
+        }
+
+        val service = BillingBackgroundService()
+        invokeQuotaNotificationPass(service)
+
+        transaction {
+            val types =
+                QuotaNotificationsSent
+                    .selectAll()
+                    .where { QuotaNotificationsSent.organization_id eq testOrgId }
+                    .map { it[QuotaNotificationsSent.notification_type] }
+                    .toSet()
+
+            assertTrue("base_80" in types, "Expected base_80 notification for bytes-only tier")
+            assertTrue("base_100" in types, "Expected base_100 notification for bytes-only tier")
+        }
+    }
+
     private fun invokeQuotaNotificationPass(service: BillingBackgroundService) {
         val method = BillingBackgroundService::class.java.getDeclaredMethod("processQuotaThresholdNotifications")
         method.isAccessible = true
