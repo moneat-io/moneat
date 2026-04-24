@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.3.20"
+kotlin = "2.3.21"
 ktor = "3.4.3"
 exposed = "1.1.1"
 logback = "1.5.32"
