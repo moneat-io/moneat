@@ -17,6 +17,7 @@
 package com.moneat.otlp.routes
 
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.calculateBillableBytes
@@ -114,11 +115,7 @@ private suspend fun handleOtlpTraceIngest(
         if (!reservation.allowed) {
             call.respond(
                 HttpStatusCode.TooManyRequests,
-                mapOf(
-                    "error" to "Quota exceeded",
-                    "reason" to reservation.reason,
-                    "usage" to reservation.usage
-                )
+                QuotaExceededResponse(reason = reservation.reason, usage = reservation.usage)
             )
             return
         }

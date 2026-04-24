@@ -18,6 +18,7 @@ package com.moneat.billing.services
 
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.OrgUsageCounters
+import kotlinx.serialization.Serializable
 import com.moneat.billing.models.PricingTier
 import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.models.PricingTierConfigs
@@ -51,6 +52,13 @@ data class QuotaReservationResult(
     val allowed: Boolean,
     val reason: String? = null,
     val eventType: String? = null,
+    val usage: BillingUsageResponse
+)
+
+@Serializable
+data class QuotaExceededResponse(
+    val error: String = "Quota exceeded",
+    val reason: String? = null,
     val usage: BillingUsageResponse
 )
 

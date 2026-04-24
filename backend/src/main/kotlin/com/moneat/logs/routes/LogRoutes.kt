@@ -22,6 +22,7 @@ import java.io.IOException
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.events.services.EventService
 import com.moneat.logs.models.CreateLogIndexRequest
@@ -653,11 +654,7 @@ fun Route.logIngestRoutes(
                 if (!reservation.allowed) {
                     call.respond(
                         HttpStatusCode.TooManyRequests,
-                        mapOf(
-                            "error" to "Quota exceeded",
-                            "reason" to reservation.reason,
-                            "usage" to reservation.usage
-                        )
+                        QuotaExceededResponse(reason = reservation.reason, usage = reservation.usage)
                     )
                     return@post
                 }
@@ -733,11 +730,7 @@ private suspend fun handleOtlpLogIngest(
         if (!reservation.allowed) {
             call.respond(
                 HttpStatusCode.TooManyRequests,
-                mapOf(
-                    "error" to "Quota exceeded",
-                    "reason" to reservation.reason,
-                    "usage" to reservation.usage
-                )
+                QuotaExceededResponse(reason = reservation.reason, usage = reservation.usage)
             )
             return
         }
