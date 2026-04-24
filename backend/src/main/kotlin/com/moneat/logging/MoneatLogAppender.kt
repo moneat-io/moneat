@@ -38,7 +38,11 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
         private const val QUEUE_CAPACITY = 10_000
         private const val LOG_HTTP_TIMEOUT_MS = 1000
         private const val SHUTDOWN_TIMEOUT_SECONDS = 5L
+        private const val RATE_LIMIT_BACKOFF_MS = 5L * 60 * 1_000 // 5 minutes
+        private const val HTTP_TOO_MANY_REQUESTS = 429
     }
+
+    @Volatile private var rateLimitedUntil: Long = 0L
 
     private val executor =
         ThreadPoolExecutor(
@@ -82,6 +86,7 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
 
     override fun append(event: ILoggingEvent) {
         if (token.isBlank() || (environment == "development" && isProdEndpoint)) return
+        if (System.currentTimeMillis() < rateLimitedUntil) return
 
         (event as? DeferredProcessingAware)?.prepareForDeferredProcessing()
 
@@ -132,7 +137,9 @@ class MoneatLogAppender : AppenderBase<ILoggingEvent>() {
 
             connection.outputStream.use { it.write(payload.toByteArray()) }
             val responseCode = connection.responseCode
-            if (responseCode !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
+            if (responseCode == HTTP_TOO_MANY_REQUESTS) {
+                rateLimitedUntil = System.currentTimeMillis() + RATE_LIMIT_BACKOFF_MS
+            } else if (responseCode !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 val body = runCatching { connection.errorStream?.bufferedReader()?.readText() }.getOrNull()
                 System.err.println(
                     "[MoneatLogAppender] Non-2xx response: $responseCode${if (body != null) " - $body" else ""}"
