@@ -488,11 +488,20 @@ data class SentryReplayEvent(
 @Serializable
 data class SentryFeedback(
     @SerialName("event_id") val eventId: String? = null,
-    val timestamp: String? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
+    val timestamp: Double? = null,
     val platform: String? = null,
     val level: String? = null,
     val environment: String? = null,
     val release: String? = null,
+    val message: String? = null,
+    val comments: String? = null,
+    @SerialName("contact_email") val contactEmail: String? = null,
+    val email: String? = null,
+    val name: String? = null,
+    val url: String? = null,
+    @SerialName("associated_event_id") val associatedEventId: String? = null,
+    @SerialName("replay_id") val replayId: String? = null,
     val user: UserInfo? = null,
     val contexts: JsonObject? = null,
     val tags: Map<String, String>? = null,

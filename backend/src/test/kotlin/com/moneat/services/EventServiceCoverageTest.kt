@@ -200,7 +200,7 @@ class EventServiceCoverageTest {
         val fbJson = Json.encodeToString(
             SentryFeedback(
                 eventId = "fb-1",
-                timestamp = "2024-01-15T10:30:45Z",
+                timestamp = 1705329045.0,
                 contexts = buildJsonObject {
                     put(
                         "feedback",
@@ -229,6 +229,79 @@ class EventServiceCoverageTest {
         )
 
         coVerify(atLeast = 1) { eventRepository.insertFeedback(any()) }
+    }
+
+    @Test
+    fun `processEnvelope routes legacy user_report item to storeFeedback`() = runBlocking {
+        val feedbackSlot = slot<FeedbackInsertData>()
+        coEvery { eventRepository.insertFeedback(capture(feedbackSlot)) } returns true
+
+        val eventId = "14bad9a2e3774046977a21440ddb39b2"
+        val fbJson =
+            """
+            {
+                "event_id": "$eventId",
+                "name": "Jane Smith",
+                "email": "jane@example.com",
+                "comments": "It broke!"
+            }
+            """.trimIndent()
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(eventId = eventId, items = listOf(EnvelopeItem("user_report", fbJson)))
+        )
+
+        assertTrue(feedbackSlot.isCaptured)
+        assertEquals("It broke!", feedbackSlot.captured.message)
+        assertEquals("jane@example.com", feedbackSlot.captured.contactEmail)
+        assertEquals("Jane Smith", feedbackSlot.captured.name)
+        assertEquals(eventId, feedbackSlot.captured.associatedEventId)
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
+    }
+
+    @Test
+    fun `processEnvelope stores modern feedback with numeric timestamp`() = runBlocking {
+        val feedbackSlot = slot<FeedbackInsertData>()
+        coEvery { eventRepository.insertFeedback(capture(feedbackSlot)) } returns true
+
+        val fbJson =
+            """
+            {
+                "event_id": "14bad9a2e3774046977a21440ddb39b2",
+                "timestamp": 1705329045.123,
+                "platform": "javascript",
+                "contexts": {
+                    "feedback": {
+                        "message": "The checkout button does not work",
+                        "contact_email": "user@example.com",
+                        "name": "Jane Smith",
+                        "url": "https://app.example.com/checkout",
+                        "associated_event_id": "24bad9a2e3774046977a21440ddb39b2",
+                        "replay_id": "34bad9a2e3774046977a21440ddb39b2"
+                    }
+                },
+                "tags": {"area": "checkout"}
+            }
+            """.trimIndent()
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "14bad9a2e3774046977a21440ddb39b2",
+                items = listOf(EnvelopeItem("feedback", fbJson))
+            )
+        )
+
+        assertTrue(feedbackSlot.isCaptured)
+        assertEquals(1705329045123L, feedbackSlot.captured.timestampMs)
+        assertEquals("The checkout button does not work", feedbackSlot.captured.message)
+        assertEquals("user@example.com", feedbackSlot.captured.contactEmail)
+        assertEquals("Jane Smith", feedbackSlot.captured.name)
+        assertEquals("https://app.example.com/checkout", feedbackSlot.captured.url)
+        assertEquals("24bad9a2e3774046977a21440ddb39b2", feedbackSlot.captured.associatedEventId)
+        assertEquals("34bad9a2e3774046977a21440ddb39b2", feedbackSlot.captured.replayId)
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
     }
 
     @Test
@@ -831,20 +904,18 @@ class EventServiceCoverageTest {
         val fbSlot = slot<FeedbackInsertData>()
         coEvery { eventRepository.insertFeedback(capture(fbSlot)) } returns true
 
-        val fbJson = Json.encodeToString(
-            SentryFeedback(
-                eventId = "fb-ts",
-                timestamp = "2024-01-15T10:30:45Z",
-                contexts = buildJsonObject {
-                    put(
-                        "feedback",
-                        buildJsonObject {
-                            put("message", "Nice")
-                        }
-                    )
+        val fbJson =
+            """
+            {
+                "event_id": "fb-ts",
+                "timestamp": "2024-01-15T10:30:45Z",
+                "contexts": {
+                    "feedback": {
+                        "message": "Nice"
+                    }
                 }
-            )
-        )
+            }
+            """.trimIndent()
 
         eventService.processEnvelope(
             testProjectId,
@@ -864,20 +935,18 @@ class EventServiceCoverageTest {
         coEvery { eventRepository.insertFeedback(capture(fbSlot)) } returns true
         val before = System.currentTimeMillis()
 
-        val fbJson = Json.encodeToString(
-            SentryFeedback(
-                eventId = "fb-bad-ts",
-                timestamp = "not-a-date",
-                contexts = buildJsonObject {
-                    put(
-                        "feedback",
-                        buildJsonObject {
-                            put("message", "Hello")
-                        }
-                    )
+        val fbJson =
+            """
+            {
+                "event_id": "fb-bad-ts",
+                "timestamp": "not-a-date",
+                "contexts": {
+                    "feedback": {
+                        "message": "Hello"
+                    }
                 }
-            )
-        )
+            }
+            """.trimIndent()
 
         eventService.processEnvelope(
             testProjectId,
