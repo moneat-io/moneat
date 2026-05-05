@@ -490,7 +490,11 @@ class EventService(
             return false
         }
 
-        val feedbackId = feedback.eventId ?: UUID.randomUUID().toString()
+        val feedbackId = if (itemType == "user_report") {
+            UUID.randomUUID().toString()
+        } else {
+            feedback.eventId ?: UUID.randomUUID().toString()
+        }
         val timestamp = feedback.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
 
         val feedbackContext = feedback.contexts?.get("feedback") as? JsonObject

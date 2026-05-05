@@ -67,6 +67,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -257,6 +258,7 @@ class EventServiceCoverageTest {
         assertEquals("jane@example.com", feedbackSlot.captured.contactEmail)
         assertEquals("Jane Smith", feedbackSlot.captured.name)
         assertEquals(eventId, feedbackSlot.captured.associatedEventId)
+        assertNotEquals("14bad9a2-e377-4046-977a-21440ddb39b2", feedbackSlot.captured.feedbackId)
         coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
     }
 
@@ -294,6 +296,7 @@ class EventServiceCoverageTest {
         )
 
         assertTrue(feedbackSlot.isCaptured)
+        assertEquals("14bad9a2-e377-4046-977a-21440ddb39b2", feedbackSlot.captured.feedbackId)
         assertEquals(1705329045123L, feedbackSlot.captured.timestampMs)
         assertEquals("The checkout button does not work", feedbackSlot.captured.message)
         assertEquals("user@example.com", feedbackSlot.captured.contactEmail)
