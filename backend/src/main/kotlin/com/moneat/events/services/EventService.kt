@@ -202,7 +202,7 @@ class EventService(
 
                 "profile" -> handleProfileItem(projectId, item)
 
-                "feedback" -> handleFeedbackItem(projectId, item)
+                "feedback", "user_report" -> handleFeedbackItem(projectId, item)
 
                 else -> {
                     logger.debug { "Unknown item type: ${item.type}" }
@@ -256,7 +256,7 @@ class EventService(
     private suspend fun handleFeedbackItem(projectId: Long, item: EnvelopeItem) {
         logger.debug { "Feedback payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
         val feedback = json.decodeFromString<SentryFeedback>(item.payload)
-        if (storeFeedback(projectId, feedback)) {
+        if (storeFeedback(projectId, feedback, item.type)) {
             recordUsage(projectId, "feedback", item)
         }
     }
@@ -481,7 +481,8 @@ class EventService(
 
     private suspend fun storeFeedback(
         projectId: Long,
-        feedback: SentryFeedback
+        feedback: SentryFeedback,
+        itemType: String
     ): Boolean {
         // Validate project ID — allow negative demo project IDs (-1, -2, -3)
         if (projectId == 0L) {
@@ -489,26 +490,28 @@ class EventService(
             return false
         }
 
-        val feedbackId = feedback.eventId ?: UUID.randomUUID().toString()
-        val timestamp =
-            feedback.timestamp?.let {
-                suspendRunCatching {
-                    java.time.Instant
-                        .parse(it)
-                        .toEpochMilli()
-                }.getOrElse { _ ->
-                    logger.warn { "Failed to parse feedback timestamp: $it, using current time" }
-                    System.currentTimeMillis()
-                }
-            } ?: System.currentTimeMillis()
+        val feedbackId = if (itemType == "user_report") {
+            UUID.randomUUID().toString()
+        } else {
+            feedback.eventId ?: UUID.randomUUID().toString()
+        }
+        val timestamp = feedback.timestamp?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis()
 
         val feedbackContext = feedback.contexts?.get("feedback") as? JsonObject
-        val message = feedbackContext?.get("message")?.jsonPrimitive?.contentOrNull ?: ""
-        val contactEmail = feedbackContext?.get("contact_email")?.jsonPrimitive?.contentOrNull ?: ""
-        val name = feedbackContext?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
-        val url = feedbackContext?.get("url")?.jsonPrimitive?.contentOrNull ?: ""
-        val associatedEventId = feedbackContext?.get("associated_event_id")?.jsonPrimitive?.contentOrNull ?: ""
-        val replayId = feedbackContext?.get("replay_id")?.jsonPrimitive?.contentOrNull ?: ""
+        val message = feedbackContext?.string("message") ?: feedback.message ?: feedback.comments ?: ""
+        val contactEmail =
+            feedbackContext?.string("contact_email")
+                ?: feedbackContext?.string("email")
+                ?: feedback.contactEmail
+                ?: feedback.email
+                ?: ""
+        val name = feedbackContext?.string("name") ?: feedback.name ?: ""
+        val url = feedbackContext?.string("url") ?: feedback.url ?: ""
+        val associatedEventId =
+            feedbackContext?.string("associated_event_id")
+                ?: feedback.associatedEventId
+                ?: if (itemType == "user_report") feedback.eventId.orEmpty() else ""
+        val replayId = feedbackContext?.string("replay_id") ?: feedback.replayId ?: ""
 
         val userId = feedback.user?.id ?: ""
         val userEmail = feedback.user?.email ?: contactEmail
@@ -547,6 +550,8 @@ class EventService(
             return false
         }
     }
+
+    private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 
     private suspend fun storeReplayEvent(
         projectId: Long,

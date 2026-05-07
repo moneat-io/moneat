@@ -323,7 +323,7 @@ internal fun mapEnvelopeItemTypeToQuotaType(itemType: String): String {
     return when (itemType) {
         "transaction" -> "transaction"
         "replay_event", "replay_recording", "replay_video" -> "replay"
-        "feedback" -> "feedback"
+        "feedback", "user_report" -> "feedback"
         "llm_generation" -> "llm"
         else -> "error"
     }
