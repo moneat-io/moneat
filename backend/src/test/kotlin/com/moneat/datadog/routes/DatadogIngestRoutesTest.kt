@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.DatadogEventService
 import com.moneat.datadog.services.DatadogHostService
@@ -44,6 +45,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlin.test.AfterTest
@@ -60,12 +62,12 @@ class DatadogIngestRoutesTest {
         private const val ORG_ID = 5
     }
 
-    private var previousSelfHosted: String? = null
+    private val quotaService = mockk<BillingQuotaService> {
+        every { isEnforcementEnabled() } returns false
+    }
 
     @BeforeTest
     fun setup() {
-        previousSelfHosted = System.getProperty("SELF_HOSTED")
-        System.setProperty("SELF_HOSTED", "true")
         startTestKoin()
         DatadogAuthMiddleware.clearCache()
         mockkObject(DatadogService)
@@ -116,25 +118,20 @@ class DatadogIngestRoutesTest {
         unmockkObject(DatadogService)
         DatadogAuthMiddleware.clearCache()
         stopTestKoin()
-        if (previousSelfHosted != null) {
-            System.setProperty("SELF_HOSTED", previousSelfHosted!!)
-        } else {
-            System.clearProperty("SELF_HOSTED")
-        }
     }
 
     private fun installRoutes(): io.ktor.server.testing.ApplicationTestBuilder.() -> Unit = {
         application {
             install(ContentNegotiation) { json() }
             routing {
-                datadogMetricRoutes()
-                datadogLogRoutes()
-                datadogEventRoutes()
+                datadogMetricRoutes(quotaService)
+                datadogLogRoutes(quotaService)
+                datadogEventRoutes(quotaService)
                 datadogValidateRoutes()
-                miscIngestRoutes()
-                dbmIngestRoutes()
-                debuggerIngestRoutes()
-                orchestratorIngestRoutes()
+                miscIngestRoutes(quotaService)
+                dbmIngestRoutes(quotaService)
+                debuggerIngestRoutes(quotaService)
+                orchestratorIngestRoutes(quotaService)
             }
         }
     }
