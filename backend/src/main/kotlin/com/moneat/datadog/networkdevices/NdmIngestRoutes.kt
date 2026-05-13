@@ -65,7 +65,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload(
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdNdmPayload>(body.decodeToString())
         val requestedUnits = countNdmPayload(payload)
-        if (requestedUnits != null &&
+        if (requestedUnits == null) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("error" to "Unknown NDM payload type: ${payload.type}"),
+            )
+            return
+        }
+        if (requestedUnits > 0 &&
             !reserveDatadogQuota(call, quotaService, orgId, requestedUnits, "dd_ndm", body.size.toLong())
         ) {
             return

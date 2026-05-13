@@ -63,12 +63,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorReso
 
         val payload = json.decodeFromString<DdOrchestratorPayload>(body)
         if (!reserveDatadogQuota(
-                call,
-                quotaService,
-                organizationId,
-                payload.resources.size,
-                "dd_orchestrator",
-                bytes.size.toLong(),
+                call = call,
+                quotaService = quotaService,
+                organizationId = organizationId,
+                requestedUnits = payload.resources.size,
+                eventType = "dd_orchestrator",
+                requestedBytes = bytes.size.toLong(),
             )
         ) {
             return
@@ -94,12 +94,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorMani
 
         val payload = json.decodeFromString<DdManifestPayload>(body)
         if (!reserveDatadogQuota(
-                call,
-                quotaService,
-                organizationId,
-                payload.manifests.size,
-                "dd_orchestrator",
-                bytes.size.toLong(),
+                call = call,
+                quotaService = quotaService,
+                organizationId = organizationId,
+                requestedUnits = payload.manifests.size,
+                eventType = "dd_orchestrator",
+                requestedBytes = bytes.size.toLong(),
             )
         ) {
             return

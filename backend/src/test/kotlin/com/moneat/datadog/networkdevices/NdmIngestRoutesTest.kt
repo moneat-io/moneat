@@ -165,7 +165,7 @@ class NdmIngestRoutesTest {
         val response = client.post("/api/v2/netpath") {
             header(DD_API_KEY_HEADER, VALID_KEY)
             contentType(ContentType.Application.Json)
-            setBody("{}")
+            setBody("""{"type":"netpath","paths":[]}""")
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
     }

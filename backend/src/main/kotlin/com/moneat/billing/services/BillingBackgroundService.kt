@@ -258,12 +258,13 @@ class BillingBackgroundService(
                 appendLine("Billing usage alert for $orgName")
                 appendLine()
                 appendLine("Plan: ${usage.plan}")
-                if (usage.baseLimitUnits < UNLIMITED_UNIT_SENTINEL) {
+                if (usage.baseLimitUnits in 1L until UNLIMITED_UNIT_SENTINEL) {
                     appendLine("Usage: ${usage.usedUnits}/${usage.totalLimitUnits} units")
                     appendLine("Base limit: ${usage.baseLimitUnits} units")
                 }
                 if (usage.bytesLimit > 0) {
-                    val usedGb = "%.2f".format(usage.usedBytes / BYTES_PER_GB)
+                    val eligible = kotlin.math.max(0L, usage.usedBytes - usage.usedApmSpanBytes)
+                    val usedGb = "%.2f".format(eligible / BYTES_PER_GB)
                     val limitGb = "%.2f".format(usage.bytesLimit / BYTES_PER_GB)
                     appendLine("Ingestion: $usedGb / $limitGb GB")
                 }

@@ -95,6 +95,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake(
         null
     }
     val requestedUnits = countTraceSpans(bytes, tracesJsonElement, isProtobuf)
+    if (requestedUnits == null) {
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Unparseable trace payload"))
+        return
+    }
 
     if (!reserveDatadogQuota(call, quotaService, organizationId, requestedUnits, "dd_trace", bytes.size.toLong())) {
         return
@@ -164,7 +168,7 @@ private fun countTraceSpans(
     bytes: ByteArray,
     tracesJsonElement: JsonElement?,
     isProtobuf: Boolean,
-): Int {
+): Int? {
     if (tracesJsonElement != null) {
         return tracesJsonElement.jsonArray.sumOf { trace -> trace.jsonArray.size }
     }
@@ -176,5 +180,8 @@ private fun countTraceSpans(
             TraceIngestionService.parseMsgpackTraces(bytes)
         }
         traces.sumOf { it.size }
-    }.getOrDefault(1)
+    }.getOrElse { e ->
+        logger.warn(e) { "Failed to parse trace payload for span count" }
+        null
+    }
 }
