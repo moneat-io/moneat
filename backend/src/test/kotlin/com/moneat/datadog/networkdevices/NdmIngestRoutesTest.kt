@@ -48,8 +48,12 @@ class NdmIngestRoutesTest {
         private const val VALID_KEY = "ndm-ingest-test-key"
     }
 
+    private var previousSelfHosted: String? = null
+
     @BeforeTest
     fun setupKoin() {
+        previousSelfHosted = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", "true")
         startTestKoin()
         DatadogAuthMiddleware.clearCache()
         mockkObject(DatadogService)
@@ -63,6 +67,11 @@ class NdmIngestRoutesTest {
         unmockkObject(DatadogService)
         DatadogAuthMiddleware.clearCache()
         stopTestKoin()
+        if (previousSelfHosted != null) {
+            System.setProperty("SELF_HOSTED", previousSelfHosted!!)
+        } else {
+            System.clearProperty("SELF_HOSTED")
+        }
     }
 
     @Test

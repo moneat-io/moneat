@@ -60,8 +60,12 @@ class DatadogIngestRoutesTest {
         private const val ORG_ID = 5
     }
 
+    private var previousSelfHosted: String? = null
+
     @BeforeTest
     fun setup() {
+        previousSelfHosted = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", "true")
         startTestKoin()
         DatadogAuthMiddleware.clearCache()
         mockkObject(DatadogService)
@@ -112,6 +116,11 @@ class DatadogIngestRoutesTest {
         unmockkObject(DatadogService)
         DatadogAuthMiddleware.clearCache()
         stopTestKoin()
+        if (previousSelfHosted != null) {
+            System.setProperty("SELF_HOSTED", previousSelfHosted!!)
+        } else {
+            System.clearProperty("SELF_HOSTED")
+        }
     }
 
     private fun installRoutes(): io.ktor.server.testing.ApplicationTestBuilder.() -> Unit = {
