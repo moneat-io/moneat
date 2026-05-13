@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DatadogEventPayload
@@ -41,7 +43,9 @@ private val json = Json {
     coerceInputValues = true
 }
 
-fun Route.datadogEventRoutes() {
+fun Route.datadogEventRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd") {
         route("/api/v1") {
             post("/check_run") {
@@ -79,6 +83,18 @@ fun Route.datadogEventRoutes() {
                         orgId.toLong(),
                         checks = checks
                     )
+
+                if (!reserveDatadogQuota(
+                        call,
+                        quotaService,
+                        orgId,
+                        batch.serviceChecks.size,
+                        "dd_event",
+                        body.size.toLong(),
+                    )
+                ) {
+                    return@post
+                }
 
                 if (batch.serviceChecks.isNotEmpty()) {
                     DatadogEventService
@@ -134,6 +150,18 @@ fun Route.datadogEventRoutes() {
                     )
                 }
 
+                if (!reserveDatadogQuota(
+                        call,
+                        quotaService,
+                        orgId,
+                        payload.events.size,
+                        "dd_event",
+                        body.size.toLong(),
+                    )
+                ) {
+                    return@post
+                }
+
                 val count = DatadogEventService.enqueueEvents(
                     organizationId =
                     orgId.toLong(),
@@ -186,6 +214,18 @@ fun Route.datadogEventRoutes() {
                         orgId.toLong(),
                         checks = payload.serviceChecks
                     )
+
+                if (!reserveDatadogQuota(
+                        call,
+                        quotaService,
+                        orgId,
+                        batch.serviceChecks.size,
+                        "dd_event",
+                        body.size.toLong(),
+                    )
+                ) {
+                    return@post
+                }
 
                 if (batch.serviceChecks.isNotEmpty()) {
                     DatadogEventService

@@ -16,6 +16,9 @@
 
 package com.moneat.routes
 
+import com.moneat.billing.models.BillingUsageResponse
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.models.DdApiKeys
@@ -38,6 +41,7 @@ import com.moneat.datadog.routes.miscIngestRoutes
 import com.moneat.datadog.routes.orchestratorIngestRoutes
 import com.moneat.datadog.routes.telemetryProxyRoutes
 import com.moneat.datadog.routes.traceDashboardRoutes
+import com.moneat.datadog.routes.traceIngestRoutes
 import com.moneat.datadog.services.DatadogEventService
 import com.moneat.datadog.services.DatadogHostService
 import com.moneat.datadog.services.DatadogInfraService
@@ -62,6 +66,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -76,10 +81,13 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.Runs
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.mockk.verify
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -104,8 +112,13 @@ class DatadogRoutesExtendedTest {
         private var db: Database? = null
     }
 
+    private var previousSelfHostedProperty: String? = null
+
     @BeforeTest
     fun setup() {
+        previousSelfHostedProperty = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", "true")
+
         if (db == null) {
             db = Database.connect(
                 url = "jdbc:h2:mem:moneat_dd_routes_ext;" +
@@ -189,6 +202,11 @@ class DatadogRoutesExtendedTest {
         unmockkObject(DatadogService)
         unmockkObject(TraceIngestionService)
         unmockkObject(ClickHouseClient)
+        if (previousSelfHostedProperty == null) {
+            System.clearProperty("SELF_HOSTED")
+        } else {
+            System.setProperty("SELF_HOSTED", previousSelfHostedProperty!!)
+        }
     }
 
     private fun Application.installAuth() {
@@ -200,6 +218,48 @@ class DatadogRoutesExtendedTest {
         orgId: Int = TEST_ORG_ID,
     ): String =
         RouteTestSupport.createToken(userId, orgId)
+
+    private fun quotaUsage(): BillingUsageResponse {
+        return BillingUsageResponse(
+            organizationId = TEST_ORG_ID,
+            periodStart = "2026-05-01",
+            periodEnd = "2026-05-31",
+            retentionDays = 30,
+            usedUnits = 0,
+            usedErrors = 0,
+            errorLimit = 0,
+            usedTransactions = 0,
+            transactionLimit = 0,
+            usedReplays = 0,
+            replayLimit = 0,
+            usedFeedback = 0,
+            feedbackLimit = 0,
+            usedBytes = 0,
+            bytesLimit = 0,
+            baseLimitUnits = 0,
+            paygLimitUnits = 0,
+            totalLimitUnits = 0,
+            paygBudgetCents = 0,
+            paygUsedUnits = 0,
+            paygUsedCentsEstimate = 0,
+            plan = "PRO",
+            status = "active",
+            withinQuota = true,
+        )
+    }
+
+    private fun rejectingQuotaService(): BillingQuotaService {
+        val quotaService = mockk<BillingQuotaService>()
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnits(any(), any(), any(), any())
+        } returns QuotaReservationResult(
+            allowed = false,
+            reason = "gb_quota_exceeded",
+            usage = quotaUsage(),
+        )
+        return quotaService
+    }
 
     private fun seedUserAndOrg(): Pair<Int, Int> {
         val orgId = transaction {
@@ -697,6 +757,89 @@ class DatadogRoutesExtendedTest {
             setBody("")
         }
         assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `PUT dd traces returns 429 when quota is exceeded`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        val body = """[[{"trace_id":1,"span_id":2,"name":"web.request"}]]"""
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(quotaService) }
+        }
+
+        val response = client.put("/dd/v0.4/traces") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        verify {
+            quotaService.reserveUnits(
+                organizationId = TEST_ORG_ID,
+                requestedUnits = 1,
+                eventType = "dd_trace",
+                requestedBytes = body.toByteArray().size.toLong(),
+            )
+        }
+    }
+
+    @Test
+    fun `POST dd metrics returns 429 before enqueue when quota is exceeded`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        val body = """{"series":[{"metric":"system.cpu","points":[[1700000000,42.0]]}]}"""
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogMetricRoutes(quotaService) }
+        }
+
+        val response = client.post("/dd/api/v1/series") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        verify {
+            quotaService.reserveUnits(
+                organizationId = TEST_ORG_ID,
+                requestedUnits = 1,
+                eventType = "dd_metric",
+                requestedBytes = body.toByteArray().size.toLong(),
+            )
+        }
+        coVerify(exactly = 0) { DatadogMetricService.enqueueMetrics(any(), any()) }
+    }
+
+    @Test
+    fun `POST dd logs returns 429 before enqueue when quota is exceeded`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        val body = """[{"message":"test log","hostname":"h1","service":"svc","status":"info"}]"""
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogLogRoutes(quotaService) }
+        }
+
+        val response = client.post(DD_LOGS_PATH) {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        verify {
+            quotaService.reserveUnits(
+                organizationId = TEST_ORG_ID,
+                requestedUnits = 1,
+                eventType = "dd_log",
+                requestedBytes = body.toByteArray().size.toLong(),
+            )
+        }
+        coVerify(exactly = 0) { DatadogLogService.enqueueLogs(any(), any()) }
     }
 
     // ──── DatadogValidateRoutes ────

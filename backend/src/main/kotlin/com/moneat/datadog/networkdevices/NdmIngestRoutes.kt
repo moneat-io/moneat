@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.networkdevices
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdNdmPayload
@@ -37,27 +39,37 @@ private val json = Json {
     coerceInputValues = true
 }
 
-fun Route.ndmIngestRoutes() {
+fun Route.ndmIngestRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd/api/v1") {
-        post("/ndm") { handleNdmPayload() }
+        post("/ndm") { handleNdmPayload(quotaService) }
     }
 
     // Event platform forwarder strips path from dd_url, so these arrive without /dd/ prefix.
     route("/api/v2") {
-        post("/ndm") { handleNdmPayload() }
-        post("/ndmconfig") { handleNdmPayload() }
-        post("/ndmtraps") { handleNdmPayload() }
-        post("/ndmflow") { handleNdmPayload() }
-        post("/netpath") { handleNdmPayload() }
+        post("/ndm") { handleNdmPayload(quotaService) }
+        post("/ndmconfig") { handleNdmPayload(quotaService) }
+        post("/ndmtraps") { handleNdmPayload(quotaService) }
+        post("/ndmflow") { handleNdmPayload(quotaService) }
+        post("/netpath") { handleNdmPayload(quotaService) }
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdNdmPayload>(body.decodeToString())
+        val requestedUnits = countNdmPayload(payload)
+        if (requestedUnits != null &&
+            !reserveDatadogQuota(call, quotaService, orgId, requestedUnits, "dd_ndm", body.size.toLong())
+        ) {
+            return
+        }
 
         val count = NdmIngestionService.enqueue(orgId, payload)
         logger.debug { "Accepted $count NDM entries (type=${payload.type}) for org $orgId" }
@@ -65,5 +77,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload() {
     }.getOrElse { e ->
         logger.error(e) { "Failed to process NDM payload" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    }
+}
+
+private fun countNdmPayload(payload: DdNdmPayload): Int? {
+    return when (payload.type) {
+        "ndm" -> payload.devices.size
+        "ndmtraps" -> payload.traps.size
+        "ndmflow" -> payload.flows.size
+        "netpath" -> payload.paths.size
+        "ndmconfig" -> payload.configs.size
+        else -> null
     }
 }

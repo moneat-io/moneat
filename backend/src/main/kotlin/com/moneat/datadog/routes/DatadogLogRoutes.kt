@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DatadogLogEntry
@@ -38,7 +40,9 @@ private val json = Json {
     coerceInputValues = true
 }
 
-fun Route.datadogLogRoutes() {
+fun Route.datadogLogRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd") {
         route("/api/v2") {
             post("/logs") {
@@ -63,6 +67,10 @@ fun Route.datadogLogRoutes() {
 
                 if (entries.isEmpty()) {
                     call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
+                    return@post
+                }
+
+                if (!reserveDatadogQuota(call, quotaService, orgId, entries.size, "dd_log", body.size.toLong())) {
                     return@post
                 }
 

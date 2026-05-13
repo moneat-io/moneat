@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DatadogMetricSeriesV1
@@ -35,7 +37,9 @@ private const val DOGSTATSD_METRIC_SEPARATOR = '|'
 private const val DOGSTATSD_TAG_SEPARATOR = '#'
 private const val MILLIS_TO_SECONDS = 1000.0
 
-fun Route.datadogDogStatsDRoutes() {
+fun Route.datadogDogStatsDRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd") {
         route("/dogstatsd/v2") {
             post("/proxy") {
@@ -52,6 +56,10 @@ fun Route.datadogDogStatsDRoutes() {
                 val bodyStr = body.decodeToString()
 
                 val metrics = parseDogStatsDLines(bodyStr)
+
+                if (!reserveDatadogQuota(call, quotaService, orgId, metrics.size, "dd_metric", body.size.toLong())) {
+                    return@post
+                }
 
                 if (metrics.isNotEmpty()) {
                     val payload = DatadogMetricSeriesV1(

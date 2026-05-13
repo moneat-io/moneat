@@ -100,12 +100,20 @@ private fun dispatchStripeEvent(stripeService: StripeService, event: com.stripe.
             if (subscription != null) stripeService.handleSubscriptionDeleted(subscription)
         }
         "invoice.paid" -> {
-            val invoice = event.dataObjectDeserializer.`object`.orElse(null) as? com.stripe.model.Invoice
-            if (invoice != null) stripeService.handleInvoicePaid(invoice)
+            logger.info { "Processing invoice.paid event ${event.id}" }
+            val invoice = resolveInvoice(event)
+            val subId = invoice.parent?.subscriptionDetails?.getSubscription()
+            logger.info {
+                "Calling handleInvoicePaid for invoice ${invoice.id}, " +
+                    "sub=$subId, customer=${invoice.customer}"
+            }
+            stripeService.handleInvoicePaid(invoice)
+            logger.info { "Finished handleInvoicePaid" }
         }
         "invoice.payment_failed" -> {
-            val invoice = event.dataObjectDeserializer.`object`.orElse(null) as? com.stripe.model.Invoice
-            if (invoice != null) stripeService.handleInvoicePaymentFailed(invoice)
+            logger.info { "Processing invoice.payment_failed event ${event.id}" }
+            val invoice = resolveInvoice(event)
+            stripeService.handleInvoicePaymentFailed(invoice)
         }
         "setup_intent.succeeded" -> {
             logger.info { "Received setup_intent.succeeded webhook" }
@@ -148,5 +156,19 @@ private fun resolveSubscription(event: com.stripe.model.Event): com.stripe.model
                 .jsonObject["id"]?.jsonPrimitive?.content
                 ?: error("Missing 'id' in Stripe webhook raw JSON")
         com.stripe.model.Subscription.retrieve(subscriptionId)
+    }
+}
+
+private fun resolveInvoice(event: com.stripe.model.Event): com.stripe.model.Invoice {
+    val invoiceOpt = event.dataObjectDeserializer.`object`
+    return if (invoiceOpt.isPresent) {
+        invoiceOpt.get() as com.stripe.model.Invoice
+    } else {
+        val invoiceId =
+            Json.parseToJsonElement(event.dataObjectDeserializer.rawJson)
+                .jsonObject["id"]?.jsonPrimitive?.content
+                ?: error("Missing 'id' in Stripe webhook raw JSON")
+        logger.warn { "Invoice deserialization failed for event ${event.id}, fetching invoice $invoiceId from API" }
+        com.stripe.model.Invoice.retrieve(invoiceId)
     }
 }

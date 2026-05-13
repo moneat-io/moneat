@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.ProcessAgentPayloadDecoder
 import com.moneat.datadog.services.DatadogInfraService
@@ -31,24 +33,26 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
-fun Route.datadogInfraRoutes() {
+fun Route.datadogInfraRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     // Process-agent sends to /api/v1/* without /dd/ prefix
     route("/api/v1") {
         post("/discovery") {
             DatadogAuthMiddleware.authenticate(call) ?: return@post
             call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
         }
-        post("/container") { handleContainer(call) }
+        post("/container") { handleContainer(call, quotaService) }
     }
 
     route("/dd") {
         route("/api/v1") {
             post("/collector") {
                 val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@post
-                handleProcessAgentPayload(call, orgId)
+                handleProcessAgentPayload(call, quotaService, orgId)
             }
 
-            post("/container") { handleContainer(call) }
+            post("/container") { handleContainer(call, quotaService) }
 
             post("/connections") {
                 val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@post
@@ -61,13 +65,17 @@ fun Route.datadogInfraRoutes() {
     }
 }
 
-private suspend fun handleContainer(call: ApplicationCall) {
+private suspend fun handleContainer(
+    call: ApplicationCall,
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    handleProcessAgentPayload(call, orgId)
+    handleProcessAgentPayload(call, quotaService, orgId)
 }
 
 private suspend fun handleProcessAgentPayload(
     call: ApplicationCall,
+    quotaService: BillingQuotaService,
     orgId: Int
 ) {
     val rawBody = call.receive<ByteArray>()
@@ -96,6 +104,17 @@ private suspend fun handleProcessAgentPayload(
                 return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             }
             val batch = DatadogInfraService.mapContainers(orgId.toLong(), payload)
+            if (!reserveDatadogQuota(
+                    call,
+                    quotaService,
+                    orgId,
+                    batch.containers.size,
+                    "dd_infra",
+                    proto.size.toLong(),
+                )
+            ) {
+                return
+            }
             val count = DatadogInfraService.enqueueInfra(batch)
             logger.debug { "Accepted $count DD containers for org $orgId" }
         }
@@ -108,6 +127,17 @@ private suspend fun handleProcessAgentPayload(
                 return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             }
             val batch = DatadogInfraService.mapProcesses(orgId.toLong(), payload)
+            if (!reserveDatadogQuota(
+                    call,
+                    quotaService,
+                    orgId,
+                    batch.processes.size,
+                    "dd_infra",
+                    proto.size.toLong(),
+                )
+            ) {
+                return
+            }
             val count = DatadogInfraService.enqueueInfra(batch)
             logger.debug { "Accepted $count DD processes for org $orgId" }
         }

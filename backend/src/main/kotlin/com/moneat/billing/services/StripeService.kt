@@ -578,8 +578,21 @@ class StripeService(
         } else {
             subscription.items.data.firstOrNull()
         }
-        val periodStartEpoch = periodSourceItem?.currentPeriodStart ?: subscription.startDate
-        val periodEndEpoch = periodSourceItem?.currentPeriodEnd ?: subscription.trialEnd
+        var periodStartEpoch = periodSourceItem?.currentPeriodStart
+        var periodEndEpoch = periodSourceItem?.currentPeriodEnd
+        if (periodStartEpoch == null || periodEndEpoch == null) {
+            // Item-level period fields may be null in webhook payloads; re-fetch to populate
+            try {
+                val fresh = Subscription.retrieve(subscription.id)
+                val freshItem = fresh.items?.data?.find { it.id == (baseItemId ?: it.id) }
+                if (periodStartEpoch == null) periodStartEpoch = freshItem?.currentPeriodStart ?: fresh.startDate
+                if (periodEndEpoch == null) periodEndEpoch = freshItem?.currentPeriodEnd ?: fresh.trialEnd
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to re-fetch subscription ${subscription.id} for period dates" }
+                periodStartEpoch = periodStartEpoch ?: subscription.startDate
+                periodEndEpoch = periodEndEpoch ?: subscription.trialEnd
+            }
+        }
         val startInstant = periodStartEpoch?.let { Instant.fromEpochSeconds(it) }
         val endInstant = periodEndEpoch?.let { Instant.fromEpochSeconds(it) }
         val billingInterval =
@@ -697,19 +710,68 @@ class StripeService(
     }
 
     fun handleInvoicePaid(invoice: Invoice) {
-        val organizationId = resolveOrganizationId(invoice.metadata["organization_id"], invoice.customer) ?: return
+        val subscriptionId = invoice.parent?.subscriptionDetails?.getSubscription()
+        val organizationId = resolveOrganizationId(
+            invoice.metadata["organization_id"],
+            invoice.customer,
+            subscriptionId
+        )
+        if (organizationId == null) {
+            logger.warn {
+                "handleInvoicePaid: could not resolve org for invoice " +
+                    "${invoice.id} (customer=${invoice.customer}, sub=$subscriptionId)"
+            }
+            return
+        }
         val billingReason = invoice.billingReason ?: ""
         val isCycleRollover = billingReason == "subscription_cycle"
-        val start = invoice.periodStart?.let { Instant.fromEpochSeconds(it) }
-        val end = invoice.periodEnd?.let { Instant.fromEpochSeconds(it) }
+        val (start, end) = resolveInvoicePeriod(invoice, subscriptionId)
+
+        logger.info {
+            "handleInvoicePaid: org=$organizationId, " +
+                "invoice=${invoice.id}, reason=$billingReason, period=$start..$end"
+        }
         subscriptionRepository.updateAfterInvoicePaid(organizationId, start, end, isCycleRollover)
+    }
+
+    private fun resolveInvoicePeriod(
+        invoice: Invoice,
+        subscriptionId: String?
+    ): Pair<Instant?, Instant?> {
+        var start = invoice.periodStart?.let { Instant.fromEpochSeconds(it) }
+        var end = invoice.periodEnd?.let { Instant.fromEpochSeconds(it) }
+        if ((start != null && end != null) || subscriptionId.isNullOrBlank()) {
+            return Pair(start, end)
+        }
+        try {
+            val sub = Subscription.retrieve(subscriptionId)
+            val item = sub.items?.data?.firstOrNull()
+            val itemStart = item?.currentPeriodStart ?: sub.startDate
+            val itemEnd = item?.currentPeriodEnd ?: sub.trialEnd
+            if (start == null) start = itemStart?.let { Instant.fromEpochSeconds(it) }
+            if (end == null) end = itemEnd?.let { Instant.fromEpochSeconds(it) }
+        } catch (e: Exception) {
+            logger.warn(e) {
+                "handleInvoicePaid: failed to fetch sub $subscriptionId"
+            }
+        }
+        return Pair(start, end)
     }
 
     fun handleInvoicePaymentFailed(
         invoice: Invoice,
         graceDays: Int = 7
     ) {
-        val organizationId = resolveOrganizationId(invoice.metadata["organization_id"], invoice.customer) ?: return
+        val organizationId = resolveOrganizationId(
+            invoice.metadata["organization_id"],
+            invoice.customer,
+            invoice.parent?.subscriptionDetails?.getSubscription()
+        )
+        if (organizationId == null) {
+            logger.warn { "handleInvoicePaymentFailed: could not resolve org for invoice ${invoice.id}" }
+            return
+        }
+        logger.info { "handleInvoicePaymentFailed: org=$organizationId, invoice=${invoice.id}" }
         val graceUntil = addDays(Clock.System.now(), graceDays)
         subscriptionRepository.setPastDueByOrganizationId(organizationId, graceUntil)
     }
@@ -1110,22 +1172,38 @@ class StripeService(
 
     private fun resolveOrganizationId(
         metadataOrgId: String?,
-        customerId: String?
+        customerId: String?,
+        stripeSubscriptionId: String? = null
     ): Int? {
-        logger.debug { "Resolving org ID: metadataOrgId=$metadataOrgId, customerId=$customerId" }
+        logger.debug {
+            "Resolving org ID: metadataOrgId=$metadataOrgId, " +
+                "customerId=$customerId, subId=$stripeSubscriptionId"
+        }
         val byMetadata = metadataOrgId?.toIntOrNull()
-        logger.debug { "Parsed metadata org ID: $byMetadata" }
         if (byMetadata != null) {
             logger.debug { "Returning org ID from metadata: $byMetadata" }
             return byMetadata
         }
-        if (customerId.isNullOrBlank()) {
-            logger.debug { "Customer ID is blank, returning null" }
-            return null
+        if (!customerId.isNullOrBlank()) {
+            val orgId = subscriptionRepository.findByStripeCustomerId(customerId)?.organizationId
+            if (orgId != null) {
+                logger.debug { "Found org ID from customer lookup: $orgId" }
+                return orgId
+            }
         }
-        val orgId = subscriptionRepository.findByStripeCustomerId(customerId)?.organizationId
-        logger.debug { "Found org ID from customer lookup: $orgId" }
-        return orgId
+        if (!stripeSubscriptionId.isNullOrBlank()) {
+            val orgId = subscriptionRepository
+                .findByStripeSubscriptionId(stripeSubscriptionId)?.organizationId
+            if (orgId != null) {
+                logger.debug { "Found org ID from subscription lookup: $orgId" }
+                return orgId
+            }
+        }
+        logger.warn {
+            "Could not resolve org ID: metadata=$metadataOrgId, " +
+                "customer=$customerId, sub=$stripeSubscriptionId"
+        }
+        return null
     }
 
     private fun ensureEnabled() {

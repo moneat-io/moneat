@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.decompression.MetricPayloadDecoder
@@ -43,7 +45,9 @@ private val json = Json {
     coerceInputValues = true
 }
 
-fun Route.datadogMetricRoutes() {
+fun Route.datadogMetricRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd") {
         route("/api/v1") {
             post("/series") {
@@ -77,6 +81,11 @@ fun Route.datadogMetricRoutes() {
                     )
                 }
 
+                val requestedUnits = countV1MetricPoints(payload)
+                if (!reserveDatadogQuota(call, quotaService, orgId, requestedUnits, "dd_metric", body.size.toLong())) {
+                    return@post
+                }
+
                 val count = DatadogMetricService.enqueueMetrics(
                     organizationId = orgId.toLong(),
                     payload = payload
@@ -99,13 +108,13 @@ fun Route.datadogMetricRoutes() {
             }
 
             post("/sketches") {
-                handleSketches()
+                handleSketches(quotaService)
             }
         }
 
         route("/api/beta") {
             post("/sketches") {
-                handleSketches()
+                handleSketches(quotaService)
             }
         }
 
@@ -133,6 +142,11 @@ fun Route.datadogMetricRoutes() {
                     )
                 }
 
+                val requestedUnits = countV1MetricPoints(payload)
+                if (!reserveDatadogQuota(call, quotaService, orgId, requestedUnits, "dd_metric", body.size.toLong())) {
+                    return@post
+                }
+
                 val count = DatadogMetricService.enqueueMetrics(
                     organizationId = orgId.toLong(),
                     payload = payload
@@ -149,7 +163,7 @@ fun Route.datadogMetricRoutes() {
             }
 
             post("/sketches") {
-                handleSketches()
+                handleSketches(quotaService)
             }
         }
 
@@ -177,6 +191,11 @@ fun Route.datadogMetricRoutes() {
                     )
                 }
 
+                val requestedUnits = countV1MetricPoints(payload)
+                if (!reserveDatadogQuota(call, quotaService, orgId, requestedUnits, "dd_metric", body.size.toLong())) {
+                    return@post
+                }
+
                 val count = DatadogMetricService.enqueueMetrics(
                     organizationId = orgId.toLong(),
                     payload = payload
@@ -195,7 +214,9 @@ fun Route.datadogMetricRoutes() {
     }
 }
 
-private suspend fun io.ktor.server.routing.RoutingContext.handleSketches() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleSketches(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
 
     val contentEncoding = call.request.headers["Content-Encoding"]
@@ -229,6 +250,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches() {
         payload = payload
     )
 
+    if (!reserveDatadogQuota(call, quotaService, orgId, batch.sketches.size, "dd_metric", body.size.toLong())) {
+        return
+    }
+
     if (batch.sketches.isNotEmpty()) {
         DatadogMetricService.insertSketchBatch(batch)
     }
@@ -242,4 +267,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches() {
         HttpStatusCode.Accepted,
         mapOf("status" to "ok")
     )
+}
+
+private fun countV1MetricPoints(payload: DatadogMetricSeriesV1): Int {
+    return payload.series.sumOf { series ->
+        series.points.count { point -> point.size >= 2 }
+    }
 }

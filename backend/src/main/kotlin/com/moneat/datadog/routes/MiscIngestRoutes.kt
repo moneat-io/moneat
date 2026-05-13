@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdContainerImagePayload
@@ -44,29 +46,31 @@ private val json = Json {
     coerceInputValues = true
 }
 
-fun Route.miscIngestRoutes() {
+fun Route.miscIngestRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd") {
         // Symbol DB
         route("/symdb/v1") {
-            post("/input") { handleSymbolDb() }
+            post("/input") { handleSymbolDb(quotaService) }
         }
 
         // Pipeline stats
         route("/v0.1") {
-            post("/pipeline_stats") { handlePipelineStats() }
+            post("/pipeline_stats") { handlePipelineStats(quotaService) }
         }
 
         // Data lineage
         route("/api/v1") {
-            post("/lineage") { handleDataLineage() }
+            post("/lineage") { handleDataLineage(quotaService) }
         }
 
         // Data streams, synthetics, container images, SBOM
         route("/api/v2") {
-            post("/data_streams") { handleDataStreams() }
-            post("/synthetics") { handleSynthetics() }
-            post("/contimage") { handleContainerImage() }
-            post("/sbom") { handleSbom() }
+            post("/data_streams") { handleDataStreams(quotaService) }
+            post("/synthetics") { handleSynthetics(quotaService) }
+            post("/contimage") { handleContainerImage(quotaService) }
+            post("/sbom") { handleSbom(quotaService) }
         }
     }
 
@@ -74,20 +78,23 @@ fun Route.miscIngestRoutes() {
     // arrive at /api/v2/... (no /dd/ prefix) when redirected via datadog.yaml dd_url config.
     route("/api/v2") {
         post("/contlcycle") { handleContainerLifecycle() }
-        post("/contimage") { handleContainerImage() }
-        post("/sbom") { handleSbom() }
-        post("/synthetics") { handleSynthetics() }
-        post("/data_streams_messages") { handleDataStreams() }
+        post("/contimage") { handleContainerImage(quotaService) }
+        post("/sbom") { handleSbom(quotaService) }
+        post("/synthetics") { handleSynthetics(quotaService) }
+        post("/data_streams_messages") { handleDataStreams(quotaService) }
         post("/events") { handleEventManagement() }
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdSymbolDbPayload>(body.decodeToString())
+        if (!reserveMiscQuota(quotaService, orgId, 1, body)) return
         MiscIngestionService.enqueueSymbolDb(orgId, payload)
         logger.debug { "Accepted DD symbol_db for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -96,13 +103,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats() {
+private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdPipelineStatsPayload>(body.decodeToString())
+        if (!reserveMiscQuota(quotaService, orgId, payload.stats.size, body)) return
         val count = MiscIngestionService.enqueuePipelineStats(orgId, payload)
         logger.debug { "Accepted $count DD pipeline_stats for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -111,13 +121,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats() 
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdDataLineagePayload>(body.decodeToString())
+        if (!reserveMiscQuota(quotaService, orgId, 1, body)) return
         MiscIngestionService.enqueueDataLineage(orgId, payload)
         logger.debug { "Accepted DD data_lineage for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -126,13 +139,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdDataStreamsPayload>(body.decodeToString())
+        if (!reserveMiscQuota(quotaService, orgId, payload.stats.size, body)) return
         val count = MiscIngestionService.enqueueDataStreams(orgId, payload)
         logger.debug { "Accepted $count DD data_streams for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -141,13 +157,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdSyntheticsPayload>(body.decodeToString())
+        if (!reserveMiscQuota(quotaService, orgId, payload.results.size, body)) return
         val count = MiscIngestionService.enqueueSynthetics(orgId, payload)
         logger.debug { "Accepted $count DD synthetics for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -156,7 +175,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentType = call.request.headers["Content-Type"] ?: ""
@@ -170,6 +191,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage()
         }
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdContainerImagePayload>(body.decodeToString())
+        if (!reserveMiscQuota(quotaService, orgId, 1, body)) return
         MiscIngestionService.enqueueContainerImage(orgId, payload)
         logger.debug { "Accepted DD contimage for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -178,7 +200,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage()
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleSbom() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleSbom(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentType = call.request.headers["Content-Type"] ?: ""
@@ -192,6 +216,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSbom() {
         }
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdSbomPayload>(body.decodeToString())
+        if (!reserveMiscQuota(quotaService, orgId, payload.packages.size, body)) return
         val count = MiscIngestionService.enqueueSbom(orgId, payload)
         logger.debug { "Accepted $count DD sbom packages for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -211,4 +236,20 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventManagement(
     DatadogAuthMiddleware.authenticate(call) ?: return
     // Event management events accepted; full ingestion pipeline not yet implemented.
     call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.reserveMiscQuota(
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnits: Int,
+    bytes: ByteArray,
+): Boolean {
+    return reserveDatadogQuota(
+        call = call,
+        quotaService = quotaService,
+        organizationId = organizationId,
+        requestedUnits = requestedUnits,
+        eventType = "dd_misc",
+        requestedBytes = bytes.size.toLong(),
+    )
 }

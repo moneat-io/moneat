@@ -50,7 +50,10 @@ private val logger = KotlinLogging.logger {}
 
 private const val BILLING_JOB_INTERVAL_MS = 60_000L
 private const val QUOTA_WARNING_THRESHOLD = 0.8
+private const val QUOTA_CRITICAL_THRESHOLD = 0.9
 private const val CENTS_PER_DOLLAR = 100.0
+private const val BYTES_PER_GB = 1_073_741_824.0
+private const val UNLIMITED_UNIT_SENTINEL = 9_000_000_000_000_000L
 
 class BillingBackgroundService(
     private val stripeService: StripeService = StripeService(
@@ -142,7 +145,7 @@ class BillingBackgroundService(
             val usage = quotaService.getUsageForOrganization(orgId)
             val periodStart = usage.periodStart
             val unitPct =
-                if (usage.baseLimitUnits > 0) {
+                if (usage.baseLimitUnits in 1L until UNLIMITED_UNIT_SENTINEL) {
                     usage.usedUnits.toDouble() / usage.baseLimitUnits.toDouble()
                 } else {
                     0.0
@@ -175,6 +178,9 @@ class BillingBackgroundService(
 
             if (basePct >= QUOTA_WARNING_THRESHOLD) {
                 maybeSendNotification(orgId, periodStart, "base_80", usage)
+            }
+            if (basePct >= QUOTA_CRITICAL_THRESHOLD) {
+                maybeSendNotification(orgId, periodStart, "base_90", usage)
             }
             if (basePct >= 1.0) {
                 maybeSendNotification(orgId, periodStart, "base_100", usage)
@@ -242,7 +248,8 @@ class BillingBackgroundService(
         val subject =
             when (notificationType) {
                 "base_80" -> "[$orgName] 80% of monthly quota used"
-                "base_100" -> "[$orgName] Base quota reached"
+                "base_90" -> "[$orgName] 90% of monthly quota used"
+                "base_100" -> "[$orgName] Monthly quota exceeded — ingestion may be blocked"
                 "payg_80" -> "[$orgName] 80% of PAYG budget consumed"
                 else -> "[$orgName] Usage notification"
             }
@@ -251,8 +258,15 @@ class BillingBackgroundService(
                 appendLine("Billing usage alert for $orgName")
                 appendLine()
                 appendLine("Plan: ${usage.plan}")
-                appendLine("Usage: ${usage.usedUnits}/${usage.totalLimitUnits} units")
-                appendLine("Base limit: ${usage.baseLimitUnits} units")
+                if (usage.baseLimitUnits < UNLIMITED_UNIT_SENTINEL) {
+                    appendLine("Usage: ${usage.usedUnits}/${usage.totalLimitUnits} units")
+                    appendLine("Base limit: ${usage.baseLimitUnits} units")
+                }
+                if (usage.bytesLimit > 0) {
+                    val usedGb = "%.2f".format(usage.usedBytes / BYTES_PER_GB)
+                    val limitGb = "%.2f".format(usage.bytesLimit / BYTES_PER_GB)
+                    appendLine("Ingestion: $usedGb / $limitGb GB")
+                }
                 appendLine("PAYG budget: $${"%.2f".format(usage.paygBudgetCents / CENTS_PER_DOLLAR)}")
                 appendLine("PAYG used estimate: $${"%.2f".format(usage.paygUsedCentsEstimate / CENTS_PER_DOLLAR)}")
                 appendLine("Billing period: ${usage.periodStart} to ${usage.periodEnd}")

@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdDbmActivityPayload
@@ -41,34 +43,38 @@ private val json = Json {
     coerceInputValues = true
 }
 
-fun Route.dbmIngestRoutes() {
+fun Route.dbmIngestRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd/api/v2") {
         // POST /dd/api/v2/databasequery - query samples
-        post("/databasequery") { handleDbmQueries() }
+        post("/databasequery") { handleDbmQueries(quotaService) }
 
         // POST /dd/api/v2/dbmmetrics - query metrics
-        post("/dbmmetrics") { handleDbmMetrics() }
+        post("/dbmmetrics") { handleDbmMetrics(quotaService) }
 
         // POST /dd/api/v2/dbmactivity - active sessions
-        post("/dbmactivity") { handleDbmActivity() }
+        post("/dbmactivity") { handleDbmActivity(quotaService) }
 
         // POST /dd/api/v2/dbmmetadata - schema/explain metadata
-        post("/dbmmetadata") { handleDbmMetadata() }
+        post("/dbmmetadata") { handleDbmMetadata(quotaService) }
 
         // POST /dd/api/v2/dbmhealth - agent health checks
-        post("/dbmhealth") { handleDbmHealth() }
+        post("/dbmhealth") { handleDbmHealth(quotaService) }
     }
 
     // Event platform forwarder strips path from dd_url, so these arrive without /dd/ prefix.
     route("/api/v2") {
-        post("/databasequery") { handleDbmQueries() }
-        post("/dbmmetrics") { handleDbmMetrics() }
-        post("/dbmactivity") { handleDbmActivity() }
-        post("/dbmmetadata") { handleDbmMetadata() }
-        post("/dbmhealth") { handleDbmHealth() }
+        post("/databasequery") { handleDbmQueries(quotaService) }
+        post("/dbmmetrics") { handleDbmMetrics(quotaService) }
+        post("/dbmactivity") { handleDbmActivity(quotaService) }
+        post("/dbmmetadata") { handleDbmMetadata(quotaService) }
+        post("/dbmhealth") { handleDbmHealth(quotaService) }
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
     suspendRunCatching {
@@ -77,6 +83,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries() {
         val body = bytes.decodeToString()
 
         val payload = json.decodeFromString<DdDbmQueryPayload>(body)
+        if (!reserveDbmQuota(quotaService, organizationId, payload.rows.size, bytes)) return
         val count = DbmIngestionService.enqueueQueries(organizationId, payload)
 
         logger.debug { "Enqueued $count DBM queries for org=$organizationId" }
@@ -86,7 +93,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
     suspendRunCatching {
@@ -95,6 +104,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics() {
         val body = bytes.decodeToString()
 
         val payload = json.decodeFromString<DdDbmMetricsPayload>(body)
+        if (!reserveDbmQuota(quotaService, organizationId, payload.rows.size, bytes)) return
         val count = DbmIngestionService.enqueueMetrics(organizationId, payload)
 
         logger.debug { "Enqueued $count DBM metrics for org=$organizationId" }
@@ -104,7 +114,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
     suspendRunCatching {
@@ -113,6 +125,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity() {
         val body = bytes.decodeToString()
 
         val payload = json.decodeFromString<DdDbmActivityPayload>(body)
+        if (!reserveDbmQuota(quotaService, organizationId, payload.activity.size, bytes)) return
         val count = DbmIngestionService.enqueueActivity(organizationId, payload)
 
         logger.debug { "Enqueued $count DBM activity for org=$organizationId" }
@@ -122,7 +135,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
     suspendRunCatching {
@@ -131,6 +146,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata() {
         val body = bytes.decodeToString()
 
         val payload = json.decodeFromString<DdDbmMetadataPayload>(body)
+        if (!reserveDbmQuota(quotaService, organizationId, 1, bytes)) return
         val count = DbmIngestionService.enqueueMetadata(organizationId, payload)
 
         logger.debug { "Enqueued $count DBM metadata for org=$organizationId" }
@@ -140,7 +156,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata() {
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleDbmHealth() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleDbmHealth(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
     suspendRunCatching {
@@ -149,6 +167,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmHealth() {
         val body = bytes.decodeToString()
 
         val payload = json.decodeFromString<DdDbmHealthPayload>(body)
+        if (!reserveDbmQuota(quotaService, organizationId, 1, bytes)) return
         val count = DbmIngestionService.enqueueHealth(organizationId, payload)
 
         logger.debug { "Enqueued $count DBM health for org=$organizationId" }
@@ -157,4 +176,20 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmHealth() {
         logger.error(e) { "Failed to process DBM health" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.reserveDbmQuota(
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnits: Int,
+    bytes: ByteArray,
+): Boolean {
+    return reserveDatadogQuota(
+        call = call,
+        quotaService = quotaService,
+        organizationId = organizationId,
+        requestedUnits = requestedUnits,
+        eventType = "dd_dbm",
+        requestedBytes = bytes.size.toLong(),
+    )
 }
