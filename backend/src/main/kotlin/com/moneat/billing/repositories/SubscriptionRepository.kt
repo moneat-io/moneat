@@ -32,6 +32,9 @@ interface SubscriptionRepository {
     /** Find subscription by stripe customer ID. */
     fun findByStripeCustomerId(customerId: String): SubscriptionRow?
 
+    /** Find subscription by stripe subscription ID (any org). */
+    fun findByStripeSubscriptionId(stripeSubId: String): SubscriptionRow?
+
     /** Find subscription by org ID and stripe subscription ID. */
     fun findByOrganizationAndStripeSubscriptionId(orgId: Int, stripeSubId: String): SubscriptionRow?
 

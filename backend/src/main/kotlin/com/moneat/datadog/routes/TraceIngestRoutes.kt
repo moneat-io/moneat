@@ -16,7 +16,9 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.RedisConfig
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.services.TraceIngestionService
@@ -31,8 +33,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.utils.io.toByteArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
 import java.util.Base64
@@ -45,30 +49,34 @@ private val json = Json {
 
 private const val QUEUE_KEY = "moneat:traces:queue"
 
-fun Route.traceIngestRoutes() {
+fun Route.traceIngestRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd") {
         // PUT /dd/v0.3/traces - v0.3 format (msgpack)
-        put("/v0.3/traces") { handleTraceIntake() }
+        put("/v0.3/traces") { handleTraceIntake(quotaService) }
         // PUT /dd/v0.4/traces - v0.4 format (msgpack, primary)
-        put("/v0.4/traces") { handleTraceIntake() }
+        put("/v0.4/traces") { handleTraceIntake(quotaService) }
         // PUT /dd/v0.5/traces - v0.5 format
-        put("/v0.5/traces") { handleTraceIntake() }
+        put("/v0.5/traces") { handleTraceIntake(quotaService) }
         // PUT /dd/v0.7/traces - v0.7 format
-        put("/v0.7/traces") { handleTraceIntake() }
+        put("/v0.7/traces") { handleTraceIntake(quotaService) }
 
         // PUT /dd/v0.6/stats - trace stats (local agent format)
-        put("/v0.6/stats") { handleTraceStats() }
+        put("/v0.6/stats") { handleTraceStats(quotaService) }
 
         // DD agent backend/edge format - sent by dd-agent trace writer when forwarding to
         // the configured DD_APM_DD_URL (e.g. https://api.moneat.io/dd)
         route("/api") {
-            post("/v0.2/traces") { handleTraceIntake() }
-            post("/v0.6/stats") { handleTraceStats() }
+            post("/v0.2/traces") { handleTraceIntake(quotaService) }
+            post("/v0.6/stats") { handleTraceStats(quotaService) }
         }
     }
 }
 
-private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call)
         ?: return
 
@@ -81,6 +89,20 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake() {
     val contentType = call.request.contentType()
     val isJson = contentType.withoutParameters() == ContentType.Application.Json
     val isProtobuf = contentType.contentSubtype.contains("protobuf")
+    val tracesJsonElement = if (isJson) {
+        json.parseToJsonElement(bytes.decodeToString())
+    } else {
+        null
+    }
+    val requestedUnits = countTraceSpans(bytes, tracesJsonElement, isProtobuf)
+    if (requestedUnits == null) {
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Unparseable trace payload"))
+        return
+    }
+
+    if (!reserveDatadogQuota(call, quotaService, organizationId, requestedUnits, "dd_trace", bytes.size.toLong())) {
+        return
+    }
 
     // Enqueue for async processing
     val queuePayload = when {
@@ -90,7 +112,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake() {
             put("env", env)
             put("version", version)
             put("format", "json")
-            put("traces", json.parseToJsonElement(bytes.decodeToString()))
+            put("traces", requireNotNull(tracesJsonElement))
         }.toString()
         isProtobuf -> buildJsonObject {
             put("organization_id", organizationId)
@@ -119,7 +141,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake() {
     )
 }
 
-private suspend fun io.ktor.server.routing.RoutingContext.handleTraceStats() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleTraceStats(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call)
         ?: return
 
@@ -130,7 +154,34 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceStats() {
     val payload = json.decodeFromString<
         com.moneat.datadog.models.DdStatsPayload
         >(body)
+    val requestedUnits = payload.stats.sumOf { it.stats.size }
+    if (!reserveDatadogQuota(call, quotaService, organizationId, requestedUnits, "dd_trace", bytes.size.toLong())) {
+        return
+    }
+
     TraceIngestionService.insertTraceStats(organizationId, payload)
 
     call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
+}
+
+private fun countTraceSpans(
+    bytes: ByteArray,
+    tracesJsonElement: JsonElement?,
+    isProtobuf: Boolean,
+): Int? {
+    if (tracesJsonElement != null) {
+        return tracesJsonElement.jsonArray.sumOf { trace -> trace.jsonArray.size }
+    }
+
+    return runCatching {
+        val traces = if (isProtobuf) {
+            TraceIngestionService.parseProtobufAgentPayload(bytes)
+        } else {
+            TraceIngestionService.parseMsgpackTraces(bytes)
+        }
+        traces.sumOf { it.size }
+    }.getOrElse { e ->
+        logger.warn(e) { "Failed to parse trace payload for span count" }
+        null
+    }
 }

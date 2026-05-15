@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.security
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.DatadogService
 import com.moneat.testsupport.startTestKoin
@@ -33,6 +34,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlin.test.AfterTest
@@ -46,6 +48,10 @@ class SecurityIngestRoutesTest {
     companion object {
         private const val DD_API_KEY_HEADER = "DD-API-KEY"
         private const val VALID_KEY = "security-ingest-test-key"
+    }
+
+    private val quotaService = mockk<BillingQuotaService> {
+        every { isEnforcementEnabled() } returns false
     }
 
     @BeforeTest
@@ -71,7 +77,7 @@ class SecurityIngestRoutesTest {
     fun `security events ingest returns forbidden when api key is missing`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { securityIngestRoutes() }
+            routing { securityIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v2/security") {
             contentType(ContentType.Application.Json)
@@ -86,7 +92,7 @@ class SecurityIngestRoutesTest {
         every { DatadogService.validateApiKey(VALID_KEY) } returns 1
         application {
             install(ContentNegotiation) { json() }
-            routing { securityIngestRoutes() }
+            routing { securityIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v2/security") {
             header(DD_API_KEY_HEADER, VALID_KEY)
@@ -102,7 +108,7 @@ class SecurityIngestRoutesTest {
         every { DatadogService.validateApiKey("bad-key") } returns null
         application {
             install(ContentNegotiation) { json() }
-            routing { securityIngestRoutes() }
+            routing { securityIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v2/security") {
             header(DD_API_KEY_HEADER, "bad-key")
@@ -118,7 +124,7 @@ class SecurityIngestRoutesTest {
             every { DatadogService.validateApiKey(VALID_KEY) } returns 1
             application {
                 install(ContentNegotiation) { json() }
-                routing { securityIngestRoutes() }
+                routing { securityIngestRoutes(quotaService) }
             }
             val response = client.post("/dd/api/v2/security") {
                 header(DD_API_KEY_HEADER, VALID_KEY)
@@ -133,7 +139,7 @@ class SecurityIngestRoutesTest {
     fun `activity dump ingest returns forbidden when api key is missing`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { securityIngestRoutes() }
+            routing { securityIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v2/activity-dump") {
             contentType(ContentType.Application.Json)
@@ -146,7 +152,7 @@ class SecurityIngestRoutesTest {
     fun `compliance ingest returns forbidden when api key is missing`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { securityIngestRoutes() }
+            routing { securityIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v2/compliance") {
             contentType(ContentType.Application.Json)
@@ -160,7 +166,7 @@ class SecurityIngestRoutesTest {
         every { DatadogService.validateApiKey(VALID_KEY) } returns 7
         application {
             install(ContentNegotiation) { json() }
-            routing { securityIngestRoutes() }
+            routing { securityIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v2/security") {
             header(DD_API_KEY_HEADER, VALID_KEY)

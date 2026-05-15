@@ -47,7 +47,7 @@ exposed-java-time = { module = "org.jetbrains.exposed:exposed-java-time", versio
 exposed-json = { module = "org.jetbrains.exposed:exposed-json", version.ref = "exposed" }
 
 # Database
-postgresql = { module = "org.postgresql:postgresql", version = "42.7.10" }
+postgresql = { module = "org.postgresql:postgresql", version = "42.7.11" }
 hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
@@ -60,7 +60,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version = "1.10.2" }
 
 # Redis
-lettuce = { module = "io.lettuce:lettuce-core", version = "7.5.0.RELEASE" }
+lettuce = { module = "io.lettuce:lettuce-core", version = "7.5.1.RELEASE" }
 
 # Email
 jakarta-mail = { module = "com.sun.mail:jakarta.mail", version = "2.0.2" }
@@ -77,7 +77,7 @@ oauth2-oidc-sdk = { module = "com.nimbusds:oauth2-oidc-sdk", version = "11.34" }
 stripe-java = { module = "com.stripe:stripe-java", version = "31.4.1" }
 
 # JWT
-java-jwt = { module = "com.auth0:java-jwt", version = "4.5.1" }
+java-jwt = { module = "com.auth0:java-jwt", version = "4.5.2" }
 
 # Encoding/Parsing
 msgpack-core = { module = "org.msgpack:msgpack-core", version = "0.9.11" }
@@ -121,13 +121,13 @@ testcontainers-clickhouse = { module = "org.testcontainers:testcontainers-clickh
 mysql-connector-j = { module = "com.mysql:mysql-connector-j", version = "9.6.0" }
 mariadb-java-client = { module = "org.mariadb.jdbc:mariadb-java-client", version = "3.5.8" }
 mssql-jdbc = { module = "com.microsoft.sqlserver:mssql-jdbc", version = "13.4.0.jre11" }
-clickhouse-jdbc = { module = "com.clickhouse:clickhouse-jdbc", version = "0.9.7" }
+clickhouse-jdbc = { module = "com.clickhouse:clickhouse-jdbc", version = "0.9.8" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version = "3.51.2.0" }
 snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "4.0.2" }
 
 # Non-JDBC data clients / SDKs
 mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version = "5.6.5" }
-aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.62" }
+aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.73" }
 google-cloud-bigquery = { module = "com.google.cloud:google-cloud-bigquery", version = "2.61.0" }
 
 # Detekt

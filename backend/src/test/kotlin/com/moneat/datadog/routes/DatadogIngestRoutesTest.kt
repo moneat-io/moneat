@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.DatadogEventService
 import com.moneat.datadog.services.DatadogHostService
@@ -44,6 +45,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlin.test.AfterTest
@@ -58,6 +60,10 @@ class DatadogIngestRoutesTest {
         private const val DD_API_KEY_HEADER = "DD-API-KEY"
         private const val VALID_KEY = "dd-ingest-test-key"
         private const val ORG_ID = 5
+    }
+
+    private val quotaService = mockk<BillingQuotaService> {
+        every { isEnforcementEnabled() } returns false
     }
 
     @BeforeTest
@@ -118,14 +124,14 @@ class DatadogIngestRoutesTest {
         application {
             install(ContentNegotiation) { json() }
             routing {
-                datadogMetricRoutes()
-                datadogLogRoutes()
-                datadogEventRoutes()
+                datadogMetricRoutes(quotaService)
+                datadogLogRoutes(quotaService)
+                datadogEventRoutes(quotaService)
                 datadogValidateRoutes()
-                miscIngestRoutes()
-                dbmIngestRoutes()
-                debuggerIngestRoutes()
-                orchestratorIngestRoutes()
+                miscIngestRoutes(quotaService)
+                dbmIngestRoutes(quotaService)
+                debuggerIngestRoutes(quotaService)
+                orchestratorIngestRoutes(quotaService)
             }
         }
     }
