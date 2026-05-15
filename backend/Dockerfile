@@ -20,7 +20,7 @@ COPY ee/backend /ee/backend
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     gradle shadowJar --no-daemon --build-cache
 
-FROM eclipse-temurin:25.0.2_10-jre
+FROM eclipse-temurin:25.0.3_9-jre
 RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system moneat && useradd --system --gid moneat --home /app --create-home moneat
 WORKDIR /app
