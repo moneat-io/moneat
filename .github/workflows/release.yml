@@ -221,26 +221,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout target branch
+        env:
+          TARGET_BRANCH: ${{ contains(github.ref_name, '-') && 'develop' || 'main' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          CANDIDATES=$(git branch -r --contains "$GITHUB_SHA" | grep -v 'HEAD' | sed 's|origin/||' | tr -d ' ')
-          COUNT=$(echo "$CANDIDATES" | grep -c .)
-
-          if [ "$COUNT" -eq 0 ]; then
-            echo "::error::No branch found containing commit $GITHUB_SHA"
-            exit 1
-          elif [ "$COUNT" -gt 1 ]; then
-            echo "::error::Multiple branches contain commit $GITHUB_SHA — resolve manually:"
-            echo "$CANDIDATES"
+          git fetch origin "$TARGET_BRANCH"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$TARGET_BRANCH"; then
+            echo "::error::Tag ${{ github.ref_name }} does not point to a commit on $TARGET_BRANCH"
             exit 1
           fi
 
-          TARGET_BRANCH="$CANDIDATES"
           echo "TARGET_BRANCH=$TARGET_BRANCH" >> "$GITHUB_ENV"
           echo "Checking out branch: $TARGET_BRANCH"
-          git checkout "$TARGET_BRANCH"
+          git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
 
       - name: Generate full changelog
         uses: orhun/git-cliff-action@07dda386992489f0a6151dee53f3a137713644de
@@ -254,8 +249,6 @@ jobs:
 
       - name: Commit updated CHANGELOG.md
         run: |
-          git fetch origin
-          git reset --hard "origin/$TARGET_BRANCH"
           git add CHANGELOG.md
           if git diff --cached --quiet; then
             echo "No changelog changes to commit"
