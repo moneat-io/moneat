@@ -220,39 +220,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Checkout target branch
+      - name: Validate target branch
         env:
           TARGET_BRANCH: ${{ contains(github.ref_name, '-') && 'develop' || 'main' }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git fetch origin "$TARGET_BRANCH"
           if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$TARGET_BRANCH"; then
             echo "::error::Tag ${{ github.ref_name }} does not point to a commit on $TARGET_BRANCH"
             exit 1
           fi
 
-          echo "TARGET_BRANCH=$TARGET_BRANCH" >> "$GITHUB_ENV"
-          echo "Checking out branch: $TARGET_BRANCH"
-          git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
-
-      - name: Generate full changelog
-        uses: orhun/git-cliff-action@07dda386992489f0a6151dee53f3a137713644de
-        with:
-          config: cliff.toml
-          args: --verbose
-        env:
-          OUTPUT: CHANGELOG.md
-          GITHUB_REPO: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Commit updated CHANGELOG.md
-        run: |
-          git add CHANGELOG.md
-          if git diff --cached --quiet; then
-            echo "No changelog changes to commit"
-          else
-            git commit -m "chore(release): update CHANGELOG.md for ${{ github.ref_name }} [skip ci]"
-            git push origin "$TARGET_BRANCH"
-          fi
+          echo "Validated ${{ github.ref_name }} against $TARGET_BRANCH"
