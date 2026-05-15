@@ -1,12 +1,13 @@
 # syntax=docker/dockerfile:1.22
-FROM node:24-alpine AS email-builder
+# Build artifacts are architecture-neutral, so keep build stages on the native runner platform.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS email-builder
 WORKDIR /emails
 COPY emails/package*.json ./
 RUN npm ci
 COPY emails/ ./
 RUN npm run build:production
 
-FROM gradle:9-jdk17 AS build
+FROM --platform=$BUILDPLATFORM gradle:9-jdk17 AS build
 WORKDIR /app
 COPY backend/build.gradle.kts backend/settings.gradle.kts backend/gradle.properties ./
 COPY backend/gradle ./gradle
