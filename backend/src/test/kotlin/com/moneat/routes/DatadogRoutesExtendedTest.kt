@@ -112,13 +112,12 @@ class DatadogRoutesExtendedTest {
         private var db: Database? = null
     }
 
-    private var previousSelfHostedProperty: String? = null
+    private val allowingQuotaService = mockk<BillingQuotaService> {
+        every { isEnforcementEnabled() } returns false
+    }
 
     @BeforeTest
     fun setup() {
-        previousSelfHostedProperty = System.getProperty("SELF_HOSTED")
-        System.setProperty("SELF_HOSTED", "true")
-
         if (db == null) {
             db = Database.connect(
                 url = "jdbc:h2:mem:moneat_dd_routes_ext;" +
@@ -202,11 +201,6 @@ class DatadogRoutesExtendedTest {
         unmockkObject(DatadogService)
         unmockkObject(TraceIngestionService)
         unmockkObject(ClickHouseClient)
-        if (previousSelfHostedProperty == null) {
-            System.clearProperty("SELF_HOSTED")
-        } else {
-            System.setProperty("SELF_HOSTED", previousSelfHostedProperty!!)
-        }
     }
 
     private fun Application.installAuth() {
@@ -496,7 +490,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v1 series returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogMetricRoutes() }
+            routing { datadogMetricRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v1/series") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -514,7 +508,7 @@ class DatadogRoutesExtendedTest {
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
-                routing { datadogMetricRoutes() }
+                routing { datadogMetricRoutes(allowingQuotaService) }
             }
             val response = client.post("/dd/api/v1/series") {
                 header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -528,7 +522,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 series returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogMetricRoutes() }
+            routing { datadogMetricRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/series") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -545,7 +539,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v3 series returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogMetricRoutes() }
+            routing { datadogMetricRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v3/series") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -563,7 +557,7 @@ class DatadogRoutesExtendedTest {
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
-                routing { datadogMetricRoutes() }
+                routing { datadogMetricRoutes(allowingQuotaService) }
             }
             val response = client.post("/dd/api/v1/sketches") {
                 header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -577,7 +571,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api beta sketches returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogMetricRoutes() }
+            routing { datadogMetricRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/beta/sketches") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -592,7 +586,7 @@ class DatadogRoutesExtendedTest {
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
-                routing { datadogMetricRoutes() }
+                routing { datadogMetricRoutes(allowingQuotaService) }
             }
             val response = client.post("/dd/api/v1/sketches") {
                 header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -608,7 +602,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v1 check_run returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogEventRoutes() }
+            routing { datadogEventRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v1/check_run") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -625,7 +619,7 @@ class DatadogRoutesExtendedTest {
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
-                routing { datadogEventRoutes() }
+                routing { datadogEventRoutes(allowingQuotaService) }
             }
             val response = client.post("/dd/api/v1/check_run") {
                 header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -639,7 +633,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 events returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogEventRoutes() }
+            routing { datadogEventRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/events") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -653,7 +647,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 service_checks returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogEventRoutes() }
+            routing { datadogEventRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/service_checks") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -670,7 +664,7 @@ class DatadogRoutesExtendedTest {
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
-                routing { datadogEventRoutes() }
+                routing { datadogEventRoutes(allowingQuotaService) }
             }
             val response = client.post("/dd/api/v2/service_checks") {
                 header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -686,7 +680,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 logs returns 200`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogLogRoutes() }
+            routing { datadogLogRoutes(allowingQuotaService) }
         }
         val response = client.post(DD_LOGS_PATH) {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -702,7 +696,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 logs single object returns 200`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogLogRoutes() }
+            routing { datadogLogRoutes(allowingQuotaService) }
         }
         val response = client.post(DD_LOGS_PATH) {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -719,7 +713,7 @@ class DatadogRoutesExtendedTest {
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
-                routing { datadogLogRoutes() }
+                routing { datadogLogRoutes(allowingQuotaService) }
             }
             val response = client.post(DD_LOGS_PATH) {
                 header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -735,7 +729,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd dogstatsd v2 proxy returns 200`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogDogStatsDRoutes() }
+            routing { datadogDogStatsDRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/dogstatsd/v2/proxy") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -749,7 +743,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd dogstatsd v2 proxy handles empty body`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogDogStatsDRoutes() }
+            routing { datadogDogStatsDRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/dogstatsd/v2/proxy") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -885,7 +879,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd symdb v1 input returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { miscIngestRoutes() }
+            routing { miscIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/symdb/v1/input") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -899,7 +893,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 data_streams returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { miscIngestRoutes() }
+            routing { miscIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/data_streams") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -913,7 +907,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 contimage returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { miscIngestRoutes() }
+            routing { miscIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/contimage") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -927,7 +921,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 sbom returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { miscIngestRoutes() }
+            routing { miscIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/sbom") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -941,7 +935,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd v0 1 pipeline_stats returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { miscIngestRoutes() }
+            routing { miscIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/v0.1/pipeline_stats") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -955,7 +949,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v1 lineage returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { miscIngestRoutes() }
+            routing { miscIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v1/lineage") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -969,7 +963,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 synthetics returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { miscIngestRoutes() }
+            routing { miscIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/synthetics") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -983,7 +977,7 @@ class DatadogRoutesExtendedTest {
     fun `POST api v2 contlcycle returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { miscIngestRoutes() }
+            routing { miscIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/api/v2/contlcycle") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -997,7 +991,7 @@ class DatadogRoutesExtendedTest {
     fun `POST api v2 events management returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { miscIngestRoutes() }
+            routing { miscIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/api/v2/events") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1013,7 +1007,7 @@ class DatadogRoutesExtendedTest {
     fun `POST api v1 discovery returns 200`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogInfraRoutes() }
+            routing { datadogInfraRoutes(allowingQuotaService) }
         }
         val response = client.post("/api/v1/discovery") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1027,7 +1021,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v1 connections returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { datadogInfraRoutes() }
+            routing { datadogInfraRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v1/connections") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1043,7 +1037,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 databasequery returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { dbmIngestRoutes() }
+            routing { dbmIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/databasequery") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1057,7 +1051,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 dbmmetrics returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { dbmIngestRoutes() }
+            routing { dbmIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/dbmmetrics") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1071,7 +1065,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 dbmactivity returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { dbmIngestRoutes() }
+            routing { dbmIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/dbmactivity") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1085,7 +1079,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 dbmmetadata returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { dbmIngestRoutes() }
+            routing { dbmIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/dbmmetadata") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1099,7 +1093,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 dbmhealth returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { dbmIngestRoutes() }
+            routing { dbmIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/dbmhealth") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1114,7 +1108,7 @@ class DatadogRoutesExtendedTest {
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
-                routing { dbmIngestRoutes() }
+                routing { dbmIngestRoutes(allowingQuotaService) }
             }
             val response = client.post("/api/v2/databasequery") {
                 header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1129,7 +1123,7 @@ class DatadogRoutesExtendedTest {
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
-                routing { dbmIngestRoutes() }
+                routing { dbmIngestRoutes(allowingQuotaService) }
             }
             val response = client.post("/dd/api/v2/databasequery") {
                 header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1145,7 +1139,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 orch returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { orchestratorIngestRoutes() }
+            routing { orchestratorIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/orch") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1159,7 +1153,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd api v2 orchmanif returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { orchestratorIngestRoutes() }
+            routing { orchestratorIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/api/v2/orchmanif") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1174,7 +1168,7 @@ class DatadogRoutesExtendedTest {
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
-                routing { orchestratorIngestRoutes() }
+                routing { orchestratorIngestRoutes(allowingQuotaService) }
             }
             val response = client.post("/dd/api/v2/orch") {
                 header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1190,7 +1184,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd debugger v1 input returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { debuggerIngestRoutes() }
+            routing { debuggerIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/debugger/v1/input") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1204,7 +1198,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd debugger v2 input returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { debuggerIngestRoutes() }
+            routing { debuggerIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/debugger/v2/input") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1218,7 +1212,7 @@ class DatadogRoutesExtendedTest {
     fun `POST dd debugger v1 diagnostics returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { debuggerIngestRoutes() }
+            routing { debuggerIngestRoutes(allowingQuotaService) }
         }
         val response = client.post("/dd/debugger/v1/diagnostics") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
@@ -1233,7 +1227,7 @@ class DatadogRoutesExtendedTest {
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
-                routing { debuggerIngestRoutes() }
+                routing { debuggerIngestRoutes(allowingQuotaService) }
             }
             val response = client.post("/dd/debugger/v1/input") {
                 header(DD_API_KEY_HEADER, TEST_API_KEY)
