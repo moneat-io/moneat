@@ -71,6 +71,16 @@ class SubscriptionRepositoryImpl : SubscriptionRepository {
                 ?.toRow()
         }
 
+    override fun findByStripeSubscriptionId(stripeSubId: String): SubscriptionRow? =
+        transaction {
+            Subscriptions
+                .selectAll()
+                .where { Subscriptions.stripe_subscription_id eq stripeSubId }
+                .orderBy(Subscriptions.id to SortOrder.DESC)
+                .firstOrNull()
+                ?.toRow()
+        }
+
     override fun findByOrganizationAndStripeSubscriptionId(orgId: Int, stripeSubId: String): SubscriptionRow? =
         transaction {
             Subscriptions

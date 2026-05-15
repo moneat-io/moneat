@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdDebuggerDiagnostic
@@ -38,21 +40,25 @@ private val json = Json {
     coerceInputValues = true
 }
 
-fun Route.debuggerIngestRoutes() {
+fun Route.debuggerIngestRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd/debugger/v1") {
         // POST /dd/debugger/v1/input - debugger probe data
-        post("/input") { handleDebuggerInput() }
+        post("/input") { handleDebuggerInput(quotaService) }
 
         // POST /dd/debugger/v1/diagnostics - debugger diagnostics
-        post("/diagnostics") { handleDebuggerDiagnostics() }
+        post("/diagnostics") { handleDebuggerDiagnostics(quotaService) }
     }
 
     route("/dd/debugger/v2") {
         // POST /dd/debugger/v2/input - v2 debugger probe data
-        post("/input") { handleDebuggerInput() }
+        post("/input") { handleDebuggerInput(quotaService) }
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerInput() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerInput(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
     suspendRunCatching {
@@ -61,6 +67,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerInput() 
         val body = bytes.decodeToString()
 
         val entries = json.decodeFromString<List<DdDebuggerInput>>(body)
+        if (!reserveDebuggerQuota(quotaService, organizationId, entries.size, bytes)) return
         val count = DebuggerIngestionService.enqueueDebuggerLogs(organizationId, entries)
 
         logger.debug { "Enqueued $count debugger entries for org=$organizationId" }
@@ -70,7 +77,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerInput() 
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerDiagnostics() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerDiagnostics(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
     suspendRunCatching {
@@ -79,6 +88,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerDiagnost
         val body = bytes.decodeToString()
 
         val entries = json.decodeFromString<List<DdDebuggerDiagnostic>>(body)
+        if (!reserveDebuggerQuota(quotaService, organizationId, entries.size, bytes)) return
         val count = DebuggerIngestionService.enqueueDiagnostics(organizationId, entries)
 
         logger.debug { "Enqueued $count debugger diagnostics for org=$organizationId" }
@@ -87,4 +97,20 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerDiagnost
         logger.error(e) { "Failed to process debugger diagnostics" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.reserveDebuggerQuota(
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnits: Int,
+    bytes: ByteArray,
+): Boolean {
+    return reserveDatadogQuota(
+        call = call,
+        quotaService = quotaService,
+        organizationId = organizationId,
+        requestedUnits = requestedUnits,
+        eventType = "dd_debugger",
+        requestedBytes = bytes.size.toLong(),
+    )
 }

@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.networkdevices
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.DatadogService
 import com.moneat.testsupport.startTestKoin
@@ -33,6 +34,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlin.test.AfterTest
@@ -46,6 +48,10 @@ class NdmIngestRoutesTest {
     companion object {
         private const val DD_API_KEY_HEADER = "DD-API-KEY"
         private const val VALID_KEY = "ndm-ingest-test-key"
+    }
+
+    private val quotaService = mockk<BillingQuotaService> {
+        every { isEnforcementEnabled() } returns false
     }
 
     @BeforeTest
@@ -69,7 +75,7 @@ class NdmIngestRoutesTest {
     fun `ndm ingest returns forbidden when api key is missing`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
-            routing { ndmIngestRoutes() }
+            routing { ndmIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v1/ndm") {
             contentType(ContentType.Application.Json)
@@ -84,7 +90,7 @@ class NdmIngestRoutesTest {
         every { DatadogService.validateApiKey("bad-key") } returns null
         application {
             install(ContentNegotiation) { json() }
-            routing { ndmIngestRoutes() }
+            routing { ndmIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v1/ndm") {
             header(DD_API_KEY_HEADER, "bad-key")
@@ -99,7 +105,7 @@ class NdmIngestRoutesTest {
         every { DatadogService.validateApiKey(VALID_KEY) } returns 1
         application {
             install(ContentNegotiation) { json() }
-            routing { ndmIngestRoutes() }
+            routing { ndmIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v1/ndm") {
             header(DD_API_KEY_HEADER, VALID_KEY)
@@ -113,7 +119,7 @@ class NdmIngestRoutesTest {
         every { DatadogService.validateApiKey(VALID_KEY) } returns 1
         application {
             install(ContentNegotiation) { json() }
-            routing { ndmIngestRoutes() }
+            routing { ndmIngestRoutes(quotaService) }
         }
         val response = client.post("/api/v2/ndm") {
             header(DD_API_KEY_HEADER, VALID_KEY)
@@ -129,7 +135,7 @@ class NdmIngestRoutesTest {
         every { DatadogService.validateApiKey(VALID_KEY) } returns 1
         application {
             install(ContentNegotiation) { json() }
-            routing { ndmIngestRoutes() }
+            routing { ndmIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v1/ndm") {
             header(DD_API_KEY_HEADER, VALID_KEY)
@@ -145,7 +151,7 @@ class NdmIngestRoutesTest {
         every { DatadogService.validateApiKey(VALID_KEY) } returns 42
         application {
             install(ContentNegotiation) { json() }
-            routing { ndmIngestRoutes() }
+            routing { ndmIngestRoutes(quotaService) }
         }
         val response = client.post("/dd/api/v1/ndm") {
             header(DD_API_KEY_HEADER, VALID_KEY)
@@ -160,12 +166,12 @@ class NdmIngestRoutesTest {
         every { DatadogService.validateApiKey(VALID_KEY) } returns 1
         application {
             install(ContentNegotiation) { json() }
-            routing { ndmIngestRoutes() }
+            routing { ndmIngestRoutes(quotaService) }
         }
         val response = client.post("/api/v2/netpath") {
             header(DD_API_KEY_HEADER, VALID_KEY)
             contentType(ContentType.Application.Json)
-            setBody("{}")
+            setBody("""{"type":"netpath","paths":[]}""")
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
     }

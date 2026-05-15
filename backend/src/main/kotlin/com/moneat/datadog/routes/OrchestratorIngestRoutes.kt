@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdManifestPayload
@@ -38,16 +40,20 @@ private val json = Json {
     coerceInputValues = true
 }
 
-fun Route.orchestratorIngestRoutes() {
+fun Route.orchestratorIngestRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd/api/v2") {
         // POST /dd/api/v2/orch - K8s resource payloads
-        post("/orch") { handleOrchestratorResources() }
+        post("/orch") { handleOrchestratorResources(quotaService) }
 
         // POST /dd/api/v2/orchmanif - K8s manifest payloads
-        post("/orchmanif") { handleOrchestratorManifests() }
+        post("/orchmanif") { handleOrchestratorManifests(quotaService) }
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorResources() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorResources(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
     suspendRunCatching {
@@ -56,6 +62,17 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorReso
         val body = bytes.decodeToString()
 
         val payload = json.decodeFromString<DdOrchestratorPayload>(body)
+        if (!reserveDatadogQuota(
+                call = call,
+                quotaService = quotaService,
+                organizationId = organizationId,
+                requestedUnits = payload.resources.size,
+                eventType = "dd_orchestrator",
+                requestedBytes = bytes.size.toLong(),
+            )
+        ) {
+            return
+        }
         val count = OrchestratorIngestionService.enqueueResources(organizationId, payload)
 
         logger.debug { "Enqueued $count K8s resources for org=$organizationId" }
@@ -65,7 +82,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorReso
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorManifests() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorManifests(
+    quotaService: BillingQuotaService,
+) {
     val organizationId = DatadogAuthMiddleware.authenticate(call) ?: return
 
     suspendRunCatching {
@@ -74,6 +93,17 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorMani
         val body = bytes.decodeToString()
 
         val payload = json.decodeFromString<DdManifestPayload>(body)
+        if (!reserveDatadogQuota(
+                call = call,
+                quotaService = quotaService,
+                organizationId = organizationId,
+                requestedUnits = payload.manifests.size,
+                eventType = "dd_orchestrator",
+                requestedBytes = bytes.size.toLong(),
+            )
+        ) {
+            return
+        }
         val count = OrchestratorIngestionService.enqueueManifests(organizationId, payload)
 
         logger.debug { "Enqueued $count K8s manifests for org=$organizationId" }

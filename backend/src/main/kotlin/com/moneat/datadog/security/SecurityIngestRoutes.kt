@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.security
 
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdActivityDumpPayload
@@ -39,20 +41,25 @@ private val json = Json {
     coerceInputValues = true
 }
 
-fun Route.securityIngestRoutes() {
+fun Route.securityIngestRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
     route("/dd/api/v2") {
-        post("/security") { handleSecurityEvents() }
-        post("/activity-dump") { handleActivityDumps() }
-        post("/compliance") { handleComplianceFindings() }
+        post("/security") { handleSecurityEvents(quotaService) }
+        post("/activity-dump") { handleActivityDumps(quotaService) }
+        post("/compliance") { handleComplianceFindings(quotaService) }
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleSecurityEvents() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleSecurityEvents(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdSecurityEventPayload>(body.decodeToString())
+        if (!reserveSecurityQuota(quotaService, orgId, payload.events.size, body)) return
         val count = SecurityIngestionService.enqueueSecurityEvents(orgId, payload)
         logger.debug { "Accepted $count security events for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -61,13 +68,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSecurityEvents()
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleActivityDumps() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleActivityDumps(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdActivityDumpPayload>(body.decodeToString())
+        if (!reserveSecurityQuota(quotaService, orgId, payload.dumps.size, body)) return
         val count = SecurityIngestionService.enqueueActivityDumps(orgId, payload)
         logger.debug { "Accepted $count activity dumps for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -76,13 +86,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleActivityDumps() 
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceFindings() {
+private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceFindings(
+    quotaService: BillingQuotaService,
+) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdCompliancePayload>(body.decodeToString())
+        if (!reserveSecurityQuota(quotaService, orgId, payload.findings.size, body)) return
         val count = SecurityIngestionService.enqueueCompliance(orgId, payload)
         logger.debug { "Accepted $count compliance findings for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -90,4 +103,20 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceFindin
         logger.error(e) { "Failed to process compliance findings" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.reserveSecurityQuota(
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnits: Int,
+    bytes: ByteArray,
+): Boolean {
+    return reserveDatadogQuota(
+        call = call,
+        quotaService = quotaService,
+        organizationId = organizationId,
+        requestedUnits = requestedUnits,
+        eventType = "dd_security",
+        requestedBytes = bytes.size.toLong(),
+    )
 }

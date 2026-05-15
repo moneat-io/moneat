@@ -18,6 +18,7 @@ package com.moneat.billing.routes
 
 import com.moneat.billing.services.StripeService
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
@@ -28,9 +29,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+
+private const val MISSING_STRIPE_WEBHOOK_RAW_JSON_ID = "Missing 'id' in Stripe webhook raw JSON"
 
 fun Route.stripeWebhookRoutes(
     stripeService: StripeService = GlobalContext.get().get(),
@@ -100,12 +102,20 @@ private fun dispatchStripeEvent(stripeService: StripeService, event: com.stripe.
             if (subscription != null) stripeService.handleSubscriptionDeleted(subscription)
         }
         "invoice.paid" -> {
-            val invoice = event.dataObjectDeserializer.`object`.orElse(null) as? com.stripe.model.Invoice
-            if (invoice != null) stripeService.handleInvoicePaid(invoice)
+            logger.info { "Processing invoice.paid event ${event.id}" }
+            val invoice = resolveInvoice(event)
+            val subId = invoice.parent?.subscriptionDetails?.getSubscription()
+            logger.info {
+                "Calling handleInvoicePaid for invoice ${invoice.id}, " +
+                    "sub=$subId, customer=${invoice.customer}"
+            }
+            stripeService.handleInvoicePaid(invoice)
+            logger.info { "Finished handleInvoicePaid" }
         }
         "invoice.payment_failed" -> {
-            val invoice = event.dataObjectDeserializer.`object`.orElse(null) as? com.stripe.model.Invoice
-            if (invoice != null) stripeService.handleInvoicePaymentFailed(invoice)
+            logger.info { "Processing invoice.payment_failed event ${event.id}" }
+            val invoice = resolveInvoice(event)
+            stripeService.handleInvoicePaymentFailed(invoice)
         }
         "setup_intent.succeeded" -> {
             logger.info { "Received setup_intent.succeeded webhook" }
@@ -133,7 +143,7 @@ private fun resolveCheckoutSession(event: com.stripe.model.Event): com.stripe.mo
         val sessionId =
             Json.parseToJsonElement(event.dataObjectDeserializer.rawJson)
                 .jsonObject["id"]?.jsonPrimitive?.content
-                ?: error("Missing 'id' in Stripe webhook raw JSON")
+                ?: error(MISSING_STRIPE_WEBHOOK_RAW_JSON_ID)
         com.stripe.model.checkout.Session.retrieve(sessionId)
     }
 }
@@ -146,7 +156,21 @@ private fun resolveSubscription(event: com.stripe.model.Event): com.stripe.model
         val subscriptionId =
             Json.parseToJsonElement(event.dataObjectDeserializer.rawJson)
                 .jsonObject["id"]?.jsonPrimitive?.content
-                ?: error("Missing 'id' in Stripe webhook raw JSON")
+                ?: error(MISSING_STRIPE_WEBHOOK_RAW_JSON_ID)
         com.stripe.model.Subscription.retrieve(subscriptionId)
+    }
+}
+
+private fun resolveInvoice(event: com.stripe.model.Event): com.stripe.model.Invoice {
+    val invoiceOpt = event.dataObjectDeserializer.`object`
+    return if (invoiceOpt.isPresent) {
+        invoiceOpt.get() as com.stripe.model.Invoice
+    } else {
+        val invoiceId =
+            Json.parseToJsonElement(event.dataObjectDeserializer.rawJson)
+                .jsonObject["id"]?.jsonPrimitive?.content
+                ?: error(MISSING_STRIPE_WEBHOOK_RAW_JSON_ID)
+        logger.warn { "Invoice deserialization failed for event ${event.id}, fetching invoice $invoiceId from API" }
+        com.stripe.model.Invoice.retrieve(invoiceId)
     }
 }

@@ -17,6 +17,7 @@
 package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdProfileEvent
@@ -126,14 +127,7 @@ fun Route.profileIngestRoutes(
             }
 
             val totalBytes = profileParts.sumOf { it.data.size }.toLong()
-            val reservation = quotaService.reserveUnits(
-                organizationId = organizationId,
-                requestedUnits = 1,
-                eventType = "dd_profile",
-                requestedBytes = totalBytes,
-            )
-            if (!reservation.allowed) {
-                call.respond(HttpStatusCode.TooManyRequests, mapOf("error" to "quota_exceeded"))
+            if (!reserveDatadogQuota(call, quotaService, organizationId, 1, "dd_profile", totalBytes)) {
                 return@post
             }
 

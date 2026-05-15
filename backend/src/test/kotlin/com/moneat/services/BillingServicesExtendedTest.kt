@@ -996,6 +996,52 @@ class BillingServicesExtendedTest {
     }
 
     @Test
+    fun `reserveUnitsBatch normalizes datadog agent event types`() {
+        transaction {
+            insertTestUsageCounter(organizationId = testOrgId)
+        }
+
+        val result = billingQuotaService.reserveUnitsBatch(
+            organizationId = testOrgId,
+            requestedUnitsByType = mapOf(
+                "dd_trace" to 3,
+                "dd_metric" to 4,
+                "dd_log" to 5,
+                "dd_infra" to 1,
+                "dd_event" to 1,
+                "dd_orchestrator" to 1,
+                "dd_dbm" to 1,
+                "dd_debugger" to 1,
+                "dd_misc" to 1,
+                "dd_ndm" to 1,
+                "dd_security" to 1,
+            ),
+            requestedBytesByType = mapOf(
+                "dd_trace" to 30L,
+                "dd_metric" to 40L,
+                "dd_log" to 50L,
+                "dd_infra" to 60L,
+                "dd_event" to 70L,
+                "dd_orchestrator" to 80L,
+                "dd_dbm" to 90L,
+                "dd_debugger" to 100L,
+                "dd_misc" to 110L,
+                "dd_ndm" to 120L,
+                "dd_security" to 130L,
+            )
+        )
+
+        assertTrue(result.allowed)
+        assertEquals(3L, result.usage.usedApmSpans)
+        assertEquals(4L, result.usage.usedCustomMetrics)
+        assertEquals(5L, result.usage.usedLogs)
+        assertEquals(30L, result.usage.usedApmSpanBytes)
+        assertEquals(50L, result.usage.usedLogBytes)
+        assertEquals(880L, result.usage.usedBytes)
+        assertEquals(0L, result.usage.usedErrorBytes, "DD-only types should not fall back to error bytes")
+    }
+
+    @Test
     fun `reserveUnits normalizes unknown event type to error`() {
         transaction {
             insertTestUsageCounter(organizationId = testOrgId)

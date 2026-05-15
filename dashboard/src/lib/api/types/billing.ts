@@ -112,6 +112,7 @@ export interface BillingUsage {
   usedLogBytes?: number
   usedLlmBytes?: number
   usedProfilerBytes?: number
+  usedApmSpanBytes?: number
   bytesLimit: number
   baseLimitUnits: number
   paygLimitUnits: number

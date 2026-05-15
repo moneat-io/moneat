@@ -884,6 +884,7 @@ function UsageTab() {
     { label: 'Logs', bytes: usage.usedLogBytes ?? 0, color: 'bg-emerald-400' },
     { label: 'LLM', bytes: usage.usedLlmBytes ?? 0, color: 'bg-amber-400' },
     { label: 'Profiling', bytes: usage.usedProfilerBytes ?? 0, color: 'bg-pink-400' },
+    { label: 'APM Spans', bytes: usage.usedApmSpanBytes ?? 0, color: 'bg-violet-400' },
   ]
   const ingestionKnownBytes = ingestionBreakdown.reduce((sum, s) => sum + s.bytes, 0)
   const ingestionOtherBytes = Math.max(0, (usage.usedBytes ?? 0) - ingestionKnownBytes)
