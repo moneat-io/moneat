@@ -116,13 +116,13 @@ private suspend fun RoutingContext.acceptMetricSeries(
     apiVersion: String
 ) {
     val requestedUnits = countV1MetricPoints(payload)
+    touchMetricHosts(orgId, payload)
     if (!reserveMetricQuota(quotaService, orgId, requestedUnits, body)) return
 
     val count = DatadogMetricService.enqueueMetrics(
         organizationId = orgId.toLong(),
         payload = payload
     )
-    touchMetricHosts(orgId, payload)
     logger.debug { "Accepted $count DD $apiVersion metrics for org $orgId" }
     call.respondAccepted()
 }
@@ -189,6 +189,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches(
         payload = payload
     )
 
+    touchSketchHosts(orgId, payload)
     if (!reserveMetricQuota(quotaService, orgId, batch.sketches.size, body)) return
 
     insertSketchBatchIfPresent(batch)
@@ -225,6 +226,14 @@ private suspend fun RoutingContext.reserveMetricQuota(
 
 private fun touchMetricHosts(orgId: Int, payload: DatadogMetricSeriesV1) {
     val hosts = payload.series
+        .map { it.host }
+        .filter { it.isNotBlank() }
+        .toSet()
+    DatadogHostService.touchHostLastSeen(orgId, hosts)
+}
+
+private fun touchSketchHosts(orgId: Int, payload: DatadogSketchPayload) {
+    val hosts = payload.sketches
         .map { it.host }
         .filter { it.isNotBlank() }
         .toSet()
