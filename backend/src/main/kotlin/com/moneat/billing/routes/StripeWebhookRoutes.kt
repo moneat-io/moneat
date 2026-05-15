@@ -18,6 +18,7 @@ package com.moneat.billing.routes
 
 import com.moneat.billing.services.StripeService
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
@@ -28,9 +29,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+
+private const val MISSING_STRIPE_WEBHOOK_RAW_JSON_ID = "Missing 'id' in Stripe webhook raw JSON"
 
 fun Route.stripeWebhookRoutes(
     stripeService: StripeService = GlobalContext.get().get(),
@@ -141,7 +143,7 @@ private fun resolveCheckoutSession(event: com.stripe.model.Event): com.stripe.mo
         val sessionId =
             Json.parseToJsonElement(event.dataObjectDeserializer.rawJson)
                 .jsonObject["id"]?.jsonPrimitive?.content
-                ?: error("Missing 'id' in Stripe webhook raw JSON")
+                ?: error(MISSING_STRIPE_WEBHOOK_RAW_JSON_ID)
         com.stripe.model.checkout.Session.retrieve(sessionId)
     }
 }
@@ -154,7 +156,7 @@ private fun resolveSubscription(event: com.stripe.model.Event): com.stripe.model
         val subscriptionId =
             Json.parseToJsonElement(event.dataObjectDeserializer.rawJson)
                 .jsonObject["id"]?.jsonPrimitive?.content
-                ?: error("Missing 'id' in Stripe webhook raw JSON")
+                ?: error(MISSING_STRIPE_WEBHOOK_RAW_JSON_ID)
         com.stripe.model.Subscription.retrieve(subscriptionId)
     }
 }
@@ -167,7 +169,7 @@ private fun resolveInvoice(event: com.stripe.model.Event): com.stripe.model.Invo
         val invoiceId =
             Json.parseToJsonElement(event.dataObjectDeserializer.rawJson)
                 .jsonObject["id"]?.jsonPrimitive?.content
-                ?: error("Missing 'id' in Stripe webhook raw JSON")
+                ?: error(MISSING_STRIPE_WEBHOOK_RAW_JSON_ID)
         logger.warn { "Invoice deserialization failed for event ${event.id}, fetching invoice $invoiceId from API" }
         com.stripe.model.Invoice.retrieve(invoiceId)
     }

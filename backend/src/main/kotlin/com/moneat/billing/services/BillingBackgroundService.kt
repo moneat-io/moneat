@@ -26,6 +26,7 @@ import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.shared.services.TaskLock
+import com.moneat.utils.suspendRunCatching
 import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,16 +45,20 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
 private const val BILLING_JOB_INTERVAL_MS = 60_000L
 private const val QUOTA_WARNING_THRESHOLD = 0.8
 private const val QUOTA_CRITICAL_THRESHOLD = 0.9
+private const val QUOTA_EXCEEDED_THRESHOLD = 1.0
 private const val CENTS_PER_DOLLAR = 100.0
 private const val BYTES_PER_GB = 1_073_741_824.0
 private const val UNLIMITED_UNIT_SENTINEL = 9_000_000_000_000_000L
+private const val BASE_WARNING_NOTIFICATION = "base_80"
+private const val BASE_CRITICAL_NOTIFICATION = "base_90"
+private const val BASE_EXCEEDED_NOTIFICATION = "base_100"
+private const val PAYG_WARNING_NOTIFICATION = "payg_80"
 
 class BillingBackgroundService(
     private val stripeService: StripeService = StripeService(
@@ -130,67 +135,78 @@ class BillingBackgroundService(
     }
 
     private fun processQuotaThresholdNotifications() {
-        val orgIds =
-            transaction {
-                Subscriptions
-                    .selectAll()
-                    .where {
-                        Subscriptions.status inList listOf("active", "trialing", "past_due")
-                    }.orderBy(Subscriptions.id to SortOrder.DESC)
-                    .map { it[Subscriptions.organization_id] }
-                    .distinct()
-            }
-
-        for (orgId in orgIds) {
+        for (orgId in activeBillingOrganizationIds()) {
             val usage = quotaService.getUsageForOrganization(orgId)
-            val periodStart = usage.periodStart
-            val unitPct =
-                if (usage.baseLimitUnits in 1L until UNLIMITED_UNIT_SENTINEL) {
-                    usage.usedUnits.toDouble() / usage.baseLimitUnits.toDouble()
-                } else {
-                    0.0
-                }
-            val gbEligibleBytes =
-                kotlin.math.max(0L, usage.usedBytes - usage.usedApmSpanBytes)
-            val bytesPct =
-                if (usage.bytesLimit > 0) {
-                    gbEligibleBytes.toDouble() / usage.bytesLimit.toDouble()
-                } else {
-                    0.0
-                }
-            val basePct = maxOf(unitPct, bytesPct)
-
-            val unitPaygPct =
-                if (usage.paygLimitUnits > 0) {
-                    val paygUsed = kotlin.math.max(0L, usage.usedUnits - usage.baseLimitUnits)
-                    paygUsed.toDouble() / usage.paygLimitUnits.toDouble()
-                } else {
-                    0.0
-                }
-            val bytesPaygPct =
-                if (usage.paygLimitBytes > 0) {
-                    val paygBytes = kotlin.math.max(0L, gbEligibleBytes - usage.bytesLimit)
-                    paygBytes.toDouble() / usage.paygLimitBytes.toDouble()
-                } else {
-                    0.0
-                }
-            val paygPct = maxOf(unitPaygPct, bytesPaygPct)
-
-            if (basePct >= QUOTA_WARNING_THRESHOLD) {
-                maybeSendNotification(orgId, periodStart, "base_80", usage)
-            }
-            if (basePct >= QUOTA_CRITICAL_THRESHOLD) {
-                maybeSendNotification(orgId, periodStart, "base_90", usage)
-            }
-            if (basePct >= 1.0) {
-                maybeSendNotification(orgId, periodStart, "base_100", usage)
-            }
-            if ((usage.paygLimitUnits > 0 || usage.paygLimitBytes > 0) &&
-                paygPct >= QUOTA_WARNING_THRESHOLD
-            ) {
-                maybeSendNotification(orgId, periodStart, "payg_80", usage)
+            for (notificationType in quotaNotificationTypesFor(usage)) {
+                maybeSendNotification(orgId, usage.periodStart, notificationType, usage)
             }
         }
+    }
+
+    private fun activeBillingOrganizationIds(): List<Int> {
+        return transaction {
+            Subscriptions
+                .selectAll()
+                .where {
+                    Subscriptions.status inList listOf("active", "trialing", "past_due")
+                }.orderBy(Subscriptions.id to SortOrder.DESC)
+                .map { it[Subscriptions.organization_id] }
+                .distinct()
+        }
+    }
+
+    private fun quotaNotificationTypesFor(usage: BillingUsageResponse): List<String> {
+        val percentages = quotaUsagePercentages(usage)
+        return listOfNotNull(
+            BASE_WARNING_NOTIFICATION.takeIf { percentages.base >= QUOTA_WARNING_THRESHOLD },
+            BASE_CRITICAL_NOTIFICATION.takeIf { percentages.base >= QUOTA_CRITICAL_THRESHOLD },
+            BASE_EXCEEDED_NOTIFICATION.takeIf { percentages.base >= QUOTA_EXCEEDED_THRESHOLD },
+            PAYG_WARNING_NOTIFICATION.takeIf {
+                hasPaygLimit(usage) && percentages.payg >= QUOTA_WARNING_THRESHOLD
+            },
+        )
+    }
+
+    private fun quotaUsagePercentages(usage: BillingUsageResponse): QuotaUsagePercentages {
+        val gbEligibleBytes = gbEligibleBytes(usage)
+        return QuotaUsagePercentages(
+            base = maxOf(baseUnitPercentage(usage), baseBytesPercentage(usage, gbEligibleBytes)),
+            payg = maxOf(paygUnitPercentage(usage), paygBytesPercentage(usage, gbEligibleBytes)),
+        )
+    }
+
+    private fun baseUnitPercentage(usage: BillingUsageResponse): Double {
+        return if (usage.baseLimitUnits in 1L until UNLIMITED_UNIT_SENTINEL) {
+            usage.usedUnits.toDouble() / usage.baseLimitUnits.toDouble()
+        } else {
+            0.0
+        }
+    }
+
+    private fun baseBytesPercentage(usage: BillingUsageResponse, gbEligibleBytes: Long): Double {
+        return percentageOrZero(gbEligibleBytes, usage.bytesLimit)
+    }
+
+    private fun paygUnitPercentage(usage: BillingUsageResponse): Double {
+        val paygUsed = kotlin.math.max(0L, usage.usedUnits - usage.baseLimitUnits)
+        return percentageOrZero(paygUsed, usage.paygLimitUnits)
+    }
+
+    private fun paygBytesPercentage(usage: BillingUsageResponse, gbEligibleBytes: Long): Double {
+        val paygBytes = kotlin.math.max(0L, gbEligibleBytes - usage.bytesLimit)
+        return percentageOrZero(paygBytes, usage.paygLimitBytes)
+    }
+
+    private fun gbEligibleBytes(usage: BillingUsageResponse): Long {
+        return kotlin.math.max(0L, usage.usedBytes - usage.usedApmSpanBytes)
+    }
+
+    private fun percentageOrZero(value: Long, limit: Long): Double {
+        return if (limit > 0) value.toDouble() / limit.toDouble() else 0.0
+    }
+
+    private fun hasPaygLimit(usage: BillingUsageResponse): Boolean {
+        return usage.paygLimitUnits > 0 || usage.paygLimitBytes > 0
     }
 
     private fun maybeSendNotification(
@@ -247,10 +263,10 @@ class BillingBackgroundService(
 
         val subject =
             when (notificationType) {
-                "base_80" -> "[$orgName] 80% of monthly quota used"
-                "base_90" -> "[$orgName] 90% of monthly quota used"
-                "base_100" -> "[$orgName] Monthly quota exceeded — ingestion may be blocked"
-                "payg_80" -> "[$orgName] 80% of PAYG budget consumed"
+                BASE_WARNING_NOTIFICATION -> "[$orgName] 80% of monthly quota used"
+                BASE_CRITICAL_NOTIFICATION -> "[$orgName] 90% of monthly quota used"
+                BASE_EXCEEDED_NOTIFICATION -> "[$orgName] Monthly quota exceeded — ingestion may be blocked"
+                PAYG_WARNING_NOTIFICATION -> "[$orgName] 80% of PAYG budget consumed"
                 else -> "[$orgName] Usage notification"
             }
         val body =
@@ -287,4 +303,9 @@ class BillingBackgroundService(
             }
         }
     }
+
+    private data class QuotaUsagePercentages(
+        val base: Double,
+        val payg: Double,
+    )
 }

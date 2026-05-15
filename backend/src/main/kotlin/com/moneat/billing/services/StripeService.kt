@@ -31,6 +31,7 @@ import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.shared.repositories.OrganizationRepository
 import com.moneat.utils.SentryUtils
+import com.moneat.utils.suspendRunCatching
 import com.stripe.Stripe
 import com.stripe.exception.SignatureVerificationException
 import com.stripe.model.Customer
@@ -73,10 +74,11 @@ import org.jetbrains.exposed.v1.jdbc.update
 import java.util.*
 import kotlin.time.Clock
 import kotlin.time.Instant
-import com.moneat.utils.suspendRunCatching
 import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
 
 private val logger = KotlinLogging.logger {}
+
+private const val FREE_PLAN_NAME = "FREE"
 
 class StripeService(
     private val subscriptionRepository: SubscriptionRepository,
@@ -517,120 +519,200 @@ class StripeService(
                 "metadata_org_id='$metadataOrgId'"
         }
 
-        val organizationId = resolveOrganizationId(metadataOrgId, subscription.customer)
-        if (organizationId == null) {
-            logger.error {
-                "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}. " +
-                    "metadata_org_id='$metadataOrgId', customer=${subscription.customer}, " +
-                    "full_metadata=${subscription.metadata}"
-            }
-            return
-        }
-        logger.info { "Resolved organization ID $organizationId for subscription ${subscription.id}" }
-
-        val fallbackTier = run {
-            val tierName =
-                subscriptionRepository.findCurrentByOrganizationId(organizationId)?.plan?.uppercase() ?: "FREE"
-            pricingTierService.getCurrentTier(tierName) ?: pricingTierService.getCurrentTier("FREE")
-        }
-
+        val organizationId = resolveOrganizationIdForSubscription(subscription, metadataOrgId) ?: return
+        val fallbackTier = resolveFallbackTier(organizationId)
         val resolvedTier = resolveTierForSubscription(subscription, fallbackTier)
-        val basePriceIds =
-            setOfNotBlank(
-                resolvedTier?.stripeBasePriceId,
-                resolvedTier?.stripeYearlyBasePriceId
-            )
-        val overagePriceIds =
-            setOfNotBlank(
-                resolvedTier?.stripeOveragePriceId,
-                resolvedTier?.stripeYearlyOveragePriceId
-            )
-        val oncallPriceIds =
-            setOfNotBlank(
-                resolvedTier?.stripeOncallPriceId,
-                resolvedTier?.stripeOncallYearlyPriceId
-            )
-
-        var baseItemId: String? = null
-        var overageItemId: String? = null
-        var oncallItemId: String? = null
-        var oncallSeats = 0
-
-        for (item in subscription.items.data) {
-            val priceId = item.price?.id
-            if (priceId != null) {
-                if (priceId in overagePriceIds) overageItemId = item.id
-                if (priceId in basePriceIds) baseItemId = item.id
-                if (priceId in oncallPriceIds) {
-                    oncallItemId = item.id
-                    oncallSeats = item.quantity?.toInt() ?: 0
-                }
-            }
-        }
-
-        val planName =
-            resolvedTier?.tierName?.lowercase()
-                ?: fallbackTier?.tierName?.lowercase()
-                ?: "free"
+        val subscriptionItems = resolveSubscriptionItems(subscription, resolvedTier)
+        val periodEpochs = resolveSubscriptionPeriodEpochs(subscription, subscriptionItems.baseItemId)
+        val planName = resolvePlanName(resolvedTier, fallbackTier)
         val tierId = resolvedTier?.id?.takeIf { it > 0 }
-        val periodSourceItem = if (baseItemId != null) {
-            subscription.items.data.find { it.id == baseItemId }
-        } else {
-            subscription.items.data.firstOrNull()
-        }
-        var periodStartEpoch = periodSourceItem?.currentPeriodStart
-        var periodEndEpoch = periodSourceItem?.currentPeriodEnd
-        if (periodStartEpoch == null || periodEndEpoch == null) {
-            // Item-level period fields may be null in webhook payloads; re-fetch to populate
-            try {
-                val fresh = Subscription.retrieve(subscription.id)
-                val freshItem = fresh.items?.data?.find { it.id == (baseItemId ?: it.id) }
-                if (periodStartEpoch == null) periodStartEpoch = freshItem?.currentPeriodStart ?: fresh.startDate
-                if (periodEndEpoch == null) periodEndEpoch = freshItem?.currentPeriodEnd ?: fresh.trialEnd
-            } catch (e: Exception) {
-                logger.warn(e) { "Failed to re-fetch subscription ${subscription.id} for period dates" }
-                periodStartEpoch = periodStartEpoch ?: subscription.startDate
-                periodEndEpoch = periodEndEpoch ?: subscription.trialEnd
-            }
-        }
-        val startInstant = periodStartEpoch?.let { Instant.fromEpochSeconds(it) }
-        val endInstant = periodEndEpoch?.let { Instant.fromEpochSeconds(it) }
-        val billingInterval =
-            if (baseItemId != null) {
-                subscription.items.data
-                    .find { it.id == baseItemId }
-                    ?.price
-                    ?.recurring
-                    ?.interval ?: "monthly"
-            } else {
-                "monthly"
-            }
-        val finalInterval = if (billingInterval == "year") "yearly" else "monthly"
 
-        val existing = subscriptionRepository.findByOrganizationAndStripeSubscriptionId(organizationId, subscription.id)
         val stripeData = StripeSubscriptionData(
             plan = planName,
             status = subscription.status,
-            periodStart = startInstant,
-            periodEnd = endInstant,
+            periodStart = periodEpochs.start?.let { Instant.fromEpochSeconds(it) },
+            periodEnd = periodEpochs.end?.let { Instant.fromEpochSeconds(it) },
             stripeCustomerId = subscription.customer,
             pricingTierConfigId = tierId,
-            stripeBaseItemId = baseItemId,
-            stripeOverageItemId = overageItemId,
-            stripeOncallItemId = oncallItemId,
-            oncallSeats = oncallSeats,
-            billingInterval = finalInterval,
+            stripeBaseItemId = subscriptionItems.baseItemId,
+            stripeOverageItemId = subscriptionItems.overageItemId,
+            stripeOncallItemId = subscriptionItems.oncallItemId,
+            oncallSeats = subscriptionItems.oncallSeats,
+            billingInterval = resolveBillingInterval(subscription, subscriptionItems.baseItemId),
+        )
+        upsertStripeSubscription(organizationId, subscription, stripeData)
+    }
+
+    private fun resolveOrganizationIdForSubscription(
+        subscription: Subscription,
+        metadataOrgId: String?
+    ): Int? {
+        val organizationId = resolveOrganizationId(metadataOrgId, subscription.customer)
+        if (organizationId != null) {
+            logger.info { "Resolved organization ID $organizationId for subscription ${subscription.id}" }
+            return organizationId
+        }
+
+        logger.error {
+            "CRITICAL: Could not resolve organization ID for subscription ${subscription.id}. " +
+                "metadata_org_id='$metadataOrgId', customer=${subscription.customer}, " +
+                "full_metadata=${subscription.metadata}"
+        }
+        return null
+    }
+
+    private fun resolveFallbackTier(organizationId: Int): PricingTierConfigResponse? {
+        val tierName = subscriptionRepository.findCurrentByOrganizationId(organizationId)?.plan?.uppercase()
+            ?: FREE_PLAN_NAME
+        return pricingTierService.getCurrentTier(tierName)
+            ?: pricingTierService.getCurrentTier(FREE_PLAN_NAME)
+    }
+
+    private fun resolveSubscriptionItems(
+        subscription: Subscription,
+        resolvedTier: PricingTierConfigResponse?
+    ): StripeSubscriptionItems {
+        val priceIds = stripePriceIdsForTier(resolvedTier)
+        return subscription.items.data.fold(StripeSubscriptionItems()) { items, item ->
+            items.withMatchedItem(item, priceIds)
+        }
+    }
+
+    private fun stripePriceIdsForTier(resolvedTier: PricingTierConfigResponse?): StripePriceIds {
+        return StripePriceIds(
+            base = setOfNotBlank(
+                resolvedTier?.stripeBasePriceId,
+                resolvedTier?.stripeYearlyBasePriceId
+            ),
+            overage = setOfNotBlank(
+                resolvedTier?.stripeOveragePriceId,
+                resolvedTier?.stripeYearlyOveragePriceId
+            ),
+            oncall = setOfNotBlank(
+                resolvedTier?.stripeOncallPriceId,
+                resolvedTier?.stripeOncallYearlyPriceId
+            ),
+        )
+    }
+
+    private fun StripeSubscriptionItems.withMatchedItem(
+        item: SubscriptionItem,
+        priceIds: StripePriceIds
+    ): StripeSubscriptionItems {
+        val priceId = item.price?.id ?: return this
+        return copy(
+            baseItemId = if (priceId in priceIds.base) item.id else baseItemId,
+            overageItemId = if (priceId in priceIds.overage) item.id else overageItemId,
+            oncallItemId = if (priceId in priceIds.oncall) item.id else oncallItemId,
+            oncallSeats = if (priceId in priceIds.oncall) item.quantity?.toInt() ?: 0 else oncallSeats,
+        )
+    }
+
+    private fun resolvePlanName(
+        resolvedTier: PricingTierConfigResponse?,
+        fallbackTier: PricingTierConfigResponse?
+    ): String {
+        return resolvedTier?.tierName?.lowercase()
+            ?: fallbackTier?.tierName?.lowercase()
+            ?: FREE_PLAN_NAME.lowercase()
+    }
+
+    private fun resolveSubscriptionPeriodEpochs(
+        subscription: Subscription,
+        baseItemId: String?
+    ): SubscriptionPeriodEpochs {
+        val periodSourceItem = findPeriodSourceItem(subscription, baseItemId)
+        val periodEpochs = SubscriptionPeriodEpochs(
+            start = periodSourceItem?.currentPeriodStart,
+            end = periodSourceItem?.currentPeriodEnd,
+        )
+        if (periodEpochs.isComplete()) {
+            return periodEpochs
+        }
+
+        return fetchMissingSubscriptionPeriodEpochs(subscription, baseItemId, periodEpochs)
+    }
+
+    private fun findPeriodSourceItem(subscription: Subscription, baseItemId: String?): SubscriptionItem? {
+        return if (baseItemId != null) {
+            subscription.items?.data?.find { it.id == baseItemId }
+        } else {
+            subscription.items?.data?.firstOrNull()
+        }
+    }
+
+    private fun fetchMissingSubscriptionPeriodEpochs(
+        subscription: Subscription,
+        baseItemId: String?,
+        current: SubscriptionPeriodEpochs
+    ): SubscriptionPeriodEpochs {
+        return try {
+            val fresh = Subscription.retrieve(subscription.id)
+            val freshItem = findPeriodSourceItem(fresh, baseItemId)
+            SubscriptionPeriodEpochs(
+                start = current.start ?: freshItem?.currentPeriodStart ?: fresh.startDate,
+                end = current.end ?: freshItem?.currentPeriodEnd ?: fresh.trialEnd,
+            )
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to re-fetch subscription ${subscription.id} for period dates" }
+            SubscriptionPeriodEpochs(
+                start = current.start ?: subscription.startDate,
+                end = current.end ?: subscription.trialEnd,
+            )
+        }
+    }
+
+    private fun resolveBillingInterval(subscription: Subscription, baseItemId: String?): String {
+        val stripeInterval = baseItemId
+            ?.let { id -> subscription.items.data.find { it.id == id } }
+            ?.price
+            ?.recurring
+            ?.interval
+        return if (stripeInterval == "year") "yearly" else "monthly"
+    }
+
+    private fun upsertStripeSubscription(
+        organizationId: Int,
+        subscription: Subscription,
+        stripeData: StripeSubscriptionData
+    ) {
+        val existing = subscriptionRepository.findByOrganizationAndStripeSubscriptionId(
+            organizationId,
+            subscription.id
         )
         if (existing != null) {
             logger.info { "Updating existing subscription row ${existing.id} for org $organizationId" }
             subscriptionRepository.updateFromStripe(existing.id, stripeData)
         } else {
             logger.info {
-                "Creating new subscription row for org $organizationId, plan=$planName, status=${subscription.status}"
+                "Creating new subscription row for org $organizationId, " +
+                    "plan=${stripeData.plan}, status=${subscription.status}"
             }
             subscriptionRepository.insertFromStripe(organizationId, subscription.id, stripeData)
         }
     }
+
+    private fun SubscriptionPeriodEpochs.isComplete(): Boolean {
+        return start != null && end != null
+    }
+
+    private data class StripePriceIds(
+        val base: Set<String>,
+        val overage: Set<String>,
+        val oncall: Set<String>,
+    )
+
+    private data class StripeSubscriptionItems(
+        val baseItemId: String? = null,
+        val overageItemId: String? = null,
+        val oncallItemId: String? = null,
+        val oncallSeats: Int = 0,
+    )
+
+    private data class SubscriptionPeriodEpochs(
+        val start: Long?,
+        val end: Long?,
+    )
 
     private fun resolveTierForSubscription(
         subscription: Subscription,

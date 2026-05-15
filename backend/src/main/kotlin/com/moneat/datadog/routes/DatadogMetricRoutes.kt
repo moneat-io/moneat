@@ -26,16 +26,19 @@ import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogSketchPayload
 import com.moneat.datadog.services.DatadogHostService
 import com.moneat.datadog.services.DatadogMetricService
+import com.moneat.datadog.services.QueuedSketchBatch
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.contentType
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -51,60 +54,7 @@ fun Route.datadogMetricRoutes(
     route("/dd") {
         route("/api/v1") {
             post("/series") {
-                val orgId = DatadogAuthMiddleware.authenticate(call)
-                    ?: return@post
-
-                val contentEncoding =
-                    call.request.headers["Content-Encoding"]
-                val rawBody = call.receive<ByteArray>()
-                val body = DecompressionService.decompress(
-                    rawBody,
-                    contentEncoding
-                )
-                val bodyStr = body.decodeToString()
-
-                val payload = suspendRunCatching {
-                    json.decodeFromString<DatadogMetricSeriesV1>(
-                        bodyStr
-                    )
-                }.getOrElse { e ->
-                    logger.warn(e) {
-                        "Failed to parse DD V1 series payload"
-                    }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "errors" to listOf(
-                                "Invalid payload"
-                            )
-                        )
-                    )
-                }
-
-                val requestedUnits = countV1MetricPoints(payload)
-                if (!reserveDatadogQuota(call, quotaService, orgId, requestedUnits, "dd_metric", body.size.toLong())) {
-                    return@post
-                }
-
-                val count = DatadogMetricService.enqueueMetrics(
-                    organizationId = orgId.toLong(),
-                    payload = payload
-                )
-
-                val hosts = payload.series
-                    .map { it.host }
-                    .filter { it.isNotBlank() }
-                    .toSet()
-                DatadogHostService.touchHostLastSeen(orgId, hosts)
-
-                logger.debug {
-                    "Accepted $count DD V1 metrics for org $orgId"
-                }
-
-                call.respond(
-                    HttpStatusCode.Accepted,
-                    mapOf("status" to "ok")
-                )
+                handleV1MetricSeries(quotaService)
             }
 
             post("/sketches") {
@@ -120,46 +70,7 @@ fun Route.datadogMetricRoutes(
 
         route("/api/v3") {
             post("/series") {
-                val orgId = DatadogAuthMiddleware.authenticate(call)
-                    ?: return@post
-
-                val contentEncoding = call.request.headers["Content-Encoding"]
-                val contentType = call.request.contentType().toString()
-                val rawBody = call.receive<ByteArray>()
-                val body = DecompressionService.decompress(rawBody, contentEncoding)
-
-                val payload = suspendRunCatching {
-                    if (contentType.contains("application/json")) {
-                        json.decodeFromString<DatadogMetricSeriesV1>(body.decodeToString())
-                    } else {
-                        MetricPayloadDecoder.decode(body)
-                    }
-                }.getOrElse { e ->
-                    logger.warn(e) { "Failed to parse DD V3 series payload" }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("errors" to listOf("Invalid payload"))
-                    )
-                }
-
-                val requestedUnits = countV1MetricPoints(payload)
-                if (!reserveDatadogQuota(call, quotaService, orgId, requestedUnits, "dd_metric", body.size.toLong())) {
-                    return@post
-                }
-
-                val count = DatadogMetricService.enqueueMetrics(
-                    organizationId = orgId.toLong(),
-                    payload = payload
-                )
-
-                val hosts = payload.series
-                    .map { it.host }
-                    .filter { it.isNotBlank() }
-                    .toSet()
-                DatadogHostService.touchHostLastSeen(orgId, hosts)
-
-                logger.debug { "Accepted $count DD V3 metrics for org $orgId" }
-                call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+                handleMetricSeries(quotaService, "V3")
             }
 
             post("/sketches") {
@@ -169,48 +80,81 @@ fun Route.datadogMetricRoutes(
 
         route("/api/v2") {
             post("/series") {
-                val orgId = DatadogAuthMiddleware.authenticate(call)
-                    ?: return@post
-
-                val contentEncoding = call.request.headers["Content-Encoding"]
-                val contentType = call.request.contentType().toString()
-                val rawBody = call.receive<ByteArray>()
-                val body = DecompressionService.decompress(rawBody, contentEncoding)
-
-                val payload = suspendRunCatching {
-                    if (contentType.contains("application/json")) {
-                        json.decodeFromString<DatadogMetricSeriesV1>(body.decodeToString())
-                    } else {
-                        MetricPayloadDecoder.decode(body)
-                    }
-                }.getOrElse { e ->
-                    logger.warn(e) { "Failed to parse DD V2 series payload" }
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("errors" to listOf("Invalid payload"))
-                    )
-                }
-
-                val requestedUnits = countV1MetricPoints(payload)
-                if (!reserveDatadogQuota(call, quotaService, orgId, requestedUnits, "dd_metric", body.size.toLong())) {
-                    return@post
-                }
-
-                val count = DatadogMetricService.enqueueMetrics(
-                    organizationId = orgId.toLong(),
-                    payload = payload
-                )
-
-                val hosts = payload.series
-                    .map { it.host }
-                    .filter { it.isNotBlank() }
-                    .toSet()
-                DatadogHostService.touchHostLastSeen(orgId, hosts)
-
-                logger.debug { "Accepted $count DD V2 metrics for org $orgId" }
-                call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+                handleMetricSeries(quotaService, "V2")
             }
         }
+    }
+}
+
+private suspend fun RoutingContext.handleV1MetricSeries(
+    quotaService: BillingQuotaService,
+) {
+    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
+    val body = receiveDecompressedBody()
+    val payload = decodeV1MetricSeriesJson(body) ?: return
+
+    acceptMetricSeries(quotaService, orgId, body, payload, "V1")
+}
+
+private suspend fun RoutingContext.handleMetricSeries(
+    quotaService: BillingQuotaService,
+    apiVersion: String
+) {
+    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
+    val contentType = call.request.contentType().toString()
+    val body = receiveDecompressedBody()
+    val payload = decodeMetricSeriesPayload(body, contentType, apiVersion) ?: return
+
+    acceptMetricSeries(quotaService, orgId, body, payload, apiVersion)
+}
+
+private suspend fun RoutingContext.acceptMetricSeries(
+    quotaService: BillingQuotaService,
+    orgId: Int,
+    body: ByteArray,
+    payload: DatadogMetricSeriesV1,
+    apiVersion: String
+) {
+    val requestedUnits = countV1MetricPoints(payload)
+    if (!reserveMetricQuota(quotaService, orgId, requestedUnits, body)) return
+
+    val count = DatadogMetricService.enqueueMetrics(
+        organizationId = orgId.toLong(),
+        payload = payload
+    )
+    touchMetricHosts(orgId, payload)
+    logger.debug { "Accepted $count DD $apiVersion metrics for org $orgId" }
+    call.respondAccepted()
+}
+
+private suspend fun RoutingContext.decodeV1MetricSeriesJson(
+    body: ByteArray
+): DatadogMetricSeriesV1? {
+    return decodeMetricSeriesPayload(body, "application/json", "V1")
+}
+
+private suspend fun RoutingContext.decodeMetricSeriesPayload(
+    body: ByteArray,
+    contentType: String,
+    apiVersion: String
+): DatadogMetricSeriesV1? {
+    return suspendRunCatching {
+        decodeMetricSeriesBody(body, contentType)
+    }.getOrElse { e ->
+        logger.warn(e) { "Failed to parse DD $apiVersion series payload" }
+        call.respondInvalidPayload()
+        null
+    }
+}
+
+private fun decodeMetricSeriesBody(
+    body: ByteArray,
+    contentType: String
+): DatadogMetricSeriesV1 {
+    return if (contentType.contains("application/json")) {
+        json.decodeFromString(body.decodeToString())
+    } else {
+        MetricPayloadDecoder.decode(body)
     }
 }
 
@@ -219,13 +163,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches(
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
 
-    val contentEncoding = call.request.headers["Content-Encoding"]
     val contentType = call.request.contentType().toString()
-    val rawBody = call.receive<ByteArray>()
-    val body = DecompressionService.decompress(rawBody, contentEncoding)
+    val body = receiveDecompressedBody()
 
     if (body.isEmpty()) {
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+        call.respondAccepted()
         return
     }
 
@@ -238,10 +180,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches(
         }
     }.getOrElse { e ->
         logger.warn(e) { "Failed to parse DD sketches" }
-        call.respond(
-            HttpStatusCode.BadRequest,
-            mapOf("errors" to listOf("Invalid payload"))
-        )
+        call.respondInvalidPayload()
         return
     }
 
@@ -250,23 +189,60 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches(
         payload = payload
     )
 
-    if (!reserveDatadogQuota(call, quotaService, orgId, batch.sketches.size, "dd_metric", body.size.toLong())) {
-        return
-    }
+    if (!reserveMetricQuota(quotaService, orgId, batch.sketches.size, body)) return
 
-    if (batch.sketches.isNotEmpty()) {
-        DatadogMetricService.insertSketchBatch(batch)
-    }
+    insertSketchBatchIfPresent(batch)
 
     logger.debug {
         "Accepted ${batch.sketches.size} DD sketches " +
             "for org $orgId"
     }
 
-    call.respond(
-        HttpStatusCode.Accepted,
-        mapOf("status" to "ok")
+    call.respondAccepted()
+}
+
+private suspend fun RoutingContext.receiveDecompressedBody(): ByteArray {
+    val contentEncoding = call.request.headers["Content-Encoding"]
+    val rawBody = call.receive<ByteArray>()
+    return DecompressionService.decompress(rawBody, contentEncoding)
+}
+
+private suspend fun RoutingContext.reserveMetricQuota(
+    quotaService: BillingQuotaService,
+    orgId: Int,
+    requestedUnits: Int,
+    body: ByteArray
+): Boolean {
+    return reserveDatadogQuota(
+        call,
+        quotaService,
+        orgId,
+        requestedUnits,
+        "dd_metric",
+        body.size.toLong(),
     )
+}
+
+private fun touchMetricHosts(orgId: Int, payload: DatadogMetricSeriesV1) {
+    val hosts = payload.series
+        .map { it.host }
+        .filter { it.isNotBlank() }
+        .toSet()
+    DatadogHostService.touchHostLastSeen(orgId, hosts)
+}
+
+private suspend fun insertSketchBatchIfPresent(batch: QueuedSketchBatch) {
+    if (batch.sketches.isNotEmpty()) {
+        DatadogMetricService.insertSketchBatch(batch)
+    }
+}
+
+private suspend fun ApplicationCall.respondInvalidPayload() {
+    respond(HttpStatusCode.BadRequest, mapOf("errors" to listOf("Invalid payload")))
+}
+
+private suspend fun ApplicationCall.respondAccepted() {
+    respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
 }
 
 private fun countV1MetricPoints(payload: DatadogMetricSeriesV1): Int {
