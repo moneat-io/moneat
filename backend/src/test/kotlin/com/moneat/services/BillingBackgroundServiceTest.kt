@@ -181,7 +181,7 @@ class BillingBackgroundServiceTest {
     }
 
     @Test
-    fun `process quota threshold notifications sends each threshold once per period`() {
+    fun `process quota threshold notifications sends highest base threshold once per period`() {
         val service = BillingBackgroundService()
 
         invokeQuotaNotificationPass(service)
@@ -195,12 +195,20 @@ class BillingBackgroundServiceTest {
                     .map { it[QuotaNotificationsSent.notification_type] }
                     .toSet()
 
-            assertEquals(4, types.size)
-            assertTrue("base_80" in types)
-            assertTrue("base_90" in types)
+            assertEquals(2, types.size)
             assertTrue("base_100" in types)
             assertTrue("payg_80" in types)
         }
+    }
+
+    @Test
+    fun `base notification type uses highest matching threshold`() {
+        val service = BillingBackgroundService()
+
+        assertEquals("base_80", invokeBaseNotificationTypeFor(service, 0.8))
+        assertEquals("base_90", invokeBaseNotificationTypeFor(service, 0.9))
+        assertEquals("base_100", invokeBaseNotificationTypeFor(service, 1.0))
+        assertEquals("base_100", invokeBaseNotificationTypeFor(service, 1.2))
     }
 
     @Test
@@ -338,8 +346,7 @@ class BillingBackgroundServiceTest {
                     .map { it[QuotaNotificationsSent.notification_type] }
                     .toSet()
 
-            assertTrue("base_80" in types, "Expected base_80 notification for bytes-only tier")
-            assertTrue("base_90" in types, "Expected base_90 notification for bytes-only tier")
+            assertEquals(setOf("base_100"), types)
             assertTrue("base_100" in types, "Expected base_100 notification for bytes-only tier")
         }
     }
@@ -630,8 +637,7 @@ class BillingBackgroundServiceTest {
                     .map { it[QuotaNotificationsSent.notification_type] }
                     .toSet()
 
-            assertTrue("base_80" in types, "Expected base_80 (base limit exceeded)")
-            assertTrue("base_90" in types, "Expected base_90 (base limit exceeded)")
+            assertEquals(2, types.size)
             assertTrue("base_100" in types, "Expected base_100 (base limit exceeded)")
             assertTrue("payg_80" in types, "Expected payg_80 for byte-based PAYG budget")
         }
@@ -774,14 +780,7 @@ class BillingBackgroundServiceTest {
                     .map { it[QuotaNotificationsSent.notification_type] }
                     .toSet()
 
-            assertTrue(
-                "base_80" in types,
-                "Expected base_80 notification when bytes exceed 80% of GB limit (unit limit is Long.MAX_VALUE)"
-            )
-            assertTrue(
-                "base_90" in types,
-                "Expected base_90 notification when bytes exceed 90% of GB limit (unit limit is Long.MAX_VALUE)"
-            )
+            assertEquals(setOf("base_100"), types)
             assertTrue(
                 "base_100" in types,
                 "Expected base_100 notification when bytes exceed GB limit (unit limit is Long.MAX_VALUE)"
@@ -793,5 +792,14 @@ class BillingBackgroundServiceTest {
         val method = BillingBackgroundService::class.java.getDeclaredMethod("processQuotaThresholdNotifications")
         method.isAccessible = true
         method.invoke(service)
+    }
+
+    private fun invokeBaseNotificationTypeFor(service: BillingBackgroundService, percentage: Double): String? {
+        val method = BillingBackgroundService::class.java.getDeclaredMethod(
+            "baseNotificationTypeFor",
+            java.lang.Double.TYPE
+        )
+        method.isAccessible = true
+        return method.invoke(service, percentage) as String?
     }
 }

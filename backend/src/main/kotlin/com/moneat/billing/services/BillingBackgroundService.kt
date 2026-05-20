@@ -158,13 +158,20 @@ class BillingBackgroundService(
     private fun quotaNotificationTypesFor(usage: BillingUsageResponse): List<String> {
         val percentages = quotaUsagePercentages(usage)
         return listOfNotNull(
-            BASE_WARNING_NOTIFICATION.takeIf { percentages.base >= QUOTA_WARNING_THRESHOLD },
-            BASE_CRITICAL_NOTIFICATION.takeIf { percentages.base >= QUOTA_CRITICAL_THRESHOLD },
-            BASE_EXCEEDED_NOTIFICATION.takeIf { percentages.base >= QUOTA_EXCEEDED_THRESHOLD },
+            baseNotificationTypeFor(percentages.base),
             PAYG_WARNING_NOTIFICATION.takeIf {
                 hasPaygLimit(usage) && percentages.payg >= QUOTA_WARNING_THRESHOLD
             },
         )
+    }
+
+    private fun baseNotificationTypeFor(basePercentage: Double): String? {
+        return when {
+            basePercentage >= QUOTA_EXCEEDED_THRESHOLD -> BASE_EXCEEDED_NOTIFICATION
+            basePercentage >= QUOTA_CRITICAL_THRESHOLD -> BASE_CRITICAL_NOTIFICATION
+            basePercentage >= QUOTA_WARNING_THRESHOLD -> BASE_WARNING_NOTIFICATION
+            else -> null
+        }
     }
 
     private fun quotaUsagePercentages(usage: BillingUsageResponse): QuotaUsagePercentages {
