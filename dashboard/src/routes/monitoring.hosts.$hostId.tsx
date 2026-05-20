@@ -16,7 +16,7 @@
 
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import type {DdContainerResponse} from '@/lib/api'
+import type {BillingUsage, DdContainerResponse} from '@/lib/api'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
@@ -27,6 +27,7 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/c
 import {
     Activity,
     ArrowLeft,
+    AlertTriangle,
     Box,
     Clock,
     Cpu,
@@ -59,8 +60,18 @@ import {formatTimeHM} from '@/lib/date-format'
 
 type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
 type ContainerViewMode = 'cards' | 'compact'
+type HostMonitoringLimitKind = 'gb' | 'customMetrics'
 
 const CONTAINER_VIEW_MODE_KEY = 'moneat.host-containers.viewMode'
+const BYTES_PER_GB = 1024 * 1024 * 1024
+
+interface HostMonitoringLimitState {
+  kind: HostMonitoringLimitKind
+  title: string
+  message: string
+  detail: string
+  emptyMessage: string
+}
 
 function getInitialContainerViewMode(): ContainerViewMode {
   if (typeof window === 'undefined') return 'cards'
@@ -90,6 +101,17 @@ function formatBytes(bytes: number | undefined): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`
 }
 
+function formatGb(bytes: number): string {
+  return `${(bytes / BYTES_PER_GB).toFixed(2)} GB`
+}
+
+function formatCount(value: number): string {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`
+  return value.toLocaleString()
+}
+
 function formatBytesShort(bytes: number | undefined): string {
   if (bytes === undefined) return 'N/A'
   if (bytes === 0) return '0'
@@ -117,6 +139,50 @@ function getPercentColor(value: number | undefined): string {
   if (value >= 75) return 'text-orange-500'
   if (value >= 50) return 'text-yellow-500'
   return 'text-emerald-500'
+}
+
+function getHostMonitoringLimitState(usage: BillingUsage | undefined): HostMonitoringLimitState | null {
+  if (!usage) return null
+
+  const usedGbEligibleBytes = Math.max(0, usage.usedBytes - (usage.usedApmSpanBytes ?? 0))
+  const effectiveBytesLimit = usage.bytesLimit + (usage.bonusGbBytes ?? 0) + (usage.paygLimitBytes ?? 0)
+
+  if (usage.bytesLimit > 0 && usedGbEligibleBytes > effectiveBytesLimit) {
+    return {
+      kind: 'gb',
+      title: 'Host telemetry is paused by billing limits',
+      message:
+        `This organization has used ${formatGb(usedGbEligibleBytes)} of ` +
+        `${formatGb(effectiveBytesLimit)} active GB-billed ingestion.`,
+      detail:
+        'New host metrics and infrastructure payloads are rejected until capacity is added, ' +
+        'pay-as-you-go budget is raised, or the billing period resets.',
+      emptyMessage: 'Ingestion is limited, so no new host telemetry is being stored.',
+    }
+  }
+
+  const customMetricLimit = usage.customMetricLimit ?? 0
+  const customMetricOverageRate = usage.customMetricOverageRateCentsPer100k ?? 0
+  const effectiveCustomMetricLimit = customMetricLimit + (usage.bonusUnits ?? 0)
+  const customMetricsBlocked =
+    customMetricLimit >= 0 &&
+    customMetricOverageRate <= 0 &&
+    (usage.usedCustomMetrics ?? 0) > effectiveCustomMetricLimit
+
+  if (customMetricsBlocked) {
+    return {
+      kind: 'customMetrics',
+      title: 'Host metrics are paused by custom metric limits',
+      message:
+        `This organization has used ${formatCount(usage.usedCustomMetrics ?? 0)} of ` +
+        `${formatCount(effectiveCustomMetricLimit)} included custom metrics.`,
+      detail:
+        'New host metric points are rejected until capacity is added or the billing period resets.',
+      emptyMessage: 'Custom metric limit reached, so no new host metric points are being stored.',
+    }
+  }
+
+  return null
 }
 
 export const Route = createFileRoute('/monitoring/hosts/$hostId')({
@@ -211,6 +277,30 @@ function MetricCard({
   )
 }
 
+function HostMonitoringLimitBanner({state}: {state: HostMonitoringLimitState}) {
+  return (
+    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex gap-3">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-500/15">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">{state.title}</p>
+            <p className="text-sm text-amber-900/80 dark:text-amber-100/80">{state.message}</p>
+            <p className="text-xs text-muted-foreground">{state.detail}</p>
+          </div>
+        </div>
+        <Button asChild size="sm" variant="outline" className="shrink-0 border-amber-500/40">
+          <Link to="/settings" search={{tab: 'billing'}}>
+            View Billing
+          </Link>
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function HostDetailPage() {
   const {hostId} = Route.useParams()
   const hostIdNum = Number(hostId)
@@ -268,6 +358,7 @@ function HostDetailPage() {
   })
 
   const containers = containerData?.containers ?? []
+  const hostMonitoringLimitState = getHostMonitoringLimitState(billingUsage)
 
   if (hostLoading) {
     return (
@@ -462,7 +553,7 @@ function HostDetailPage() {
                 Network
               </TabsTrigger>
               <TabsTrigger value="alerts" className="gap-1 px-2.5 py-1 text-xs">
-                <AlertTriangleIcon className="h-3 w-3" />
+                <AlertTriangle className="h-3 w-3" />
                 Alerts
               </TabsTrigger>
             </TabsList>
@@ -488,6 +579,10 @@ function HostDetailPage() {
               </div>
             )}
           </div>
+
+          {hostMonitoringLimitState && (
+            <HostMonitoringLimitBanner state={hostMonitoringLimitState} />
+          )}
 
           <TabsContent value="overview" className="space-y-4">
             {/* Metric Summary Cards */}
@@ -586,7 +681,7 @@ function HostDetailPage() {
                       </AreaChart>
                     </ResponsiveContainer>
                   ) : (
-                    <EmptyChart />
+                    <EmptyChart limitState={hostMonitoringLimitState} />
                   )}
                 </CardContent>
               </Card>
@@ -637,7 +732,7 @@ function HostDetailPage() {
                       </AreaChart>
                     </ResponsiveContainer>
                   ) : (
-                    <EmptyChart />
+                    <EmptyChart limitState={hostMonitoringLimitState} />
                   )}
                 </CardContent>
               </Card>
@@ -688,7 +783,7 @@ function HostDetailPage() {
                       </AreaChart>
                     </ResponsiveContainer>
                   ) : (
-                    <EmptyChart />
+                    <EmptyChart limitState={hostMonitoringLimitState} />
                   )}
                 </CardContent>
               </Card>
@@ -754,7 +849,7 @@ function HostDetailPage() {
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
-                    <EmptyChart />
+                    <EmptyChart limitState={hostMonitoringLimitState} />
                   )}
                 </CardContent>
               </Card>
@@ -940,12 +1035,30 @@ function HostDetailPage() {
               <Card className="border-dashed bg-gradient-to-br from-cyan-500/5 via-background to-blue-500/5">
                 <CardContent className="py-12">
                   <div className="mx-auto max-w-2xl text-center">
-                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20">
-                      <Box className="h-8 w-8 text-cyan-600 dark:text-cyan-400" />
+                    <div
+                      className={
+                        hostMonitoringLimitState?.kind === 'gb'
+                          ? 'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl ' +
+                            'bg-amber-500/10 border border-amber-500/20'
+                          : 'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl ' +
+                            'bg-cyan-500/10 border border-cyan-500/20'
+                      }
+                    >
+                      {hostMonitoringLimitState?.kind === 'gb' ? (
+                        <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+                      ) : (
+                        <Box className="h-8 w-8 text-cyan-600 dark:text-cyan-400" />
+                      )}
                     </div>
-                    <h3 className="text-xl font-semibold mb-2">No containers detected</h3>
+                    <h3 className="text-xl font-semibold mb-2">
+                      {hostMonitoringLimitState?.kind === 'gb'
+                        ? 'Infrastructure telemetry paused'
+                        : 'No containers detected'}
+                    </h3>
                     <p className="text-muted-foreground text-sm mb-6">
-                      Enable container monitoring by mounting the Docker socket when deploying the agent.
+                      {hostMonitoringLimitState?.kind === 'gb'
+                        ? hostMonitoringLimitState.emptyMessage
+                        : 'Enable container monitoring by mounting the Docker socket when deploying the agent.'}
                     </p>
                   </div>
                 </CardContent>
@@ -1020,7 +1133,7 @@ function HostDetailPage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <EmptyChart height={224} />
+                  <EmptyChart height={224} limitState={hostMonitoringLimitState} />
                 )}
               </CardContent>
             </Card>
@@ -1108,14 +1221,31 @@ function HostDetailPage() {
   )
 }
 
-function EmptyChart({height = 144}: {height?: number}) {
+function EmptyChart({
+  height = 144,
+  limitState,
+}: {
+  height?: number
+  limitState?: HostMonitoringLimitState | null
+}) {
   return (
     <div
       className="flex flex-col items-center justify-center text-muted-foreground gap-1"
       style={{height}}
     >
-      <Activity className="h-5 w-5 opacity-30" />
-      <p className="text-[11px]">No data available</p>
+      {limitState ? (
+        <AlertTriangle className="h-5 w-5 text-amber-500 opacity-80" />
+      ) : (
+        <Activity className="h-5 w-5 opacity-30" />
+      )}
+      <p className="text-[11px] font-medium">
+        {limitState ? 'Telemetry paused' : 'No data available'}
+      </p>
+      {limitState && (
+        <p className="max-w-[260px] text-center text-[10px] leading-snug">
+          {limitState.emptyMessage}
+        </p>
+      )}
     </div>
   )
 }
@@ -1133,26 +1263,5 @@ function ChartSkeleton({height = 144}: {height?: number}) {
         ))}
       </div>
     </div>
-  )
-}
-
-function AlertTriangleIcon(props: import('react').SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-      <path d="M12 9v4" />
-      <path d="M12 17h.01" />
-    </svg>
   )
 }

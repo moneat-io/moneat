@@ -17,6 +17,7 @@
 package com.moneat.datadog
 
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.QuotaExceededResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
@@ -43,6 +44,9 @@ internal suspend fun reserveDatadogQuota(
         return true
     }
 
-    call.respond(HttpStatusCode.TooManyRequests, mapOf("error" to "quota_exceeded"))
+    call.respond(
+        HttpStatusCode.TooManyRequests,
+        QuotaExceededResponse(reason = reservation.reason, usage = reservation.usage)
+    )
     return false
 }
