@@ -53,6 +53,8 @@ import com.moneat.datadog.services.DdHostInfo
 import com.moneat.datadog.services.DebuggerIngestionService
 import com.moneat.datadog.services.MiscIngestionService
 import com.moneat.datadog.services.OrchestratorIngestionService
+import com.moneat.datadog.services.QueuedServiceCheckBatch
+import com.moneat.datadog.services.QueuedServiceCheckEntry
 import com.moneat.datadog.services.TelemetryProxyService
 import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.shared.models.Memberships
@@ -783,7 +785,7 @@ class DatadogRoutesExtendedTest {
     @Test
     fun `POST dd metrics returns 429 before enqueue when quota is exceeded`() = testApplication {
         val quotaService = rejectingQuotaService()
-        val body = """{"series":[{"metric":"system.cpu","points":[[1700000000,42.0]]}]}"""
+        val body = """{"series":[{"metric":"system.cpu","host":"h1","points":[[1700000000,42.0]]}]}"""
 
         application {
             install(ContentNegotiation) { json() }
@@ -805,7 +807,49 @@ class DatadogRoutesExtendedTest {
                 requestedBytes = body.toByteArray().size.toLong(),
             )
         }
+        verify { DatadogHostService.touchHostLastSeen(TEST_ORG_ID, setOf("h1")) }
         coVerify(exactly = 0) { DatadogMetricService.enqueueMetrics(any(), any()) }
+    }
+
+    @Test
+    fun `POST dd service checks touches host before quota rejection`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        val body = """{"service_checks":[{"check":"disk","host_name":"h1","status":0}]}"""
+        every {
+            DatadogEventService.mapServiceChecks(any(), any())
+        } returns QueuedServiceCheckBatch(
+            organizationId = TEST_ORG_ID.toLong(),
+            serviceChecks = listOf(
+                QueuedServiceCheckEntry(
+                    checkName = "disk",
+                    host = "h1",
+                    timestampMs = 0L
+                )
+            )
+        )
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogEventRoutes(quotaService) }
+        }
+
+        val response = client.post("/dd/api/v2/service_checks") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        verify {
+            quotaService.reserveUnits(
+                organizationId = TEST_ORG_ID,
+                requestedUnits = 1,
+                eventType = "dd_event",
+                requestedBytes = body.toByteArray().size.toLong(),
+            )
+        }
+        verify { DatadogHostService.touchHostLastSeen(TEST_ORG_ID, setOf("h1")) }
+        coVerify(exactly = 0) { DatadogEventService.insertServiceCheckBatch(any()) }
     }
 
     @Test

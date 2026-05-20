@@ -79,10 +79,10 @@ private suspend fun RoutingContext.handleV1CheckRun(
     ) ?: return
     val batch = mapServiceChecks(orgId, checks)
 
+    touchServiceCheckHosts(orgId, checks)
     if (!reserveEventQuota(quotaService, orgId, batch.serviceChecks.size, body)) return
 
     insertServiceCheckBatchIfPresent(batch)
-    touchServiceCheckHosts(orgId, checks)
     logger.debug {
         "Accepted ${batch.serviceChecks.size} DD V1 check_run service checks for org $orgId"
     }
@@ -120,10 +120,10 @@ private suspend fun RoutingContext.handleV2ServiceChecks(
     ) ?: return
     val batch = mapServiceChecks(orgId, payload.serviceChecks)
 
+    touchServiceCheckHosts(orgId, payload.serviceChecks)
     if (!reserveEventQuota(quotaService, orgId, batch.serviceChecks.size, body)) return
 
     insertServiceCheckBatchIfPresent(batch)
-    touchServiceCheckHosts(orgId, payload.serviceChecks)
     logger.debug { "Accepted ${batch.serviceChecks.size} DD service checks for org $orgId" }
     call.respondAccepted()
 }
