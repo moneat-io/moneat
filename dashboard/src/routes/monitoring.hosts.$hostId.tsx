@@ -16,8 +16,7 @@
 
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import type {BillingUsage, DdContainerResponse} from '@/lib/api'
-import {api} from '@/lib/api'
+import {api, type BillingUsage, type DdContainerResponse} from '`@/lib/api`'
 import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
