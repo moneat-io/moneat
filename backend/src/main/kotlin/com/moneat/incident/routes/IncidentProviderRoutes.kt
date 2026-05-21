@@ -255,6 +255,18 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateProviderCo
 
     val request = call.receive<CreateProviderConfigRequest>()
 
+    if (request.providerType == "incident_io") {
+        val entitlementService =
+            org.koin.core.context.GlobalContext.get().get<com.moneat.billing.services.EntitlementService>()
+        if (!entitlementService.isFeatureEnabled(organizationId) { it.incidentIoEnabled }) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                ErrorResponse("Incident.io integration is not available on your current plan")
+            )
+            return
+        }
+    }
+
     val configId =
         transaction {
             // Custom SQL for JSONB insertion

@@ -18,8 +18,10 @@ package com.moneat.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.statuspage.models.StatusPageCustomDomains
 import com.moneat.statuspage.models.StatusPageIncidentUpdates
@@ -96,7 +98,8 @@ class StatusPageRoutesTest {
         // Ensure schema exists (idempotent in H2) and clean between tests
         TestDatabaseHelper.resetSchema(
             Users, Organizations, Memberships, StatusPages, StatusPageIncidents,
-            UptimeMonitors, StatusPageMonitors, StatusPageCustomDomains, StatusPageIncidentUpdates
+            UptimeMonitors, StatusPageMonitors, StatusPageCustomDomains, StatusPageIncidentUpdates,
+            PricingTierConfigs, Subscriptions
         )
     }
 

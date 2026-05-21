@@ -228,6 +228,7 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
 fun Route.integrationRoutes() {
     val slackService = GlobalContext.get().get<SlackService>()
     val discordService = GlobalContext.get().get<DiscordService>()
+    val entitlementService = GlobalContext.get().get<com.moneat.billing.services.EntitlementService>()
 
     route("/integrations") {
         // List all integrations for the organization
@@ -298,6 +299,13 @@ fun Route.integrationRoutes() {
 
                 if (organizationId == null) {
                     return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                }
+
+                if (!entitlementService.isFeatureEnabled(organizationId) { it.slackEnabled }) {
+                    return@get call.respond(
+                        HttpStatusCode.Forbidden,
+                        MessageResponse("Slack integration is not available on your current plan")
+                    )
                 }
 
                 val clientId = EnvConfig.get("SLACK_CLIENT_ID")
@@ -536,6 +544,13 @@ fun Route.integrationRoutes() {
                     return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
                 }
 
+                if (!entitlementService.isFeatureEnabled(organizationId) { it.discordEnabled }) {
+                    return@get call.respond(
+                        HttpStatusCode.Forbidden,
+                        MessageResponse("Discord integration is not available on your current plan")
+                    )
+                }
+
                 val clientId =
                     EnvConfig.get("DISCORD_CLIENT_ID")
                         ?: return@get call.respond(
@@ -746,6 +761,7 @@ fun Route.integrationRoutes() {
 fun Route.integrationCallbackRoutes() {
     val slackService = GlobalContext.get().get<SlackService>()
     val discordService = GlobalContext.get().get<DiscordService>()
+    val entitlementService = GlobalContext.get().get<com.moneat.billing.services.EntitlementService>()
 
     route("/integrations") {
         // Slack OAuth callback (no auth required - called by Slack)
@@ -779,6 +795,13 @@ fun Route.integrationCallbackRoutes() {
 
             if (!hasAccess) {
                 return@get call.respond(HttpStatusCode.Forbidden, MessageResponse("Access denied to organization"))
+            }
+
+            if (!entitlementService.isFeatureEnabled(organizationId) { it.slackEnabled }) {
+                return@get call.respond(
+                    HttpStatusCode.Forbidden,
+                    MessageResponse("Slack integration is not available on your current plan")
+                )
             }
 
             val clientId =
@@ -889,6 +912,13 @@ fun Route.integrationCallbackRoutes() {
 
             if (!hasAccess) {
                 return@get call.respond(HttpStatusCode.Forbidden, MessageResponse("Access denied to organization"))
+            }
+
+            if (!entitlementService.isFeatureEnabled(organizationId) { it.discordEnabled }) {
+                return@get call.respond(
+                    HttpStatusCode.Forbidden,
+                    MessageResponse("Discord integration is not available on your current plan")
+                )
             }
 
             val clientId =

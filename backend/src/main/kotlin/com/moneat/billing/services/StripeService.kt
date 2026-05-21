@@ -913,6 +913,7 @@ class StripeService(
                 it[Subscriptions.organization_id] = organizationId
                 it[plan] = "free"
                 it[status] = "active"
+                it[pricing_tier_config_id] = freeTier?.id?.takeIf { id -> id > 0 }
                 it[current_period_start] = Clock.System.now()
                 it[current_period_end] = addDays(Clock.System.now(), FREE_TIER_PERIOD_DAYS)
                 it[payg_budget_cents] = 0
@@ -927,6 +928,9 @@ class StripeService(
                 it[pending_custom_metric_overage_units] = 0
                 it[pending_custom_metric_batch_id] = null
                 it[pending_custom_metric_batch_units] = 0
+                it[pending_analytics_pageview_overage_units] = 0
+                it[pending_analytics_pageview_batch_id] = null
+                it[pending_analytics_pageview_batch_units] = 0
             }
         }
     }
@@ -1062,6 +1066,19 @@ class StripeService(
             limit = limit
         )
 
+        // Analytics pageview overage metering
+        val analyticsPageviewMeterEventName =
+            config.propertyOrNull("stripe.analyticsPageviewMeterEventName")?.getString()
+                ?: "moneat_analytics_pageview_overage_units"
+        flushed += flushPendingTypeOverage(
+            pendingUnitsColumn = Subscriptions.pending_analytics_pageview_overage_units,
+            batchIdColumn = Subscriptions.pending_analytics_pageview_batch_id,
+            batchUnitsColumn = Subscriptions.pending_analytics_pageview_batch_units,
+            meterEventName = analyticsPageviewMeterEventName,
+            batchPrefix = "pageview",
+            limit = limit
+        )
+
         return flushed
     }
 
@@ -1191,6 +1208,15 @@ class StripeService(
                         it[pending_meter_units] = 0
                         it[pending_meter_batch_id] = null
                         it[pending_meter_batch_units] = 0
+                        it[pending_apm_span_overage_units] = 0
+                        it[pending_apm_span_batch_id] = null
+                        it[pending_apm_span_batch_units] = 0
+                        it[pending_custom_metric_overage_units] = 0
+                        it[pending_custom_metric_batch_id] = null
+                        it[pending_custom_metric_batch_units] = 0
+                        it[pending_analytics_pageview_overage_units] = 0
+                        it[pending_analytics_pageview_batch_id] = null
+                        it[pending_analytics_pageview_batch_units] = 0
                     }
                 }
                 pastDueRows.size

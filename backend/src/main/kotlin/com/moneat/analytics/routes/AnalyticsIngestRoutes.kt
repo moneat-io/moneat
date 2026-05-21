@@ -23,9 +23,16 @@ import com.moneat.analytics.services.GeoIpService
 import com.moneat.analytics.services.ReferrerParser
 import com.moneat.analytics.services.SessionHashService
 import com.moneat.analytics.services.UserAgentService
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.PricingTierService
+import com.moneat.billing.services.QuotaExceededResponse
+import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.events.services.EventService
 import com.moneat.shared.models.ProjectKeys
+import com.moneat.shared.models.Projects
+import com.moneat.utils.suspendRunCatching
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -52,6 +59,11 @@ import java.net.URISyntaxException
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
+private data class AnalyticsQuotaReservationResult(
+    val reservedOrganizationId: Int?,
+    val responseSent: Boolean = false
+)
+
 /**
  * Public ingestion endpoint for analytics events from the tracking script.
  * Supports /api/{domain}/analytics/event (SDK) and /api/{projectId}/analytics/event (API).
@@ -61,6 +73,8 @@ fun Route.analyticsIngestRoutes(
     sessionHashService: SessionHashService = GlobalContext.get().get(),
     geoIpService: GeoIpService = GlobalContext.get().get(),
     eventService: EventService = GlobalContext.get().get(),
+    quotaService: BillingQuotaService = GlobalContext.get().get(),
+    pricingTierService: PricingTierService = GlobalContext.get().get(),
     enqueueEvent: (String) -> Unit = { message ->
         RedisConfig.sync().lpush(AnalyticsIngestionWorker.QUEUE_KEY, message)
     },
@@ -86,7 +100,16 @@ fun Route.analyticsIngestRoutes(
                 call.respond(HttpStatusCode.Unauthorized, "Invalid sentry_key")
                 return@post
             }
-            processAndEnqueueEvent(call, projectId, sessionHashService, geoIpService, enqueueEvent)
+            processAndEnqueueEvent(
+                call,
+                projectId,
+                sessionHashService,
+                geoIpService,
+                eventService,
+                quotaService,
+                pricingTierService,
+                enqueueEvent
+            )
         }
     }
 
@@ -110,7 +133,16 @@ fun Route.analyticsIngestRoutes(
                 call.respond(HttpStatusCode.Unauthorized, "Invalid DSN")
                 return@post
             }
-            processAndEnqueueEvent(call, projectId, sessionHashService, geoIpService, enqueueEvent)
+            processAndEnqueueEvent(
+                call,
+                projectId,
+                sessionHashService,
+                geoIpService,
+                eventService,
+                quotaService,
+                pricingTierService,
+                enqueueEvent
+            )
         }
     }
 
@@ -125,9 +157,12 @@ private suspend fun processAndEnqueueEvent(
     projectId: Long,
     sessionHashService: SessionHashService,
     geoIpService: GeoIpService,
+    eventService: EventService,
+    quotaService: BillingQuotaService,
+    pricingTierService: PricingTierService,
     enqueueEvent: (String) -> Unit,
 ) {
-    val payload = runCatching {
+    val payload = suspendRunCatching {
         // Accept both application/json (API clients) and text/plain (browser tracking
         // script / sendBeacon). text/plain avoids a CORS preflight, which means the
         // request succeeds even when the browser can't verify the preflight first.
@@ -142,6 +177,17 @@ private suspend fun processAndEnqueueEvent(
         logger.debug { "Invalid analytics payload: ${e.message}" }
         call.respond(HttpStatusCode.BadRequest, "Invalid payload")
     }.getOrNull() ?: return
+
+    val quotaReservation = reserveAnalyticsPageviewQuota(
+        call = call,
+        projectId = projectId,
+        payload = payload,
+        eventService = eventService,
+        quotaService = quotaService,
+        pricingTierService = pricingTierService
+    )
+    if (quotaReservation.responseSent) return
+
     val ip = call.request.header("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
         ?: call.request.header("X-Real-IP")
         ?: "0.0.0.0"
@@ -177,9 +223,64 @@ private suspend fun processAndEnqueueEvent(
         timestamp = System.currentTimeMillis(),
     )
     val message = json.encodeToString(enriched)
-    enqueueEvent(message)
+    try {
+        enqueueEvent(message)
+    } catch (e: RuntimeException) {
+        quotaReservation.reservedOrganizationId?.let { orgId ->
+            quotaService.refundUnits(orgId, 1, "analytics_pageview", 0)
+        }
+        logger.error(e) { "Failed to enqueue analytics event for project $projectId" }
+        call.respond(HttpStatusCode.InternalServerError, "Failed to enqueue event")
+        return
+    }
     updateRealtimeCounter(projectId, sessionId)
     call.respond(HttpStatusCode.Accepted, "ok")
+}
+
+private suspend fun reserveAnalyticsPageviewQuota(
+    call: ApplicationCall,
+    projectId: Long,
+    payload: AnalyticsEventPayload,
+    eventService: EventService,
+    quotaService: BillingQuotaService,
+    pricingTierService: PricingTierService
+): AnalyticsQuotaReservationResult {
+    if (!quotaService.isEnforcementEnabled()) return AnalyticsQuotaReservationResult(null)
+
+    val orgId = eventService.getOrganizationIdForProject(projectId)
+        ?: return AnalyticsQuotaReservationResult(null)
+    val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
+    val maxSites = tier.maxAnalyticsSites
+    if (maxSites != null && isAnalyticsSiteLimitReached(orgId, payload.d, maxSites)) {
+        call.respond(
+            HttpStatusCode.Forbidden,
+            "Analytics site limit reached for your plan ($maxSites sites)"
+        )
+        return AnalyticsQuotaReservationResult(null, responseSent = true)
+    }
+
+    val reservation = quotaService.reserveUnits(orgId, 1, "analytics_pageview", 0)
+    if (!reservation.allowed) {
+        call.respond(
+            HttpStatusCode.TooManyRequests,
+            QuotaExceededResponse(reason = reservation.reason, usage = reservation.usage)
+        )
+        return AnalyticsQuotaReservationResult(null, responseSent = true)
+    }
+
+    return AnalyticsQuotaReservationResult(orgId)
+}
+
+private suspend fun isAnalyticsSiteLimitReached(
+    organizationId: Int,
+    rawHostname: String,
+    maxSites: Int
+): Boolean {
+    val hostname = normalizeAnalyticsHostname(rawHostname)
+    if (hostname.isBlank()) return false
+    if (hasAnalyticsDataForHostname(organizationId, hostname)) return false
+
+    return getDistinctAnalyticsSiteCount(organizationId) >= maxSites
 }
 
 private fun updateRealtimeCounter(projectId: Long, sessionId: String) {
@@ -226,6 +327,55 @@ internal fun extractUtmParams(url: String): Map<String, String> {
     } catch (_: URISyntaxException) {
         emptyMap()
     }
+}
+
+private fun normalizeAnalyticsHostname(hostname: String): String = hostname.trim().lowercase()
+
+private suspend fun hasAnalyticsDataForHostname(organizationId: Int, hostname: String): Boolean {
+    val orgProjectIds = getProjectIdsForOrganization(organizationId)
+    if (orgProjectIds.isEmpty()) return false
+
+    return suspendRunCatching {
+        val idList = orgProjectIds.joinToString(",")
+        val escapedHostname = AnalyticsIngestionWorker.escapeCH(hostname)
+        val sql = """
+            SELECT 1
+            FROM analytics_events
+            WHERE project_id IN ($idList)
+              AND lowerUTF8(hostname) = '$escapedHostname'
+            LIMIT 1
+        """.trimIndent()
+        val response = ClickHouseClient.execute(sql)
+        val body = response.bodyAsText()
+        response.status == HttpStatusCode.OK && body.trim().isNotBlank()
+    }.getOrDefault(false)
+}
+
+private fun getProjectIdsForOrganization(organizationId: Int): List<Long> {
+    return transaction {
+        Projects
+            .selectAll()
+            .where { Projects.organization_id eq organizationId }
+            .map { it[Projects.id] }
+    }
+}
+
+private suspend fun getDistinctAnalyticsSiteCount(organizationId: Int): Int {
+    val orgProjectIds = getProjectIdsForOrganization(organizationId)
+    if (orgProjectIds.isEmpty()) return 0
+
+    return suspendRunCatching {
+        val idList = orgProjectIds.joinToString(",")
+        val sql = """
+            SELECT uniqExact(lowerUTF8(hostname))
+            FROM analytics_events
+            WHERE project_id IN ($idList)
+              AND hostname != ''
+        """.trimIndent()
+        val response = ClickHouseClient.execute(sql)
+        val body = response.bodyAsText()
+        body.trim().toIntOrNull() ?: 0
+    }.getOrDefault(0)
 }
 
 private const val REALTIME_TTL_SECONDS = 300L

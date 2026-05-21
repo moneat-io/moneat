@@ -19,6 +19,7 @@ package com.moneat.datadog.services
 import com.moneat.datadog.models.DatadogHostMeta
 import com.moneat.datadog.models.DatadogHostMetadata
 import com.moneat.datadog.models.DatadogIntakePayload
+import com.moneat.monitor.services.MonitorService
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -35,6 +36,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import org.koin.core.context.GlobalContext
 import org.postgresql.util.PGobject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
@@ -218,6 +220,13 @@ object DatadogHostService {
                     }
                 }
             } else {
+                if (!isHostQuotaAvailable(organizationId)) {
+                    logger.info {
+                        "Host quota exceeded for org $organizationId, " +
+                            "skipping registration of ${metadata.hostname}"
+                    }
+                    return@transaction
+                }
                 DdHostsTable.insert {
                     it[DdHostsTable.organizationId] = organizationId
                     it[hostname] = metadata.hostname
@@ -313,6 +322,13 @@ object DatadogHostService {
                     logger.debug {
                         "Skipping host insert for $hostname " +
                             "from intake: no usable metadata"
+                    }
+                    return@transaction false
+                }
+                if (!isHostQuotaAvailable(organizationId)) {
+                    logger.info {
+                        "Host quota exceeded for org $organizationId, " +
+                            "skipping registration of $hostname"
                     }
                     return@transaction false
                 }
@@ -419,5 +435,12 @@ object DatadogHostService {
             lastSeenAt = lastSeenAt.toString(),
             isOnline = isOnline
         )
+    }
+
+    private fun isHostQuotaAvailable(organizationId: Int): Boolean {
+        return suspendRunCatching {
+            val monitorService: MonitorService = GlobalContext.get().get()
+            monitorService.checkHostQuota(organizationId)
+        }.getOrDefault(true)
     }
 }

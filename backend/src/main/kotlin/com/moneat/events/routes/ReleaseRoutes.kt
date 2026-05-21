@@ -20,6 +20,8 @@ import kotlinx.serialization.SerializationException
 import java.io.IOException
 
 import com.moneat.auth.services.AuthTokenService
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.events.models.AssembleArtifactBundleRequest
 import com.moneat.events.models.AssembleResponse
 import com.moneat.events.models.ChunkUploadParameters
@@ -27,6 +29,7 @@ import com.moneat.events.models.CreateReleaseRequest
 import com.moneat.events.models.SentryAuthDetails
 import com.moneat.events.models.SentryAuthInfoResponse
 import com.moneat.events.models.SentryAuthUser
+import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
 import com.moneat.plugins.AuthTokenPrincipal
 import com.moneat.shared.models.Users
@@ -57,9 +60,16 @@ private val logger = KotlinLogging.logger {}
 private const val FAILED_TO_UPLOAD_SOURCE_MAP = "Failed to upload source map"
 private const val UPLOAD_FAILED = "Upload failed"
 
+private data class UploadedSourceMapChunk(
+    val checksum: String,
+    val bytes: ByteArray
+)
+
 fun Route.releaseRoutes(
     releaseService: ReleaseService = GlobalContext.get().get(),
     authTokenService: AuthTokenService = GlobalContext.get().get(),
+    quotaService: BillingQuotaService = GlobalContext.get().get(),
+    eventService: EventService = GlobalContext.get().get(),
 ) {
     // Sentry-compatible auth verification endpoint (used by sentry-cli login/info)
     authenticate("auth-bearer") {
@@ -89,7 +99,9 @@ fun Route.releaseRoutes(
 
             // Upload source maps for a release
             // POST /api/0/projects/{orgSlug}/{projectSlug}/releases/{version}/files/
-            post("/{version}/files/") { handleUploadSourceMap(releaseService, authTokenService) }
+            post("/{version}/files/") {
+                handleUploadSourceMap(releaseService, authTokenService, quotaService, eventService)
+            }
 
             // List files for a release
             get("/{version}/files/") { handleListReleaseFiles(releaseService, authTokenService) }
@@ -101,7 +113,7 @@ fun Route.releaseRoutes(
             get("/") { handleGetChunkUploadParams(releaseService) }
 
             // POST /api/0/organizations/{orgSlug}/chunk-upload/
-            post("/") { handleUploadChunks(releaseService) }
+            post("/") { handleUploadChunks(releaseService, quotaService) }
         }
 
         // Artifact bundle assemble endpoint
@@ -320,6 +332,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectRelea
 private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
     releaseService: ReleaseService,
     authTokenService: AuthTokenService,
+    quotaService: BillingQuotaService,
+    eventService: EventService,
 ) {
     val principal =
         call.principal<AuthTokenPrincipal>()
@@ -382,6 +396,28 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
         return
     }
 
+    var reservedQuotaOrgId: Int? = null
+    val uploadedBytes = fileBytes
+    if (quotaService.isEnforcementEnabled() && uploadedBytes != null) {
+        val orgId = eventService.getOrganizationIdForProject(projectId)
+        if (orgId != null) {
+            val reservation = quotaService.reserveUnits(
+                orgId,
+                1,
+                "sourcemap",
+                uploadedBytes.size.toLong()
+            )
+            if (!reservation.allowed) {
+                call.respond(
+                    HttpStatusCode.TooManyRequests,
+                    QuotaExceededResponse(reason = reservation.reason, usage = reservation.usage)
+                )
+                return
+            }
+            reservedQuotaOrgId = orgId
+        }
+    }
+
     try {
         val fileResponse =
             releaseService.uploadSourceMap(
@@ -392,14 +428,18 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
             )
         call.respond(HttpStatusCode.Created, fileResponse)
     } catch (e: IllegalArgumentException) {
+        refundReservedSourceMapQuota(quotaService, reservedQuotaOrgId, 1, uploadedBytes?.size?.toLong() ?: 0L)
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
     } catch (e: SerializationException) {
+        refundReservedSourceMapQuota(quotaService, reservedQuotaOrgId, 1, uploadedBytes?.size?.toLong() ?: 0L)
         logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
     } catch (e: IOException) {
+        refundReservedSourceMapQuota(quotaService, reservedQuotaOrgId, 1, uploadedBytes?.size?.toLong() ?: 0L)
         logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
     } catch (e: IllegalStateException) {
+        refundReservedSourceMapQuota(quotaService, reservedQuotaOrgId, 1, uploadedBytes?.size?.toLong() ?: 0L)
         logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
     }
@@ -490,6 +530,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetChunkUploadPa
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
     releaseService: ReleaseService,
+    quotaService: BillingQuotaService,
 ) {
     val principal =
         call.principal<AuthTokenPrincipal>()
@@ -505,8 +546,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
         return
     }
 
+    val orgId = releaseService.getOrganizationIdBySlug(orgSlug)
     val multipart = call.receiveMultipart()
-    var chunksProcessed = 0
+    val chunks = mutableListOf<UploadedSourceMapChunk>()
+    var totalBytes = 0L
 
     multipart.forEachPart { part ->
         if (part is PartData.FileItem) {
@@ -527,14 +570,58 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
                     rawBytes
                 }
 
-            releaseService.storeChunk(checksum, bytes)
-            chunksProcessed++
+            chunks += UploadedSourceMapChunk(checksum, bytes)
+            totalBytes += bytes.size
         }
         part.dispose()
     }
 
+    val chunksProcessed = chunks.size
+    var quotaReserved = false
+    if (quotaService.isEnforcementEnabled() && orgId != null && totalBytes > 0) {
+        val reservation = quotaService.reserveUnits(orgId, chunksProcessed, "sourcemap", totalBytes)
+        if (!reservation.allowed) {
+            call.respond(
+                HttpStatusCode.TooManyRequests,
+                QuotaExceededResponse(reason = reservation.reason, usage = reservation.usage)
+            )
+            return
+        }
+        quotaReserved = true
+    }
+
+    try {
+        chunks.forEach { chunk ->
+            releaseService.storeChunk(chunk.checksum, chunk.bytes)
+        }
+    } catch (e: IOException) {
+        if (quotaReserved && orgId != null) {
+            refundReservedSourceMapQuota(quotaService, orgId, chunksProcessed, totalBytes)
+        }
+        logger.error(e) { "Failed to store chunks for org $orgSlug" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
+        return
+    } catch (e: IllegalStateException) {
+        if (quotaReserved && orgId != null) {
+            refundReservedSourceMapQuota(quotaService, orgId, chunksProcessed, totalBytes)
+        }
+        logger.error(e) { "Failed to store chunks for org $orgSlug" }
+        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
+        return
+    }
+
     logger.info { "Stored $chunksProcessed chunks for org $orgSlug" }
     call.respond(HttpStatusCode.OK)
+}
+
+private fun refundReservedSourceMapQuota(
+    quotaService: BillingQuotaService,
+    organizationId: Int?,
+    units: Int,
+    bytes: Long
+) {
+    if (organizationId == null) return
+    quotaService.refundUnits(organizationId, units, "sourcemap", bytes)
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifactBundle(
