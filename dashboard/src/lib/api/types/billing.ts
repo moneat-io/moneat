@@ -116,6 +116,7 @@ export interface BillingUsage {
   bytesLimit: number
   baseLimitUnits: number
   paygLimitUnits: number
+  paygLimitBytes?: number
   totalLimitUnits: number
   paygBudgetCents: number
   paygUsedUnits: number
