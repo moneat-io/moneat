@@ -23,6 +23,9 @@ import type {
   TierMigrationResponse,
   UpdateStripePriceIdsRequest,
   AdminBillingSubscription,
+  AdminQuotaUsageResetRequest,
+  AdminQuotaUsageResetResponse,
+  BillingUsage,
 } from '../types'
 
 export function adminMethods(core: ApiClientCore) {
@@ -81,6 +84,21 @@ export function adminMethods(core: ApiClientCore) {
           bytesIngested: number
         }>
       >(`${base}/admin/organizations/${orgId}/usage?period=${period}`),
+
+    getAdminOrgQuotaUsage: (orgId: number) =>
+      core.request<BillingUsage>(`${base}/admin/organizations/${orgId}/quota-usage`),
+
+    resetAdminOrgQuotaUsage: (
+      orgId: number,
+      body: AdminQuotaUsageResetRequest
+    ) =>
+      core.request<AdminQuotaUsageResetResponse>(
+        `${base}/admin/organizations/${orgId}/quota-usage/reset`,
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }
+      ),
 
     getAdminUsage: (period = '7d') =>
       core.request<{

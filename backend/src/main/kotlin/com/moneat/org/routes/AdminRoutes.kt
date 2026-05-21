@@ -18,6 +18,7 @@ package com.moneat.org.routes
 
 import com.moneat.auth.services.AuthService
 import com.moneat.billing.services.AdminBillingService
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
@@ -189,6 +190,7 @@ fun Route.adminRoutes() {
     val adminService = GlobalContext.get().get<AdminService>()
     val authService = GlobalContext.get().get<AuthService>()
     val pricingTierService = GlobalContext.get().get<PricingTierService>()
+    val quotaService = GlobalContext.get().get<BillingQuotaService>()
     val attributionAnalyticsService = GlobalContext.get().get<AttributionAnalyticsService>()
     val emailService = GlobalContext.get().get<EmailService>()
     val slackService = GlobalContext.get().get<SlackService>()
@@ -280,6 +282,53 @@ fun Route.adminRoutes() {
                         )
                     }
                 call.respond(response)
+            }
+
+            get("/organizations/{orgId}/quota-usage") {
+                val orgId = call.parameters["orgId"]?.toIntOrNull()
+                if (orgId == null) {
+                    call.respond(HttpStatusCode.BadRequest, com.moneat.utils.ErrorResponse("Invalid organization ID"))
+                    return@get
+                }
+                call.respond(quotaService.getUsageForOrganization(orgId))
+            }
+
+            post("/organizations/{orgId}/quota-usage/reset") {
+                val principal = call.principal<JWTPrincipal>()
+                val adminUserId =
+                    principal?.payload?.getClaim("userId")?.asInt() ?: run {
+                        call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse("Invalid token"))
+                        return@post
+                    }
+
+                val orgId = call.parameters["orgId"]?.toIntOrNull()
+                if (orgId == null) {
+                    call.respond(HttpStatusCode.BadRequest, com.moneat.utils.ErrorResponse("Invalid organization ID"))
+                    return@post
+                }
+
+                try {
+                    val request = call.receive<com.moneat.billing.models.AdminQuotaUsageResetRequest>()
+                    val response =
+                        quotaService.resetUsageForQuotaType(
+                            organizationId = orgId,
+                            quotaType = request.quotaType,
+                            targetPercent = request.targetPercent,
+                            targetValue = request.targetValue,
+                            adminUserId = adminUserId
+                        )
+                    call.respond(response)
+                } catch (e: IllegalArgumentException) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                    )
+                } catch (e: IllegalStateException) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        com.moneat.utils.ErrorResponse(e.message ?: "Organization not found")
+                    )
+                }
             }
 
             get("/usage") {

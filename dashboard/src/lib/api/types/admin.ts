@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import type {BillingUsage} from './billing'
+
 export interface AdminAttributionMetrics {
   source: string | null
   medium: string | null
@@ -51,4 +53,22 @@ export interface AdminBillingSubscription {
   pendingMeterUnits: number
   currentPeriodStart?: string | null
   currentPeriodEnd?: string | null
+}
+
+export interface AdminQuotaUsageResetRequest {
+  quotaType: string
+  targetPercent?: number | null
+  targetValue?: number | null
+}
+
+export interface AdminQuotaUsageResetResponse {
+  organizationId: number
+  quotaType: string
+  periodStart: string
+  periodEnd: string
+  previousUsed: number
+  updatedUsed: number
+  limit: number | null
+  targetPercent: number | null
+  usage: BillingUsage
 }

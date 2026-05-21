@@ -1224,6 +1224,79 @@ class BillingQuotaServiceTest {
         assertEquals(1000, usage.analyticsPageviewOverageRateCentsPer100k)
     }
 
+    @Test
+    fun `admin quota reset sets ingestion usage to target percent`() {
+        val tenGb = 10L * 1024L * 1024L * 1024L
+        val oneGb = 1024L * 1024L * 1024L
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_gb_limit] = tenGb
+                it[overage_rate_cents_per_gb] = 40
+            }
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[payg_budget_cents] = 0
+                it[pending_overage_bytes] = oneGb
+            }
+            val counterId = insertTestUsageCounter(organizationId = testOrgId, usedBytes = oneGb * 2)
+            OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                it[used_apm_span_bytes] = oneGb
+                it[used_error_bytes] = oneGb
+            }
+        }
+
+        val response = billingQuotaService.resetUsageForQuotaType(
+            organizationId = testOrgId,
+            quotaType = "ingestion",
+            targetPercent = 80.0,
+            targetValue = null,
+            adminUserId = 1
+        )
+
+        assertEquals("ingestion_bytes", response.quotaType)
+        assertEquals(oneGb, response.previousUsed)
+        assertEquals(tenGb * 8 / 10, response.updatedUsed)
+        assertEquals(oneGb + response.updatedUsed, response.usage.usedBytes)
+        assertEquals(0, response.usage.ingestionOverageCentsEstimate)
+        transaction {
+            val subscription = Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()
+            assertEquals(0, subscription[Subscriptions.pending_overage_bytes])
+        }
+    }
+
+    @Test
+    fun `admin quota reset sets apm span usage to target percent`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_apm_span_limit] = 1_000L
+                it[apm_span_overage_rate_cents_per_1m] = 30
+            }
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[pending_apm_span_overage_units] = 500L
+            }
+            val counterId = insertTestUsageCounter(organizationId = testOrgId)
+            OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                it[used_apm_spans] = 1_500L
+            }
+        }
+
+        val response = billingQuotaService.resetUsageForQuotaType(
+            organizationId = testOrgId,
+            quotaType = "apn_spans",
+            targetPercent = 80.0,
+            targetValue = null,
+            adminUserId = 1
+        )
+
+        assertEquals("apm_spans", response.quotaType)
+        assertEquals(1_500L, response.previousUsed)
+        assertEquals(800L, response.updatedUsed)
+        assertEquals(800L, response.usage.usedApmSpans)
+        transaction {
+            val subscription = Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()
+            assertEquals(0, subscription[Subscriptions.pending_apm_span_overage_units])
+        }
+    }
+
     // ──── Feature Flag Tests ────
 
     @Test
