@@ -350,6 +350,14 @@ class McpAuthorizationTest {
 
     private fun createObjectAccessTables() {
         transaction {
+            listOf(
+                "dashboards",
+                "custom_data_sources",
+                "uptime_monitors",
+                "status_pages",
+            ).forEach { tableName ->
+                exec("DROP TABLE IF EXISTS $tableName")
+            }
             exec(
                 """
                 CREATE TABLE dashboards (

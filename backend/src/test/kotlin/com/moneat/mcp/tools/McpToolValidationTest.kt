@@ -40,9 +40,11 @@ class McpToolValidationTest {
             val result = case.tool.execute(case.args, context)
 
             assertTrue(result.isError, "${case.name} should be an error")
+            assertTrue(result.content.isNotEmpty(), "${case.name} should include validation error content")
+            val errorText = result.content.first().text.orEmpty()
             assertTrue(
-                result.content.first().text.orEmpty().contains(case.expectedError),
-                "${case.name} expected '${case.expectedError}' but got '${result.content.first().text}'"
+                errorText.contains(case.expectedError),
+                "${case.name} expected '${case.expectedError}' but got '$errorText'"
             )
         }
     }
