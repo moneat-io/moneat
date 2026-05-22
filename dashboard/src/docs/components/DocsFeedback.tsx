@@ -24,8 +24,8 @@ export function DocsFeedback({slug}: {slug: string}) {
 
   if (state === 'thumbs-up' || state === 'submitted') {
     return (
-      <div className="mt-12 pt-8 border-t border-slate-800 text-center">
-        <p className="text-sm text-slate-400">
+      <div className="mt-12 border-t border-slate-200 pt-8 text-center">
+        <p className="text-sm text-slate-500">
           {state === 'thumbs-up' ? 'Glad it was helpful!' : 'Thanks for your feedback!'}
         </p>
       </div>
@@ -33,31 +33,31 @@ export function DocsFeedback({slug}: {slug: string}) {
   }
 
   return (
-    <div className="mt-12 pt-8 border-t border-slate-800">
-      <p className="text-sm text-slate-400 text-center mb-3">Was this page helpful?</p>
+    <div className="mt-12 border-t border-slate-200 pt-8">
+      <p className="mb-3 text-center text-sm text-slate-500">Was this page helpful?</p>
 
       <div className="flex justify-center gap-3 mb-4">
         <Button
           variant="outline"
           size="sm"
           onClick={() => setState('thumbs-up')}
-          className="border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-400"
+          className="border-slate-300 text-slate-700 hover:border-sky-300 hover:text-sky-800"
         >
-          <ThumbsUp className="h-4 w-4" /> Yes
+          <ThumbsUp className="size-4" /> Yes
         </Button>
         <Button
           variant="outline"
           size="sm"
           onClick={handleThumbsDown}
           aria-expanded={state === 'thumbs-down'}
-          className="border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-400"
+          className="border-slate-300 text-slate-700 hover:border-sky-300 hover:text-sky-800"
         >
-          <ThumbsDown className="h-4 w-4" /> No
+          <ThumbsDown className="size-4" /> No
         </Button>
       </div>
 
       {state === 'thumbs-down' && (
-        <div className="max-w-md mx-auto">
+        <div className="mx-auto max-w-md">
           <Label htmlFor="docs-feedback-comment" className="sr-only">
             What could be improved?
           </Label>
@@ -67,9 +67,9 @@ export function DocsFeedback({slug}: {slug: string}) {
             onChange={(e) => setComment(e.target.value)}
             placeholder="What could be improved?"
             rows={3}
-            className="border-slate-700 bg-slate-900 text-slate-200 placeholder:text-slate-500 focus-visible:ring-sky-500 resize-none"
+            className="resize-none border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 focus-visible:ring-sky-500"
           />
-          <div className="flex justify-end mt-2">
+          <div className="mt-2 flex justify-end">
             <Button size="sm" onClick={handleSubmitFeedback}>
               Submit feedback
             </Button>

@@ -14,19 +14,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useEffect} from 'react'
 import {VariantA} from './VariantA'
 import {LandingNavbar, LandingFooter} from './LandingNavbar'
 import {Helmet} from 'react-helmet-async'
 
 export function LandingPage() {
-  // The landing page is always dark regardless of the user's saved theme preference.
-  useEffect(() => {
-    const root = document.documentElement
-    const prev = root.className
-    root.classList.add('dark')
-    return () => { root.className = prev }
-  }, [])
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -44,9 +36,9 @@ export function LandingPage() {
   }
 
   return (
-    <article className="min-h-screen bg-background">
+    <article className="min-h-screen bg-white text-slate-950">
       <Helmet>
-        <title>Moneat | Open-Source Sentry &amp; Datadog Alternative — Drop-In Compatible with Both</title>
+        <title>Moneat | Open-Source Observability for Sentry and Datadog Teams</title>
         <meta
           name="description"
           content="The only observability platform that works as a drop-in replacement for both Sentry and Datadog. Use your existing Sentry SDKs and Datadog Agent — zero code changes. Open-source errors, logs, APM, infrastructure, on-call, and AI observability in one platform."
@@ -68,13 +60,13 @@ export function LandingPage() {
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 
-      <LandingNavbar />
+      <LandingNavbar tone="light" />
 
       <main>
         <VariantA />
       </main>
 
-      <LandingFooter />
+      <LandingFooter tone="light" />
     </article>
   )
 }
