@@ -5,12 +5,12 @@
 package com.moneat.enterprise.ai.services
 
 import com.moneat.enterprise.ai.models.AiAssistantConfirmRequest
-import com.moneat.enterprise.mcp.models.McpContext
-import com.moneat.enterprise.mcp.protocol.InputSchema
-import com.moneat.enterprise.mcp.protocol.McpTool
-import com.moneat.enterprise.mcp.protocol.McpToolRegistry
-import com.moneat.enterprise.mcp.protocol.ToolCallResult
-import com.moneat.enterprise.mcp.protocol.ToolContent
+import com.moneat.mcp.models.McpContext
+import com.moneat.mcp.protocol.InputSchema
+import com.moneat.mcp.protocol.McpTool
+import com.moneat.mcp.protocol.McpToolRegistry
+import com.moneat.mcp.protocol.ToolCallResult
+import com.moneat.mcp.protocol.ToolContent
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject

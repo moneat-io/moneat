@@ -6,6 +6,7 @@ package com.moneat.enterprise.ai.services
 
 import com.moneat.config.EnvConfig
 import com.moneat.config.ClickHouseClient
+import com.moneat.auth.services.AuthTokenService
 import com.moneat.enterprise.ai.llm.CostRegistry
 import com.moneat.enterprise.ai.models.AiAssistantConfirmRequest
 import com.moneat.enterprise.ai.models.AiAssistantConfirmResponse
@@ -14,9 +15,9 @@ import com.moneat.enterprise.ai.models.AssistantDoneEvent
 import com.moneat.enterprise.ai.models.AssistantResponseEvent
 import com.moneat.enterprise.ai.models.AssistantToolInvokingEvent
 import com.moneat.enterprise.ai.models.AssistantToolResultEvent
-import com.moneat.enterprise.mcp.protocol.McpToolRegistry
-import com.moneat.enterprise.mcp.protocol.ToolDefinition
-import com.moneat.enterprise.mcp.models.McpContext
+import com.moneat.mcp.protocol.McpToolRegistry
+import com.moneat.mcp.protocol.ToolDefinition
+import com.moneat.mcp.models.McpContext
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -342,11 +343,13 @@ class AiAssistantService(
         context = McpContext(
             organizationId = orgId,
             userId = userId,
+            tokenId = -userId,
+            scopes = AuthTokenService.VALID_SCOPES,
             sessionId = sessionId,
         ),
     )
 
-    private fun summarizeToolResult(result: com.moneat.enterprise.mcp.protocol.ToolCallResult): String {
+    private fun summarizeToolResult(result: com.moneat.mcp.protocol.ToolCallResult): String {
         val text = result.content.mapNotNull { it.text }.joinToString("\n").trim()
         if (text.isBlank()) {
             return if (result.isError) "Tool failed with no details." else "Tool executed successfully."

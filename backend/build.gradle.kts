@@ -70,6 +70,9 @@ dependencies {
     implementation(libs.ktor.server.call.logging)
     implementation(libs.ktor.server.status.pages)
 
+    // MCP SDK
+    implementation(libs.mcp.kotlin.sdk.server)
+
     // Ktor Client (for ClickHouse HTTP API)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
@@ -91,6 +94,7 @@ dependencies {
 
     // Date/Time
     implementation(libs.kotlinx.datetime)
+    implementation(libs.kotlinx.coroutines.core)
 
     // Redis
     implementation(libs.lettuce)

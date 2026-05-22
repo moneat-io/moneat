@@ -32,6 +32,7 @@ import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.request.ApplicationRequest
 import org.koin.core.context.GlobalContext
 import java.net.InetAddress
+import java.security.MessageDigest
 import kotlin.time.Duration.Companion.seconds
 import com.moneat.utils.suspendRunCatching
 
@@ -104,8 +105,15 @@ private const val INGEST_RATE_LIMIT = 100
 private const val INGEST_REFILL_SECONDS = 1
 private const val TELEMETRY_RATE_LIMIT = 10
 private const val TELEMETRY_REFILL_SECONDS = 60
+private const val MCP_RATE_LIMIT = 60
+private const val MCP_REFILL_SECONDS = 60
 private const val BITS_PER_BYTE = 8
 private const val BYTE_MASK = 0xFF
+
+private fun hashRateLimitKey(value: String): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    return digest.digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+}
 
 fun Application.configureRateLimiting() {
     install(RateLimit) {
@@ -190,6 +198,16 @@ fun Application.configureRateLimiting() {
         register(RateLimitName("telemetry")) {
             requestKey { call -> call.request.clientIp() }
             rateLimiter(limit = TELEMETRY_RATE_LIMIT, refillPeriod = TELEMETRY_REFILL_SECONDS.seconds)
+        }
+        register(RateLimitName("mcp")) {
+            requestKey { call ->
+                val token = call.request.headers["Authorization"]
+                    ?.removePrefix("Bearer ")
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                token?.let { "token:${hashRateLimitKey(it)}" } ?: call.request.clientIp()
+            }
+            rateLimiter(limit = MCP_RATE_LIMIT, refillPeriod = MCP_REFILL_SECONDS.seconds)
         }
     }
 }

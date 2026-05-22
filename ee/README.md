@@ -9,7 +9,7 @@ This directory contains the enterprise modules for Moneat, licensed under the [M
 | SSO | `sso` | SAML 2.0 and OIDC single sign-on |
 | On-Call | `oncall` | On-call scheduling, escalation policies, and incident management |
 
-All other features (Datadog ingestion, AI assistant, Analytics, MCP, Synthetics, etc.) are open-source and always available without a license key.
+All other features (Datadog ingestion, AI assistant, Analytics, MCP core, Synthetics, etc.) are open-source and always available without a license key.
 
 ---
 

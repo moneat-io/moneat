@@ -16,17 +16,16 @@ The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standa
 
 ## Architecture
 
-The MCP server runs as an enterprise module inside the Ktor backend process. It uses **SSE (Server-Sent Events) transport** following the MCP specification, exposing two endpoints:
+The MCP server runs inside the core Ktor backend process. It uses **Streamable HTTP** following the MCP specification, exposing one endpoint:
 
-- `GET /v1/mcp/sse` - SSE connection endpoint
-- `POST /v1/mcp/message` - JSON-RPC message endpoint
+- `POST /v1/mcp` - Streamable HTTP JSON-RPC endpoint
 
 Since the module runs inside the application process, MCP tools call existing services directly without HTTP round-trips.
 
 ## Quick Start
 
 1. [Generate an API token](/docs/api-tokens) in Moneat
-2. Configure your MCP client to connect to `https://your-moneat-instance/v1/mcp/sse?token=YOUR_TOKEN`
+2. Configure your MCP client to connect to `https://your-moneat-instance/v1/mcp` with `Authorization: Bearer YOUR_TOKEN`
 3. Start using tools like `list_issues`, `query_logs`, `list_hosts`, etc.
 
 See [Setup Guide](./setup) for detailed instructions.
