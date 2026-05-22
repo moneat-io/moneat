@@ -17,12 +17,15 @@
 package com.moneat.mcp.routes
 
 import com.moneat.auth.services.AuthTokenService
+import com.moneat.mcp.McpModule
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
+import com.moneat.mcp.protocol.McpResource
 import com.moneat.mcp.protocol.McpResourceRegistry
 import com.moneat.mcp.protocol.McpTool
 import com.moneat.mcp.protocol.McpToolRegistry
+import com.moneat.mcp.protocol.ResourceContent
 import com.moneat.mcp.protocol.ToolCallResult
 import com.moneat.mcp.protocol.ToolContent
 import com.moneat.shared.models.AuthTokens
@@ -30,6 +33,8 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.request.delete
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -135,6 +140,106 @@ class McpRoutesTest {
         assertEquals(HttpStatusCode.NotFound, client.post("/v1/mcp/message").status)
     }
 
+    @Test
+    fun `GET v1 mcp returns method not allowed`() = testApplication {
+        setupApp()
+
+        val response = client.get("/v1/mcp")
+
+        assertEquals(HttpStatusCode.MethodNotAllowed, response.status)
+        assertTrue(response.bodyAsText().contains("Server notifications are not exposed"))
+    }
+
+    @Test
+    fun `POST v1 mcp rejects missing bearer token`() = testApplication {
+        setupApp()
+
+        val response = client.post("/v1/mcp") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Accept, "application/json, text/event-stream")
+            setBody(initializeRequest())
+        }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid or missing bearer token"))
+    }
+
+    @Test
+    fun `DELETE v1 mcp requires session id`() = testApplication {
+        setupApp()
+
+        val response = client.delete("/v1/mcp") {
+            mcpHeaders()
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Missing MCP session id"))
+    }
+
+    @Test
+    fun `DELETE v1 mcp rejects unknown session id`() = testApplication {
+        setupApp()
+
+        val response = client.delete("/v1/mcp") {
+            mcpHeaders()
+            header("mcp-session-id", "missing-session")
+        }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+        assertTrue(response.bodyAsText().contains("MCP session not found"))
+    }
+
+    @Test
+    fun `DELETE v1 mcp rejects session from another token`() = testApplication {
+        setupApp()
+        val sessionId = initializeSession()
+        val otherToken = seedToken(
+            scopes = listOf("project:read", "org:read", "event:read"),
+            label = "other",
+        )
+
+        val response = client.delete("/v1/mcp") {
+            mcpHeaders(otherToken)
+            header("mcp-session-id", sessionId)
+        }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertTrue(response.bodyAsText().contains("MCP session does not belong to this token"))
+    }
+
+    @Test
+    fun `POST v1 mcp reads registered resource`() = testApplication {
+        setupApp()
+        val sessionId = initializeSession()
+
+        val response = client.post("/v1/mcp") {
+            mcpHeaders()
+            header("mcp-session-id", sessionId)
+            setBody(
+                """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 4,
+                  "method": "resources/read",
+                  "params": {"uri": "moneat://test-resource"}
+                }
+                """.trimIndent()
+            )
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("resource ok"))
+    }
+
+    @Test
+    fun `core module registers MCP routes`() = testApplication {
+        setupRealModuleApp()
+
+        val response = client.get("/v1/mcp")
+
+        assertEquals(HttpStatusCode.MethodNotAllowed, response.status)
+    }
+
     private fun io.ktor.server.testing.ApplicationTestBuilder.setupApp() {
         application {
             install(ContentNegotiation) {
@@ -149,16 +254,33 @@ class McpRoutesTest {
             routing {
                 mcpRoutes(
                     toolRegistry = McpToolRegistry().also { it.register(AuthorizedReadTool()) },
-                    resourceRegistry = McpResourceRegistry(),
+                    resourceRegistry = McpResourceRegistry().also { it.register(TestResource()) },
                 )
             }
         }
     }
 
-    private fun io.ktor.client.request.HttpRequestBuilder.mcpHeaders() {
+    private fun io.ktor.server.testing.ApplicationTestBuilder.setupRealModuleApp() {
+        application {
+            install(ContentNegotiation) {
+                json()
+            }
+            install(RateLimit) {
+                register(RateLimitName("mcp")) {
+                    requestKey { "test" }
+                    rateLimiter(limit = 100, refillPeriod = 1.seconds)
+                }
+            }
+            routing {
+                McpModule.registerRoutes(this)
+            }
+        }
+    }
+
+    private fun io.ktor.client.request.HttpRequestBuilder.mcpHeaders(tokenValue: String = token) {
         contentType(ContentType.Application.Json)
         header(HttpHeaders.Accept, "application/json, text/event-stream")
-        header(HttpHeaders.Authorization, "Bearer $token")
+        header(HttpHeaders.Authorization, "Bearer $tokenValue")
     }
 
     private suspend fun io.ktor.server.testing.ApplicationTestBuilder.initializeSession(): String {
@@ -184,14 +306,14 @@ class McpRoutesTest {
         }
         """.trimIndent()
 
-    private fun seedToken(scopes: List<String>): String {
+    private fun seedToken(scopes: List<String>, label: String = "test"): String {
         val userId = transaction {
             val orgId = Organizations.insert {
-                it[name] = "Test Org"
-                it[slug] = "test-org"
+                it[name] = "$label Org"
+                it[slug] = "$label-org"
             }[Organizations.id]
             val insertedUserId = Users.insert {
-                it[email] = "mcp@test.com"
+                it[email] = "mcp-$label@test.com"
                 it[password_hash] = "hash"
                 it[email_verified] = true
             }[Users.id]
@@ -220,4 +342,14 @@ private class AuthorizedReadTool : McpTool {
 
     override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult =
         ToolCallResult(content = listOf(ToolContent(text = "authorized")))
+}
+
+private class TestResource : McpResource {
+    override val uri: String = "moneat://test-resource"
+    override val name: String = "Test resource"
+    override val description: String = "Test resource"
+    override val requiredScopes: Set<String> = setOf(McpScopes.ORG_READ)
+
+    override suspend fun read(context: McpContext): ResourceContent =
+        ResourceContent(uri = uri, text = """{"message":"resource ok"}""")
 }

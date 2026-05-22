@@ -17,6 +17,7 @@
 package com.moneat.mcp.auth
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.dashboards.models.Dashboards
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpTool
@@ -29,12 +30,16 @@ import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.statuspage.models.StatusPages
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.uptime.models.UptimeMonitors
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.AfterEach
@@ -44,6 +49,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
+import java.util.UUID
 
 class McpAuthorizationTest {
     companion object {
@@ -70,6 +76,7 @@ class McpAuthorizationTest {
         }
         TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(Users, Organizations, Projects, Hosts)
+        createObjectAccessTables()
     }
 
     @AfterEach
@@ -165,6 +172,56 @@ class McpAuthorizationTest {
         assertTrue(result.content[0].text!!.contains("host not found"))
     }
 
+    @Test
+    fun `owned objects authorize successfully`() = runBlocking {
+        val dashboardId = seedDashboard(organizationId = 1)
+        val monitorId = seedUptimeMonitor(organizationId = 1)
+        val pageId = seedStatusPage(organizationId = 1)
+        val dataSourceId = seedDataSource(organizationId = 1)
+
+        val result = registryWithNoopTool().callTool(
+            name = "read_project",
+            args = JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "monitor_id" to JsonPrimitive(monitorId.toString()),
+                    "page_id" to JsonPrimitive(pageId.toString()),
+                    "status_page_id" to JsonPrimitive(pageId.toString()),
+                    "data_source_id" to JsonPrimitive(dataSourceId),
+                )
+            ),
+            context = context,
+        )
+
+        assertTrue(!result.isError)
+        assertTrue(result.content[0].text!!.contains("ok"))
+    }
+
+    @Test
+    fun `objects from another org return authorization errors`() = runBlocking {
+        val cases = listOf(
+            Triple("dashboard_id", JsonPrimitive(seedDashboard(organizationId = 2)), "dashboard not found"),
+            Triple(
+                "monitor_id",
+                JsonPrimitive(seedUptimeMonitor(organizationId = 2).toString()),
+                "uptime monitor not found",
+            ),
+            Triple("page_id", JsonPrimitive(seedStatusPage(organizationId = 2).toString()), "status page not found"),
+            Triple("data_source_id", JsonPrimitive(seedDataSource(organizationId = 2)), "data source not found"),
+        )
+
+        cases.forEach { (key, value, expectedError) ->
+            val result = registryWithNoopTool().callTool(
+                name = "read_project",
+                args = JsonObject(mapOf(key to value)),
+                context = context,
+            )
+
+            assertTrue(result.isError, "$key should be rejected")
+            assertTrue(result.content[0].text!!.contains(expectedError), result.content[0].text)
+        }
+    }
+
     private fun registryWithNoopTool(): McpToolRegistry =
         McpToolRegistry().also { registry ->
             registry.register(
@@ -202,11 +259,151 @@ class McpAuthorizationTest {
             }[Hosts.id]
         }
 
+    private fun seedDashboard(organizationId: Int): Long =
+        transaction {
+            seedOrganization(organizationId)
+            Dashboards.insert {
+                it[orgId] = organizationId.toLong()
+                it[title] = "Dashboard $organizationId"
+                it[description] = null
+                it[createdBy] = 1
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }[Dashboards.id]
+        }
+
+    private fun seedUptimeMonitor(organizationId: Int): UUID =
+        transaction {
+            seedOrganization(organizationId)
+            val monitorId = UUID.randomUUID()
+            UptimeMonitors.insert {
+                it[id] = monitorId
+                it[UptimeMonitors.organizationId] = organizationId
+                it[name] = "Monitor $organizationId"
+                it[type] = "http"
+                it[url] = "https://example.com"
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }
+            monitorId
+        }
+
+    private fun seedStatusPage(organizationId: Int): UUID =
+        transaction {
+            seedOrganization(organizationId)
+            val pageId = UUID.randomUUID()
+            StatusPages.insert {
+                it[id] = pageId
+                it[StatusPages.organizationId] = organizationId
+                it[name] = "Status $organizationId"
+                it[slug] = "status-$organizationId-${pageId.toString().take(8)}"
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }
+            pageId
+        }
+
+    private fun seedDataSource(organizationId: Int): Long =
+        transaction {
+            seedOrganization(organizationId)
+            val dataSourceId = organizationId.toLong()
+            exec(
+                """
+                INSERT INTO custom_data_sources (
+                    id,
+                    org_id,
+                    name,
+                    source_type,
+                    host,
+                    encrypted_credentials,
+                    extra_config,
+                    created_by,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    $dataSourceId,
+                    $organizationId,
+                    'Warehouse $organizationId',
+                    'postgresql',
+                    'db.example.com',
+                    '{}',
+                    '{}',
+                    1,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+                """.trimIndent()
+            )
+            dataSourceId
+        }
+
     private fun seedOrganization(id: Int) {
+        if (Organizations.selectAll().where { Organizations.id eq id }.count() > 0) {
+            return
+        }
         Organizations.insert {
             it[Organizations.id] = id
             it[name] = "Org $id"
             it[slug] = "org-$id"
+        }
+    }
+
+    private fun createObjectAccessTables() {
+        transaction {
+            exec(
+                """
+                CREATE TABLE dashboards (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    org_id BIGINT NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT NULL,
+                    created_by BIGINT NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP NOT NULL
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE custom_data_sources (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    org_id BIGINT NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    source_type VARCHAR(50) NOT NULL,
+                    host VARCHAR(512) NOT NULL,
+                    encrypted_credentials TEXT NOT NULL,
+                    extra_config TEXT NOT NULL,
+                    created_by BIGINT NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP NOT NULL
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE uptime_monitors (
+                    id UUID PRIMARY KEY,
+                    organization_id INT NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    type VARCHAR(50) NOT NULL,
+                    url TEXT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP NOT NULL
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE status_pages (
+                    id UUID PRIMARY KEY,
+                    organization_id INT NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    slug VARCHAR(100) NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP NOT NULL
+                )
+                """.trimIndent()
+            )
         }
     }
 
