@@ -48,11 +48,10 @@ object McpAuthorization {
 
     fun requireScopes(context: McpContext, requiredScopes: Set<String>) {
         val missingScopes = requiredScopes.filterNot { it in context.scopes }
-        if (missingScopes.isNotEmpty()) {
-            throw McpAuthorizationException(
-                "$AUTHORIZATION_ERROR: missing scope ${missingScopes.joinToString(", ")}"
-            )
-        }
+        ensureAuthorized(
+            missingScopes.isEmpty(),
+            "$AUTHORIZATION_ERROR: missing scope ${missingScopes.joinToString(", ")}"
+        )
     }
 
     suspend fun requireObjectAccess(args: JsonObject, context: McpContext) {
@@ -77,9 +76,7 @@ object McpAuthorization {
                 }
                 .count() > 0
         }
-        if (!hasAccess) {
-            throw McpAuthorizationException("$AUTHORIZATION_ERROR: project not found")
-        }
+        ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: project not found")
     }
 
     private suspend fun requireIssueAccess(issueId: String, context: McpContext) {
@@ -104,9 +101,7 @@ object McpAuthorization {
                 }
                 .count() > 0
         }
-        if (!hasAccess) {
-            throw McpAuthorizationException("$AUTHORIZATION_ERROR: host not found")
-        }
+        ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: host not found")
     }
 
     private fun requireDashboardAccess(dashboardId: Long, context: McpContext) {
@@ -119,9 +114,7 @@ object McpAuthorization {
                 }
                 .count() > 0
         }
-        if (!hasAccess) {
-            throw McpAuthorizationException("$AUTHORIZATION_ERROR: dashboard not found")
-        }
+        ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: dashboard not found")
     }
 
     private fun requireUptimeMonitorAccess(monitorId: UUID, context: McpContext) {
@@ -134,9 +127,7 @@ object McpAuthorization {
                 }
                 .count() > 0
         }
-        if (!hasAccess) {
-            throw McpAuthorizationException("$AUTHORIZATION_ERROR: uptime monitor not found")
-        }
+        ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: uptime monitor not found")
     }
 
     private fun requireStatusPageAccess(pageId: UUID, context: McpContext) {
@@ -149,9 +140,7 @@ object McpAuthorization {
                 }
                 .count() > 0
         }
-        if (!hasAccess) {
-            throw McpAuthorizationException("$AUTHORIZATION_ERROR: status page not found")
-        }
+        ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: status page not found")
     }
 
     private fun requireDataSourceAccess(dataSourceId: Long, context: McpContext) {
@@ -164,10 +153,12 @@ object McpAuthorization {
                 }
                 .count() > 0
         }
-        if (!hasAccess) {
-            throw McpAuthorizationException("$AUTHORIZATION_ERROR: data source not found")
-        }
+        ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: data source not found")
     }
+}
+
+private fun ensureAuthorized(condition: Boolean, message: String) {
+    condition.takeIf { it } ?: throw McpAuthorizationException(message)
 }
 
 private fun JsonObject.stringValue(name: String): String? =

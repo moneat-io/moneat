@@ -6,7 +6,6 @@ package com.moneat.enterprise.ai.services
 
 import com.moneat.config.EnvConfig
 import com.moneat.config.ClickHouseClient
-import com.moneat.auth.services.AuthTokenService
 import com.moneat.enterprise.ai.llm.CostRegistry
 import com.moneat.enterprise.ai.models.AiAssistantConfirmRequest
 import com.moneat.enterprise.ai.models.AiAssistantConfirmResponse
@@ -344,10 +343,17 @@ class AiAssistantService(
             organizationId = orgId,
             userId = userId,
             tokenId = -userId,
-            scopes = AuthTokenService.VALID_SCOPES,
+            scopes = assistantScopesFor(toolName),
             sessionId = sessionId,
         ),
     )
+
+    private fun assistantScopesFor(toolName: String): Set<String> =
+        toolRegistry
+            .listTools()
+            .firstOrNull { tool -> tool.name == toolName }
+            ?.requiredScopes
+            .orEmpty()
 
     private fun summarizeToolResult(result: com.moneat.mcp.protocol.ToolCallResult): String {
         val text = result.content.mapNotNull { it.text }.joinToString("\n").trim()

@@ -109,10 +109,20 @@ private const val MCP_RATE_LIMIT = 60
 private const val MCP_REFILL_SECONDS = 60
 private const val BITS_PER_BYTE = 8
 private const val BYTE_MASK = 0xFF
+private const val BEARER_PREFIX = "Bearer "
 
 private fun hashRateLimitKey(value: String): String {
     val digest = MessageDigest.getInstance("SHA-256")
     return digest.digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+}
+
+private fun bearerToken(header: String?): String? {
+    val value = header?.trim() ?: return null
+    return value
+        .takeIf { it.startsWith(BEARER_PREFIX, ignoreCase = true) }
+        ?.substring(BEARER_PREFIX.length)
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
 }
 
 fun Application.configureRateLimiting() {
@@ -201,10 +211,7 @@ fun Application.configureRateLimiting() {
         }
         register(RateLimitName("mcp")) {
             requestKey { call ->
-                val token = call.request.headers["Authorization"]
-                    ?.removePrefix("Bearer ")
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
+                val token = bearerToken(call.request.headers["Authorization"])
                 token?.let { "token:${hashRateLimitKey(it)}" } ?: call.request.clientIp()
             }
             rateLimiter(limit = MCP_RATE_LIMIT, refillPeriod = MCP_REFILL_SECONDS.seconds)

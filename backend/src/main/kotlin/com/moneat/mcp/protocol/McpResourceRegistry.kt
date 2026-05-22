@@ -20,6 +20,7 @@ import com.moneat.mcp.auth.McpAuthorization
 import com.moneat.mcp.auth.McpAuthorizationException
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
@@ -94,6 +95,8 @@ class McpResourceRegistry {
                     )
                 )
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             logger.error(e) { "Error reading MCP resource $uri" }
             val errorJson = JsonObject(mapOf("error" to JsonPrimitive(e.message ?: "Unknown error")))

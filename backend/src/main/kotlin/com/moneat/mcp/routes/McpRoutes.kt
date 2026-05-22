@@ -18,6 +18,7 @@ package com.moneat.mcp.routes
 
 import com.moneat.mcp.auth.McpAuthProvider
 import com.moneat.mcp.auth.McpAuthResult
+import com.moneat.mcp.auth.McpExecutionLimiter
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpResourceRegistry
@@ -249,6 +250,7 @@ private class McpStreamableSession(
     suspend fun close() {
         if (!closed.compareAndSet(false, true)) return
         transport.sessionId?.let { sessions.remove(it) }
+        McpExecutionLimiter.releaseContext(context)
         transport.close()
         if (::server.isInitialized) {
             server.close()
@@ -258,6 +260,7 @@ private class McpStreamableSession(
     fun closeAsync() {
         if (!closed.compareAndSet(false, true)) return
         transport.sessionId?.let { sessions.remove(it) }
+        McpExecutionLimiter.releaseContext(context)
         if (!::server.isInitialized) return
         sessionCleanupScope.launch {
             server.close()

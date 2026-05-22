@@ -17,10 +17,12 @@
 package com.moneat.mcp.protocol
 
 import com.moneat.mcp.models.McpContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -132,5 +134,25 @@ class McpResourceRegistryTest {
 
         assertEquals(1, result.contents.size)
         assertTrue(result.contents[0].text!!.contains("error"))
+    }
+
+    @Test
+    fun `readResource propagates cancellation`() {
+        val resource = object : McpResource {
+            override val uri = "test://cancellable"
+            override val name = "Cancellable"
+            override val description = "throws cancellation"
+            override suspend fun read(context: McpContext): ResourceContent {
+                throw CancellationException("Test cancellation")
+            }
+        }
+
+        registry.register(resource)
+
+        assertFailsWith<CancellationException> {
+            runBlocking {
+                registry.readResource("test://cancellable", testContext)
+            }
+        }
     }
 }

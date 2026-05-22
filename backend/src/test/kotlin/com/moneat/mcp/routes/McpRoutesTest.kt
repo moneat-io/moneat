@@ -17,6 +17,7 @@
 package com.moneat.mcp.routes
 
 import com.moneat.auth.services.AuthTokenService
+import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpResourceRegistry
@@ -215,6 +216,7 @@ private class AuthorizedReadTool : McpTool {
     override val name: String = "authorized_read"
     override val description: String = "Authorized read"
     override val inputSchema: InputSchema = InputSchema()
+    override val requiredScopes = setOf(McpScopes.PROJECT_READ)
 
     override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult =
         ToolCallResult(content = listOf(ToolContent(text = "authorized")))

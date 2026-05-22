@@ -21,6 +21,7 @@ import com.moneat.mcp.models.McpContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 private const val DEFAULT_MAX_CONCURRENT_TOOL_CALLS = 4
 
@@ -32,13 +33,33 @@ object McpExecutionLimiter {
             ?: DEFAULT_MAX_CONCURRENT_TOOL_CALLS
     }
 
-    private val semaphores = ConcurrentHashMap<String, Semaphore>()
+    private val buckets = ConcurrentHashMap<String, PermitBucket>()
 
     suspend fun <T> withPermit(context: McpContext, block: suspend () -> T): T {
-        val key = "${context.tokenId}:${context.sessionId}"
-        val semaphore = semaphores.computeIfAbsent(key) {
-            Semaphore(maxConcurrentCalls)
+        val key = keyFor(context)
+        val bucket = buckets.computeIfAbsent(key) {
+            PermitBucket(Semaphore(maxConcurrentCalls))
         }
-        return semaphore.withPermit { block() }
+        bucket.users.incrementAndGet()
+        return try {
+            bucket.semaphore.withPermit { block() }
+        } finally {
+            if (bucket.users.decrementAndGet() == 0) {
+                buckets.computeIfPresent(key) { _, current ->
+                    current.takeIf { it !== bucket || it.users.get() > 0 }
+                }
+            }
+        }
     }
+
+    fun releaseContext(context: McpContext) {
+        buckets.remove(keyFor(context))
+    }
+
+    private fun keyFor(context: McpContext): String = "${context.tokenId}:${context.sessionId}"
+
+    private data class PermitBucket(
+        val semaphore: Semaphore,
+        val users: AtomicInteger = AtomicInteger(),
+    )
 }

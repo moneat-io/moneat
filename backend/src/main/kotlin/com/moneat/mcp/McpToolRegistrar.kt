@@ -100,6 +100,7 @@ import com.moneat.mcp.tools.UpdateStatusPageTool
 import com.moneat.mcp.tools.UpdateUptimeMonitorTool
 
 object McpToolRegistrar {
+    // Keep registration in one ordered catalog so core and contributor MCP tools are easy to audit.
     @Suppress("LongMethod")
     fun registerAll(toolRegistry: McpToolRegistry) {
         // Issue tools

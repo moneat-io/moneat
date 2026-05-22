@@ -172,6 +172,7 @@ class McpAuthorizationTest {
                     override val name = "read_project"
                     override val description = "Reads a project"
                     override val inputSchema = InputSchema()
+                    override val requiredScopes = setOf(McpScopes.PROJECT_READ)
 
                     override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
                         return ToolCallResult(content = listOf(ToolContent(text = "ok")))

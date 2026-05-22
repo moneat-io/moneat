@@ -17,6 +17,7 @@
 package com.moneat.mcp.protocol
 
 import com.moneat.mcp.McpToolRegistrar
+import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -26,12 +27,16 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 81
 
 class McpToolRegistryTest {
 
     private lateinit var registry: McpToolRegistry
+    private val fakeReadScopes = setOf(McpScopes.PROJECT_READ)
     private val testContext = McpContext(
         organizationId = 1,
         userId = 1,
@@ -58,6 +63,7 @@ class McpToolRegistryTest {
             override val name = "test_tool"
             override val description = "A test tool"
             override val inputSchema = InputSchema()
+            override val requiredScopes = fakeReadScopes
             override suspend fun execute(
                 args: JsonObject,
                 context: McpContext
@@ -83,6 +89,7 @@ class McpToolRegistryTest {
             override val name = "exists"
             override val description = "exists"
             override val inputSchema = InputSchema()
+            override val requiredScopes = fakeReadScopes
             override suspend fun execute(
                 args: JsonObject,
                 context: McpContext
@@ -166,6 +173,7 @@ class McpToolRegistryTest {
             override val name = "echo"
             override val description = "Echoes input"
             override val inputSchema = InputSchema()
+            override val requiredScopes = fakeReadScopes
             override suspend fun execute(
                 args: JsonObject,
                 context: McpContext
@@ -199,6 +207,7 @@ class McpToolRegistryTest {
             override val name = "failing"
             override val description = "Always fails"
             override val inputSchema = InputSchema()
+            override val requiredScopes = fakeReadScopes
             override suspend fun execute(
                 args: JsonObject,
                 context: McpContext
@@ -225,6 +234,7 @@ class McpToolRegistryTest {
             override val name = "bad_args"
             override val description = "Invalid args"
             override val inputSchema = InputSchema()
+            override val requiredScopes = fakeReadScopes
             override suspend fun execute(
                 args: JsonObject,
                 context: McpContext
@@ -252,6 +262,7 @@ class McpToolRegistryTest {
                 override val name = "tool_$i"
                 override val description = "Tool $i"
                 override val inputSchema = InputSchema()
+                override val requiredScopes = fakeReadScopes
                 override suspend fun execute(
                     args: JsonObject,
                     context: McpContext
@@ -307,7 +318,7 @@ class McpToolRegistryTest {
             "create_project",
         )
 
-        assertEquals(81, toolsByName.size)
+        assertEquals(EXPECTED_CORE_MCP_TOOL_COUNT, toolsByName.size)
 
         writeTools.forEach { name ->
             assertEquals(false, toolsByName[name]?.readOnly, "Expected $name to be classified as write")
@@ -318,6 +329,43 @@ class McpToolRegistryTest {
             .forEach { (name, definition) ->
                 assertEquals(true, definition.readOnly, "Expected $name to be classified as read")
             }
+    }
+
+    @Test
+    fun `scope resolver fails closed for unmapped read tools`() {
+        val unmappedReadTool = object : McpTool {
+            override val name = "unmapped_read_tool"
+            override val description = "No scope mapping"
+            override val inputSchema = InputSchema()
+            override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
+                return ToolCallResult(content = listOf(ToolContent(text = "unreachable")))
+            }
+        }
+
+        val error = assertFailsWith<IllegalArgumentException> {
+            McpScopes.requiredScopesFor(unmappedReadTool)
+        }
+
+        assertTrue(error.message!!.contains("unmapped_read_tool"))
+    }
+
+    @Test
+    fun `scope resolver fails closed for unmapped write tools`() {
+        val unmappedWriteTool = object : McpTool {
+            override val name = "unmapped_write_tool"
+            override val description = "No scope mapping"
+            override val readOnly = false
+            override val inputSchema = InputSchema()
+            override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
+                return ToolCallResult(content = listOf(ToolContent(text = "unreachable")))
+            }
+        }
+
+        val error = assertFailsWith<IllegalArgumentException> {
+            McpScopes.requiredScopesFor(unmappedWriteTool)
+        }
+
+        assertTrue(error.message!!.contains("unmapped_write_tool"))
     }
 
     @Test
@@ -361,6 +409,7 @@ class McpToolRegistryTest {
             override val name = "cancellable"
             override val description = "Throws CancellationException"
             override val inputSchema = InputSchema()
+            override val requiredScopes = fakeReadScopes
             override suspend fun execute(
                 args: JsonObject,
                 context: McpContext

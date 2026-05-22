@@ -33,7 +33,7 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
-interface McpToolContributor {
+fun interface McpToolContributor {
     fun contributeTools(registry: McpToolRegistry)
 }
 
