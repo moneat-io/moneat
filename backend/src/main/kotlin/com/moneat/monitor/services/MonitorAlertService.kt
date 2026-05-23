@@ -18,6 +18,7 @@ package com.moneat.monitor.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.incident.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
@@ -306,8 +307,7 @@ class MonitorAlertService(
         hostName: String,
         organizationId: Int
     ) {
-        val idPart = if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"
-        val alertKey = "alert_state:${alert.hostId}:$idPart"
+        val alertKey = hostAlertRedisKey(alert)
 
         // Get recent metrics for the host
         val currentValue = getCurrentMetricValue(alert.hostId, alert.organizationId, alert.metric) ?: return
@@ -341,14 +341,11 @@ class MonitorAlertService(
 
                 // Send recovery notification
                 sendRecoveryNotification(alert, hostName, organizationId)
-                // Resolve incident for metric alerts (same dedup key used when firing)
-                val dedupKey =
-                    "moneat-host-alert-${alert.hostId}-$idPart"
                 suspendRunCatching {
-                    incidentService.resolveAlert(
+                    incidentService.autoResolveAlert(
                         organizationId = organizationId,
-                        source = com.moneat.incident.models.AlertSource.HOST_ALERT,
-                        deduplicationKey = dedupKey
+                        source = AlertSource.HOST_ALERT,
+                        deduplicationKey = hostAlertDedupKey(alert)
                     )
                 }.getOrElse { e ->
                     logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
@@ -766,14 +763,7 @@ class MonitorAlertService(
                         severity = incidentSeverity,
                         status = com.moneat.incident.models.IncidentStatus.FIRING,
                         source = com.moneat.incident.models.AlertSource.HOST_ALERT,
-                        deduplicationKey = run {
-                            val idPart = if (alert.templateAlertId != null) {
-                                "tpl_${alert.templateAlertId}"
-                            } else {
-                                "id_${alert.id}"
-                            }
-                            "moneat-host-alert-${alert.hostId}-$idPart"
-                        },
+                        deduplicationKey = hostAlertDedupKey(alert),
                         organizationId = organizationId,
                         metadata =
                         mapOf(
@@ -839,12 +829,14 @@ class MonitorAlertService(
                     }
                 }
 
-                // Skip notifications if alerts are silenced for this organization
+                if (currentStatus == "down" && newStatus == "up") {
+                    resolveHostDownIncident(hostId, organizationId)
+                }
+
                 if (isAnySilenceActive(organizationId)) {
                     continue
                 }
 
-                // Send notification
                 if (newStatus == "down") {
                     sendHostDownNotification(hostId, hostName, organizationId, lastSeenAt)
                 } else {
@@ -948,7 +940,7 @@ class MonitorAlertService(
                     severity = com.moneat.incident.models.IncidentSeverity.CRITICAL,
                     status = com.moneat.incident.models.IncidentStatus.FIRING,
                     source = com.moneat.incident.models.AlertSource.HOST_DOWN,
-                    deduplicationKey = "moneat-host-down-$hostId",
+                    deduplicationKey = hostDownDedupKey(hostId),
                     organizationId = organizationId,
                     metadata =
                     mapOf(
@@ -1037,17 +1029,41 @@ class MonitorAlertService(
                 logger.error(e) { "Failed to send Discord notification for host up" }
             }
         }
+    }
 
-        // Resolve incident alert for host up
+    private suspend fun resolveHostDownIncident(
+        hostId: Int,
+        organizationId: Int
+    ) {
         suspendRunCatching {
-            incidentService.resolveAlert(
+            incidentService.autoResolveAlert(
                 organizationId = organizationId,
-                source = com.moneat.incident.models.AlertSource.HOST_DOWN,
-                deduplicationKey = "moneat-host-down-$hostId"
+                source = AlertSource.HOST_DOWN,
+                deduplicationKey = hostDownDedupKey(hostId)
             )
         }.getOrElse { e ->
             logger.error(e) { "Failed to resolve incident alert for host up" }
         }
+    }
+
+    private fun hostAlertRedisKey(alert: AlertData): String {
+        return "alert_state:${alert.hostId}:${hostAlertIdPart(alert)}"
+    }
+
+    private fun hostAlertDedupKey(alert: AlertData): String {
+        return "moneat-host-alert-${alert.hostId}-${hostAlertIdPart(alert)}"
+    }
+
+    private fun hostAlertIdPart(alert: AlertData): String {
+        return if (alert.templateAlertId != null) {
+            "tpl_${alert.templateAlertId}"
+        } else {
+            "id_${alert.id}"
+        }
+    }
+
+    private fun hostDownDedupKey(hostId: Int): String {
+        return "moneat-host-down-$hostId"
     }
 
     private fun getConditionText(condition: String): String {
