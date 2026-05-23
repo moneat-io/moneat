@@ -61,6 +61,8 @@ private const val FAILED_TO_UPDATE_ON_CALL_SEATS = "Failed to update on-call sea
 private const val FAILED_TO_UPDATE_SEATS = "Failed to update seats"
 private const val PAYG_INCREMENT_CENTS = 500
 private const val MAX_ONCALL_SEATS = 200
+private const val DEFAULT_APM_SPAN_DEBUG_LIMIT = 20
+private const val MAX_APM_SPAN_DEBUG_LIMIT = 100
 private const val AUTH_REQUIRED = "Authentication required"
 private const val NO_ORG_ACCESS = "No organization access"
 
@@ -124,7 +126,7 @@ fun Route.billingRoutes(
                         orgId,
                         startDate,
                         endDate,
-                        listOf("apm_span", "apm")
+                        listOf("apm_span", "apm", "otlp_trace", "dd_trace", "sentry_trace")
                     )
                 val computedCustomMetrics =
                     usageTrackingService.getEventCountForOrg(
@@ -145,6 +147,32 @@ fun Route.billingRoutes(
                 logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
                 call.respond(usage)
             }
+        }
+
+        get("/usage/apm-spans") {
+            val principal =
+                call.principal<JWTPrincipal>() ?: run {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
+                    return@get
+                }
+            val userId = principal.payload.getClaim("userId").asInt()
+            val orgId =
+                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
+                    return@get
+                }
+            val limit = call.request.queryParameters["limit"]
+                ?.toIntOrNull()
+                ?.coerceIn(1, MAX_APM_SPAN_DEBUG_LIMIT)
+                ?: DEFAULT_APM_SPAN_DEBUG_LIMIT
+            val usage = quotaService.getUsageForOrganization(orgId)
+            val debug = quotaService.getApmSpanUsageDebug(
+                organizationId = orgId,
+                periodStart = LocalDate.parse(usage.periodStart),
+                periodEnd = LocalDate.parse(usage.periodEnd),
+                limit = limit
+            )
+            call.respond(debug)
         }
 
         post("/checkout") {

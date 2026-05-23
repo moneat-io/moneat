@@ -69,6 +69,50 @@ describe('Billing API', () => {
     expect(result).toEqual(mockUsage)
   })
 
+  it('fetches APM span usage debug groups', async () => {
+    const mockDebug = {
+      organizationId: 1,
+      periodStart: '2026-01-01',
+      periodEnd: '2026-01-31',
+      totalSpans: 42,
+      groups: [
+        {
+          source: 'otlp',
+          service: 'api',
+          operation: 'GET /checkout',
+          resource: 'GET /checkout',
+          spanType: '',
+          env: 'prod',
+          kind: 'SERVER',
+          scopeName: 'opentelemetry.instrumentation.ktor',
+          scopeVersion: '1.0.0',
+          projectId: null,
+          projectName: null,
+          projectSlug: null,
+          spanCount: 42,
+          traceCount: 12,
+          errorCount: 1,
+          avgDurationMs: 12.5,
+          maxDurationMs: 200,
+          percentage: 100,
+          sampleTraceId: 'trace-1',
+          latestSpanAt: '2026-01-15 12:00:00',
+        },
+      ],
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/billing/usage/apm-spans`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('limit')).toBe('20')
+        return HttpResponse.json(mockDebug)
+      })
+    )
+
+    const result = await api.getBillingApmSpanUsageDebug()
+    expect(result).toEqual(mockDebug)
+  })
+
   // ──── createBillingCheckoutSession ────
 
   it('creates a billing checkout session', async () => {

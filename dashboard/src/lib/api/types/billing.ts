@@ -156,6 +156,37 @@ export interface BillingUsage {
   bonusReason?: string
 }
 
+export interface ApmSpanUsageDebugGroup {
+  source: string
+  service: string
+  operation: string
+  resource: string
+  spanType: string
+  env: string
+  kind: string
+  scopeName: string
+  scopeVersion: string
+  projectId?: number | null
+  projectName?: string | null
+  projectSlug?: string | null
+  spanCount: number
+  traceCount: number
+  errorCount: number
+  avgDurationMs: number
+  maxDurationMs: number
+  percentage: number
+  sampleTraceId: string
+  latestSpanAt: string
+}
+
+export interface ApmSpanUsageDebugResponse {
+  organizationId: number
+  periodStart: string
+  periodEnd: string
+  totalSpans: number
+  groups: ApmSpanUsageDebugGroup[]
+}
+
 export interface CheckoutSessionRequest {
   tierName: string
   billingInterval?: string

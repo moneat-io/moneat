@@ -16,6 +16,8 @@
 
 package com.moneat.routes
 
+import com.moneat.billing.models.ApmSpanUsageDebugGroup
+import com.moneat.billing.models.ApmSpanUsageDebugResponse
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.CancelSubscriptionResponse
 import com.moneat.billing.models.CheckoutSessionResponse
@@ -51,6 +53,7 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.clearMocks
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -68,6 +71,7 @@ import kotlin.test.assertTrue
 class BillingRoutesTest {
     companion object {
         private const val BILLING_USAGE = "/v1/billing/usage"
+        private const val BILLING_APM_SPAN_DEBUG = "/v1/billing/usage/apm-spans"
         private const val BILLING_CHECKOUT = "/v1/billing/checkout"
         private const val BILLING_INVOICES = "/v1/billing/invoices"
         private const val BILLING_PAYMENT_METHOD = "/v1/billing/payment-method"
@@ -337,6 +341,61 @@ class BillingRoutesTest {
             val body = r.bodyAsText()
             assertTrue(body.contains("\"organizationId\""))
             assertTrue(body.contains("\"withinQuota\""))
+        }
+
+    @Test
+    fun `GET usage apm spans returns 200 with debug groups`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val usage = makeUsageResponse(orgId)
+            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
+            every { mockQuotaService.getUsageForOrganization(orgId) } returns usage
+            coEvery {
+                mockQuotaService.getApmSpanUsageDebug(
+                    organizationId = orgId,
+                    periodStart = kotlinx.datetime.LocalDate.parse(usage.periodStart),
+                    periodEnd = kotlinx.datetime.LocalDate.parse(usage.periodEnd),
+                    limit = 20
+                )
+            } returns ApmSpanUsageDebugResponse(
+                organizationId = orgId,
+                periodStart = usage.periodStart,
+                periodEnd = usage.periodEnd,
+                totalSpans = 42,
+                groups = listOf(
+                    ApmSpanUsageDebugGroup(
+                        source = "otlp",
+                        service = "api",
+                        operation = "GET /checkout",
+                        resource = "GET /checkout",
+                        spanType = "",
+                        env = "prod",
+                        kind = "SERVER",
+                        scopeName = "opentelemetry.instrumentation.ktor",
+                        scopeVersion = "1.0.0",
+                        projectId = null,
+                        projectName = null,
+                        projectSlug = null,
+                        spanCount = 42,
+                        traceCount = 12,
+                        errorCount = 1,
+                        avgDurationMs = 12.5,
+                        maxDurationMs = 200.0,
+                        percentage = 100.0,
+                        sampleTraceId = "trace-1",
+                        latestSpanAt = "2024-01-15 12:00:00"
+                    )
+                )
+            )
+            application { installRoutes(this) }
+
+            val r = client.get(BILLING_APM_SPAN_DEBUG) {
+                withAuth(token(userId))
+            }
+            assertEquals(HttpStatusCode.OK, r.status)
+            val body = r.bodyAsText()
+            assertTrue(body.contains("\"totalSpans\":42"))
+            assertTrue(body.contains("\"service\":\"api\""))
         }
 
     // ──── POST /billing/checkout ────

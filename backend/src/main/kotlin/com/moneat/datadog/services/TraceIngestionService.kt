@@ -201,7 +201,7 @@ object TraceIngestionService {
                     e.key.length + e.value.length
                 }
         }
-        usageTracking.recordOrgUsage(organizationId, "dd_trace", totalBytes)
+        usageTracking.recordOrgUsage(organizationId, "dd_trace", allSpans.size, totalBytes)
     }
 
     /**

@@ -1177,7 +1177,7 @@ class EventService(
 
         val response = ClickHouseClient.execute(insert)
         if (response.status.isSuccess()) {
-            usageTracker.recordOrgUsage(ctx.orgId, "sentry_trace", rows.sumOf { it.length })
+            usageTracker.recordOrgUsage(ctx.orgId, "sentry_trace", rows.size, rows.sumOf { it.length })
         } else {
             logger.error { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
         }
