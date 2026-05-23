@@ -62,7 +62,7 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 mcp-kotlin-sdk-server = { module = "io.modelcontextprotocol:kotlin-sdk-server", version.ref = "mcp-kotlin-sdk" }
 
 # Redis
-lettuce = { module = "io.lettuce:lettuce-core", version = "7.5.1.RELEASE" }
+lettuce = { module = "io.lettuce:lettuce-core", version = "7.5.2.RELEASE" }
 
 # Email
 jakarta-mail = { module = "com.sun.mail:jakarta.mail", version = "2.0.2" }
