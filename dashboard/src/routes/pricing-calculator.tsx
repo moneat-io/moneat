@@ -14,10 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link} from '@tanstack/react-router'
-import {Logo} from '@/components/Logo'
-import {Button} from '@/components/ui/button'
+import {createFileRoute} from '@tanstack/react-router'
 import {PricingCalculatorSection} from '@/components/landing/PricingCalculatorSection'
+import {LandingNavbar, LandingFooter} from '@/components/landing/LandingNavbar'
 import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/pricing-calculator')({
@@ -26,7 +25,7 @@ export const Route = createFileRoute('/pricing-calculator')({
 
 function PricingCalculatorPage() {
   return (
-    <article className="min-h-screen bg-background">
+    <article className="min-h-screen bg-white text-slate-950">
       <Helmet>
         <title>Pricing Calculator | Moneat</title>
         <meta
@@ -36,95 +35,13 @@ function PricingCalculatorPage() {
         <link rel="canonical" href="https://moneat.io/pricing-calculator" />
       </Helmet>
 
-      <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-lg">
-        <div className="flex h-16 items-center px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto justify-between">
-          <Link to="/" className="flex items-center" aria-label="Moneat Home">
-            <Logo className="h-8" />
-          </Link>
-          <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
-            <a
-              href="/#features"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Features
-            </a>
-            <Link
-              to="/demo"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Live Demo
-            </Link>
-            <a
-              href="/#pricing"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Pricing
-            </a>
-            <Link
-              to="/pricing-calculator"
-              className="text-sm font-medium text-sky-500"
-              aria-current="page"
-            >
-              Calculator
-            </Link>
-            <a
-              href="/docs"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Docs
-            </a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <Link to="/login">
-              <Button variant="ghost" className="text-sm">Log in</Button>
-            </Link>
-            <Link to="/signup">
-              <Button className="bg-sky-500 hover:bg-sky-600 text-white shadow-md shadow-sky-500/25 text-sm">
-                Sign up free
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <LandingNavbar tone="light" />
 
       <main>
         <PricingCalculatorSection standalone />
       </main>
 
-      <footer className="border-t border-border/50 bg-slate-950 py-10 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Logo className="h-6" markOnly />
-            <span className="text-sm font-medium text-white">moneat</span>
-          </div>
-          <nav className="flex items-center gap-6" aria-label="Footer navigation">
-            <a href="/#pricing" className="text-sm text-slate-400 hover:text-sky-400 transition-colors">
-              Pricing
-            </a>
-            <Link to="/signup" className="text-sm text-slate-400 hover:text-sky-400 transition-colors">
-              Sign up
-            </Link>
-            <Link to="/legal/terms" className="text-sm text-slate-400 hover:text-sky-400 transition-colors">
-              Terms
-            </Link>
-            <Link to="/legal/privacy" className="text-sm text-slate-400 hover:text-sky-400 transition-colors">
-              Privacy
-            </Link>
-          </nav>
-          <p className="text-xs text-slate-500">
-            Operated by Adrian Elder &middot; 1235 East Blvd, Ste E PMB 2045, Charlotte, NC 28203, USA &middot;{' '}
-            <a href="mailto:support@moneat.io" className="hover:text-sky-400 transition-colors">support@moneat.io</a>
-          </p>
-          <p className="text-xs text-slate-500">
-            &copy; {new Date().getFullYear()} Moneat. All rights reserved.
-          </p>
-          <p className="text-xs text-slate-500">
-            Sentry&reg; is a registered trademark of Functional Software, Inc.
-            Datadog&reg; is a registered trademark of Datadog, Inc.
-            Moneat is not affiliated with or endorsed by either company.
-          </p>
-        </div>
-      </footer>
+      <LandingFooter tone="light" />
     </article>
   )
 }

@@ -136,7 +136,6 @@ import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
 import { Route as AiTracesTraceIdRouteImport } from './routes/ai.traces.$traceId'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
-import { Route as ProjectsProjectIdTracesTraceIdRouteImport } from './routes/projects.$projectId.traces.$traceId'
 import { Route as ProjectsProjectIdSpansSpanIdRouteImport } from './routes/projects.$projectId.spans.$spanId'
 
 const VerifyEmailRequiredRoute = VerifyEmailRequiredRouteImport.update({
@@ -787,12 +786,6 @@ const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
   path: '/$orgId',
   getParentRoute: () => AdminOrganizationsRoute,
 } as any)
-const ProjectsProjectIdTracesTraceIdRoute =
-  ProjectsProjectIdTracesTraceIdRouteImport.update({
-    id: '/traces/$traceId',
-    path: '/traces/$traceId',
-    getParentRoute: () => ProjectsProjectIdRoute,
-  } as any)
 const ProjectsProjectIdSpansSpanIdRoute =
   ProjectsProjectIdSpansSpanIdRouteImport.update({
     id: '/spans/$spanId',
@@ -929,7 +922,6 @@ export interface FileRoutesByFullPath {
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
-  '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -1045,7 +1037,6 @@ export interface FileRoutesByTo {
   '/monitoring/kubernetes': typeof MonitoringKubernetesIndexRoute
   '/performance/traces': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
-  '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1177,7 +1168,6 @@ export interface FileRoutesById {
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
-  '/projects/$projectId/traces/$traceId': typeof ProjectsProjectIdTracesTraceIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1310,7 +1300,6 @@ export interface FileRouteTypes {
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
     | '/projects/$projectId/spans/$spanId'
-    | '/projects/$projectId/traces/$traceId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1426,7 +1415,6 @@ export interface FileRouteTypes {
     | '/monitoring/kubernetes'
     | '/performance/traces'
     | '/projects/$projectId/spans/$spanId'
-    | '/projects/$projectId/traces/$traceId'
   id:
     | '__root__'
     | '/'
@@ -1557,7 +1545,6 @@ export interface FileRouteTypes {
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
     | '/projects/$projectId/spans/$spanId'
-    | '/projects/$projectId/traces/$traceId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -2516,13 +2503,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOrganizationsOrgIdRouteImport
       parentRoute: typeof AdminOrganizationsRoute
     }
-    '/projects/$projectId/traces/$traceId': {
-      id: '/projects/$projectId/traces/$traceId'
-      path: '/traces/$traceId'
-      fullPath: '/projects/$projectId/traces/$traceId'
-      preLoaderRoute: typeof ProjectsProjectIdTracesTraceIdRouteImport
-      parentRoute: typeof ProjectsProjectIdRoute
-    }
     '/projects/$projectId/spans/$spanId': {
       id: '/projects/$projectId/spans/$spanId'
       path: '/spans/$spanId'
@@ -2824,13 +2804,11 @@ const ProfilesRouteWithChildren = ProfilesRoute._addFileChildren(
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
   ProjectsProjectIdSpansSpanIdRoute: typeof ProjectsProjectIdSpansSpanIdRoute
-  ProjectsProjectIdTracesTraceIdRoute: typeof ProjectsProjectIdTracesTraceIdRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
   ProjectsProjectIdSpansSpanIdRoute: ProjectsProjectIdSpansSpanIdRoute,
-  ProjectsProjectIdTracesTraceIdRoute: ProjectsProjectIdTracesTraceIdRoute,
 }
 
 const ProjectsProjectIdRouteWithChildren =

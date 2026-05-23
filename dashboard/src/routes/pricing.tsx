@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useEffect} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
 import {PricingSection} from '@/components/landing/PricingSection'
 import {PricingCalculatorSection} from '@/components/landing/PricingCalculatorSection'
@@ -26,15 +25,8 @@ export const Route = createFileRoute('/pricing')({
 })
 
 function PricingPage() {
-  useEffect(() => {
-    const root = document.documentElement
-    const prev = root.className
-    root.classList.add('dark')
-    return () => { root.className = prev }
-  }, [])
-
   return (
-    <article className="min-h-screen bg-[#0a0b14]">
+    <article className="min-h-screen bg-white text-slate-950">
       <Helmet>
         <title>Pricing | Moneat</title>
         <meta
@@ -44,14 +36,14 @@ function PricingPage() {
         <link rel="canonical" href="https://moneat.io/pricing" />
       </Helmet>
 
-      <LandingNavbar />
+      <LandingNavbar tone="light" />
 
       <main>
         <PricingSection />
         <PricingCalculatorSection />
       </main>
 
-      <LandingFooter />
+      <LandingFooter tone="light" />
     </article>
   )
 }
