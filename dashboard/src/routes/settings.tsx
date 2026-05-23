@@ -811,6 +811,7 @@ function RevokeTokenDialog({ token, onClose, onConfirm, isRevoking }: RevokeToke
 
 function UsageTab() {
   const { timezone } = useTimezone()
+  const [isApmSpanSourceExpanded, setIsApmSpanSourceExpanded] = useState(false)
   const { data: usage, isLoading } = useQuery({
     queryKey: ['billingUsage'],
     queryFn: () => api.getBillingUsage(),
@@ -823,7 +824,7 @@ function UsageTab() {
   } = useQuery({
     queryKey: ['billingApmSpanUsageDebug', usage?.periodStart, usage?.periodEnd],
     queryFn: () => api.getBillingApmSpanUsageDebug(APM_SPAN_DEBUG_LIMIT),
-    enabled: api.isAuthenticated() && usage !== undefined,
+    enabled: api.isAuthenticated() && usage !== undefined && isApmSpanSourceExpanded,
   })
 
   if (isLoading || !usage) {
@@ -1056,7 +1057,9 @@ function UsageTab() {
                   <ApmSpanUsageBreakdown
                     debug={apmSpanDebug}
                     error={apmSpanDebugError}
+                    expanded={isApmSpanSourceExpanded}
                     isLoading={isApmSpanDebugLoading}
+                    onExpandedChange={setIsApmSpanSourceExpanded}
                     timezone={timezone}
                   />
                 )}
