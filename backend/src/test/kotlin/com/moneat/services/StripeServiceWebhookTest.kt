@@ -50,6 +50,7 @@ class StripeServiceWebhookTest {
     private val mockSubscriptionId = "sub_test_456"
 
     companion object {
+        private const val TEST_PENDING_OVERAGE_BYTES = 123_456L
         private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
     }
 
@@ -600,6 +601,8 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.stripe_customer_id] = mockCustomerId
                 it[Subscriptions.payg_used_units] = 500
                 it[Subscriptions.payg_used_micros] = 200000000
+                it[Subscriptions.pending_meter_units] = 100
+                it[Subscriptions.pending_overage_bytes] = TEST_PENDING_OVERAGE_BYTES
                 it[Subscriptions.status] = "past_due"
                 it[Subscriptions.billing_grace_until] =
                     Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
@@ -627,6 +630,7 @@ class StripeServiceWebhookTest {
             assertEquals(0L, record[Subscriptions.payg_used_units])
             assertEquals(0L, record[Subscriptions.payg_used_micros])
             assertEquals(0L, record[Subscriptions.pending_meter_units])
+            assertEquals(0L, record[Subscriptions.pending_overage_bytes])
             assertEquals(null, record[Subscriptions.billing_grace_until])
         }
     }
@@ -640,6 +644,7 @@ class StripeServiceWebhookTest {
                 it[Subscriptions.payg_used_units] = 500
                 it[Subscriptions.payg_used_micros] = 200000000
                 it[Subscriptions.pending_meter_units] = 100
+                it[Subscriptions.pending_overage_bytes] = TEST_PENDING_OVERAGE_BYTES
                 it[Subscriptions.status] = "past_due"
                 it[Subscriptions.billing_grace_until] =
                     Instant.fromEpochSeconds(Clock.System.now().epochSeconds + 86_400)
@@ -669,6 +674,7 @@ class StripeServiceWebhookTest {
             assertEquals(500L, record[Subscriptions.payg_used_units])
             assertEquals(200000000L, record[Subscriptions.payg_used_micros])
             assertEquals(100L, record[Subscriptions.pending_meter_units])
+            assertEquals(TEST_PENDING_OVERAGE_BYTES, record[Subscriptions.pending_overage_bytes])
         }
     }
 

@@ -27,10 +27,8 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.utils.SentryUtils
 import com.moneat.utils.suspendRunCatching
-import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import kotlinx.serialization.Serializable
@@ -782,12 +780,15 @@ class BillingQuotaService(
                     else -> tierFromEnum(sub?.get(Subscriptions.plan) ?: "FREE")
                 }
             }
-        val periodStart =
-            sub?.get(Subscriptions.current_period_start)?.toLocalDateTime(TimeZone.UTC)?.date
-                ?: LocalDate(now.year, now.month, 1)
-        val periodEnd =
-            sub?.get(Subscriptions.current_period_end)?.toLocalDateTime(TimeZone.UTC)?.date
-                ?: periodStart.plus(DatePeriod(months = 1, days = -1))
+        val billingPeriod =
+            resolveCurrentBillingPeriod(
+                storedStart = sub?.get(Subscriptions.current_period_start)?.toLocalDateTime(TimeZone.UTC)?.date,
+                storedEnd = sub?.get(Subscriptions.current_period_end)?.toLocalDateTime(TimeZone.UTC)?.date,
+                billingInterval = sub?.get(Subscriptions.billing_interval),
+                today = now,
+            )
+        val periodStart = billingPeriod.start
+        val periodEnd = billingPeriod.end
 
         val existingCounter =
             OrgUsageCounters

@@ -161,6 +161,7 @@ class SubscriptionRepositoryImpl : SubscriptionRepository {
                     it[payg_used_units] = 0
                     it[payg_used_micros] = 0
                     it[pending_meter_units] = 0
+                    it[pending_overage_bytes] = 0
                     it[pending_meter_batch_id] = null
                     it[pending_meter_batch_units] = 0
                     it[pending_apm_span_overage_units] = 0

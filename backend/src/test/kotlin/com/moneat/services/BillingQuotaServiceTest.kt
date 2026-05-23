@@ -26,8 +26,11 @@ import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -954,6 +957,36 @@ class BillingQuotaServiceTest {
     }
 
     @Test
+    fun `usage response advances stale subscription period to include today`() {
+        val today = Clock.System.todayIn(TimeZone.UTC)
+        val staleMonth = today.plus(DatePeriod(months = -2))
+        val staleStart = LocalDate(staleMonth.year, staleMonth.month, 14)
+        val staleEnd = staleStart.plus(DatePeriod(months = 1, days = -1))
+
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[current_period_start] = staleStart.atStartOfDayIn(TimeZone.UTC)
+                it[current_period_end] = staleEnd.atStartOfDayIn(TimeZone.UTC)
+                it[billing_interval] = "monthly"
+            }
+            insertTestUsageCounter(
+                organizationId = testOrgId,
+                periodStart = staleStart,
+                usedErrors = 200,
+            )
+        }
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+        val periodStart = LocalDate.parse(usage.periodStart)
+        val periodEnd = LocalDate.parse(usage.periodEnd)
+
+        assertTrue(today >= periodStart, "Current billing period should start on or before today")
+        assertTrue(today <= periodEnd, "Current billing period should end on or after today")
+        assertTrue(periodStart > staleStart, "Stale subscription period should be advanced")
+        assertEquals(0, usage.usedErrors, "Usage should be read from the advanced period, not stale counters")
+    }
+
+    @Test
     fun `usage response includes correct limits`() {
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
 
@@ -1544,10 +1577,10 @@ class BillingQuotaServiceTest {
         usedTransactions: Long = 0,
         usedReplays: Long = 0,
         usedFeedback: Long = 0,
-        usedBytes: Long = 0
+        usedBytes: Long = 0,
+        periodStart: LocalDate = Clock.System.now().toLocalDateTime(TimeZone.UTC).date,
     ): Int {
         val now = Clock.System.now()
-        val periodStart = now.toLocalDateTime(TimeZone.UTC).date
         val periodEnd = periodStart.plus(DatePeriod(months = 1, days = -1))
 
         return OrgUsageCounters.insert {
