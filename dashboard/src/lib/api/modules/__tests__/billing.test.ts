@@ -113,6 +113,31 @@ describe('Billing API', () => {
     expect(result).toEqual(mockDebug)
   })
 
+  it('normalizes APM span usage debug limits', async () => {
+    const seenLimits: string[] = []
+    const mockDebug = {
+      organizationId: 1,
+      periodStart: '2026-01-01',
+      periodEnd: '2026-01-31',
+      totalSpans: 0,
+      groups: [],
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/billing/usage/apm-spans`, ({ request }) => {
+        const url = new URL(request.url)
+        seenLimits.push(url.searchParams.get('limit') ?? '')
+        return HttpResponse.json(mockDebug)
+      })
+    )
+
+    await api.getBillingApmSpanUsageDebug(3.8)
+    await api.getBillingApmSpanUsageDebug(0)
+    await api.getBillingApmSpanUsageDebug(Number.NaN)
+
+    expect(seenLimits).toEqual(['3', '1', '20'])
+  })
+
   // ──── createBillingCheckoutSession ────
 
   it('creates a billing checkout session', async () => {

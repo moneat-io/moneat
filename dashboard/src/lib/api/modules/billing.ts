@@ -40,7 +40,9 @@ export function billingMethods(core: ApiClientCore) {
       core.request<BillingUsage>(`${base}/billing/usage`),
 
     getBillingApmSpanUsageDebug: (limit = 20) => {
-      const params = new URLSearchParams({ limit: String(limit) })
+      const numericLimit = Number(limit)
+      const safeLimit = Number.isFinite(numericLimit) ? Math.max(1, Math.floor(numericLimit)) : 20
+      const params = new URLSearchParams({ limit: String(safeLimit) })
       return core.request<ApmSpanUsageDebugResponse>(
         urlWithQuery(`${base}/billing/usage/apm-spans`, params.toString())
       )

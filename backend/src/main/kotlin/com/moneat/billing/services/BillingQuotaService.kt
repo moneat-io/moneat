@@ -834,11 +834,11 @@ class BillingQuotaService(
         periodStart: LocalDate,
         periodEnd: LocalDate
     ): String {
-        val endExclusive = periodEnd.plus(DatePeriod(days = 1))
+        val endExclusive = java.time.LocalDate.parse(periodEnd.toString()).plusDays(1).toString()
         return listOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
             "start >= toDateTime64('${escapeSql(periodStart.toString())} 00:00:00', 9, 'UTC')",
-            "start < toDateTime64('${escapeSql(endExclusive.toString())} 00:00:00', 9, 'UTC')"
+            "start < toDateTime64('${escapeSql(endExclusive)} 00:00:00', 9, 'UTC')"
         ).joinToString(" AND\n    ")
     }
 
