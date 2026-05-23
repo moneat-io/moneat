@@ -33,6 +33,7 @@ import com.moneat.billing.repositories.SubscriptionRepositoryImpl
 import com.moneat.billing.services.AdminBillingService
 import com.moneat.billing.services.BillingBackgroundService
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.EntitlementService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.billing.services.StripeService
 import com.moneat.dashboards.repositories.DashboardFolderRepository
@@ -113,6 +114,7 @@ val sharedModule = module {
 
     single { PricingTierService() }
     single { BillingQuotaService(get()) }
+    single { EntitlementService(get()) }
     single { RetentionPolicyService(get()) }
     single { RetentionBackgroundService(get()) }
 
@@ -196,7 +198,7 @@ val monitorModule = module {
     single { MonitorService(get(), get(), get(), get()) }
     single { MonitorAlertService(get(), get(), get(), get()) }
     single { AgentApiKeyService() }
-    single { SyntheticsService(get(), get(), get(), get()) }
+    single { SyntheticsService(get(), get(), get(), get(), get()) }
 }
 
 /** Log ingestion and querying. */
@@ -214,7 +216,7 @@ val uptimeModule = module {
 
     single { UptimeService(get(), get()) }
     single { UptimeCheckExecutor() }
-    single { UptimeScheduler(get(), get(), get(), get(), get(), get(), get()) }
+    single { UptimeScheduler(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { StatusPageService(get()) }
 }
 

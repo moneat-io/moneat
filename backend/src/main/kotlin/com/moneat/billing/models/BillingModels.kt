@@ -117,6 +117,9 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val used_analytics_pageviews = long("used_analytics_pageviews").default(0)
     val used_apm_spans = long("used_apm_spans").default(0)
     val used_custom_metrics = long("used_custom_metrics").default(0)
+    val used_synthetic_runs = long("used_synthetic_runs").default(0)
+    val used_uptime_checks = long("used_uptime_checks").default(0)
+    val used_ai_tokens = long("used_ai_tokens").default(0)
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
 }

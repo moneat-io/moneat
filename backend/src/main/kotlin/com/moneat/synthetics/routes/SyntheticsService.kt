@@ -16,6 +16,7 @@
 
 package com.moneat.synthetics.routes
 
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.AlertNotificationPreferencesService
@@ -57,6 +58,7 @@ class SyntheticsService(
     private val slackService: SlackService = SlackService(),
     private val discordService: DiscordService = DiscordService(),
     private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
+    private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
 ) {
     companion object {
         private val logger = KotlinLogging.logger {}
@@ -291,6 +293,12 @@ class SyntheticsService(
             logger.error(e) {
                 "Failed to record synthetic result for ${test.id}"
             }
+        }
+
+        suspendRunCatching {
+            incrementSyntheticRunCount(test.organizationId)
+        }.getOrElse { e ->
+            logger.debug(e) { "Failed to increment synthetic run count for org ${test.organizationId}" }
         }
 
         val oldStatus = test.lastStatus
@@ -814,5 +822,9 @@ class SyntheticsService(
             updatedAt = row[SyntheticVariables.updatedAt]
                 .toEpochMilliseconds()
         )
+    }
+
+    private fun incrementSyntheticRunCount(organizationId: Int) {
+        billingQuotaService.incrementUsageCounters(organizationId, syntheticRuns = 1)
     }
 }

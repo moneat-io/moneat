@@ -17,7 +17,13 @@
 package com.moneat.routes
 
 import com.moneat.auth.services.AuthTokenService
+import com.moneat.billing.models.BillingUsageResponse
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.QuotaReservationResult
+import com.moneat.events.models.SourceMapFileResponse
 import com.moneat.events.routes.releaseRoutes
+import com.moneat.events.services.EventService
+import com.moneat.events.services.ReleaseService
 import com.moneat.plugins.AuthTokenPrincipal
 import com.moneat.shared.models.AuthTokens
 import com.moneat.shared.models.Memberships
@@ -27,11 +33,15 @@ import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.get
+import io.ktor.client.request.forms.FormBuilder
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -43,9 +53,17 @@ import io.ktor.server.auth.bearer
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.Runs
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.verify
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.util.zip.GZIPOutputStream
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -55,10 +73,13 @@ import kotlin.test.assertTrue
 class ReleaseRoutesTest {
     private val testBearerToken = "test-bearer-token-releases"
     private val testCombinedToken = "test-combined-token-releases"
+    private val testSourceMapToken = "test-source-map-token-releases"
 
     companion object {
         private var dbInitialized = false
         private var testUserId = -1
+        private const val TEST_ORG_ID = 7
+        private const val TEST_PROJECT_ID = 42L
     }
 
     @BeforeTest
@@ -104,14 +125,22 @@ class ReleaseRoutesTest {
             }
             bearer("auth-combined") {
                 authenticate { credential ->
-                    if (credential.token == testCombinedToken) {
-                        AuthTokenPrincipal(
-                            userId = testUserId,
-                            scopes = listOf("project:read"), // intentionally missing releases:write
-                            tokenId = 1
-                        )
-                    } else {
-                        null
+                    when (credential.token) {
+                        testCombinedToken ->
+                            AuthTokenPrincipal(
+                                userId = testUserId,
+                                scopes = listOf("project:read"), // intentionally missing releases:write
+                                tokenId = 1
+                            )
+
+                        testSourceMapToken ->
+                            AuthTokenPrincipal(
+                                userId = testUserId,
+                                scopes = listOf("sourcemaps:write"),
+                                tokenId = 2
+                            )
+
+                        else -> null
                     }
                 }
             }
@@ -188,6 +217,251 @@ class ReleaseRoutesTest {
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
+
+    @Test
+    fun `POST source map upload reserves quota and stores file`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            every {
+                releaseService.uploadSourceMap(TEST_PROJECT_ID, "1.0.0", "~/app.js.map", any())
+            } returns SourceMapFileResponse(10, "~/app.js.map", "2026-05-23T00:00:00Z")
+
+            val quotaService = allowingQuotaService()
+            val eventService = projectOrgEventService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { releaseRoutes(releaseService, AuthTokenService(), quotaService, eventService) }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/releases/1.0.0/files/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append("name", "~/app.js.map")
+                                appendFile("file", "app.js.map", "source map content".toByteArray())
+                            }
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.Created, response.status, response.bodyAsText())
+            assertTrue(response.bodyAsText().contains("~/app.js.map"))
+            verify { quotaService.reserveUnits(TEST_ORG_ID, 1, "sourcemap", "source map content".length.toLong()) }
+        }
+
+    @Test
+    fun `POST source map upload returns 429 when quota reservation is rejected`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            val quotaService = rejectingQuotaService()
+            val eventService = projectOrgEventService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { releaseRoutes(releaseService, AuthTokenService(), quotaService, eventService) }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/releases/1.0.0/files/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append("name", "~/app.js.map")
+                                appendFile("file", "app.js.map", "source map content".toByteArray())
+                            }
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.TooManyRequests, response.status, response.bodyAsText())
+            verify(exactly = 0) { releaseService.uploadSourceMap(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `POST source map upload refunds quota when storing file fails`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            every {
+                releaseService.uploadSourceMap(TEST_PROJECT_ID, "1.0.0", "~/app.js.map", any())
+            } throws IllegalArgumentException("Release not found")
+
+            val quotaService = allowingQuotaService()
+            val eventService = projectOrgEventService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { releaseRoutes(releaseService, AuthTokenService(), quotaService, eventService) }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/releases/1.0.0/files/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append("name", "~/app.js.map")
+                                appendFile("file", "app.js.map", "source map content".toByteArray())
+                            }
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status, response.bodyAsText())
+            verify { quotaService.refundUnits(TEST_ORG_ID, 1, "sourcemap", "source map content".length.toLong()) }
+        }
+
+    @Test
+    fun `POST chunk upload reserves quota and stores gzip chunk`() =
+        testApplication {
+            val releaseService = mockk<ReleaseService>()
+            every { releaseService.hasOrgAccess(testUserId, "my-org") } returns true
+            every { releaseService.getOrganizationIdBySlug("my-org") } returns TEST_ORG_ID
+            every { releaseService.storeChunk("abc123", "chunk content".toByteArray()) } just Runs
+
+            val quotaService = allowingQuotaService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { releaseRoutes(releaseService, AuthTokenService(), quotaService, projectOrgEventService()) }
+            }
+
+            val response =
+                client.post("/api/0/organizations/my-org/chunk-upload/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                appendFile("file_gzip", "abc123", gzip("chunk content".toByteArray()))
+                            }
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
+            verify { quotaService.reserveUnits(TEST_ORG_ID, 1, "sourcemap", "chunk content".length.toLong()) }
+            verify { releaseService.storeChunk("abc123", "chunk content".toByteArray()) }
+        }
+
+    @Test
+    fun `POST chunk upload refunds quota when storing chunk fails`() =
+        testApplication {
+            val releaseService = mockk<ReleaseService>()
+            every { releaseService.hasOrgAccess(testUserId, "my-org") } returns true
+            every { releaseService.getOrganizationIdBySlug("my-org") } returns TEST_ORG_ID
+            every { releaseService.storeChunk("abc123", any()) } throws IOException("storage failed")
+
+            val quotaService = allowingQuotaService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { releaseRoutes(releaseService, AuthTokenService(), quotaService, projectOrgEventService()) }
+            }
+
+            val response =
+                client.post("/api/0/organizations/my-org/chunk-upload/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                appendFile("file", "abc123", "chunk content".toByteArray())
+                            }
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.InternalServerError, response.status, response.bodyAsText())
+            verify { quotaService.refundUnits(TEST_ORG_ID, 1, "sourcemap", "chunk content".length.toLong()) }
+        }
+
+    private fun sourceMapReleaseService(): ReleaseService {
+        val releaseService = mockk<ReleaseService>()
+        every { releaseService.getProjectBySlug("my-org", "my-project") } returns TEST_PROJECT_ID
+        every { releaseService.hasProjectAccess(testUserId, TEST_PROJECT_ID) } returns true
+        return releaseService
+    }
+
+    private fun projectOrgEventService(): EventService {
+        val eventService = mockk<EventService>()
+        every { eventService.getOrganizationIdForProject(TEST_PROJECT_ID) } returns TEST_ORG_ID
+        return eventService
+    }
+
+    private fun allowingQuotaService(): BillingQuotaService {
+        val quotaService = mockk<BillingQuotaService>(relaxed = true)
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnits(any(), any(), any(), any())
+        } returns QuotaReservationResult(allowed = true, usage = quotaUsage())
+        return quotaService
+    }
+
+    private fun rejectingQuotaService(): BillingQuotaService {
+        val quotaService = mockk<BillingQuotaService>(relaxed = true)
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnits(any(), any(), any(), any())
+        } returns QuotaReservationResult(
+            allowed = false,
+            reason = "gb_quota_exceeded",
+            usage = quotaUsage()
+        )
+        return quotaService
+    }
+
+    private fun quotaUsage(): BillingUsageResponse {
+        return BillingUsageResponse(
+            organizationId = TEST_ORG_ID,
+            periodStart = "2026-05-01",
+            periodEnd = "2026-05-31",
+            retentionDays = 30,
+            usedUnits = 0,
+            usedErrors = 0,
+            errorLimit = 0,
+            usedTransactions = 0,
+            transactionLimit = 0,
+            usedReplays = 0,
+            replayLimit = 0,
+            usedFeedback = 0,
+            feedbackLimit = 0,
+            usedBytes = 0,
+            bytesLimit = 0,
+            baseLimitUnits = 0,
+            paygLimitUnits = 0,
+            totalLimitUnits = 0,
+            paygBudgetCents = 0,
+            paygUsedUnits = 0,
+            paygUsedCentsEstimate = 0,
+            plan = "PRO",
+            status = "active",
+            withinQuota = true
+        )
+    }
+
+    private fun FormBuilder.appendFile(name: String, fileName: String, bytes: ByteArray) {
+        append(
+            name,
+            bytes,
+            Headers.build {
+                append(HttpHeaders.ContentDisposition, "form-data; name=\"$name\"; filename=\"$fileName\"")
+                append(HttpHeaders.ContentType, ContentType.Application.OctetStream.toString())
+            }
+        )
+    }
+
+    private fun gzip(bytes: ByteArray): ByteArray {
+        val out = ByteArrayOutputStream()
+        GZIPOutputStream(out).use { it.write(bytes) }
+        return out.toByteArray()
+    }
 
     @AfterTest
     fun teardownKoin() {

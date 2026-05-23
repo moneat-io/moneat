@@ -20,6 +20,8 @@ import kotlinx.serialization.SerializationException
 import java.io.IOException
 
 import com.moneat.auth.services.AuthTokenService
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.events.models.AssembleArtifactBundleRequest
 import com.moneat.events.models.AssembleResponse
 import com.moneat.events.models.ChunkUploadParameters
@@ -27,6 +29,7 @@ import com.moneat.events.models.CreateReleaseRequest
 import com.moneat.events.models.SentryAuthDetails
 import com.moneat.events.models.SentryAuthInfoResponse
 import com.moneat.events.models.SentryAuthUser
+import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
 import com.moneat.plugins.AuthTokenPrincipal
 import com.moneat.shared.models.Users
@@ -57,9 +60,27 @@ private val logger = KotlinLogging.logger {}
 private const val FAILED_TO_UPLOAD_SOURCE_MAP = "Failed to upload source map"
 private const val UPLOAD_FAILED = "Upload failed"
 
+private data class UploadedSourceMapChunk(
+    val checksum: String,
+    val bytes: ByteArray
+)
+
+private data class UploadedSourceMap(
+    val fileName: String,
+    val bytes: ByteArray
+)
+
+private data class SourceMapQuotaReservation(
+    val organizationId: Int?,
+    val units: Int,
+    val bytes: Long
+)
+
 fun Route.releaseRoutes(
     releaseService: ReleaseService = GlobalContext.get().get(),
     authTokenService: AuthTokenService = GlobalContext.get().get(),
+    quotaService: BillingQuotaService = GlobalContext.get().get(),
+    eventService: EventService = GlobalContext.get().get(),
 ) {
     // Sentry-compatible auth verification endpoint (used by sentry-cli login/info)
     authenticate("auth-bearer") {
@@ -89,7 +110,9 @@ fun Route.releaseRoutes(
 
             // Upload source maps for a release
             // POST /api/0/projects/{orgSlug}/{projectSlug}/releases/{version}/files/
-            post("/{version}/files/") { handleUploadSourceMap(releaseService, authTokenService) }
+            post("/{version}/files/") {
+                handleUploadSourceMap(releaseService, authTokenService, quotaService, eventService)
+            }
 
             // List files for a release
             get("/{version}/files/") { handleListReleaseFiles(releaseService, authTokenService) }
@@ -101,7 +124,7 @@ fun Route.releaseRoutes(
             get("/") { handleGetChunkUploadParams(releaseService) }
 
             // POST /api/0/organizations/{orgSlug}/chunk-upload/
-            post("/") { handleUploadChunks(releaseService) }
+            post("/") { handleUploadChunks(releaseService, quotaService) }
         }
 
         // Artifact bundle assemble endpoint
@@ -320,6 +343,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectRelea
 private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
     releaseService: ReleaseService,
     authTokenService: AuthTokenService,
+    quotaService: BillingQuotaService,
+    eventService: EventService,
 ) {
     val principal =
         call.principal<AuthTokenPrincipal>()
@@ -352,57 +377,22 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
         return
     }
 
-    // Handle multipart file upload
-    val multipart = call.receiveMultipart()
-    var fileName: String? = null
-    var fileBytes: ByteArray? = null
-    var filePath: String? = null
+    val upload = receiveSourceMapUpload() ?: return
+    val quotaReservation = reserveSourceMapQuotaOrRespond(
+        quotaService = quotaService,
+        organizationId = eventService.getOrganizationIdForProject(projectId),
+        units = 1,
+        bytes = upload.bytes.size.toLong()
+    ) ?: return
 
-    multipart.forEachPart { part ->
-        when (part) {
-            is PartData.FormItem -> {
-                if (part.name == "name") {
-                    filePath = part.value
-                }
-            }
-
-            is PartData.FileItem -> {
-                fileName = part.originalFileName ?: "unknown"
-                fileBytes = part.provider().toByteArray()
-            }
-
-            else -> {}
-        }
-        part.dispose()
-    }
-
-    val finalFileName = filePath ?: fileName
-    if (finalFileName == null || fileBytes == null) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing file or filename"))
-        return
-    }
-
-    try {
-        val fileResponse =
-            releaseService.uploadSourceMap(
-                projectId = projectId,
-                version = version,
-                fileName = finalFileName,
-                fileContent = fileBytes
-            )
-        call.respond(HttpStatusCode.Created, fileResponse)
-    } catch (e: IllegalArgumentException) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-    } catch (e: SerializationException) {
-        logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
-    } catch (e: IOException) {
-        logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
-    } catch (e: IllegalStateException) {
-        logger.error(e) { FAILED_TO_UPLOAD_SOURCE_MAP }
-        call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
-    }
+    uploadSourceMapOrRespond(
+        releaseService = releaseService,
+        quotaService = quotaService,
+        quotaReservation = quotaReservation,
+        projectId = projectId,
+        version = version,
+        upload = upload
+    )
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleListReleaseFiles(
@@ -490,6 +480,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetChunkUploadPa
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
     releaseService: ReleaseService,
+    quotaService: BillingQuotaService,
 ) {
     val principal =
         call.principal<AuthTokenPrincipal>()
@@ -505,36 +496,175 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadChunks(
         return
     }
 
+    val orgId = releaseService.getOrganizationIdBySlug(orgSlug)
+    val chunks = receiveUploadedSourceMapChunks()
+    val totalBytes = chunks.sumOf { it.bytes.size.toLong() }
+    val quotaReservation = reserveSourceMapQuotaOrRespond(
+        quotaService = quotaService,
+        organizationId = orgId,
+        units = chunks.size,
+        bytes = totalBytes
+    ) ?: return
+
+    if (!storeChunksOrRespond(releaseService, quotaService, orgSlug, chunks, quotaReservation)) return
+
+    logger.info { "Stored ${chunks.size} chunks for org $orgSlug" }
+    call.respond(HttpStatusCode.OK)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.receiveSourceMapUpload(): UploadedSourceMap? {
     val multipart = call.receiveMultipart()
-    var chunksProcessed = 0
+    var fileName: String? = null
+    var fileBytes: ByteArray? = null
+    var filePath: String? = null
 
     multipart.forEachPart { part ->
+        if (part is PartData.FormItem && part.name == "name") {
+            filePath = part.value
+        }
         if (part is PartData.FileItem) {
-            val checksum = part.originalFileName ?: part.name ?: ""
-            val rawBytes = part.provider().toByteArray()
-
-            // Handle gzip-compressed chunks
-            val bytes =
-                if (part.name == "file_gzip") {
-                    suspendRunCatching {
-                        val bos = ByteArrayOutputStream()
-                        GZIPInputStream(rawBytes.inputStream()).use { it.copyTo(bos) }
-                        bos.toByteArray()
-                    }.getOrElse { _ ->
-                        rawBytes
-                    }
-                } else {
-                    rawBytes
-                }
-
-            releaseService.storeChunk(checksum, bytes)
-            chunksProcessed++
+            fileName = part.originalFileName ?: "unknown"
+            fileBytes = part.provider().toByteArray()
         }
         part.dispose()
     }
 
-    logger.info { "Stored $chunksProcessed chunks for org $orgSlug" }
-    call.respond(HttpStatusCode.OK)
+    val finalFileName = filePath ?: fileName
+    val uploadedBytes = fileBytes
+    if (finalFileName == null || uploadedBytes == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing file or filename"))
+        return null
+    }
+    return UploadedSourceMap(finalFileName, uploadedBytes)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.receiveUploadedSourceMapChunks():
+    List<UploadedSourceMapChunk> {
+    val chunks = mutableListOf<UploadedSourceMapChunk>()
+    val multipart = call.receiveMultipart()
+    multipart.forEachPart { part ->
+        if (part is PartData.FileItem) {
+            chunks += UploadedSourceMapChunk(
+                checksum = part.originalFileName ?: part.name ?: "",
+                bytes = sourceMapChunkBytes(part)
+            )
+        }
+        part.dispose()
+    }
+    return chunks
+}
+
+private suspend fun sourceMapChunkBytes(part: PartData.FileItem): ByteArray {
+    val rawBytes = part.provider().toByteArray()
+    if (part.name != "file_gzip") return rawBytes
+
+    return suspendRunCatching {
+        val bos = ByteArrayOutputStream()
+        GZIPInputStream(rawBytes.inputStream()).use { it.copyTo(bos) }
+        bos.toByteArray()
+    }.getOrElse { _ ->
+        rawBytes
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.reserveSourceMapQuotaOrRespond(
+    quotaService: BillingQuotaService,
+    organizationId: Int?,
+    units: Int,
+    bytes: Long
+): SourceMapQuotaReservation? {
+    if (!quotaService.isEnforcementEnabled() || organizationId == null || bytes <= 0) {
+        return SourceMapQuotaReservation(null, units, bytes)
+    }
+
+    val reservation = quotaService.reserveUnits(organizationId, units, "sourcemap", bytes)
+    if (!reservation.allowed) {
+        call.respond(
+            HttpStatusCode.TooManyRequests,
+            QuotaExceededResponse(reason = reservation.reason, usage = reservation.usage)
+        )
+        return null
+    }
+    return SourceMapQuotaReservation(organizationId, units, bytes)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.uploadSourceMapOrRespond(
+    releaseService: ReleaseService,
+    quotaService: BillingQuotaService,
+    quotaReservation: SourceMapQuotaReservation,
+    projectId: Long,
+    version: String,
+    upload: UploadedSourceMap
+) {
+    try {
+        val fileResponse =
+            releaseService.uploadSourceMap(
+                projectId = projectId,
+                version = version,
+                fileName = upload.fileName,
+                fileContent = upload.bytes
+            )
+        call.respond(HttpStatusCode.Created, fileResponse)
+    } catch (e: IllegalArgumentException) {
+        refundReservedSourceMapQuota(quotaService, quotaReservation)
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+    } catch (e: SerializationException) {
+        respondSourceMapUploadFailure(e, quotaService, quotaReservation)
+    } catch (e: IOException) {
+        respondSourceMapUploadFailure(e, quotaService, quotaReservation)
+    } catch (e: IllegalStateException) {
+        respondSourceMapUploadFailure(e, quotaService, quotaReservation)
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.respondSourceMapUploadFailure(
+    error: Exception,
+    quotaService: BillingQuotaService,
+    quotaReservation: SourceMapQuotaReservation
+) {
+    refundReservedSourceMapQuota(quotaService, quotaReservation)
+    logger.error(error) { FAILED_TO_UPLOAD_SOURCE_MAP }
+    call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.storeChunksOrRespond(
+    releaseService: ReleaseService,
+    quotaService: BillingQuotaService,
+    orgSlug: String,
+    chunks: List<UploadedSourceMapChunk>,
+    quotaReservation: SourceMapQuotaReservation
+): Boolean {
+    return try {
+        chunks.forEach { chunk ->
+            releaseService.storeChunk(chunk.checksum, chunk.bytes)
+        }
+        true
+    } catch (e: IOException) {
+        respondChunkUploadFailure(e, quotaService, orgSlug, quotaReservation)
+        false
+    } catch (e: IllegalStateException) {
+        respondChunkUploadFailure(e, quotaService, orgSlug, quotaReservation)
+        false
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.respondChunkUploadFailure(
+    error: Exception,
+    quotaService: BillingQuotaService,
+    orgSlug: String,
+    quotaReservation: SourceMapQuotaReservation
+) {
+    refundReservedSourceMapQuota(quotaService, quotaReservation)
+    logger.error(error) { "Failed to store chunks for org $orgSlug" }
+    call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
+}
+
+private fun refundReservedSourceMapQuota(
+    quotaService: BillingQuotaService,
+    reservation: SourceMapQuotaReservation
+) {
+    val organizationId = reservation.organizationId ?: return
+    quotaService.refundUnits(organizationId, reservation.units, "sourcemap", reservation.bytes)
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifactBundle(

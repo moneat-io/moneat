@@ -34,7 +34,10 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -184,6 +187,31 @@ class BillingQuotaServiceExtendedTest {
         service.refundUnits(testOrgId, units = 0, eventType = "error")
         val after = service.getUsageForOrganization(testOrgId)
         assertEquals(before.usedErrors, after.usedErrors)
+    }
+
+    @Test
+    fun `incrementUsageCounters creates current period row before incrementing visibility counters`() {
+        transaction {
+            OrgUsageCounters.deleteWhere { organization_id eq testOrgId }
+        }
+
+        service.incrementUsageCounters(
+            organizationId = testOrgId,
+            syntheticRuns = 2,
+            uptimeChecks = 3,
+            aiTokens = 100
+        )
+
+        val row = transaction {
+            OrgUsageCounters
+                .selectAll()
+                .where { OrgUsageCounters.organization_id eq testOrgId }
+                .first()
+        }
+
+        assertEquals(2L, row[OrgUsageCounters.used_synthetic_runs])
+        assertEquals(3L, row[OrgUsageCounters.used_uptime_checks])
+        assertEquals(100L, row[OrgUsageCounters.used_ai_tokens])
     }
 
     @Test

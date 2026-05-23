@@ -59,6 +59,7 @@ class UptimeScheduler(
     private val incidentService: IncidentService = IncidentService(),
     private val emailService: EmailService = EmailService(),
     private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
+    private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
 ) {
     companion object {
         private const val TIMEOUT_BUFFER_MS = 5000L
@@ -200,6 +201,12 @@ class UptimeScheduler(
             uptimeService.recordHeartbeat(monitor.id, finalResult)
         }.getOrElse { e ->
             logger.error(e) { "Failed to record heartbeat for monitor ${monitor.id}: ${e.message}" }
+        }
+
+        suspendRunCatching {
+            incrementUptimeCheckCount(monitor.organizationId)
+        }.getOrElse { e ->
+            logger.debug(e) { "Failed to increment uptime check count for org ${monitor.organizationId}" }
         }
 
         // Update monitor status
@@ -425,5 +432,9 @@ class UptimeScheduler(
         }.onFailure { e ->
             logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
         }
+    }
+
+    private fun incrementUptimeCheckCount(organizationId: Int) {
+        billingQuotaService.incrementUsageCounters(organizationId, uptimeChecks = 1)
     }
 }
