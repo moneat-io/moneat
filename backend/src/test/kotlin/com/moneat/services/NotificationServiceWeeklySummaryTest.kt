@@ -148,6 +148,9 @@ class NotificationServiceWeeklySummaryTest {
         { exchange ->
             val query = exchange.requestBodyText()
             when {
+                query.contains("any(culprit)") -> {
+                    exchange.respond(500, "Code: 47. Unknown expression identifier culprit", TEXT_PLAIN)
+                }
                 query.contains("GROUP BY project_id") -> {
                     exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
                 }
@@ -193,6 +196,8 @@ class NotificationServiceWeeklySummaryTest {
             when {
                 query.contains("GROUP BY project_id") ->
                     exchange.respond(200, emptyData, TEXT_PLAIN)
+                query.contains("any(culprit)") ->
+                    exchange.respond(500, "Code: 47. Unknown expression identifier culprit", TEXT_PLAIN)
                 query.contains("count() as total_events") -> {
                     call++
                     val body = if (call == 1) {
