@@ -19,9 +19,15 @@ import {createFileRoute, Link, redirect, useNavigate, useSearch} from '@tanstack
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {loadStripe} from '@stripe/stripe-js'
 import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
-import {type AlertNotificationPreference, type AlertSource, api, type AuthToken} from '@/lib/api'
+import {
+  type AlertNotificationPreference,
+  type AlertSource,
+  api,
+  type AuthToken,
+} from '@/lib/api'
 import {OtlpApiKeysTab} from '@/components/settings/OtlpApiKeysTab'
 import {AgentApiKeysTab} from '@/components/settings/AgentApiKeysTab'
+import {ApmSpanUsageBreakdown} from '@/components/settings/ApmSpanUsageBreakdown'
 import {trackEvent} from '@/lib/analytics'
 import {buildPricingCardModel} from '@/lib/pricing-display'
 import {Button} from '@/components/ui/button'
@@ -113,6 +119,8 @@ const EXPIRATION_OPTIONS = [
   { label: '90 days', value: '90' },
   { label: 'Custom', value: 'custom' },
 ] as const
+
+const APM_SPAN_DEBUG_LIMIT = 20
 
 function formatDate(iso: string | null | undefined, timezone: string): string {
   if (!iso) return '—'
@@ -808,6 +816,15 @@ function UsageTab() {
     queryFn: () => api.getBillingUsage(),
     enabled: api.isAuthenticated(),
   })
+  const {
+    data: apmSpanDebug,
+    error: apmSpanDebugError,
+    isLoading: isApmSpanDebugLoading,
+  } = useQuery({
+    queryKey: ['billingApmSpanUsageDebug', usage?.periodStart, usage?.periodEnd],
+    queryFn: () => api.getBillingApmSpanUsageDebug(APM_SPAN_DEBUG_LIMIT),
+    enabled: api.isAuthenticated() && usage !== undefined,
+  })
 
   if (isLoading || !usage) {
     return <p className="text-sm text-muted-foreground">Loading usage data...</p>
@@ -1034,6 +1051,15 @@ function UsageTab() {
                     )}
                   </div>
                 )}
+
+                {row.key === 'apm_span' && (
+                  <ApmSpanUsageBreakdown
+                    debug={apmSpanDebug}
+                    error={apmSpanDebugError}
+                    isLoading={isApmSpanDebugLoading}
+                    timezone={timezone}
+                  />
+                )}
               </div>
             )
           })}
@@ -1059,6 +1085,7 @@ function UsageTab() {
           </div>
         </CardContent>
       </Card>
+
     </div>
   )
 }

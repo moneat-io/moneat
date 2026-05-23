@@ -16,15 +16,23 @@
 
 package com.moneat.billing.services
 
+import com.moneat.billing.models.APM_SPAN_USAGE_DEBUG_MAX_LIMIT
+import com.moneat.billing.models.APM_SPAN_USAGE_DEBUG_MIN_LIMIT
 import com.moneat.billing.models.AdminQuotaUsageResetResponse
+import com.moneat.billing.models.ApmSpanUsageDebugGroup
+import com.moneat.billing.models.ApmSpanUsageDebugResponse
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.OrgUsageCounters
 import com.moneat.billing.models.PricingTier
 import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
+import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.SentryUtils
 import com.moneat.utils.suspendRunCatching
 import kotlinx.datetime.LocalDate
@@ -32,6 +40,12 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -48,6 +62,7 @@ import kotlin.math.roundToLong
 import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
+private val billingQuotaJson = Json { ignoreUnknownKeys = true }
 
 data class QuotaReservationResult(
     val allowed: Boolean,
@@ -76,6 +91,8 @@ class BillingQuotaService(
         private const val MIN_QUOTA_TARGET_PERCENT = 0.0
         private const val MAX_QUOTA_TARGET_PERCENT = 500.0
         private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
+        private const val NANOS_PER_MILLISECOND = 1_000_000.0
+        private const val DURATION_DECIMAL_PLACES = 3
         private val NON_AGGREGATE_UNIT_TYPES = setOf(
             "llm",
             "log",
@@ -98,6 +115,73 @@ class BillingQuotaService(
         return transaction {
             val state = loadQuotaState(organizationId, lockRows = false)
             toUsageResponse(state)
+        }
+    }
+
+    suspend fun getApmSpanUsageDebug(
+        organizationId: Int,
+        periodStart: LocalDate,
+        periodEnd: LocalDate,
+        limit: Int
+    ): ApmSpanUsageDebugResponse {
+        val safeLimit = limit.coerceIn(APM_SPAN_USAGE_DEBUG_MIN_LIMIT, APM_SPAN_USAGE_DEBUG_MAX_LIMIT)
+        return suspendRunCatching {
+            val whereClause = apmSpanDebugWhereClause(organizationId, periodStart, periodEnd)
+            val totalSpans = queryApmSpanDebugTotal(whereClause)
+            val rawGroups = if (totalSpans > 0) {
+                queryApmSpanDebugGroups(whereClause, safeLimit)
+            } else {
+                emptyList()
+            }
+            val projectLabels = loadApmSpanProjectLabels(
+                organizationId = organizationId,
+                projectIds = rawGroups.mapNotNull { it.projectId }.toSet()
+            )
+
+            ApmSpanUsageDebugResponse(
+                organizationId = organizationId,
+                periodStart = periodStart.toString(),
+                periodEnd = periodEnd.toString(),
+                totalSpans = totalSpans,
+                groups = rawGroups.map { group ->
+                    val project = group.projectId?.let { projectLabels[it] }
+                    ApmSpanUsageDebugGroup(
+                        source = group.source,
+                        service = group.service,
+                        operation = group.operation,
+                        resource = group.resource,
+                        spanType = group.spanType,
+                        env = group.env,
+                        kind = group.kind,
+                        scopeName = group.scopeName,
+                        scopeVersion = group.scopeVersion,
+                        projectId = group.projectId,
+                        projectName = project?.name,
+                        projectSlug = project?.slug,
+                        spanCount = group.spanCount,
+                        traceCount = group.traceCount,
+                        errorCount = group.errorCount,
+                        avgDurationMs = group.avgDurationMs,
+                        maxDurationMs = group.maxDurationMs,
+                        percentage = if (totalSpans > 0) {
+                            group.spanCount.toDouble() / totalSpans.toDouble() * PERCENT_MULTIPLIER
+                        } else {
+                            0.0
+                        },
+                        sampleTraceId = group.sampleTraceId,
+                        latestSpanAt = group.latestSpanAt
+                    )
+                }
+            )
+        }.getOrElse { e ->
+            logger.warn(e) { "Failed to query APM span usage debug for org $organizationId" }
+            ApmSpanUsageDebugResponse(
+                organizationId = organizationId,
+                periodStart = periodStart.toString(),
+                periodEnd = periodEnd.toString(),
+                totalSpans = 0,
+                groups = emptyList()
+            )
         }
     }
 
@@ -719,6 +803,153 @@ class BillingQuotaService(
         val usedLlmBytes: Long,
         val usedProfilerBytes: Long
     )
+
+    private data class RawApmSpanDebugGroup(
+        val source: String,
+        val service: String,
+        val operation: String,
+        val resource: String,
+        val spanType: String,
+        val env: String,
+        val kind: String,
+        val scopeName: String,
+        val scopeVersion: String,
+        val projectId: Long?,
+        val spanCount: Long,
+        val traceCount: Long,
+        val errorCount: Long,
+        val avgDurationMs: Double,
+        val maxDurationMs: Double,
+        val sampleTraceId: String,
+        val latestSpanAt: String
+    )
+
+    private data class ApmSpanProjectLabel(
+        val name: String,
+        val slug: String
+    )
+
+    private fun apmSpanDebugWhereClause(
+        organizationId: Int,
+        periodStart: LocalDate,
+        periodEnd: LocalDate
+    ): String {
+        val endExclusive = java.time.LocalDate.parse(periodEnd.toString()).plusDays(1).toString()
+        return listOf(
+            ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
+            "start >= toDateTime64('${escapeSql(periodStart.toString())} 00:00:00', 9, 'UTC')",
+            "start < toDateTime64('${escapeSql(endExclusive)} 00:00:00', 9, 'UTC')"
+        ).joinToString(" AND\n    ")
+    }
+
+    private suspend fun queryApmSpanDebugTotal(whereClause: String): Long {
+        val query = """
+            SELECT count()
+            FROM `${ClickHouseClient.getDatabase()}`.apm_spans
+            WHERE $whereClause
+        """.trimIndent()
+        return ClickHouseClient.executeWithFormat(query, "TabSeparated").trim().toLongOrNull() ?: 0L
+    }
+
+    private suspend fun queryApmSpanDebugGroups(
+        whereClause: String,
+        limit: Int
+    ): List<RawApmSpanDebugGroup> {
+        val query = """
+            SELECT
+                if(source = '', 'datadog', source) AS source_value,
+                service,
+                name AS operation,
+                resource,
+                type AS span_type,
+                env,
+                kind,
+                scope_name,
+                scope_version,
+                toUInt64OrNull(meta['sentry.project_id']) AS project_id,
+                count() AS span_count,
+                uniqExact(
+                    if(trace_id_hex != '', trace_id_hex, concat(toString(trace_id_high), ':', toString(trace_id)))
+                ) AS trace_count,
+                countIf(error != 0) AS error_count,
+                round(avg(duration) / $NANOS_PER_MILLISECOND, $DURATION_DECIMAL_PLACES) AS avg_duration_ms,
+                round(max(duration) / $NANOS_PER_MILLISECOND, $DURATION_DECIMAL_PLACES) AS max_duration_ms,
+                argMax(if(trace_id_hex != '', trace_id_hex, toString(trace_id)), start) AS sample_trace_id,
+                toString(max(start)) AS latest_span_at
+            FROM `${ClickHouseClient.getDatabase()}`.apm_spans
+            WHERE $whereClause
+            GROUP BY
+                source_value,
+                service,
+                operation,
+                resource,
+                span_type,
+                env,
+                kind,
+                scope_name,
+                scope_version,
+                project_id
+            ORDER BY span_count DESC
+            LIMIT $limit
+            FORMAT JSONEachRow
+        """.trimIndent()
+        val body = ClickHouseClient.executeWithFormat(query, "")
+        return parseApmSpanDebugGroups(body)
+    }
+
+    private fun parseApmSpanDebugGroups(body: String): List<RawApmSpanDebugGroup> {
+        if (body.isBlank()) return emptyList()
+        return body.trim().lines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                suspendRunCatching {
+                    val obj = billingQuotaJson.parseToJsonElement(line).jsonObject
+                    RawApmSpanDebugGroup(
+                        source = obj["source_value"]?.jsonPrimitive?.contentOrNull ?: "datadog",
+                        service = obj["service"]?.jsonPrimitive?.contentOrNull ?: "",
+                        operation = obj["operation"]?.jsonPrimitive?.contentOrNull ?: "",
+                        resource = obj["resource"]?.jsonPrimitive?.contentOrNull ?: "",
+                        spanType = obj["span_type"]?.jsonPrimitive?.contentOrNull ?: "",
+                        env = obj["env"]?.jsonPrimitive?.contentOrNull ?: "",
+                        kind = obj["kind"]?.jsonPrimitive?.contentOrNull ?: "",
+                        scopeName = obj["scope_name"]?.jsonPrimitive?.contentOrNull ?: "",
+                        scopeVersion = obj["scope_version"]?.jsonPrimitive?.contentOrNull ?: "",
+                        projectId = obj["project_id"]?.jsonPrimitive?.longOrNull,
+                        spanCount = obj["span_count"]?.jsonPrimitive?.longOrNull ?: 0L,
+                        traceCount = obj["trace_count"]?.jsonPrimitive?.longOrNull ?: 0L,
+                        errorCount = obj["error_count"]?.jsonPrimitive?.longOrNull ?: 0L,
+                        avgDurationMs = obj["avg_duration_ms"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                        maxDurationMs = obj["max_duration_ms"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                        sampleTraceId = obj["sample_trace_id"]?.jsonPrimitive?.contentOrNull ?: "",
+                        latestSpanAt = obj["latest_span_at"]?.jsonPrimitive?.contentOrNull ?: ""
+                    )
+                }.getOrElse { e ->
+                    logger.warn(e) { "Failed to parse APM span debug row" }
+                    null
+                }
+            }
+    }
+
+    private fun loadApmSpanProjectLabels(
+        organizationId: Int,
+        projectIds: Set<Long>
+    ): Map<Long, ApmSpanProjectLabel> {
+        if (projectIds.isEmpty()) return emptyMap()
+        return transaction {
+            Projects
+                .selectAll()
+                .where {
+                    (Projects.organization_id eq organizationId) and
+                        (Projects.id inList projectIds.toList())
+                }
+                .associate { row ->
+                    row[Projects.id] to ApmSpanProjectLabel(
+                        name = row[Projects.name],
+                        slug = row[Projects.slug]
+                    )
+                }
+        }
+    }
 
     private fun loadQuotaState(
         organizationId: Int,
@@ -1706,7 +1937,7 @@ class BillingQuotaService(
             "feedback" -> "feedback"
             "llm" -> "llm"
             "log", "logs", "dd_log" -> "log"
-            "apm_span", "apm", "otlp_trace", "dd_trace" -> "apm_span"
+            "apm_span", "apm", "otlp_trace", "dd_trace", "sentry_trace" -> "apm_span"
             "custom_metric", "metric", "otlp_metric", "dd_metric" -> "custom_metric"
             "analytics_pageview" -> "analytics_pageview"
             "sourcemap", "artifact" -> "artifact"

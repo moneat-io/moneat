@@ -16,6 +16,8 @@
 
 package com.moneat.routes
 
+import com.moneat.billing.models.ApmSpanUsageDebugGroup
+import com.moneat.billing.models.ApmSpanUsageDebugResponse
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.CancelSubscriptionResponse
 import com.moneat.billing.models.CheckoutSessionResponse
@@ -51,10 +53,13 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.clearMocks
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import kotlinx.datetime.LocalDate
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -68,6 +73,7 @@ import kotlin.test.assertTrue
 class BillingRoutesTest {
     companion object {
         private const val BILLING_USAGE = "/v1/billing/usage"
+        private const val BILLING_APM_SPAN_DEBUG = "/v1/billing/usage/apm-spans"
         private const val BILLING_CHECKOUT = "/v1/billing/checkout"
         private const val BILLING_INVOICES = "/v1/billing/invoices"
         private const val BILLING_PAYMENT_METHOD = "/v1/billing/payment-method"
@@ -196,6 +202,35 @@ class BillingRoutesTest {
         withinQuota = true,
     )
 
+    private fun makeApmSpanDebugResponse(
+        orgId: Int,
+        usage: BillingUsageResponse,
+        totalSpans: Long = 0
+    ) = ApmSpanUsageDebugResponse(
+        organizationId = orgId,
+        periodStart = usage.periodStart,
+        periodEnd = usage.periodEnd,
+        totalSpans = totalSpans,
+        groups = emptyList()
+    )
+
+    private fun stubApmSpanDebug(
+        orgId: Int,
+        usage: BillingUsageResponse,
+        expectedLimit: Int
+    ): ApmSpanUsageDebugResponse {
+        val response = makeApmSpanDebugResponse(orgId, usage)
+        coEvery {
+            mockQuotaService.getApmSpanUsageDebug(
+                organizationId = orgId,
+                periodStart = LocalDate.parse(usage.periodStart),
+                periodEnd = LocalDate.parse(usage.periodEnd),
+                limit = expectedLimit
+            )
+        } returns response
+        return response
+    }
+
     // ──── Auth ────
 
     @Test
@@ -203,6 +238,14 @@ class BillingRoutesTest {
         testApplication {
             application { installRoutes(this) }
             val r = client.get(BILLING_USAGE)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
+        }
+
+    @Test
+    fun `GET usage apm spans returns 401 when unauthenticated`() =
+        testApplication {
+            application { installRoutes(this) }
+            val r = client.get(BILLING_APM_SPAN_DEBUG)
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
@@ -277,6 +320,18 @@ class BillingRoutesTest {
         }
 
     @Test
+    fun `GET usage apm spans returns 403 when user has no org`() =
+        testApplication {
+            val userId = seedUser()
+            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
+            application { installRoutes(this) }
+            val r = client.get(BILLING_APM_SPAN_DEBUG) {
+                withAuth(token(userId))
+            }
+            assertEquals(HttpStatusCode.Forbidden, r.status)
+        }
+
+    @Test
     fun `POST checkout returns 403 when user has no org`() =
         testApplication {
             val userId = seedUser()
@@ -337,6 +392,136 @@ class BillingRoutesTest {
             val body = r.bodyAsText()
             assertTrue(body.contains("\"organizationId\""))
             assertTrue(body.contains("\"withinQuota\""))
+        }
+
+    @Test
+    fun `GET usage apm spans returns 200 with debug groups`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val usage = makeUsageResponse(orgId)
+            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
+            every { mockQuotaService.getUsageForOrganization(orgId) } returns usage
+            coEvery {
+                mockQuotaService.getApmSpanUsageDebug(
+                    organizationId = orgId,
+                    periodStart = kotlinx.datetime.LocalDate.parse(usage.periodStart),
+                    periodEnd = kotlinx.datetime.LocalDate.parse(usage.periodEnd),
+                    limit = 20
+                )
+            } returns ApmSpanUsageDebugResponse(
+                organizationId = orgId,
+                periodStart = usage.periodStart,
+                periodEnd = usage.periodEnd,
+                totalSpans = 42,
+                groups = listOf(
+                    ApmSpanUsageDebugGroup(
+                        source = "otlp",
+                        service = "api",
+                        operation = "GET /checkout",
+                        resource = "GET /checkout",
+                        spanType = "",
+                        env = "prod",
+                        kind = "SERVER",
+                        scopeName = "opentelemetry.instrumentation.ktor",
+                        scopeVersion = "1.0.0",
+                        projectId = null,
+                        projectName = null,
+                        projectSlug = null,
+                        spanCount = 42,
+                        traceCount = 12,
+                        errorCount = 1,
+                        avgDurationMs = 12.5,
+                        maxDurationMs = 200.0,
+                        percentage = 100.0,
+                        sampleTraceId = "trace-1",
+                        latestSpanAt = "2024-01-15 12:00:00"
+                    )
+                )
+            )
+            application { installRoutes(this) }
+
+            val r = client.get(BILLING_APM_SPAN_DEBUG) {
+                withAuth(token(userId))
+            }
+            assertEquals(HttpStatusCode.OK, r.status)
+            val body = r.bodyAsText()
+            assertTrue(body.contains("\"totalSpans\":42"))
+            assertTrue(body.contains("\"service\":\"api\""))
+        }
+
+    @Test
+    fun `GET usage apm spans clamps low limit to one`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val usage = makeUsageResponse(orgId)
+            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
+            every { mockQuotaService.getUsageForOrganization(orgId) } returns usage
+            stubApmSpanDebug(orgId, usage, expectedLimit = 1)
+            application { installRoutes(this) }
+
+            val r = client.get("$BILLING_APM_SPAN_DEBUG?limit=0") {
+                withAuth(token(userId))
+            }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            coVerify(exactly = 1) {
+                mockQuotaService.getApmSpanUsageDebug(
+                    organizationId = orgId,
+                    periodStart = LocalDate.parse(usage.periodStart),
+                    periodEnd = LocalDate.parse(usage.periodEnd),
+                    limit = 1
+                )
+            }
+        }
+
+    @Test
+    fun `GET usage apm spans clamps high limit to max`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val usage = makeUsageResponse(orgId)
+            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
+            every { mockQuotaService.getUsageForOrganization(orgId) } returns usage
+            stubApmSpanDebug(orgId, usage, expectedLimit = 100)
+            application { installRoutes(this) }
+
+            val r = client.get("$BILLING_APM_SPAN_DEBUG?limit=500") {
+                withAuth(token(userId))
+            }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            coVerify(exactly = 1) {
+                mockQuotaService.getApmSpanUsageDebug(
+                    organizationId = orgId,
+                    periodStart = LocalDate.parse(usage.periodStart),
+                    periodEnd = LocalDate.parse(usage.periodEnd),
+                    limit = 100
+                )
+            }
+        }
+
+    @Test
+    fun `GET usage apm spans defaults non-numeric limit`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val usage = makeUsageResponse(orgId)
+            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
+            every { mockQuotaService.getUsageForOrganization(orgId) } returns usage
+            stubApmSpanDebug(orgId, usage, expectedLimit = 20)
+            application { installRoutes(this) }
+
+            val r = client.get("$BILLING_APM_SPAN_DEBUG?limit=abc") {
+                withAuth(token(userId))
+            }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            coVerify(exactly = 1) {
+                mockQuotaService.getApmSpanUsageDebug(
+                    organizationId = orgId,
+                    periodStart = LocalDate.parse(usage.periodStart),
+                    periodEnd = LocalDate.parse(usage.periodEnd),
+                    limit = 20
+                )
+            }
         }
 
     // ──── POST /billing/checkout ────

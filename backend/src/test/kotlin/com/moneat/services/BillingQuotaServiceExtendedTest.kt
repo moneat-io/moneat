@@ -19,17 +19,23 @@ package com.moneat.services
 import com.moneat.billing.models.OrgUsageCounters
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.OnCallParticipants
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
@@ -44,6 +50,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
@@ -79,6 +86,7 @@ class BillingQuotaServiceExtendedTest {
             Subscriptions,
             OrgUsageCounters,
             PricingTierConfigs,
+            Projects,
             OnCallSchedules,
             OnCallParticipants,
         )
@@ -170,6 +178,12 @@ class BillingQuotaServiceExtendedTest {
         }
     }
 
+    private fun jsonRow(vararg fields: String): String = fields.joinToString(
+        separator = ",",
+        prefix = "{",
+        postfix = "}"
+    )
+
     @Test
     fun `refundUnits decrements error counters after reservation`() {
         val before = service.getUsageForOrganization(testOrgId)
@@ -212,6 +226,257 @@ class BillingQuotaServiceExtendedTest {
         assertEquals(2L, row[OrgUsageCounters.used_synthetic_runs])
         assertEquals(3L, row[OrgUsageCounters.used_uptime_checks])
         assertEquals(100L, row[OrgUsageCounters.used_ai_tokens])
+    }
+
+    @Test
+    fun `getApmSpanUsageDebug groups span rows and enriches project labels`() = runBlocking {
+        val projectId = transaction {
+            Projects.insert {
+                it[organization_id] = testOrgId
+                it[name] = "Checkout API"
+                it[slug] = "checkout-api"
+            } get Projects.id
+        }
+        val groupRows = listOf(
+            jsonRow(
+                "\"source_value\":\"otlp\"",
+                "\"service\":\"checkout\"",
+                "\"operation\":\"GET /orders\"",
+                "\"resource\":\"GET /orders\"",
+                "\"span_type\":\"web\"",
+                "\"env\":\"prod\"",
+                "\"kind\":\"SERVER\"",
+                "\"scope_name\":\"ktor\"",
+                "\"scope_version\":\"1.0.0\"",
+                "\"project_id\":$projectId",
+                "\"span_count\":10",
+                "\"trace_count\":4",
+                "\"error_count\":1",
+                "\"avg_duration_ms\":12.5",
+                "\"max_duration_ms\":80.0",
+                "\"sample_trace_id\":\"trace-a\"",
+                "\"latest_span_at\":\"2026-04-15 12:00:00\""
+            ),
+            jsonRow(
+                "\"service\":\"worker\"",
+                "\"operation\":\"queue.process\"",
+                "\"resource\":\"order-created\"",
+                "\"span_type\":\"\"",
+                "\"env\":\"\"",
+                "\"kind\":\"CONSUMER\"",
+                "\"scope_name\":\"\"",
+                "\"scope_version\":\"\"",
+                "\"span_count\":15",
+                "\"trace_count\":5",
+                "\"error_count\":0",
+                "\"avg_duration_ms\":2.0",
+                "\"max_duration_ms\":8.0",
+                "\"sample_trace_id\":\"\"",
+                "\"latest_span_at\":\"\""
+            )
+        ).joinToString("\n")
+        var groupedQuery = ""
+
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "moneat_test"
+            coEvery {
+                ClickHouseClient.executeWithFormat(
+                    match { it.contains("SELECT count()") },
+                    match { it == "TabSeparated" }
+                )
+            } returns "25"
+            coEvery {
+                ClickHouseClient.executeWithFormat(
+                    match { it.contains("GROUP BY") },
+                    match { it == "" }
+                )
+            } coAnswers {
+                groupedQuery = invocation.args[0] as String
+                groupRows
+            }
+
+            val result = service.getApmSpanUsageDebug(
+                organizationId = testOrgId,
+                periodStart = LocalDate.parse("2026-04-01"),
+                periodEnd = LocalDate.parse("2026-04-30"),
+                limit = 500
+            )
+
+            assertEquals(testOrgId, result.organizationId)
+            assertEquals("2026-04-01", result.periodStart)
+            assertEquals("2026-04-30", result.periodEnd)
+            assertEquals(25, result.totalSpans)
+            assertEquals(2, result.groups.size)
+            assertTrue(groupedQuery.contains("LIMIT 100"))
+            assertTrue(groupedQuery.contains("2026-05-01 00:00:00"))
+
+            val checkout = result.groups.first()
+            assertEquals("otlp", checkout.source)
+            assertEquals("checkout", checkout.service)
+            assertEquals("GET /orders", checkout.operation)
+            assertEquals(projectId, checkout.projectId)
+            assertEquals("Checkout API", checkout.projectName)
+            assertEquals("checkout-api", checkout.projectSlug)
+            assertEquals(10, checkout.spanCount)
+            assertEquals(4, checkout.traceCount)
+            assertEquals(1, checkout.errorCount)
+            assertEquals(40.0, checkout.percentage)
+
+            val worker = result.groups.last()
+            assertEquals("datadog", worker.source)
+            assertNull(worker.projectName)
+            assertEquals(60.0, worker.percentage)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `getApmSpanUsageDebug returns empty groups without querying grouped rows when total is zero`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "moneat_test"
+            coEvery {
+                ClickHouseClient.executeWithFormat(
+                    match { it.contains("SELECT count()") },
+                    match { it == "TabSeparated" }
+                )
+            } returns "0"
+
+            val result = service.getApmSpanUsageDebug(
+                organizationId = testOrgId,
+                periodStart = LocalDate.parse("2026-04-01"),
+                periodEnd = LocalDate.parse("2026-04-30"),
+                limit = 20
+            )
+
+            assertEquals(0, result.totalSpans)
+            assertTrue(result.groups.isEmpty())
+            coVerify(exactly = 0) {
+                ClickHouseClient.executeWithFormat(
+                    match { it.contains("GROUP BY") },
+                    match { it == "" }
+                )
+            }
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `getApmSpanUsageDebug treats non numeric totals as zero`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "moneat_test"
+            coEvery {
+                ClickHouseClient.executeWithFormat(
+                    match { it.contains("SELECT count()") },
+                    match { it == "TabSeparated" }
+                )
+            } returns "not-a-number"
+
+            val result = service.getApmSpanUsageDebug(
+                organizationId = testOrgId,
+                periodStart = LocalDate.parse("2026-04-01"),
+                periodEnd = LocalDate.parse("2026-04-30"),
+                limit = 20
+            )
+
+            assertEquals(0, result.totalSpans)
+            assertTrue(result.groups.isEmpty())
+            coVerify(exactly = 0) {
+                ClickHouseClient.executeWithFormat(
+                    match { it.contains("GROUP BY") },
+                    match { it == "" }
+                )
+            }
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `getApmSpanUsageDebug skips malformed rows and defaults missing fields`() = runBlocking {
+        val groupRows = listOf(
+            "not-json",
+            "",
+            jsonRow("\"span_count\":2")
+        ).joinToString("\n")
+
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "moneat_test"
+            coEvery {
+                ClickHouseClient.executeWithFormat(
+                    match { it.contains("SELECT count()") },
+                    match { it == "TabSeparated" }
+                )
+            } returns "5"
+            coEvery {
+                ClickHouseClient.executeWithFormat(
+                    match { it.contains("GROUP BY") },
+                    match { it == "" }
+                )
+            } returns groupRows
+
+            val result = service.getApmSpanUsageDebug(
+                organizationId = testOrgId,
+                periodStart = LocalDate.parse("2026-04-01"),
+                periodEnd = LocalDate.parse("2026-04-30"),
+                limit = 20
+            )
+
+            assertEquals(5, result.totalSpans)
+            assertEquals(1, result.groups.size)
+            val group = result.groups.single()
+            assertEquals("datadog", group.source)
+            assertEquals("", group.service)
+            assertEquals("", group.operation)
+            assertEquals("", group.resource)
+            assertEquals("", group.spanType)
+            assertEquals("", group.env)
+            assertEquals("", group.kind)
+            assertEquals("", group.scopeName)
+            assertEquals("", group.scopeVersion)
+            assertEquals(2, group.spanCount)
+            assertEquals(0, group.traceCount)
+            assertEquals(0, group.errorCount)
+            assertEquals(0.0, group.avgDurationMs)
+            assertEquals(0.0, group.maxDurationMs)
+            assertEquals("", group.sampleTraceId)
+            assertEquals("", group.latestSpanAt)
+            assertEquals(40.0, group.percentage)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `getApmSpanUsageDebug falls back to empty response on ClickHouse failure`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "moneat_test"
+            coEvery {
+                ClickHouseClient.executeWithFormat(
+                    match { it.contains("SELECT count()") },
+                    match { it == "TabSeparated" }
+                )
+            } throws IllegalStateException("ClickHouse unavailable")
+
+            val result = service.getApmSpanUsageDebug(
+                organizationId = testOrgId,
+                periodStart = LocalDate.parse("2026-04-01"),
+                periodEnd = LocalDate.parse("2026-04-30"),
+                limit = 20
+            )
+
+            assertEquals(testOrgId, result.organizationId)
+            assertEquals(0, result.totalSpans)
+            assertTrue(result.groups.isEmpty())
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
     }
 
     @Test

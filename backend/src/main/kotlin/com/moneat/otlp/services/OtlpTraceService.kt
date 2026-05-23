@@ -382,6 +382,7 @@ class OtlpTraceService(
         usageTracking.recordOrgUsage(
             batch.organizationId.toInt(),
             "otlp_trace",
+            batch.spans.size,
             totalBytes
         )
     }

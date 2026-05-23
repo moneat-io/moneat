@@ -22,6 +22,10 @@ import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
 
+const val APM_SPAN_USAGE_DEBUG_DEFAULT_LIMIT = 20
+const val APM_SPAN_USAGE_DEBUG_MIN_LIMIT = 1
+const val APM_SPAN_USAGE_DEBUG_MAX_LIMIT = 100
+
 object PricingTierConfigs : Table("pricing_tier_configs") {
     val id = integer("id").autoIncrement()
     val tier_name = varchar("tier_name", 50)
@@ -319,6 +323,39 @@ data class AdminQuotaUsageResetResponse(
     val limit: Long?,
     val targetPercent: Double?,
     val usage: BillingUsageResponse
+)
+
+@Serializable
+data class ApmSpanUsageDebugResponse(
+    val organizationId: Int,
+    val periodStart: String,
+    val periodEnd: String,
+    val totalSpans: Long,
+    val groups: List<ApmSpanUsageDebugGroup>
+)
+
+@Serializable
+data class ApmSpanUsageDebugGroup(
+    val source: String,
+    val service: String,
+    val operation: String,
+    val resource: String,
+    val spanType: String,
+    val env: String,
+    val kind: String,
+    val scopeName: String,
+    val scopeVersion: String,
+    val projectId: Long?,
+    val projectName: String?,
+    val projectSlug: String?,
+    val spanCount: Long,
+    val traceCount: Long,
+    val errorCount: Long,
+    val avgDurationMs: Double,
+    val maxDurationMs: Double,
+    val percentage: Double,
+    val sampleTraceId: String,
+    val latestSpanAt: String
 )
 
 @Serializable

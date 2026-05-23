@@ -16,9 +16,9 @@
 
 package com.moneat.billing.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
+import com.moneat.billing.models.APM_SPAN_USAGE_DEBUG_DEFAULT_LIMIT
+import com.moneat.billing.models.APM_SPAN_USAGE_DEBUG_MAX_LIMIT
+import com.moneat.billing.models.APM_SPAN_USAGE_DEBUG_MIN_LIMIT
 import com.moneat.billing.models.BillingPlansListResponse
 import com.moneat.billing.models.CheckoutSessionRequest
 import com.moneat.billing.models.UpdateOnCallSeatsRequest
@@ -31,6 +31,7 @@ import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -52,7 +53,8 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
-import com.moneat.utils.suspendRunCatching
+import kotlinx.serialization.SerializationException
+import java.io.IOException
 
 private val logger = KotlinLogging.logger {}
 private const val FAILED_TO_CREATE_CHECKOUT_SESSION = "Failed to create checkout session"
@@ -124,7 +126,7 @@ fun Route.billingRoutes(
                         orgId,
                         startDate,
                         endDate,
-                        listOf("apm_span", "apm")
+                        listOf("apm_span", "apm", "otlp_trace", "dd_trace", "sentry_trace")
                     )
                 val computedCustomMetrics =
                     usageTrackingService.getEventCountForOrg(
@@ -145,6 +147,32 @@ fun Route.billingRoutes(
                 logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
                 call.respond(usage)
             }
+        }
+
+        get("/usage/apm-spans") {
+            val principal =
+                call.principal<JWTPrincipal>() ?: run {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
+                    return@get
+                }
+            val userId = principal.payload.getClaim("userId").asInt()
+            val orgId =
+                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
+                    return@get
+                }
+            val limit = call.request.queryParameters["limit"]
+                ?.toIntOrNull()
+                ?.coerceIn(APM_SPAN_USAGE_DEBUG_MIN_LIMIT, APM_SPAN_USAGE_DEBUG_MAX_LIMIT)
+                ?: APM_SPAN_USAGE_DEBUG_DEFAULT_LIMIT
+            val usage = quotaService.getUsageForOrganization(orgId)
+            val debug = quotaService.getApmSpanUsageDebug(
+                organizationId = orgId,
+                periodStart = LocalDate.parse(usage.periodStart),
+                periodEnd = LocalDate.parse(usage.periodEnd),
+                limit = limit
+            )
+            call.respond(debug)
         }
 
         post("/checkout") {
