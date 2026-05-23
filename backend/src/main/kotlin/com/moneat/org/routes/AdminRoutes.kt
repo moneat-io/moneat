@@ -290,7 +290,7 @@ fun Route.adminRoutes() {
             }
 
             get("/organizations/{orgId}/quota-usage") {
-                call.handleQuotaUsageRequest(quotaService)
+                call.handleQuotaUsageRequest(quotaService, adminService)
             }
 
             post("/organizations/{orgId}/quota-usage/reset") {
@@ -1051,8 +1051,15 @@ fun Route.adminRoutes() {
     }
 }
 
-private suspend fun ApplicationCall.handleQuotaUsageRequest(quotaService: BillingQuotaService) {
+private suspend fun ApplicationCall.handleQuotaUsageRequest(
+    quotaService: BillingQuotaService,
+    adminService: AdminService
+) {
     val orgId = organizationIdParameter() ?: return
+    if (adminService.getOrgDetail(orgId) == null) {
+        respondAdminError(HttpStatusCode.NotFound, ORGANIZATION_NOT_FOUND_MESSAGE)
+        return
+    }
     respond(quotaService.getUsageForOrganization(orgId))
 }
 

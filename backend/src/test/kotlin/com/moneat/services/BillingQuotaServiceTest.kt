@@ -1413,10 +1413,15 @@ class BillingQuotaServiceTest {
             assertFailsWith<IllegalArgumentException> {
                 billingQuotaService.resetUsageForQuotaType(testOrgId, "not_a_quota", null, 1L, 1)
             }
+        val ambiguousTarget =
+            assertFailsWith<IllegalArgumentException> {
+                billingQuotaService.resetUsageForQuotaType(testOrgId, "errors", 50.0, 1L, 1)
+            }
 
         assertEquals("targetPercent or targetValue is required", missingTarget.message)
         assertEquals("targetValue must be non-negative", negativeValue.message)
         assertEquals("Unsupported quota type: not_a_quota", unsupportedType.message)
+        assertEquals("Provide exactly one of targetPercent or targetValue", ambiguousTarget.message)
     }
 
     // ──── Feature Flag Tests ────

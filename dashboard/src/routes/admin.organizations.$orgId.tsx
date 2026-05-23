@@ -112,6 +112,7 @@ function formatQuotaValue(quotaType: AdminQuotaType, value: number): string {
 }
 
 function parseTargetPercent(value: string): number | null {
+  if (value.trim() === '') return null
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return null
   if (parsed < QUOTA_TARGET_PERCENT_MIN || parsed > QUOTA_TARGET_PERCENT_MAX) return null

@@ -643,6 +643,9 @@ class BillingQuotaService(
         val type = parseAdminQuotaUsageType(rawType)
         val currentUsed = usedForAdminQuotaTarget(state, type)
         val limit = limitForAdminQuotaTarget(state, type)
+        require(targetValue == null || targetPercent == null) {
+            "Provide exactly one of targetPercent or targetValue"
+        }
         val targetUsed = when {
             targetValue != null -> {
                 require(targetValue >= 0) { "targetValue must be non-negative" }
