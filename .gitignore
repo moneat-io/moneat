@@ -122,9 +122,9 @@ deploy/certbot/
 # Enterprise (build helper may temporarily create this directory at the repo root)
 /enterprise/
 
-# moneat-agent worktrees and runtime artifacts
+# Moneat local worktrees and runtime artifacts
 .moneat-worktrees/
-.moneat-agent/
+.moneat/
 
 # Ephemeral root-level dumps from local line-length / agent tooling (not project source)
 .auto-agent/

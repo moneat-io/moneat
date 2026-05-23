@@ -12,8 +12,8 @@ import com.moneat.enterprise.ai.services.AiContextAggregator
 import com.moneat.enterprise.ai.services.AiAssistantService
 import com.moneat.enterprise.ai.services.AiContextSnapshotService
 import com.moneat.enterprise.ai.services.EnterpriseAiChatService
-import com.moneat.enterprise.mcp.McpToolRegistrar
-import com.moneat.enterprise.mcp.protocol.McpToolRegistry
+import com.moneat.mcp.McpToolRegistrar
+import com.moneat.mcp.protocol.McpToolRegistry
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import mu.KotlinLogging

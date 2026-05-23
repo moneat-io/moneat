@@ -228,6 +228,7 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
 fun Route.integrationRoutes() {
     val slackService = GlobalContext.get().get<SlackService>()
     val discordService = GlobalContext.get().get<DiscordService>()
+    val entitlementService = GlobalContext.get().get<com.moneat.billing.services.EntitlementService>()
 
     route("/integrations") {
         // List all integrations for the organization
@@ -299,6 +300,12 @@ fun Route.integrationRoutes() {
                 if (organizationId == null) {
                     return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
                 }
+
+                entitlementService.unavailableFeatureMessage(
+                    organizationId,
+                    { it.slackEnabled },
+                    "Slack integration"
+                )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
                 val clientId = EnvConfig.get("SLACK_CLIENT_ID")
                 if (clientId == null) {
@@ -536,6 +543,12 @@ fun Route.integrationRoutes() {
                     return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
                 }
 
+                entitlementService.unavailableFeatureMessage(
+                    organizationId,
+                    { it.discordEnabled },
+                    "Discord integration"
+                )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
+
                 val clientId =
                     EnvConfig.get("DISCORD_CLIENT_ID")
                         ?: return@get call.respond(
@@ -746,6 +759,7 @@ fun Route.integrationRoutes() {
 fun Route.integrationCallbackRoutes() {
     val slackService = GlobalContext.get().get<SlackService>()
     val discordService = GlobalContext.get().get<DiscordService>()
+    val entitlementService = GlobalContext.get().get<com.moneat.billing.services.EntitlementService>()
 
     route("/integrations") {
         // Slack OAuth callback (no auth required - called by Slack)
@@ -780,6 +794,12 @@ fun Route.integrationCallbackRoutes() {
             if (!hasAccess) {
                 return@get call.respond(HttpStatusCode.Forbidden, MessageResponse("Access denied to organization"))
             }
+
+            entitlementService.unavailableFeatureMessage(
+                organizationId,
+                { it.slackEnabled },
+                "Slack integration"
+            )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
             val clientId =
                 EnvConfig.get("SLACK_CLIENT_ID")
@@ -890,6 +910,12 @@ fun Route.integrationCallbackRoutes() {
             if (!hasAccess) {
                 return@get call.respond(HttpStatusCode.Forbidden, MessageResponse("Access denied to organization"))
             }
+
+            entitlementService.unavailableFeatureMessage(
+                organizationId,
+                { it.discordEnabled },
+                "Discord integration"
+            )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
             val clientId =
                 EnvConfig.get("DISCORD_CLIENT_ID")

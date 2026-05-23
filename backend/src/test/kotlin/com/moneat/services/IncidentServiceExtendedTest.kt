@@ -49,6 +49,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -319,6 +320,54 @@ class IncidentServiceExtendedTest {
         service.resolveAlert(emptyOrgId, AlertSource.UPTIME_MONITOR, "dedup-5")
 
         assertEquals(0L, IncidentTestHelper.getEventLogCount(emptyOrgId))
+    }
+
+    @Test
+    fun `autoResolveAlert resolves allowlisted source`() = runBlocking {
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            resolveAlertResult = Result.success("auto-resolved-1")
+        )
+
+        service.autoResolveAlert(orgId, AlertSource.UPTIME_MONITOR, "dedup-auto")
+
+        val logs = IncidentTestHelper.getEventLogs(orgId)
+        assertEquals(1, logs.size)
+        assertTrue(logs[0][IncidentEventLog.success])
+        assertEquals(AlertSource.UPTIME_MONITOR.name, logs[0][IncidentEventLog.alertSource])
+        assertEquals(IncidentStatus.RESOLVED.name, logs[0][IncidentEventLog.incidentStatus])
+        assertEquals("auto-resolved-1", logs[0][IncidentEventLog.providerIncidentId])
+    }
+
+    @Test
+    fun `autoResolveAlert skips source without deterministic clear signal`() = runBlocking {
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            resolveAlertResult = Result.success("should-not-resolve")
+        )
+        transaction {
+            IncidentRoutingRules.insert {
+                it[providerConfigId] = this@IncidentServiceExtendedTest.providerConfigId
+                it[alertSource] = AlertSource.ERROR_ALERT.name
+                it[alertType] = null
+                it[incidentSeverity] = "high"
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }
+        }
+
+        service.autoResolveAlert(orgId, AlertSource.ERROR_ALERT, "dedup-error")
+
+        assertEquals(0L, IncidentTestHelper.getEventLogCount(orgId))
+    }
+
+    @Test
+    fun `autoResolve source allowlist only includes deterministic recovery sources`() {
+        assertTrue(service.isAutoResolvableSource(AlertSource.HOST_ALERT))
+        assertTrue(service.isAutoResolvableSource(AlertSource.HOST_DOWN))
+        assertTrue(service.isAutoResolvableSource(AlertSource.UPTIME_MONITOR))
+        assertTrue(service.isAutoResolvableSource(AlertSource.DASHBOARD_ALERT))
+        assertFalse(service.isAutoResolvableSource(AlertSource.ERROR_ALERT))
     }
 
     // ──── resolveIncidentSeverity edge cases ────

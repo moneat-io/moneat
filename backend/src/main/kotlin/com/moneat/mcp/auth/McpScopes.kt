@@ -1,0 +1,137 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.mcp.auth
+
+import com.moneat.mcp.protocol.McpTool
+
+object McpScopes {
+    const val EVENT_READ = "event:read"
+    const val ORG_READ = "org:read"
+    const val PROJECT_READ = "project:read"
+    const val PROJECT_WRITE = "project:write"
+    const val RELEASES_READ = "releases:read"
+    const val RELEASES_WRITE = "releases:write"
+
+    private val telemetryReadTools = listOf(
+        "aggregate_logs",
+        "get_issue",
+        "get_issue_events",
+        "get_issue_transactions",
+        "get_log_filters",
+        "get_log_top_values",
+        "get_related_errors",
+        "get_span_details",
+        "get_trace",
+        "get_transaction_stats",
+        "list_feedback",
+        "list_issues",
+        "list_profiles",
+        "list_transactions",
+        "query_logs",
+    ).associateWith { setOf(EVENT_READ) }
+
+    private val projectReadTools = listOf(
+        "get_alert_config",
+        "get_alert_notification_channels",
+        "get_container_metrics",
+        "get_dashboard",
+        "get_dashboard_templates",
+        "get_datasource_schema",
+        "get_dbm_queries",
+        "get_host_logs",
+        "get_host_metrics",
+        "get_host_status",
+        "get_k8s_resources",
+        "get_monitor_heartbeats",
+        "get_network_connections",
+        "get_project",
+        "get_project_stats",
+        "get_status_page",
+        "global_search",
+        "list_alerts",
+        "list_containers",
+        "list_dashboards",
+        "list_datasources",
+        "list_hosts",
+        "list_processes",
+        "list_projects",
+        "list_silence_periods",
+        "list_status_pages",
+        "list_uptime_monitors",
+    ).associateWith { setOf(PROJECT_READ) }
+
+    private val releaseReadTools = listOf(
+        "get_release_stats",
+        "list_releases",
+    ).associateWith { setOf(RELEASES_READ) }
+
+    private val orgReadTools = listOf(
+        "get_incident",
+        "get_incident_context",
+        "get_infrastructure_summary",
+        "get_notification_preferences",
+        "get_overnight_summary",
+        "get_weekly_report",
+        "list_incidents",
+        "list_schedules",
+    ).associateWith { setOf(ORG_READ) }
+
+    private val writeTools = listOf(
+        "add_status_page_monitor",
+        "create_agent_key",
+        "create_alert",
+        "create_dashboard",
+        "create_dashboard_alert",
+        "create_datasource",
+        "create_project",
+        "create_silence_period",
+        "create_status_page",
+        "create_status_page_incident",
+        "create_uptime_monitor",
+        "delete_alert",
+        "delete_dashboard",
+        "delete_dashboard_alert",
+        "delete_host",
+        "delete_silence_period",
+        "delete_uptime_monitor",
+        "execute_dashboard_query",
+        "execute_datasource_query",
+        "import_dashboard",
+        "pause_uptime_monitor",
+        "post_incident_update",
+        "resume_uptime_monitor",
+        "update_alert",
+        "update_alert_notification_channels",
+        "update_dashboard",
+        "update_dashboard_alert",
+        "update_issue_status",
+        "update_notification_preferences",
+        "update_status_page",
+        "update_status_page_incident",
+        "update_uptime_monitor",
+    ).associateWith { setOf(PROJECT_WRITE) }
+
+    private val readScopesByTool = telemetryReadTools + projectReadTools + releaseReadTools + orgReadTools
+    private val writeScopesByTool = writeTools
+
+    fun requiredScopesFor(tool: McpTool): Set<String> {
+        val scopesByTool = if (tool.readOnly) readScopesByTool else writeScopesByTool
+        return requireNotNull(scopesByTool[tool.name]) {
+            "No MCP scope mapping registered for tool: ${tool.name}"
+        }
+    }
+}

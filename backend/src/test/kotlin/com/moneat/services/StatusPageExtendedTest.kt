@@ -18,8 +18,10 @@ package com.moneat.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.statuspage.models.AddCustomDomainRequest
 import com.moneat.statuspage.models.AddMonitorsRequest
@@ -111,7 +113,8 @@ class StatusPageExtendedTest {
 
         TestDatabaseHelper.resetSchema(
             Users, Organizations, Memberships, StatusPages, StatusPageIncidents,
-            UptimeMonitors, StatusPageMonitors, StatusPageIncidentUpdates, StatusPageCustomDomains
+            UptimeMonitors, StatusPageMonitors, StatusPageIncidentUpdates, StatusPageCustomDomains,
+            PricingTierConfigs, Subscriptions
         )
         transaction {
             orgId = Organizations.insert {

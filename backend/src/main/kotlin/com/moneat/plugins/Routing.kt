@@ -36,6 +36,7 @@ import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
 import com.moneat.monitor.routes.infraRoutes
 import com.moneat.monitor.routes.monitorRoutes
+import com.moneat.mcp.McpModule
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.otlp.routes.otlpMetricsRoutes
@@ -238,6 +239,10 @@ fun Application.configureRouting() {
         // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader
         FeatureRegistry.registerRoutes(this)
         routingLogger.info { "Enterprise routes registered" }
+
+        routingLogger.info { "Registering MCP routes..." }
+        McpModule.registerRoutes(this)
+        routingLogger.info { "MCP routes registered" }
 
         // AI chat assistant endpoints
         aiChatRoutes()

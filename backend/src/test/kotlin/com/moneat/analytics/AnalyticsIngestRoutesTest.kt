@@ -22,18 +22,44 @@ import com.moneat.analytics.routes.extractPathname
 import com.moneat.analytics.routes.extractUtmParams
 import com.moneat.analytics.services.GeoIpService
 import com.moneat.analytics.services.SessionHashService
+import com.moneat.billing.models.BillingUsageResponse
+import com.moneat.billing.models.OrgUsageCounters
+import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.QuotaReservationResult
+import com.moneat.config.RedisConfig
 import com.moneat.events.services.EventService
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.ProjectKeys
+import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Subscriptions
+import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.install
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.lettuce.core.api.sync.RedisCommands
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import io.mockk.verify
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -43,14 +69,39 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AnalyticsIngestRoutesTest {
+    companion object {
+        private var dbInitialized = false
+    }
+
+    private val mockRedis = mockk<RedisCommands<String, String>>(relaxed = true)
 
     @BeforeTest
     fun setupKoin() {
         startTestKoin()
+        mockkObject(RedisConfig)
+        every { RedisConfig.sync() } returns mockRedis
+        every { mockRedis.get(match { it.startsWith("moneat:analytics:salt:") }) } returns
+            "dGVzdHNhbHR0ZXN0c2FsdHRlc3RzYWx0dGVzdHNhbHR0ZXN0c2FsdA=="
+        if (!dbInitialized) {
+            Database.connect(
+                url = "jdbc:h2:mem:moneat_analytics_routes;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+            dbInitialized = true
+        }
+        TestDatabaseHelper.resetSchema(
+            Organizations,
+            Projects,
+            ProjectKeys,
+            PricingTierConfigs,
+            Subscriptions,
+            OrgUsageCounters
+        )
     }
 
     @AfterTest
     fun teardownKoin() {
+        unmockkObject(RedisConfig)
         stopTestKoin()
     }
 
@@ -180,5 +231,272 @@ class AnalyticsIngestRoutesTest {
         val body = response.bodyAsText()
         assertTrue(body.contains("function"))
         assertTrue(body.contains("moneat"))
+    }
+
+    @Test
+    fun `POST project analytics event reserves quota and enqueues event`() = testApplication {
+        val (orgId, projectId, publicKey) = seedAnalyticsProject()
+        var queuedMessage: String? = null
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsIngestRoutes(
+                    sessionHashService = SessionHashService(),
+                    geoIpService = GeoIpService(),
+                    eventService = GlobalContext.get().get<EventService>(),
+                    enqueueEvent = { queuedMessage = it },
+                )
+            }
+        }
+
+        val response = client.post("/api/$projectId/analytics/event?sentry_key=$publicKey") {
+            contentType(ContentType.Application.Json)
+            header("User-Agent", "Mozilla/5.0 Test Browser")
+            setBody(
+                """
+                {
+                  "n": "pageview",
+                  "u": "https://analytics.example/pricing?utm_source=newsletter",
+                  "d": "analytics.example",
+                  "r": "https://google.com/search?q=moneat",
+                  "w": 1440,
+                  "p": {"plan": "pro"}
+                }
+                """.trimIndent()
+            )
+        }
+
+        val body = response.bodyAsText()
+        assertEquals(HttpStatusCode.Accepted, response.status, body)
+        assertEquals("ok", body)
+        val message = requireNotNull(queuedMessage)
+        assertTrue(message.contains("\"projectId\":$projectId"))
+        assertTrue(message.contains("\"hostname\":\"analytics.example\""))
+        assertEquals(1L, usedAnalyticsPageviews(orgId))
+    }
+
+    @Test
+    fun `POST domain analytics event accepts text payload`() = testApplication {
+        val (orgId, _, publicKey) = seedAnalyticsProject()
+        var queuedMessage: String? = null
+
+        application {
+            routing {
+                analyticsIngestRoutes(
+                    sessionHashService = SessionHashService(),
+                    geoIpService = GeoIpService(),
+                    eventService = GlobalContext.get().get<EventService>(),
+                    enqueueEvent = { queuedMessage = it },
+                )
+            }
+        }
+
+        val response = client.post("/api/analytics.example/analytics/event?sentry_key=$publicKey") {
+            contentType(ContentType.Text.Plain)
+            setBody("""{"n":"pageview","u":"https://analytics.example/docs","d":"analytics.example"}""")
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status, response.bodyAsText())
+        assertTrue(requireNotNull(queuedMessage).contains("\"pathname\":\"/docs\""))
+        assertEquals(1L, usedAnalyticsPageviews(orgId))
+    }
+
+    @Test
+    fun `POST project analytics event returns 400 for invalid payload after auth`() = testApplication {
+        val (_, projectId, publicKey) = seedAnalyticsProject()
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsIngestRoutes(
+                    sessionHashService = SessionHashService(),
+                    geoIpService = GeoIpService(),
+                    eventService = GlobalContext.get().get<EventService>(),
+                    enqueueEvent = { },
+                )
+            }
+        }
+
+        val response = client.post("/api/$projectId/analytics/event?sentry_key=$publicKey") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"n":""")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid payload"))
+    }
+
+    @Test
+    fun `POST project analytics event returns 429 when quota is exceeded`() = testApplication {
+        val (orgId, projectId, publicKey) = seedAnalyticsProject()
+        val quotaService = mockk<BillingQuotaService>(relaxed = true)
+        every { quotaService.isEnforcementEnabled() } returns true
+        every { quotaService.reserveUnits(orgId, 1, "analytics_pageview", 0) } returns
+            QuotaReservationResult(
+                allowed = false,
+                reason = "analytics_pageview_quota_exceeded",
+                usage = quotaUsage(orgId)
+            )
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsIngestRoutes(
+                    sessionHashService = SessionHashService(),
+                    geoIpService = GeoIpService(),
+                    eventService = GlobalContext.get().get<EventService>(),
+                    quotaService = quotaService,
+                    enqueueEvent = { },
+                )
+            }
+        }
+
+        val response = client.post("/api/$projectId/analytics/event?sentry_key=$publicKey") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"n":"pageview","u":"https://analytics.example/","d":"analytics.example"}""")
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status, response.bodyAsText())
+        assertTrue(response.bodyAsText().contains("analytics_pageview_quota_exceeded"))
+    }
+
+    @Test
+    fun `POST project analytics event refunds quota when enqueue fails`() = testApplication {
+        val (orgId, projectId, publicKey) = seedAnalyticsProject()
+        val quotaService = mockk<BillingQuotaService>(relaxed = true)
+        every { quotaService.isEnforcementEnabled() } returns true
+        every { quotaService.reserveUnits(orgId, 1, "analytics_pageview", 0) } returns
+            QuotaReservationResult(allowed = true, usage = quotaUsage(orgId))
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsIngestRoutes(
+                    sessionHashService = SessionHashService(),
+                    geoIpService = GeoIpService(),
+                    eventService = GlobalContext.get().get<EventService>(),
+                    quotaService = quotaService,
+                    enqueueEvent = { throw RuntimeException("queue down") },
+                )
+            }
+        }
+
+        val response = client.post("/api/$projectId/analytics/event?sentry_key=$publicKey") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"n":"pageview","u":"https://analytics.example/","d":"analytics.example"}""")
+        }
+
+        assertEquals(HttpStatusCode.InternalServerError, response.status, response.bodyAsText())
+        verify { quotaService.refundUnits(orgId, 1, "analytics_pageview", 0) }
+    }
+
+    @Test
+    fun `POST project analytics event returns 403 when analytics site limit is reached`() = testApplication {
+        val (orgId, projectId, publicKey) = seedAnalyticsProject()
+        seedAnalyticsTier(orgId, maxSites = 0)
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsIngestRoutes(
+                    sessionHashService = SessionHashService(),
+                    geoIpService = GeoIpService(),
+                    eventService = GlobalContext.get().get<EventService>(),
+                    enqueueEvent = { },
+                )
+            }
+        }
+
+        val response = client.post("/api/$projectId/analytics/event?sentry_key=$publicKey") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"n":"pageview","u":"https://new.example/","d":"new.example"}""")
+        }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status, response.bodyAsText())
+        assertTrue(response.bodyAsText().contains("Analytics site limit reached"))
+    }
+
+    private fun seedAnalyticsProject(): Triple<Int, Long, String> {
+        return transaction {
+            val orgId = Organizations.insert {
+                it[name] = "Analytics Test Org"
+                it[slug] = "analytics-test-org"
+            } get Organizations.id
+            val projectId = Projects.insert {
+                it[organization_id] = orgId
+                it[name] = "Analytics Project"
+                it[slug] = "analytics-project"
+                it[framework] = "web"
+            } get Projects.id
+            val publicKey = "analytics-public-key"
+            ProjectKeys.insert {
+                it[project_id] = projectId
+                it[public_key] = publicKey
+                it[secret_key] = null
+                it[platform_target] = "web"
+                it[is_active] = true
+            }
+            Triple(orgId, projectId, publicKey)
+        }
+    }
+
+    private fun seedAnalyticsTier(orgId: Int, maxSites: Int) {
+        transaction {
+            val tierId = PricingTierConfigs.insert {
+                it[tier_name] = "ANALYTICS_TEST"
+                it[monthly_unit_limit] = 1_000
+                it[retention_days] = 30
+                it[log_retention_days] = 30
+                it[max_systems] = 10
+                it[monitor_interval_seconds] = 60
+                it[monthly_price_cents] = 0
+                it[max_analytics_sites] = maxSites
+            } get PricingTierConfigs.id
+            Subscriptions.insert {
+                it[organization_id] = orgId
+                it[plan] = "ANALYTICS_TEST"
+                it[status] = "active"
+                it[pricing_tier_config_id] = tierId
+            }
+        }
+    }
+
+    private fun quotaUsage(orgId: Int): BillingUsageResponse {
+        return BillingUsageResponse(
+            organizationId = orgId,
+            periodStart = "2026-05-01",
+            periodEnd = "2026-05-31",
+            retentionDays = 30,
+            usedUnits = 0,
+            usedErrors = 0,
+            errorLimit = 0,
+            usedTransactions = 0,
+            transactionLimit = 0,
+            usedReplays = 0,
+            replayLimit = 0,
+            usedFeedback = 0,
+            feedbackLimit = 0,
+            usedBytes = 0,
+            bytesLimit = 0,
+            baseLimitUnits = 0,
+            paygLimitUnits = 0,
+            totalLimitUnits = 0,
+            paygBudgetCents = 0,
+            paygUsedUnits = 0,
+            paygUsedCentsEstimate = 0,
+            plan = "PRO",
+            status = "active",
+            withinQuota = true
+        )
+    }
+
+    private fun usedAnalyticsPageviews(orgId: Int): Long {
+        return transaction {
+            OrgUsageCounters
+                .selectAll()
+                .where { OrgUsageCounters.organization_id eq orgId }
+                .first()[OrgUsageCounters.used_analytics_pageviews]
+        }
     }
 }

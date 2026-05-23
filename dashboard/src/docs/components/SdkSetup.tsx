@@ -8,7 +8,7 @@ export default function SdkSetup() {
   const platform = sdkSetupData[selectedPlatform] ?? sdkSetupData.other
 
   return (
-    <div className="mt-6 mb-6">
+    <div className="mb-6 mt-6">
       <div className="mb-4">
         <p className="mb-2 font-semibold">Select your platform</p>
         <div className="flex flex-wrap gap-2">
@@ -23,8 +23,8 @@ export default function SdkSetup() {
                 onClick={() => setSelectedPlatform(id)}
                 className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
                   isActive
-                    ? 'bg-sky-500/20 border-2 border-sky-500 font-semibold text-sky-300'
-                    : 'bg-slate-800 border border-slate-700 text-slate-300 hover:border-slate-500'
+                    ? 'border-2 border-sky-600 bg-sky-50 font-semibold text-sky-800'
+                    : 'border border-slate-300 bg-white text-slate-700 hover:border-slate-500'
                 }`}
               >
                 {p.sdkName}
@@ -39,7 +39,7 @@ export default function SdkSetup() {
         {platform.steps.map((step, idx) => (
           <div key={idx} className="mb-6">
             <h4 className="text-base mb-1 font-medium">{step.title}</h4>
-            <p className="mb-2 text-sm text-slate-400">{step.description}</p>
+            <p className="mb-2 text-sm text-slate-600">{step.description}</p>
             {step.code && (
               <SyntaxHighlighter
                 language={step.language || 'text'}

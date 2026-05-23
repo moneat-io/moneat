@@ -94,6 +94,7 @@ private fun getOrganizationIdsForUser(userId: Int): List<Int> {
  */
 fun Route.statusPageRoutes(
     statusPageService: StatusPageService = GlobalContext.get().get(),
+    entitlementService: com.moneat.billing.services.EntitlementService = GlobalContext.get().get(),
 ) {
     // ==================== Authenticated Management Endpoints ====================
 
@@ -146,6 +147,16 @@ fun Route.statusPageRoutes(
                     }
 
                     val organizationId = organizationIds.first()
+
+                    entitlementService.unavailableFeatureMessage(
+                        organizationId,
+                        { it.statusPagesEnabled },
+                        "Status pages"
+                    )?.let {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(it))
+                        return@post
+                    }
+
                     val request = call.receive<CreateStatusPageRequest>()
 
                     val statusPage = statusPageService.createStatusPage(organizationId, request)
@@ -569,6 +580,16 @@ fun Route.statusPageRoutes(
                     }
 
                     val organizationId = organizationIds.first()
+
+                    entitlementService.unavailableFeatureMessage(
+                        organizationId,
+                        { it.statusPageCustomDomainEnabled },
+                        "Custom domains"
+                    )?.let {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(it))
+                        return@post
+                    }
+
                     val request = call.receive<AddCustomDomainRequest>()
 
                     val domain = statusPageService.addCustomDomain(pageId, organizationId, request)

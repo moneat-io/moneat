@@ -18,12 +18,14 @@ package com.moneat.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.org.routes.integrationCallbackRoutes
 import com.moneat.org.routes.integrationRoutes
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SlackUserMappings
+import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
@@ -76,7 +78,15 @@ class IntegrationRoutesTest {
         }
 
         // Ensure schema exists (idempotent in H2) and clean between tests
-        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, OrganizationIntegrations, SlackUserMappings)
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Memberships,
+            OrganizationIntegrations,
+            SlackUserMappings,
+            PricingTierConfigs,
+            Subscriptions
+        )
     }
 
     @Test
@@ -162,6 +172,66 @@ class IntegrationRoutesTest {
 
             assertEquals(HttpStatusCode.NotFound, response.status)
             assertTrue(response.bodyAsText().contains("No organization found"))
+        }
+    }
+
+    @Test
+    fun `slack oauth start returns forbidden when plan disables slack`() {
+        val orgId = seedOrganization("Slack Disabled Org")
+        val userId = seedUser("slack-disabled@test.com")
+        seedMembership(orgId, userId, "owner")
+        seedDisabledIntegrationTier(orgId)
+
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        route("/v1") {
+                            integrationRoutes()
+                        }
+                    }
+                }
+            }
+
+            val response =
+                client.get("/v1/integrations/slack/oauth/start") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertTrue(response.bodyAsText().contains("Slack integration is not available"))
+        }
+    }
+
+    @Test
+    fun `discord oauth start returns forbidden when plan disables discord`() {
+        val orgId = seedOrganization("Discord Disabled Org")
+        val userId = seedUser("discord-disabled@test.com")
+        seedMembership(orgId, userId, "owner")
+        seedDisabledIntegrationTier(orgId)
+
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        route("/v1") {
+                            integrationRoutes()
+                        }
+                    }
+                }
+            }
+
+            val response =
+                client.get("/v1/integrations/discord/oauth/start") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertTrue(response.bodyAsText().contains("Discord integration is not available"))
         }
     }
 
@@ -343,6 +413,28 @@ class IntegrationRoutesTest {
             it[OrganizationIntegrations.enabled] = enabled
             it[created_at] = Clock.System.now()
             it[updated_at] = Clock.System.now()
+        }
+    }
+
+    private fun seedDisabledIntegrationTier(orgId: Int) {
+        transaction {
+            val tierId = PricingTierConfigs.insert {
+                it[tier_name] = "INTEGRATIONS_DISABLED"
+                it[monthly_unit_limit] = 1_000
+                it[retention_days] = 30
+                it[log_retention_days] = 30
+                it[max_systems] = 10
+                it[monitor_interval_seconds] = 60
+                it[monthly_price_cents] = 0
+                it[slack_enabled] = false
+                it[discord_enabled] = false
+            } get PricingTierConfigs.id
+            Subscriptions.insert {
+                it[organization_id] = orgId
+                it[plan] = "INTEGRATIONS_DISABLED"
+                it[status] = "active"
+                it[pricing_tier_config_id] = tierId
+            }
         }
     }
 

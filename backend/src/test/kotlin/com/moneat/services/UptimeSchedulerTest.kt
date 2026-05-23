@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.incident.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
@@ -38,6 +39,9 @@ import kotlinx.coroutines.runBlocking
 import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.reflect.full.callSuspend
+import kotlin.reflect.full.declaredFunctions
+import kotlin.reflect.jvm.isAccessible
 import kotlin.time.Instant
 
 class UptimeSchedulerTest {
@@ -103,6 +107,15 @@ class UptimeSchedulerTest {
             val block = it.invocation.args[3] as suspend () -> Unit
             block()
         }
+    }
+
+    private suspend fun callPrivateSuspend(name: String, vararg args: Any?): Any? {
+        val fn =
+            UptimeScheduler::class.declaredFunctions.single { f ->
+                f.name == name && f.parameters.drop(1).size == args.size
+            }
+        fn.isAccessible = true
+        return fn.callSuspend(scheduler, *args)
     }
 
     @Test
@@ -235,6 +248,30 @@ class UptimeSchedulerTest {
 
             coVerify(atLeast = 1) {
                 uptimeService.recordHeartbeat(monitor.id, any())
+            }
+        }
+
+    // ──── Recovery ────
+
+    @Test
+    fun `notifyStatusChange auto resolves incident when monitor recovers`() =
+        runBlocking {
+            val monitor = testMonitor(status = "down")
+
+            callPrivateSuspend(
+                "notifyStatusChange",
+                monitor,
+                "down",
+                "up",
+                CheckResult(status = 1, responseTimeMs = 50, statusCode = 200, message = "recovered")
+            )
+
+            coVerify(exactly = 1) {
+                incidentService.autoResolveAlert(
+                    organizationId = monitor.organizationId,
+                    source = AlertSource.UPTIME_MONITOR,
+                    deduplicationKey = "moneat-uptime-${monitor.id}"
+                )
             }
         }
 }

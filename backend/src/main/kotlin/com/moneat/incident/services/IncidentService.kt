@@ -50,6 +50,16 @@ class IncidentService {
     private val logger = LoggerFactory.getLogger(IncidentService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
+    companion object {
+        private val AUTO_RESOLVABLE_SOURCES =
+            setOf(
+                AlertSource.HOST_ALERT,
+                AlertSource.HOST_DOWN,
+                AlertSource.UPTIME_MONITOR,
+                AlertSource.DASHBOARD_ALERT
+            )
+    }
+
     /**
      * Fire an alert to all enabled incident providers for the organization.
      * Severity is resolved in order: per-monitor override > routing rule default > skip
@@ -179,6 +189,26 @@ class IncidentService {
         }.getOrElse { e ->
             logger.error("Error resolving alert", e)
         }
+    }
+
+    /**
+     * Resolve only alert sources with deterministic clear signals.
+     */
+    suspend fun autoResolveAlert(
+        organizationId: Int,
+        source: AlertSource,
+        deduplicationKey: String
+    ) {
+        if (!isAutoResolvableSource(source)) {
+            logger.warn("Skipping auto-resolve for source without clear signal: $source")
+            return
+        }
+
+        resolveAlert(organizationId, source, deduplicationKey)
+    }
+
+    internal fun isAutoResolvableSource(source: AlertSource): Boolean {
+        return source in AUTO_RESOLVABLE_SOURCES
     }
 
     /**

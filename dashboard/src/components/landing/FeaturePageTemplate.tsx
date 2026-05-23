@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useEffect} from 'react'
 import {Link} from '@tanstack/react-router'
-import {ArrowRight, type LucideIcon} from 'lucide-react'
+import {ArrowRight, Check, Database, ShieldCheck, type LucideIcon} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {ScreenshotFrame} from './VariantA'
 import {LandingNavbar, LandingFooter} from './LandingNavbar'
@@ -47,95 +46,106 @@ export interface FeaturePageConfig {
 }
 
 export function FeaturePageTemplate({config}: {readonly config: FeaturePageConfig}) {
-  useEffect(() => {
-    const root = document.documentElement
-    const addedDark = !root.classList.contains('dark')
-    if (addedDark) root.classList.add('dark')
-    return () => { if (addedDark) root.classList.remove('dark') }
-  }, [])
+  const proofItems: {
+    icon: LucideIcon
+    label: string
+    value: string
+  }[] = [
+    {icon: config.icon, label: 'Workflow', value: config.tagline},
+    {icon: ShieldCheck, label: 'Deployment', value: 'Cloud or self-hosted'},
+    {icon: Database, label: 'Pricing', value: '1 GB free to start'},
+  ]
 
   return (
-    <article className="min-h-screen bg-[#0a0b14]">
+    <article className="min-h-screen bg-white text-slate-950">
       <Helmet>
         <title>{config.title} | Moneat</title>
         <meta name="description" content={config.metaDescription} />
         <link rel="canonical" href={`https://moneat.io/${config.slug}`} />
       </Helmet>
 
-      <LandingNavbar />
+      <LandingNavbar tone="light" />
 
       <main>
-        {/* Hero */}
-        <section className="relative overflow-hidden pt-20 pb-24 px-4 sm:px-6 lg:px-8">
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className={`absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full bg-gradient-to-br ${config.gradient} opacity-15 blur-[120px]`} />
-            <div className="absolute -bottom-40 -left-40 w-[400px] h-[400px] rounded-full bg-violet-500/10 blur-[100px]" />
-          </div>
-
-          <div className="max-w-6xl mx-auto relative z-10">
-            <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
-              <div className="lg:w-[42%] text-center lg:text-left">
-                <div className={`inline-flex rounded-lg ${config.iconBg} p-3 mb-6 ring-1 ring-inset ring-white/5`}>
-                  <config.icon className={`h-6 w-6 ${config.iconColor}`} />
-                </div>
-                <p className={`text-sm font-semibold ${config.accentColor} tracking-wide uppercase mb-3`}>
-                  {config.tagline}
-                </p>
-                <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-white mb-6">
-                  {config.title}
-                </h1>
-                <p className="text-lg text-slate-400 leading-relaxed mb-8">
-                  {config.description}
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                  <Button
-                    asChild
-                    size="lg"
-                    className="bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/30 hover:shadow-sky-400/40 transition-all duration-300 text-base px-8 h-12"
-                  >
-                    <Link to="/signup">
-                      Start Free
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <Button
-                    asChild
-                    variant="outline"
-                    size="lg"
-                    className="border-white/[0.1] text-slate-200 hover:bg-white/[0.05] hover:border-white/[0.15] transition-all duration-300 text-base px-8 h-12"
-                  >
-                    <Link to="/demo">
-                      Live Demo
-                    </Link>
-                  </Button>
-                </div>
+        <section className="relative overflow-hidden px-4 pb-20 pt-20 sm:px-6 lg:px-8 lg:pb-24">
+          <div className="absolute inset-x-0 top-0 h-96 bg-[linear-gradient(180deg,#f8fafc_0%,rgba(248,250,252,0)_100%)]" />
+          <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
+            <div>
+              <div className={`mb-6 inline-flex rounded-lg ${config.iconBg} p-3 ring-1 ring-slate-950/5`}>
+                <config.icon className={`size-6 ${config.iconColor}`} />
               </div>
-              <div className="lg:w-[58%] w-full">
-                <ScreenshotFrame gradient={config.gradient} fade="bottom">
-                  <img src={config.screenshot} alt={config.screenshotAlt} className="w-full h-full object-cover" />
-                </ScreenshotFrame>
+              <h1 className="max-w-xl text-4xl font-semibold leading-[1.05] text-slate-950 sm:text-5xl lg:text-6xl">
+                {config.title}
+              </h1>
+              <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
+                {config.description}
+              </p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Button
+                  asChild
+                  size="lg"
+                  className="h-12 bg-slate-950 px-6 text-white hover:bg-slate-800"
+                >
+                  <Link to="/signup">
+                    Start free
+                    <ArrowRight className="ml-2 size-4" />
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="lg"
+                  className="h-12 border-slate-400 !bg-white px-6 font-semibold !text-slate-950 shadow-sm hover:!bg-slate-50 hover:!text-slate-950 dark:!bg-white dark:!text-slate-950 dark:hover:!bg-slate-50"
+                >
+                  <Link to="/demo">
+                    Live demo
+                    <ArrowRight className="ml-2 size-4" />
+                  </Link>
+                </Button>
               </div>
+            </div>
+            <div className="w-full">
+              <ScreenshotFrame gradient={config.gradient} fade="bottom">
+                <img src={config.screenshot} alt={config.screenshotAlt} className="size-full object-cover" />
+              </ScreenshotFrame>
             </div>
           </div>
         </section>
 
-        {/* Sub-features grid */}
-        <section className="py-24 px-4 sm:px-6 lg:px-8 border-t border-white/[0.06]">
-          <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-16">
-              <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
-                Everything you need
+        <section className="border-y border-slate-200 bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-6xl gap-4 sm:grid-cols-3">
+            {proofItems.map((item) => (
+              <div key={item.label} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-4">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-800">
+                  <item.icon className="size-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500">{item.label}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-950">{item.value}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="px-4 py-24 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-6xl">
+            <div className="max-w-2xl">
+              <h2 className="text-3xl font-semibold leading-tight text-slate-950 sm:text-4xl">
+                Built for production debugging without the enterprise tax
               </h2>
-              <p className="text-slate-400 max-w-xl mx-auto">
-                Built-in capabilities that work together out of the box.
+              <p className="mt-4 text-base leading-7 text-slate-600">
+                Each capability is designed to work with the rest of the platform, so teams can move from signal to root cause without switching tools.
               </p>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {config.subFeatures.map(sf => (
-                <div key={sf.title} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 hover:bg-white/[0.04] hover:border-white/[0.1] transition-colors">
-                  <sf.icon className={`h-5 w-5 ${sf.iconColor} mb-4`} />
-                  <h3 className="font-semibold text-white mb-2">{sf.title}</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">{sf.description}</p>
+            <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {config.subFeatures.map((sf) => (
+                <div key={sf.title} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm transition-colors hover:border-slate-300">
+                  <div className="mb-5 flex size-10 items-center justify-center rounded-md bg-slate-50 ring-1 ring-slate-200">
+                    <sf.icon className={`size-5 ${sf.iconColor}`} />
+                  </div>
+                  <h3 className="text-base font-semibold text-slate-950">{sf.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{sf.description}</p>
                 </div>
               ))}
             </div>
@@ -143,41 +153,46 @@ export function FeaturePageTemplate({config}: {readonly config: FeaturePageConfi
         </section>
 
         {config.compatNote && (
-          <section className="py-16 px-4 sm:px-6 lg:px-8 border-t border-white/[0.06]">
-            <div className="max-w-3xl mx-auto text-center">
-              <p className="text-slate-400 text-lg leading-relaxed">{config.compatNote}</p>
+          <section className="bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-4xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                  <Check className="size-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-950">Works with your existing setup</h2>
+                  <p className="mt-2 text-base leading-7 text-slate-600">{config.compatNote}</p>
+                </div>
+              </div>
             </div>
           </section>
         )}
 
-        {/* CTA */}
-        <section className="relative overflow-hidden py-24 px-4 sm:px-6 lg:px-8 border-t border-white/[0.06]">
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 left-1/4 w-[400px] h-[400px] rounded-full bg-sky-500/10 blur-[100px]" />
-            <div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] rounded-full bg-violet-500/10 blur-[80px]" />
-          </div>
-          <div className="max-w-3xl mx-auto text-center relative z-10">
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-              Ready to get started?
-            </h2>
-            <p className="text-lg text-slate-400 mb-8 max-w-xl mx-auto">
-              Start with 1 GB free. No credit card required.
-            </p>
+        <section className="bg-slate-950 px-4 py-24 text-white sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <h2 className="text-3xl font-semibold leading-tight sm:text-4xl">
+                Start with production telemetry today
+              </h2>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
+                Start with 1 GB free, invite the team, and keep the option to self-host when you need it.
+              </p>
+            </div>
             <Button
               asChild
               size="lg"
-              className="bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/30 hover:shadow-sky-400/40 transition-all duration-300 text-base px-8 h-12"
+              className="h-12 bg-white px-6 text-slate-950 hover:bg-slate-100"
             >
               <Link to="/signup">
-                Start Free
-                <ArrowRight className="ml-2 h-4 w-4" />
+                Start free
+                <ArrowRight className="ml-2 size-4" />
               </Link>
             </Button>
           </div>
         </section>
       </main>
 
-      <LandingFooter />
+      <LandingFooter tone="light" />
     </article>
   )
 }

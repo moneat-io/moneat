@@ -19,6 +19,7 @@ package com.moneat.datadog.services
 import com.moneat.datadog.models.DatadogHostMeta
 import com.moneat.datadog.models.DatadogHostMetadata
 import com.moneat.datadog.models.DatadogIntakePayload
+import com.moneat.monitor.services.MonitorService
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -35,9 +36,11 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import org.koin.core.context.GlobalContext
 import org.postgresql.util.PGobject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
@@ -154,6 +157,13 @@ data class DdHostInfo(
     val isOnline: Boolean
 )
 
+private data class HostSystemInfo(
+    val agentVersion: String,
+    val cpuCores: Int,
+    val processor: String,
+    val memoryTotalKb: Long
+)
+
 object DatadogHostService {
 
     private val json = Json {
@@ -218,24 +228,19 @@ object DatadogHostService {
                     }
                 }
             } else {
-                DdHostsTable.insert {
-                    it[DdHostsTable.organizationId] = organizationId
-                    it[hostname] = metadata.hostname
-                    it[status] = "up"
-                    it[os] = metadata.os.ifBlank { meta.os }
-                    it[DdHostsTable.platform] =
-                        metadata.platform.ifBlank { meta.platform }
-                    it[processor] = metadata.processor.ifBlank {
-                        gohaiProcessor
-                    }
-                    it[cpuCores] = gohaiCpuCores
-                    it[memoryTotalKb] = gohaiMemoryKb
-                    it[agentVersion] = metadata.agentVersion
-                    it[gohai] = metadata.gohai
-                    it[DdHostsTable.tags] = tagsJson
-                    it[firstSeenAt] = now
-                    it[lastSeenAt] = now
-                }
+                insertHostFromMetadata(
+                    organizationId,
+                    metadata,
+                    meta,
+                    tagsJson,
+                    HostSystemInfo(
+                        agentVersion = metadata.agentVersion,
+                        cpuCores = gohaiCpuCores,
+                        processor = gohaiProcessor,
+                        memoryTotalKb = gohaiMemoryKb
+                    ),
+                    now
+                )
             }
         }
 
@@ -316,22 +321,19 @@ object DatadogHostService {
                     }
                     return@transaction false
                 }
-                DdHostsTable.insert {
-                    it[DdHostsTable.organizationId] = organizationId
-                    it[DdHostsTable.hostname] = hostname
-                    it[status] = "up"
-                    it[os] = payload.meta.os
-                    it[platform] = payload.meta.platform
-                    it[processor] = gohaiProcessor
-                    it[cpuCores] = gohaiCpuCores
-                    it[memoryTotalKb] = gohaiMemoryKb
-                    it[DdHostsTable.agentVersion] = agentVersion
-                    it[gohai] = payload.gohai
-                    it[DdHostsTable.tags] = tagsJson
-                    it[firstSeenAt] = now
-                    it[lastSeenAt] = now
-                }
-                true
+                insertHostFromIntake(
+                    organizationId,
+                    hostname,
+                    payload,
+                    tagsJson,
+                    HostSystemInfo(
+                        agentVersion = agentVersion,
+                        cpuCores = gohaiCpuCores,
+                        processor = gohaiProcessor,
+                        memoryTotalKb = gohaiMemoryKb
+                    ),
+                    now
+                )
             }
         }
 
@@ -419,5 +421,78 @@ object DatadogHostService {
             lastSeenAt = lastSeenAt.toString(),
             isOnline = isOnline
         )
+    }
+
+    private fun insertHostFromMetadata(
+        organizationId: Int,
+        metadata: DatadogHostMetadata,
+        meta: DatadogHostMeta,
+        tagsJson: String,
+        systemInfo: HostSystemInfo,
+        now: Instant
+    ) {
+        if (!isHostQuotaAvailable(organizationId)) {
+            logger.info {
+                "Host quota exceeded for org $organizationId, " +
+                    "skipping registration of ${metadata.hostname}"
+            }
+            return
+        }
+        DdHostsTable.insert {
+            it[DdHostsTable.organizationId] = organizationId
+            it[hostname] = metadata.hostname
+            it[status] = "up"
+            it[os] = metadata.os.ifBlank { meta.os }
+            it[DdHostsTable.platform] = metadata.platform.ifBlank { meta.platform }
+            it[processor] = metadata.processor.ifBlank { systemInfo.processor }
+            it[cpuCores] = systemInfo.cpuCores
+            it[memoryTotalKb] = systemInfo.memoryTotalKb
+            it[agentVersion] = systemInfo.agentVersion
+            it[gohai] = metadata.gohai
+            it[DdHostsTable.tags] = tagsJson
+            it[firstSeenAt] = now
+            it[lastSeenAt] = now
+        }
+    }
+
+    private fun insertHostFromIntake(
+        organizationId: Int,
+        hostname: String,
+        payload: DatadogIntakePayload,
+        tagsJson: String,
+        systemInfo: HostSystemInfo,
+        now: Instant
+    ): Boolean {
+        if (!isHostQuotaAvailable(organizationId)) {
+            logger.info {
+                "Host quota exceeded for org $organizationId, " +
+                    "skipping registration of $hostname"
+            }
+            return false
+        }
+        val meta = payload.meta ?: return false
+        DdHostsTable.insert {
+            it[DdHostsTable.organizationId] = organizationId
+            it[DdHostsTable.hostname] = hostname
+            it[status] = "up"
+            it[os] = meta.os
+            it[platform] = meta.platform
+            it[processor] = systemInfo.processor
+            it[cpuCores] = systemInfo.cpuCores
+            it[memoryTotalKb] = systemInfo.memoryTotalKb
+            it[DdHostsTable.agentVersion] = systemInfo.agentVersion
+            it[gohai] = payload.gohai
+            it[DdHostsTable.tags] = tagsJson
+            it[firstSeenAt] = now
+            it[lastSeenAt] = now
+        }
+        return true
+    }
+
+    private fun isHostQuotaAvailable(organizationId: Int): Boolean {
+        return suspendRunCatching {
+            val monitorService: MonitorService = GlobalContext.get().get()
+            monitorService.checkHostQuota(organizationId)
+        }.getOrDefault(true)
     }
 }
