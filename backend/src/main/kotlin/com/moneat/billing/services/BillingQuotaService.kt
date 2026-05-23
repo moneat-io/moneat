@@ -16,21 +16,24 @@
 
 package com.moneat.billing.services
 
+import com.moneat.billing.models.AdminQuotaUsageResetResponse
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.OrgUsageCounters
-import kotlinx.serialization.Serializable
 import com.moneat.billing.models.PricingTier
 import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.config.EnvConfig
+import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.utils.SentryUtils
+import com.moneat.utils.suspendRunCatching
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
+import kotlinx.serialization.Serializable
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -43,8 +46,8 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.math.max
+import kotlin.math.roundToLong
 import kotlin.time.Clock
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -71,6 +74,10 @@ class BillingQuotaService(
         private const val UNITS_PER_THOUSAND = 1_000L
         private const val UNITS_PER_MILLION = 1_000_000L
         private const val UNITS_PER_HUNDRED_THOUSAND = 100_000L
+        private const val PERCENT_MULTIPLIER = 100.0
+        private const val MIN_QUOTA_TARGET_PERCENT = 0.0
+        private const val MAX_QUOTA_TARGET_PERCENT = 500.0
+        private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
         private val NON_AGGREGATE_UNIT_TYPES = setOf(
             "llm",
             "log",
@@ -279,6 +286,334 @@ class BillingQuotaService(
                 refundByteOverage(state, requestedBytes, refunded)
                 refundCountOverages(state, normalizedType, refunded)
             }
+        }
+    }
+
+    fun resetUsageForQuotaType(
+        organizationId: Int,
+        quotaType: String,
+        targetPercent: Double?,
+        targetValue: Long?,
+        adminUserId: Int
+    ): AdminQuotaUsageResetResponse {
+        return transaction {
+            val organizationExists =
+                Organizations
+                    .selectAll()
+                    .where { Organizations.id eq organizationId }
+                    .firstOrNull() != null
+            check(organizationExists) { ORGANIZATION_NOT_FOUND_MESSAGE }
+
+            val state = loadQuotaState(organizationId, lockRows = true)
+            val target = resolveQuotaUsageTarget(state, quotaType, targetPercent, targetValue)
+            val ingestionBytes = target.type.takeIf { it == AdminQuotaUsageType.INGESTION_BYTES }
+                ?.let { buildIngestionByteTarget(state, target.targetUsed) }
+
+            OrgUsageCounters.update({
+                (OrgUsageCounters.organization_id eq organizationId) and
+                    (OrgUsageCounters.period_start eq state.periodStart)
+            }) {
+                when (target.type) {
+                    AdminQuotaUsageType.INGESTION_BYTES -> {
+                        val bytes = checkNotNull(ingestionBytes)
+                        it[used_bytes] = bytes.usedBytes
+                        it[used_error_bytes] = bytes.usedErrorBytes
+                        it[used_replay_bytes] = bytes.usedReplayBytes
+                        it[used_log_bytes] = bytes.usedLogBytes
+                        it[used_llm_bytes] = bytes.usedLlmBytes
+                        it[used_profiler_bytes] = bytes.usedProfilerBytes
+                    }
+                    AdminQuotaUsageType.APM_SPANS -> it[used_apm_spans] = target.targetUsed
+                    AdminQuotaUsageType.CUSTOM_METRICS -> it[used_custom_metrics] = target.targetUsed
+                    AdminQuotaUsageType.ERRORS -> {
+                        it[used_errors] = target.targetUsed
+                        it[used_units] = adjustedAggregateUnits(state, target.currentUsed, target.targetUsed)
+                    }
+                    AdminQuotaUsageType.TRANSACTIONS -> {
+                        it[used_transactions] = target.targetUsed
+                        it[used_units] = adjustedAggregateUnits(state, target.currentUsed, target.targetUsed)
+                    }
+                    AdminQuotaUsageType.REPLAYS -> {
+                        it[used_replays] = target.targetUsed
+                        it[used_units] = adjustedAggregateUnits(state, target.currentUsed, target.targetUsed)
+                    }
+                    AdminQuotaUsageType.FEEDBACK -> {
+                        it[used_feedback] = target.targetUsed
+                        it[used_units] = adjustedAggregateUnits(state, target.currentUsed, target.targetUsed)
+                    }
+                    AdminQuotaUsageType.LLM_EVENTS -> it[used_llm_events] = target.targetUsed
+                    AdminQuotaUsageType.ANALYTICS_PAGEVIEWS -> it[used_analytics_pageviews] = target.targetUsed
+                }
+                it[updated_at] = Clock.System.now()
+            }
+
+            syncPendingOverageForAdminReset(state, target)
+
+            val updatedUsage = toUsageResponse(loadQuotaState(organizationId, lockRows = false))
+            logger.info {
+                "Admin $adminUserId reset ${target.type.wireName} quota usage for org $organizationId " +
+                    "from ${target.currentUsed} to ${target.targetUsed}"
+            }
+            AdminQuotaUsageResetResponse(
+                organizationId = organizationId,
+                quotaType = target.type.wireName,
+                periodStart = state.periodStart.toString(),
+                periodEnd = state.periodEnd.toString(),
+                previousUsed = target.currentUsed,
+                updatedUsed = target.targetUsed,
+                limit = target.limit,
+                targetPercent = target.resolvedPercent,
+                usage = updatedUsage
+            )
+        }
+    }
+
+    private enum class AdminQuotaUsageType(val wireName: String) {
+        INGESTION_BYTES("ingestion_bytes"),
+        APM_SPANS("apm_spans"),
+        CUSTOM_METRICS("custom_metrics"),
+        ERRORS("errors"),
+        TRANSACTIONS("transactions"),
+        REPLAYS("replays"),
+        FEEDBACK("feedback"),
+        LLM_EVENTS("llm_events"),
+        ANALYTICS_PAGEVIEWS("analytics_pageviews")
+    }
+
+    private data class QuotaUsageTarget(
+        val type: AdminQuotaUsageType,
+        val currentUsed: Long,
+        val targetUsed: Long,
+        val limit: Long?,
+        val resolvedPercent: Double?
+    )
+
+    private data class IngestionByteTarget(
+        val usedBytes: Long,
+        val usedErrorBytes: Long,
+        val usedReplayBytes: Long,
+        val usedLogBytes: Long,
+        val usedLlmBytes: Long,
+        val usedProfilerBytes: Long
+    )
+
+    private fun resolveQuotaUsageTarget(
+        state: QuotaState,
+        rawType: String,
+        targetPercent: Double?,
+        targetValue: Long?
+    ): QuotaUsageTarget {
+        val type = parseAdminQuotaUsageType(rawType)
+        val currentUsed = usedForAdminQuotaTarget(state, type)
+        val limit = limitForAdminQuotaTarget(state, type)
+        require(targetValue == null || targetPercent == null) {
+            "Provide exactly one of targetPercent or targetValue"
+        }
+        val targetUsed = when {
+            targetValue != null -> {
+                require(targetValue >= 0) { "targetValue must be non-negative" }
+                targetValue
+            }
+            targetPercent != null -> usageForTargetPercent(limit, targetPercent)
+            else -> throw IllegalArgumentException("targetPercent or targetValue is required")
+        }
+        val resolvedPercent = if (limit != null && isFinitePositiveLimit(limit)) {
+            targetUsed.toDouble() / limit.toDouble() * PERCENT_MULTIPLIER
+        } else {
+            targetPercent
+        }
+        return QuotaUsageTarget(
+            type = type,
+            currentUsed = currentUsed,
+            targetUsed = targetUsed,
+            limit = limit,
+            resolvedPercent = resolvedPercent
+        )
+    }
+
+    private fun usageForTargetPercent(
+        limit: Long?,
+        targetPercent: Double
+    ): Long {
+        require(targetPercent in MIN_QUOTA_TARGET_PERCENT..MAX_QUOTA_TARGET_PERCENT) {
+            "targetPercent must be between $MIN_QUOTA_TARGET_PERCENT and $MAX_QUOTA_TARGET_PERCENT"
+        }
+        require(limit != null && isFinitePositiveLimit(limit)) {
+            "Selected quota type does not have a finite positive limit"
+        }
+        return (limit.toDouble() * targetPercent / PERCENT_MULTIPLIER).roundToLong().coerceAtLeast(0)
+    }
+
+    private fun parseAdminQuotaUsageType(rawType: String): AdminQuotaUsageType {
+        return when (rawType.trim().lowercase().replace("-", "_")) {
+            "ingestion", "ingestion_bytes", "ingestion_gb", "ingestion_db", "gb", "gb_limit" ->
+                AdminQuotaUsageType.INGESTION_BYTES
+            "apm", "apm_span", "apm_spans", "apn_span", "apn_spans", "span", "spans" ->
+                AdminQuotaUsageType.APM_SPANS
+            "custom_metric", "custom_metrics", "metric", "metrics" -> AdminQuotaUsageType.CUSTOM_METRICS
+            "error", "errors" -> AdminQuotaUsageType.ERRORS
+            "transaction", "transactions" -> AdminQuotaUsageType.TRANSACTIONS
+            "replay", "replays" -> AdminQuotaUsageType.REPLAYS
+            "feedback" -> AdminQuotaUsageType.FEEDBACK
+            "llm", "llm_event", "llm_events" -> AdminQuotaUsageType.LLM_EVENTS
+            "analytics", "analytics_pageview", "analytics_pageviews", "pageview", "pageviews" ->
+                AdminQuotaUsageType.ANALYTICS_PAGEVIEWS
+            else -> throw IllegalArgumentException("Unsupported quota type: $rawType")
+        }
+    }
+
+    private fun usedForAdminQuotaTarget(
+        state: QuotaState,
+        type: AdminQuotaUsageType
+    ): Long {
+        return when (type) {
+            AdminQuotaUsageType.INGESTION_BYTES -> (state.usedBytes - state.usedApmSpanBytes).coerceAtLeast(0)
+            AdminQuotaUsageType.APM_SPANS -> state.usedApmSpans
+            AdminQuotaUsageType.CUSTOM_METRICS -> state.usedCustomMetrics
+            AdminQuotaUsageType.ERRORS -> state.usedErrors
+            AdminQuotaUsageType.TRANSACTIONS -> state.usedTransactions
+            AdminQuotaUsageType.REPLAYS -> state.usedReplays
+            AdminQuotaUsageType.FEEDBACK -> state.usedFeedback
+            AdminQuotaUsageType.LLM_EVENTS -> state.usedLlmEvents
+            AdminQuotaUsageType.ANALYTICS_PAGEVIEWS -> state.usedAnalyticsPageviews
+        }
+    }
+
+    private fun limitForAdminQuotaTarget(
+        state: QuotaState,
+        type: AdminQuotaUsageType
+    ): Long? {
+        return when (type) {
+            AdminQuotaUsageType.INGESTION_BYTES -> state.bytesLimit
+            AdminQuotaUsageType.APM_SPANS -> state.apmSpanLimit
+            AdminQuotaUsageType.CUSTOM_METRICS -> state.customMetricLimit
+            AdminQuotaUsageType.ERRORS -> state.errorLimit
+            AdminQuotaUsageType.TRANSACTIONS -> state.transactionLimit
+            AdminQuotaUsageType.REPLAYS -> state.replayLimit
+            AdminQuotaUsageType.FEEDBACK -> state.feedbackLimit
+            AdminQuotaUsageType.LLM_EVENTS -> state.llmEventLimit
+            AdminQuotaUsageType.ANALYTICS_PAGEVIEWS -> state.analyticsPageviewLimit
+        }
+    }
+
+    private fun isFinitePositiveLimit(limit: Long): Boolean {
+        return limit > 0 && limit < Long.MAX_VALUE
+    }
+
+    private fun adjustedAggregateUnits(
+        state: QuotaState,
+        currentUsed: Long,
+        targetUsed: Long
+    ): Long {
+        return (state.usedUnits - currentUsed + targetUsed).coerceAtLeast(0)
+    }
+
+    private fun buildIngestionByteTarget(
+        state: QuotaState,
+        targetGbEligibleBytes: Long
+    ): IngestionByteTarget {
+        val currentKnownBytes =
+            state.usedErrorBytes + state.usedReplayBytes + state.usedLogBytes +
+                state.usedLlmBytes + state.usedProfilerBytes
+        val adjustedKnownBytes =
+            if (currentKnownBytes > 0 && targetGbEligibleBytes < currentKnownBytes) {
+                scaleIngestionByteColumns(state, currentKnownBytes, targetGbEligibleBytes)
+            } else {
+                IngestionByteTarget(
+                    usedBytes = state.usedApmSpanBytes + targetGbEligibleBytes,
+                    usedErrorBytes = state.usedErrorBytes,
+                    usedReplayBytes = state.usedReplayBytes,
+                    usedLogBytes = state.usedLogBytes,
+                    usedLlmBytes = state.usedLlmBytes,
+                    usedProfilerBytes = state.usedProfilerBytes
+                )
+            }
+
+        return adjustedKnownBytes.copy(usedBytes = state.usedApmSpanBytes + targetGbEligibleBytes)
+    }
+
+    private fun scaleIngestionByteColumns(
+        state: QuotaState,
+        currentKnownBytes: Long,
+        targetGbEligibleBytes: Long
+    ): IngestionByteTarget {
+        val errorBytes = scaleBytes(state.usedErrorBytes, currentKnownBytes, targetGbEligibleBytes)
+        val replayBytes = scaleBytes(state.usedReplayBytes, currentKnownBytes, targetGbEligibleBytes)
+        val logBytes = scaleBytes(state.usedLogBytes, currentKnownBytes, targetGbEligibleBytes)
+        val llmBytes = scaleBytes(state.usedLlmBytes, currentKnownBytes, targetGbEligibleBytes)
+        val assignedBytes = errorBytes + replayBytes + logBytes + llmBytes
+        val profilerBytes = (targetGbEligibleBytes - assignedBytes).coerceAtLeast(0)
+
+        return IngestionByteTarget(
+            usedBytes = state.usedApmSpanBytes + targetGbEligibleBytes,
+            usedErrorBytes = errorBytes,
+            usedReplayBytes = replayBytes,
+            usedLogBytes = logBytes,
+            usedLlmBytes = llmBytes,
+            usedProfilerBytes = profilerBytes
+        )
+    }
+
+    private fun scaleBytes(
+        value: Long,
+        currentTotal: Long,
+        targetTotal: Long
+    ): Long {
+        return ((value.toDouble() / currentTotal.toDouble()) * targetTotal.toDouble())
+            .toLong()
+            .coerceAtLeast(0)
+    }
+
+    private fun syncPendingOverageForAdminReset(
+        state: QuotaState,
+        target: QuotaUsageTarget
+    ) {
+        val subscriptionId = state.subscriptionId ?: return
+        when (target.type) {
+            AdminQuotaUsageType.INGESTION_BYTES ->
+                Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                    it[pending_overage_bytes] = pendingIngestionOverageBytes(state, target.targetUsed)
+                }
+            AdminQuotaUsageType.APM_SPANS ->
+                Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                    it[pending_apm_span_overage_units] = pendingCountOverage(
+                        target.targetUsed,
+                        state.apmSpanLimit,
+                        state.apmSpanOverageRateCentsPer1m
+                    )
+                }
+            AdminQuotaUsageType.CUSTOM_METRICS ->
+                Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                    it[pending_custom_metric_overage_units] = pendingCountOverage(
+                        target.targetUsed,
+                        state.customMetricLimit,
+                        state.customMetricOverageRateCentsPer100k
+                    )
+                }
+            else -> Unit
+        }
+    }
+
+    private fun pendingIngestionOverageBytes(
+        state: QuotaState,
+        targetGbEligibleBytes: Long
+    ): Long {
+        return if (state.overageRateCentsPerGb > 0 && state.bytesLimit > 0) {
+            max(0, targetGbEligibleBytes - state.bytesLimit)
+        } else {
+            0
+        }
+    }
+
+    private fun pendingCountOverage(
+        targetUsed: Long,
+        limit: Long,
+        overageRate: Int
+    ): Long {
+        return if (overageRate > 0 && limit >= 0) {
+            max(0, targetUsed - limit)
+        } else {
+            0
         }
     }
 

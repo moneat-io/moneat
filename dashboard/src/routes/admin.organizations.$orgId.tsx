@@ -15,11 +15,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link} from '@tanstack/react-router'
-import {useQuery} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {api, type BillingUsage} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
+import {Input} from '@/components/ui/input'
+import {Label} from '@/components/ui/label'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts'
@@ -33,10 +35,13 @@ import {
     HardDrive,
     MessageSquare,
     MonitorPlay,
+    RotateCcw,
+    SlidersHorizontal,
     Users,
     Zap
 } from 'lucide-react'
 import {useMemo, useState} from 'react'
+import {useToast} from '@/hooks/useToast'
 import {
     AdminSkeleton,
     ChartTooltipContent,
@@ -53,9 +58,74 @@ export const Route = createFileRoute('/admin/organizations/$orgId')({
   component: AdminOrgDetailPage,
 })
 
+const QUOTA_TARGET_PERCENT_MIN = 0
+const QUOTA_TARGET_PERCENT_MAX = 500
+const PERCENT_MULTIPLIER = 100
+
+const QUOTA_RESET_OPTIONS = [
+  {value: 'ingestion_bytes', label: 'Ingestion GB'},
+  {value: 'apm_spans', label: 'APM spans'},
+  {value: 'custom_metrics', label: 'Custom metrics'},
+  {value: 'analytics_pageviews', label: 'Analytics pageviews'},
+  {value: 'errors', label: 'Errors'},
+  {value: 'transactions', label: 'Transactions'},
+  {value: 'replays', label: 'Replays'},
+  {value: 'feedback', label: 'Feedback'},
+  {value: 'llm_events', label: 'LLM events'},
+] as const
+
+type AdminQuotaType = (typeof QUOTA_RESET_OPTIONS)[number]['value']
+
+interface QuotaUsageSnapshot {
+  used: number
+  limit: number
+}
+
+function getQuotaUsageSnapshot(usage: BillingUsage, quotaType: AdminQuotaType): QuotaUsageSnapshot {
+  switch (quotaType) {
+    case 'ingestion_bytes':
+      return {
+        used: Math.max(0, usage.usedBytes - (usage.usedApmSpanBytes ?? 0)),
+        limit: usage.bytesLimit,
+      }
+    case 'apm_spans':
+      return {used: usage.usedApmSpans ?? 0, limit: usage.apmSpanLimit ?? 0}
+    case 'custom_metrics':
+      return {used: usage.usedCustomMetrics ?? 0, limit: usage.customMetricLimit ?? 0}
+    case 'analytics_pageviews':
+      return {used: usage.usedAnalyticsPageviews ?? 0, limit: usage.analyticsPageviewLimit ?? 0}
+    case 'errors':
+      return {used: usage.usedErrors, limit: usage.errorLimit}
+    case 'transactions':
+      return {used: usage.usedTransactions, limit: usage.transactionLimit}
+    case 'replays':
+      return {used: usage.usedReplays, limit: usage.replayLimit}
+    case 'feedback':
+      return {used: usage.usedFeedback, limit: usage.feedbackLimit}
+    case 'llm_events':
+      return {used: usage.usedLlmEvents ?? 0, limit: usage.llmEventLimit ?? 0}
+  }
+}
+
+function formatQuotaValue(quotaType: AdminQuotaType, value: number): string {
+  return quotaType === 'ingestion_bytes' ? formatBytes(value) : formatNumber(value)
+}
+
+function parseTargetPercent(value: string): number | null {
+  if (value.trim() === '') return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return null
+  if (parsed < QUOTA_TARGET_PERCENT_MIN || parsed > QUOTA_TARGET_PERCENT_MAX) return null
+  return parsed
+}
+
 function AdminOrgDetailPage() {
   const {orgId} = Route.useParams()
+  const queryClient = useQueryClient()
+  const {toast} = useToast()
   const [usagePeriod, setUsagePeriod] = useState<'7d' | '30d'>('30d')
+  const [quotaType, setQuotaType] = useState<AdminQuotaType>('ingestion_bytes')
+  const [targetPercent, setTargetPercent] = useState('80')
 
   const normalizeEventType = (eventType: string): 'error' | 'transaction' | 'replay' | 'feedback' | 'log' | null => {
     switch (eventType) {
@@ -82,6 +152,37 @@ function AdminOrgDetailPage() {
     queryKey: ['admin-org-usage', orgId, usagePeriod],
     queryFn: () => api.getAdminOrgUsage(Number(orgId), usagePeriod),
     enabled: !!orgId,
+  })
+
+  const {data: quotaUsage} = useQuery({
+    queryKey: ['admin-org-quota-usage', orgId],
+    queryFn: () => api.getAdminOrgQuotaUsage(Number(orgId)),
+    enabled: !!orgId,
+  })
+
+  const quotaResetMutation = useMutation({
+    mutationFn: (targetPercentValue: number) =>
+      api.resetAdminOrgQuotaUsage(Number(orgId), {
+        quotaType,
+        targetPercent: targetPercentValue,
+      }),
+    onSuccess: (response) => {
+      const responseQuotaType = response.quotaType as AdminQuotaType
+      queryClient.setQueryData(['admin-org-quota-usage', orgId], response.usage)
+      void queryClient.invalidateQueries({queryKey: ['admin-org-quota-usage', orgId]})
+      toast({
+        title: 'Quota usage updated',
+        description:
+          `${formatQuotaValue(responseQuotaType, response.updatedUsed)} ${response.quotaType.replaceAll('_', ' ')}`,
+      })
+    },
+    onError: (error) => {
+      toast({
+        title: 'Quota update failed',
+        description: error instanceof Error ? error.message : 'Unable to update quota usage',
+        variant: 'destructive',
+      })
+    },
   })
 
   // Aggregate usage by date for chart
@@ -124,6 +225,17 @@ function AdminOrgDetailPage() {
   }
 
   const periodLabel = usagePeriod === '7d' ? 'Last 7 Days' : 'Last 30 Days'
+  const selectedQuota = quotaUsage ? getQuotaUsageSnapshot(quotaUsage, quotaType) : null
+  const parsedTargetPercent = parseTargetPercent(targetPercent)
+  const canResetQuota =
+    selectedQuota != null &&
+    selectedQuota.limit > 0 &&
+    parsedTargetPercent != null &&
+    !quotaResetMutation.isPending
+  const targetUsage =
+    selectedQuota != null && parsedTargetPercent != null
+      ? Math.round(selectedQuota.limit * parsedTargetPercent / PERCENT_MULTIPLIER)
+      : null
 
   return (
     <div className="space-y-8">
@@ -198,6 +310,87 @@ function AdminOrgDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Quota Controls */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+            Quota Controls
+          </CardTitle>
+          <CardDescription>
+            {quotaUsage ? `${quotaUsage.periodStart} to ${quotaUsage.periodEnd}` : 'Current billing period'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-end">
+            <div className="space-y-2">
+              <Label htmlFor="quota-type">Type</Label>
+              <Select value={quotaType} onValueChange={(value) => setQuotaType(value as AdminQuotaType)}>
+                <SelectTrigger id="quota-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUOTA_RESET_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Current</Label>
+              <div className="h-9 rounded-md border px-3 py-2 text-sm tabular-nums">
+                {selectedQuota ? formatQuotaValue(quotaType, selectedQuota.used) : '\u2014'}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="quota-target-percent">Target %</Label>
+              <Input
+                id="quota-target-percent"
+                type="number"
+                min={QUOTA_TARGET_PERCENT_MIN}
+                max={QUOTA_TARGET_PERCENT_MAX}
+                step="1"
+                value={targetPercent}
+                onChange={(event) => setTargetPercent(event.target.value)}
+              />
+            </div>
+            <Button
+              type="button"
+              disabled={!canResetQuota}
+              onClick={() => {
+                if (parsedTargetPercent == null) return
+                quotaResetMutation.mutate(parsedTargetPercent)
+              }}
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Set Usage
+            </Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-md border px-3 py-2">
+              <div className="text-xs text-muted-foreground">Limit</div>
+              <div className="text-sm font-medium tabular-nums">
+                {selectedQuota && selectedQuota.limit > 0 ? formatQuotaValue(quotaType, selectedQuota.limit) : '\u2014'}
+              </div>
+            </div>
+            <div className="rounded-md border px-3 py-2">
+              <div className="text-xs text-muted-foreground">Target</div>
+              <div className="text-sm font-medium tabular-nums">
+                {targetUsage != null ? formatQuotaValue(quotaType, targetUsage) : '\u2014'}
+              </div>
+            </div>
+            <div className="rounded-md border px-3 py-2">
+              <div className="text-xs text-muted-foreground">Status</div>
+              <div className="text-sm font-medium">
+                {quotaUsage ? (quotaUsage.withinQuota ? 'Within quota' : 'Over quota') : '\u2014'}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Event Type Breakdown */}
       <div>

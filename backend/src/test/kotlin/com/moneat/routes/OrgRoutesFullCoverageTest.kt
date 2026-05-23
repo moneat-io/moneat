@@ -19,7 +19,10 @@ package com.moneat.routes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.auth.services.AuthService
+import com.moneat.billing.models.AdminQuotaUsageResetResponse
+import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.services.AdminBillingService
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.incident.services.IncidentService
 import com.moneat.notifications.services.DiscordService
@@ -73,6 +76,7 @@ import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.datetime.LocalDate
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -102,6 +106,7 @@ class OrgRoutesFullCoverageTest {
     private val mockDiscordService = mockk<DiscordService>(relaxed = true)
     private val mockIncidentService = mockk<IncidentService>(relaxed = true)
     private val mockAdminBillingService = mockk<AdminBillingService>(relaxed = true)
+    private val mockQuotaService = mockk<BillingQuotaService>(relaxed = true)
 
     @BeforeTest
     fun setup() {
@@ -117,6 +122,7 @@ class OrgRoutesFullCoverageTest {
                 single<DiscordService> { mockDiscordService }
                 single<IncidentService> { mockIncidentService }
                 single<AdminBillingService> { mockAdminBillingService }
+                single<BillingQuotaService> { mockQuotaService }
             }
         )
         if (!dbInitialized) {
@@ -181,6 +187,66 @@ class OrgRoutesFullCoverageTest {
             it[Memberships.role] = role
         }
     }
+
+    private fun adminOrgDetail(id: Int = 42): AdminOrgDetail =
+        AdminOrgDetail(
+            id = id,
+            name = "Acme",
+            slug = "acme",
+            companySize = null,
+            plan = "pro",
+            subscriptionStatus = "active",
+            memberCount = 1,
+            projectCount = 1,
+            eventCountThisMonth = 100,
+            bytesIngestedThisMonth = 5_000,
+            quotaUsedPercent = 25.0,
+            members = emptyList(),
+            projects = emptyList()
+        )
+
+    private fun billingUsageResponse(organizationId: Int = 42): BillingUsageResponse =
+        BillingUsageResponse(
+            organizationId = organizationId,
+            periodStart = "2026-01-01",
+            periodEnd = "2026-01-31",
+            retentionDays = 30,
+            usedUnits = 100,
+            usedErrors = 10,
+            errorLimit = 1_000,
+            usedTransactions = 20,
+            transactionLimit = 2_000,
+            usedReplays = 30,
+            replayLimit = 3_000,
+            usedFeedback = 40,
+            feedbackLimit = 4_000,
+            usedBytes = 1_024,
+            bytesLimit = 10_240,
+            baseLimitUnits = 1_000,
+            paygLimitUnits = 0,
+            totalLimitUnits = 1_000,
+            paygBudgetCents = 0,
+            paygUsedUnits = 0,
+            paygUsedCentsEstimate = 0,
+            usedApmSpans = 800,
+            apmSpanLimit = 1_000,
+            plan = "pro",
+            status = "active",
+            withinQuota = true
+        )
+
+    private fun quotaResetResponse(organizationId: Int = 42): AdminQuotaUsageResetResponse =
+        AdminQuotaUsageResetResponse(
+            organizationId = organizationId,
+            quotaType = "apm_spans",
+            periodStart = "2026-01-01",
+            periodEnd = "2026-01-31",
+            previousUsed = 1_000,
+            updatedUsed = 800,
+            limit = 1_000,
+            targetPercent = 80.0,
+            usage = billingUsageResponse(organizationId)
+        )
 
     private fun seedIntegration(orgId: Int, type: String, tok: String? = "tok") = transaction {
         OrganizationIntegrations.insert {
@@ -387,6 +453,123 @@ class OrgRoutesFullCoverageTest {
                 HttpStatusCode.OK,
                 client.get("/v1/admin/organizations/42/usage?period=30d") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
+                }.status
+            )
+        }
+    }
+
+    // ──── Admin: org quota usage ────
+
+    @Test fun `admin org quota usage returns usage`() {
+        val id = seedUser("a@t.com", admin = true)
+        every { mockAdminService.getOrgDetail(42) } returns adminOrgDetail()
+        every { mockQuotaService.getUsageForOrganization(42) } returns billingUsageResponse()
+        testApplication {
+            application {
+                installTestApp()
+                routing { adminRoutes() }
+            }
+            val response =
+                client.get("/v1/admin/organizations/42/quota-usage") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
+                }
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains("\"organizationId\":42"))
+        }
+    }
+
+    @Test fun `admin org quota usage returns 404 for missing org`() {
+        val id = seedUser("a@t.com", admin = true)
+        every { mockAdminService.getOrgDetail(404) } returns null
+        testApplication {
+            application {
+                installTestApp()
+                routing { adminRoutes() }
+            }
+            assertEquals(
+                HttpStatusCode.NotFound,
+                client.get("/v1/admin/organizations/404/quota-usage") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
+                }.status
+            )
+        }
+        verify(exactly = 0) { mockQuotaService.getUsageForOrganization(404) }
+    }
+
+    @Test fun `admin org quota usage rejects bad id`() {
+        val id = seedUser("a@t.com", admin = true)
+        testApplication {
+            application {
+                installTestApp()
+                routing { adminRoutes() }
+            }
+            assertEquals(
+                HttpStatusCode.BadRequest,
+                client.get("/v1/admin/organizations/not-a-number/quota-usage") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
+                }.status
+            )
+        }
+    }
+
+    @Test fun `admin org quota reset returns reset response`() {
+        val id = seedUser("a@t.com", admin = true)
+        every {
+            mockQuotaService.resetUsageForQuotaType(42, "apm_spans", 80.0, null, id)
+        } returns quotaResetResponse()
+        testApplication {
+            application {
+                installTestApp()
+                routing { adminRoutes() }
+            }
+            val response =
+                client.post("/v1/admin/organizations/42/quota-usage/reset") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"quotaType":"apm_spans","targetPercent":80.0}""")
+                }
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains("\"updatedUsed\":800"))
+        }
+    }
+
+    @Test fun `admin org quota reset returns 400 for invalid target`() {
+        val id = seedUser("a@t.com", admin = true)
+        every {
+            mockQuotaService.resetUsageForQuotaType(42, "errors", null, null, id)
+        } throws IllegalArgumentException("targetPercent or targetValue is required")
+        testApplication {
+            application {
+                installTestApp()
+                routing { adminRoutes() }
+            }
+            assertEquals(
+                HttpStatusCode.BadRequest,
+                client.post("/v1/admin/organizations/42/quota-usage/reset") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"quotaType":"errors"}""")
+                }.status
+            )
+        }
+    }
+
+    @Test fun `admin org quota reset returns 404 for missing org`() {
+        val id = seedUser("a@t.com", admin = true)
+        every {
+            mockQuotaService.resetUsageForQuotaType(404, "errors", null, 1L, id)
+        } throws IllegalStateException("Organization not found")
+        testApplication {
+            application {
+                installTestApp()
+                routing { adminRoutes() }
+            }
+            assertEquals(
+                HttpStatusCode.NotFound,
+                client.post("/v1/admin/organizations/404/quota-usage/reset") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"quotaType":"errors","targetValue":1}""")
                 }.status
             )
         }

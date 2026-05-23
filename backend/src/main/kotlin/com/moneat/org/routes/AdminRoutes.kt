@@ -18,6 +18,7 @@ package com.moneat.org.routes
 
 import com.moneat.auth.services.AuthService
 import com.moneat.billing.services.AdminBillingService
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
@@ -37,6 +38,7 @@ import com.moneat.shared.models.Users
 import com.moneat.shared.services.AttributionAnalyticsService
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.isHandled
 import io.ktor.server.auth.AuthenticationChecked
@@ -174,6 +176,10 @@ private const val DEFAULT_PAGE_LIMIT = 25
 private const val SMALL_PAGE_LIMIT = 10
 private const val LARGE_PAGE_LIMIT = 500
 private const val MEDIUM_PAGE_LIMIT = 100
+private const val INVALID_ORGANIZATION_ID_MESSAGE = "Invalid organization ID"
+private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
+private const val INVALID_TOKEN_MESSAGE = "Invalid token"
+private const val INVALID_REQUEST_MESSAGE = "Invalid request"
 
 @Serializable
 private data class AdminImpersonationTokenResponse(
@@ -189,6 +195,7 @@ fun Route.adminRoutes() {
     val adminService = GlobalContext.get().get<AdminService>()
     val authService = GlobalContext.get().get<AuthService>()
     val pricingTierService = GlobalContext.get().get<PricingTierService>()
+    val quotaService = GlobalContext.get().get<BillingQuotaService>()
     val attributionAnalyticsService = GlobalContext.get().get<AttributionAnalyticsService>()
     val emailService = GlobalContext.get().get<EmailService>()
     val slackService = GlobalContext.get().get<SlackService>()
@@ -256,7 +263,7 @@ fun Route.adminRoutes() {
                 }
                 val detail = adminService.getOrgDetail(orgId)
                 if (detail == null) {
-                    call.respond(HttpStatusCode.NotFound, "Organization not found")
+                    call.respond(HttpStatusCode.NotFound, ORGANIZATION_NOT_FOUND_MESSAGE)
                 } else {
                     call.respond<AdminOrgDetail>(detail)
                 }
@@ -280,6 +287,14 @@ fun Route.adminRoutes() {
                         )
                     }
                 call.respond(response)
+            }
+
+            get("/organizations/{orgId}/quota-usage") {
+                call.handleQuotaUsageRequest(quotaService, adminService)
+            }
+
+            post("/organizations/{orgId}/quota-usage/reset") {
+                call.handleQuotaUsageReset(quotaService)
             }
 
             get("/usage") {
@@ -338,7 +353,7 @@ fun Route.adminRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId =
                     principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                        call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse("Invalid token"))
+                        call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse(INVALID_TOKEN_MESSAGE))
                         return@post
                     }
 
@@ -401,7 +416,7 @@ fun Route.adminRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId =
                     principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                        call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse("Invalid token"))
+                        call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse(INVALID_TOKEN_MESSAGE))
                         return@post
                     }
 
@@ -711,7 +726,7 @@ fun Route.adminRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId =
                     principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                        call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse("Invalid token"))
+                        call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse(INVALID_TOKEN_MESSAGE))
                         return@post
                     }
 
@@ -825,7 +840,7 @@ fun Route.adminRoutes() {
                 }.getOrElse { e ->
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                        com.moneat.utils.ErrorResponse(e.message ?: INVALID_REQUEST_MESSAGE)
                     )
                 }
             }
@@ -838,7 +853,7 @@ fun Route.adminRoutes() {
                 }.getOrElse { e ->
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                        com.moneat.utils.ErrorResponse(e.message ?: INVALID_REQUEST_MESSAGE)
                     )
                 }
             }
@@ -870,7 +885,7 @@ fun Route.adminRoutes() {
                     } catch (e: IllegalArgumentException) {
                         call.respond(
                             HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                            com.moneat.utils.ErrorResponse(e.message ?: INVALID_REQUEST_MESSAGE)
                         )
                     }
                 }
@@ -888,7 +903,7 @@ fun Route.adminRoutes() {
                     } catch (e: IllegalArgumentException) {
                         call.respond(
                             HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                            com.moneat.utils.ErrorResponse(e.message ?: INVALID_REQUEST_MESSAGE)
                         )
                     }
                 }
@@ -915,7 +930,7 @@ fun Route.adminRoutes() {
                     } catch (e: IllegalArgumentException) {
                         call.respond(
                             HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                            com.moneat.utils.ErrorResponse(e.message ?: INVALID_REQUEST_MESSAGE)
                         )
                     }
                 }
@@ -927,7 +942,10 @@ fun Route.adminRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val adminUserId =
                         principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                            call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse("Invalid token"))
+                            call.respond(
+                                HttpStatusCode.Unauthorized,
+                                com.moneat.utils.ErrorResponse(INVALID_TOKEN_MESSAGE)
+                            )
                             return@post
                         }
 
@@ -935,7 +953,7 @@ fun Route.adminRoutes() {
                     if (orgId == null) {
                         call.respond(
                             HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse("Invalid organization ID")
+                            com.moneat.utils.ErrorResponse(INVALID_ORGANIZATION_ID_MESSAGE)
                         )
                         return@post
                     }
@@ -954,12 +972,12 @@ fun Route.adminRoutes() {
                     } catch (e: IllegalArgumentException) {
                         call.respond(
                             HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse(e.message ?: "Invalid request")
+                            com.moneat.utils.ErrorResponse(e.message ?: INVALID_REQUEST_MESSAGE)
                         )
                     } catch (e: IllegalStateException) {
                         call.respond(
                             HttpStatusCode.NotFound,
-                            com.moneat.utils.ErrorResponse(e.message ?: "Organization not found")
+                            com.moneat.utils.ErrorResponse(e.message ?: ORGANIZATION_NOT_FOUND_MESSAGE)
                         )
                     }
                 }
@@ -969,7 +987,7 @@ fun Route.adminRoutes() {
                     if (orgId == null) {
                         call.respond(
                             HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse("Invalid organization ID")
+                            com.moneat.utils.ErrorResponse(INVALID_ORGANIZATION_ID_MESSAGE)
                         )
                         return@get
                     }
@@ -988,7 +1006,10 @@ fun Route.adminRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val adminUserId =
                         principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                            call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse("Invalid token"))
+                            call.respond(
+                                HttpStatusCode.Unauthorized,
+                                com.moneat.utils.ErrorResponse(INVALID_TOKEN_MESSAGE)
+                            )
                             return@delete
                         }
 
@@ -996,7 +1017,7 @@ fun Route.adminRoutes() {
                     if (orgId == null) {
                         call.respond(
                             HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse("Invalid organization ID")
+                            com.moneat.utils.ErrorResponse(INVALID_ORGANIZATION_ID_MESSAGE)
                         )
                         return@delete
                     }
@@ -1005,7 +1026,10 @@ fun Route.adminRoutes() {
                     if (success) {
                         call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
                     } else {
-                        call.respond(HttpStatusCode.NotFound, com.moneat.utils.ErrorResponse("Organization not found"))
+                        call.respond(
+                            HttpStatusCode.NotFound,
+                            com.moneat.utils.ErrorResponse(ORGANIZATION_NOT_FOUND_MESSAGE)
+                        )
                     }
                 }
             }
@@ -1025,4 +1049,61 @@ fun Route.adminRoutes() {
             }
         }
     }
+}
+
+private suspend fun ApplicationCall.handleQuotaUsageRequest(
+    quotaService: BillingQuotaService,
+    adminService: AdminService
+) {
+    val orgId = organizationIdParameter() ?: return
+    if (adminService.getOrgDetail(orgId) == null) {
+        respondAdminError(HttpStatusCode.NotFound, ORGANIZATION_NOT_FOUND_MESSAGE)
+        return
+    }
+    respond(quotaService.getUsageForOrganization(orgId))
+}
+
+private suspend fun ApplicationCall.handleQuotaUsageReset(quotaService: BillingQuotaService) {
+    val adminUserId = adminUserId() ?: return
+    val orgId = organizationIdParameter() ?: return
+
+    try {
+        val request = receive<com.moneat.billing.models.AdminQuotaUsageResetRequest>()
+        val response =
+            quotaService.resetUsageForQuotaType(
+                organizationId = orgId,
+                quotaType = request.quotaType,
+                targetPercent = request.targetPercent,
+                targetValue = request.targetValue,
+                adminUserId = adminUserId
+            )
+        respond(response)
+    } catch (e: IllegalArgumentException) {
+        respondAdminError(HttpStatusCode.BadRequest, e.message ?: INVALID_REQUEST_MESSAGE)
+    } catch (e: IllegalStateException) {
+        respondAdminError(HttpStatusCode.NotFound, e.message ?: ORGANIZATION_NOT_FOUND_MESSAGE)
+    }
+}
+
+private suspend fun ApplicationCall.adminUserId(): Int? {
+    val userId = principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()
+    if (userId == null) {
+        respondAdminError(HttpStatusCode.Unauthorized, INVALID_TOKEN_MESSAGE)
+    }
+    return userId
+}
+
+private suspend fun ApplicationCall.organizationIdParameter(): Int? {
+    val orgId = parameters["orgId"]?.toIntOrNull()
+    if (orgId == null) {
+        respondAdminError(HttpStatusCode.BadRequest, INVALID_ORGANIZATION_ID_MESSAGE)
+    }
+    return orgId
+}
+
+private suspend fun ApplicationCall.respondAdminError(
+    status: HttpStatusCode,
+    message: String
+) {
+    respond(status, com.moneat.utils.ErrorResponse(message))
 }

@@ -302,6 +302,26 @@ data class BillingUsageResponse(
 )
 
 @Serializable
+data class AdminQuotaUsageResetRequest(
+    val quotaType: String,
+    val targetPercent: Double? = null,
+    val targetValue: Long? = null
+)
+
+@Serializable
+data class AdminQuotaUsageResetResponse(
+    val organizationId: Int,
+    val quotaType: String,
+    val periodStart: String,
+    val periodEnd: String,
+    val previousUsed: Long,
+    val updatedUsed: Long,
+    val limit: Long?,
+    val targetPercent: Double?,
+    val usage: BillingUsageResponse
+)
+
+@Serializable
 data class CheckoutSessionRequest(
     val tierName: String,
     val billingInterval: String = "monthly", // "monthly" or "yearly"

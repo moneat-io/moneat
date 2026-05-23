@@ -21,6 +21,43 @@ import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
 
+const createQuotaResetResponse = () => ({
+  organizationId: 1,
+  quotaType: 'apm_spans',
+  periodStart: '2026-01-01',
+  periodEnd: '2026-01-31',
+  previousUsed: 100,
+  updatedUsed: 800,
+  limit: 1000,
+  targetPercent: 80,
+  usage: {
+    organizationId: 1,
+    periodStart: '2026-01-01',
+    periodEnd: '2026-01-31',
+    retentionDays: 30,
+    usedUnits: 0,
+    usedErrors: 0,
+    errorLimit: 100,
+    usedTransactions: 0,
+    transactionLimit: 100,
+    usedReplays: 0,
+    replayLimit: 100,
+    usedFeedback: 0,
+    feedbackLimit: 100,
+    usedBytes: 0,
+    bytesLimit: 10737418240,
+    baseLimitUnits: 400,
+    paygLimitUnits: 0,
+    totalLimitUnits: 400,
+    paygBudgetCents: 0,
+    paygUsedUnits: 0,
+    paygUsedCentsEstimate: 0,
+    plan: 'pro',
+    status: 'active',
+    withinQuota: true,
+  },
+})
+
 describe('adminMethods', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -149,6 +186,85 @@ describe('adminMethods', () => {
       )
 
       await api.getAdminOrgUsage(1, '30d')
+    })
+  })
+
+  describe('getAdminOrgQuotaUsage', () => {
+    it('fetches quota usage for an organization', async () => {
+      const quotaUsage = {
+        organizationId: 1,
+        periodStart: '2026-01-01',
+        periodEnd: '2026-01-31',
+        retentionDays: 30,
+        usedUnits: 10,
+        usedErrors: 10,
+        errorLimit: 100,
+        usedTransactions: 0,
+        transactionLimit: 100,
+        usedReplays: 0,
+        replayLimit: 100,
+        usedFeedback: 0,
+        feedbackLimit: 100,
+        usedBytes: 1073741824,
+        bytesLimit: 10737418240,
+        baseLimitUnits: 400,
+        paygLimitUnits: 0,
+        totalLimitUnits: 400,
+        paygBudgetCents: 0,
+        paygUsedUnits: 0,
+        paygUsedCentsEstimate: 0,
+        plan: 'pro',
+        status: 'active',
+        withinQuota: true,
+      }
+      server.use(
+        http.get(`${API_BASE}/v1/admin/organizations/1/quota-usage`, () =>
+          HttpResponse.json(quotaUsage)
+        )
+      )
+
+      const result = await api.getAdminOrgQuotaUsage(1)
+      expect(result).toEqual(quotaUsage)
+    })
+  })
+
+  describe('resetAdminOrgQuotaUsage', () => {
+    it('posts quota reset payload', async () => {
+      const response = createQuotaResetResponse()
+      server.use(
+        http.post(`${API_BASE}/v1/admin/organizations/1/quota-usage/reset`, async ({ request }) => {
+          await expect(request.json()).resolves.toEqual({
+            quotaType: 'apm_spans',
+            targetPercent: 80,
+          })
+          return HttpResponse.json(response)
+        })
+      )
+
+      const result = await api.resetAdminOrgQuotaUsage(1, {
+        quotaType: 'apm_spans',
+        targetPercent: 80,
+      })
+      expect(result).toEqual(response)
+    })
+
+    it('posts quota reset payload with target value', async () => {
+      const response = createQuotaResetResponse()
+      server.use(
+        http.post(`${API_BASE}/v1/admin/organizations/1/quota-usage/reset`, async ({ request }) => {
+          await expect(request.json()).resolves.toEqual({
+            quotaType: 'apm_spans',
+            targetValue: 800,
+          })
+          return HttpResponse.json(response)
+        })
+      )
+
+      const result = await api.resetAdminOrgQuotaUsage(1, {
+        quotaType: 'apm_spans',
+        targetValue: 800,
+      })
+      expect(result).toEqual(response)
     })
   })
 
