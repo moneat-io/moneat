@@ -112,10 +112,7 @@ class BillingQuotaService(
                     (OrgUsageCounters.organization_id eq organizationId) and
                         (OrgUsageCounters.period_start eq state.periodStart)
                 }.first()
-            OrgUsageCounters.update({
-                (OrgUsageCounters.organization_id eq organizationId) and
-                    (OrgUsageCounters.period_start eq state.periodStart)
-            }) {
+            OrgUsageCounters.update({ OrgUsageCounters.id eq usageRow[OrgUsageCounters.id] }) {
                 if (syntheticRuns > 0) {
                     it[used_synthetic_runs] = usageRow[OrgUsageCounters.used_synthetic_runs] + syntheticRuns
                 }

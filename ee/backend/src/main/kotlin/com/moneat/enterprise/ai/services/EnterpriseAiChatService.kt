@@ -369,7 +369,11 @@ $contextStr"""
 
         if (orgId != null) {
             val totalTokens = (response.inputTokens + response.outputTokens).toLong()
-            billingQuotaService.incrementUsageCounters(orgId, aiTokens = totalTokens)
+            try {
+                billingQuotaService.incrementUsageCounters(orgId, aiTokens = totalTokens)
+            } catch (e: Throwable) {
+                logger.debug(e) { "Failed to increment AI token count for org $orgId" }
+            }
         }
     }
 
