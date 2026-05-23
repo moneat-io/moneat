@@ -77,6 +77,7 @@ class BillingQuotaService(
         private const val PERCENT_MULTIPLIER = 100.0
         private const val MIN_QUOTA_TARGET_PERCENT = 0.0
         private const val MAX_QUOTA_TARGET_PERCENT = 500.0
+        private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
     }
 
     fun isEnforcementEnabled(): Boolean {
@@ -538,9 +539,7 @@ class BillingQuotaService(
                     .selectAll()
                     .where { Organizations.id eq organizationId }
                     .firstOrNull() != null
-            if (!organizationExists) {
-                throw IllegalStateException("Organization not found")
-            }
+            check(organizationExists) { ORGANIZATION_NOT_FOUND_MESSAGE }
 
             val state = loadQuotaState(organizationId, lockRows = true)
             val target = resolveQuotaUsageTarget(state, quotaType, targetPercent, targetValue)
@@ -804,24 +803,28 @@ class BillingQuotaService(
         target: QuotaUsageTarget
     ) {
         val subscriptionId = state.subscriptionId ?: return
-        Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
-            when (target.type) {
-                AdminQuotaUsageType.INGESTION_BYTES ->
+        when (target.type) {
+            AdminQuotaUsageType.INGESTION_BYTES ->
+                Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
                     it[pending_overage_bytes] = pendingIngestionOverageBytes(state, target.targetUsed)
-                AdminQuotaUsageType.APM_SPANS ->
+                }
+            AdminQuotaUsageType.APM_SPANS ->
+                Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
                     it[pending_apm_span_overage_units] = pendingCountOverage(
                         target.targetUsed,
                         state.apmSpanLimit,
                         state.apmSpanOverageRateCentsPer1m
                     )
-                AdminQuotaUsageType.CUSTOM_METRICS ->
+                }
+            AdminQuotaUsageType.CUSTOM_METRICS ->
+                Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
                     it[pending_custom_metric_overage_units] = pendingCountOverage(
                         target.targetUsed,
                         state.customMetricLimit,
                         state.customMetricOverageRateCentsPer100k
                     )
-                else -> Unit
-            }
+                }
+            else -> Unit
         }
     }
 

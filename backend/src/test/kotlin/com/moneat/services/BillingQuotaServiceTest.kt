@@ -38,6 +38,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -1295,6 +1296,127 @@ class BillingQuotaServiceTest {
             val subscription = Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()
             assertEquals(0, subscription[Subscriptions.pending_apm_span_overage_units])
         }
+    }
+
+    @Test
+    fun `admin quota reset supports aggregate count quota target values`() {
+        transaction {
+            val counterId =
+                insertTestUsageCounter(
+                    organizationId = testOrgId,
+                    usedErrors = 100,
+                    usedTransactions = 200,
+                    usedReplays = 300,
+                    usedFeedback = 400
+                )
+            OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                it[used_units] = 1_000L
+            }
+        }
+
+        val errors = billingQuotaService.resetUsageForQuotaType(testOrgId, "errors", null, 50L, 1)
+        val transactions = billingQuotaService.resetUsageForQuotaType(testOrgId, "transactions", null, 150L, 1)
+        val replays = billingQuotaService.resetUsageForQuotaType(testOrgId, "replays", null, 250L, 1)
+        val feedback = billingQuotaService.resetUsageForQuotaType(testOrgId, "feedback", null, 350L, 1)
+
+        assertEquals(50L, errors.updatedUsed)
+        assertEquals(950L, errors.usage.usedUnits)
+        assertEquals(150L, transactions.updatedUsed)
+        assertEquals(900L, transactions.usage.usedUnits)
+        assertEquals(250L, replays.updatedUsed)
+        assertEquals(850L, replays.usage.usedUnits)
+        assertEquals(350L, feedback.updatedUsed)
+        assertEquals(800L, feedback.usage.usedUnits)
+    }
+
+    @Test
+    fun `admin quota reset supports non aggregate count quotas`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_llm_event_limit] = 2_000L
+                it[monthly_analytics_pageview_limit] = 3_000L
+                it[monthly_custom_metric_limit] = 1_000L
+                it[custom_metric_overage_rate_cents_per_100k] = 25
+            }
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[pending_custom_metric_overage_units] = 500L
+            }
+            val counterId = insertTestUsageCounter(organizationId = testOrgId)
+            OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                it[used_units] = 111L
+                it[used_llm_events] = 100L
+                it[used_analytics_pageviews] = 200L
+                it[used_custom_metrics] = 900L
+            }
+        }
+
+        val llm = billingQuotaService.resetUsageForQuotaType(testOrgId, "llm_events", null, 1_500L, 1)
+        val analytics = billingQuotaService.resetUsageForQuotaType(testOrgId, "analytics_pageviews", null, 2_500L, 1)
+        val customMetrics = billingQuotaService.resetUsageForQuotaType(testOrgId, "custom_metrics", null, 1_200L, 1)
+
+        assertEquals(1_500L, llm.usage.usedLlmEvents)
+        assertEquals(2_500L, analytics.usage.usedAnalyticsPageviews)
+        assertEquals(1_200L, customMetrics.usage.usedCustomMetrics)
+        assertEquals(111L, customMetrics.usage.usedUnits)
+        transaction {
+            val subscription = Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()
+            assertEquals(200L, subscription[Subscriptions.pending_custom_metric_overage_units])
+        }
+    }
+
+    @Test
+    fun `admin quota reset scales ingestion byte buckets downward`() {
+        val oneGb = 1024L * 1024L * 1024L
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_gb_limit] = 10L * oneGb
+                it[overage_rate_cents_per_gb] = 40
+            }
+            val counterId = insertTestUsageCounter(organizationId = testOrgId, usedBytes = 11L * oneGb)
+            OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                it[used_apm_span_bytes] = oneGb
+                it[used_error_bytes] = 6L * oneGb
+                it[used_replay_bytes] = 2L * oneGb
+                it[used_log_bytes] = oneGb
+                it[used_llm_bytes] = oneGb
+            }
+        }
+
+        val response =
+            billingQuotaService.resetUsageForQuotaType(
+                organizationId = testOrgId,
+                quotaType = "ingestion_bytes",
+                targetPercent = null,
+                targetValue = 5L * oneGb,
+                adminUserId = 1
+            )
+
+        assertEquals(5L * oneGb, response.updatedUsed)
+        assertEquals(6L * oneGb, response.usage.usedBytes)
+        assertEquals(3L * oneGb, response.usage.usedErrorBytes)
+        assertEquals(oneGb, response.usage.usedReplayBytes)
+        assertEquals(oneGb / 2, response.usage.usedLogBytes)
+        assertEquals(oneGb / 2, response.usage.usedLlmBytes)
+    }
+
+    @Test
+    fun `admin quota reset rejects invalid targets`() {
+        val missingTarget =
+            assertFailsWith<IllegalArgumentException> {
+                billingQuotaService.resetUsageForQuotaType(testOrgId, "errors", null, null, 1)
+            }
+        val negativeValue =
+            assertFailsWith<IllegalArgumentException> {
+                billingQuotaService.resetUsageForQuotaType(testOrgId, "errors", null, -1L, 1)
+            }
+        val unsupportedType =
+            assertFailsWith<IllegalArgumentException> {
+                billingQuotaService.resetUsageForQuotaType(testOrgId, "not_a_quota", null, 1L, 1)
+            }
+
+        assertEquals("targetPercent or targetValue is required", missingTarget.message)
+        assertEquals("targetValue must be non-negative", negativeValue.message)
+        assertEquals("Unsupported quota type: not_a_quota", unsupportedType.message)
     }
 
     // ──── Feature Flag Tests ────
