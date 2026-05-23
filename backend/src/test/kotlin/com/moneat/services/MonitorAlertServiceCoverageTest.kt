@@ -136,6 +136,15 @@ class MonitorAlertServiceCoverageTest {
         return fn.callSuspend(service, *args)
     }
 
+    private fun callPrivate(name: String, vararg args: Any?): Any? {
+        val fn =
+            MonitorAlertService::class.declaredFunctions.single { f ->
+                f.name == name && f.parameters.drop(1).size == args.size
+            }
+        fn.isAccessible = true
+        return fn.call(service, *args)
+    }
+
     @Test
     fun `evaluateAlerts completes with no alerts in database`() =
         runBlocking {
@@ -182,6 +191,32 @@ class MonitorAlertServiceCoverageTest {
                 )
             callPrivateSuspend("sendAlertNotification", alert, "host-a", 1, 91.0)
         }
+
+    @Test
+    fun `host alert keys use stable alert identity`() {
+        val now = Clock.System.now()
+        val directAlert =
+            AlertData(
+                id = 7,
+                hostId = 42,
+                organizationId = 1,
+                metric = "cpu_percent",
+                condition = ">",
+                threshold = 80.0,
+                durationSeconds = 0,
+                enabled = true,
+                lastTriggeredAt = null,
+                createdAt = now,
+                scope = MonitorService.ALERT_SCOPE_HOST,
+                templateAlertId = null,
+            )
+        val templateAlert = directAlert.copy(id = 8, templateAlertId = 17)
+
+        assertEquals("alert_state:42:id_7", callPrivate("hostAlertRedisKey", directAlert))
+        assertEquals("moneat-host-alert-42-id_7", callPrivate("hostAlertDedupKey", directAlert))
+        assertEquals("alert_state:42:tpl_17", callPrivate("hostAlertRedisKey", templateAlert))
+        assertEquals("moneat-host-alert-42-tpl_17", callPrivate("hostAlertDedupKey", templateAlert))
+    }
 
     @Test
     fun `checkHostStatuses transitions stale host to down`() =

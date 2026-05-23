@@ -97,6 +97,14 @@ class MonitorAlertService(
         private const val SECONDS_PER_MINUTE = 60
     }
 
+    private data class HostStatusSnapshot(
+        val hostId: Int,
+        val hostName: String,
+        val organizationId: Int,
+        val currentStatus: String,
+        val lastSeenAt: Instant
+    )
+
     /**
      * Start the background jobs for alert evaluation and status checking.
      */
@@ -789,60 +797,60 @@ class MonitorAlertService(
         val now = Clock.System.now()
         val downThreshold = now - HOST_DOWN_THRESHOLD_SECONDS.seconds
 
-        // Get all hosts and check their last_seen_at
         val hosts =
             transaction {
                 Hosts.selectAll().map { row ->
-                    Triple(
-                        row[Hosts.id],
-                        row[Hosts.display_name] ?: row[Hosts.hostname],
-                        row[Hosts.organization_id]
-                    ) to
-                        Pair(
-                            row[Hosts.status],
-                            row[Hosts.last_seen_at]
-                        )
+                    HostStatusSnapshot(
+                        hostId = row[Hosts.id],
+                        hostName = row[Hosts.display_name] ?: row[Hosts.hostname],
+                        organizationId = row[Hosts.organization_id],
+                        currentStatus = row[Hosts.status],
+                        lastSeenAt = row[Hosts.last_seen_at]
+                    )
                 }
             }
 
-        for ((hostInfo, statusInfo) in hosts) {
-            val (hostId, hostName, organizationId) = hostInfo
-            val (currentStatus, lastSeenAt) = statusInfo
+        for (host in hosts) {
+            checkHostStatus(host, downThreshold)
+        }
+    }
 
-            val isDown = lastSeenAt < downThreshold
+    private suspend fun checkHostStatus(
+        host: HostStatusSnapshot,
+        downThreshold: Instant
+    ) {
+        if (host.currentStatus == "pending") return
 
-            // Skip pending hosts that have never reported
-            if (currentStatus == "pending") {
-                continue
+        val newStatus = if (host.lastSeenAt < downThreshold) "down" else "up"
+        if (host.currentStatus == newStatus) return
+
+        logger.info {
+            "Host ${host.hostId} (${host.hostName}) status changed: ${host.currentStatus} -> $newStatus"
+        }
+
+        transaction {
+            Hosts.update({ Hosts.id eq host.hostId }) {
+                it[status] = newStatus
             }
+        }
 
-            val newStatus = if (isDown) "down" else "up"
+        if (host.currentStatus == "down" && newStatus == "up") {
+            resolveHostDownIncident(host.hostId, host.organizationId)
+        }
 
-            // Only send notification if status changed
-            if (currentStatus != newStatus) {
-                logger.info { "Host $hostId ($hostName) status changed: $currentStatus -> $newStatus" }
+        if (isAnySilenceActive(host.organizationId)) return
 
-                // Update status in database (last_seen_at is only updated by heartbeat/metrics code)
-                transaction {
-                    Hosts.update({ Hosts.id eq hostId }) {
-                        it[status] = newStatus
-                    }
-                }
+        sendHostStatusNotification(host, newStatus)
+    }
 
-                if (currentStatus == "down" && newStatus == "up") {
-                    resolveHostDownIncident(hostId, organizationId)
-                }
-
-                if (isAnySilenceActive(organizationId)) {
-                    continue
-                }
-
-                if (newStatus == "down") {
-                    sendHostDownNotification(hostId, hostName, organizationId, lastSeenAt)
-                } else {
-                    sendHostUpNotification(hostId, hostName, organizationId)
-                }
-            }
+    private suspend fun sendHostStatusNotification(
+        host: HostStatusSnapshot,
+        newStatus: String
+    ) {
+        if (newStatus == "down") {
+            sendHostDownNotification(host.hostId, host.hostName, host.organizationId, host.lastSeenAt)
+        } else {
+            sendHostUpNotification(host.hostId, host.hostName, host.organizationId)
         }
     }
 
