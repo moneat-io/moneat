@@ -16,12 +16,14 @@
 
 package com.moneat.dashboards
 
+import com.moneat.config.RedisConfig
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
 import com.moneat.dashboards.models.DashboardWidgetAlerts
 import com.moneat.dashboards.models.DashboardWidgets
 import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.NotificationChannels
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
+import com.moneat.incident.models.AlertSource
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.incident.services.IncidentService
@@ -31,11 +33,23 @@ import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.TestDatabaseHelper
+import io.lettuce.core.api.sync.RedisCommands
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.reflect.full.callSuspend
+import kotlin.reflect.full.declaredFunctions
+import kotlin.reflect.jvm.isAccessible
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,6 +69,7 @@ class DashboardAlertServiceTest {
     private val prefsService: AlertNotificationPreferencesService = mockk(relaxed = true)
     private val queryEngine: DashboardQueryEngine = mockk(relaxed = true)
     private val retentionPolicyService: RetentionPolicyService = mockk(relaxed = true)
+    private var redisConfigMocked = false
 
     private val service = DashboardAlertService(
         emailService = emailService,
@@ -70,6 +85,11 @@ class DashboardAlertServiceTest {
         private var db: Database? = null
         private const val ORG_ID = 1L
         private const val CREATED_BY = 100L
+        private const val DEFAULT_PROJECT_ID = 1L
+        private const val RECOVERY_RETENTION_DAYS = 90
+        private const val RECOVERED_TOTAL = 50.0
+        private const val RECOVERY_THRESHOLD = 100.0
+        private const val REDIS_DELETE_COUNT = 1L
     }
 
     @BeforeTest
@@ -174,9 +194,26 @@ class DashboardAlertServiceTest {
         }
     }
 
+    @AfterTest
+    fun tearDown() {
+        if (redisConfigMocked) {
+            unmockkObject(RedisConfig)
+            redisConfigMocked = false
+        }
+    }
+
+    private suspend fun callPrivateSuspend(name: String, vararg args: Any?): Any? {
+        val fn =
+            DashboardAlertService::class.declaredFunctions.single { f ->
+                f.name == name && f.parameters.drop(1).size == args.size
+            }
+        fn.isAccessible = true
+        return fn.callSuspend(service, *args)
+    }
+
     private fun seedDashboard(
         title: String = "Test Dashboard",
-        projectId: Long? = 1L
+        projectId: Long? = DEFAULT_PROJECT_ID
     ): Long =
         transaction {
             val now = Clock.System.now()
@@ -192,7 +229,8 @@ class DashboardAlertServiceTest {
 
     private fun seedWidget(
         dashboardId: Long,
-        title: String? = "Test Widget"
+        title: String? = "Test Widget",
+        queryConfigs: String = "[]"
     ): Long =
         transaction {
             val now = Clock.System.now()
@@ -201,7 +239,7 @@ class DashboardAlertServiceTest {
                 it[DashboardWidgets.title] = title
                 it[widgetType] = "timeseries"
                 it[queryConfig] = "{}"
-                it[queryConfigs] = "[]"
+                it[DashboardWidgets.queryConfigs] = queryConfigs
                 it[displayConfig] = "{}"
                 it[createdAt] = now
                 it[updatedAt] = now
@@ -589,6 +627,51 @@ class DashboardAlertServiceTest {
         val alerts = service.listAlerts(dashboardId, ORG_ID)
         assertEquals(1, alerts.size)
     }
+
+    @Test
+    fun `evaluateAlerts auto resolves recovered dashboard alert`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            val redis = mockk<RedisCommands<String, String>>(relaxed = true)
+            every { RedisConfig.isConnected() } returns true
+            every { RedisConfig.sync() } returns redis
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(RECOVERED_TOTAL)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(
+                        widgetId,
+                        AlertRequestOverrides(condition = ">", threshold = RECOVERY_THRESHOLD),
+                    ),
+                )
+            every { redis.get("dashboard_alert_state:${created.id}") } returns "TRIGGERED"
+            every { redis.del(any<String>()) } returns REDIS_DELETE_COUNT
+
+            callPrivateSuspend("evaluateAlerts")
+
+            coVerify(exactly = 1) {
+                incidentService.autoResolveAlert(
+                    organizationId = ORG_ID.toInt(),
+                    source = AlertSource.DASHBOARD_ALERT,
+                    deduplicationKey = "moneat-dashboard-alert-${created.id}"
+                )
+            }
+        }
 
     // ──── CRUD round-trip ────
 

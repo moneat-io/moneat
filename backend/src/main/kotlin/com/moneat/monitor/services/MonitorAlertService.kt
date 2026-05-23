@@ -18,6 +18,7 @@ package com.moneat.monitor.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.incident.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
@@ -95,6 +96,14 @@ class MonitorAlertService(
         const val MIN_DATA_POINT_RATIO = 0.8
         private const val SECONDS_PER_MINUTE = 60
     }
+
+    private data class HostStatusSnapshot(
+        val hostId: Int,
+        val hostName: String,
+        val organizationId: Int,
+        val currentStatus: String,
+        val lastSeenAt: Instant
+    )
 
     /**
      * Start the background jobs for alert evaluation and status checking.
@@ -306,8 +315,7 @@ class MonitorAlertService(
         hostName: String,
         organizationId: Int
     ) {
-        val idPart = if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"
-        val alertKey = "alert_state:${alert.hostId}:$idPart"
+        val alertKey = hostAlertRedisKey(alert)
 
         // Get recent metrics for the host
         val currentValue = getCurrentMetricValue(alert.hostId, alert.organizationId, alert.metric) ?: return
@@ -341,14 +349,11 @@ class MonitorAlertService(
 
                 // Send recovery notification
                 sendRecoveryNotification(alert, hostName, organizationId)
-                // Resolve incident for metric alerts (same dedup key used when firing)
-                val dedupKey =
-                    "moneat-host-alert-${alert.hostId}-$idPart"
                 suspendRunCatching {
-                    incidentService.resolveAlert(
+                    incidentService.autoResolveAlert(
                         organizationId = organizationId,
-                        source = com.moneat.incident.models.AlertSource.HOST_ALERT,
-                        deduplicationKey = dedupKey
+                        source = AlertSource.HOST_ALERT,
+                        deduplicationKey = hostAlertDedupKey(alert)
                     )
                 }.getOrElse { e ->
                     logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
@@ -766,14 +771,7 @@ class MonitorAlertService(
                         severity = incidentSeverity,
                         status = com.moneat.incident.models.IncidentStatus.FIRING,
                         source = com.moneat.incident.models.AlertSource.HOST_ALERT,
-                        deduplicationKey = run {
-                            val idPart = if (alert.templateAlertId != null) {
-                                "tpl_${alert.templateAlertId}"
-                            } else {
-                                "id_${alert.id}"
-                            }
-                            "moneat-host-alert-${alert.hostId}-$idPart"
-                        },
+                        deduplicationKey = hostAlertDedupKey(alert),
                         organizationId = organizationId,
                         metadata =
                         mapOf(
@@ -799,58 +797,62 @@ class MonitorAlertService(
         val now = Clock.System.now()
         val downThreshold = now - HOST_DOWN_THRESHOLD_SECONDS.seconds
 
-        // Get all hosts and check their last_seen_at
         val hosts =
             transaction {
                 Hosts.selectAll().map { row ->
-                    Triple(
-                        row[Hosts.id],
-                        row[Hosts.display_name] ?: row[Hosts.hostname],
-                        row[Hosts.organization_id]
-                    ) to
-                        Pair(
-                            row[Hosts.status],
-                            row[Hosts.last_seen_at]
-                        )
+                    HostStatusSnapshot(
+                        hostId = row[Hosts.id],
+                        hostName = row[Hosts.display_name] ?: row[Hosts.hostname],
+                        organizationId = row[Hosts.organization_id],
+                        currentStatus = row[Hosts.status],
+                        lastSeenAt = row[Hosts.last_seen_at]
+                    )
                 }
             }
 
-        for ((hostInfo, statusInfo) in hosts) {
-            val (hostId, hostName, organizationId) = hostInfo
-            val (currentStatus, lastSeenAt) = statusInfo
+        for (host in hosts) {
+            checkHostStatus(host, downThreshold)
+        }
+    }
 
-            val isDown = lastSeenAt < downThreshold
+    private suspend fun checkHostStatus(
+        host: HostStatusSnapshot,
+        downThreshold: Instant
+    ) {
+        if (host.currentStatus == "pending") return
 
-            // Skip pending hosts that have never reported
-            if (currentStatus == "pending") {
-                continue
+        val newStatus = if (host.lastSeenAt < downThreshold) "down" else "up"
+        if (host.currentStatus == newStatus) return
+
+        logger.info {
+            "Host ${host.hostId} (${host.hostName}) status changed: ${host.currentStatus} -> $newStatus"
+        }
+
+        if (host.currentStatus == "down" && newStatus == "up" &&
+            !resolveHostDownIncident(host.hostId, host.organizationId)
+        ) {
+            return
+        }
+
+        transaction {
+            Hosts.update({ Hosts.id eq host.hostId }) {
+                it[status] = newStatus
             }
+        }
 
-            val newStatus = if (isDown) "down" else "up"
+        if (isAnySilenceActive(host.organizationId)) return
 
-            // Only send notification if status changed
-            if (currentStatus != newStatus) {
-                logger.info { "Host $hostId ($hostName) status changed: $currentStatus -> $newStatus" }
+        sendHostStatusNotification(host, newStatus)
+    }
 
-                // Update status in database (last_seen_at is only updated by heartbeat/metrics code)
-                transaction {
-                    Hosts.update({ Hosts.id eq hostId }) {
-                        it[status] = newStatus
-                    }
-                }
-
-                // Skip notifications if alerts are silenced for this organization
-                if (isAnySilenceActive(organizationId)) {
-                    continue
-                }
-
-                // Send notification
-                if (newStatus == "down") {
-                    sendHostDownNotification(hostId, hostName, organizationId, lastSeenAt)
-                } else {
-                    sendHostUpNotification(hostId, hostName, organizationId)
-                }
-            }
+    private suspend fun sendHostStatusNotification(
+        host: HostStatusSnapshot,
+        newStatus: String
+    ) {
+        if (newStatus == "down") {
+            sendHostDownNotification(host.hostId, host.hostName, host.organizationId, host.lastSeenAt)
+        } else {
+            sendHostUpNotification(host.hostId, host.hostName, host.organizationId)
         }
     }
 
@@ -948,7 +950,7 @@ class MonitorAlertService(
                     severity = com.moneat.incident.models.IncidentSeverity.CRITICAL,
                     status = com.moneat.incident.models.IncidentStatus.FIRING,
                     source = com.moneat.incident.models.AlertSource.HOST_DOWN,
-                    deduplicationKey = "moneat-host-down-$hostId",
+                    deduplicationKey = hostDownDedupKey(hostId),
                     organizationId = organizationId,
                     metadata =
                     mapOf(
@@ -1037,17 +1039,42 @@ class MonitorAlertService(
                 logger.error(e) { "Failed to send Discord notification for host up" }
             }
         }
+    }
 
-        // Resolve incident alert for host up
+    private suspend fun resolveHostDownIncident(
+        hostId: Int,
+        organizationId: Int
+    ): Boolean =
         suspendRunCatching {
-            incidentService.resolveAlert(
+            incidentService.autoResolveAlert(
                 organizationId = organizationId,
-                source = com.moneat.incident.models.AlertSource.HOST_DOWN,
-                deduplicationKey = "moneat-host-down-$hostId"
+                source = AlertSource.HOST_DOWN,
+                deduplicationKey = hostDownDedupKey(hostId)
             )
+            true
         }.getOrElse { e ->
             logger.error(e) { "Failed to resolve incident alert for host up" }
+            false
         }
+
+    private fun hostAlertRedisKey(alert: AlertData): String {
+        return "alert_state:${alert.hostId}:${hostAlertIdPart(alert)}"
+    }
+
+    private fun hostAlertDedupKey(alert: AlertData): String {
+        return "moneat-host-alert-${alert.hostId}-${hostAlertIdPart(alert)}"
+    }
+
+    private fun hostAlertIdPart(alert: AlertData): String {
+        return if (alert.templateAlertId != null) {
+            "tpl_${alert.templateAlertId}"
+        } else {
+            "id_${alert.id}"
+        }
+    }
+
+    private fun hostDownDedupKey(hostId: Int): String {
+        return "moneat-host-down-$hostId"
     }
 
     private fun getConditionText(condition: String): String {

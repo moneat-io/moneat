@@ -17,6 +17,7 @@
 package com.moneat.uptime.services
 
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.incident.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
@@ -415,9 +416,9 @@ class UptimeScheduler(
                 incidentService.fireAlert(incidentEvent)
             } else if (newStatus == "up") {
                 // Resolve the incident
-                incidentService.resolveAlert(
+                incidentService.autoResolveAlert(
                     organizationId = monitor.organizationId,
-                    source = com.moneat.incident.models.AlertSource.UPTIME_MONITOR,
+                    source = AlertSource.UPTIME_MONITOR,
                     deduplicationKey = "moneat-uptime-${monitor.id}"
                 )
             }

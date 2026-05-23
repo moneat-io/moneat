@@ -330,7 +330,7 @@ class DashboardAlertService(
                 }
                 sendRecoveryNotification(alert, currentValue)
                 suspendRunCatching {
-                    incidentService.resolveAlert(
+                    incidentService.autoResolveAlert(
                         organizationId = alert.orgId.toInt(),
                         source = AlertSource.DASHBOARD_ALERT,
                         deduplicationKey = "moneat-dashboard-alert-${alert.alertId}"
