@@ -69,6 +69,7 @@ class DashboardAlertServiceTest {
     private val prefsService: AlertNotificationPreferencesService = mockk(relaxed = true)
     private val queryEngine: DashboardQueryEngine = mockk(relaxed = true)
     private val retentionPolicyService: RetentionPolicyService = mockk(relaxed = true)
+    private var redisConfigMocked = false
 
     private val service = DashboardAlertService(
         emailService = emailService,
@@ -84,6 +85,11 @@ class DashboardAlertServiceTest {
         private var db: Database? = null
         private const val ORG_ID = 1L
         private const val CREATED_BY = 100L
+        private const val DEFAULT_PROJECT_ID = 1L
+        private const val RECOVERY_RETENTION_DAYS = 90
+        private const val RECOVERED_TOTAL = 50.0
+        private const val RECOVERY_THRESHOLD = 100.0
+        private const val REDIS_DELETE_COUNT = 1L
     }
 
     @BeforeTest
@@ -190,10 +196,9 @@ class DashboardAlertServiceTest {
 
     @AfterTest
     fun tearDown() {
-        try {
+        if (redisConfigMocked) {
             unmockkObject(RedisConfig)
-        } catch (_: Exception) {
-            // RedisConfig may not have been mocked in every test.
+            redisConfigMocked = false
         }
     }
 
@@ -208,7 +213,7 @@ class DashboardAlertServiceTest {
 
     private fun seedDashboard(
         title: String = "Test Dashboard",
-        projectId: Long? = 1L
+        projectId: Long? = DEFAULT_PROJECT_ID
     ): Long =
         transaction {
             val now = Clock.System.now()
@@ -627,13 +632,16 @@ class DashboardAlertServiceTest {
     fun `evaluateAlerts auto resolves recovered dashboard alert`() =
         runBlocking {
             mockkObject(RedisConfig)
+            redisConfigMocked = true
             val redis = mockk<RedisCommands<String, String>>(relaxed = true)
             every { RedisConfig.isConnected() } returns true
             every { RedisConfig.sync() } returns redis
-            coEvery { retentionPolicyService.getRetentionDaysForProject(any()) } returns 90
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
             coEvery {
                 queryEngine.executeQuery(any(), any(), any(), any())
-            } returns listOf(mapOf("total" to JsonPrimitive(50.0)))
+            } returns listOf(mapOf("total" to JsonPrimitive(RECOVERED_TOTAL)))
 
             val dashboardId = seedDashboard()
             val widgetId =
@@ -646,10 +654,13 @@ class DashboardAlertServiceTest {
                     dashboardId,
                     ORG_ID,
                     CREATED_BY,
-                    buildCreateRequest(widgetId, AlertRequestOverrides(condition = ">", threshold = 100.0)),
+                    buildCreateRequest(
+                        widgetId,
+                        AlertRequestOverrides(condition = ">", threshold = RECOVERY_THRESHOLD),
+                    ),
                 )
             every { redis.get("dashboard_alert_state:${created.id}") } returns "TRIGGERED"
-            every { redis.del(any<String>()) } returns 1L
+            every { redis.del(any<String>()) } returns REDIS_DELETE_COUNT
 
             callPrivateSuspend("evaluateAlerts")
 

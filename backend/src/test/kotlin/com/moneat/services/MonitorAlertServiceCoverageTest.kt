@@ -192,6 +192,8 @@ class MonitorAlertServiceCoverageTest {
             callPrivateSuspend("sendAlertNotification", alert, "host-a", 1, 91.0)
         }
 
+    // ──── Key helpers ────
+
     @Test
     fun `host alert keys use stable alert identity`() {
         val now = Clock.System.now()
@@ -217,6 +219,8 @@ class MonitorAlertServiceCoverageTest {
         assertEquals("alert_state:42:tpl_17", callPrivate("hostAlertRedisKey", templateAlert))
         assertEquals("moneat-host-alert-42-tpl_17", callPrivate("hostAlertDedupKey", templateAlert))
     }
+
+    // ──── Host status recovery ────
 
     @Test
     fun `checkHostStatuses transitions stale host to down`() =
@@ -339,6 +343,58 @@ class MonitorAlertServiceCoverageTest {
                 incidentService.autoResolveAlert(orgId, AlertSource.HOST_DOWN, "moneat-host-down-$hostId")
             }
         }
+
+    @Test
+    fun `checkHostStatuses retries host down incident resolution before marking recovered`() =
+        runBlocking {
+            val orgId =
+                transaction {
+                    Organizations.insert {
+                        it[name] = "Retry Recovery Org"
+                        it[slug] = "retry-recovery-org"
+                    } get Organizations.id
+                }
+            val now = Clock.System.now()
+            val hostId =
+                transaction {
+                    Hosts.insert {
+                        it[hostname] = "retry-recovered"
+                        it[organization_id] = orgId
+                        it[status] = "down"
+                        it[first_seen_at] = now - 10.minutes
+                        it[last_seen_at] = now
+                    } get Hosts.id
+                }
+            val deduplicationKey = "moneat-host-down-$hostId"
+            coEvery {
+                incidentService.autoResolveAlert(orgId, AlertSource.HOST_DOWN, deduplicationKey)
+            } throws RuntimeException("resolve failed")
+
+            callPrivateSuspend("checkHostStatuses")
+
+            val failedStatus =
+                transaction {
+                    Hosts.selectAll().where { Hosts.id eq hostId }.first()[Hosts.status]
+                }
+            assertEquals("down", failedStatus)
+
+            coEvery {
+                incidentService.autoResolveAlert(orgId, AlertSource.HOST_DOWN, deduplicationKey)
+            } returns Unit
+
+            callPrivateSuspend("checkHostStatuses")
+
+            val recoveredStatus =
+                transaction {
+                    Hosts.selectAll().where { Hosts.id eq hostId }.first()[Hosts.status]
+                }
+            assertEquals("up", recoveredStatus)
+            coVerify(exactly = 2) {
+                incidentService.autoResolveAlert(orgId, AlertSource.HOST_DOWN, deduplicationKey)
+            }
+        }
+
+    // ──── Silence cleanup ────
 
     @Test
     fun `cleanupExpiredSilencePeriods removes ended rows`() {

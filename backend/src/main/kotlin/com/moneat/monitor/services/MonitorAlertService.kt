@@ -828,14 +828,16 @@ class MonitorAlertService(
             "Host ${host.hostId} (${host.hostName}) status changed: ${host.currentStatus} -> $newStatus"
         }
 
+        if (host.currentStatus == "down" && newStatus == "up" &&
+            !resolveHostDownIncident(host.hostId, host.organizationId)
+        ) {
+            return
+        }
+
         transaction {
             Hosts.update({ Hosts.id eq host.hostId }) {
                 it[status] = newStatus
             }
-        }
-
-        if (host.currentStatus == "down" && newStatus == "up") {
-            resolveHostDownIncident(host.hostId, host.organizationId)
         }
 
         if (isAnySilenceActive(host.organizationId)) return
@@ -1042,17 +1044,18 @@ class MonitorAlertService(
     private suspend fun resolveHostDownIncident(
         hostId: Int,
         organizationId: Int
-    ) {
+    ): Boolean =
         suspendRunCatching {
             incidentService.autoResolveAlert(
                 organizationId = organizationId,
                 source = AlertSource.HOST_DOWN,
                 deduplicationKey = hostDownDedupKey(hostId)
             )
+            true
         }.getOrElse { e ->
             logger.error(e) { "Failed to resolve incident alert for host up" }
+            false
         }
-    }
 
     private fun hostAlertRedisKey(alert: AlertData): String {
         return "alert_state:${alert.hostId}:${hostAlertIdPart(alert)}"

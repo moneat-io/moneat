@@ -251,6 +251,8 @@ class UptimeSchedulerTest {
             }
         }
 
+    // ──── Recovery ────
+
     @Test
     fun `notifyStatusChange auto resolves incident when monitor recovers`() =
         runBlocking {
