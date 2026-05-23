@@ -181,7 +181,7 @@ class BillingBackgroundServiceTest {
     }
 
     @Test
-    fun `process quota threshold notifications sends highest base threshold once per period`() {
+    fun `process quota threshold notifications sends each threshold once per period`() {
         val service = BillingBackgroundService()
 
         invokeQuotaNotificationPass(service)
@@ -195,20 +195,12 @@ class BillingBackgroundServiceTest {
                     .map { it[QuotaNotificationsSent.notification_type] }
                     .toSet()
 
-            assertEquals(2, types.size)
+            assertEquals(4, types.size)
+            assertTrue("base_80" in types)
+            assertTrue("base_90" in types)
             assertTrue("base_100" in types)
             assertTrue("payg_80" in types)
         }
-    }
-
-    @Test
-    fun `base notification type uses highest matching threshold`() {
-        val service = BillingBackgroundService()
-
-        assertEquals("base_80", invokeBaseNotificationTypeFor(service, 0.8))
-        assertEquals("base_90", invokeBaseNotificationTypeFor(service, 0.9))
-        assertEquals("base_100", invokeBaseNotificationTypeFor(service, 1.0))
-        assertEquals("base_100", invokeBaseNotificationTypeFor(service, 1.2))
     }
 
     @Test
@@ -346,7 +338,8 @@ class BillingBackgroundServiceTest {
                     .map { it[QuotaNotificationsSent.notification_type] }
                     .toSet()
 
-            assertEquals(setOf("base_100"), types)
+            assertTrue("base_80" in types, "Expected base_80 notification for bytes-only tier")
+            assertTrue("base_90" in types, "Expected base_90 notification for bytes-only tier")
             assertTrue("base_100" in types, "Expected base_100 notification for bytes-only tier")
         }
     }
@@ -637,7 +630,8 @@ class BillingBackgroundServiceTest {
                     .map { it[QuotaNotificationsSent.notification_type] }
                     .toSet()
 
-            assertEquals(2, types.size)
+            assertTrue("base_80" in types, "Expected base_80 (base limit exceeded)")
+            assertTrue("base_90" in types, "Expected base_90 (base limit exceeded)")
             assertTrue("base_100" in types, "Expected base_100 (base limit exceeded)")
             assertTrue("payg_80" in types, "Expected payg_80 for byte-based PAYG budget")
         }
@@ -780,10 +774,442 @@ class BillingBackgroundServiceTest {
                     .map { it[QuotaNotificationsSent.notification_type] }
                     .toSet()
 
-            assertEquals(setOf("base_100"), types)
+            assertTrue(
+                "base_80" in types,
+                "Expected base_80 notification when bytes exceed 80% of GB limit (unit limit is Long.MAX_VALUE)"
+            )
+            assertTrue(
+                "base_90" in types,
+                "Expected base_90 notification when bytes exceed 90% of GB limit (unit limit is Long.MAX_VALUE)"
+            )
             assertTrue(
                 "base_100" in types,
                 "Expected base_100 notification when bytes exceed GB limit (unit limit is Long.MAX_VALUE)"
+            )
+        }
+    }
+
+    @Test
+    fun `only base_80 fires when base usage is exactly 80 percent`() {
+        transaction {
+            TestDatabaseHelper.resetSchema(
+                Users,
+                Organizations,
+                Memberships,
+                Subscriptions,
+                EmailsSent,
+                PricingTierConfigs,
+                OrgUsageCounters,
+                QuotaNotificationsSent
+            )
+
+            val orgId =
+                Organizations.insert {
+                    it[name] = "80pct Org"
+                    it[slug] = "80pct-org"
+                }[Organizations.id]
+
+            val ownerId =
+                Users.insert {
+                    it[email] = "owner-80@moneat.test"
+                    it[password_hash] = "hash"
+                    it[name] = "Owner 80"
+                }[Users.id]
+
+            Memberships.insert {
+                it[user_id] = ownerId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+
+            val tierId =
+                PricingTierConfigs.insert {
+                    it[tier_name] = "PRO_80"
+                    it[version] = 1
+                    it[monthly_unit_limit] = 1000
+                    it[monthly_error_limit] = 1000
+                    it[monthly_transaction_limit] = 0
+                    it[monthly_replay_limit] = 0
+                    it[monthly_feedback_limit] = 0
+                    it[monthly_llm_event_limit] = 0
+                    it[monthly_gb_limit] = 10
+                    it[retention_days] = 30
+                    it[log_retention_days] = 30
+                    it[replay_retention_days] = 30
+                    it[llm_retention_days] = 30
+                    it[status_pages_enabled] = true
+                    it[status_page_custom_domain_enabled] = true
+                    it[session_replay_enabled] = true
+                    it[slack_enabled] = false
+                    it[discord_enabled] = false
+                    it[incident_io_enabled] = false
+                    it[saml_enabled] = false
+                    it[oidc_enabled] = false
+                    it[priority_support_enabled] = false
+                    it[sla_enabled] = false
+                    it[custom_retention_enabled] = false
+                    it[max_projects] = 10
+                    it[max_systems] = 10
+                    it[monitor_interval_seconds] = 60
+                    it[monthly_price_cents] = 2900
+                    it[yearly_price_cents] = 28800
+                    it[trial_days] = 14
+                    it[payg_enabled] = false
+                    it[payg_rate_micros_per_unit] = 0
+                    it[overage_rate_cents_per_gb] = 0
+                    it[error_overage_rate_cents_per_1k] = 0
+                    it[replay_overage_rate_cents_per_gb] = 0
+                    it[llm_overage_rate_cents_per_1k] = 0
+                    it[oncall_per_user_monthly_cents] = 0
+                    it[oncall_per_user_yearly_cents] = 0
+                    it[oncall_enabled] = false
+                    it[stripe_base_price_id] = null
+                    it[stripe_overage_price_id] = null
+                    it[stripe_yearly_base_price_id] = null
+                    it[stripe_yearly_overage_price_id] = null
+                    it[stripe_oncall_price_id] = null
+                    it[stripe_oncall_yearly_price_id] = null
+                    it[is_current] = true
+                }[PricingTierConfigs.id]
+
+            val now = Clock.System.now()
+            val periodStart = now.toLocalDateTime(TimeZone.UTC).date
+            val periodEnd = periodStart.plus(DatePeriod(months = 1, days = -1))
+
+            Subscriptions.insert {
+                it[organization_id] = orgId
+                it[plan] = "PRO_80"
+                it[status] = "active"
+                it[billing_interval] = "monthly"
+                it[current_period_start] = now
+                it[current_period_end] = Instant.fromEpochSeconds(now.epochSeconds + 2_592_000)
+                it[pricing_tier_config_id] = tierId
+                it[payg_budget_cents] = 0
+                it[payg_used_units] = 0
+                it[payg_used_micros] = 0
+                it[pending_meter_units] = 0
+            }
+
+            // used_units = 800 is exactly 80% of 1000 limit
+            OrgUsageCounters.insert {
+                it[organization_id] = orgId
+                it[period_start] = periodStart
+                it[period_end] = periodEnd
+                it[used_units] = 800
+                it[used_errors] = 800
+                it[used_transactions] = 0
+                it[used_replays] = 0
+                it[used_feedback] = 0
+                it[used_llm_events] = 0
+                it[used_logs] = 0
+                it[used_bytes] = 0
+                it[used_error_bytes] = 0
+                it[used_replay_bytes] = 0
+                it[used_log_bytes] = 0
+                it[used_llm_bytes] = 0
+                it[updated_at] = now
+            }
+
+            testOrgId = orgId
+        }
+
+        val service = BillingBackgroundService()
+        invokeQuotaNotificationPass(service)
+
+        transaction {
+            val types =
+                QuotaNotificationsSent
+                    .selectAll()
+                    .where { QuotaNotificationsSent.organization_id eq testOrgId }
+                    .map { it[QuotaNotificationsSent.notification_type] }
+                    .toSet()
+
+            assertTrue("base_80" in types, "Expected base_80 to fire at exactly 80% usage")
+            assertTrue("base_90" !in types, "Expected base_90 NOT to fire at exactly 80% usage")
+            assertTrue("base_100" !in types, "Expected base_100 NOT to fire at exactly 80% usage")
+        }
+    }
+
+    @Test
+    fun `base_80 and base_90 both fire when base usage is exactly 90 percent`() {
+        transaction {
+            TestDatabaseHelper.resetSchema(
+                Users,
+                Organizations,
+                Memberships,
+                Subscriptions,
+                EmailsSent,
+                PricingTierConfigs,
+                OrgUsageCounters,
+                QuotaNotificationsSent
+            )
+
+            val orgId =
+                Organizations.insert {
+                    it[name] = "90pct Org"
+                    it[slug] = "90pct-org"
+                }[Organizations.id]
+
+            val ownerId =
+                Users.insert {
+                    it[email] = "owner-90@moneat.test"
+                    it[password_hash] = "hash"
+                    it[name] = "Owner 90"
+                }[Users.id]
+
+            Memberships.insert {
+                it[user_id] = ownerId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+
+            val tierId =
+                PricingTierConfigs.insert {
+                    it[tier_name] = "PRO_90"
+                    it[version] = 1
+                    it[monthly_unit_limit] = 1000
+                    it[monthly_error_limit] = 1000
+                    it[monthly_transaction_limit] = 0
+                    it[monthly_replay_limit] = 0
+                    it[monthly_feedback_limit] = 0
+                    it[monthly_llm_event_limit] = 0
+                    it[monthly_gb_limit] = 10
+                    it[retention_days] = 30
+                    it[log_retention_days] = 30
+                    it[replay_retention_days] = 30
+                    it[llm_retention_days] = 30
+                    it[status_pages_enabled] = true
+                    it[status_page_custom_domain_enabled] = true
+                    it[session_replay_enabled] = true
+                    it[slack_enabled] = false
+                    it[discord_enabled] = false
+                    it[incident_io_enabled] = false
+                    it[saml_enabled] = false
+                    it[oidc_enabled] = false
+                    it[priority_support_enabled] = false
+                    it[sla_enabled] = false
+                    it[custom_retention_enabled] = false
+                    it[max_projects] = 10
+                    it[max_systems] = 10
+                    it[monitor_interval_seconds] = 60
+                    it[monthly_price_cents] = 2900
+                    it[yearly_price_cents] = 28800
+                    it[trial_days] = 14
+                    it[payg_enabled] = false
+                    it[payg_rate_micros_per_unit] = 0
+                    it[overage_rate_cents_per_gb] = 0
+                    it[error_overage_rate_cents_per_1k] = 0
+                    it[replay_overage_rate_cents_per_gb] = 0
+                    it[llm_overage_rate_cents_per_1k] = 0
+                    it[oncall_per_user_monthly_cents] = 0
+                    it[oncall_per_user_yearly_cents] = 0
+                    it[oncall_enabled] = false
+                    it[stripe_base_price_id] = null
+                    it[stripe_overage_price_id] = null
+                    it[stripe_yearly_base_price_id] = null
+                    it[stripe_yearly_overage_price_id] = null
+                    it[stripe_oncall_price_id] = null
+                    it[stripe_oncall_yearly_price_id] = null
+                    it[is_current] = true
+                }[PricingTierConfigs.id]
+
+            val now = Clock.System.now()
+            val periodStart = now.toLocalDateTime(TimeZone.UTC).date
+            val periodEnd = periodStart.plus(DatePeriod(months = 1, days = -1))
+
+            Subscriptions.insert {
+                it[organization_id] = orgId
+                it[plan] = "PRO_90"
+                it[status] = "active"
+                it[billing_interval] = "monthly"
+                it[current_period_start] = now
+                it[current_period_end] = Instant.fromEpochSeconds(now.epochSeconds + 2_592_000)
+                it[pricing_tier_config_id] = tierId
+                it[payg_budget_cents] = 0
+                it[payg_used_units] = 0
+                it[payg_used_micros] = 0
+                it[pending_meter_units] = 0
+            }
+
+            // used_units = 900 is exactly 90% of 1000 limit
+            OrgUsageCounters.insert {
+                it[organization_id] = orgId
+                it[period_start] = periodStart
+                it[period_end] = periodEnd
+                it[used_units] = 900
+                it[used_errors] = 900
+                it[used_transactions] = 0
+                it[used_replays] = 0
+                it[used_feedback] = 0
+                it[used_llm_events] = 0
+                it[used_logs] = 0
+                it[used_bytes] = 0
+                it[used_error_bytes] = 0
+                it[used_replay_bytes] = 0
+                it[used_log_bytes] = 0
+                it[used_llm_bytes] = 0
+                it[updated_at] = now
+            }
+
+            testOrgId = orgId
+        }
+
+        val service = BillingBackgroundService()
+        invokeQuotaNotificationPass(service)
+
+        transaction {
+            val types =
+                QuotaNotificationsSent
+                    .selectAll()
+                    .where { QuotaNotificationsSent.organization_id eq testOrgId }
+                    .map { it[QuotaNotificationsSent.notification_type] }
+                    .toSet()
+
+            // At 90%: both base_80 and base_90 fire because each threshold is checked independently
+            assertTrue("base_80" in types, "Expected base_80 to fire at exactly 90% usage")
+            assertTrue("base_90" in types, "Expected base_90 to fire at exactly 90% usage")
+            assertTrue("base_100" !in types, "Expected base_100 NOT to fire at exactly 90% usage")
+        }
+    }
+
+    @Test
+    fun `no base notifications fire when base usage is below 80 percent`() {
+        transaction {
+            TestDatabaseHelper.resetSchema(
+                Users,
+                Organizations,
+                Memberships,
+                Subscriptions,
+                EmailsSent,
+                PricingTierConfigs,
+                OrgUsageCounters,
+                QuotaNotificationsSent
+            )
+
+            val orgId =
+                Organizations.insert {
+                    it[name] = "Low Usage Org"
+                    it[slug] = "low-usage-org"
+                }[Organizations.id]
+
+            val ownerId =
+                Users.insert {
+                    it[email] = "owner-low@moneat.test"
+                    it[password_hash] = "hash"
+                    it[name] = "Owner Low"
+                }[Users.id]
+
+            Memberships.insert {
+                it[user_id] = ownerId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+
+            val tierId =
+                PricingTierConfigs.insert {
+                    it[tier_name] = "PRO_LOW"
+                    it[version] = 1
+                    it[monthly_unit_limit] = 1000
+                    it[monthly_error_limit] = 1000
+                    it[monthly_transaction_limit] = 0
+                    it[monthly_replay_limit] = 0
+                    it[monthly_feedback_limit] = 0
+                    it[monthly_llm_event_limit] = 0
+                    it[monthly_gb_limit] = 10
+                    it[retention_days] = 30
+                    it[log_retention_days] = 30
+                    it[replay_retention_days] = 30
+                    it[llm_retention_days] = 30
+                    it[status_pages_enabled] = true
+                    it[status_page_custom_domain_enabled] = true
+                    it[session_replay_enabled] = true
+                    it[slack_enabled] = false
+                    it[discord_enabled] = false
+                    it[incident_io_enabled] = false
+                    it[saml_enabled] = false
+                    it[oidc_enabled] = false
+                    it[priority_support_enabled] = false
+                    it[sla_enabled] = false
+                    it[custom_retention_enabled] = false
+                    it[max_projects] = 10
+                    it[max_systems] = 10
+                    it[monitor_interval_seconds] = 60
+                    it[monthly_price_cents] = 2900
+                    it[yearly_price_cents] = 28800
+                    it[trial_days] = 14
+                    it[payg_enabled] = false
+                    it[payg_rate_micros_per_unit] = 0
+                    it[overage_rate_cents_per_gb] = 0
+                    it[error_overage_rate_cents_per_1k] = 0
+                    it[replay_overage_rate_cents_per_gb] = 0
+                    it[llm_overage_rate_cents_per_1k] = 0
+                    it[oncall_per_user_monthly_cents] = 0
+                    it[oncall_per_user_yearly_cents] = 0
+                    it[oncall_enabled] = false
+                    it[stripe_base_price_id] = null
+                    it[stripe_overage_price_id] = null
+                    it[stripe_yearly_base_price_id] = null
+                    it[stripe_yearly_overage_price_id] = null
+                    it[stripe_oncall_price_id] = null
+                    it[stripe_oncall_yearly_price_id] = null
+                    it[is_current] = true
+                }[PricingTierConfigs.id]
+
+            val now = Clock.System.now()
+            val periodStart = now.toLocalDateTime(TimeZone.UTC).date
+            val periodEnd = periodStart.plus(DatePeriod(months = 1, days = -1))
+
+            Subscriptions.insert {
+                it[organization_id] = orgId
+                it[plan] = "PRO_LOW"
+                it[status] = "active"
+                it[billing_interval] = "monthly"
+                it[current_period_start] = now
+                it[current_period_end] = Instant.fromEpochSeconds(now.epochSeconds + 2_592_000)
+                it[pricing_tier_config_id] = tierId
+                it[payg_budget_cents] = 0
+                it[payg_used_units] = 0
+                it[payg_used_micros] = 0
+                it[pending_meter_units] = 0
+            }
+
+            // used_units = 500 is 50% of 1000 — below the 80% warning threshold
+            OrgUsageCounters.insert {
+                it[organization_id] = orgId
+                it[period_start] = periodStart
+                it[period_end] = periodEnd
+                it[used_units] = 500
+                it[used_errors] = 500
+                it[used_transactions] = 0
+                it[used_replays] = 0
+                it[used_feedback] = 0
+                it[used_llm_events] = 0
+                it[used_logs] = 0
+                it[used_bytes] = 0
+                it[used_error_bytes] = 0
+                it[used_replay_bytes] = 0
+                it[used_log_bytes] = 0
+                it[used_llm_bytes] = 0
+                it[updated_at] = now
+            }
+
+            testOrgId = orgId
+        }
+
+        val service = BillingBackgroundService()
+        invokeQuotaNotificationPass(service)
+
+        transaction {
+            val types =
+                QuotaNotificationsSent
+                    .selectAll()
+                    .where { QuotaNotificationsSent.organization_id eq testOrgId }
+                    .map { it[QuotaNotificationsSent.notification_type] }
+                    .toSet()
+
+            assertTrue(
+                types.none { it.startsWith("base_") },
+                "Expected no base notifications when usage is below 80%, but got: $types"
             )
         }
     }
@@ -792,14 +1218,5 @@ class BillingBackgroundServiceTest {
         val method = BillingBackgroundService::class.java.getDeclaredMethod("processQuotaThresholdNotifications")
         method.isAccessible = true
         method.invoke(service)
-    }
-
-    private fun invokeBaseNotificationTypeFor(service: BillingBackgroundService, percentage: Double): String? {
-        val method = BillingBackgroundService::class.java.getDeclaredMethod(
-            "baseNotificationTypeFor",
-            java.lang.Double.TYPE
-        )
-        method.isAccessible = true
-        return method.invoke(service, percentage) as String?
     }
 }
