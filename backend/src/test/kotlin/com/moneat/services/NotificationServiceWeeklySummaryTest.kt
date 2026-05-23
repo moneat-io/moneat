@@ -71,6 +71,7 @@ class NotificationServiceWeeklySummaryTest {
         private const val LARGE_K_EVENTS = 1500L
         private const val LARGE_M_EVENTS = 2_000_000L
         private const val DEFAULT_CRASH_FREE = 99.0
+        private const val CLICKHOUSE_ERROR_STATUS = 500
     }
 
     private val emailService = mockk<EmailService>(relaxed = true)
@@ -148,6 +149,13 @@ class NotificationServiceWeeklySummaryTest {
         { exchange ->
             val query = exchange.requestBodyText()
             when {
+                query.contains("any(culprit)") -> {
+                    exchange.respond(
+                        CLICKHOUSE_ERROR_STATUS,
+                        "Code: 47. Unknown expression identifier culprit",
+                        TEXT_PLAIN
+                    )
+                }
                 query.contains("GROUP BY project_id") -> {
                     exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
                 }
@@ -193,6 +201,12 @@ class NotificationServiceWeeklySummaryTest {
             when {
                 query.contains("GROUP BY project_id") ->
                     exchange.respond(200, emptyData, TEXT_PLAIN)
+                query.contains("any(culprit)") ->
+                    exchange.respond(
+                        CLICKHOUSE_ERROR_STATUS,
+                        "Code: 47. Unknown expression identifier culprit",
+                        TEXT_PLAIN
+                    )
                 query.contains("count() as total_events") -> {
                     call++
                     val body = if (call == 1) {

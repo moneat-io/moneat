@@ -595,7 +595,7 @@ class NotificationService(
             SELECT 
                 issue_id,
                 any(message) as title,
-                any(culprit) as culprit,
+                any(exception_type) as culprit,
                 any(project_id) as project_id,
                 count() as event_count
             FROM `$clickhouseDb`.events
