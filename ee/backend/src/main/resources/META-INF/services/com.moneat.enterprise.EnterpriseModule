@@ -1,4 +1,3 @@
 com.moneat.enterprise.ai.AiModule
-com.moneat.enterprise.mcp.McpModule
 com.moneat.enterprise.sso.SsoModule
 com.moneat.enterprise.oncall.OnCallModule

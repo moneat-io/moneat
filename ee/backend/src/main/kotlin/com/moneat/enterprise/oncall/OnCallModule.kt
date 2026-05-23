@@ -16,6 +16,9 @@ import com.moneat.enterprise.oncall.routes.notificationPreferencesRoutes
 import com.moneat.enterprise.oncall.routes.onCallRoutes
 import com.moneat.enterprise.oncall.routes.priorityRoutes
 import com.moneat.enterprise.oncall.routes.twilioWebhookRoutes
+import com.moneat.enterprise.oncall.mcp.GetIncidentTool
+import com.moneat.enterprise.oncall.mcp.ListIncidentsTool
+import com.moneat.enterprise.oncall.mcp.ListSchedulesTool
 import com.moneat.enterprise.oncall.services.BusinessHoursService
 import com.moneat.enterprise.oncall.services.EscalationEngine
 import com.moneat.enterprise.oncall.services.EscalationPolicyService
@@ -26,6 +29,8 @@ import com.moneat.enterprise.oncall.services.PriorityService
 import com.moneat.enterprise.oncall.services.PushNotificationService
 import com.moneat.enterprise.oncall.services.ShiftChangeNotifier
 import com.moneat.enterprise.oncall.services.SlackUserGroupSyncService
+import com.moneat.mcp.McpToolContributor
+import com.moneat.mcp.protocol.McpToolRegistry
 import com.moneat.notifications.services.SlackService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
@@ -42,6 +47,7 @@ private val logger = KotlinLogging.logger {}
  */
 class OnCallModule :
     EnterpriseModule,
+    McpToolContributor,
     OnCallBridge {
     private lateinit var escalationEngine: EscalationEngine
     private lateinit var incidentManagementService: IncidentManagementService
@@ -68,6 +74,12 @@ class OnCallModule :
             twilioWebhookRoutes()
             notificationPreferencesRoutes { pushNotificationService }
         }
+    }
+
+    override fun contributeTools(registry: McpToolRegistry) {
+        registry.register(ListIncidentsTool())
+        registry.register(GetIncidentTool())
+        registry.register(ListSchedulesTool())
     }
 
     override fun startBackgroundJobs(application: Application) {
