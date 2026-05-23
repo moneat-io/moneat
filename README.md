@@ -73,7 +73,7 @@ docker compose up -d postgres clickhouse redis
 # Backend (API at localhost:8080)
 cd backend && ./gradlew run
 
-# Dashboard (UI at localhost:5173)
+# Dashboard (UI at localhost:3000)
 cd dashboard && npm install && npm run dev
 ```
 

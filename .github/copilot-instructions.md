@@ -27,7 +27,7 @@ cd backend
 ### Dashboard (React/Vite)
 ```bash
 cd dashboard
-npm run dev              # Dev server (port 5173)
+npm run dev              # Dev server (port 3000)
 npm run build            # Production build
 npm run lint             # ESLint
 npm run preview          # Preview production build
@@ -58,7 +58,7 @@ Built templates are in `emails/build/templates/email/` with `{{ variable }}` pla
 **IMPORTANT:** 
 - **Database services** (PostgreSQL, ClickHouse, Redis) run via Docker (see `docker-compose.yml`)
 - **Backend** (Kotlin/Ktor) runs **locally** on port 8080 and connects to the database services
-- **Frontend** (React/Vite) runs **locally** on port 5173
+- **Frontend** (React/Vite) runs **locally** on port 3000
 
 Start infrastructure with `docker-compose up -d`, then run the backend and frontend locally.
 
@@ -257,7 +257,7 @@ Fingerprint logic is in `EventService.kt` - modify carefully as it affects group
 **IMPORTANT:** When writing code that uses environment variables or configurable URLs:
 
 1. **Never use localhost defaults for production-facing configurations**
-   - ❌ BAD: `val frontendUrl = EnvConfig.get("FRONTEND_URL", "http://localhost:5173")`
+   - ❌ BAD: `val frontendUrl = EnvConfig.get("FRONTEND_URL", "http://localhost:3000")`
    - ✅ GOOD: `val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")`
 
 2. **Always use production URLs as defaults in code**
@@ -276,7 +276,7 @@ Fingerprint logic is in `EventService.kt` - modify carefully as it affects group
    - Mark as CONDITIONAL if only required when a feature is enabled
 
 5. **Local development should be explicit**
-   - Developers should explicitly set `FRONTEND_URL=http://localhost:5173` in their local `.env`
+   - Developers should explicitly set `FRONTEND_URL=http://localhost:3000` in their local `.env`
    - Do not force localhost defaults in code just for convenience
 
 ### Self-Monitoring
