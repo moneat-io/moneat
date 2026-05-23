@@ -148,11 +148,12 @@ fun Route.statusPageRoutes(
 
                     val organizationId = organizationIds.first()
 
-                    if (!entitlementService.isFeatureEnabled(organizationId) { it.statusPagesEnabled }) {
-                        call.respond(
-                            HttpStatusCode.Forbidden,
-                            ErrorResponse("Status pages are not available on your current plan")
-                        )
+                    entitlementService.unavailableFeatureMessage(
+                        organizationId,
+                        { it.statusPagesEnabled },
+                        "Status pages"
+                    )?.let {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(it))
                         return@post
                     }
 
@@ -580,14 +581,12 @@ fun Route.statusPageRoutes(
 
                     val organizationId = organizationIds.first()
 
-                    if (!entitlementService.isFeatureEnabled(
-                            organizationId
-                        ) { it.statusPageCustomDomainEnabled }
-                    ) {
-                        call.respond(
-                            HttpStatusCode.Forbidden,
-                            ErrorResponse("Custom domains are not available on your current plan")
-                        )
+                    entitlementService.unavailableFeatureMessage(
+                        organizationId,
+                        { it.statusPageCustomDomainEnabled },
+                        "Custom domains"
+                    )?.let {
+                        call.respond(HttpStatusCode.Forbidden, ErrorResponse(it))
                         return@post
                     }
 

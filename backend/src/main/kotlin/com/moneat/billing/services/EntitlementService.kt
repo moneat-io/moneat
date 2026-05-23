@@ -27,12 +27,8 @@ class EntitlementService(
         featureCheck: (PricingTierConfigResponse) -> Boolean,
         featureName: String
     ) {
-        if (EnvConfig.SelfHost.enabled) return
-        val tier = pricingTierService.getEffectiveTierForOrganization(organizationId).tier
-        if (!featureCheck(tier)) {
-            throw FeatureNotAvailableException(
-                "$featureName is not available on your current plan"
-            )
+        unavailableFeatureMessage(organizationId, featureCheck, featureName)?.let {
+            throw FeatureNotAvailableException(it)
         }
     }
 
@@ -43,6 +39,16 @@ class EntitlementService(
         if (EnvConfig.SelfHost.enabled) return true
         val tier = pricingTierService.getEffectiveTierForOrganization(organizationId).tier
         return featureCheck(tier)
+    }
+
+    fun unavailableFeatureMessage(
+        organizationId: Int,
+        featureCheck: (PricingTierConfigResponse) -> Boolean,
+        featureName: String
+    ): String? {
+        if (EnvConfig.SelfHost.enabled) return null
+        val tier = pricingTierService.getEffectiveTierForOrganization(organizationId).tier
+        return if (featureCheck(tier)) null else "$featureName is not available on your current plan"
     }
 }
 

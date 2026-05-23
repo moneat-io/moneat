@@ -165,6 +165,32 @@ class StatusPageRoutesTest {
         return pageId
     }
 
+    private fun seedStatusPageTier(
+        orgId: Int,
+        statusPagesEnabled: Boolean,
+        customDomainsEnabled: Boolean
+    ) {
+        transaction {
+            val tierId = PricingTierConfigs.insert {
+                it[tier_name] = "STATUS_PAGE_TEST"
+                it[monthly_unit_limit] = 1_000
+                it[retention_days] = 30
+                it[log_retention_days] = 30
+                it[max_systems] = 10
+                it[monitor_interval_seconds] = 60
+                it[monthly_price_cents] = 0
+                it[status_pages_enabled] = statusPagesEnabled
+                it[status_page_custom_domain_enabled] = customDomainsEnabled
+            } get PricingTierConfigs.id
+            Subscriptions.insert {
+                it[organization_id] = orgId
+                it[plan] = "STATUS_PAGE_TEST"
+                it[status] = "active"
+                it[pricing_tier_config_id] = tierId
+            }
+        }
+    }
+
     // ──── LIST STATUS PAGES ────
 
     @Test
@@ -245,6 +271,26 @@ class StatusPageRoutesTest {
             }
             assertEquals(HttpStatusCode.Created, response.status)
             assertTrue(response.bodyAsText().contains(slug))
+        }
+
+    @Test
+    fun `create status page returns 403 when plan disables status pages`() =
+        testApplication {
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
+            val (userId, orgId) = seedUserAndOrg()
+            seedStatusPageTier(orgId, statusPagesEnabled = false, customDomainsEnabled = true)
+
+            val response = client.post("/v1/status-pages") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"name":"My Page","slug":"disabled-page"}""")
+            }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertTrue(response.bodyAsText().contains("Status pages is not available"))
         }
 
     @Test
@@ -711,6 +757,27 @@ class StatusPageRoutesTest {
             }
             assertEquals(HttpStatusCode.Created, response.status)
             assertTrue(response.bodyAsText().contains("status.example.com"))
+        }
+
+    @Test
+    fun `add custom domain returns 403 when plan disables custom domains`() =
+        testApplication {
+            application {
+                installAuth()
+                routing { statusPageRoutes() }
+            }
+            val (userId, orgId) = seedUserAndOrg()
+            seedStatusPageTier(orgId, statusPagesEnabled = true, customDomainsEnabled = false)
+            val pageId = seedStatusPage(orgId)
+
+            val response = client.post("/v1/status-pages/$pageId/domains") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"domain":"status.example.com"}""")
+            }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertTrue(response.bodyAsText().contains("Custom domains is not available"))
         }
 
     @Test

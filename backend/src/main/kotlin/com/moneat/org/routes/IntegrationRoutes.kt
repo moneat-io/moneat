@@ -301,12 +301,11 @@ fun Route.integrationRoutes() {
                     return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
                 }
 
-                if (!entitlementService.isFeatureEnabled(organizationId) { it.slackEnabled }) {
-                    return@get call.respond(
-                        HttpStatusCode.Forbidden,
-                        MessageResponse("Slack integration is not available on your current plan")
-                    )
-                }
+                entitlementService.unavailableFeatureMessage(
+                    organizationId,
+                    { it.slackEnabled },
+                    "Slack integration"
+                )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
                 val clientId = EnvConfig.get("SLACK_CLIENT_ID")
                 if (clientId == null) {
@@ -544,12 +543,11 @@ fun Route.integrationRoutes() {
                     return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
                 }
 
-                if (!entitlementService.isFeatureEnabled(organizationId) { it.discordEnabled }) {
-                    return@get call.respond(
-                        HttpStatusCode.Forbidden,
-                        MessageResponse("Discord integration is not available on your current plan")
-                    )
-                }
+                entitlementService.unavailableFeatureMessage(
+                    organizationId,
+                    { it.discordEnabled },
+                    "Discord integration"
+                )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
                 val clientId =
                     EnvConfig.get("DISCORD_CLIENT_ID")
@@ -797,12 +795,11 @@ fun Route.integrationCallbackRoutes() {
                 return@get call.respond(HttpStatusCode.Forbidden, MessageResponse("Access denied to organization"))
             }
 
-            if (!entitlementService.isFeatureEnabled(organizationId) { it.slackEnabled }) {
-                return@get call.respond(
-                    HttpStatusCode.Forbidden,
-                    MessageResponse("Slack integration is not available on your current plan")
-                )
-            }
+            entitlementService.unavailableFeatureMessage(
+                organizationId,
+                { it.slackEnabled },
+                "Slack integration"
+            )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
             val clientId =
                 EnvConfig.get("SLACK_CLIENT_ID")
@@ -914,12 +911,11 @@ fun Route.integrationCallbackRoutes() {
                 return@get call.respond(HttpStatusCode.Forbidden, MessageResponse("Access denied to organization"))
             }
 
-            if (!entitlementService.isFeatureEnabled(organizationId) { it.discordEnabled }) {
-                return@get call.respond(
-                    HttpStatusCode.Forbidden,
-                    MessageResponse("Discord integration is not available on your current plan")
-                )
-            }
+            entitlementService.unavailableFeatureMessage(
+                organizationId,
+                { it.discordEnabled },
+                "Discord integration"
+            )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
             val clientId =
                 EnvConfig.get("DISCORD_CLIENT_ID")
