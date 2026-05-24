@@ -168,20 +168,20 @@ export function FeaturePageTemplate({config}: {readonly config: FeaturePageConfi
           </section>
         )}
 
-        <section className="bg-slate-950 px-4 py-24 text-white sm:px-6 lg:px-8">
+        <section className="border-t border-slate-200 bg-white px-4 py-24 text-slate-950 sm:px-6 lg:px-8">
           <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-[1fr_auto] md:items-center">
             <div>
               <h2 className="text-3xl font-semibold leading-tight sm:text-4xl">
                 Start with production telemetry today
               </h2>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
                 Start with 1 GB free, invite the team, and keep the option to self-host when you need it.
               </p>
             </div>
             <Button
               asChild
               size="lg"
-              className="h-12 bg-white px-6 text-slate-950 hover:bg-slate-100"
+              className="h-12 bg-slate-950 px-6 text-white hover:bg-slate-800"
             >
               <Link to="/signup">
                 Start free

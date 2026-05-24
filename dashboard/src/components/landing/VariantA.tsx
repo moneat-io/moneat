@@ -332,7 +332,7 @@ function OpenSourceSection() {
 
 function CapabilitySection() {
   return (
-    <section id="features" className="bg-slate-950 px-4 py-24 text-white sm:px-6 lg:px-8">
+    <section id="features" className="border-y border-slate-200 bg-slate-50 px-4 py-24 text-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div className="grid gap-8 lg:grid-cols-[0.82fr_1fr] lg:items-end">
           <div>
@@ -340,7 +340,7 @@ function CapabilitySection() {
               One operational surface for the signals engineers already use.
             </h2>
           </div>
-          <p className="max-w-2xl text-base leading-7 text-slate-400 lg:justify-self-end">
+          <p className="max-w-2xl text-base leading-7 text-slate-600 lg:justify-self-end">
             Bring the context engineers need into one workspace: what failed, where it happened,
             which services are affected, and who should respond next.
           </p>
@@ -351,9 +351,9 @@ function CapabilitySection() {
             <Link
               key={capability.title}
               to={capability.href}
-              className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.03] transition-colors hover:bg-white/[0.06]"
+              className="group overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300"
             >
-              <div className="aspect-[16/10] overflow-hidden border-b border-white/10 bg-slate-900">
+              <div className="aspect-[16/10] overflow-hidden border-b border-slate-200 bg-slate-950">
                 <img
                   src={capability.image}
                   alt={capability.imageAlt}
@@ -361,21 +361,21 @@ function CapabilitySection() {
                 />
               </div>
               <div className="p-5">
-                <div className="mb-4 flex size-9 items-center justify-center rounded-md bg-white/10">
-                  <capability.icon className="size-4 text-cyan-300" />
+                <div className="mb-4 flex size-9 items-center justify-center rounded-md bg-slate-100 ring-1 ring-slate-200">
+                  <capability.icon className="size-4 text-slate-700" />
                 </div>
                 <h3 className="text-lg font-semibold">{capability.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-400">{capability.description}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{capability.description}</p>
               </div>
             </Link>
           ))}
         </div>
 
-        <div className="mt-10 grid gap-4 rounded-lg border border-white/10 bg-white/[0.03] p-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-10 grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2 lg:grid-cols-4">
           {secondaryCapabilities.map((capability) => (
-            <div key={capability.title} className="flex items-center gap-3 rounded-md bg-slate-900/60 p-3">
-              <capability.icon className="size-4 text-slate-300" />
-              <span className="text-sm font-medium text-slate-200">{capability.title}</span>
+            <div key={capability.title} className="flex items-center gap-3 rounded-md bg-slate-50 p-3">
+              <capability.icon className="size-4 text-slate-600" />
+              <span className="text-sm font-medium text-slate-800">{capability.title}</span>
             </div>
           ))}
         </div>
@@ -498,23 +498,23 @@ function CompatibilityCard({
 
 function FinalCta() {
   return (
-    <section className="bg-slate-950 px-4 py-24 text-white sm:px-6 lg:px-8">
+    <section className="border-t border-slate-200 bg-white px-4 py-24 text-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl text-center">
         <h2 className="text-3xl font-semibold sm:text-4xl">
           Replace fragmented observability with one product your team can run.
         </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-400">
+        <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-600">
           Start with hosted Moneat, move to self-hosting when your requirements demand it,
           and keep your existing SDK and agent paths intact.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Button asChild size="lg" className="bg-white text-slate-950 hover:bg-slate-200">
+          <Button asChild size="lg" className="bg-slate-950 text-white hover:bg-slate-800">
             <Link to="/signup">
               Start free
               <ArrowRight data-icon="inline-end" />
             </Link>
           </Button>
-          <Button asChild variant="outline" size="lg" className="border-white/20 text-white hover:bg-white/10">
+          <Button asChild variant="outline" size="lg" className="border-slate-300 bg-white text-slate-950 hover:bg-slate-50">
             <Link to="/demo">
               <Play data-icon="inline-start" />
               Live demo
