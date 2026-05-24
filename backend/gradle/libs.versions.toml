@@ -83,7 +83,7 @@ java-jwt = { module = "com.auth0:java-jwt", version = "4.5.2" }
 
 # Encoding/Parsing
 msgpack-core = { module = "org.msgpack:msgpack-core", version = "0.9.12" }
-zstd-jni = { module = "com.github.luben:zstd-jni", version = "1.5.7-7" }
+zstd-jni = { module = "com.github.luben:zstd-jni", version = "1.5.7-9" }
 protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "4.34.1" }
 opentelemetry-proto = { module = "io.opentelemetry.proto:opentelemetry-proto", version = "1.10.0-alpha" }
 jsonpath = { module = "com.jayway.jsonpath:json-path", version = "3.0.0" }
