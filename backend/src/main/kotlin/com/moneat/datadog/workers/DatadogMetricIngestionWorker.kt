@@ -38,6 +38,7 @@ private val logger = KotlinLogging.logger {}
 
 private const val BRPOP_TIMEOUT_SECONDS = 5L
 private const val ERROR_DELAY_MS = 1000L
+private const val WORKER_NAME = "DD metric"
 
 class DatadogMetricIngestionWorker(
     private val queueKey: String,
@@ -84,7 +85,7 @@ class DatadogMetricIngestionWorker(
                     brpopLoopBackoff(
                         logger,
                         workerId,
-                        "DD metric",
+                        WORKER_NAME,
                         ERROR_DELAY_MS,
                         e,
                     )
@@ -92,7 +93,7 @@ class DatadogMetricIngestionWorker(
                     brpopLoopBackoff(
                         logger,
                         workerId,
-                        "DD metric",
+                        WORKER_NAME,
                         ERROR_DELAY_MS,
                         e,
                     )
@@ -111,9 +112,9 @@ class DatadogMetricIngestionWorker(
             val batch =
                 DatadogMetricService.decodeMetricBatch(payload)
             DatadogMetricService.insertMetricBatch(batch)
-            OperationalMetrics.recordWorkerMessageProcessed("DD metric", workerId)
+            OperationalMetrics.recordWorkerMessageProcessed(WORKER_NAME, workerId)
         }.getOrElse { e ->
-            pushToDlq(logger, dlqKey, payload, workerId, "DD metric", e)
+            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)
         }
     }
 }

@@ -38,6 +38,7 @@ private val logger = KotlinLogging.logger {}
 
 private const val BRPOP_TIMEOUT_SECONDS = 5L
 private const val ERROR_DELAY_MS = 1000L
+private const val WORKER_NAME = "DD infra"
 
 class DatadogInfraIngestionWorker(
     private val queueKey: String,
@@ -84,7 +85,7 @@ class DatadogInfraIngestionWorker(
                     brpopLoopBackoff(
                         logger,
                         workerId,
-                        "DD infra",
+                        WORKER_NAME,
                         ERROR_DELAY_MS,
                         e,
                     )
@@ -92,7 +93,7 @@ class DatadogInfraIngestionWorker(
                     brpopLoopBackoff(
                         logger,
                         workerId,
-                        "DD infra",
+                        WORKER_NAME,
                         ERROR_DELAY_MS,
                         e,
                     )
@@ -111,9 +112,9 @@ class DatadogInfraIngestionWorker(
             val batch =
                 DatadogInfraService.decodeInfraBatch(payload)
             DatadogInfraService.insertInfraBatch(batch)
-            OperationalMetrics.recordWorkerMessageProcessed("DD infra", workerId)
+            OperationalMetrics.recordWorkerMessageProcessed(WORKER_NAME, workerId)
         }.getOrElse { e ->
-            pushToDlq(logger, dlqKey, payload, workerId, "DD infra", e)
+            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)
         }
     }
 }
