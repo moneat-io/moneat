@@ -79,11 +79,22 @@ interface ApmSpanUsageBreakdownProps {
   readonly debug?: ApmSpanUsageDebugResponse
   readonly isLoading: boolean
   readonly error?: unknown
+  readonly expanded?: boolean
+  readonly onExpandedChange?: (expanded: boolean) => void
   readonly timezone: string
 }
 
-export function ApmSpanUsageBreakdown({debug, isLoading, error, timezone}: ApmSpanUsageBreakdownProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+export function ApmSpanUsageBreakdown({
+  debug,
+  isLoading,
+  error,
+  expanded,
+  onExpandedChange,
+  timezone,
+}: ApmSpanUsageBreakdownProps) {
+  const [internalExpanded, setInternalExpanded] = useState(false)
+  const isExpanded = expanded ?? internalExpanded
+  const setIsExpanded = onExpandedChange ?? setInternalExpanded
   const groups = debug?.groups ?? []
 
   return (
@@ -96,7 +107,7 @@ export function ApmSpanUsageBreakdown({debug, isLoading, error, timezone}: ApmSp
           className="h-7 gap-1 px-2 text-xs"
           aria-expanded={isExpanded}
           aria-controls="apm-span-source-breakdown"
-          onClick={() => setIsExpanded((current) => !current)}
+          onClick={() => setIsExpanded(!isExpanded)}
         >
           <ChevronRight
             className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
