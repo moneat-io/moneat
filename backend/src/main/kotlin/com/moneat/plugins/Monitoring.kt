@@ -20,7 +20,6 @@ import kotlinx.serialization.SerializationException
 import java.io.IOException
 
 import com.moneat.config.SentryConfig
-import com.moneat.sso.SsoForbiddenException
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.SentryUtils
 import io.ktor.http.HttpStatusCode
@@ -139,20 +138,10 @@ fun Application.configureMonitoring() {
 
     install(StatusPages) {
         exception<BadRequestException> { call, cause ->
-            logger.debug(cause) { "Bad request: ${cause.message}" }
             if (!call.response.isCommitted) {
                 call.respond(
                     HttpStatusCode.BadRequest,
                     ErrorResponse(cause.message ?: "Bad request"),
-                )
-            }
-        }
-        exception<SsoForbiddenException> { call, cause ->
-            logger.debug(cause) { "SSO forbidden: ${cause.message}" }
-            if (!call.response.isCommitted) {
-                call.respond(
-                    HttpStatusCode.Forbidden,
-                    ErrorResponse(cause.message ?: "Forbidden"),
                 )
             }
         }

@@ -54,6 +54,7 @@ import com.moneat.shared.services.SidebarPreferenceService
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -86,7 +87,9 @@ private const val DEFAULT_EVENTS_LIMIT = 50
 private const val DEFAULT_TRANSACTIONS_LIMIT = 20
 private const val DEFAULT_REPLAYS_LIMIT = 10
 private const val DEFAULT_ALERT_FREQUENCY_MINUTES = 30
+private const val ERROR_NO_ORGANIZATION_ACCESS = "No organization access"
 
+@Suppress("kotlin:S3776")
 fun Route.apiRoutes() {
     val koin = GlobalContext.get()
     val dashboardService = koin.get<DashboardService>()
@@ -107,24 +110,7 @@ fun Route.apiRoutes() {
                 get("/subscription") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
-                    val orgId = principal.payload.getClaim("orgId").asInt()
-                    if (orgId == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("No organization access"))
-                        return@get
-                    }
-                    val hasOrganizationAccess =
-                        transaction {
-                            Memberships
-                                .selectAll()
-                                .where {
-                                    (Memberships.user_id eq userId) and
-                                        (Memberships.organization_id eq orgId)
-                                }.firstOrNull() != null
-                        }
-                    if (!hasOrganizationAccess) {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("No organization access"))
-                        return@get
-                    }
+                    val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@get
                     val pricingTierService = koin.get<PricingTierService>()
                     val context = pricingTierService.getEffectiveTierForOrganization(orgId)
                     call.respond(
@@ -1501,3 +1487,22 @@ fun Route.apiRoutes() {
         integrationCallbackRoutes()
     }
 }
+
+private suspend fun ApplicationCall.resolveSubscriptionOrganizationId(userId: Int): Int? {
+    val orgId = principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
+    if (orgId == null || !hasOrganizationAccess(userId, orgId)) {
+        respond(HttpStatusCode.NotFound, ErrorResponse(ERROR_NO_ORGANIZATION_ACCESS))
+        return null
+    }
+    return orgId
+}
+
+private fun hasOrganizationAccess(userId: Int, orgId: Int): Boolean =
+    transaction {
+        Memberships
+            .selectAll()
+            .where {
+                (Memberships.user_id eq userId) and
+                    (Memberships.organization_id eq orgId)
+            }.firstOrNull() != null
+    }

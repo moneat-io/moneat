@@ -78,6 +78,7 @@ import kotlin.time.Clock
 private val logger = KotlinLogging.logger {}
 
 private const val DISCOVERY_CACHE_TTL_MS = 3_600_000L // 1 hour
+private const val ERROR_OIDC_ISSUER_URL_NOT_CONFIGURED = "OIDC issuer URL not configured"
 
 @Serializable
 data class SsoStateData(
@@ -215,11 +216,11 @@ open class SsoService {
                 val issuerRaw =
                     ssoConfig[SsoConfigurations.oidcIssuerUrl]
                         ?: throw IllegalArgumentException(
-                            "OIDC issuer URL not configured"
+                            ERROR_OIDC_ISSUER_URL_NOT_CONFIGURED
                         )
                 val issuerUrl = issuerRaw.trim()
                 require(issuerUrl.isNotEmpty()) {
-                    "OIDC issuer URL not configured"
+                    ERROR_OIDC_ISSUER_URL_NOT_CONFIGURED
                 }
                 UrlValidator.validateExternalUrl(issuerUrl)
                 val clientId =
@@ -683,9 +684,9 @@ open class SsoService {
     ): String {
         val issuerRaw =
             ssoConfig[SsoConfigurations.oidcIssuerUrl]
-                ?: throw IllegalArgumentException("OIDC issuer URL not configured")
+                ?: throw IllegalArgumentException(ERROR_OIDC_ISSUER_URL_NOT_CONFIGURED)
         val issuerUrl = issuerRaw.trim()
-        require(issuerUrl.isNotEmpty()) { "OIDC issuer URL not configured" }
+        require(issuerUrl.isNotEmpty()) { ERROR_OIDC_ISSUER_URL_NOT_CONFIGURED }
         UrlValidator.validateExternalUrl(issuerUrl)
         val clientId =
             ssoConfig[SsoConfigurations.oidcClientId]

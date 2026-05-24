@@ -178,6 +178,75 @@ class ApiRoutesExtendedTest {
     }
 
     @Test
+    fun `GET subscription returns 404 when JWT has no org claim`() = testApplication {
+        val userId =
+            transaction {
+                Users.insert {
+                    it[email] = "subscription-no-org@test.com"
+                    it[password_hash] = "hash"
+                    it[email_verified] = true
+                } get Users.id
+            }
+
+        application {
+            installJwtAuth()
+            install(RateLimit) {
+                register(RateLimitName("api")) {
+                    requestKey { "api-routes-extended" }
+                    rateLimiter(limit = 1000, refillPeriod = 1.seconds)
+                }
+            }
+            routing { apiRoutes() }
+        }
+
+        val token = RouteTestSupport.createToken(userId = userId)
+        val response = client.get("/v1/subscription") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `GET subscription uses JWT org membership`() = testApplication {
+        val (userId, orgId) =
+            transaction {
+                val insertedUserId =
+                    Users.insert {
+                        it[email] = "subscription-success@test.com"
+                        it[password_hash] = "hash"
+                        it[email_verified] = true
+                    } get Users.id
+                val insertedOrgId =
+                    Organizations.insert {
+                        it[name] = "Subscription Org"
+                        it[slug] = "subscription-org"
+                    } get Organizations.id
+                Memberships.insert {
+                    it[user_id] = insertedUserId
+                    it[organization_id] = insertedOrgId
+                    it[role] = "owner"
+                }
+                insertedUserId to insertedOrgId
+            }
+
+        application {
+            installJwtAuth()
+            install(RateLimit) {
+                register(RateLimitName("api")) {
+                    requestKey { "api-routes-extended" }
+                    rateLimiter(limit = 1000, refillPeriod = 1.seconds)
+                }
+            }
+            routing { apiRoutes() }
+        }
+
+        val token = RouteTestSupport.createToken(userId = userId, orgId = orgId)
+        val response = client.get("/v1/subscription") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("FREE"))
+    }
+
+    @Test
     fun `PUT user phone-number requires auth`() = testApplication {
         application {
             installJwtAuth()

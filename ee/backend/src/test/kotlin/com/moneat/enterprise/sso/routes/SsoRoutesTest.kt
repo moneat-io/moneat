@@ -339,6 +339,36 @@ class SsoRoutesTest {
         }
 
     @Test
+    fun `put v1 sso config returns 400 for invalid provider`() =
+        withFrontendUrl {
+            val (orgId, ownerId, _) = seedTeamOrgOwner()
+            testApplication {
+                application {
+                    installAuthAndJson()
+                }
+                routing { ssoRoutes() }
+
+                val response =
+                    client.put("/v1/sso/config?organizationId=$orgId") {
+                        header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
+                        header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        setBody(
+                            """
+                            {
+                              "providerType": "invalid",
+                              "oidcIssuerUrl": "$OIDC_ISSUER",
+                              "oidcClientId": "api-client",
+                              "oidcClientSecret": "api-secret"
+                            }
+                            """.trimIndent(),
+                        )
+                    }
+
+                assertEquals(HttpStatusCode.BadRequest, response.status)
+            }
+        }
+
+    @Test
     fun `delete v1 sso config removes configuration`() =
         withFrontendUrl {
             val (orgId, ownerId, _) = seedTeamOrgOwner()
@@ -374,6 +404,53 @@ class SsoRoutesTest {
                         header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                     }
                 assertEquals(HttpStatusCode.NotFound, get.status)
+            }
+        }
+
+    @Test
+    fun `delete v1 sso config returns 403 for non-owner`() =
+        withFrontendUrl {
+            val (orgId, ownerId, _) = seedTeamOrgOwner()
+            val memberId =
+                transaction {
+                    Users.insert {
+                        it[Users.email] = "member@routes.example"
+                        it[Users.password_hash] = "x"
+                    }[Users.id].also { userId ->
+                        Memberships.insert {
+                            it[Memberships.user_id] = userId
+                            it[Memberships.organization_id] = orgId
+                            it[Memberships.role] = "member"
+                        }
+                    }
+                }
+            testApplication {
+                application {
+                    installAuthAndJson()
+                }
+                routing { ssoRoutes() }
+
+                client.put("/v1/sso/config?organizationId=$orgId") {
+                    header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
+                    header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    setBody(
+                        """
+                        {
+                          "providerType": "oidc",
+                          "oidcIssuerUrl": "$OIDC_ISSUER",
+                          "oidcClientId": "del-client",
+                          "oidcClientSecret": "del-secret"
+                        }
+                        """.trimIndent(),
+                    )
+                }
+
+                val response =
+                    client.delete("/v1/sso/config?organizationId=$orgId") {
+                        header(HttpHeaders.Authorization, "Bearer ${bearerForUser(memberId)}")
+                    }
+
+                assertEquals(HttpStatusCode.Forbidden, response.status)
             }
         }
 

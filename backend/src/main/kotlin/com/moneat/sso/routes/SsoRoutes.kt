@@ -88,53 +88,11 @@ fun Route.ssoRoutes() {
     route("/auth/sso") {
         // Public OIDC SSO flow endpoints
         post("/init") {
-            suspendRunCatching {
-                val request = call.receive<SsoInitRequest>()
-                val response = ssoService.initSso(
-                    request.email,
-                    request.orgSlug,
-                )
-                call.respond(response)
-            }.onFailure { e ->
-                when (e) {
-                    is IllegalArgumentException -> {
-                        logger.error(e) { "SSO init failed: ${e.message}" }
-                        call.respond(
-                            HttpStatusCode.BadRequest,
-                            ErrorResponse(e.message),
-                        )
-                    }
-                    else -> {
-                        logger.error(e) { "SSO init error" }
-                        call.respond(
-                            HttpStatusCode.InternalServerError,
-                            ErrorResponse("SSO initialization failed")
-                        )
-                    }
-                }
-            }
+            call.handleSsoInit(ssoService)
         }
 
         get("/oidc/callback") {
-            suspendRunCatching {
-                val code = call.parameters["code"]
-                    ?: throw IllegalArgumentException(
-                        "Missing authorization code"
-                    )
-                val state = call.parameters["state"]
-                    ?: throw IllegalArgumentException(
-                        "Missing state parameter"
-                    )
-
-                val callbackData =
-                    ssoService.handleOidcCallback(code, state)
-
-                AuthCookieUtils.setAuthCookie(call, callbackData.token)
-                call.respondRedirect("$frontendUrl/auth/sso/callback")
-            }.onFailure { e ->
-                logger.error(e) { "OIDC callback error: ${e.message}" }
-                call.respondRedirect("$frontendUrl/login?error=sso_failed")
-            }
+            call.handleOidcCallback(ssoService, frontendUrl)
         }
     }
 
@@ -143,109 +101,178 @@ fun Route.ssoRoutes() {
         authenticate("auth-jwt") {
             get(SSO_CONFIG_PATH) {
                 val ctx = call.requireSsoAuth() ?: return@get
-                suspendRunCatching {
-                    val config = ssoService.getSsoConfig(ctx.orgId)
-                    when (config) {
-                        null -> call.respond(
-                            HttpStatusCode.NotFound,
-                            ErrorResponse("SSO not configured")
-                        )
-                        else -> call.respond(config)
-                    }
-                }.onFailure { e ->
-                    logger.error(e) { "Get SSO config error" }
-                    call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ErrorResponse("Failed to retrieve SSO configuration")
-                    )
-                }
+                call.handleGetSsoConfig(ctx, ssoService)
             }
 
             put(SSO_CONFIG_PATH) {
                 val ctx = call.requireSsoAuth() ?: return@put
-                suspendRunCatching {
-                    val request = call.receive<SsoConfigRequest>()
-                    val providerType =
-                        try {
-                            SsoProviderType.fromString(request.providerType)
-                        } catch (e: IllegalArgumentException) {
-                            throw BadRequestException(e.message ?: "Invalid SSO provider type")
-                        }
-                    if (providerType == SsoProviderType.SAML &&
-                        !FeatureRegistry.hasModule("SAML")
-                    ) {
-                        call.respond(
-                            HttpStatusCode.Forbidden,
-                            ErrorResponse("SAML SSO requires an enterprise license")
-                        )
-                        return@suspendRunCatching
-                    }
-                    val config = ssoService.configureSso(ctx.orgId, ctx.userId, request)
-                    call.respond(config)
-                }.onFailure { e ->
-                    when (e) {
-                        is BadRequestException -> {
-                            logger.error(e) { "SSO config request failed: ${e.message}" }
-                            call.respond(
-                                HttpStatusCode.BadRequest,
-                                ErrorResponse(e.message)
-                            )
-                        }
-                        is SsoForbiddenException -> {
-                            logger.error(e) { "SSO config forbidden: ${e.message}" }
-                            call.respond(
-                                HttpStatusCode.Forbidden,
-                                ErrorResponse(e.message)
-                            )
-                        }
-                        else -> {
-                            logger.error(e) { "Configure SSO error" }
-                            call.respond(
-                                HttpStatusCode.InternalServerError,
-                                ErrorResponse("Failed to configure SSO")
-                            )
-                        }
-                    }
-                }
+                call.handlePutSsoConfig(ctx, ssoService)
             }
 
             delete(SSO_CONFIG_PATH) {
                 val ctx = call.requireSsoAuth() ?: return@delete
-                val deleted = ssoService.deleteSsoConfig(ctx.orgId, ctx.userId)
-                when (deleted) {
-                    true -> call.respond(
-                        HttpStatusCode.OK,
-                        MessageResponse("SSO configuration deleted")
-                    )
-                    false -> call.respond(
-                        HttpStatusCode.NotFound,
-                        ErrorResponse("SSO configuration not found")
-                    )
-                }
+                call.handleDeleteSsoConfig(ctx, ssoService)
             }
 
             post("/check-required") {
-                suspendRunCatching {
-                    val request = call.receive<Map<String, String>>()
-                    val email =
-                        request["email"]
-                            ?: return@post call.respond(
-                                HttpStatusCode.BadRequest,
-                                ErrorResponse("Missing email")
-                            )
-
-                    val required = ssoService.checkSsoRequired(email)
-                    call.respond(mapOf("required" to required))
-                }.onFailure { e ->
-                    logger.error(e) { "Check SSO required error" }
-                    call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ErrorResponse(
-                            "Failed to check SSO requirement"
-                        )
-                    )
-                }
+                call.handleCheckSsoRequired(ssoService)
             }
         }
+    }
+}
+
+private suspend fun ApplicationCall.handleSsoInit(ssoService: SsoService) {
+    suspendRunCatching {
+        val request = receive<SsoInitRequest>()
+        val response = ssoService.initSso(
+            request.email,
+            request.orgSlug,
+        )
+        respond(response)
+    }.onFailure { e ->
+        when (e) {
+            is IllegalArgumentException -> {
+                logger.error(e) { "SSO init failed: ${e.message}" }
+                respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+            }
+            else -> {
+                logger.error(e) { "SSO init error" }
+                respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse("SSO initialization failed")
+                )
+            }
+        }
+    }
+}
+
+private suspend fun ApplicationCall.handleOidcCallback(
+    ssoService: SsoService,
+    frontendUrl: String,
+) {
+    suspendRunCatching {
+        val code = parameters["code"]
+            ?: throw IllegalArgumentException("Missing authorization code")
+        val state = parameters["state"]
+            ?: throw IllegalArgumentException("Missing state parameter")
+        val callbackData = ssoService.handleOidcCallback(code, state)
+
+        AuthCookieUtils.setAuthCookie(this, callbackData.token)
+        respondRedirect("$frontendUrl/auth/sso/callback")
+    }.onFailure { e ->
+        logger.error(e) { "OIDC callback error: ${e.message}" }
+        respondRedirect("$frontendUrl/login?error=sso_failed")
+    }
+}
+
+private suspend fun ApplicationCall.handleGetSsoConfig(
+    ctx: SsoAuthContext,
+    ssoService: SsoService,
+) {
+    suspendRunCatching {
+        val config = ssoService.getSsoConfig(ctx.orgId)
+        when (config) {
+            null -> respond(HttpStatusCode.NotFound, ErrorResponse("SSO not configured"))
+            else -> respond(config)
+        }
+    }.onFailure { e ->
+        logger.error(e) { "Get SSO config error" }
+        respond(
+            HttpStatusCode.InternalServerError,
+            ErrorResponse("Failed to retrieve SSO configuration")
+        )
+    }
+}
+
+private suspend fun ApplicationCall.handlePutSsoConfig(
+    ctx: SsoAuthContext,
+    ssoService: SsoService,
+) {
+    suspendRunCatching {
+        val request = receive<SsoConfigRequest>()
+        val providerType = parseSsoProviderType(request.providerType)
+        if (providerType == SsoProviderType.SAML && !FeatureRegistry.hasModule("SAML")) {
+            respond(
+                HttpStatusCode.Forbidden,
+                ErrorResponse("SAML SSO requires an enterprise license")
+            )
+            return@suspendRunCatching
+        }
+        val config = ssoService.configureSso(ctx.orgId, ctx.userId, request)
+        respond(config)
+    }.onFailure { e ->
+        respondSsoConfigFailure(e)
+    }
+}
+
+private fun parseSsoProviderType(providerType: String): SsoProviderType =
+    try {
+        SsoProviderType.fromString(providerType)
+    } catch (e: IllegalArgumentException) {
+        throw BadRequestException(e.message ?: "Invalid SSO provider type")
+    }
+
+private suspend fun ApplicationCall.respondSsoConfigFailure(e: Throwable) {
+    when (e) {
+        is BadRequestException -> {
+            logger.error(e) { "SSO config request failed: ${e.message}" }
+            respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+        }
+        is SsoForbiddenException -> {
+            logger.error(e) { "SSO config forbidden: ${e.message}" }
+            respond(HttpStatusCode.Forbidden, ErrorResponse(e.message))
+        }
+        else -> {
+            logger.error(e) { "Configure SSO error" }
+            respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to configure SSO"))
+        }
+    }
+}
+
+private suspend fun ApplicationCall.handleDeleteSsoConfig(
+    ctx: SsoAuthContext,
+    ssoService: SsoService,
+) {
+    suspendRunCatching {
+        val deleted = ssoService.deleteSsoConfig(ctx.orgId, ctx.userId)
+        when (deleted) {
+            true -> respond(HttpStatusCode.OK, MessageResponse("SSO configuration deleted"))
+            false -> respond(
+                HttpStatusCode.NotFound,
+                ErrorResponse("SSO configuration not found")
+            )
+        }
+    }.onFailure { e ->
+        when (e) {
+            is SsoForbiddenException -> respond(HttpStatusCode.Forbidden, ErrorResponse(e.message))
+            else -> {
+                logger.error(e) { "Delete SSO config error" }
+                respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse("Failed to delete SSO configuration")
+                )
+            }
+        }
+    }
+}
+
+private suspend fun ApplicationCall.handleCheckSsoRequired(ssoService: SsoService) {
+    suspendRunCatching {
+        val request = receive<Map<String, String>>()
+        val email =
+            request["email"]
+                ?: return@suspendRunCatching respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponse("Missing email")
+                )
+
+        val required = ssoService.checkSsoRequired(email)
+        respond(mapOf("required" to required))
+    }.onFailure { e ->
+        logger.error(e) { "Check SSO required error" }
+        respond(
+            HttpStatusCode.InternalServerError,
+            ErrorResponse("Failed to check SSO requirement")
+        )
     }
 }
