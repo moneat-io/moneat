@@ -124,8 +124,14 @@ class LlmIngestionWorker(
     ) {
         logger.error(e) { "LLM worker $workerId failed to process message, sending to DLQ" }
         OperationalMetrics.recordWorkerProcessingFailure("LLM", workerId, e)
-        onDlq(value)
-        OperationalMetrics.recordDlqPush("LLM", dlqKey, "success")
+        runCatching {
+            onDlq(value)
+        }.onSuccess {
+            OperationalMetrics.recordDlqPush("LLM", dlqKey, "success")
+        }.onFailure { dlqErr ->
+            OperationalMetrics.recordDlqPush("LLM", dlqKey, "failure")
+            logger.error(dlqErr) { "Failed to push LLM message to DLQ" }
+        }.getOrThrow()
     }
 
     suspend fun insertGenerations(

@@ -21,11 +21,26 @@ import com.moneat.logs.models.QueuedLogEntry
 import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogIngestionWorker
 import com.moneat.logs.services.LogService
+import com.moneat.monitoring.OperationalMetrics
 import kotlinx.coroutines.runBlocking
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class LogIngestionWorkerTest {
+    @BeforeTest
+    fun resetMetricsBefore() {
+        OperationalMetrics.resetForTest()
+    }
+
+    @AfterTest
+    fun resetMetricsAfter() {
+        OperationalMetrics.resetForTest()
+    }
+
     @Test
     fun `processMessageForTest sends malformed payload to DLQ`() =
         runBlocking {
@@ -73,5 +88,24 @@ class LogIngestionWorkerTest {
             worker.processMessageForTest(workerId = 2, payload = message) { dlq.add(it) }
 
             assertEquals(listOf(message), dlq)
+        }
+
+    @Test
+    fun `processMessageForTest records DLQ failure when callback throws`() =
+        runBlocking {
+            val worker = LogIngestionWorker("log:q", "log:dlq", 1)
+            val malformed = "not-json"
+
+            assertFailsWith<IllegalStateException> {
+                worker.processMessageForTest(workerId = 3, payload = malformed) {
+                    error("dlq down")
+                }
+            }
+
+            val rendered = OperationalMetrics.scrape()
+            assertContains(rendered, "moneat_worker_dlq_pushes_total")
+            assertContains(rendered, "worker=\"Log\"")
+            assertContains(rendered, "dlq_key=\"log:dlq\"")
+            assertContains(rendered, "status=\"failure\"")
         }
 }

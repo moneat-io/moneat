@@ -144,8 +144,14 @@ class IngestionWorker(
         }.onFailure { e ->
             logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
             OperationalMetrics.recordWorkerProcessingFailure("Event", workerId, e)
-            onDlq(value)
-            OperationalMetrics.recordDlqPush("Event", dlqKey, "success")
+            runCatching {
+                onDlq(value)
+            }.onSuccess {
+                OperationalMetrics.recordDlqPush("Event", dlqKey, "success")
+            }.onFailure { dlqErr ->
+                OperationalMetrics.recordDlqPush("Event", dlqKey, "failure")
+                logger.error(dlqErr) { "Failed to push event message to DLQ" }
+            }.getOrThrow()
             Sentry.captureException(e) { scope ->
                 scope.setTag("worker.operation", "process_message")
                 scope.setTag("worker.id", workerId.toString())
