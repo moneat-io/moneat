@@ -43,9 +43,9 @@ describe('ThemeSwitcher', () => {
         expect(screen.getByRole('button', {name: /select theme/i})).toBeInTheDocument()
     })
 
-    it('defaults to dark theme if no theme is saved', () => {
+    it('defaults to light theme if no theme is saved', () => {
         render(<ThemeSwitcher />)
-        expect(document.documentElement.classList.contains('dark')).toBe(true)
+        expect(document.documentElement.classList.contains('dark')).toBe(false)
     })
 
     it('loads saved theme from localStorage', () => {

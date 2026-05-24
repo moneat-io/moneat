@@ -12,6 +12,7 @@ type Theme = 'light' | 'dark' | 'midnight' | 'forest' | 'sunset' | 'gamer' | 're
 
 const VT323_FONT_ID = 'vt323-font'
 const IBM_PLEX_MONO_FONT_ID = 'ibm-plex-mono-font'
+const DEFAULT_THEME: Theme = 'light'
 
 function loadGamerFont() {
   if (!globalThis.document) return
@@ -36,7 +37,7 @@ function loadTerminalFont() {
 export function ThemeSwitcher() {
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = globalThis.localStorage?.getItem('theme') as Theme | null
-    return saved || 'retro-dark'
+    return saved || DEFAULT_THEME
   })
 
   const applyTheme = (newTheme: Theme) => {
