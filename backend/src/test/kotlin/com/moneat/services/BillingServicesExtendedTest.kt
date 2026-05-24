@@ -432,6 +432,45 @@ class BillingServicesExtendedTest {
     }
 
     @Test
+    fun `flushPendingMeteredUsage flushes infrastructure metric overage`() {
+        val captured = mutableListOf<MeterEventCreateParams>()
+        val meteringService = StripeService(
+            subscriptionRepository = SubscriptionRepositoryImpl(),
+            organizationRepository = OrganizationRepositoryImpl(),
+            meterEventSender = { captured.add(it) },
+            allowMeteringWhenStripeDisabled = true
+        )
+
+        transaction {
+            Subscriptions.update({ Subscriptions.id eq testSubId }) {
+                it[pending_meter_units] = 0
+                it[pending_overage_bytes] = 0
+                it[pending_infra_metric_overage_units] = 700
+                it[pending_infra_metric_batch_id] = null
+                it[pending_infra_metric_batch_units] = 0
+            }
+        }
+
+        val flushed = meteringService.flushPendingMeteredUsage(limit = 10)
+        assertEquals(1, flushed, "Should flush infrastructure metric overage")
+
+        assertEquals(1, captured.size, MSG_SHOULD_EMIT_ONE_METER)
+        val event = captured.first()
+        assertEquals("moneat_infra_metric_overage_units", event.eventName)
+        assertEquals(mockCustomerId, event.payload["stripe_customer_id"])
+        assertEquals("700", event.payload["value"])
+
+        val sub = transaction {
+            Subscriptions.selectAll().where { Subscriptions.id eq testSubId }.first()
+        }
+        assertEquals(
+            0L,
+            sub[Subscriptions.pending_infra_metric_overage_units],
+            "Infrastructure metric pending should be cleared"
+        )
+    }
+
+    @Test
     fun `flushPendingMeteredUsage flushes APM span overage`() {
         val captured = mutableListOf<MeterEventCreateParams>()
         val meteringService = StripeService(

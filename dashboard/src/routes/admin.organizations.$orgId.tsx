@@ -66,6 +66,7 @@ const QUOTA_RESET_OPTIONS = [
   {value: 'ingestion_bytes', label: 'Ingestion GB'},
   {value: 'apm_spans', label: 'APM spans'},
   {value: 'custom_metrics', label: 'Custom metrics'},
+  {value: 'infra_metrics', label: 'Infrastructure metrics'},
   {value: 'analytics_pageviews', label: 'Analytics pageviews'},
   {value: 'errors', label: 'Errors'},
   {value: 'transactions', label: 'Transactions'},
@@ -85,13 +86,15 @@ function getQuotaUsageSnapshot(usage: BillingUsage, quotaType: AdminQuotaType): 
   switch (quotaType) {
     case 'ingestion_bytes':
       return {
-        used: Math.max(0, usage.usedBytes - (usage.usedApmSpanBytes ?? 0)),
+        used: Math.max(0, usage.usedBytes - (usage.usedApmSpanBytes ?? 0) - (usage.usedInfraMetricBytes ?? 0)),
         limit: usage.bytesLimit,
       }
     case 'apm_spans':
       return {used: usage.usedApmSpans ?? 0, limit: usage.apmSpanLimit ?? 0}
     case 'custom_metrics':
       return {used: usage.usedCustomMetrics ?? 0, limit: usage.customMetricLimit ?? 0}
+    case 'infra_metrics':
+      return {used: usage.usedInfraMetricSeriesHours ?? 0, limit: usage.infraMetricSeriesHourLimit ?? 0}
     case 'analytics_pageviews':
       return {used: usage.usedAnalyticsPageviews ?? 0, limit: usage.analyticsPageviewLimit ?? 0}
     case 'errors':

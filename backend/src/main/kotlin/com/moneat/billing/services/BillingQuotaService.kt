@@ -23,8 +23,6 @@ import com.moneat.billing.models.ApmSpanUsageDebugGroup
 import com.moneat.billing.models.ApmSpanUsageDebugResponse
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.OrgUsageCounters
-import com.moneat.billing.models.PricingTier
-import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
@@ -47,7 +45,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -78,6 +75,145 @@ data class QuotaExceededResponse(
     val usage: BillingUsageResponse
 )
 
+private data class QuotaState(
+    val organizationId: Int,
+    val plan: String,
+    val status: String,
+    val retentionDays: Int,
+    val logRetentionDays: Int,
+    val replayRetentionDays: Int,
+    val llmRetentionDays: Int,
+    val subscriptionId: Int?,
+    val periodStart: LocalDate,
+    val periodEnd: LocalDate,
+    val usedUnits: Long,
+    val usedErrors: Long,
+    val usedTransactions: Long,
+    val usedReplays: Long,
+    val usedFeedback: Long,
+    val usedLlmEvents: Long,
+    val usedLogs: Long,
+    val usedBytes: Long,
+    val usedApmSpanBytes: Long,
+    val usedInfraMetricBytes: Long,
+    val usedErrorBytes: Long,
+    val usedReplayBytes: Long,
+    val usedLogBytes: Long,
+    val usedLlmBytes: Long,
+    val usedProfilerBytes: Long,
+    val errorLimit: Long,
+    val transactionLimit: Long,
+    val replayLimit: Long,
+    val feedbackLimit: Long,
+    val llmEventLimit: Long,
+    val bytesLimit: Long,
+    val baseLimitUnits: Long,
+    val paygLimitUnits: Long,
+    val totalLimitUnits: Long,
+    val paygBudgetCents: Int,
+    val paygUsedUnits: Long,
+    val paygUsedMicros: Long,
+    val pendingMeterUnits: Long,
+    val pendingOverageBytes: Long,
+    val paygRateMicrosPerUnit: Long,
+    val paygLimitBytes: Long,
+    val oncallSeats: Int,
+    val oncallUsedSeats: Int,
+    val oncallPerUserMonthlyCents: Int,
+    val oncallEnabled: Boolean,
+    val bonusGbBytes: Long,
+    val bonusUnits: Long,
+    val bonusReason: String?,
+    val errorOverageRateCentsPer1k: Int,
+    val replayOverageRateCentsPerGb: Int,
+    val logOverageRateCentsPerGb: Int,
+    val llmOverageRateCentsPer1k: Int,
+    val overageRateCentsPerGb: Int,
+    val usedAnalyticsPageviews: Long,
+    val analyticsPageviewLimit: Long,
+    val analyticsPageviewOverageRateCentsPer100k: Int,
+    val usedApmSpans: Long,
+    val apmSpanLimit: Long,
+    val apmSpanOverageRateCentsPer1m: Int,
+    val usedCustomMetrics: Long,
+    val customMetricLimit: Long,
+    val customMetricOverageRateCentsPer100k: Int,
+    val usedInfraMetricSeriesHours: Long,
+    val infraMetricSeriesHourLimit: Long,
+    val infraMetricOverageRateCentsPer100kSeriesHours: Int,
+    val pendingApmSpanOverageUnits: Long,
+    val pendingCustomMetricOverageUnits: Long,
+    val pendingInfraMetricOverageUnits: Long,
+    val pendingAnalyticsPageviewOverageUnits: Long,
+)
+
+private data class ReservationAmounts(
+    val errors: Long,
+    val transactions: Long,
+    val replays: Long,
+    val feedback: Long,
+    val llm: Long,
+    val logs: Long,
+    val apmSpans: Long,
+    val customMetrics: Long,
+    val infraMetricSeriesHours: Long,
+    val analyticsPageviews: Long,
+    val errorBytes: Long,
+    val replayBytes: Long,
+    val logBytes: Long,
+    val llmBytes: Long,
+    val apmSpanBytes: Long,
+    val infraMetricBytes: Long,
+    val profilerBytes: Long
+)
+
+private data class RefundedUsage(
+    val usedUnits: Long,
+    val usedErrors: Long,
+    val usedTransactions: Long,
+    val usedReplays: Long,
+    val usedFeedback: Long,
+    val usedLlmEvents: Long,
+    val usedLogs: Long,
+    val usedApmSpans: Long,
+    val usedCustomMetrics: Long,
+    val usedInfraMetricSeriesHours: Long,
+    val usedAnalyticsPageviews: Long,
+    val usedBytes: Long,
+    val usedApmSpanBytes: Long,
+    val usedInfraMetricBytes: Long,
+    val usedErrorBytes: Long,
+    val usedReplayBytes: Long,
+    val usedLogBytes: Long,
+    val usedLlmBytes: Long,
+    val usedProfilerBytes: Long
+)
+
+private data class RawApmSpanDebugGroup(
+    val source: String,
+    val service: String,
+    val operation: String,
+    val resource: String,
+    val spanType: String,
+    val env: String,
+    val kind: String,
+    val scopeName: String,
+    val scopeVersion: String,
+    val projectId: Long?,
+    val spanCount: Long,
+    val traceCount: Long,
+    val errorCount: Long,
+    val avgDurationMs: Double,
+    val maxDurationMs: Double,
+    val sampleTraceId: String,
+    val latestSpanAt: String
+)
+
+private data class ApmSpanProjectLabel(
+    val name: String,
+    val slug: String
+)
+
 class BillingQuotaService(
     private val pricingTierService: PricingTierService = PricingTierService()
 ) {
@@ -93,18 +229,22 @@ class BillingQuotaService(
         private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
         private const val NANOS_PER_MILLISECOND = 1_000_000.0
         private const val DURATION_DECIMAL_PLACES = 3
+        private const val INFRA_METRIC_TYPE = "infra_metric"
         private val NON_AGGREGATE_UNIT_TYPES = setOf(
             "llm",
             "log",
             "apm_span",
             "custom_metric",
+            INFRA_METRIC_TYPE,
             "analytics_pageview"
         )
         private val COUNT_GATED_UNIT_TYPES = setOf(
             "custom_metric",
             "apm_span",
+            INFRA_METRIC_TYPE,
             "analytics_pageview"
         )
+        private val GB_EXCLUDED_BYTE_TYPES = setOf("apm_span", INFRA_METRIC_TYPE)
     }
 
     fun isEnforcementEnabled(): Boolean {
@@ -271,8 +411,8 @@ class BillingQuotaService(
                     .sum()
             val totalAfter = state.usedUnits + requestedAggregate
             val requestedTotalBytes = normalizedBytes.values.sum()
-            val requestedGbEligibleBytes = normalizedBytes.filterKeys { it != "apm_span" }.values.sum()
-            val gbEligibleBytes = (state.usedBytes - state.usedApmSpanBytes).coerceAtLeast(0)
+            val requestedGbEligibleBytes = normalizedBytes.filterKeys { it !in GB_EXCLUDED_BYTE_TYPES }.values.sum()
+            val gbEligibleBytes = gbEligibleBytes(state)
             val gbEligibleBytesAfter = gbEligibleBytes + requestedGbEligibleBytes
             val usedBytesAfter = state.usedBytes + requestedTotalBytes
 
@@ -352,9 +492,11 @@ class BillingQuotaService(
                 it[used_logs] = refunded.usedLogs
                 it[used_apm_spans] = refunded.usedApmSpans
                 it[used_custom_metrics] = refunded.usedCustomMetrics
+                it[used_infra_metric_series_hours] = refunded.usedInfraMetricSeriesHours
                 it[used_analytics_pageviews] = refunded.usedAnalyticsPageviews
                 it[used_bytes] = refunded.usedBytes
                 it[used_apm_span_bytes] = refunded.usedApmSpanBytes
+                it[used_infra_metric_bytes] = refunded.usedInfraMetricBytes
                 it[used_error_bytes] = refunded.usedErrorBytes
                 it[used_replay_bytes] = refunded.usedReplayBytes
                 it[used_log_bytes] = refunded.usedLogBytes
@@ -407,6 +549,7 @@ class BillingQuotaService(
                     }
                     AdminQuotaUsageType.APM_SPANS -> it[used_apm_spans] = target.targetUsed
                     AdminQuotaUsageType.CUSTOM_METRICS -> it[used_custom_metrics] = target.targetUsed
+                    AdminQuotaUsageType.INFRA_METRICS -> it[used_infra_metric_series_hours] = target.targetUsed
                     AdminQuotaUsageType.ERRORS -> {
                         it[used_errors] = target.targetUsed
                         it[used_units] = adjustedAggregateUnits(state, target.currentUsed, target.targetUsed)
@@ -454,6 +597,7 @@ class BillingQuotaService(
         INGESTION_BYTES("ingestion_bytes"),
         APM_SPANS("apm_spans"),
         CUSTOM_METRICS("custom_metrics"),
+        INFRA_METRICS("infra_metrics"),
         ERRORS("errors"),
         TRANSACTIONS("transactions"),
         REPLAYS("replays"),
@@ -533,6 +677,8 @@ class BillingQuotaService(
             "apm", "apm_span", "apm_spans", "apn_span", "apn_spans", "span", "spans" ->
                 AdminQuotaUsageType.APM_SPANS
             "custom_metric", "custom_metrics", "metric", "metrics" -> AdminQuotaUsageType.CUSTOM_METRICS
+            "infra", "infra_metric", "infra_metrics", "infrastructure_metric", "infrastructure_metrics" ->
+                AdminQuotaUsageType.INFRA_METRICS
             "error", "errors" -> AdminQuotaUsageType.ERRORS
             "transaction", "transactions" -> AdminQuotaUsageType.TRANSACTIONS
             "replay", "replays" -> AdminQuotaUsageType.REPLAYS
@@ -549,9 +695,10 @@ class BillingQuotaService(
         type: AdminQuotaUsageType
     ): Long {
         return when (type) {
-            AdminQuotaUsageType.INGESTION_BYTES -> (state.usedBytes - state.usedApmSpanBytes).coerceAtLeast(0)
+            AdminQuotaUsageType.INGESTION_BYTES -> gbEligibleBytes(state)
             AdminQuotaUsageType.APM_SPANS -> state.usedApmSpans
             AdminQuotaUsageType.CUSTOM_METRICS -> state.usedCustomMetrics
+            AdminQuotaUsageType.INFRA_METRICS -> state.usedInfraMetricSeriesHours
             AdminQuotaUsageType.ERRORS -> state.usedErrors
             AdminQuotaUsageType.TRANSACTIONS -> state.usedTransactions
             AdminQuotaUsageType.REPLAYS -> state.usedReplays
@@ -569,6 +716,7 @@ class BillingQuotaService(
             AdminQuotaUsageType.INGESTION_BYTES -> state.bytesLimit
             AdminQuotaUsageType.APM_SPANS -> state.apmSpanLimit
             AdminQuotaUsageType.CUSTOM_METRICS -> state.customMetricLimit
+            AdminQuotaUsageType.INFRA_METRICS -> state.infraMetricSeriesHourLimit
             AdminQuotaUsageType.ERRORS -> state.errorLimit
             AdminQuotaUsageType.TRANSACTIONS -> state.transactionLimit
             AdminQuotaUsageType.REPLAYS -> state.replayLimit
@@ -602,7 +750,7 @@ class BillingQuotaService(
                 scaleIngestionByteColumns(state, currentKnownBytes, targetGbEligibleBytes)
             } else {
                 IngestionByteTarget(
-                    usedBytes = state.usedApmSpanBytes + targetGbEligibleBytes,
+                    usedBytes = excludedGbBytes(state) + targetGbEligibleBytes,
                     usedErrorBytes = state.usedErrorBytes,
                     usedReplayBytes = state.usedReplayBytes,
                     usedLogBytes = state.usedLogBytes,
@@ -611,7 +759,7 @@ class BillingQuotaService(
                 )
             }
 
-        return adjustedKnownBytes.copy(usedBytes = state.usedApmSpanBytes + targetGbEligibleBytes)
+        return adjustedKnownBytes.copy(usedBytes = excludedGbBytes(state) + targetGbEligibleBytes)
     }
 
     private fun scaleIngestionByteColumns(
@@ -627,7 +775,7 @@ class BillingQuotaService(
         val profilerBytes = (targetGbEligibleBytes - assignedBytes).coerceAtLeast(0)
 
         return IngestionByteTarget(
-            usedBytes = state.usedApmSpanBytes + targetGbEligibleBytes,
+            usedBytes = excludedGbBytes(state) + targetGbEligibleBytes,
             usedErrorBytes = errorBytes,
             usedReplayBytes = replayBytes,
             usedLogBytes = logBytes,
@@ -672,6 +820,14 @@ class BillingQuotaService(
                         state.customMetricOverageRateCentsPer100k
                     )
                 }
+            AdminQuotaUsageType.INFRA_METRICS ->
+                Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+                    it[pending_infra_metric_overage_units] = pendingCountOverage(
+                        target.targetUsed,
+                        state.infraMetricSeriesHourLimit,
+                        state.infraMetricOverageRateCentsPer100kSeriesHours
+                    )
+                }
             else -> Unit
         }
     }
@@ -698,136 +854,6 @@ class BillingQuotaService(
             0
         }
     }
-
-    private data class QuotaState(
-        val organizationId: Int,
-        val plan: String,
-        val status: String,
-        val retentionDays: Int,
-        val logRetentionDays: Int,
-        val replayRetentionDays: Int,
-        val llmRetentionDays: Int,
-        val subscriptionId: Int?,
-        val periodStart: LocalDate,
-        val periodEnd: LocalDate,
-        val usedUnits: Long,
-        val usedErrors: Long,
-        val usedTransactions: Long,
-        val usedReplays: Long,
-        val usedFeedback: Long,
-        val usedLlmEvents: Long,
-        val usedLogs: Long,
-        val usedBytes: Long,
-        val usedApmSpanBytes: Long,
-        val usedErrorBytes: Long,
-        val usedReplayBytes: Long,
-        val usedLogBytes: Long,
-        val usedLlmBytes: Long,
-        val usedProfilerBytes: Long,
-        val errorLimit: Long,
-        val transactionLimit: Long,
-        val replayLimit: Long,
-        val feedbackLimit: Long,
-        val llmEventLimit: Long,
-        val bytesLimit: Long,
-        val baseLimitUnits: Long,
-        val paygLimitUnits: Long,
-        val totalLimitUnits: Long,
-        val paygBudgetCents: Int,
-        val paygUsedUnits: Long,
-        val paygUsedMicros: Long,
-        val pendingMeterUnits: Long,
-        val pendingOverageBytes: Long,
-        val paygRateMicrosPerUnit: Long,
-        val paygLimitBytes: Long,
-        val oncallSeats: Int,
-        val oncallUsedSeats: Int,
-        val oncallPerUserMonthlyCents: Int,
-        val oncallEnabled: Boolean,
-        val bonusGbBytes: Long,
-        val bonusUnits: Long,
-        val bonusReason: String?,
-        val errorOverageRateCentsPer1k: Int,
-        val replayOverageRateCentsPerGb: Int,
-        val logOverageRateCentsPerGb: Int,
-        val llmOverageRateCentsPer1k: Int,
-        val overageRateCentsPerGb: Int,
-        val usedAnalyticsPageviews: Long,
-        val analyticsPageviewLimit: Long,
-        val analyticsPageviewOverageRateCentsPer100k: Int,
-        val usedApmSpans: Long,
-        val apmSpanLimit: Long,
-        val apmSpanOverageRateCentsPer1m: Int,
-        val usedCustomMetrics: Long,
-        val customMetricLimit: Long,
-        val customMetricOverageRateCentsPer100k: Int,
-        val pendingApmSpanOverageUnits: Long,
-        val pendingCustomMetricOverageUnits: Long,
-        val pendingAnalyticsPageviewOverageUnits: Long,
-    )
-
-    private data class ReservationAmounts(
-        val errors: Long,
-        val transactions: Long,
-        val replays: Long,
-        val feedback: Long,
-        val llm: Long,
-        val logs: Long,
-        val apmSpans: Long,
-        val customMetrics: Long,
-        val analyticsPageviews: Long,
-        val errorBytes: Long,
-        val replayBytes: Long,
-        val logBytes: Long,
-        val llmBytes: Long,
-        val apmSpanBytes: Long,
-        val profilerBytes: Long
-    )
-
-    private data class RefundedUsage(
-        val usedUnits: Long,
-        val usedErrors: Long,
-        val usedTransactions: Long,
-        val usedReplays: Long,
-        val usedFeedback: Long,
-        val usedLlmEvents: Long,
-        val usedLogs: Long,
-        val usedApmSpans: Long,
-        val usedCustomMetrics: Long,
-        val usedAnalyticsPageviews: Long,
-        val usedBytes: Long,
-        val usedApmSpanBytes: Long,
-        val usedErrorBytes: Long,
-        val usedReplayBytes: Long,
-        val usedLogBytes: Long,
-        val usedLlmBytes: Long,
-        val usedProfilerBytes: Long
-    )
-
-    private data class RawApmSpanDebugGroup(
-        val source: String,
-        val service: String,
-        val operation: String,
-        val resource: String,
-        val spanType: String,
-        val env: String,
-        val kind: String,
-        val scopeName: String,
-        val scopeVersion: String,
-        val projectId: Long?,
-        val spanCount: Long,
-        val traceCount: Long,
-        val errorCount: Long,
-        val avgDurationMs: Double,
-        val maxDurationMs: Double,
-        val sampleTraceId: String,
-        val latestSpanAt: String
-    )
-
-    private data class ApmSpanProjectLabel(
-        val name: String,
-        val slug: String
-    )
 
     private fun apmSpanDebugWhereClause(
         organizationId: Int,
@@ -1005,10 +1031,10 @@ class BillingQuotaService(
                     }
 
                 when {
-                    byId != null -> tierFromRow(byId)
-                    byPlan != null -> tierFromRow(byPlan)
-                    free != null -> tierFromRow(free)
-                    else -> tierFromEnum(sub?.get(Subscriptions.plan) ?: "FREE")
+                    byId != null -> quotaTierFromRow(byId)
+                    byPlan != null -> quotaTierFromRow(byPlan)
+                    free != null -> quotaTierFromRow(free)
+                    else -> quotaTierFromEnum(sub?.get(Subscriptions.plan) ?: "FREE")
                 }
             }
         val billingPeriod =
@@ -1071,6 +1097,7 @@ class BillingQuotaService(
         val usedLogs = usageRow[OrgUsageCounters.used_logs]
         val usedBytes = usageRow[OrgUsageCounters.used_bytes]
         val usedApmSpanBytes = usageRow[OrgUsageCounters.used_apm_span_bytes]
+        val usedInfraMetricBytes = usageRow[OrgUsageCounters.used_infra_metric_bytes]
         val usedErrorBytes = usageRow[OrgUsageCounters.used_error_bytes]
         val usedReplayBytes = usageRow[OrgUsageCounters.used_replay_bytes]
         val usedLogBytes = usageRow[OrgUsageCounters.used_log_bytes]
@@ -1079,6 +1106,7 @@ class BillingQuotaService(
         val usedAnalyticsPageviews = usageRow[OrgUsageCounters.used_analytics_pageviews]
         val usedApmSpans = usageRow[OrgUsageCounters.used_apm_spans]
         val usedCustomMetrics = usageRow[OrgUsageCounters.used_custom_metrics]
+        val usedInfraMetricSeriesHours = usageRow[OrgUsageCounters.used_infra_metric_series_hours]
         val errorLimit = tier.monthlyErrorLimit
         val llmEventLimit = tier.monthlyLlmEventLimit
         val transactionLimit = tier.monthlyTransactionLimit
@@ -1134,6 +1162,7 @@ class BillingQuotaService(
             usedLogs = usedLogs,
             usedBytes = usedBytes,
             usedApmSpanBytes = usedApmSpanBytes,
+            usedInfraMetricBytes = usedInfraMetricBytes,
             usedErrorBytes = usedErrorBytes,
             usedReplayBytes = usedReplayBytes,
             usedLogBytes = usedLogBytes,
@@ -1176,14 +1205,19 @@ class BillingQuotaService(
             usedCustomMetrics = usedCustomMetrics,
             customMetricLimit = tier.monthlyCustomMetricLimit,
             customMetricOverageRateCentsPer100k = tier.customMetricOverageRateCentsPer100k,
+            usedInfraMetricSeriesHours = usedInfraMetricSeriesHours,
+            infraMetricSeriesHourLimit = tier.monthlyInfraMetricSeriesHourLimit,
+            infraMetricOverageRateCentsPer100kSeriesHours =
+            tier.infraMetricOverageRateCentsPer100kSeriesHours,
             pendingApmSpanOverageUnits = sub?.get(Subscriptions.pending_apm_span_overage_units) ?: 0,
             pendingCustomMetricOverageUnits = sub?.get(Subscriptions.pending_custom_metric_overage_units) ?: 0,
+            pendingInfraMetricOverageUnits = sub?.get(Subscriptions.pending_infra_metric_overage_units) ?: 0,
             pendingAnalyticsPageviewOverageUnits = pendingAnalyticsPageviewOverageUnits,
         )
     }
 
     private fun toUsageResponse(state: QuotaState): BillingUsageResponse {
-        val gbEligibleBytes = (state.usedBytes - state.usedApmSpanBytes).coerceAtLeast(0)
+        val gbEligibleBytes = gbEligibleBytes(state)
         val withinQuota = isWithinQuota(state, gbEligibleBytes)
         val ingestionOverageCents = byteOverageCents(
             bytes = limitedOverage(state.bytesLimit, gbEligibleBytes),
@@ -1221,9 +1255,15 @@ class BillingQuotaService(
             rateCents = state.customMetricOverageRateCentsPer100k,
             divisor = UNITS_PER_HUNDRED_THOUSAND
         )
+        val infraMetricOverageCents = unitOverageCents(
+            units = limitedOverage(state.infraMetricSeriesHourLimit, state.usedInfraMetricSeriesHours),
+            rateCents = state.infraMetricOverageRateCentsPer100kSeriesHours,
+            divisor = UNITS_PER_HUNDRED_THOUSAND
+        )
 
         val totalOverageCents = ingestionOverageCents +
-            analyticsPageviewOverageCents + customMetricOverageCents + apmSpanOverageCents
+            analyticsPageviewOverageCents + customMetricOverageCents + apmSpanOverageCents +
+            infraMetricOverageCents
 
         return BillingUsageResponse(
             organizationId = state.organizationId,
@@ -1251,6 +1291,7 @@ class BillingQuotaService(
             usedLogBytes = state.usedLogBytes,
             usedLlmBytes = state.usedLlmBytes,
             usedProfilerBytes = state.usedProfilerBytes,
+            usedInfraMetricBytes = state.usedInfraMetricBytes,
             bytesLimit = state.bytesLimit,
             ingestionOverageCentsEstimate = ingestionOverageCents,
             ingestionOverageRateCentsPerGb = state.overageRateCentsPerGb,
@@ -1267,6 +1308,7 @@ class BillingQuotaService(
             llmOverageCentsEstimate = llmOverageCents,
             apmSpanOverageCentsEstimate = apmSpanOverageCents,
             customMetricOverageCentsEstimate = customMetricOverageCents,
+            infraMetricOverageCentsEstimate = infraMetricOverageCents,
             totalOverageCentsEstimate = totalOverageCents,
             errorOverageRateCentsPer1k = state.errorOverageRateCentsPer1k,
             replayOverageRateCentsPerGb = state.replayOverageRateCentsPerGb,
@@ -1274,6 +1316,8 @@ class BillingQuotaService(
             llmOverageRateCentsPer1k = state.llmOverageRateCentsPer1k,
             apmSpanOverageRateCentsPer1m = state.apmSpanOverageRateCentsPer1m,
             customMetricOverageRateCentsPer100k = state.customMetricOverageRateCentsPer100k,
+            infraMetricOverageRateCentsPer100kSeriesHours =
+            state.infraMetricOverageRateCentsPer100kSeriesHours,
             oncallSeats = state.oncallSeats,
             oncallUsedSeats = state.oncallUsedSeats,
             oncallPerUserMonthlyCents = state.oncallPerUserMonthlyCents,
@@ -1288,6 +1332,8 @@ class BillingQuotaService(
             apmSpanLimit = state.apmSpanLimit,
             usedCustomMetrics = state.usedCustomMetrics,
             customMetricLimit = state.customMetricLimit,
+            usedInfraMetricSeriesHours = state.usedInfraMetricSeriesHours,
+            infraMetricSeriesHourLimit = state.infraMetricSeriesHourLimit,
             plan = state.plan,
             status = state.status,
             withinQuota = withinQuota,
@@ -1349,6 +1395,7 @@ class BillingQuotaService(
         return when (eventType) {
             "custom_metric" -> state.customMetricOverageRateCentsPer100k > 0
             "apm_span" -> state.apmSpanOverageRateCentsPer1m > 0
+            INFRA_METRIC_TYPE -> state.infraMetricOverageRateCentsPer100kSeriesHours > 0
             "analytics_pageview" -> state.analyticsPageviewOverageRateCentsPer100k > 0
             else -> false
         }
@@ -1367,12 +1414,14 @@ class BillingQuotaService(
             logs = units["log"] ?: 0L,
             apmSpans = units["apm_span"] ?: 0L,
             customMetrics = units["custom_metric"] ?: 0L,
+            infraMetricSeriesHours = units[INFRA_METRIC_TYPE] ?: 0L,
             analyticsPageviews = units["analytics_pageview"] ?: 0L,
             errorBytes = bytes["error"] ?: 0L,
             replayBytes = bytes["replay"] ?: 0L,
             logBytes = bytes["log"] ?: 0L,
             llmBytes = bytes["llm"] ?: 0L,
             apmSpanBytes = bytes["apm_span"] ?: 0L,
+            infraMetricBytes = bytes[INFRA_METRIC_TYPE] ?: 0L,
             profilerBytes = bytes["profile"] ?: 0L
         )
     }
@@ -1397,9 +1446,12 @@ class BillingQuotaService(
             it[used_logs] = state.usedLogs + requested.logs
             it[used_apm_spans] = state.usedApmSpans + requested.apmSpans
             it[used_custom_metrics] = state.usedCustomMetrics + requested.customMetrics
+            it[used_infra_metric_series_hours] =
+                state.usedInfraMetricSeriesHours + requested.infraMetricSeriesHours
             it[used_analytics_pageviews] = state.usedAnalyticsPageviews + requested.analyticsPageviews
             it[used_bytes] = usedBytesAfter
             it[used_apm_span_bytes] = state.usedApmSpanBytes + requested.apmSpanBytes
+            it[used_infra_metric_bytes] = state.usedInfraMetricBytes + requested.infraMetricBytes
             it[used_error_bytes] = state.usedErrorBytes + requested.errorBytes
             it[used_replay_bytes] = state.usedReplayBytes + requested.replayBytes
             it[used_log_bytes] = state.usedLogBytes + requested.logBytes
@@ -1420,6 +1472,7 @@ class BillingQuotaService(
         trackReservedIngestionOverage(organizationId, state, gbEligibleBytes, gbEligibleBytesAfter)
         trackReservedCustomMetricOverage(organizationId, state, requested.customMetrics)
         trackReservedApmSpanOverage(organizationId, state, requested.apmSpans)
+        trackReservedInfraMetricOverage(organizationId, state, requested.infraMetricSeriesHours)
         trackReservedAnalyticsPageviewOverage(state, requested.analyticsPageviews)
     }
 
@@ -1470,6 +1523,33 @@ class BillingQuotaService(
         )
         Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
             it[pending_custom_metric_overage_units] = state.pendingCustomMetricOverageUnits + overageDelta
+        }
+    }
+
+    private fun trackReservedInfraMetricOverage(
+        organizationId: Int,
+        state: QuotaState,
+        requestedUnits: Long
+    ) {
+        val overageDelta = overageDelta(
+            state.usedInfraMetricSeriesHours,
+            requestedUnits,
+            state.infraMetricSeriesHourLimit
+        )
+        if (overageDelta <= 0 || state.infraMetricOverageRateCentsPer100kSeriesHours <= 0) return
+        val subscriptionId = state.subscriptionId ?: return
+
+        SentryUtils.breadcrumb(
+            "billing",
+            "Infrastructure metric overage incurred",
+            mapOf(
+                "organization_id" to organizationId,
+                "infra_metric_overage_delta" to overageDelta,
+                "subscription_id" to subscriptionId
+            )
+        )
+        Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+            it[pending_infra_metric_overage_units] = state.pendingInfraMetricOverageUnits + overageDelta
         }
     }
 
@@ -1546,6 +1626,12 @@ class BillingQuotaService(
                 "custom_metric",
                 requestedUnits
             ),
+            usedInfraMetricSeriesHours = refundMatchingUsage(
+                state.usedInfraMetricSeriesHours,
+                normalizedType,
+                INFRA_METRIC_TYPE,
+                requestedUnits
+            ),
             usedAnalyticsPageviews = refundMatchingUsage(
                 state.usedAnalyticsPageviews,
                 normalizedType,
@@ -1557,6 +1643,12 @@ class BillingQuotaService(
                 state.usedApmSpanBytes,
                 normalizedType,
                 "apm_span",
+                requestedBytes
+            ),
+            usedInfraMetricBytes = refundMatchingUsage(
+                state.usedInfraMetricBytes,
+                normalizedType,
+                INFRA_METRIC_TYPE,
                 requestedBytes
             ),
             usedErrorBytes = refundMatchingUsage(state.usedErrorBytes, normalizedType, "error", requestedBytes),
@@ -1602,8 +1694,12 @@ class BillingQuotaService(
     ) {
         if (requestedBytes <= 0 || state.bytesLimit <= 0) return
 
-        val gbEligibleBytesBefore = (state.usedBytes - state.usedApmSpanBytes).coerceAtLeast(0)
-        val gbEligibleBytesAfter = (refunded.usedBytes - refunded.usedApmSpanBytes).coerceAtLeast(0)
+        val gbEligibleBytesBefore = gbEligibleBytes(state)
+        val gbEligibleBytesAfter = gbEligibleBytes(
+            usedBytes = refunded.usedBytes,
+            usedApmSpanBytes = refunded.usedApmSpanBytes,
+            usedInfraMetricBytes = refunded.usedInfraMetricBytes
+        )
         val byteOverageRefundDelta = (
             positiveLimitOverage(state.bytesLimit, gbEligibleBytesBefore) -
                 positiveLimitOverage(state.bytesLimit, gbEligibleBytesAfter)
@@ -1623,6 +1719,7 @@ class BillingQuotaService(
     ) {
         refundCustomMetricOverage(state, normalizedType, refunded.usedCustomMetrics)
         refundApmSpanOverage(state, normalizedType, refunded.usedApmSpans)
+        refundInfraMetricOverage(state, normalizedType, refunded.usedInfraMetricSeriesHours)
         refundAnalyticsPageviewOverage(state, normalizedType, refunded.usedAnalyticsPageviews)
     }
 
@@ -1658,6 +1755,26 @@ class BillingQuotaService(
         }
     }
 
+    private fun refundInfraMetricOverage(
+        state: QuotaState,
+        normalizedType: String,
+        usedAfter: Long
+    ) {
+        if (normalizedType != INFRA_METRIC_TYPE || state.infraMetricSeriesHourLimit < 0) return
+        val refundDelta = refundOverageDelta(
+            state.usedInfraMetricSeriesHours,
+            usedAfter,
+            state.infraMetricSeriesHourLimit
+        )
+        if (refundDelta <= 0) return
+        val subscriptionId = state.subscriptionId ?: return
+
+        Subscriptions.update({ Subscriptions.id eq subscriptionId }) {
+            it[pending_infra_metric_overage_units] =
+                (state.pendingInfraMetricOverageUnits - refundDelta).coerceAtLeast(0)
+        }
+    }
+
     private fun refundAnalyticsPageviewOverage(
         state: QuotaState,
         normalizedType: String,
@@ -1690,6 +1807,13 @@ class BillingQuotaService(
             countWithinBudget(state.apmSpanLimit, state.usedApmSpans, state.bonusUnits) {
                 state.apmSpanOverageRateCentsPer1m
             } &&
+            countWithinBudget(
+                state.infraMetricSeriesHourLimit,
+                state.usedInfraMetricSeriesHours,
+                state.bonusUnits
+            ) {
+                state.infraMetricOverageRateCentsPer100kSeriesHours
+            } &&
             countWithinBudget(state.analyticsPageviewLimit, state.usedAnalyticsPageviews, state.bonusUnits) {
                 state.analyticsPageviewOverageRateCentsPer100k
             }
@@ -1698,6 +1822,26 @@ class BillingQuotaService(
     private fun bytesWithinBudget(state: QuotaState, gbEligibleBytes: Long): Boolean {
         return state.bytesLimit <= 0 ||
             gbEligibleBytes <= (state.bytesLimit + state.bonusGbBytes + state.paygLimitBytes)
+    }
+
+    private fun gbEligibleBytes(state: QuotaState): Long {
+        return gbEligibleBytes(
+            usedBytes = state.usedBytes,
+            usedApmSpanBytes = state.usedApmSpanBytes,
+            usedInfraMetricBytes = state.usedInfraMetricBytes
+        )
+    }
+
+    private fun gbEligibleBytes(
+        usedBytes: Long,
+        usedApmSpanBytes: Long,
+        usedInfraMetricBytes: Long
+    ): Long {
+        return (usedBytes - usedApmSpanBytes - usedInfraMetricBytes).coerceAtLeast(0)
+    }
+
+    private fun excludedGbBytes(state: QuotaState): Long {
+        return state.usedApmSpanBytes + state.usedInfraMetricBytes
     }
 
     private fun countWithinBudget(
@@ -1754,181 +1898,6 @@ class BillingQuotaService(
         return if (limit > 0) max(0, used - limit) else 0L
     }
 
-    private fun tierFromRow(row: ResultRow): PricingTierConfigResponse {
-        return PricingTierConfigResponse(
-            id = row[PricingTierConfigs.id],
-            tierName = row[PricingTierConfigs.tier_name],
-            version = row[PricingTierConfigs.version],
-            monthlyUnitLimit = row[PricingTierConfigs.monthly_unit_limit],
-            monthlyErrorLimit = row[PricingTierConfigs.monthly_error_limit],
-            monthlyTransactionLimit = row[PricingTierConfigs.monthly_transaction_limit],
-            monthlyReplayLimit = row[PricingTierConfigs.monthly_replay_limit],
-            monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
-            monthlyLlmEventLimit = row[PricingTierConfigs.monthly_llm_event_limit],
-            monthlyGbLimit = row[PricingTierConfigs.monthly_gb_limit],
-            retentionDays = row[PricingTierConfigs.retention_days],
-            logRetentionDays = row[PricingTierConfigs.log_retention_days],
-            replayRetentionDays = row[PricingTierConfigs.replay_retention_days],
-            llmRetentionDays = row[PricingTierConfigs.llm_retention_days],
-            statusPagesEnabled = row[PricingTierConfigs.status_pages_enabled],
-            statusPageCustomDomainEnabled = row[PricingTierConfigs.status_page_custom_domain_enabled],
-            sessionReplayEnabled = row[PricingTierConfigs.session_replay_enabled],
-            slackEnabled = row[PricingTierConfigs.slack_enabled],
-            discordEnabled = row[PricingTierConfigs.discord_enabled],
-            incidentIoEnabled = row[PricingTierConfigs.incident_io_enabled],
-            samlEnabled = row[PricingTierConfigs.saml_enabled],
-            oidcEnabled = row[PricingTierConfigs.oidc_enabled],
-            prioritySupportEnabled = row[PricingTierConfigs.priority_support_enabled],
-            slaEnabled = row[PricingTierConfigs.sla_enabled],
-            customRetentionEnabled = row[PricingTierConfigs.custom_retention_enabled],
-            maxProjects = row[PricingTierConfigs.max_projects],
-            maxSystems = row[PricingTierConfigs.max_systems],
-            monitorIntervalSeconds = row[PricingTierConfigs.monitor_interval_seconds],
-            monthlyPriceCents = row[PricingTierConfigs.monthly_price_cents],
-            yearlyPriceCents = row[PricingTierConfigs.yearly_price_cents],
-            trialDays = row[PricingTierConfigs.trial_days],
-            paygEnabled = row[PricingTierConfigs.payg_enabled],
-            paygRateMicrosPerUnit = row[PricingTierConfigs.payg_rate_micros_per_unit],
-            overageRateCentsPerGb = row[PricingTierConfigs.overage_rate_cents_per_gb],
-            errorOverageRateCentsPer1k = row[PricingTierConfigs.error_overage_rate_cents_per_1k],
-            replayOverageRateCentsPerGb = row[PricingTierConfigs.replay_overage_rate_cents_per_gb],
-            llmOverageRateCentsPer1k = row[PricingTierConfigs.llm_overage_rate_cents_per_1k],
-            stripeBasePriceId = row[PricingTierConfigs.stripe_base_price_id],
-            stripeOveragePriceId = row[PricingTierConfigs.stripe_overage_price_id],
-            stripeYearlyBasePriceId = row[PricingTierConfigs.stripe_yearly_base_price_id],
-            stripeYearlyOveragePriceId = row[PricingTierConfigs.stripe_yearly_overage_price_id],
-            stripeOncallPriceId = row[PricingTierConfigs.stripe_oncall_price_id],
-            stripeOncallYearlyPriceId = row[PricingTierConfigs.stripe_oncall_yearly_price_id],
-            oncallPerUserMonthlyCents = row[PricingTierConfigs.oncall_per_user_monthly_cents],
-            oncallPerUserYearlyCents = row[PricingTierConfigs.oncall_per_user_yearly_cents],
-            oncallEnabled = row[PricingTierConfigs.oncall_enabled],
-            maxAnalyticsSites = row[PricingTierConfigs.max_analytics_sites],
-            analyticsRetentionDays = row[PricingTierConfigs.analytics_retention_days],
-            monthlyAnalyticsPageviewLimit = row[PricingTierConfigs.monthly_analytics_pageview_limit],
-            analyticsPageviewOverageRateCentsPer100k =
-            row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
-            monthlyApmSpanLimit = row[PricingTierConfigs.monthly_apm_span_limit],
-            apmSpanOverageRateCentsPer1m = row[PricingTierConfigs.apm_span_overage_rate_cents_per_1m],
-            monthlyCustomMetricLimit = row[PricingTierConfigs.monthly_custom_metric_limit],
-            customMetricOverageRateCentsPer100k = row[PricingTierConfigs.custom_metric_overage_rate_cents_per_100k],
-            maxHosts = row[PricingTierConfigs.max_hosts],
-            profilingEnabled = row[PricingTierConfigs.profiling_enabled],
-            networkMonitoringEnabled = row[PricingTierConfigs.network_monitoring_enabled],
-            dbmEnabled = row[PricingTierConfigs.dbm_enabled],
-            debuggerEnabled = row[PricingTierConfigs.debugger_enabled],
-            k8sMonitoringEnabled = row[PricingTierConfigs.k8s_monitoring_enabled],
-            dataStreamsEnabled = row[PricingTierConfigs.data_streams_enabled],
-            sbomEnabled = row[PricingTierConfigs.sbom_enabled],
-            syntheticsEnabled = row[PricingTierConfigs.synthetics_enabled],
-            isCurrent = row[PricingTierConfigs.is_current]
-        )
-    }
-
-    private fun tierFromEnum(tierName: String): PricingTierConfigResponse {
-        val tier = PricingTier.entries.find { it.name.equals(tierName, ignoreCase = true) } ?: PricingTier.FREE
-        return PricingTierConfigResponse(
-            id = 0,
-            tierName = tier.name,
-            version = 1,
-            monthlyUnitLimit = tier.monthlyErrorLimit,
-            monthlyErrorLimit = tier.monthlyErrorLimit,
-            monthlyTransactionLimit = 0,
-            monthlyReplayLimit = tier.monthlyReplayLimit,
-            monthlyFeedbackLimit = 0,
-            monthlyLlmEventLimit = tier.monthlyLlmEventLimit,
-            monthlyGbLimit = tier.monthlyGbBytes,
-            retentionDays = tier.retentionDays,
-            logRetentionDays = tier.retentionDays,
-            replayRetentionDays = tier.retentionDays,
-            llmRetentionDays = tier.retentionDays,
-            statusPagesEnabled = true,
-            statusPageCustomDomainEnabled = true,
-            sessionReplayEnabled = true,
-            slackEnabled = true,
-            discordEnabled = true,
-            incidentIoEnabled = true,
-            samlEnabled = tier == PricingTier.TEAM || tier == PricingTier.BUSINESS,
-            oidcEnabled = tier == PricingTier.TEAM || tier == PricingTier.BUSINESS,
-            prioritySupportEnabled = tier == PricingTier.BUSINESS,
-            slaEnabled = tier == PricingTier.BUSINESS,
-            customRetentionEnabled = tier == PricingTier.BUSINESS,
-            maxProjects = tier.maxProjects,
-            maxSystems = tier.maxSystems,
-            monitorIntervalSeconds = tier.monitorIntervalSeconds,
-            monthlyPriceCents =
-            when (tier) {
-                PricingTier.FREE -> 0
-                PricingTier.PRO -> 2900
-                PricingTier.TEAM -> 7900
-                PricingTier.BUSINESS -> 19900
-            },
-            yearlyPriceCents =
-            when (tier) {
-                PricingTier.FREE -> 0
-                PricingTier.PRO -> 28800
-                PricingTier.TEAM -> 79200
-                PricingTier.BUSINESS -> 199200
-            },
-            trialDays = if (tier == PricingTier.FREE) 0 else 14,
-            paygEnabled = tier != PricingTier.FREE,
-            paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000,
-            overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,
-            errorOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 10,
-            replayOverageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,
-            llmOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 100,
-            stripeBasePriceId = null,
-            stripeOveragePriceId = null,
-            stripeYearlyBasePriceId = null,
-            stripeYearlyOveragePriceId = null,
-            stripeOncallPriceId = null,
-            stripeOncallYearlyPriceId = null,
-            oncallPerUserMonthlyCents = 500, // Default $5
-            oncallPerUserYearlyCents = 5000, // Default $50
-            oncallEnabled = tier != PricingTier.FREE,
-            maxAnalyticsSites = when (tier) {
-                PricingTier.FREE -> 1
-                PricingTier.PRO -> 5
-                PricingTier.TEAM -> 10
-                PricingTier.BUSINESS -> null
-            },
-            analyticsRetentionDays = when (tier) {
-                PricingTier.FREE, PricingTier.PRO -> 1095
-                PricingTier.TEAM, PricingTier.BUSINESS -> 1825
-            },
-            monthlyAnalyticsPageviewLimit = when (tier) {
-                PricingTier.FREE -> 10_000
-                PricingTier.PRO -> 100_000
-                PricingTier.TEAM -> 1_000_000
-                PricingTier.BUSINESS -> 10_000_000
-            },
-            analyticsPageviewOverageRateCentsPer100k = if (tier == PricingTier.FREE) 0 else 1000,
-            monthlyApmSpanLimit = when (tier) {
-                PricingTier.FREE -> 500_000
-                PricingTier.PRO -> 10_000_000
-                PricingTier.TEAM -> 50_000_000
-                PricingTier.BUSINESS -> 200_000_000
-            },
-            apmSpanOverageRateCentsPer1m = if (tier == PricingTier.FREE) 0 else 30,
-            monthlyCustomMetricLimit = when (tier) {
-                PricingTier.FREE -> 100_000
-                PricingTier.PRO -> 1_000_000
-                PricingTier.TEAM -> 10_000_000
-                PricingTier.BUSINESS -> Long.MAX_VALUE
-            },
-            customMetricOverageRateCentsPer100k = if (tier == PricingTier.FREE) 0 else 50,
-            maxHosts = if (tier == PricingTier.FREE) 3 else null,
-            profilingEnabled = true,
-            networkMonitoringEnabled = true,
-            dbmEnabled = true,
-            debuggerEnabled = true,
-            k8sMonitoringEnabled = true,
-            dataStreamsEnabled = true,
-            sbomEnabled = true,
-            syntheticsEnabled = true,
-            isCurrent = true
-        )
-    }
-
     private fun normalizeEventType(eventType: String): String {
         return when (eventType.lowercase()) {
             "error" -> "error"
@@ -1939,6 +1908,7 @@ class BillingQuotaService(
             "log", "logs", "dd_log" -> "log"
             "apm_span", "apm", "otlp_trace", "dd_trace", "sentry_trace" -> "apm_span"
             "custom_metric", "metric", "otlp_metric", "dd_metric" -> "custom_metric"
+            INFRA_METRIC_TYPE, "dd_infra_metric" -> INFRA_METRIC_TYPE
             "analytics_pageview" -> "analytics_pageview"
             "sourcemap", "artifact" -> "artifact"
             "dd_profile", "profile" -> "profile"
@@ -1959,6 +1929,7 @@ class BillingQuotaService(
             "error" -> state.usedErrors
             "apm_span" -> state.usedApmSpans
             "custom_metric" -> state.usedCustomMetrics
+            INFRA_METRIC_TYPE -> state.usedInfraMetricSeriesHours
             "analytics_pageview" -> state.usedAnalyticsPageviews
             "transaction" -> state.usedTransactions
             "replay" -> state.usedReplays
@@ -1973,11 +1944,12 @@ class BillingQuotaService(
         state: QuotaState,
         eventType: String
     ): Long {
-        // Unified ingestion model: custom_metric, apm_span, and analytics_pageview
+        // Unified ingestion model: custom_metric, apm_span, infra_metric, and analytics_pageview
         // have count-based limits. Other types are gated by the unified GB limit.
         return when (eventType) {
             "custom_metric" -> state.customMetricLimit
             "apm_span" -> state.apmSpanLimit
+            INFRA_METRIC_TYPE -> state.infraMetricSeriesHourLimit
             "analytics_pageview" -> state.analyticsPageviewLimit
             else -> -1L // No count-based limit; GB is the gate
         }

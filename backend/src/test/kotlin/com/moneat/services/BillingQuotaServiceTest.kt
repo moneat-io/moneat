@@ -699,6 +699,60 @@ class BillingQuotaServiceTest {
     }
 
     @Test
+    fun `infra metric reservation tracks series hours and bytes outside GB billing`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_gb_limit] = 1_073_741_824L
+                it[monthly_infra_metric_series_hour_limit] = 10_000L
+                it[infra_metric_overage_rate_cents_per_100k_series_hours] = 10
+            }
+            insertTestUsageCounter(organizationId = testOrgId)
+        }
+
+        val result = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 2_000,
+            eventType = "infra_metric",
+            requestedBytes = 2_147_483_648L
+        )
+
+        assertTrue(result.allowed)
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+        assertEquals(2_000L, usage.usedInfraMetricSeriesHours)
+        assertEquals(2_147_483_648L, usage.usedInfraMetricBytes)
+        assertEquals(0, usage.ingestionOverageCentsEstimate)
+        assertTrue(usage.withinQuota)
+    }
+
+    @Test
+    fun `infra metric overage tracking increments pending column on reserveUnits`() {
+        transaction {
+            PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {
+                it[monthly_infra_metric_series_hour_limit] = 10_000L
+                it[infra_metric_overage_rate_cents_per_100k_series_hours] = 10
+            }
+            insertTestUsageCounter(organizationId = testOrgId).also { counterId ->
+                OrgUsageCounters.update({ OrgUsageCounters.id eq counterId }) {
+                    it[used_infra_metric_series_hours] = 10_000L
+                }
+            }
+        }
+
+        val result = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 20_000,
+            eventType = "infra_metric"
+        )
+
+        assertTrue(result.allowed)
+        val pendingInfraOverage = transaction {
+            Subscriptions.selectAll().where { Subscriptions.id eq testSubId }
+                .first()[Subscriptions.pending_infra_metric_overage_units]
+        }
+        assertEquals(20_000L, pendingInfraOverage)
+    }
+
+    @Test
     fun `apm span overage rate of zero disables estimate`() {
         transaction {
             PricingTierConfigs.update({ PricingTierConfigs.id eq testTierId }) {

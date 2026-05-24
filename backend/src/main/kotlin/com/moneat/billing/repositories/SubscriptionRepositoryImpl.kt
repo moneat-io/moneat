@@ -170,6 +170,9 @@ class SubscriptionRepositoryImpl : SubscriptionRepository {
                     it[pending_custom_metric_overage_units] = 0
                     it[pending_custom_metric_batch_id] = null
                     it[pending_custom_metric_batch_units] = 0
+                    it[pending_infra_metric_overage_units] = 0
+                    it[pending_infra_metric_batch_id] = null
+                    it[pending_infra_metric_batch_units] = 0
                 }
                 it[billing_grace_until] = null
             }
@@ -229,6 +232,9 @@ class SubscriptionRepositoryImpl : SubscriptionRepository {
                 it[pending_custom_metric_overage_units] = 0
                 it[pending_custom_metric_batch_id] = null
                 it[pending_custom_metric_batch_units] = 0
+                it[pending_infra_metric_overage_units] = 0
+                it[pending_infra_metric_batch_id] = null
+                it[pending_infra_metric_batch_units] = 0
                 it[stripe_base_item_id] = data.stripeBaseItemId
                 it[stripe_overage_item_id] = data.stripeOverageItemId
                 it[stripe_oncall_item_id] = data.stripeOncallItemId

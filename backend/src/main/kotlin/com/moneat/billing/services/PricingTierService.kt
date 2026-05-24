@@ -67,6 +67,10 @@ private const val PRO_YEARLY_PRICE_CENTS = 28800
 private const val TEAM_YEARLY_PRICE_CENTS = 79200
 private const val BUSINESS_YEARLY_PRICE_CENTS = 199200
 private const val DEFAULT_TRIAL_DAYS_NON_FREE = 14
+private const val DEFAULT_INFRA_METRIC_OVERAGE_RATE_CENTS_PER_100K = 10
+private const val FREE_INFRA_METRIC_SERIES_HOUR_LIMIT = 5_000_000L
+private const val PRO_INFRA_METRIC_SERIES_HOUR_LIMIT = 50_000_000L
+private const val TEAM_INFRA_METRIC_SERIES_HOUR_LIMIT = 250_000_000L
 
 class PricingTierService {
     private data class DefaultFeatureFlags(
@@ -271,6 +275,14 @@ class PricingTierService {
             val resolvedCustomMetricOverageRateCentsPer100k =
                 request.customMetricOverageRateCentsPer100k
                     ?: currentConfig?.customMetricOverageRateCentsPer100k ?: 0
+            val resolvedMonthlyInfraMetricSeriesHourLimit =
+                request.monthlyInfraMetricSeriesHourLimit
+                    ?: currentConfig?.monthlyInfraMetricSeriesHourLimit
+                    ?: defaultMonthlyInfraMetricSeriesHourLimit(canonicalName)
+            val resolvedInfraMetricOverageRateCentsPer100k =
+                request.infraMetricOverageRateCentsPer100kSeriesHours
+                    ?: currentConfig?.infraMetricOverageRateCentsPer100kSeriesHours
+                    ?: defaultInfraMetricOverageRateCentsPer100k(canonicalName)
             val resolvedMaxHosts = request.maxHosts
             val resolvedProfilingEnabled = request.profilingEnabled
                 ?: currentConfig?.profilingEnabled ?: true
@@ -388,6 +400,9 @@ class PricingTierService {
                     it[apm_span_overage_rate_cents_per_1m] = resolvedApmSpanOverageRateCentsPer1m
                     it[monthly_custom_metric_limit] = resolvedMonthlyCustomMetricLimit
                     it[custom_metric_overage_rate_cents_per_100k] = resolvedCustomMetricOverageRateCentsPer100k
+                    it[monthly_infra_metric_series_hour_limit] = resolvedMonthlyInfraMetricSeriesHourLimit
+                    it[infra_metric_overage_rate_cents_per_100k_series_hours] =
+                        resolvedInfraMetricOverageRateCentsPer100k
                     it[max_hosts] = resolvedMaxHosts
                     it[profiling_enabled] = resolvedProfilingEnabled
                     it[network_monitoring_enabled] = resolvedNetworkMonitoringEnabled
@@ -464,6 +479,16 @@ class PricingTierService {
             require(
                 request.analyticsPageviewOverageRateCentsPer100k >= 0
             ) { "Analytics pageview overage rate cannot be negative" }
+        }
+        if (request.monthlyInfraMetricSeriesHourLimit != null) {
+            require(request.monthlyInfraMetricSeriesHourLimit >= 0) {
+                "Monthly infrastructure metric limit must be non-negative"
+            }
+        }
+        if (request.infraMetricOverageRateCentsPer100kSeriesHours != null) {
+            require(request.infraMetricOverageRateCentsPer100kSeriesHours >= 0) {
+                "Infrastructure metric overage rate cannot be negative"
+            }
         }
     }
 
@@ -656,6 +681,8 @@ class PricingTierService {
             stripeYearlyOveragePriceId = null,
             stripeOncallPriceId = null,
             stripeOncallYearlyPriceId = null,
+            monthlyInfraMetricSeriesHourLimit = defaultMonthlyInfraMetricSeriesHourLimit(tier.name),
+            infraMetricOverageRateCentsPer100kSeriesHours = defaultInfraMetricOverageRateCentsPer100k(tier.name),
             isCurrent = true
         )
     }
@@ -711,6 +738,9 @@ class PricingTierService {
             apmSpanOverageRateCentsPer1m = row[PricingTierConfigs.apm_span_overage_rate_cents_per_1m],
             monthlyCustomMetricLimit = row[PricingTierConfigs.monthly_custom_metric_limit],
             customMetricOverageRateCentsPer100k = row[PricingTierConfigs.custom_metric_overage_rate_cents_per_100k],
+            monthlyInfraMetricSeriesHourLimit = row[PricingTierConfigs.monthly_infra_metric_series_hour_limit],
+            infraMetricOverageRateCentsPer100kSeriesHours =
+            row[PricingTierConfigs.infra_metric_overage_rate_cents_per_100k_series_hours],
             maxHosts = row[PricingTierConfigs.max_hosts],
             profilingEnabled = row[PricingTierConfigs.profiling_enabled],
             networkMonitoringEnabled = row[PricingTierConfigs.network_monitoring_enabled],
@@ -755,5 +785,23 @@ class PricingTierService {
 
     private fun defaultTrialDaysForTier(tierName: String): Int {
         return if (tierName.uppercase() == "FREE") 0 else DEFAULT_TRIAL_DAYS_NON_FREE
+    }
+
+    private fun defaultMonthlyInfraMetricSeriesHourLimit(tierName: String): Long {
+        return when (tierName.uppercase()) {
+            "FREE" -> FREE_INFRA_METRIC_SERIES_HOUR_LIMIT
+            "PRO" -> PRO_INFRA_METRIC_SERIES_HOUR_LIMIT
+            "TEAM" -> TEAM_INFRA_METRIC_SERIES_HOUR_LIMIT
+            "BUSINESS" -> Long.MAX_VALUE
+            else -> FREE_INFRA_METRIC_SERIES_HOUR_LIMIT
+        }
+    }
+
+    private fun defaultInfraMetricOverageRateCentsPer100k(tierName: String): Int {
+        return if (tierName.uppercase() == "FREE") {
+            0
+        } else {
+            DEFAULT_INFRA_METRIC_OVERAGE_RATE_CENTS_PER_100K
+        }
     }
 }

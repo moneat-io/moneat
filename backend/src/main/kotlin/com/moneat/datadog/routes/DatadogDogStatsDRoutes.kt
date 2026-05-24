@@ -17,11 +17,12 @@
 package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
-import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.datadog.dogStatsDBillingRequest
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogMetricV1
+import com.moneat.datadog.reserveDatadogQuotaBatch
 import com.moneat.datadog.services.DatadogMetricService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
@@ -56,8 +57,16 @@ fun Route.datadogDogStatsDRoutes(
                 val bodyStr = body.decodeToString()
 
                 val metrics = parseDogStatsDLines(bodyStr)
+                val billingRequest = dogStatsDBillingRequest(metrics, body.size.toLong())
 
-                if (!reserveDatadogQuota(call, quotaService, orgId, metrics.size, "dd_metric", body.size.toLong())) {
+                if (!reserveDatadogQuotaBatch(
+                        call,
+                        quotaService,
+                        orgId,
+                        billingRequest.requestedUnitsByType,
+                        billingRequest.requestedBytesByType,
+                    )
+                ) {
                     return@post
                 }
 

@@ -928,6 +928,9 @@ class StripeService(
                 it[pending_custom_metric_overage_units] = 0
                 it[pending_custom_metric_batch_id] = null
                 it[pending_custom_metric_batch_units] = 0
+                it[pending_infra_metric_overage_units] = 0
+                it[pending_infra_metric_batch_id] = null
+                it[pending_infra_metric_batch_units] = 0
                 it[pending_analytics_pageview_overage_units] = 0
                 it[pending_analytics_pageview_batch_id] = null
                 it[pending_analytics_pageview_batch_units] = 0
@@ -941,6 +944,8 @@ class StripeService(
             ?: "moneat_ingestion_overage_gb"
         val customMetricMeterEventName = config.propertyOrNull("stripe.customMetricMeterEventName")?.getString()
             ?: "moneat_custom_metric_overage_units"
+        val infraMetricMeterEventName = config.propertyOrNull("stripe.infraMetricMeterEventName")?.getString()
+            ?: "moneat_infra_metric_overage_units"
         val apmSpanMeterEventName = config.propertyOrNull("stripe.apmSpanMeterEventName")?.getString()
             ?: "moneat_apm_span_overage_units"
 
@@ -1053,6 +1058,16 @@ class StripeService(
             batchUnitsColumn = Subscriptions.pending_custom_metric_batch_units,
             meterEventName = customMetricMeterEventName,
             batchPrefix = "metric",
+            limit = limit
+        )
+
+        // Infrastructure metric overage metering
+        flushed += flushPendingTypeOverage(
+            pendingUnitsColumn = Subscriptions.pending_infra_metric_overage_units,
+            batchIdColumn = Subscriptions.pending_infra_metric_batch_id,
+            batchUnitsColumn = Subscriptions.pending_infra_metric_batch_units,
+            meterEventName = infraMetricMeterEventName,
+            batchPrefix = "infra",
             limit = limit
         )
 
@@ -1214,6 +1229,9 @@ class StripeService(
                         it[pending_custom_metric_overage_units] = 0
                         it[pending_custom_metric_batch_id] = null
                         it[pending_custom_metric_batch_units] = 0
+                        it[pending_infra_metric_overage_units] = 0
+                        it[pending_infra_metric_batch_id] = null
+                        it[pending_infra_metric_batch_units] = 0
                         it[pending_analytics_pageview_overage_units] = 0
                         it[pending_analytics_pageview_batch_id] = null
                         it[pending_analytics_pageview_batch_units] = 0
