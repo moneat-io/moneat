@@ -40,7 +40,9 @@ class PricingTierServiceTest {
         monthlyUnitLimit: Long = 10_000,
         retentionDays: Int = 3,
         isCurrent: Boolean = true,
-        monthlyPriceCents: Int = 0
+        monthlyPriceCents: Int = 0,
+        monthlyInfraMetricSeriesHourLimit: Long = 0,
+        infraMetricOverageRateCentsPer100kSeriesHours: Int = 0
     ): Int =
         transaction {
             PricingTierConfigs.insert {
@@ -73,6 +75,9 @@ class PricingTierServiceTest {
                 it[payg_enabled] = false
                 it[payg_rate_micros_per_unit] = 0
                 it[overage_rate_cents_per_gb] = 0
+                it[monthly_infra_metric_series_hour_limit] = monthlyInfraMetricSeriesHourLimit
+                it[infra_metric_overage_rate_cents_per_100k_series_hours] =
+                    infraMetricOverageRateCentsPer100kSeriesHours
                 it[is_current] = isCurrent
             } get PricingTierConfigs.id
         }
@@ -159,6 +164,71 @@ class PricingTierServiceTest {
         assertEquals(2, created.version)
         assertEquals("PRO", created.tierName)
         assertEquals(50_000, created.monthlyUnitLimit)
+    }
+
+    @Test
+    fun `createTierVersion preserves infrastructure metric billing from current tier`() {
+        seedTier(
+            "PRO",
+            version = 1,
+            monthlyInfraMetricSeriesHourLimit = 12_345,
+            infraMetricOverageRateCentsPer100kSeriesHours = 17
+        )
+
+        val created =
+            service.createTierVersion(
+                "PRO",
+                CreateTierVersionRequest(
+                    monthlyUnitLimit = 50_000,
+                    monthlyErrorLimit = 50_000,
+                    monthlyTransactionLimit = 0,
+                    monthlyReplayLimit = 0,
+                    monthlyFeedbackLimit = 0,
+                    monthlyGbLimit = 1_073_741_824,
+                    retentionDays = 7,
+                    logRetentionDays = 7,
+                    maxProjects = 5,
+                    maxSystems = 5,
+                    monitorIntervalSeconds = 60,
+                    monthlyPriceCents = 2900,
+                    yearlyPriceCents = 24900,
+                    trialDays = 14,
+                    paygEnabled = false,
+                    paygRateMicrosPerUnit = 0
+                )
+            )
+
+        assertEquals(12_345, created.monthlyInfraMetricSeriesHourLimit)
+        assertEquals(17, created.infraMetricOverageRateCentsPer100kSeriesHours)
+    }
+
+    @Test
+    fun `createTierVersion uses default infrastructure metric billing without current tier`() {
+        val created =
+            service.createTierVersion(
+                "TEAM",
+                CreateTierVersionRequest(
+                    monthlyUnitLimit = 50_000,
+                    monthlyErrorLimit = 50_000,
+                    monthlyTransactionLimit = 0,
+                    monthlyReplayLimit = 0,
+                    monthlyFeedbackLimit = 0,
+                    monthlyGbLimit = 1_073_741_824,
+                    retentionDays = 7,
+                    logRetentionDays = 7,
+                    maxProjects = 5,
+                    maxSystems = 5,
+                    monitorIntervalSeconds = 60,
+                    monthlyPriceCents = 7900,
+                    yearlyPriceCents = 79200,
+                    trialDays = 14,
+                    paygEnabled = true,
+                    paygRateMicrosPerUnit = 400_000
+                )
+            )
+
+        assertEquals(250_000_000, created.monthlyInfraMetricSeriesHourLimit)
+        assertEquals(10, created.infraMetricOverageRateCentsPer100kSeriesHours)
     }
 
     @Test

@@ -19,7 +19,6 @@ package com.moneat.billing.services
 import com.moneat.billing.models.AdminBillingSubscriptionResponse
 import com.moneat.billing.models.BillingPlanResponse
 import com.moneat.billing.models.CreateTierVersionRequest
-import com.moneat.billing.models.PricingTier
 import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.models.TierMigrationRequest
@@ -60,17 +59,7 @@ private const val DEFAULT_ANALYTICS_RETENTION_DAYS = 1095
 private const val MAX_RETENTION_DAYS = 90
 private const val MAX_TRIAL_DAYS = 60
 private const val MAX_ANALYTICS_RETENTION_DAYS = 3650
-private const val PRO_MONTHLY_PRICE_CENTS = 2900
-private const val TEAM_MONTHLY_PRICE_CENTS = 7900
-private const val BUSINESS_MONTHLY_PRICE_CENTS = 19900
-private const val PRO_YEARLY_PRICE_CENTS = 28800
-private const val TEAM_YEARLY_PRICE_CENTS = 79200
-private const val BUSINESS_YEARLY_PRICE_CENTS = 199200
 private const val DEFAULT_TRIAL_DAYS_NON_FREE = 14
-private const val DEFAULT_INFRA_METRIC_OVERAGE_RATE_CENTS_PER_100K = 10
-private const val FREE_INFRA_METRIC_SERIES_HOUR_LIMIT = 5_000_000L
-private const val PRO_INFRA_METRIC_SERIES_HOUR_LIMIT = 50_000_000L
-private const val TEAM_INFRA_METRIC_SERIES_HOUR_LIMIT = 250_000_000L
 
 class PricingTierService {
     private data class DefaultFeatureFlags(
@@ -230,6 +219,7 @@ class PricingTierService {
                     .orderBy(PricingTierConfigs.version to SortOrder.DESC)
                     .firstOrNull()
             val currentConfig = current?.let { rowToResponse(it) }
+            val fallbackConfig = enumFallbackToResponse(canonicalName)
             val defaults = defaultFeatureFlagsForTier(canonicalName)
             val nextVersion = (current?.get(PricingTierConfigs.version) ?: 0) + 1
 
@@ -276,13 +266,18 @@ class PricingTierService {
                 request.customMetricOverageRateCentsPer100k
                     ?: currentConfig?.customMetricOverageRateCentsPer100k ?: 0
             val resolvedMonthlyInfraMetricSeriesHourLimit =
-                request.monthlyInfraMetricSeriesHourLimit
-                    ?: currentConfig?.monthlyInfraMetricSeriesHourLimit
-                    ?: defaultMonthlyInfraMetricSeriesHourLimit(canonicalName)
+                when {
+                    request.monthlyInfraMetricSeriesHourLimit != null -> request.monthlyInfraMetricSeriesHourLimit
+                    currentConfig != null -> currentConfig.monthlyInfraMetricSeriesHourLimit
+                    else -> fallbackConfig.monthlyInfraMetricSeriesHourLimit
+                }
             val resolvedInfraMetricOverageRateCentsPer100k =
-                request.infraMetricOverageRateCentsPer100kSeriesHours
-                    ?: currentConfig?.infraMetricOverageRateCentsPer100kSeriesHours
-                    ?: defaultInfraMetricOverageRateCentsPer100k(canonicalName)
+                when {
+                    request.infraMetricOverageRateCentsPer100kSeriesHours != null ->
+                        request.infraMetricOverageRateCentsPer100kSeriesHours
+                    currentConfig != null -> currentConfig.infraMetricOverageRateCentsPer100kSeriesHours
+                    else -> fallbackConfig.infraMetricOverageRateCentsPer100kSeriesHours
+                }
             val resolvedMaxHosts = request.maxHosts
             val resolvedProfilingEnabled = request.profilingEnabled
                 ?: currentConfig?.profilingEnabled ?: true
@@ -614,150 +609,11 @@ class PricingTierService {
     }
 
     private fun enumFallbackToResponse(tierName: String): PricingTierConfigResponse {
-        val tier = PricingTier.entries.find { it.name.equals(tierName, ignoreCase = true) } ?: PricingTier.FREE
-        val monthlyPrice =
-            when (tier) {
-                PricingTier.FREE -> 0
-                PricingTier.PRO -> PRO_MONTHLY_PRICE_CENTS
-                PricingTier.TEAM -> TEAM_MONTHLY_PRICE_CENTS
-                PricingTier.BUSINESS -> BUSINESS_MONTHLY_PRICE_CENTS
-            }
-        val yearlyPrice =
-            when (tier) {
-                PricingTier.FREE -> 0
-
-                PricingTier.PRO -> PRO_YEARLY_PRICE_CENTS
-
-                // $288/yr
-                PricingTier.TEAM -> TEAM_YEARLY_PRICE_CENTS
-
-                // $792/yr
-                PricingTier.BUSINESS -> BUSINESS_YEARLY_PRICE_CENTS // $1992/yr
-            }
-        return PricingTierConfigResponse(
-            id = 0,
-            tierName = tier.name,
-            version = 1,
-            monthlyUnitLimit = tier.monthlyErrorLimit,
-            monthlyErrorLimit = tier.monthlyErrorLimit,
-            monthlyTransactionLimit = 0,
-            monthlyReplayLimit = tier.monthlyReplayLimit,
-            monthlyFeedbackLimit = 0,
-            monthlyLlmEventLimit = tier.monthlyLlmEventLimit,
-            monthlyGbLimit = tier.monthlyGbBytes,
-            retentionDays = tier.retentionDays,
-            logRetentionDays = tier.retentionDays,
-            replayRetentionDays = tier.retentionDays,
-            llmRetentionDays = tier.retentionDays,
-            statusPagesEnabled = true,
-            statusPageCustomDomainEnabled = true,
-            sessionReplayEnabled = true,
-            slackEnabled = true,
-            discordEnabled = true,
-            incidentIoEnabled = true,
-            samlEnabled = tier == PricingTier.TEAM || tier == PricingTier.BUSINESS,
-            oidcEnabled = tier == PricingTier.TEAM || tier == PricingTier.BUSINESS,
-            prioritySupportEnabled = tier == PricingTier.BUSINESS,
-            slaEnabled = tier == PricingTier.BUSINESS,
-            customRetentionEnabled = tier == PricingTier.BUSINESS,
-            maxProjects = tier.maxProjects,
-            maxSystems = tier.maxSystems,
-            monitorIntervalSeconds = tier.monitorIntervalSeconds,
-            monthlyPriceCents = monthlyPrice,
-            yearlyPriceCents = yearlyPrice,
-            trialDays = defaultTrialDaysForTier(tier.name),
-            paygEnabled = tier != PricingTier.FREE,
-            paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000, // $0.40/GB in micros
-            overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40, // $0.40/GB
-            errorOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 10,
-            replayOverageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,
-            llmOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 100,
-            oncallPerUserMonthlyCents = 500, // Default $5
-            oncallPerUserYearlyCents = 5000, // Default $50
-            oncallEnabled = tier != PricingTier.FREE,
-            stripeBasePriceId = null,
-            stripeOveragePriceId = null,
-            stripeYearlyBasePriceId = null,
-            stripeYearlyOveragePriceId = null,
-            stripeOncallPriceId = null,
-            stripeOncallYearlyPriceId = null,
-            monthlyInfraMetricSeriesHourLimit = defaultMonthlyInfraMetricSeriesHourLimit(tier.name),
-            infraMetricOverageRateCentsPer100kSeriesHours = defaultInfraMetricOverageRateCentsPer100k(tier.name),
-            isCurrent = true
-        )
+        return quotaTierFromEnum(tierName)
     }
 
     private fun rowToResponse(row: ResultRow): PricingTierConfigResponse {
-        return PricingTierConfigResponse(
-            id = row[PricingTierConfigs.id],
-            tierName = row[PricingTierConfigs.tier_name],
-            version = row[PricingTierConfigs.version],
-            monthlyUnitLimit = row[PricingTierConfigs.monthly_unit_limit],
-            monthlyErrorLimit = row[PricingTierConfigs.monthly_error_limit],
-            monthlyTransactionLimit = row[PricingTierConfigs.monthly_transaction_limit],
-            monthlyReplayLimit = row[PricingTierConfigs.monthly_replay_limit],
-            monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
-            monthlyLlmEventLimit = row[PricingTierConfigs.monthly_llm_event_limit],
-            monthlyGbLimit = row[PricingTierConfigs.monthly_gb_limit],
-            retentionDays = row[PricingTierConfigs.retention_days],
-            logRetentionDays = row[PricingTierConfigs.log_retention_days],
-            replayRetentionDays = row[PricingTierConfigs.replay_retention_days],
-            llmRetentionDays = row[PricingTierConfigs.llm_retention_days],
-            statusPagesEnabled = row[PricingTierConfigs.status_pages_enabled],
-            statusPageCustomDomainEnabled = row[PricingTierConfigs.status_page_custom_domain_enabled],
-            sessionReplayEnabled = row[PricingTierConfigs.session_replay_enabled],
-            slackEnabled = row[PricingTierConfigs.slack_enabled],
-            discordEnabled = row[PricingTierConfigs.discord_enabled],
-            incidentIoEnabled = row[PricingTierConfigs.incident_io_enabled],
-            samlEnabled = row[PricingTierConfigs.saml_enabled],
-            oidcEnabled = row[PricingTierConfigs.oidc_enabled],
-            prioritySupportEnabled = row[PricingTierConfigs.priority_support_enabled],
-            slaEnabled = row[PricingTierConfigs.sla_enabled],
-            customRetentionEnabled = row[PricingTierConfigs.custom_retention_enabled],
-            maxProjects = row[PricingTierConfigs.max_projects],
-            maxSystems = row[PricingTierConfigs.max_systems],
-            monitorIntervalSeconds = row[PricingTierConfigs.monitor_interval_seconds],
-            monthlyPriceCents = row[PricingTierConfigs.monthly_price_cents],
-            yearlyPriceCents = row[PricingTierConfigs.yearly_price_cents],
-            trialDays = row[PricingTierConfigs.trial_days],
-            paygEnabled = row[PricingTierConfigs.payg_enabled],
-            paygRateMicrosPerUnit = row[PricingTierConfigs.payg_rate_micros_per_unit],
-            overageRateCentsPerGb = row[PricingTierConfigs.overage_rate_cents_per_gb],
-            errorOverageRateCentsPer1k = row[PricingTierConfigs.error_overage_rate_cents_per_1k],
-            replayOverageRateCentsPerGb = row[PricingTierConfigs.replay_overage_rate_cents_per_gb],
-            llmOverageRateCentsPer1k = row[PricingTierConfigs.llm_overage_rate_cents_per_1k],
-            oncallPerUserMonthlyCents = row[PricingTierConfigs.oncall_per_user_monthly_cents],
-            oncallPerUserYearlyCents = row[PricingTierConfigs.oncall_per_user_yearly_cents],
-            oncallEnabled = row[PricingTierConfigs.oncall_enabled],
-            maxAnalyticsSites = row[PricingTierConfigs.max_analytics_sites],
-            analyticsRetentionDays = row[PricingTierConfigs.analytics_retention_days],
-            monthlyAnalyticsPageviewLimit = row[PricingTierConfigs.monthly_analytics_pageview_limit],
-            analyticsPageviewOverageRateCentsPer100k =
-            row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
-            monthlyApmSpanLimit = row[PricingTierConfigs.monthly_apm_span_limit],
-            apmSpanOverageRateCentsPer1m = row[PricingTierConfigs.apm_span_overage_rate_cents_per_1m],
-            monthlyCustomMetricLimit = row[PricingTierConfigs.monthly_custom_metric_limit],
-            customMetricOverageRateCentsPer100k = row[PricingTierConfigs.custom_metric_overage_rate_cents_per_100k],
-            monthlyInfraMetricSeriesHourLimit = row[PricingTierConfigs.monthly_infra_metric_series_hour_limit],
-            infraMetricOverageRateCentsPer100kSeriesHours =
-            row[PricingTierConfigs.infra_metric_overage_rate_cents_per_100k_series_hours],
-            maxHosts = row[PricingTierConfigs.max_hosts],
-            profilingEnabled = row[PricingTierConfigs.profiling_enabled],
-            networkMonitoringEnabled = row[PricingTierConfigs.network_monitoring_enabled],
-            dbmEnabled = row[PricingTierConfigs.dbm_enabled],
-            debuggerEnabled = row[PricingTierConfigs.debugger_enabled],
-            k8sMonitoringEnabled = row[PricingTierConfigs.k8s_monitoring_enabled],
-            dataStreamsEnabled = row[PricingTierConfigs.data_streams_enabled],
-            sbomEnabled = row[PricingTierConfigs.sbom_enabled],
-            syntheticsEnabled = row[PricingTierConfigs.synthetics_enabled],
-            stripeBasePriceId = row[PricingTierConfigs.stripe_base_price_id],
-            stripeOveragePriceId = row[PricingTierConfigs.stripe_overage_price_id],
-            stripeYearlyBasePriceId = row[PricingTierConfigs.stripe_yearly_base_price_id],
-            stripeYearlyOveragePriceId = row[PricingTierConfigs.stripe_yearly_overage_price_id],
-            stripeOncallPriceId = row[PricingTierConfigs.stripe_oncall_price_id],
-            stripeOncallYearlyPriceId = row[PricingTierConfigs.stripe_oncall_yearly_price_id],
-            isCurrent = row[PricingTierConfigs.is_current]
-        )
+        return quotaTierFromRow(row)
     }
 
     private fun Instant.toLocalDateUtc(): kotlinx.datetime.LocalDate {
@@ -785,23 +641,5 @@ class PricingTierService {
 
     private fun defaultTrialDaysForTier(tierName: String): Int {
         return if (tierName.uppercase() == "FREE") 0 else DEFAULT_TRIAL_DAYS_NON_FREE
-    }
-
-    private fun defaultMonthlyInfraMetricSeriesHourLimit(tierName: String): Long {
-        return when (tierName.uppercase()) {
-            "FREE" -> FREE_INFRA_METRIC_SERIES_HOUR_LIMIT
-            "PRO" -> PRO_INFRA_METRIC_SERIES_HOUR_LIMIT
-            "TEAM" -> TEAM_INFRA_METRIC_SERIES_HOUR_LIMIT
-            "BUSINESS" -> Long.MAX_VALUE
-            else -> FREE_INFRA_METRIC_SERIES_HOUR_LIMIT
-        }
-    }
-
-    private fun defaultInfraMetricOverageRateCentsPer100k(tierName: String): Int {
-        return if (tierName.uppercase() == "FREE") {
-            0
-        } else {
-            DEFAULT_INFRA_METRIC_OVERAGE_RATE_CENTS_PER_100K
-        }
     }
 }
