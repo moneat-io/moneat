@@ -18,6 +18,8 @@ package com.moneat.otlp.services
 
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
+import com.moneat.monitoring.OperationalMetrics
+import com.moneat.utils.suspendRunCatching
 import io.lettuce.core.RedisException
 import io.lettuce.core.api.StatefulRedisConnection
 import kotlinx.coroutines.CancellationException
@@ -34,7 +36,6 @@ import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
 import java.sql.SQLException
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private const val ERROR_RETRY_DELAY_MS = 1000L
@@ -57,6 +58,7 @@ abstract class OtlpIngestionWorkerBase(
         logger.info {
             "Starting $workerName with $workerCount workers, queue=$queueKey"
         }
+        OperationalMetrics.registerWorkerQueues("OTLP $workerLabel", queueKey, dlqKey)
         jobs = (1..workerCount).map { workerId ->
             scope.launch { runWorker(workerId) }
         }
@@ -125,6 +127,7 @@ abstract class OtlpIngestionWorkerBase(
     private suspend fun processBrpopPayload(workerId: Int, payload: String) {
         try {
             processMessage(workerId, payload)
+            OperationalMetrics.recordWorkerMessageProcessed("OTLP $workerLabel", workerId)
         } catch (proc: CancellationException) {
             throw proc
         } catch (proc: SerializationException) {
@@ -149,6 +152,7 @@ abstract class OtlpIngestionWorkerBase(
         logger.error(proc) {
             "OTLP $workerLabel worker $workerId failed processing message"
         }
+        OperationalMetrics.recordWorkerProcessingFailure("OTLP $workerLabel", workerId, proc)
         delay(ERROR_RETRY_DELAY_MS)
     }
 
@@ -159,6 +163,7 @@ abstract class OtlpIngestionWorkerBase(
         resetConnection: (StatefulRedisConnection<String, String>) -> Unit,
     ) {
         logger.error(e) { "OTLP $workerLabel worker $workerId error in BRPOP loop" }
+        OperationalMetrics.recordWorkerBrpopFailure("OTLP $workerLabel", workerId, e)
         connection?.let(resetConnection)
         delay(ERROR_RETRY_DELAY_MS)
     }
@@ -176,7 +181,9 @@ abstract class OtlpIngestionWorkerBase(
     protected fun pushToDlq(workerId: Int, payload: String) {
         try {
             RedisConfig.sync().rpush(dlqKey, payload)
+            OperationalMetrics.recordDlqPush("OTLP $workerLabel", dlqKey, "success")
         } catch (dlqErr: RedisException) {
+            OperationalMetrics.recordDlqPush("OTLP $workerLabel", dlqKey, "failure")
             logger.error(dlqErr) { "Failed to push to DLQ $dlqKey for worker=$workerId" }
         }
     }

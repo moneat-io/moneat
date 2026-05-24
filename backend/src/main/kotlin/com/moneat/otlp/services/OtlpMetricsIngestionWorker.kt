@@ -16,8 +16,9 @@
 
 package com.moneat.otlp.services
 
-import mu.KotlinLogging
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.suspendRunCatching
+import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
@@ -54,6 +55,7 @@ class OtlpMetricsIngestionWorker(
         logger.error(e) {
             "OTLP metrics worker $workerId failed to process batch, sending to DLQ"
         }
+        OperationalMetrics.recordWorkerProcessingFailure("OTLP metrics", workerId, e)
         pushToDlq(workerId, payload)
     }
 }

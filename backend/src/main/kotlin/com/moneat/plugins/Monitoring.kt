@@ -20,14 +20,18 @@ import kotlinx.serialization.SerializationException
 import java.io.IOException
 
 import com.moneat.config.SentryConfig
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 import com.moneat.utils.SentryUtils
-import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.statuspages.StatusPages
@@ -41,8 +45,6 @@ import io.sentry.Sentry
 import io.sentry.SpanStatus
 import mu.KotlinLogging
 import org.slf4j.event.Level
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
@@ -56,6 +58,11 @@ private const val HTTP_SERVER_ERROR_MIN = 500
 private const val HTTP_SERVER_ERROR_MAX = 599
 
 fun Application.configureMonitoring() {
+    OperationalMetrics.bindSystemMetrics()
+    install(MicrometerMetrics) {
+        registry = OperationalMetrics.registry
+    }
+
     // Sentry transaction interceptor for non-ingestion, non-health requests
     intercept(ApplicationCallPipeline.Setup) {
         if (SentryConfig.isEnabled()) {
@@ -200,6 +207,9 @@ fun Application.configureMonitoring() {
 
 private fun shouldSkipTracing(path: String, method: String): Boolean {
     if (path == "/health" || path == "/health/" || path.startsWith("/health/")) {
+        return true
+    }
+    if (path == "/metrics" || path == "/metrics/") {
         return true
     }
     if (method == "POST") {

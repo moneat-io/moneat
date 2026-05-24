@@ -18,6 +18,7 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.OrchestratorIngestionService
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
@@ -110,6 +111,7 @@ class OrchestratorIngestionWorker(
                     "resources=${batch.resources.size} " +
                     "manifests=${batch.manifests.size}"
             }
+            OperationalMetrics.recordWorkerMessageProcessed("Orchestrator", workerId)
         }.getOrElse { e ->
             pushToDlq(
                 logger,

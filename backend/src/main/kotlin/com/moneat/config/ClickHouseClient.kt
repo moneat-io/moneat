@@ -16,10 +16,13 @@
 
 package com.moneat.config
 
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.SentryUtils
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.events.*
@@ -27,7 +30,7 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.sentry.ISpan
 import io.sentry.Sentry
-import com.moneat.utils.suspendRunCatching
+import kotlinx.coroutines.CancellationException
 
 object ClickHouseClient {
     private const val MIGRATION_TIMEOUT_MS = 600_000L
@@ -38,6 +41,7 @@ object ClickHouseClient {
     private const val MIGRATION_MAX_CONNECTIONS = 4
     private const val QUERY_LOG_MAX_LEN = 200
     private const val ERROR_BODY_MAX_LEN = 500
+    private const val NANOS_PER_SECOND = 1_000_000_000.0
 
     @Volatile
     private var httpClient: HttpClient? = null
@@ -100,24 +104,44 @@ object ClickHouseClient {
                 childSpan?.setData("db.name", database)
                 childSpan?.setData("db.statement", query.take(QUERY_LOG_MAX_LEN)) // Truncate long queries
 
-                client.post(baseUrl) {
-                    parameter("database", database)
-                    header("X-ClickHouse-User", user)
-                    header("X-ClickHouse-Key", password)
-                    contentType(ContentType.Text.Plain)
-                    setBody(query)
-                }
+                executePost(client, query, "execute")
             }
         } else {
-            client.post(baseUrl) {
+            executePost(client, query, "execute")
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun executePost(
+        client: HttpClient,
+        query: String,
+        operation: String
+    ): HttpResponse {
+        val startedAt = System.nanoTime()
+        try {
+            val response = client.post(baseUrl) {
                 parameter("database", database)
                 header("X-ClickHouse-User", user)
                 header("X-ClickHouse-Key", password)
                 contentType(ContentType.Text.Plain)
                 setBody(query)
             }
+            val status = if (response.status.isSuccess()) "success" else "http_${response.status.value}"
+            OperationalMetrics.recordClickHouseRequest(operation, status, elapsedSeconds(startedAt))
+            return response
+        } catch (e: HttpRequestTimeoutException) {
+            OperationalMetrics.recordClickHouseRequestFailure(operation, e, elapsedSeconds(startedAt))
+            throw e
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            OperationalMetrics.recordClickHouseRequestFailure(operation, e, elapsedSeconds(startedAt))
+            throw e
         }
     }
+
+    private fun elapsedSeconds(startedAt: Long): Double =
+        (System.nanoTime() - startedAt) / NANOS_PER_SECOND
 
     suspend fun executeWithFormat(
         query: String,
@@ -139,13 +163,7 @@ object ClickHouseClient {
      */
     suspend fun executeMigration(query: String): HttpResponse {
         val client = checkNotNull(migrationClient) { "ClickHouseClient is not initialized. Call init() first." }
-        return client.post(baseUrl) {
-            parameter("database", database)
-            header("X-ClickHouse-User", user)
-            header("X-ClickHouse-Key", password)
-            contentType(ContentType.Text.Plain)
-            setBody(query)
-        }
+        return executePost(client, query, "migration")
     }
 
     suspend fun ping(): Boolean {

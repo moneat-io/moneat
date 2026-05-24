@@ -21,9 +21,11 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.llm.models.LlmGenerationIngest
 import com.moneat.llm.models.LlmIngestPayload
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils
 import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.lettuce.core.RedisException
@@ -43,7 +45,6 @@ import java.time.Instant
 import java.time.format.DateTimeParseException
 import java.util.Base64
 import java.util.UUID
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -64,6 +65,7 @@ class LlmIngestionWorker(
 
     fun start() {
         logger.info { "Starting LlmIngestionWorker with $workerCount workers, queue=$queueKey" }
+        OperationalMetrics.registerWorkerQueues("LLM", queueKey, dlqKey)
         jobs =
             (1..workerCount).map { id ->
                 scope.launch { runWorker(id) }
@@ -108,6 +110,7 @@ class LlmIngestionWorker(
             val payload = json.decodeFromString<LlmIngestPayload>(payloadBytes.decodeToString())
             insertGenerations(projectId, payload.generations)
             usageTracker.recordUsage(projectId, "llm", payloadBytes.size)
+            OperationalMetrics.recordWorkerMessageProcessed("LLM", workerId)
         }.getOrElse { e ->
             handleLlmDlq(workerId, value, e, onDlq)
         }
@@ -120,7 +123,9 @@ class LlmIngestionWorker(
         onDlq: (String) -> Unit,
     ) {
         logger.error(e) { "LLM worker $workerId failed to process message, sending to DLQ" }
+        OperationalMetrics.recordWorkerProcessingFailure("LLM", workerId, e)
         onDlq(value)
+        OperationalMetrics.recordDlqPush("LLM", dlqKey, "success")
     }
 
     suspend fun insertGenerations(

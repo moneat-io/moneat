@@ -16,6 +16,7 @@
 
 package com.moneat.otlp.services
 
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 
@@ -73,6 +74,7 @@ class OtlpTraceIngestionWorker(
         logger.error(e) {
             "OTLP trace worker $workerId failed to decode batch, sending to DLQ"
         }
+        OperationalMetrics.recordWorkerProcessingFailure("OTLP trace", workerId, e)
         pushToDlq(workerId, payload)
     }
 
@@ -84,6 +86,7 @@ class OtlpTraceIngestionWorker(
         logger.error(e) {
             "OTLP trace worker $workerId failed to insert batch, sending to DLQ"
         }
+        OperationalMetrics.recordWorkerProcessingFailure("OTLP trace", workerId, e)
         pushToDlq(workerId, payload)
     }
 }

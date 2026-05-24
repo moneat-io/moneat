@@ -17,6 +17,7 @@
 package com.moneat.datadog.networkdevices
 
 import com.moneat.config.RedisConfig
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
@@ -107,6 +108,7 @@ class NdmIngestionWorker(
                 "NDM worker $workerId processed batch: " +
                     "type=${batch.batchType}"
             }
+            OperationalMetrics.recordWorkerMessageProcessed("NDM", workerId)
         }.getOrElse { e ->
             pushToDlq(logger, dlqKey, payload, workerId, "NDM", e)
         }

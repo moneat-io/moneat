@@ -18,6 +18,7 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogMetricService
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
@@ -110,6 +111,7 @@ class DatadogMetricIngestionWorker(
             val batch =
                 DatadogMetricService.decodeMetricBatch(payload)
             DatadogMetricService.insertMetricBatch(batch)
+            OperationalMetrics.recordWorkerMessageProcessed("DD metric", workerId)
         }.getOrElse { e ->
             pushToDlq(logger, dlqKey, payload, workerId, "DD metric", e)
         }

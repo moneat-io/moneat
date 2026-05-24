@@ -20,6 +20,7 @@ import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import com.moneat.events.models.SentryEnvelope
 import com.moneat.events.repositories.EventRepositoryImpl
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.utils.SentryUtils
@@ -63,6 +64,7 @@ class IngestionWorker(
 
     fun start() {
         logger.info { "Starting IngestionWorker with $workerCount workers, queue=$queueKey" }
+        OperationalMetrics.registerWorkerQueues("Event", queueKey, dlqKey)
         SentryUtils.breadcrumb(
             "worker",
             "IngestionWorker starting",
@@ -138,9 +140,12 @@ class IngestionWorker(
 
             val envelope = SentryEnvelope.parse(envelopeBytes)
             eventService.processEnvelope(projectId, envelope)
+            OperationalMetrics.recordWorkerMessageProcessed("Event", workerId)
         }.onFailure { e ->
             logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
+            OperationalMetrics.recordWorkerProcessingFailure("Event", workerId, e)
             onDlq(value)
+            OperationalMetrics.recordDlqPush("Event", dlqKey, "success")
             Sentry.captureException(e) { scope ->
                 scope.setTag("worker.operation", "process_message")
                 scope.setTag("worker.id", workerId.toString())

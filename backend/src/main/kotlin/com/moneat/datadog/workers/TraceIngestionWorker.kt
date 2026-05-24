@@ -18,6 +18,7 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
@@ -147,6 +148,7 @@ class TraceIngestionWorker(
                 env,
                 version
             )
+            OperationalMetrics.recordWorkerMessageProcessed("Trace", workerId)
         }.getOrElse { e ->
             pushToDlq(logger, dlqKey, payload, workerId, "Trace", e)
         }

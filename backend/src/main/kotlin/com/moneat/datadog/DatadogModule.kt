@@ -51,6 +51,7 @@ import com.moneat.datadog.workers.MiscIngestionWorker
 import com.moneat.datadog.workers.OrchestratorIngestionWorker
 import com.moneat.datadog.workers.TraceIngestionWorker
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.monitoring.OperationalMetrics
 import io.ktor.server.application.Application
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
@@ -120,6 +121,7 @@ class DatadogModule : EnterpriseModule {
 
     override fun startBackgroundJobs(application: Application) {
         logger.info { "Starting Datadog enterprise background jobs" }
+        registerQueueMetrics()
         ProfileStorageService.init()
         traceWorker = TraceIngestionWorker()
         traceWorker.start()
@@ -164,4 +166,27 @@ class DatadogModule : EnterpriseModule {
         ndmWorker?.stop()
         securityWorker?.stop()
     }
+
+    private fun registerQueueMetrics() {
+        listOf(
+            WorkerQueue("Trace", "moneat:traces:queue", "moneat:traces:dlq"),
+            WorkerQueue("DD metric", METRICS_QUEUE, METRICS_DLQ),
+            WorkerQueue("DD event", EVENTS_QUEUE, EVENTS_DLQ),
+            WorkerQueue("DD infra", INFRA_QUEUE, INFRA_DLQ),
+            WorkerQueue("Misc", MISC_QUEUE, MISC_DLQ),
+            WorkerQueue("Orchestrator", "moneat:dd:orchestrator:queue", "moneat:dd:orchestrator:dlq"),
+            WorkerQueue("DBM", "moneat:dd:dbm:queue", "moneat:dd:dbm:dlq"),
+            WorkerQueue("Debugger", "moneat:dd:debugger:queue", "moneat:dd:debugger:dlq"),
+            WorkerQueue("NDM", "moneat:dd:ndm:queue", "moneat:dd:ndm:dlq"),
+            WorkerQueue("Security", "moneat:dd:security:queue", "moneat:dd:security:dlq")
+        ).forEach { queue ->
+            OperationalMetrics.registerWorkerQueues(queue.workerName, queue.queueKey, queue.dlqKey)
+        }
+    }
+
+    private data class WorkerQueue(
+        val workerName: String,
+        val queueKey: String,
+        val dlqKey: String,
+    )
 }

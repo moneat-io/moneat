@@ -19,6 +19,7 @@ package com.moneat.billing.services
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.QuotaNotificationsSent
 import com.moneat.billing.repositories.SubscriptionRepositoryImpl
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.notifications.services.EmailService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
@@ -59,6 +60,7 @@ private const val BASE_WARNING_NOTIFICATION = "base_80"
 private const val BASE_CRITICAL_NOTIFICATION = "base_90"
 private const val BASE_EXCEEDED_NOTIFICATION = "base_100"
 private const val PAYG_WARNING_NOTIFICATION = "payg_80"
+private const val NANOS_PER_SECOND = 1_000_000_000.0
 
 class BillingBackgroundService(
     private val stripeService: StripeService = StripeService(
@@ -91,8 +93,12 @@ class BillingBackgroundService(
                         lockAtMostFor = 5.minutes,
                         lockAtLeastFor = 55.seconds
                     ) {
-                        val flushed = stripeService.flushPendingMeteredUsage()
-                        if (flushed > 0) logger.info { "Flushed pending metered usage for $flushed subscription(s)" }
+                        recordBackgroundJobRun("billing-metered-flush") {
+                            val flushed = stripeService.flushPendingMeteredUsage()
+                            if (flushed > 0) {
+                                logger.info { "Flushed pending metered usage for $flushed subscription(s)" }
+                            }
+                        }
                     }
                     delay(BILLING_JOB_INTERVAL_MS)
                 }
@@ -106,7 +112,9 @@ class BillingBackgroundService(
                         lockAtMostFor = 5.minutes,
                         lockAtLeastFor = 55.seconds
                     ) {
-                        stripeService.applyDunningDowngrade()
+                        recordBackgroundJobRun("billing-dunning-downgrade") {
+                            stripeService.applyDunningDowngrade()
+                        }
                     }
                     delay(BILLING_JOB_INTERVAL_MS)
                 }
@@ -120,7 +128,9 @@ class BillingBackgroundService(
                         lockAtMostFor = 5.minutes,
                         lockAtLeastFor = 55.seconds
                     ) {
-                        processQuotaThresholdNotifications()
+                        recordBackgroundJobRun("billing-quota-notifications") {
+                            processQuotaThresholdNotifications()
+                        }
                     }
                     delay(BILLING_JOB_INTERVAL_MS)
                 }
@@ -142,6 +152,33 @@ class BillingBackgroundService(
             }
         }
     }
+
+    private suspend fun recordBackgroundJobRun(jobName: String, block: suspend () -> Unit) {
+        val startedAt = System.nanoTime()
+        suspendRunCatching {
+            block()
+        }.fold(
+            onSuccess = {
+                OperationalMetrics.recordBackgroundJobRun(
+                    jobName,
+                    success = true,
+                    elapsedSecondsSince(startedAt)
+                )
+            },
+            onFailure = { cause ->
+                OperationalMetrics.recordBackgroundJobRun(
+                    jobName,
+                    success = false,
+                    elapsedSecondsSince(startedAt),
+                    cause
+                )
+                throw cause
+            }
+        )
+    }
+
+    private fun elapsedSecondsSince(startedAt: Long): Double =
+        (System.nanoTime() - startedAt).toDouble() / NANOS_PER_SECOND
 
     private fun activeBillingOrganizationIds(): List<Int> {
         return transaction {
