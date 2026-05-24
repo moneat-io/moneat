@@ -219,7 +219,7 @@ export function DashboardGrid({
   }
 
   return (
-    <div ref={containerRef} className="w-full">
+    <div ref={containerRef} className="relative z-0 isolate w-full">
       <ResponsiveGridLayout
         className="layout"
         layouts={{lg: layout}}
