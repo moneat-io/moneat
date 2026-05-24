@@ -29,6 +29,7 @@ import com.moneat.dashboards.services.handlers.MySQLHandler
 import com.moneat.dashboards.services.handlers.PostgresHandler
 import com.moneat.dashboards.services.handlers.PrometheusHandler
 import com.moneat.dashboards.services.handlers.UnsupportedHandler
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
@@ -36,6 +37,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -93,6 +96,16 @@ class DashboardHandlersTest {
     private val prometheusHandler = PrometheusHandler()
     private val postgresHandler = PostgresHandler(ConcurrentHashMap())
     private val mysqlHandler = MySQLHandler(ConcurrentHashMap())
+
+    @BeforeTest
+    fun resetMetricsBefore() {
+        OperationalMetrics.resetForTest()
+    }
+
+    @AfterTest
+    fun resetMetricsAfter() {
+        OperationalMetrics.resetForTest()
+    }
 
     // ──── UnsupportedHandler ────
 
@@ -407,6 +420,28 @@ class DashboardHandlersTest {
                         null
                     )
                     assertTrue(rows.isEmpty())
+                    assertPrometheusFailureMetric("query", "http_500")
+                }
+            }
+        }
+
+    @Test
+    fun `Prometheus testConnection records server failures`() =
+        withSelfHosted {
+            runBlocking {
+                MockHttpServer { ex ->
+                    ex.respond(503, "unavailable")
+                }.use { server ->
+                    val port = extractPort(server.baseUrl)
+                    val result = PrometheusHandler().testConnection(
+                        TestConnectionRequest(
+                            sourceType = "prometheus",
+                            host = DEFAULT_HOST,
+                            port = port
+                        )
+                    )
+                    assertFalse(result.success)
+                    assertPrometheusFailureMetric("test_connection", "http_503")
                 }
             }
         }
@@ -430,6 +465,26 @@ class DashboardHandlersTest {
                     assertEquals(2, fields.size)
                     assertEquals("cpu", fields[0].name)
                     assertEquals("gauge", fields[0].type)
+                }
+            }
+        }
+
+    @Test
+    fun `Prometheus getSchema records server failures`() =
+        withSelfHosted {
+            runBlocking {
+                MockHttpServer { ex ->
+                    ex.respond(502, "bad gateway")
+                }.use { server ->
+                    val port = extractPort(server.baseUrl)
+                    val fields = PrometheusHandler().getSchema(
+                        DEFAULT_HOST,
+                        port,
+                        null,
+                        DataSourceCredentials()
+                    )
+                    assertTrue(fields.isEmpty())
+                    assertPrometheusFailureMetric("schema", "http_502")
                 }
             }
         }
@@ -479,6 +534,27 @@ class DashboardHandlersTest {
         }
 
     @Test
+    fun `Prometheus executeLabelValuesQuery records server failures`() =
+        withSelfHosted {
+            runBlocking {
+                MockHttpServer { ex ->
+                    ex.respond(422, "bad query")
+                }.use { server ->
+                    val port = extractPort(server.baseUrl)
+                    val vals =
+                        PrometheusHandler().executeLabelValuesQuery(
+                            DEFAULT_HOST,
+                            port,
+                            DataSourceCredentials(),
+                            "label_values(up, instance)"
+                        )
+                    assertTrue(vals.isEmpty())
+                    assertPrometheusFailureMetric("label_values", "http_422")
+                }
+            }
+        }
+
+    @Test
     fun `Prometheus executeLabelValuesQuery invalid returns empty`() =
         runBlocking {
             val vals = prometheusHandler.executeLabelValuesQuery(
@@ -489,6 +565,14 @@ class DashboardHandlersTest {
             )
             assertTrue(vals.isEmpty())
         }
+
+    private fun assertPrometheusFailureMetric(operation: String, failure: String) {
+        val rendered = OperationalMetrics.scrape()
+        assertContains(rendered, "moneat_datasource_query_failures_total")
+        assertContains(rendered, "source_type=\"prometheus\"")
+        assertContains(rendered, "operation=\"$operation\"")
+        assertContains(rendered, "failure=\"$failure\"")
+    }
 
     // ──── ElasticsearchHandler ────
 

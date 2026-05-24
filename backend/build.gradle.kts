@@ -291,7 +291,7 @@ val jacocoBackendMainExcludes =
         "**/sso/**", // OIDC/OAuth routes & service — integration-heavy; gate via detekt + manual/E2E
         "**/Application*", // entry point
         "**/di/**", // Koin module assembly — pure wiring, no business logic
-        "**/monitoring/**", // monitoring module hook — framework wiring only
+        "**/monitoring/MonitoringModule*", // enterprise monitoring module hook — framework wiring only
     )
 
 tasks.jacocoTestReport {

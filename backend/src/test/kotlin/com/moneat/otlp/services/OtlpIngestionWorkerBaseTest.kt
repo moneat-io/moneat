@@ -16,8 +16,17 @@
 
 package com.moneat.otlp.services
 
+import com.moneat.monitoring.OperationalMetrics
+import io.lettuce.core.api.StatefulRedisConnection
 import kotlinx.coroutines.runBlocking
+import kotlin.reflect.KFunction
+import kotlin.reflect.full.callSuspend
+import kotlin.reflect.full.declaredFunctions
+import kotlin.reflect.jvm.isAccessible
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class OtlpIngestionWorkerBaseTest {
@@ -45,6 +54,31 @@ class OtlpIngestionWorkerBaseTest {
         ) {
             processMessage(workerId, payload)
         }
+    }
+
+    private class FailingOtlpIngestionWorker : OtlpIngestionWorkerBase(
+        "test:otlp:failing:queue",
+        "test:otlp:failing:dlq",
+        1,
+        "FailingOtlpIngestionWorker",
+        "failing",
+    ) {
+        override suspend fun processMessage(
+            workerId: Int,
+            payload: String,
+        ) {
+            error("boom")
+        }
+    }
+
+    @BeforeTest
+    fun resetMetricsBefore() {
+        OperationalMetrics.resetForTest()
+    }
+
+    @AfterTest
+    fun resetMetricsAfter() {
+        OperationalMetrics.resetForTest()
     }
 
     @Test
@@ -95,5 +129,66 @@ class OtlpIngestionWorkerBaseTest {
         runBlocking {
             worker.stop()
         }
+    }
+
+    @Test
+    fun `base payload processing records success and failure metrics`() {
+        val successWorker =
+            NoOpOtlpIngestionWorker(
+                "test:otlp:noop:queue",
+                "test:otlp:noop:dlq",
+                1,
+            )
+        val failingWorker = FailingOtlpIngestionWorker()
+
+        runBlocking {
+            processBrpopPayloadFunction.callSuspend(successWorker, 1, "{}")
+            processBrpopPayloadFunction.callSuspend(failingWorker, 2, "{}")
+        }
+
+        val rendered = OperationalMetrics.scrape()
+        assertContains(rendered, "moneat_worker_messages_processed_total")
+        assertContains(rendered, "worker=\"OTLP noop\"")
+        assertContains(rendered, "worker_id=\"1\"")
+        assertContains(rendered, "moneat_worker_processing_failures_total")
+        assertContains(rendered, "worker=\"OTLP failing\"")
+        assertContains(rendered, "worker_id=\"2\"")
+        assertContains(rendered, "exception=\"IllegalStateException\"")
+    }
+
+    @Test
+    fun `base brpop loop failure records metrics`() {
+        val worker =
+            NoOpOtlpIngestionWorker(
+                "test:otlp:noop:queue",
+                "test:otlp:noop:dlq",
+                1,
+            )
+
+        runBlocking {
+            onOtlpBrpopLoopFailureFunction.callSuspend(
+                worker,
+                3,
+                IllegalStateException("redis down"),
+                null,
+                { _: StatefulRedisConnection<String, String> -> },
+            )
+        }
+
+        val rendered = OperationalMetrics.scrape()
+        assertContains(rendered, "moneat_worker_brpop_failures_total")
+        assertContains(rendered, "worker=\"OTLP noop\"")
+        assertContains(rendered, "worker_id=\"3\"")
+        assertContains(rendered, "exception=\"IllegalStateException\"")
+    }
+
+    private companion object {
+        private val processBrpopPayloadFunction = privateBaseFunction("processBrpopPayload")
+        private val onOtlpBrpopLoopFailureFunction = privateBaseFunction("onOtlpBrpopLoopFailure")
+
+        private fun privateBaseFunction(name: String): KFunction<*> =
+            OtlpIngestionWorkerBase::class.declaredFunctions
+                .single { it.name == name }
+                .also { it.isAccessible = true }
     }
 }

@@ -16,10 +16,12 @@
 
 package com.moneat.monitoring
 
+import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertFailsWith
 
 class OperationalMetricsTest {
     @BeforeTest
@@ -141,6 +143,28 @@ class OperationalMetricsTest {
         assertContains(rendered, "job=\"billing-quota-notifications\"")
         assertContains(rendered, "status=\"failure\"")
         assertContains(rendered, "moneat_background_job_duration_seconds_bucket")
+        assertContains(rendered, "moneat_background_job_last_success_timestamp_seconds")
+        assertHasApplicationTag(rendered)
+    }
+
+    @Test
+    fun `records timed background job success and failure`() = runBlocking {
+        OperationalMetrics.recordTimedBackgroundJobRun("timed-success") {
+            // Intentionally empty.
+        }
+
+        assertFailsWith<IllegalStateException> {
+            OperationalMetrics.recordTimedBackgroundJobRun("timed-failure") {
+                error("boom")
+            }
+        }
+
+        val rendered = OperationalMetrics.scrape()
+
+        assertContains(rendered, "job=\"timed-success\"")
+        assertContains(rendered, "job=\"timed-failure\"")
+        assertContains(rendered, "exception=\"IllegalStateException\"")
+        assertContains(rendered, "moneat_background_job_duration_seconds_count")
         assertContains(rendered, "moneat_background_job_last_success_timestamp_seconds")
         assertHasApplicationTag(rendered)
     }

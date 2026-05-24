@@ -246,6 +246,17 @@ object OperationalMetrics {
         ).record(durationSeconds.toNanos(), TimeUnit.NANOSECONDS)
     }
 
+    suspend fun recordTimedBackgroundJobRun(jobName: String, block: suspend () -> Unit) {
+        val startedAt = System.nanoTime()
+        try {
+            block()
+            recordBackgroundJobRun(jobName, success = true, elapsedSecondsSince(startedAt))
+        } catch (cause: Throwable) {
+            recordBackgroundJobRun(jobName, success = false, elapsedSecondsSince(startedAt), cause)
+            throw cause
+        }
+    }
+
     fun recordDatasourceQueryFailure(
         sourceType: String,
         operation: String,
@@ -448,6 +459,9 @@ object OperationalMetrics {
             this is java.net.SocketTimeoutException ||
             message?.contains("timeout", ignoreCase = true) == true ||
             cause?.isTimeoutLike() == true
+
+    private fun elapsedSecondsSince(startedAt: Long): Double =
+        (System.nanoTime() - startedAt).toDouble() / NANOS_PER_SECOND
 
     private fun Double.toNanos(): Long {
         val sanitized = if (isFinite()) coerceAtLeast(0.0) else 0.0
