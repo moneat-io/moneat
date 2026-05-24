@@ -27,6 +27,15 @@ if [ ! -d "node_modules/playwright" ]; then
     echo ""
 fi
 
+# Playwright can be installed while its browser cache is missing or stale.
+# Validate the executable path so the workflow repairs that state automatically.
+BROWSER_PATH="$(node -e "const { chromium } = require('playwright'); process.stdout.write(chromium.executablePath());")"
+if [ ! -x "$BROWSER_PATH" ]; then
+    echo "🌐 Installing missing Playwright Chromium browser..."
+    npx playwright install chromium
+    echo ""
+fi
+
 # Check if dashboard is running
 echo "🔍 Checking if dashboard is running..."
 if ! curl -s http://localhost:3000 > /dev/null 2>&1; then

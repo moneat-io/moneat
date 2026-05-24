@@ -13,7 +13,27 @@
 const fs = require('fs');
 const path = require('path');
 
-const VARIANT_FILE = path.join(__dirname, '../dashboard/src/components/landing/variant-a.tsx');
+const LANDING_DIR = path.join(__dirname, '../dashboard/src/components/landing');
+const VARIANT_FILE_CANDIDATES = [
+  path.join(LANDING_DIR, 'VariantA.tsx'),
+  path.join(LANDING_DIR, 'variant-a.tsx'),
+];
+
+function findVariantFile() {
+  const explicitPath = process.env.VARIANT_FILE;
+  if (explicitPath) {
+    return path.resolve(explicitPath);
+  }
+
+  const variantFile = VARIANT_FILE_CANDIDATES.find((candidate) => fs.existsSync(candidate));
+  if (variantFile) {
+    return variantFile;
+  }
+
+  return VARIANT_FILE_CANDIDATES[0];
+}
+
+const VARIANT_FILE = findVariantFile();
 
 // Map feature identifiers to screenshot filenames
 const SCREENSHOT_MAPPING = {
@@ -56,6 +76,10 @@ function updateLandingPage() {
   
   if (!fs.existsSync(VARIANT_FILE)) {
     console.error(`❌ File not found: ${VARIANT_FILE}`);
+    console.error('   Tried:');
+    VARIANT_FILE_CANDIDATES.forEach((candidate) => {
+      console.error(`   - ${candidate}`);
+    });
     process.exit(1);
   }
   
