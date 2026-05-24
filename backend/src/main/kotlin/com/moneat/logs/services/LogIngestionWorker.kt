@@ -19,7 +19,9 @@ package com.moneat.logs.services
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import com.moneat.logs.repositories.LogRepositoryImpl
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
+import com.moneat.utils.suspendRunCatching
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +34,6 @@ import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
 import kotlin.random.Random
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private const val FULL_SAMPLING_RATE = 1.0f
@@ -50,6 +51,7 @@ class LogIngestionWorker(
 
     fun start() {
         logger.info { "Starting LogIngestionWorker with $workerCount workers, queue=$queueKey" }
+        OperationalMetrics.registerWorkerQueues("Log", queueKey, dlqKey)
         jobs =
             (1..workerCount).map { workerId ->
                 scope.launch {
@@ -117,9 +119,18 @@ class LogIngestionWorker(
             val taggedBatch = batch.copy(logs = taggedLogs)
             val inserted = logService.insertBatch(taggedBatch)
             logService.publishLiveLogs(orgId, inserted)
+            OperationalMetrics.recordWorkerMessageProcessed("Log", workerId)
         }.getOrElse { e ->
             logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
-            onDlq(payload)
+            OperationalMetrics.recordWorkerProcessingFailure("Log", workerId, e)
+            suspendRunCatching {
+                onDlq(payload)
+            }.onSuccess {
+                OperationalMetrics.recordDlqPush("Log", dlqKey, "success")
+            }.onFailure { dlqErr ->
+                OperationalMetrics.recordDlqPush("Log", dlqKey, "failure")
+                logger.error(dlqErr) { "Failed to push log message to DLQ" }
+            }.getOrThrow()
         }
     }
 

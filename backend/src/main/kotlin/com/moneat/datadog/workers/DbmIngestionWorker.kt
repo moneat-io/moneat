@@ -18,6 +18,7 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DbmIngestionService
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
@@ -111,6 +112,7 @@ class DbmIngestionWorker(
                     "metrics=${batch.metrics.size} " +
                     "activity=${batch.activity.size}"
             }
+            OperationalMetrics.recordWorkerMessageProcessed("DBM", workerId)
         }.getOrElse { e ->
             pushToDlq(logger, dlqKey, payload, workerId, "DBM", e)
         }

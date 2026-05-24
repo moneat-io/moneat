@@ -17,6 +17,7 @@
 package com.moneat.utils
 
 import com.moneat.config.RedisConfig
+import com.moneat.monitoring.OperationalMetrics
 import kotlinx.coroutines.delay
 import mu.KLogger
 
@@ -32,6 +33,7 @@ suspend fun brpopLoopBackoff(
     e: Throwable,
 ) {
     logger.error(e) { "$scopeLabel worker $workerId error in BRPOP loop" }
+    OperationalMetrics.recordWorkerBrpopFailure(scopeLabel, workerId, e)
     delay(errorDelayMs)
 }
 
@@ -51,9 +53,13 @@ fun pushToDlq(
     logger.error(cause) {
         "$workerName worker $workerId failed, pushing to DLQ"
     }
+    OperationalMetrics.recordWorkerProcessingFailure(workerName, workerId, cause)
     runCatching {
         RedisConfig.sync().rpush(dlqKey, payload)
+    }.onSuccess {
+        OperationalMetrics.recordDlqPush(workerName, dlqKey, "success")
     }.onFailure { dlqErr ->
+        OperationalMetrics.recordDlqPush(workerName, dlqKey, "failure")
         logger.error(dlqErr) {
             "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
         }

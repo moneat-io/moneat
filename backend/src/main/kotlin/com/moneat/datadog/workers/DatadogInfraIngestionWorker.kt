@@ -18,6 +18,7 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogInfraService
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
@@ -37,6 +38,7 @@ private val logger = KotlinLogging.logger {}
 
 private const val BRPOP_TIMEOUT_SECONDS = 5L
 private const val ERROR_DELAY_MS = 1000L
+private const val WORKER_NAME = "DD infra"
 
 class DatadogInfraIngestionWorker(
     private val queueKey: String,
@@ -83,7 +85,7 @@ class DatadogInfraIngestionWorker(
                     brpopLoopBackoff(
                         logger,
                         workerId,
-                        "DD infra",
+                        WORKER_NAME,
                         ERROR_DELAY_MS,
                         e,
                     )
@@ -91,7 +93,7 @@ class DatadogInfraIngestionWorker(
                     brpopLoopBackoff(
                         logger,
                         workerId,
-                        "DD infra",
+                        WORKER_NAME,
                         ERROR_DELAY_MS,
                         e,
                     )
@@ -110,8 +112,9 @@ class DatadogInfraIngestionWorker(
             val batch =
                 DatadogInfraService.decodeInfraBatch(payload)
             DatadogInfraService.insertInfraBatch(batch)
+            OperationalMetrics.recordWorkerMessageProcessed(WORKER_NAME, workerId)
         }.getOrElse { e ->
-            pushToDlq(logger, dlqKey, payload, workerId, "DD infra", e)
+            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)
         }
     }
 }

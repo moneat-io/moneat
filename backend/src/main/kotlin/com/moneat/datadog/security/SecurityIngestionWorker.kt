@@ -17,6 +17,7 @@
 package com.moneat.datadog.security
 
 import com.moneat.config.RedisConfig
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
@@ -107,6 +108,7 @@ class SecurityIngestionWorker(
                 "Security worker $workerId processed batch: " +
                     "type=${batch.batchType}"
             }
+            OperationalMetrics.recordWorkerMessageProcessed("Security", workerId)
         }.getOrElse { e ->
             pushToDlq(logger, dlqKey, payload, workerId, "Security", e)
         }

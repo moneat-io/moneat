@@ -18,6 +18,7 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.MiscIngestionService
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
 import io.lettuce.core.RedisException
@@ -108,6 +109,7 @@ class MiscIngestionWorker(
                 "Misc worker $workerId processed batch: " +
                     "type=${batch.batchType}"
             }
+            OperationalMetrics.recordWorkerMessageProcessed("Misc", workerId)
         }.getOrElse { e ->
             pushToDlq(logger, dlqKey, payload, workerId, "Misc", e)
         }

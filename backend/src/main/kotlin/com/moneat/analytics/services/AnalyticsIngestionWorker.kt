@@ -20,7 +20,9 @@ import com.moneat.analytics.models.EnrichedAnalyticsEvent
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.config.isClickHouseError
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
@@ -35,7 +37,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import java.io.IOException
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -54,6 +55,7 @@ class AnalyticsIngestionWorker(
 
     fun start() {
         logger.info { "Starting AnalyticsIngestionWorker with $workerCount workers, queue=$queueKey" }
+        OperationalMetrics.registerWorkerQueues("Analytics", queueKey, dlqKey)
         jobs = (1..workerCount).map { id ->
             scope.launch { runWorker(id) }
         }
@@ -81,9 +83,11 @@ class AnalyticsIngestionWorker(
                     break
                 } catch (e: RedisException) {
                     logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
+                    OperationalMetrics.recordWorkerBrpopFailure("Analytics", workerId, e)
                     delay(ERROR_BACKOFF_MS)
                 } catch (e: IOException) {
                     logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
+                    OperationalMetrics.recordWorkerBrpopFailure("Analytics", workerId, e)
                     delay(ERROR_BACKOFF_MS)
                 }
             }
@@ -95,6 +99,7 @@ class AnalyticsIngestionWorker(
         suspendRunCatching {
             val event = json.decodeFromString<EnrichedAnalyticsEvent>(value)
             insertEvent(event)
+            OperationalMetrics.recordWorkerMessageProcessed("Analytics", workerId)
         }.getOrElse { e ->
             logProcessFailureAndDlq(workerId, value, e)
         }
@@ -102,13 +107,16 @@ class AnalyticsIngestionWorker(
 
     private fun logProcessFailureAndDlq(workerId: Int, value: String, e: Throwable) {
         logger.error(e) { "Analytics worker $workerId failed to process message, sending to DLQ" }
+        OperationalMetrics.recordWorkerProcessingFailure("Analytics", workerId, e)
         pushToAnalyticsDlq(workerId, value)
     }
 
     private fun pushToAnalyticsDlq(workerId: Int, value: String) {
         try {
             RedisConfig.sync().rpush(dlqKey, value)
+            OperationalMetrics.recordDlqPush("Analytics", dlqKey, "success")
         } catch (e: RedisException) {
+            OperationalMetrics.recordDlqPush("Analytics", dlqKey, "failure")
             logger.error(e) { "Failed to push to analytics DLQ (worker $workerId)" }
         }
     }

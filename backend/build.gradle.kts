@@ -69,6 +69,7 @@ dependencies {
     implementation(libs.ktor.server.rate.limit)
     implementation(libs.ktor.server.call.logging)
     implementation(libs.ktor.server.status.pages)
+    implementation(libs.ktor.server.metrics.micrometer)
 
     // MCP SDK
     implementation(libs.mcp.kotlin.sdk.server)
@@ -144,6 +145,9 @@ dependencies {
     implementation(libs.opentelemetry.sdk)
     implementation(libs.opentelemetry.exporter.otlp)
     implementation(libs.opentelemetry.logback)
+
+    // Micrometer / Prometheus operational metrics
+    implementation(libs.micrometer.registry.prometheus)
 
     // Sentry - Error monitoring
     implementation(libs.sentry.kotlin)
@@ -287,7 +291,7 @@ val jacocoBackendMainExcludes =
         "**/sso/**", // OIDC/OAuth routes & service — integration-heavy; gate via detekt + manual/E2E
         "**/Application*", // entry point
         "**/di/**", // Koin module assembly — pure wiring, no business logic
-        "**/monitoring/**", // monitoring module hook — framework wiring only
+        "**/monitoring/MonitoringModule*", // enterprise monitoring module hook — framework wiring only
     )
 
 tasks.jacocoTestReport {
