@@ -69,6 +69,8 @@ export interface BillingTierConfig {
   apmSpanOverageRateCentsPer1m?: number
   monthlyCustomMetricLimit?: number
   customMetricOverageRateCentsPer100k?: number
+  monthlyInfraMetricSeriesHourLimit?: number
+  infraMetricOverageRateCentsPer100kSeriesHours?: number
   maxHosts?: number | null
   profilingEnabled?: boolean
   networkMonitoringEnabled?: boolean
@@ -113,6 +115,7 @@ export interface BillingUsage {
   usedLlmBytes?: number
   usedProfilerBytes?: number
   usedApmSpanBytes?: number
+  usedInfraMetricBytes?: number
   bytesLimit: number
   baseLimitUnits: number
   paygLimitUnits: number
@@ -146,6 +149,10 @@ export interface BillingUsage {
   customMetricLimit?: number
   customMetricOverageCentsEstimate?: number
   customMetricOverageRateCentsPer100k?: number
+  usedInfraMetricSeriesHours?: number
+  infraMetricSeriesHourLimit?: number
+  infraMetricOverageCentsEstimate?: number
+  infraMetricOverageRateCentsPer100kSeriesHours?: number
   ingestionOverageCentsEstimate?: number
   ingestionOverageRateCentsPerGb?: number
   plan: string
@@ -267,6 +274,8 @@ export interface CreateTierVersionRequest {
   analyticsRetentionDays?: number | null
   monthlyAnalyticsPageviewLimit?: number | null
   analyticsPageviewOverageRateCentsPer100k?: number | null
+  monthlyInfraMetricSeriesHourLimit?: number | null
+  infraMetricOverageRateCentsPer100kSeriesHours?: number | null
   stripeBasePriceId?: string | null
   stripeOveragePriceId?: string | null
   stripeYearlyBasePriceId?: string | null

@@ -832,12 +832,15 @@ function UsageTab() {
   }
 
   const periodLabel = `${formatDate(usage.periodStart, timezone)} – ${formatDate(usage.periodEnd, timezone)}`
+  const usedApmSpanBytes = usage.usedApmSpanBytes ?? 0
+  const usedInfraMetricBytes = usage.usedInfraMetricBytes ?? 0
+  const gbBilledIngestionBytes = Math.max(0, (usage.usedBytes ?? 0) - usedApmSpanBytes - usedInfraMetricBytes)
 
   const usageRows = [
     {
       key: 'ingestion',
-      label: 'Ingestion',
-      used: usage.usedBytes ?? 0,
+      label: 'GB-Billed Ingestion',
+      used: gbBilledIngestionBytes,
       limit: usage.bytesLimit,
       icon: AlertCircle,
       color: 'text-blue-500',
@@ -863,6 +866,21 @@ function UsageTab() {
         ? `$${(usage.customMetricOverageRateCentsPer100k / 100).toFixed(2)}/100K`
         : null,
       unit: 'events',
+    },
+    {
+      key: 'infra_metric',
+      label: 'Infrastructure Metrics',
+      used: usage.usedInfraMetricSeriesHours ?? 0,
+      limit: usage.infraMetricSeriesHourLimit ?? 0,
+      icon: Database,
+      color: 'text-emerald-500',
+      bgColor: 'bg-emerald-500',
+      retentionDays: usage.retentionDays,
+      overageCents: usage.infraMetricOverageCentsEstimate ?? 0,
+      overageRate: usage.infraMetricOverageRateCentsPer100kSeriesHours
+        ? `$${(usage.infraMetricOverageRateCentsPer100kSeriesHours / 100).toFixed(2)}/100K series-hours`
+        : null,
+      unit: 'series-hours',
     },
     {
       key: 'apm_span',
@@ -902,13 +920,16 @@ function UsageTab() {
     { label: 'Logs', bytes: usage.usedLogBytes ?? 0, color: 'bg-emerald-400' },
     { label: 'LLM', bytes: usage.usedLlmBytes ?? 0, color: 'bg-amber-400' },
     { label: 'Profiling', bytes: usage.usedProfilerBytes ?? 0, color: 'bg-pink-400' },
-    { label: 'APM Spans', bytes: usage.usedApmSpanBytes ?? 0, color: 'bg-violet-400' },
   ]
   const ingestionKnownBytes = ingestionBreakdown.reduce((sum, s) => sum + s.bytes, 0)
-  const ingestionOtherBytes = Math.max(0, (usage.usedBytes ?? 0) - ingestionKnownBytes)
+  const ingestionOtherBytes = Math.max(0, gbBilledIngestionBytes - ingestionKnownBytes)
   const ingestionSegments = [
     ...ingestionBreakdown,
     { label: 'Other', bytes: ingestionOtherBytes, color: 'bg-blue-300' },
+  ].filter((s) => s.bytes > 0)
+  const nonGbBilledBreakdown = [
+    { label: 'APM Spans', bytes: usedApmSpanBytes, color: 'bg-violet-400' },
+    { label: 'Infra Metrics', bytes: usedInfraMetricBytes, color: 'bg-teal-400' },
   ].filter((s) => s.bytes > 0)
 
   const UNLIMITED_SENTINEL = 9_007_199_254_740_000
@@ -943,10 +964,10 @@ function UsageTab() {
 
   // GB conversion: 1 GB = 1,073,741,824 bytes (binary)
   const formatGB = (bytes: number) => (bytes / BYTES_PER_GB).toFixed(2)
-  const usedGB = formatGB(usage.usedBytes)
+  const usedGB = formatGB(gbBilledIngestionBytes)
   const limitGB = usage.bytesLimit > 0 ? formatGB(usage.bytesLimit) : null
   const isUnlimitedGB = !usage.bytesLimit || usage.bytesLimit <= 0
-  const overageGB = usage.bytesLimit > 0 && usage.usedBytes > usage.bytesLimit
+  const overageGB = usage.bytesLimit > 0 && gbBilledIngestionBytes > usage.bytesLimit
 
   return (
     <div className="space-y-6">
@@ -1028,6 +1049,14 @@ function UsageTab() {
                           <span className="text-xs text-muted-foreground">Other · {formatGB(ingestionOtherBytes)} GB</span>
                         </div>
                       )}
+                      {nonGbBilledBreakdown.map((seg) => (
+                        <div key={seg.label} className="flex items-center gap-1">
+                          <div className={`h-1.5 w-1.5 rounded-full ${seg.color}`} />
+                          <span className="text-xs text-muted-foreground">
+                            {seg.label} · {formatGB(seg.bytes)} GB tracked
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : (
@@ -1067,12 +1096,12 @@ function UsageTab() {
             )
           })}
 
-          {/* Total data volume */}
+          {/* GB-billed data volume */}
           <div className="rounded-lg border border-dashed p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Database className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">Total data ingested</span>
+                <span className="text-sm font-medium text-muted-foreground">GB-billed ingestion</span>
               </div>
               <span className="text-sm font-semibold">
                 {usedGB} GB
@@ -1082,7 +1111,7 @@ function UsageTab() {
             {overageGB && (
               <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600">
                 <AlertTriangle className="h-3 w-3" />
-                <span>Total data exceeds base GB limit.</span>
+                <span>GB-billed ingestion exceeds the base GB limit.</span>
               </div>
             )}
           </div>

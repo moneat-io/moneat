@@ -17,16 +17,19 @@
 package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
-import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.DatadogMetricBillingRequest
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.decompression.MetricPayloadDecoder
 import com.moneat.datadog.decompression.SketchPayloadDecoder
+import com.moneat.datadog.metricSeriesBillingRequest
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogSketchPayload
+import com.moneat.datadog.reserveDatadogQuotaBatch
 import com.moneat.datadog.services.DatadogHostService
 import com.moneat.datadog.services.DatadogMetricService
 import com.moneat.datadog.services.QueuedSketchBatch
+import com.moneat.datadog.sketchBillingRequest
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -115,9 +118,9 @@ private suspend fun RoutingContext.acceptMetricSeries(
     payload: DatadogMetricSeriesV1,
     apiVersion: String
 ) {
-    val requestedUnits = countV1MetricPoints(payload)
     touchMetricHosts(orgId, payload)
-    if (!reserveMetricQuota(quotaService, orgId, requestedUnits, body)) return
+    val billingRequest = metricSeriesBillingRequest(payload, body.size.toLong())
+    if (!reserveMetricQuota(quotaService, orgId, billingRequest)) return
 
     val count = DatadogMetricService.enqueueMetrics(
         organizationId = orgId.toLong(),
@@ -190,7 +193,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches(
     )
 
     touchSketchHosts(orgId, payload)
-    if (!reserveMetricQuota(quotaService, orgId, batch.sketches.size, body)) return
+    val billingRequest = sketchBillingRequest(payload, body.size.toLong())
+    if (!reserveMetricQuota(quotaService, orgId, billingRequest)) return
 
     insertSketchBatchIfPresent(batch)
 
@@ -211,16 +215,14 @@ private suspend fun RoutingContext.receiveDecompressedBody(): ByteArray {
 private suspend fun RoutingContext.reserveMetricQuota(
     quotaService: BillingQuotaService,
     orgId: Int,
-    requestedUnits: Int,
-    body: ByteArray
+    billingRequest: DatadogMetricBillingRequest,
 ): Boolean {
-    return reserveDatadogQuota(
+    return reserveDatadogQuotaBatch(
         call,
         quotaService,
         orgId,
-        requestedUnits,
-        "dd_metric",
-        body.size.toLong(),
+        billingRequest.requestedUnitsByType,
+        billingRequest.requestedBytesByType,
     )
 }
 
@@ -252,10 +254,4 @@ private suspend fun ApplicationCall.respondInvalidPayload() {
 
 private suspend fun ApplicationCall.respondAccepted() {
     respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-}
-
-private fun countV1MetricPoints(payload: DatadogMetricSeriesV1): Int {
-    return payload.series.sumOf { series ->
-        series.points.count { point -> point.size >= 2 }
-    }
 }

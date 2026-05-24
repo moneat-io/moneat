@@ -205,7 +205,10 @@ class BillingBackgroundService(
     }
 
     private fun gbEligibleBytes(usage: BillingUsageResponse): Long {
-        return kotlin.math.max(0L, usage.usedBytes - usage.usedApmSpanBytes)
+        return kotlin.math.max(
+            0L,
+            usage.usedBytes - usage.usedApmSpanBytes - usage.usedInfraMetricBytes
+        )
     }
 
     private fun percentageOrZero(value: Long, limit: Long): Double {
@@ -286,7 +289,7 @@ class BillingBackgroundService(
                     appendLine("Base limit: ${usage.baseLimitUnits} units")
                 }
                 if (usage.bytesLimit > 0) {
-                    val eligible = kotlin.math.max(0L, usage.usedBytes - usage.usedApmSpanBytes)
+                    val eligible = gbEligibleBytes(usage)
                     val usedGb = "%.2f".format(eligible / BYTES_PER_GB)
                     val limitGb = "%.2f".format(usage.bytesLimit / BYTES_PER_GB)
                     appendLine("Ingestion: $usedGb / $limitGb GB")

@@ -50,3 +50,30 @@ internal suspend fun reserveDatadogQuota(
     )
     return false
 }
+
+internal suspend fun reserveDatadogQuotaBatch(
+    call: ApplicationCall,
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnitsByType: Map<String, Int>,
+    requestedBytesByType: Map<String, Long>,
+): Boolean {
+    if (!quotaService.isEnforcementEnabled()) {
+        return true
+    }
+
+    val reservation = quotaService.reserveUnitsBatch(
+        organizationId = organizationId,
+        requestedUnitsByType = requestedUnitsByType,
+        requestedBytesByType = requestedBytesByType,
+    )
+    if (reservation.allowed) {
+        return true
+    }
+
+    call.respond(
+        HttpStatusCode.TooManyRequests,
+        QuotaExceededResponse(reason = reservation.reason, usage = reservation.usage)
+    )
+    return false
+}

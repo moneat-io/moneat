@@ -79,6 +79,10 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val custom_metric_overage_rate_cents_per_100k = integer(
         "custom_metric_overage_rate_cents_per_100k"
     ).default(0)
+    val monthly_infra_metric_series_hour_limit = long("monthly_infra_metric_series_hour_limit").default(0)
+    val infra_metric_overage_rate_cents_per_100k_series_hours = integer(
+        "infra_metric_overage_rate_cents_per_100k_series_hours"
+    ).default(0)
     val max_hosts = integer("max_hosts").nullable()
     val profiling_enabled = bool("profiling_enabled").default(false)
     val network_monitoring_enabled = bool("network_monitoring_enabled").default(false)
@@ -121,6 +125,8 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val used_analytics_pageviews = long("used_analytics_pageviews").default(0)
     val used_apm_spans = long("used_apm_spans").default(0)
     val used_custom_metrics = long("used_custom_metrics").default(0)
+    val used_infra_metric_series_hours = long("used_infra_metric_series_hours").default(0)
+    val used_infra_metric_bytes = long("used_infra_metric_bytes").default(0)
     val used_synthetic_runs = long("used_synthetic_runs").default(0)
     val used_uptime_checks = long("used_uptime_checks").default(0)
     val used_ai_tokens = long("used_ai_tokens").default(0)
@@ -203,6 +209,8 @@ data class PricingTierConfigResponse(
     val apmSpanOverageRateCentsPer1m: Int = 0,
     val monthlyCustomMetricLimit: Long = 0,
     val customMetricOverageRateCentsPer100k: Int = 0,
+    val monthlyInfraMetricSeriesHourLimit: Long = 0,
+    val infraMetricOverageRateCentsPer100kSeriesHours: Int = 0,
     val maxHosts: Int? = null,
     val profilingEnabled: Boolean = false,
     val networkMonitoringEnabled: Boolean = false,
@@ -297,6 +305,11 @@ data class BillingUsageResponse(
     val apmSpanLimit: Long = 0,
     val usedCustomMetrics: Long = 0,
     val customMetricLimit: Long = 0,
+    val usedInfraMetricSeriesHours: Long = 0,
+    val usedInfraMetricBytes: Long = 0,
+    val infraMetricSeriesHourLimit: Long = 0,
+    val infraMetricOverageCentsEstimate: Int = 0,
+    val infraMetricOverageRateCentsPer100kSeriesHours: Int = 0,
     val plan: String,
     val status: String,
     val withinQuota: Boolean,
@@ -465,6 +478,8 @@ data class CreateTierVersionRequest(
     val apmSpanOverageRateCentsPer1m: Int? = null,
     val monthlyCustomMetricLimit: Long? = null,
     val customMetricOverageRateCentsPer100k: Int? = null,
+    val monthlyInfraMetricSeriesHourLimit: Long? = null,
+    val infraMetricOverageRateCentsPer100kSeriesHours: Int? = null,
     val maxHosts: Int? = null,
     val profilingEnabled: Boolean? = null,
     val networkMonitoringEnabled: Boolean? = null,

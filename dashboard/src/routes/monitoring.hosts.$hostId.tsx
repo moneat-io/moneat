@@ -59,7 +59,7 @@ import {formatTimeHM} from '@/lib/date-format'
 
 type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
 type ContainerViewMode = 'cards' | 'compact'
-type HostMonitoringLimitKind = 'gb' | 'customMetrics'
+type HostMonitoringLimitKind = 'gb' | 'infraMetrics'
 
 const CONTAINER_VIEW_MODE_KEY = 'moneat.host-containers.viewMode'
 const BYTES_PER_GB = 1024 * 1024 * 1024
@@ -143,7 +143,10 @@ function getPercentColor(value: number | undefined): string {
 function getHostMonitoringLimitState(usage: BillingUsage | undefined): HostMonitoringLimitState | null {
   if (!usage) return null
 
-  const usedGbEligibleBytes = Math.max(0, usage.usedBytes - (usage.usedApmSpanBytes ?? 0))
+  const usedGbEligibleBytes = Math.max(
+    0,
+    usage.usedBytes - (usage.usedApmSpanBytes ?? 0) - (usage.usedInfraMetricBytes ?? 0),
+  )
   const effectiveBytesLimit = usage.bytesLimit + (usage.bonusGbBytes ?? 0) + (usage.paygLimitBytes ?? 0)
 
   if (usage.bytesLimit > 0 && usedGbEligibleBytes > effectiveBytesLimit) {
@@ -160,24 +163,24 @@ function getHostMonitoringLimitState(usage: BillingUsage | undefined): HostMonit
     }
   }
 
-  const customMetricLimit = usage.customMetricLimit ?? 0
-  const customMetricOverageRate = usage.customMetricOverageRateCentsPer100k ?? 0
-  const effectiveCustomMetricLimit = customMetricLimit + (usage.bonusUnits ?? 0)
-  const customMetricsBlocked =
-    customMetricLimit >= 0 &&
-    customMetricOverageRate <= 0 &&
-    (usage.usedCustomMetrics ?? 0) > effectiveCustomMetricLimit
+  const infraMetricLimit = usage.infraMetricSeriesHourLimit ?? 0
+  const infraMetricOverageRate = usage.infraMetricOverageRateCentsPer100kSeriesHours ?? 0
+  const effectiveInfraMetricLimit = infraMetricLimit + (usage.bonusUnits ?? 0)
+  const infraMetricsBlocked =
+    infraMetricLimit >= 0 &&
+    infraMetricOverageRate <= 0 &&
+    (usage.usedInfraMetricSeriesHours ?? 0) > effectiveInfraMetricLimit
 
-  if (customMetricsBlocked) {
+  if (infraMetricsBlocked) {
     return {
-      kind: 'customMetrics',
-      title: 'Host metrics are paused by custom metric limits',
+      kind: 'infraMetrics',
+      title: 'Host metrics are paused by infrastructure metric limits',
       message:
-        `This organization has used ${formatCount(usage.usedCustomMetrics ?? 0)} of ` +
-        `${formatCount(effectiveCustomMetricLimit)} included custom metrics.`,
+        `This organization has used ${formatCount(usage.usedInfraMetricSeriesHours ?? 0)} of ` +
+        `${formatCount(effectiveInfraMetricLimit)} included infrastructure metric series-hours.`,
       detail:
         'New host metric points are rejected until capacity is added or the billing period resets.',
-      emptyMessage: 'Custom metric limit reached, so no new host metric points are being stored.',
+      emptyMessage: 'Infrastructure metric limit reached, so no new host metric points are being stored.',
     }
   }
 
@@ -1036,26 +1039,26 @@ function HostDetailPage() {
                   <div className="mx-auto max-w-2xl text-center">
                     <div
                       className={
-                        hostMonitoringLimitState?.kind === 'gb'
+                        hostMonitoringLimitState
                           ? 'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl ' +
                             'bg-amber-500/10 border border-amber-500/20'
                           : 'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl ' +
                             'bg-cyan-500/10 border border-cyan-500/20'
                       }
                     >
-                      {hostMonitoringLimitState?.kind === 'gb' ? (
+                      {hostMonitoringLimitState ? (
                         <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
                       ) : (
                         <Box className="h-8 w-8 text-cyan-600 dark:text-cyan-400" />
                       )}
                     </div>
                     <h3 className="text-xl font-semibold mb-2">
-                      {hostMonitoringLimitState?.kind === 'gb'
-                        ? 'Infrastructure telemetry paused'
+                      {hostMonitoringLimitState
+                        ? hostMonitoringLimitState.title
                         : 'No containers detected'}
                     </h3>
                     <p className="text-muted-foreground text-sm mb-6">
-                      {hostMonitoringLimitState?.kind === 'gb'
+                      {hostMonitoringLimitState
                         ? hostMonitoringLimitState.emptyMessage
                         : 'Enable container monitoring by mounting the Docker socket when deploying the agent.'}
                     </p>

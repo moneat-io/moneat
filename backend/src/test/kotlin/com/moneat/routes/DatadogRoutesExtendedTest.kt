@@ -254,6 +254,13 @@ class DatadogRoutesExtendedTest {
             reason = "gb_quota_exceeded",
             usage = quotaUsage(),
         )
+        every {
+            quotaService.reserveUnitsBatch(any(), any(), any())
+        } returns QuotaReservationResult(
+            allowed = false,
+            reason = "event_type_quota_exceeded",
+            usage = quotaUsage(),
+        )
         return quotaService
     }
 
@@ -521,6 +528,43 @@ class DatadogRoutesExtendedTest {
         }
 
     @Test
+    fun `POST dd api v1 series bills infra namespaces separately from custom metrics`() = testApplication {
+        val quotaService = mockk<BillingQuotaService>()
+        val body =
+            """{"series":[""" +
+                """{"metric":"system.cpu","host":"h1","tags":["device:vda"],"points":""" +
+                """[[1700000000,42.0],[1700000060,43.0]]},""" +
+                """{"metric":"checkout.orders","host":"h1","points":[[1700000000,1.0],[1700000060,2.0]]}""" +
+                """]}"""
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnitsBatch(any(), any(), any())
+        } returns QuotaReservationResult(
+            allowed = true,
+            usage = quotaUsage(),
+        )
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogMetricRoutes(quotaService) }
+        }
+        val response = client.post("/dd/api/v1/series") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        verify {
+            quotaService.reserveUnitsBatch(
+                organizationId = TEST_ORG_ID,
+                requestedUnitsByType = mapOf("infra_metric" to 1, "dd_metric" to 2),
+                requestedBytesByType = any(),
+            )
+        }
+    }
+
+    @Test
     fun `POST dd api v2 series returns 202`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
@@ -756,6 +800,38 @@ class DatadogRoutesExtendedTest {
     }
 
     @Test
+    fun `POST dd dogstatsd v2 proxy bills infra namespaces separately`() = testApplication {
+        val quotaService = mockk<BillingQuotaService>()
+        val body = "system.cpu.user:42|g|#host:h1\napp.orders:1|c|#env:prod"
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnitsBatch(any(), any(), any())
+        } returns QuotaReservationResult(
+            allowed = true,
+            usage = quotaUsage(),
+        )
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogDogStatsDRoutes(quotaService) }
+        }
+        val response = client.post("/dd/dogstatsd/v2/proxy") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.OctetStream)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        verify {
+            quotaService.reserveUnitsBatch(
+                organizationId = TEST_ORG_ID,
+                requestedUnitsByType = mapOf("infra_metric" to 1, "dd_metric" to 1),
+                requestedBytesByType = any(),
+            )
+        }
+    }
+
+    @Test
     fun `PUT dd traces returns 429 when quota is exceeded`() = testApplication {
         val quotaService = rejectingQuotaService()
         val body = """[[{"trace_id":1,"span_id":2,"name":"web.request"}]]"""
@@ -800,11 +876,10 @@ class DatadogRoutesExtendedTest {
 
         assertEquals(HttpStatusCode.TooManyRequests, response.status)
         verify {
-            quotaService.reserveUnits(
+            quotaService.reserveUnitsBatch(
                 organizationId = TEST_ORG_ID,
-                requestedUnits = 1,
-                eventType = "dd_metric",
-                requestedBytes = body.toByteArray().size.toLong(),
+                requestedUnitsByType = mapOf("infra_metric" to 1),
+                requestedBytesByType = mapOf("infra_metric" to body.toByteArray().size.toLong()),
             )
         }
         verify { DatadogHostService.touchHostLastSeen(TEST_ORG_ID, setOf("h1")) }

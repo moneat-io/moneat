@@ -61,6 +61,8 @@ export interface PricingCardTierInput {
   apmSpanOverageRateCentsPer1m?: number
   monthlyCustomMetricLimit?: number
   customMetricOverageRateCentsPer100k?: number
+  monthlyInfraMetricSeriesHourLimit?: number
+  infraMetricOverageRateCentsPer100kSeriesHours?: number
   maxHosts?: number | null
   profilingEnabled?: boolean
   networkMonitoringEnabled?: boolean
@@ -154,6 +156,12 @@ function buildIncludedLimits(tier: PricingCardTierInput): string[] {
   const metricLimit = tier.monthlyCustomMetricLimit
   if (metricLimit != null && metricLimit > 0) {
     limits.push(`${isUnlimited(metricLimit) ? 'Unlimited' : formatEventLimit(metricLimit)} custom metrics`)
+  }
+
+  const infraMetricLimit = tier.monthlyInfraMetricSeriesHourLimit
+  if (infraMetricLimit != null && (infraMetricLimit > 0 || isUnlimited(infraMetricLimit))) {
+    const limitText = isUnlimited(infraMetricLimit) ? 'Unlimited' : formatEventLimit(infraMetricLimit)
+    limits.push(`${limitText} infra metric series-hours`)
   }
 
   const spanLimit = tier.monthlyApmSpanLimit
@@ -261,6 +269,11 @@ function buildOverages(tier: PricingCardTierInput): OverageItem[] {
   const metricRate = tier.customMetricOverageRateCentsPer100k
   if (metricRate != null && metricRate > 0) {
     overages.push({label: 'Custom metrics', rate: formatCentsRate(metricRate, '100K')})
+  }
+
+  const infraMetricRate = tier.infraMetricOverageRateCentsPer100kSeriesHours
+  if (infraMetricRate != null && infraMetricRate > 0) {
+    overages.push({label: 'Infra metrics', rate: formatCentsRate(infraMetricRate, '100K series-hours')})
   }
 
   const spanRate = tier.apmSpanOverageRateCentsPer1m
