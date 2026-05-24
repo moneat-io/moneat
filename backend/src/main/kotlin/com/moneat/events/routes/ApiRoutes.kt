@@ -107,12 +107,25 @@ fun Route.apiRoutes() {
                 get("/subscription") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
-                    val pricingTierService = koin.get<PricingTierService>()
-                    val orgId =
-                        pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                            call.respond(HttpStatusCode.NotFound, ErrorResponse("No organization access"))
-                            return@get
+                    val orgId = principal.payload.getClaim("orgId").asInt()
+                    if (orgId == null) {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("No organization access"))
+                        return@get
+                    }
+                    val hasOrganizationAccess =
+                        transaction {
+                            Memberships
+                                .selectAll()
+                                .where {
+                                    (Memberships.user_id eq userId) and
+                                        (Memberships.organization_id eq orgId)
+                                }.firstOrNull() != null
                         }
+                    if (!hasOrganizationAccess) {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("No organization access"))
+                        return@get
+                    }
+                    val pricingTierService = koin.get<PricingTierService>()
                     val context = pricingTierService.getEffectiveTierForOrganization(orgId)
                     call.respond(
                         mapOf(

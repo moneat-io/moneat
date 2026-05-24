@@ -19,6 +19,7 @@ package com.moneat.sso.routes
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.shared.models.Memberships
+import com.moneat.sso.SsoForbiddenException
 import com.moneat.sso.models.SsoConfigRequest
 import com.moneat.sso.models.SsoInitRequest
 import com.moneat.sso.models.SsoProviderType
@@ -162,24 +163,50 @@ fun Route.ssoRoutes() {
 
             put(SSO_CONFIG_PATH) {
                 val ctx = call.requireSsoAuth() ?: return@put
-                val request = call.receive<SsoConfigRequest>()
-                val providerType =
-                    try {
-                        SsoProviderType.fromString(request.providerType)
-                    } catch (e: IllegalArgumentException) {
-                        throw BadRequestException(e.message ?: "Invalid SSO provider type")
+                suspendRunCatching {
+                    val request = call.receive<SsoConfigRequest>()
+                    val providerType =
+                        try {
+                            SsoProviderType.fromString(request.providerType)
+                        } catch (e: IllegalArgumentException) {
+                            throw BadRequestException(e.message ?: "Invalid SSO provider type")
+                        }
+                    if (providerType == SsoProviderType.SAML &&
+                        !FeatureRegistry.hasModule("SAML")
+                    ) {
+                        call.respond(
+                            HttpStatusCode.Forbidden,
+                            ErrorResponse("SAML SSO requires an enterprise license")
+                        )
+                        return@suspendRunCatching
                     }
-                if (providerType == SsoProviderType.SAML &&
-                    !FeatureRegistry.hasModule("SAML")
-                ) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        ErrorResponse("SAML SSO requires an enterprise license")
-                    )
-                    return@put
+                    val config = ssoService.configureSso(ctx.orgId, ctx.userId, request)
+                    call.respond(config)
+                }.onFailure { e ->
+                    when (e) {
+                        is BadRequestException -> {
+                            logger.error(e) { "SSO config request failed: ${e.message}" }
+                            call.respond(
+                                HttpStatusCode.BadRequest,
+                                ErrorResponse(e.message)
+                            )
+                        }
+                        is SsoForbiddenException -> {
+                            logger.error(e) { "SSO config forbidden: ${e.message}" }
+                            call.respond(
+                                HttpStatusCode.Forbidden,
+                                ErrorResponse(e.message)
+                            )
+                        }
+                        else -> {
+                            logger.error(e) { "Configure SSO error" }
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                ErrorResponse("Failed to configure SSO")
+                            )
+                        }
+                    }
                 }
-                val config = ssoService.configureSso(ctx.orgId, ctx.userId, request)
-                call.respond(config)
             }
 
             delete(SSO_CONFIG_PATH) {

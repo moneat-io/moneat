@@ -7,14 +7,16 @@ package com.moneat.enterprise.sso.routes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.models.PricingTierConfigs
-import com.moneat.enterprise.sso.models.SsoConfigRequest
-import com.moneat.enterprise.sso.services.SsoService
 import com.moneat.enterprise.sso.support.EnterpriseTestDatabaseHelper
+import com.moneat.enterprise.sso.support.MockOidcDiscoveryServer
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SsoConfigurations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.sso.models.SsoConfigRequest
+import com.moneat.sso.routes.ssoRoutes
+import com.moneat.sso.services.SsoService
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -199,38 +201,62 @@ class SsoRoutesTest {
         }
     }
 
+    private fun <T> withSelfHosted(block: () -> T): T {
+        val key = "SELF_HOSTED"
+        val previous = System.getProperty(key)
+        System.setProperty(key, "true")
+        return try {
+            block()
+        } finally {
+            if (previous == null) {
+                System.clearProperty(key)
+            } else {
+                System.setProperty(key, previous)
+            }
+        }
+    }
+
+    private fun <T> withOidcDiscoveryServer(block: (issuerUrl: String) -> T): T =
+        MockOidcDiscoveryServer().use { server ->
+            withSelfHosted {
+                block(server.baseUrl)
+            }
+        }
+
     @Test
     fun `post auth sso init returns OIDC redirect payload`() =
         withFrontendUrl {
-            val (orgId, ownerId, _) = seedTeamOrgOwner()
-            val service = SsoService()
-            service.configureSso(
-                orgId,
-                ownerId,
-                SsoConfigRequest(
-                    providerType = "oidc",
-                    oidcIssuerUrl = OIDC_ISSUER,
-                    oidcClientId = "route-client",
-                    oidcClientSecret = "route-secret",
-                    emailDomain = "routes.example",
-                ),
-            )
+            withOidcDiscoveryServer { issuerUrl ->
+                val (orgId, ownerId, _) = seedTeamOrgOwner()
+                val service = SsoService()
+                service.configureSso(
+                    orgId,
+                    ownerId,
+                    SsoConfigRequest(
+                        providerType = "oidc",
+                        oidcIssuerUrl = issuerUrl,
+                        oidcClientId = "route-client",
+                        oidcClientSecret = "route-secret",
+                        emailDomain = "routes.example",
+                    ),
+                )
 
-            testApplication {
-                application {
-                    installAuthAndJson()
-                }
-                routing { ssoRoutes() }
-
-                val response =
-                    client.post("/auth/sso/init") {
-                        header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-                        setBody("""{"email":"user@routes.example"}""")
+                testApplication {
+                    application {
+                        installAuthAndJson()
                     }
-                assertEquals(HttpStatusCode.OK, response.status)
-                val body = response.bodyAsText()
-                assertTrue(body.contains("protocol/openid-connect/auth"))
-                assertTrue(body.contains("route-client"))
+                    routing { ssoRoutes() }
+
+                    val response =
+                        client.post("/auth/sso/init") {
+                            header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                            setBody("""{"email":"user@routes.example"}""")
+                        }
+                    assertEquals(HttpStatusCode.OK, response.status)
+                    val body = response.bodyAsText()
+                    assertTrue(body.contains("protocol/openid-connect/auth"))
+                    assertTrue(body.contains("route-client"))
+                }
             }
         }
 
@@ -352,7 +378,7 @@ class SsoRoutesTest {
         }
 
     @Test
-    fun `post v1 sso check-required reflects domain configuration`() =
+    fun `post v1 sso check-required stays false without SAML module`() =
         withFrontendUrl {
             val (orgId, ownerId, _) = seedTeamOrgOwner()
             testApplication {
@@ -370,22 +396,42 @@ class SsoRoutesTest {
                 assertEquals(HttpStatusCode.OK, before.status)
                 assertTrue(before.bodyAsText().contains("\"required\":false"))
 
-                client.put("/v1/sso/config?organizationId=$orgId") {
-                    header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
-                    header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-                    setBody(
-                        """
-                        {
-                          "providerType": "oidc",
-                          "oidcIssuerUrl": "$OIDC_ISSUER",
-                          "oidcClientId": "chk",
-                          "oidcClientSecret": "chk",
-                          "emailDomain": "check.example",
-                          "requireSso": true
-                        }
-                        """.trimIndent(),
-                    )
-                }
+                val deniedRequireSso =
+                    client.put("/v1/sso/config?organizationId=$orgId") {
+                        header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
+                        header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        setBody(
+                            """
+                            {
+                              "providerType": "oidc",
+                              "oidcIssuerUrl": "$OIDC_ISSUER",
+                              "oidcClientId": "chk",
+                              "oidcClientSecret": "chk",
+                              "emailDomain": "check.example",
+                              "requireSso": true
+                            }
+                            """.trimIndent(),
+                        )
+                    }
+                assertEquals(HttpStatusCode.Forbidden, deniedRequireSso.status)
+
+                val allowed =
+                    client.put("/v1/sso/config?organizationId=$orgId") {
+                        header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
+                        header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        setBody(
+                            """
+                            {
+                              "providerType": "oidc",
+                              "oidcIssuerUrl": "$OIDC_ISSUER",
+                              "oidcClientId": "chk",
+                              "oidcClientSecret": "chk",
+                              "emailDomain": "check.example"
+                            }
+                            """.trimIndent(),
+                        )
+                    }
+                assertEquals(HttpStatusCode.OK, allowed.status)
 
                 val after =
                     client.post("/v1/sso/check-required") {
@@ -394,7 +440,7 @@ class SsoRoutesTest {
                         setBody("""{"email":"b@check.example"}""")
                     }
                 assertEquals(HttpStatusCode.OK, after.status)
-                assertTrue(after.bodyAsText().contains("\"required\":true"))
+                assertTrue(after.bodyAsText().contains("\"required\":false"))
             }
         }
 

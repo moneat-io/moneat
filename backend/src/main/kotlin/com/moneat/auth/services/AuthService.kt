@@ -586,12 +586,12 @@ class AuthService(
         val decodedJWT = jwtVerifier.verify(tokenPair.accessToken)
         val userId = decodedJWT.getClaim("userId").asInt()
         val email = decodedJWT.getClaim("email").asString()
+        val orgId = decodedJWT.getClaim("orgId").asInt()
+        val orgRole = decodedJWT.getClaim("orgRole").asString()
 
         val user = run {
             val userRow = userRepository.findById(userId) ?: return null
-            val membership = membershipRepository.getFirstMembershipForUser(userId)
-            val organizationSlug =
-                membership?.let { organizationRepository.findById(it.organizationId)?.slug }
+            val organizationSlug = orgId?.let { organizationRepository.findById(it)?.slug }
             UserResponse(
                 id = userId,
                 email = email,
@@ -600,7 +600,7 @@ class AuthService(
                 onboardingCompleted = userRow.onboardingCompleted,
                 isAdmin = userRow.isAdmin,
                 organizationSlug = organizationSlug,
-                orgRole = membership?.role,
+                orgRole = orgRole,
             )
         }
 
