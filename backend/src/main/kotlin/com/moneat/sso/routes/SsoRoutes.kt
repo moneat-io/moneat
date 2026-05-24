@@ -54,8 +54,12 @@ private val logger = KotlinLogging.logger {}
 private const val SSO_CONFIG_PATH = "/config"
 private const val ERROR_INVALID_TOKEN = "Invalid token"
 private const val ERROR_MISSING_ORG_ID = "Missing organizationId"
+private const val STACKTRACE_MAX_LENGTH = 500
 
 private data class SsoAuthContext(val userId: Int, val orgId: Int)
+
+private fun Throwable.limitedStackTrace(): String =
+    stackTraceToString().take(STACKTRACE_MAX_LENGTH)
 
 private suspend fun ApplicationCall.requireSsoAuth(): SsoAuthContext? {
     val userId = principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()
@@ -132,11 +136,11 @@ private suspend fun ApplicationCall.handleSsoInit(ssoService: SsoService) {
     }.onFailure { e ->
         when (e) {
             is IllegalArgumentException -> {
-                logger.error(e) { "SSO init failed: ${e.message}" }
+                logger.error { "SSO init failed: ${e.limitedStackTrace()}" }
                 respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
             }
             else -> {
-                logger.error(e) { "SSO init error" }
+                logger.error { "SSO init error: ${e.limitedStackTrace()}" }
                 respond(
                     HttpStatusCode.InternalServerError,
                     ErrorResponse("SSO initialization failed")
@@ -160,7 +164,7 @@ private suspend fun ApplicationCall.handleOidcCallback(
         AuthCookieUtils.setAuthCookie(this, callbackData.token)
         respondRedirect("$frontendUrl/auth/sso/callback")
     }.onFailure { e ->
-        logger.error(e) { "OIDC callback error: ${e.message}" }
+        logger.error { "OIDC callback error: ${e.limitedStackTrace()}" }
         respondRedirect("$frontendUrl/login?error=sso_failed")
     }
 }
@@ -176,7 +180,7 @@ private suspend fun ApplicationCall.handleGetSsoConfig(
             else -> respond(config)
         }
     }.onFailure { e ->
-        logger.error(e) { "Get SSO config error" }
+        logger.error { "Get SSO config error: ${e.limitedStackTrace()}" }
         respond(
             HttpStatusCode.InternalServerError,
             ErrorResponse("Failed to retrieve SSO configuration")
@@ -215,15 +219,15 @@ private fun parseSsoProviderType(providerType: String): SsoProviderType =
 private suspend fun ApplicationCall.respondSsoConfigFailure(e: Throwable) {
     when (e) {
         is BadRequestException -> {
-            logger.error(e) { "SSO config request failed: ${e.message}" }
+            logger.error { "SSO config request failed: ${e.limitedStackTrace()}" }
             respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
         }
         is SsoForbiddenException -> {
-            logger.error(e) { "SSO config forbidden: ${e.message}" }
+            logger.error { "SSO config forbidden: ${e.limitedStackTrace()}" }
             respond(HttpStatusCode.Forbidden, ErrorResponse(e.message))
         }
         else -> {
-            logger.error(e) { "Configure SSO error" }
+            logger.error { "Configure SSO error: ${e.limitedStackTrace()}" }
             respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to configure SSO"))
         }
     }
@@ -246,7 +250,7 @@ private suspend fun ApplicationCall.handleDeleteSsoConfig(
         when (e) {
             is SsoForbiddenException -> respond(HttpStatusCode.Forbidden, ErrorResponse(e.message))
             else -> {
-                logger.error(e) { "Delete SSO config error" }
+                logger.error { "Delete SSO config error: ${e.limitedStackTrace()}" }
                 respond(
                     HttpStatusCode.InternalServerError,
                     ErrorResponse("Failed to delete SSO configuration")
@@ -269,7 +273,7 @@ private suspend fun ApplicationCall.handleCheckSsoRequired(ssoService: SsoServic
         val required = ssoService.checkSsoRequired(email)
         respond(mapOf("required" to required))
     }.onFailure { e ->
-        logger.error(e) { "Check SSO required error" }
+        logger.error { "Check SSO required error: ${e.limitedStackTrace()}" }
         respond(
             HttpStatusCode.InternalServerError,
             ErrorResponse("Failed to check SSO requirement")
