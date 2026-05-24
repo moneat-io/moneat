@@ -116,7 +116,7 @@ class LlmIngestionWorker(
         }
     }
 
-    private fun handleLlmDlq(
+    private suspend fun handleLlmDlq(
         workerId: Int,
         value: String,
         e: Throwable,
@@ -124,7 +124,7 @@ class LlmIngestionWorker(
     ) {
         logger.error(e) { "LLM worker $workerId failed to process message, sending to DLQ" }
         OperationalMetrics.recordWorkerProcessingFailure("LLM", workerId, e)
-        runCatching {
+        suspendRunCatching {
             onDlq(value)
         }.onSuccess {
             OperationalMetrics.recordDlqPush("LLM", dlqKey, "success")

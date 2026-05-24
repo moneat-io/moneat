@@ -144,7 +144,7 @@ class IngestionWorker(
         }.onFailure { e ->
             logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
             OperationalMetrics.recordWorkerProcessingFailure("Event", workerId, e)
-            runCatching {
+            suspendRunCatching {
                 onDlq(value)
             }.onSuccess {
                 OperationalMetrics.recordDlqPush("Event", dlqKey, "success")

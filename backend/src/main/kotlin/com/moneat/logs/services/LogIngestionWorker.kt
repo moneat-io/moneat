@@ -123,7 +123,7 @@ class LogIngestionWorker(
         }.getOrElse { e ->
             logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
             OperationalMetrics.recordWorkerProcessingFailure("Log", workerId, e)
-            runCatching {
+            suspendRunCatching {
                 onDlq(payload)
             }.onSuccess {
                 OperationalMetrics.recordDlqPush("Log", dlqKey, "success")
