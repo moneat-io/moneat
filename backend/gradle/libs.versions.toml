@@ -124,7 +124,7 @@ mysql-connector-j = { module = "com.mysql:mysql-connector-j", version = "9.6.0" 
 mariadb-java-client = { module = "org.mariadb.jdbc:mariadb-java-client", version = "3.5.8" }
 mssql-jdbc = { module = "com.microsoft.sqlserver:mssql-jdbc", version = "13.4.0.jre11" }
 clickhouse-jdbc = { module = "com.clickhouse:clickhouse-jdbc", version = "0.9.8" }
-sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version = "3.51.2.0" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version = "3.51.3.0" }
 snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "4.0.2" }
 
 # Non-JDBC data clients / SDKs
