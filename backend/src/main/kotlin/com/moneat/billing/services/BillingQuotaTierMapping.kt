@@ -57,6 +57,7 @@ private const val TEAM_CUSTOM_METRIC_LIMIT = 10_000_000L
 private const val FREE_INFRA_METRIC_SERIES_HOUR_LIMIT = 5_000_000L
 private const val PRO_INFRA_METRIC_SERIES_HOUR_LIMIT = 50_000_000L
 private const val TEAM_INFRA_METRIC_SERIES_HOUR_LIMIT = 250_000_000L
+private const val FREE_TIER_MAX_HOSTS = 3
 
 internal fun quotaTierFromRow(row: ResultRow): PricingTierConfigResponse {
     return PricingTierConfigResponse(
@@ -193,7 +194,7 @@ internal fun quotaTierFromEnum(tierName: String): PricingTierConfigResponse {
         monthlyInfraMetricSeriesHourLimit = monthlyInfraMetricSeriesHourLimit(tier),
         infraMetricOverageRateCentsPer100kSeriesHours =
         if (tier == PricingTier.FREE) 0 else INFRA_METRIC_OVERAGE_RATE_CENTS_PER_100K,
-        maxHosts = if (tier == PricingTier.FREE) 3 else null,
+        maxHosts = if (tier == PricingTier.FREE) FREE_TIER_MAX_HOSTS else null,
         profilingEnabled = true,
         networkMonitoringEnabled = true,
         dbmEnabled = true,

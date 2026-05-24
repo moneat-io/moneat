@@ -159,7 +159,7 @@ function buildIncludedLimits(tier: PricingCardTierInput): string[] {
   }
 
   const infraMetricLimit = tier.monthlyInfraMetricSeriesHourLimit
-  if (infraMetricLimit != null && infraMetricLimit > 0) {
+  if (infraMetricLimit != null && (infraMetricLimit > 0 || isUnlimited(infraMetricLimit))) {
     const limitText = isUnlimited(infraMetricLimit) ? 'Unlimited' : formatEventLimit(infraMetricLimit)
     limits.push(`${limitText} infra metric series-hours`)
   }

@@ -182,7 +182,7 @@ class PricingTierService {
                 if (tierRow != null) {
                     rowToResponse(tierRow)
                 } else {
-                    enumFallbackToResponse(subscription[Subscriptions.plan])
+                    quotaTierFromEnum(subscription[Subscriptions.plan])
                 }
 
             EffectiveTierContext(
@@ -219,7 +219,7 @@ class PricingTierService {
                     .orderBy(PricingTierConfigs.version to SortOrder.DESC)
                     .firstOrNull()
             val currentConfig = current?.let { rowToResponse(it) }
-            val fallbackConfig = enumFallbackToResponse(canonicalName)
+            val fallbackConfig = quotaTierFromEnum(canonicalName)
             val defaults = defaultFeatureFlagsForTier(canonicalName)
             val nextVersion = (current?.get(PricingTierConfigs.version) ?: 0) + 1
 
@@ -605,10 +605,6 @@ class PricingTierService {
                         (PricingTierConfigs.is_current eq true)
                 }.firstOrNull()
         if (row != null) return rowToResponse(row)
-        return enumFallbackToResponse(tierName)
-    }
-
-    private fun enumFallbackToResponse(tierName: String): PricingTierConfigResponse {
         return quotaTierFromEnum(tierName)
     }
 

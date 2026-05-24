@@ -878,7 +878,7 @@ function UsageTab() {
       retentionDays: usage.retentionDays,
       overageCents: usage.infraMetricOverageCentsEstimate ?? 0,
       overageRate: usage.infraMetricOverageRateCentsPer100kSeriesHours
-        ? `$${(usage.infraMetricOverageRateCentsPer100kSeriesHours / 100).toFixed(2)}/100K`
+        ? `$${(usage.infraMetricOverageRateCentsPer100kSeriesHours / 100).toFixed(2)}/100K series-hours`
         : null,
       unit: 'series-hours',
     },
@@ -1096,12 +1096,12 @@ function UsageTab() {
             )
           })}
 
-          {/* Total data volume */}
+          {/* GB-billed data volume */}
           <div className="rounded-lg border border-dashed p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Database className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">Total data ingested</span>
+                <span className="text-sm font-medium text-muted-foreground">GB-billed ingestion</span>
               </div>
               <span className="text-sm font-semibold">
                 {usedGB} GB
@@ -1111,7 +1111,7 @@ function UsageTab() {
             {overageGB && (
               <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600">
                 <AlertTriangle className="h-3 w-3" />
-                <span>Total data exceeds base GB limit.</span>
+                <span>GB-billed ingestion exceeds the base GB limit.</span>
               </div>
             )}
           </div>

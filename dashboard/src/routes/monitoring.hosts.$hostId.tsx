@@ -1039,26 +1039,26 @@ function HostDetailPage() {
                   <div className="mx-auto max-w-2xl text-center">
                     <div
                       className={
-                        hostMonitoringLimitState?.kind === 'gb'
+                        hostMonitoringLimitState
                           ? 'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl ' +
                             'bg-amber-500/10 border border-amber-500/20'
                           : 'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl ' +
                             'bg-cyan-500/10 border border-cyan-500/20'
                       }
                     >
-                      {hostMonitoringLimitState?.kind === 'gb' ? (
+                      {hostMonitoringLimitState ? (
                         <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
                       ) : (
                         <Box className="h-8 w-8 text-cyan-600 dark:text-cyan-400" />
                       )}
                     </div>
                     <h3 className="text-xl font-semibold mb-2">
-                      {hostMonitoringLimitState?.kind === 'gb'
-                        ? 'Infrastructure telemetry paused'
+                      {hostMonitoringLimitState
+                        ? hostMonitoringLimitState.title
                         : 'No containers detected'}
                     </h3>
                     <p className="text-muted-foreground text-sm mb-6">
-                      {hostMonitoringLimitState?.kind === 'gb'
+                      {hostMonitoringLimitState
                         ? hostMonitoringLimitState.emptyMessage
                         : 'Enable container monitoring by mounting the Docker socket when deploying the agent.'}
                     </p>
