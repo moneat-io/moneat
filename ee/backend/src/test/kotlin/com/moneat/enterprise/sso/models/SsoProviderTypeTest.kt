@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.sso.models
 
+import com.moneat.sso.models.SsoProviderType
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

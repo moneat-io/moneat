@@ -54,6 +54,7 @@ data class UserResponse(
     val onboardingCompleted: Boolean = false,
     val isAdmin: Boolean = false,
     val organizationSlug: String? = null,
+    val orgRole: String? = null,
     val demoEpochMs: Long? = null,
     val sidebarHiddenItems: List<String> = emptyList(),
     val phoneNumber: String? = null,

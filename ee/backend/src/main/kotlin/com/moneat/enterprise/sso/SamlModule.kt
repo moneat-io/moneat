@@ -5,23 +5,26 @@
 package com.moneat.enterprise.sso
 
 import com.moneat.enterprise.EnterpriseModule
-import com.moneat.enterprise.sso.routes.ssoRoutes
+import com.moneat.enterprise.sso.routes.samlRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 
 /**
- * Enterprise module for SSO/SAML/OIDC authentication.
+ * Enterprise module for SAML 2.0 single sign-on and SSO enforcement.
+ * Requires the "sso" license feature to activate.
+ *
+ * OIDC SSO is provided by the core SsoModule (no license required).
  */
-class SsoModule : EnterpriseModule {
-    override val name: String = "SSO"
+class SamlModule : EnterpriseModule {
+    override val name: String = "SAML"
     override val licenseFeature: String = "sso"
 
     override fun registerRoutes(route: Route) {
-        route.ssoRoutes()
+        route.samlRoutes()
     }
 
     override fun startBackgroundJobs(application: Application) {
-        // SSO has no background jobs
+        // SAML has no background jobs
     }
 
     override fun stopBackgroundJobs() {

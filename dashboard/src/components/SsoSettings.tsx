@@ -24,10 +24,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/useToast'
 import { AlertCircle, Check, Loader2, Shield } from 'lucide-react'
 
-export function SsoTab() {
+export function SsoTab({
+  hasSamlModule = false,
+  canConfigure = true,
+}: Readonly<{ hasSamlModule?: boolean; canConfigure?: boolean }>) {
+  const readOnly = !canConfigure
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [providerType, setProviderType] = useState<'saml' | 'oidc'>('oidc')
@@ -138,90 +143,98 @@ export function SsoTab() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (readOnly) return
     saveMutation.mutate()
   }
 
   if (configLoading) {
     return (
       <Card>
-        <CardContent className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" />
-            <CardTitle>Single Sign-On (SSO)</CardTitle>
+            <Shield className="h-4 w-4 text-primary" />
+            <CardTitle className="text-base">Single Sign-On (SSO)</CardTitle>
           </div>
-          <CardDescription>
-            Configure SAML 2.0 or OIDC authentication for your organization. SSO allows your team to
-            log in using your company's identity provider.
+          <CardDescription className="text-xs">
+            Configure SAML 2.0 or OIDC authentication for your organization.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Provider Type</Label>
+        <CardContent className="pt-0">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">Provider Type</Label>
                 <Select
                   value={providerType}
                   onValueChange={(value: 'saml' | 'oidc') => setProviderType(value)}
+                  disabled={readOnly}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-8">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="oidc">OIDC (OpenID Connect)</SelectItem>
-                    <SelectItem value="saml">SAML 2.0</SelectItem>
+                    <SelectItem value="saml" disabled={!hasSamlModule}>
+                      SAML 2.0{!hasSamlModule && ' (Enterprise)'}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {providerType === 'oidc'
-                    ? 'Recommended for modern identity providers like Okta, Auth0, Azure AD'
-                    : 'For legacy enterprise identity providers'}
+                    ? 'Works with any OIDC provider including Authentik, Authelia, Keycloak, Okta, and Azure AD'
+                    : 'For enterprise identity providers. Requires an enterprise license for self-hosted deployments.'}
                 </p>
               </div>
 
               {providerType === 'saml' ? (
                 <>
-                  <div className="space-y-2">
-                    <Label htmlFor="idpEntityId">IdP Entity ID</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="idpEntityId" className="text-sm">IdP Entity ID</Label>
                     <Input
                       id="idpEntityId"
+                      className="h-8"
                       value={formData.idpEntityId}
                       onChange={(e) => setFormData({ ...formData, idpEntityId: e.target.value })}
                       placeholder="https://idp.example.com/metadata"
                       required={providerType === 'saml'}
+                      disabled={readOnly}
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="idpSsoUrl">IdP SSO URL</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="idpSsoUrl" className="text-sm">IdP SSO URL</Label>
                     <Input
                       id="idpSsoUrl"
+                      className="h-8"
                       value={formData.idpSsoUrl}
                       onChange={(e) => setFormData({ ...formData, idpSsoUrl: e.target.value })}
                       placeholder="https://idp.example.com/sso/saml"
                       required={providerType === 'saml'}
+                      disabled={readOnly}
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="idpCertificate">IdP X.509 Certificate</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="idpCertificate" className="text-sm">IdP X.509 Certificate</Label>
                     <Textarea
                       id="idpCertificate"
                       value={formData.idpCertificate}
                       onChange={(e) => setFormData({ ...formData, idpCertificate: e.target.value })}
                       placeholder="-----BEGIN CERTIFICATE-----&#10;MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiIMA0GCSqGSI...&#10;-----END CERTIFICATE-----"
-                      rows={6}
-                      className="font-mono text-xs"
+                      rows={4}
+                      className="font-mono text-xs min-h-0 py-2"
                       required={providerType === 'saml'}
+                      disabled={readOnly}
                     />
                     <p className="text-xs text-muted-foreground">
                       Paste the X.509 certificate from your identity provider
@@ -229,9 +242,9 @@ export function SsoTab() {
                   </div>
 
                   {ssoConfig?.spEntityId && (
-                    <div className="space-y-2">
-                      <Label>SP Entity ID (read-only)</Label>
-                      <Input value={ssoConfig.spEntityId} readOnly className="bg-muted" />
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">SP Entity ID (read-only)</Label>
+                      <Input value={ssoConfig.spEntityId} readOnly className="bg-muted h-8" />
                       <p className="text-xs text-muted-foreground">
                         Use this value when configuring Moneat in your IdP
                       </p>
@@ -240,40 +253,46 @@ export function SsoTab() {
                 </>
               ) : (
                 <>
-                  <div className="space-y-2">
-                    <Label htmlFor="oidcIssuerUrl">Issuer URL</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="oidcIssuerUrl" className="text-sm">Issuer URL</Label>
                     <Input
                       id="oidcIssuerUrl"
+                      className="h-8"
                       value={formData.oidcIssuerUrl}
                       onChange={(e) => setFormData({ ...formData, oidcIssuerUrl: e.target.value })}
                       placeholder="https://your-domain.okta.com"
                       required={providerType === 'oidc'}
+                      disabled={readOnly}
                     />
                     <p className="text-xs text-muted-foreground">
                       The base URL of your OIDC provider
                     </p>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="oidcClientId">Client ID</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="oidcClientId" className="text-sm">Client ID</Label>
                     <Input
                       id="oidcClientId"
+                      className="h-8"
                       value={formData.oidcClientId}
                       onChange={(e) => setFormData({ ...formData, oidcClientId: e.target.value })}
                       placeholder="0oa2abc3defGHI4jkl5m"
                       required={providerType === 'oidc'}
+                      disabled={readOnly}
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="oidcClientSecret">Client Secret</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="oidcClientSecret" className="text-sm">Client Secret</Label>
                     <Input
                       id="oidcClientSecret"
                       type="password"
+                      className="h-8"
                       value={formData.oidcClientSecret}
                       onChange={(e) => setFormData({ ...formData, oidcClientSecret: e.target.value })}
                       placeholder={ssoConfig?.hasClientSecret ? '••••••••••••••••' : 'Enter client secret'}
                       required={providerType === 'oidc' && !ssoConfig?.hasClientSecret}
+                      disabled={readOnly}
                     />
                     {ssoConfig?.hasClientSecret && (
                       <p className="text-xs text-muted-foreground">
@@ -284,25 +303,30 @@ export function SsoTab() {
                 </>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="emailDomain">Email Domain</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="emailDomain" className="text-sm">Email Domain</Label>
                 <Input
                   id="emailDomain"
+                  className="h-8"
                   value={formData.emailDomain}
                   onChange={(e) => setFormData({ ...formData, emailDomain: e.target.value })}
                   placeholder="company.com"
+                  disabled={readOnly}
                 />
                 <p className="text-xs text-muted-foreground">
                   Users with this email domain will be prompted to use SSO (e.g., "company.com")
                 </p>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="space-y-0.5">
-                  <Label htmlFor="requireSso" className="text-base font-medium">
+                  <Label htmlFor="requireSso" className="text-sm font-medium">
                     Require SSO
+                    {!hasSamlModule && (
+                      <Badge variant="secondary" className="ml-2 text-[10px]">Enterprise</Badge>
+                    )}
                   </Label>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Block password login for users in this organization
                   </p>
                 </div>
@@ -310,15 +334,16 @@ export function SsoTab() {
                   id="requireSso"
                   checked={formData.requireSso}
                   onCheckedChange={(checked) => setFormData({ ...formData, requireSso: checked })}
+                  disabled={readOnly || (!hasSamlModule && !formData.requireSso)}
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="space-y-0.5">
-                  <Label htmlFor="isEnabled" className="text-base font-medium">
+                  <Label htmlFor="isEnabled" className="text-sm font-medium">
                     Enable SSO
                   </Label>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Allow users to log in via SSO
                   </p>
                 </div>
@@ -326,12 +351,13 @@ export function SsoTab() {
                   id="isEnabled"
                   checked={formData.isEnabled}
                   onCheckedChange={(checked) => setFormData({ ...formData, isEnabled: checked })}
+                  disabled={readOnly}
                 />
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <Button type="submit" disabled={saveMutation.isPending}>
+            <div className="flex gap-2 pt-1">
+              <Button type="submit" size="sm" disabled={readOnly || saveMutation.isPending}>
                 {saveMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -349,8 +375,9 @@ export function SsoTab() {
                 <Button
                   type="button"
                   variant="destructive"
+                  size="sm"
                   onClick={() => deleteMutation.mutate()}
-                  disabled={deleteMutation.isPending}
+                  disabled={readOnly || deleteMutation.isPending}
                 >
                   {deleteMutation.isPending ? (
                     <>
@@ -369,12 +396,12 @@ export function SsoTab() {
 
       {formData.requireSso && (
         <Card className="border-yellow-500/50 bg-yellow-500/5">
-          <CardContent className="pt-6">
-            <div className="flex gap-3">
-              <AlertCircle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-              <div className="space-y-1">
+          <CardContent className="py-3 px-4">
+            <div className="flex gap-2">
+              <AlertCircle className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
                 <p className="text-sm font-medium">SSO Enforcement Enabled</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   When "Require SSO" is enabled, all users in your organization will be required to
                   log in via SSO. Password-based login will be blocked. Make sure SSO is working
                   correctly before enabling this option.

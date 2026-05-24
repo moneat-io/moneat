@@ -17,8 +17,10 @@
 package com.moneat.events.routes
 
 import com.moneat.auth.routes.accountDeletionRoutes
+import com.moneat.auth.services.Quadruple
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.routes.publicBillingRoutes
+import com.moneat.billing.services.PricingTierService
 import com.moneat.events.models.AddTargetRequest
 import com.moneat.events.models.AlertNotificationPreferencesResponse
 import com.moneat.events.models.CreateProjectRequest
@@ -52,6 +54,7 @@ import com.moneat.shared.services.SidebarPreferenceService
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -84,7 +87,9 @@ private const val DEFAULT_EVENTS_LIMIT = 50
 private const val DEFAULT_TRANSACTIONS_LIMIT = 20
 private const val DEFAULT_REPLAYS_LIMIT = 10
 private const val DEFAULT_ALERT_FREQUENCY_MINUTES = 30
+private const val ERROR_NO_ORGANIZATION_ACCESS = "No organization access"
 
+@Suppress("kotlin:S3776")
 fun Route.apiRoutes() {
     val koin = GlobalContext.get()
     val dashboardService = koin.get<DashboardService>()
@@ -101,6 +106,20 @@ fun Route.apiRoutes() {
                 // Protected billing routes
                 billingRoutes()
 
+                // Subscription tier (for SSO visibility, etc.)
+                get("/subscription") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@get
+                    val pricingTierService = koin.get<PricingTierService>()
+                    val context = pricingTierService.getEffectiveTierForOrganization(orgId)
+                    call.respond(
+                        mapOf(
+                            "tier" to mapOf("tierName" to context.tier.tierName)
+                        )
+                    )
+                }
+
                 // Integrations
                 integrationRoutes()
 
@@ -110,11 +129,11 @@ fun Route.apiRoutes() {
                     val userId = principal!!.payload.getClaim("userId").asInt()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val (user, orgSlug, sidebarHiddenItems) =
+                    val (user, orgSlug, orgRole, sidebarHiddenItems) =
                         transaction {
                             val userRow =
                                 Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                                    ?: return@transaction Triple(null, null, emptyList())
+                                    ?: return@transaction Quadruple(null, null, null, emptyList())
 
                             val membership =
                                 Memberships
@@ -131,9 +150,10 @@ fun Route.apiRoutes() {
                                         ?.get(Organizations.slug)
                                 }
 
+                            val role = membership?.get(Memberships.role)
                             val hiddenItems = membership?.get(Memberships.sidebar_hidden_items) ?: emptyList()
 
-                            Triple(userRow, slug, hiddenItems)
+                            Quadruple(userRow, slug, role, hiddenItems)
                         }
 
                     if (user == null) {
@@ -148,6 +168,7 @@ fun Route.apiRoutes() {
                                 user[Users.onboarding_completed],
                                 user[Users.is_admin],
                                 orgSlug,
+                                orgRole,
                                 demoEpochMs,
                                 sidebarHiddenItems,
                                 user[Users.phone_number],
@@ -1466,3 +1487,22 @@ fun Route.apiRoutes() {
         integrationCallbackRoutes()
     }
 }
+
+private suspend fun ApplicationCall.resolveSubscriptionOrganizationId(userId: Int): Int? {
+    val orgId = principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
+    if (orgId == null || !hasOrganizationAccess(userId, orgId)) {
+        respond(HttpStatusCode.NotFound, ErrorResponse(ERROR_NO_ORGANIZATION_ACCESS))
+        return null
+    }
+    return orgId
+}
+
+private fun hasOrganizationAccess(userId: Int, orgId: Int): Boolean =
+    transaction {
+        Memberships
+            .selectAll()
+            .where {
+                (Memberships.user_id eq userId) and
+                    (Memberships.organization_id eq orgId)
+            }.firstOrNull() != null
+    }

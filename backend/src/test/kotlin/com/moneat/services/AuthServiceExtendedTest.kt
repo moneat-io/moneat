@@ -16,11 +16,16 @@
 
 package com.moneat.services
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.auth.repositories.UserRepository
 import com.moneat.auth.repositories.UserRepositoryImpl
+import com.moneat.auth.repositories.models.UserRow
 import com.moneat.auth.services.AccountDeletionService
 import com.moneat.auth.services.AuthService
 import com.moneat.auth.services.RefreshTokenCleaner
 import com.moneat.auth.services.RefreshTokenCleanupService
+import com.moneat.auth.services.RefreshTokenResponse
 import com.moneat.auth.services.RefreshTokenService
 import com.moneat.billing.services.StripeService
 import com.moneat.config.EnvConfig
@@ -37,8 +42,12 @@ import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
 import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.Users
+import com.moneat.shared.repositories.MembershipRepository
 import com.moneat.shared.repositories.MembershipRepositoryImpl
+import com.moneat.shared.repositories.OrganizationRepository
 import com.moneat.shared.repositories.OrganizationRepositoryImpl
+import com.moneat.shared.repositories.models.MembershipRow
+import com.moneat.shared.repositories.models.OrganizationRow
 import com.moneat.testsupport.TestDatabaseHelper
 import io.mockk.every
 import io.mockk.mockk
@@ -55,6 +64,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.mindrot.jbcrypt.BCrypt
+import java.util.Date
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -618,6 +628,44 @@ class AuthServiceExtendedTest {
     }
 
     @Test
+    fun `refreshToken response uses org context from rotated access token`() {
+        val userId = 123
+        val tokenOrgId = 202
+        val firstOrgId = 101
+        val email = "refresh-context@test.com"
+        val tokenPair = RefreshTokenResponse(
+            accessToken = testAccessToken(userId, email, tokenOrgId, "admin"),
+            refreshToken = "rotated-refresh-token"
+        )
+        val userRepository = mockk<UserRepository>()
+        val membershipRepository = mockk<MembershipRepository>()
+        val organizationRepository = mockk<OrganizationRepository>()
+        val refreshTokenService = mockk<RefreshTokenService>()
+
+        every { refreshTokenService.validateAndRotate("refresh-token") } returns tokenPair
+        every { userRepository.findById(userId) } returns userRow(userId, email)
+        every { membershipRepository.getFirstMembershipForUser(userId) } returns
+            MembershipRow(id = 1, userId = userId, organizationId = firstOrgId, role = "viewer")
+        every { organizationRepository.findById(firstOrgId) } returns
+            OrganizationRow(id = firstOrgId, name = "First Org", slug = "first-org")
+        every { organizationRepository.findById(tokenOrgId) } returns
+            OrganizationRow(id = tokenOrgId, name = "Token Org", slug = "token-org")
+
+        val authService = AuthService(
+            userRepository,
+            membershipRepository,
+            organizationRepository,
+            refreshTokenService = refreshTokenService
+        )
+
+        val refreshed = authService.refreshToken("refresh-token")
+
+        assertNotNull(refreshed)
+        assertEquals("token-org", refreshed.user.organizationSlug)
+        assertEquals("admin", refreshed.user.orgRole)
+    }
+
+    @Test
     fun `refreshToken returns null for invalid token`() {
         val authService = AuthService(
             UserRepositoryImpl(),
@@ -625,6 +673,43 @@ class AuthServiceExtendedTest {
             OrganizationRepositoryImpl()
         )
         assertNull(authService.refreshToken("invalid-refresh-token"))
+    }
+
+    private fun userRow(
+        userId: Int,
+        email: String
+    ): UserRow = UserRow(
+        id = userId,
+        email = email,
+        passwordHash = "hash",
+        name = "Refresh Context",
+        emailVerified = true,
+        isAdmin = false,
+        onboardingCompleted = true,
+        emailVerificationToken = null,
+        emailVerificationExpiresAt = null,
+        passwordResetToken = null,
+        passwordResetExpiresAt = null,
+        oauthProvider = null,
+        oauthProviderId = null
+    )
+
+    private fun testAccessToken(
+        userId: Int,
+        email: String,
+        orgId: Int,
+        orgRole: String
+    ): String {
+        return JWT
+            .create()
+            .withIssuer("moneat")
+            .withAudience("moneat-users")
+            .withClaim("userId", userId)
+            .withClaim("email", email)
+            .withClaim("orgId", orgId)
+            .withClaim("orgRole", orgRole)
+            .withExpiresAt(Date(System.currentTimeMillis() + 3_600_000L))
+            .sign(Algorithm.HMAC256("test-secret-for-unit-tests"))
     }
 
     // ── AuthService - generateImpersonationToken ────────────────────
