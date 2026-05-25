@@ -27,7 +27,7 @@ import {
     Loader2,
 } from 'lucide-react'
 import {Helmet} from 'react-helmet-async'
-import {browserTimezone, formatDateTime as formatDateTimeFn, formatTimeHM12} from '@/lib/date-format'
+import {browserTimezone, formatDateTime as formatDateTimeFn, formatMonthDay, formatTimeHM12} from '@/lib/date-format'
 import {StatusBanner, StatusPageMonitorRow} from '@/components/StatusPagePreview'
 
 export const Route = createFileRoute('/s/$slug')({
