@@ -31,6 +31,7 @@ import io.ktor.server.routing.route
 private const val DEFAULT_LIMIT = 50
 private const val MAX_LIMIT = 200
 private const val DEFAULT_APM_TIME_RANGE = "24h"
+private const val INVALID_TIME_RANGE_ERROR = "Invalid timeRange"
 
 private val apmTimeRanges = mapOf(
     "1h" to DdApmQueryTimeRange(1, DdApmQueryTimeUnit.HOUR),
@@ -64,7 +65,7 @@ fun Route.traceDashboardRoutes() {
                 val timeRange = call.apmTimeRange()
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid timeRange")
+                        mapOf("error" to INVALID_TIME_RANGE_ERROR)
                     )
 
                 val result = TraceIngestionService.listResourceStats(
@@ -98,7 +99,7 @@ fun Route.traceDashboardRoutes() {
                 val timeRange = call.apmTimeRange()
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid timeRange")
+                        mapOf("error" to INVALID_TIME_RANGE_ERROR)
                     )
 
                 val result = TraceIngestionService.listTraces(
@@ -180,7 +181,7 @@ fun Route.traceDashboardRoutes() {
             val timeRange = call.apmTimeRange()
                 ?: return@get call.respond(
                     HttpStatusCode.BadRequest,
-                    mapOf("error" to "Invalid timeRange")
+                    mapOf("error" to INVALID_TIME_RANGE_ERROR)
                 )
 
             val result = TraceIngestionService.getApmErrors(
