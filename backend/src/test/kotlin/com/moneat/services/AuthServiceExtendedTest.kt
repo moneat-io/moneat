@@ -49,6 +49,7 @@ import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.shared.repositories.models.MembershipRow
 import com.moneat.shared.repositories.models.OrganizationRow
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -498,7 +499,8 @@ class AuthServiceExtendedTest {
         val authService = AuthService(
             UserRepositoryImpl(),
             MembershipRepositoryImpl(),
-            OrganizationRepositoryImpl()
+            OrganizationRepositoryImpl(),
+            workflowService = mockk<WorkflowService>(relaxed = true),
         )
 
         val result = authService.completeOnboarding(
@@ -583,7 +585,8 @@ class AuthServiceExtendedTest {
             UserRepositoryImpl(),
             MembershipRepositoryImpl(),
             OrganizationRepositoryImpl(),
-            refreshTokenService = refreshTokenService
+            refreshTokenService = refreshTokenService,
+            workflowService = mockk<WorkflowService>(relaxed = true),
         )
 
         authService.logout(userId)
@@ -606,7 +609,8 @@ class AuthServiceExtendedTest {
             UserRepositoryImpl(),
             MembershipRepositoryImpl(),
             OrganizationRepositoryImpl(),
-            refreshTokenService = refreshTokenService
+            refreshTokenService = refreshTokenService,
+            workflowService = mockk<WorkflowService>(relaxed = true),
         )
 
         val signup = authService.signup(
@@ -670,7 +674,8 @@ class AuthServiceExtendedTest {
         val authService = AuthService(
             UserRepositoryImpl(),
             MembershipRepositoryImpl(),
-            OrganizationRepositoryImpl()
+            OrganizationRepositoryImpl(),
+            workflowService = mockk<WorkflowService>(relaxed = true),
         )
         assertNull(authService.refreshToken("invalid-refresh-token"))
     }
@@ -720,7 +725,8 @@ class AuthServiceExtendedTest {
         val authService = AuthService(
             UserRepositoryImpl(),
             MembershipRepositoryImpl(),
-            OrganizationRepositoryImpl()
+            OrganizationRepositoryImpl(),
+            workflowService = mockk<WorkflowService>(relaxed = true),
         )
 
         val token = authService.generateImpersonationToken(userId, "admin@test.com")
@@ -1032,7 +1038,8 @@ class AuthServiceExtendedTest {
         val authService = AuthService(
             UserRepositoryImpl(),
             MembershipRepositoryImpl(),
-            OrganizationRepositoryImpl()
+            OrganizationRepositoryImpl(),
+            workflowService = mockk<WorkflowService>(relaxed = true),
         )
 
         val result = authService.signup(

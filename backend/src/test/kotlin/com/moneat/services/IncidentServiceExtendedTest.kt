@@ -33,6 +33,7 @@ import com.moneat.shared.models.EscalationPolicyAlertSources
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.IncidentTestHelper
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -57,7 +58,8 @@ import kotlin.time.Clock
 class IncidentServiceExtendedTest {
     private var orgId: Int = 0
     private var providerConfigId: Int = 0
-    private val service = IncidentService()
+    private val workflowService: WorkflowService = mockk(relaxed = true)
+    private val service = IncidentService(workflowService)
     private val testProviderType = "test_provider_ext"
 
     companion object {

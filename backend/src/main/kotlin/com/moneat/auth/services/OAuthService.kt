@@ -103,15 +103,15 @@ data class OAuthUserData(
     val emailVerified: Boolean
 )
 
-class OAuthService {
+class OAuthService(
+    private val workflowService: WorkflowService = WorkflowService()
+) {
     private val config = ApplicationConfig("application.conf")
     private val jwtSecret = config.property("jwt.secret").getString()
     private val jwtIssuer = config.property("jwt.issuer").getString()
     private val jwtAudience = config.property("jwt.audience").getString()
     private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
     private val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
-    private val workflowService = WorkflowService()
-
     companion object {
         private const val ORG_SLUG_SUFFIX_LENGTH = 8
         private const val ONE_HOUR_MILLIS = 3_600_000L

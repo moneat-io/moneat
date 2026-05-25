@@ -24,9 +24,6 @@ import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
@@ -37,6 +34,7 @@ import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
@@ -74,10 +72,8 @@ class MonitorAlertServiceCoverageTest {
         private var db: Database? = null
     }
 
-    private lateinit var emailService: EmailService
-    private lateinit var slackService: SlackService
-    private lateinit var discordService: DiscordService
     private lateinit var incidentService: IncidentService
+    private lateinit var workflowService: WorkflowService
     private lateinit var service: MonitorAlertService
 
     @BeforeTest
@@ -104,16 +100,12 @@ class MonitorAlertServiceCoverageTest {
             HostAlertTemplateStates
         )
 
-        emailService = mockk(relaxed = true)
-        slackService = mockk(relaxed = true)
-        discordService = mockk(relaxed = true)
         incidentService = mockk(relaxed = true)
+        workflowService = mockk(relaxed = true)
         service =
             MonitorAlertService(
-                emailService = emailService,
-                slackService = slackService,
-                discordService = discordService,
                 incidentService = incidentService,
+                workflowService = workflowService,
             )
 
         mockkObject(ClickHouseClient, RedisConfig)
@@ -190,6 +182,10 @@ class MonitorAlertServiceCoverageTest {
                     templateAlertId = null,
                 )
             callPrivateSuspend("sendAlertNotification", alert, "host-a", 1, 91.0)
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(any())
+            }
         }
 
     // ──── Key helpers ────
@@ -283,13 +279,29 @@ class MonitorAlertServiceCoverageTest {
                 }
             assertEquals("up", status)
             coVerify(exactly = 1) {
-                incidentService.autoResolveAlert(orgId, AlertSource.HOST_DOWN, "moneat-host-down-$hostId")
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    "moneat-host-down-$hostId",
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
             }
 
             callPrivateSuspend("checkHostStatuses")
 
             coVerify(exactly = 1) {
-                incidentService.autoResolveAlert(orgId, AlertSource.HOST_DOWN, "moneat-host-down-$hostId")
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    "moneat-host-down-$hostId",
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
             }
         }
 
@@ -340,7 +352,15 @@ class MonitorAlertServiceCoverageTest {
                 }
             assertEquals("up", status)
             coVerify(exactly = 1) {
-                incidentService.autoResolveAlert(orgId, AlertSource.HOST_DOWN, "moneat-host-down-$hostId")
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    "moneat-host-down-$hostId",
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
             }
         }
 
@@ -367,7 +387,15 @@ class MonitorAlertServiceCoverageTest {
                 }
             val deduplicationKey = "moneat-host-down-$hostId"
             coEvery {
-                incidentService.autoResolveAlert(orgId, AlertSource.HOST_DOWN, deduplicationKey)
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
             } throws RuntimeException("resolve failed")
 
             callPrivateSuspend("checkHostStatuses")
@@ -379,7 +407,15 @@ class MonitorAlertServiceCoverageTest {
             assertEquals("down", failedStatus)
 
             coEvery {
-                incidentService.autoResolveAlert(orgId, AlertSource.HOST_DOWN, deduplicationKey)
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
             } returns Unit
 
             callPrivateSuspend("checkHostStatuses")
@@ -390,7 +426,15 @@ class MonitorAlertServiceCoverageTest {
                 }
             assertEquals("up", recoveredStatus)
             coVerify(exactly = 2) {
-                incidentService.autoResolveAlert(orgId, AlertSource.HOST_DOWN, deduplicationKey)
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
             }
         }
 

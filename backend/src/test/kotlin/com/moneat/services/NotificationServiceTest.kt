@@ -17,6 +17,7 @@
 package com.moneat.services
 
 import com.moneat.events.models.SentryEvent
+import com.moneat.incident.models.IncidentEvent
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.shared.models.EmailsSent
@@ -26,10 +27,12 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
+import io.mockk.coVerify
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -58,7 +61,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    fun `onNewIssue respects alert frequency deduplication`() =
+    fun `onNewIssue publishes workflow event for each issue`() =
         runBlocking {
             val organizationId =
                 transaction {
@@ -108,7 +111,8 @@ class NotificationServiceTest {
                 }
             }
 
-            val notificationService = NotificationService(EmailService())
+            val workflowService = mockk<WorkflowService>(relaxed = true)
+            val notificationService = NotificationService(EmailService(), workflowService)
             try {
                 val event =
                     SentryEvent(
@@ -118,53 +122,18 @@ class NotificationServiceTest {
                         message = "NullPointerException in checkout flow",
                         environment = "production"
                     )
+                val publishedEvents = mutableListOf<IncidentEvent>()
 
                 notificationService.onNewIssue(projectId, "1001", event)
-                waitForEmailRows(expectedCount = 1)
-
-                // Second issue alert for the same project/user should be throttled by alert frequency.
                 notificationService.onNewIssue(projectId, "1002", event.copy(eventId = "evt-2"))
-                waitForEmailRows(expectedCount = 1)
 
-                val sentRows =
-                    transaction {
-                        EmailsSent
-                            .selectAll()
-                            .toList()
-                            .count { it[EmailsSent.email_type] == "error_alert" }
-                            .toLong()
-                    }
-                assertEquals(1L, sentRows)
+                coVerify(exactly = 2) {
+                    workflowService.publishAlertTriggered(capture(publishedEvents))
+                }
+                assertEquals("moneat-error-1001", publishedEvents[0].deduplicationKey)
+                assertEquals("moneat-error-1002", publishedEvents[1].deduplicationKey)
             } finally {
                 notificationService.shutdown()
             }
         }
-
-    private fun waitForEmailRows(
-        expectedCount: Long,
-        timeoutMs: Long = 3000
-    ) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            val count =
-                transaction {
-                    EmailsSent
-                        .selectAll()
-                        .toList()
-                        .count { it[EmailsSent.email_type] == "error_alert" }
-                        .toLong()
-                }
-            if (count >= expectedCount) return
-            Thread.sleep(50)
-        }
-        val finalCount =
-            transaction {
-                EmailsSent
-                    .selectAll()
-                    .toList()
-                    .count { it[EmailsSent.email_type] == "error_alert" }
-                    .toLong()
-            }
-        assertEquals(expectedCount, finalCount)
-    }
 }
