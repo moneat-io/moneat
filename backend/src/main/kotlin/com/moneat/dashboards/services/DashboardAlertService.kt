@@ -17,8 +17,9 @@
 package com.moneat.dashboards.services
 
 import com.moneat.config.RedisConfig
-import com.moneat.utils.suspendRunCatching
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
+import com.moneat.dashboards.models.CustomDataSourceResponse
+import com.moneat.dashboards.models.CustomDataSourceType
 import com.moneat.dashboards.models.DashboardAlertResponse
 import com.moneat.dashboards.models.DashboardWidgetAlerts
 import com.moneat.dashboards.models.DashboardWidgets
@@ -26,6 +27,7 @@ import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.NotificationChannels
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
+import com.moneat.utils.suspendRunCatching
 import com.moneat.incident.models.AlertSource
 import com.moneat.incident.models.IncidentEvent
 import com.moneat.incident.models.IncidentSeverity
@@ -75,6 +77,8 @@ class DashboardAlertService(
     private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
     private val queryEngine: DashboardQueryEngine = DashboardQueryEngine(),
     private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
+    private val dataSourceService: CustomDataSourceService = CustomDataSourceService(),
+    private val dataSourceExecutor: CustomDataSourceExecutor = CustomDataSourceExecutor(),
 ) {
     private val config = ApplicationConfig("application.conf")
     private val json = Json { ignoreUnknownKeys = true }
@@ -289,11 +293,8 @@ class DashboardAlertService(
         val (queryIndex, metricIndexInQuery) = resolveMetricTarget(queryConfigs, alert.metricIndex) ?: return
         val queryDsl = queryConfigs.getOrNull(queryIndex) ?: return
 
-        val projectId = alert.projectId ?: return
-        val retentionDays = retentionPolicyService.getRetentionDaysForProject(projectId) ?: DEFAULT_RETENTION_DAYS
-
         val results = suspendRunCatching {
-            queryEngine.executeQuery(queryDsl, projectId, null, retentionDays)
+            executeQueryForAlert(alert.orgId, alert.projectId, queryDsl)
         }.getOrElse { e ->
             logger.warn(e) { "Failed to execute query for dashboard alert ${alert.alertId}" }
             return
@@ -385,6 +386,77 @@ class DashboardAlertService(
         sendAlertNotification(alert, currentValue)
     }
 
+    internal suspend fun executeQueryForAlert(
+        orgId: Long,
+        projectId: Long?,
+        queryDsl: QueryDsl
+    ): List<Map<String, JsonElement>> {
+        val customDataSource = resolveCustomDataSource(orgId, queryDsl.dataSource)
+        if (customDataSource != null) {
+            return executeCustomDataSourceQuery(orgId, customDataSource, queryDsl)
+        }
+
+        val builtInProjectId = projectId ?: return emptyList()
+        val retentionDays =
+            retentionPolicyService.getRetentionDaysForProject(builtInProjectId) ?: DEFAULT_RETENTION_DAYS
+        return queryEngine.executeQuery(queryDsl, builtInProjectId, null, retentionDays)
+    }
+
+    private fun resolveCustomDataSource(
+        orgId: Long,
+        dataSource: String
+    ): CustomDataSourceResponse? {
+        if (dataSource == "__prometheus") {
+            return checkNotNull(
+                dataSourceService.listDataSources(orgId)
+                    .firstOrNull { source ->
+                        source.enabled &&
+                            CustomDataSourceType.fromString(source.sourceType) == CustomDataSourceType.PROMETHEUS
+                    }
+            ) { "No enabled Prometheus data source configured" }
+        }
+        if (!dataSource.startsWith("custom:")) return null
+
+        val sourceId = requireNotNull(dataSource.removePrefix("custom:").toLongOrNull()) {
+            "Invalid custom data source reference: $dataSource"
+        }
+        val source = checkNotNull(dataSourceService.getDataSource(sourceId, orgId)) {
+            "Custom data source not found: $sourceId"
+        }
+        check(source.enabled) { "Custom data source is disabled: $sourceId" }
+        return source
+    }
+
+    private suspend fun executeCustomDataSourceQuery(
+        orgId: Long,
+        dataSource: CustomDataSourceResponse,
+        queryDsl: QueryDsl
+    ): List<Map<String, JsonElement>> {
+        val sourceType = checkNotNull(CustomDataSourceType.fromString(dataSource.sourceType)) {
+            "Unsupported data source type: ${dataSource.sourceType}"
+        }
+        val rawQuery = requireNotNull(queryDsl.rawQuery?.takeIf { it.isNotBlank() }) {
+            "Custom data source dashboard alerts require rawQuery"
+        }
+        val resolvedCredentials = dataSourceService.getDecryptedCredentials(dataSource.id, orgId)
+        check(resolvedCredentials != null || !dataSource.hasCredentials) {
+            "Failed to resolve credentials for custom data source: ${dataSource.id}"
+        }
+        val credentials = resolvedCredentials ?: DataSourceCredentials()
+
+        return dataSourceExecutor.executeQuery(
+            sourceId = dataSource.id,
+            sourceType = sourceType,
+            host = dataSource.host,
+            port = dataSource.port,
+            databaseName = dataSource.databaseName,
+            credentials = credentials,
+            query = rawQuery,
+            limit = queryDsl.limit,
+            timeRange = queryDsl.timeRange,
+        )
+    }
+
     private fun resolveMetricTarget(queryConfigs: List<QueryDsl>, globalMetricIndex: Int): Pair<Int, Int>? {
         if (globalMetricIndex < 0) return null
         var remaining = globalMetricIndex
@@ -402,22 +474,24 @@ class DashboardAlertService(
         metricIndexInQuery: Int
     ): Double? {
         if (results.isEmpty()) return null
-        val row = results.last()
         val metricAliases = metricAliases(queryDsl)
         val targetAlias = metricAliases.getOrNull(metricIndexInQuery)
-        val targetByAlias = targetAlias?.let { row[it] }
-        if (targetByAlias is JsonPrimitive) {
-            return targetByAlias.doubleOrNull ?: targetByAlias.content.toDoubleOrNull()
-        }
-        val metricValues = row.entries
-            .filter { (k, _) -> k !in setOf("time_bucket", "timestamp", "time", "day") }
-            .map { it.value }
 
-        val target = metricValues.getOrNull(metricIndexInQuery) ?: metricValues.firstOrNull() ?: return null
-        return when (target) {
-            is JsonPrimitive -> target.doubleOrNull ?: target.content.toDoubleOrNull()
-            else -> null
+        return results.asReversed().firstNotNullOfOrNull { row ->
+            primitiveDouble(targetAlias?.let { row[it] })?.let { return@firstNotNullOfOrNull it }
+
+            val metricValues = row.entries
+                .filter { (key, _) -> key !in setOf("time_bucket", "timestamp", "time", "day") }
+                .map { it.value }
+
+            primitiveDouble(metricValues.getOrNull(metricIndexInQuery))
+                ?: metricValues.firstNotNullOfOrNull(::primitiveDouble)
         }
+    }
+
+    private fun primitiveDouble(value: JsonElement?): Double? = when (value) {
+        is JsonPrimitive -> value.doubleOrNull ?: value.content.toDoubleOrNull()
+        else -> null
     }
 
     private fun metricAliases(queryDsl: QueryDsl): List<String> {
