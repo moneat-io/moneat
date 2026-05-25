@@ -18,14 +18,20 @@ package com.moneat.dashboards
 
 import com.moneat.config.RedisConfig
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
+import com.moneat.dashboards.models.CustomDataSourceResponse
+import com.moneat.dashboards.models.CustomDataSourceType
 import com.moneat.dashboards.models.DashboardWidgetAlerts
 import com.moneat.dashboards.models.DashboardWidgets
 import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.NotificationChannels
+import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
-import com.moneat.incident.models.AlertSource
+import com.moneat.dashboards.services.CustomDataSourceExecutor
+import com.moneat.dashboards.services.CustomDataSourceService
+import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
+import com.moneat.incident.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
@@ -42,6 +48,7 @@ import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -69,6 +76,8 @@ class DashboardAlertServiceTest {
     private val prefsService: AlertNotificationPreferencesService = mockk(relaxed = true)
     private val queryEngine: DashboardQueryEngine = mockk(relaxed = true)
     private val retentionPolicyService: RetentionPolicyService = mockk(relaxed = true)
+    private val dataSourceService: CustomDataSourceService = mockk(relaxed = true)
+    private val dataSourceExecutor: CustomDataSourceExecutor = mockk(relaxed = true)
     private var redisConfigMocked = false
 
     private val service = DashboardAlertService(
@@ -79,6 +88,8 @@ class DashboardAlertServiceTest {
         prefsService = prefsService,
         queryEngine = queryEngine,
         retentionPolicyService = retentionPolicyService,
+        dataSourceService = dataSourceService,
+        dataSourceExecutor = dataSourceExecutor,
     )
 
     companion object {
@@ -270,6 +281,25 @@ class DashboardAlertServiceTest {
         incidentSeverity = overrides.incidentSeverity,
         enabled = overrides.enabled,
         notificationChannels = overrides.notificationChannels,
+    )
+
+    private fun customDataSource(
+        id: Long = 10,
+        sourceType: String = CustomDataSourceType.PROMETHEUS.name.lowercase(),
+        enabled: Boolean = true,
+    ): CustomDataSourceResponse = CustomDataSourceResponse(
+        id = id,
+        orgId = ORG_ID,
+        name = "Prometheus",
+        sourceType = sourceType,
+        host = "https://prometheus.example.com",
+        port = null,
+        databaseName = null,
+        enabled = enabled,
+        createdBy = CREATED_BY,
+        createdAt = Clock.System.now().toString(),
+        updatedAt = Clock.System.now().toString(),
+        hasCredentials = false,
     )
 
     // ──── createAlert tests ────
@@ -670,6 +700,86 @@ class DashboardAlertServiceTest {
                     source = AlertSource.DASHBOARD_ALERT,
                     deduplicationKey = "moneat-dashboard-alert-${created.id}"
                 )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert executes custom datasource query without project`() =
+        runBlocking {
+            val source = customDataSource(id = 10)
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns source
+            every { dataSourceService.getDecryptedCredentials(10, ORG_ID) } returns DataSourceCredentials()
+            coEvery {
+                dataSourceExecutor.executeQuery(
+                    sourceId = 10,
+                    sourceType = CustomDataSourceType.PROMETHEUS,
+                    host = source.host,
+                    port = source.port,
+                    databaseName = source.databaseName,
+                    credentials = any(),
+                    query = "up",
+                    limit = 25,
+                    timeRange = any(),
+                )
+            } returns listOf(mapOf("value" to JsonPrimitive(1.0)))
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = null,
+                queryDsl = QueryDsl(
+                    dataSource = "custom:10",
+                    rawQuery = "up",
+                    limit = 25,
+                ),
+            )
+
+            assertEquals(1.0, result.single()["value"]?.jsonPrimitive?.content?.toDouble())
+        }
+
+    @Test
+    fun `executeQueryForAlert resolves prometheus alias to custom datasource`() =
+        runBlocking {
+            val source = customDataSource(id = 11)
+            every { dataSourceService.listDataSources(ORG_ID) } returns listOf(source)
+            every { dataSourceService.getDecryptedCredentials(11, ORG_ID) } returns null
+            coEvery {
+                dataSourceExecutor.executeQuery(
+                    sourceId = 11,
+                    sourceType = CustomDataSourceType.PROMETHEUS,
+                    host = source.host,
+                    port = source.port,
+                    databaseName = source.databaseName,
+                    credentials = any(),
+                    query = "process_cpu_usage",
+                    limit = any(),
+                    timeRange = any(),
+                )
+            } returns listOf(mapOf("value" to JsonPrimitive(0.25)))
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = null,
+                queryDsl = QueryDsl(
+                    dataSource = "__prometheus",
+                    rawQuery = "process_cpu_usage",
+                ),
+            )
+
+            assertEquals(0.25, result.single()["value"]?.jsonPrimitive?.content?.toDouble())
+        }
+
+    @Test
+    fun `executeQueryForAlert skips built in datasource without project`() =
+        runBlocking {
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = null,
+                queryDsl = QueryDsl(dataSource = "events"),
+            )
+
+            assertTrue(result.isEmpty())
+            coVerify(exactly = 0) {
+                queryEngine.executeQuery(any(), any(), any(), any())
             }
         }
 

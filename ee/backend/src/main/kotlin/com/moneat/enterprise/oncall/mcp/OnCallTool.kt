@@ -43,7 +43,7 @@ class ListIncidentsTool : McpTool {
                 ),
                 "priority" to schemaEnum(
                     "Filter by priority",
-                    listOf("P1", "P2", "P3", "P4", "P5")
+                    listOf("P0", "P1", "P2", "P3", "P4", "P5")
                 ),
                 "limit" to schemaNumber(
                     "Max results (default 50)"

@@ -22,9 +22,9 @@ import com.moneat.dashboards.models.UpdateDashboardRequest
 import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
-import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.DashboardAlertService
+import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpTool
@@ -40,6 +40,29 @@ private val dashCrudService = CustomDashboardService(
     ProjectRepositoryImpl { col, _, _ -> col },
 )
 private val dashAlertService = DashboardAlertService()
+private val dashboardAlertConditions = listOf(
+    "gt", "lt", "eq", "gte", "lte", ">", "<", "==", ">=", "<="
+)
+private val dashboardAlertSeverities = listOf(
+    "P0", "P1", "P2", "P3", "P4", "P5", "CRITICAL", "HIGH", "MEDIUM", "LOW"
+)
+
+private fun dashboardAlertCondition(input: String): String = when (input) {
+    "gt" -> ">"
+    "lt" -> "<"
+    "eq" -> "=="
+    "gte" -> ">="
+    "lte" -> "<="
+    else -> input
+}
+
+private fun dashboardAlertSeverity(input: String?): String? = when (input?.uppercase()) {
+    "P0", "CRITICAL" -> "CRITICAL"
+    "P1", "HIGH" -> "HIGH"
+    "P2", "MEDIUM" -> "MEDIUM"
+    "P3", "P4", "P5", "LOW" -> "LOW"
+    else -> input
+}
 
 class UpdateDashboardTool : McpTool {
     override val name = "update_dashboard"
@@ -128,15 +151,15 @@ class CreateDashboardAlertTool : McpTool {
                 "widget_id" to schemaNumber("Widget ID"),
                 "name" to schemaString("Alert name"),
                 "condition" to schemaEnum(
-                    "Condition", listOf("gt", "lt", "eq")
+                    "Condition", dashboardAlertConditions
                 ),
                 "threshold" to schemaNumber("Threshold value"),
-                "duration_seconds" to schemaNumber(
+                "duration_seconds" to schemaInteger(
                     "Duration before firing"
                 ),
                 "incident_severity" to schemaEnum(
                     "Severity",
-                    listOf("P1", "P2", "P3", "P4", "P5")
+                    dashboardAlertSeverities
                 )
             )
         ),
@@ -178,11 +201,12 @@ class CreateDashboardAlertTool : McpTool {
         val request = CreateDashboardAlertRequest(
             widgetId = widgetId,
             name = name,
-            condition = condition,
+            condition = dashboardAlertCondition(condition),
             threshold = threshold,
             durationSeconds = durationSeconds,
-            incidentSeverity = args["incident_severity"]
-                ?.jsonPrimitive?.content
+            incidentSeverity = dashboardAlertSeverity(
+                args["incident_severity"]?.jsonPrimitive?.content
+            )
         )
         val alert = dashAlertService.createAlert(
             dashboardId = dashId,
@@ -205,9 +229,16 @@ class UpdateDashboardAlertTool : McpTool {
                 "alert_id" to schemaNumber("Alert ID"),
                 "name" to schemaString("Alert name"),
                 "condition" to schemaEnum(
-                    "Condition", listOf("gt", "lt", "eq")
+                    "Condition", dashboardAlertConditions
                 ),
                 "threshold" to schemaNumber("Threshold value"),
+                "duration_seconds" to schemaInteger(
+                    "Duration before firing"
+                ),
+                "incident_severity" to schemaEnum(
+                    "Severity",
+                    dashboardAlertSeverities
+                ),
                 "enabled" to schemaBoolean("Enable/disable")
             )
         ),
@@ -234,6 +265,17 @@ class UpdateDashboardAlertTool : McpTool {
         } else {
             null
         }
+        val durationSeconds = if (args.containsKey("duration_seconds")) {
+            args["duration_seconds"]?.jsonPrimitive?.intOrNull
+                ?: return errorResult(
+                    "duration_seconds must be a valid integer"
+                )
+        } else {
+            null
+        }
+        val incidentSeverity = dashboardAlertSeverity(
+            args["incident_severity"]?.jsonPrimitive?.content
+        )
         val enabled = if (args.containsKey("enabled")) {
             args["enabled"]?.jsonPrimitive?.content
                 ?.toBooleanStrictOrNull()
@@ -243,8 +285,13 @@ class UpdateDashboardAlertTool : McpTool {
         } else {
             null
         }
-        if (name == null && condition == null &&
-            threshold == null && enabled == null
+        if (
+            name == null &&
+            condition == null &&
+            threshold == null &&
+            durationSeconds == null &&
+            incidentSeverity == null &&
+            enabled == null
         ) {
             return errorResult(
                 "At least one field must be provided to update"
@@ -252,8 +299,10 @@ class UpdateDashboardAlertTool : McpTool {
         }
         val request = UpdateDashboardAlertRequest(
             name = name,
-            condition = condition,
+            condition = condition?.let(::dashboardAlertCondition),
             threshold = threshold,
+            durationSeconds = durationSeconds,
+            incidentSeverity = incidentSeverity,
             enabled = enabled
         )
         val alert = dashAlertService.updateAlert(
