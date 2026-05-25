@@ -50,6 +50,7 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import io.lettuce.core.api.sync.RedisCommands
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -334,6 +335,89 @@ class MonitorAlertServiceCoverageTest {
                         .first()[HostAlerts.last_triggered_at]
                 }
             assertNull(clearedLastTriggeredAt)
+        }
+
+    @Test
+    fun `handleRecoveredAlert clears global template trigger state`() =
+        runBlocking {
+            val now = Clock.System.now()
+            val triggeredAt = now - 1.minutes
+            val (orgId, hostId, templateId) =
+                transaction {
+                    val organizationId =
+                        Organizations.insert {
+                            it[name] = "Global Alert Workflow Org"
+                            it[slug] = "global-alert-workflow-org"
+                        } get Organizations.id
+                    val host =
+                        Hosts.insert {
+                            it[hostname] = "global-alert-workflow"
+                            it[organization_id] = organizationId
+                            it[status] = "up"
+                            it[first_seen_at] = now
+                            it[last_seen_at] = now
+                        } get Hosts.id
+                    val template =
+                        OrganizationAlertTemplates.insert {
+                            it[organization_id] = organizationId
+                            it[metric] = "cpu_percent"
+                            it[condition] = ">"
+                            it[threshold] = 80.0
+                            it[duration_seconds] = 0
+                            it[enabled] = true
+                            it[incident_severity] = null
+                            it[created_at] = now
+                            it[updated_at] = now
+                        } get OrganizationAlertTemplates.id
+                    HostAlertTemplateStates.insert {
+                        it[template_alert_id] = template
+                        it[host_id] = host
+                        it[last_triggered_at] = triggeredAt
+                    }
+                    Triple(organizationId, host, template)
+                }
+            val alert =
+                AlertData(
+                    id = templateId,
+                    hostId = hostId,
+                    organizationId = orgId,
+                    metric = "cpu_percent",
+                    condition = ">",
+                    threshold = 80.0,
+                    durationSeconds = 0,
+                    enabled = true,
+                    lastTriggeredAt = triggeredAt,
+                    createdAt = now,
+                    scope = MonitorService.ALERT_SCOPE_GLOBAL,
+                    templateAlertId = templateId,
+                )
+            val alertKey = "alert_state:$hostId:tpl_$templateId"
+            val deduplicationKey = "moneat-host-alert-$hostId-tpl_$templateId"
+
+            callPrivateSuspend("handleRecoveredAlert", alert, "global-alert-workflow", orgId, alertKey)
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertResolved(
+                    orgId,
+                    AlertSource.HOST_ALERT.name,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    AlertSeverity.HIGH,
+                )
+            }
+            val clearedTemplateState =
+                transaction {
+                    HostAlertTemplateStates
+                        .selectAll()
+                        .where {
+                            (HostAlertTemplateStates.template_alert_id eq templateId) and
+                                (HostAlertTemplateStates.host_id eq hostId)
+                        }
+                        .first()[HostAlertTemplateStates.last_triggered_at]
+                }
+            assertNull(clearedTemplateState)
         }
 
     @Test
