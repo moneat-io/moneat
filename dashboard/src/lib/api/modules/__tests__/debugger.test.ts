@@ -50,15 +50,22 @@ describe('Debugger API', () => {
   // ──── createDebuggerProbe ────
 
   it('creates a debugger probe', async () => {
-    const request = { type: 'LOG', file: 'Main.kt', line: 42, template: 'x={x}' }
+    const request = {
+      probeType: 'log_probe' as const,
+      service: 'backend',
+      whereType: 'line' as const,
+      sourceFile: 'Main.kt',
+      sourceLines: '42',
+      template: 'x={x}',
+    }
     const mockProbe = { id: 'probe-new', ...request, active: true }
 
     server.use(
       http.post(`${API_BASE}/v1/infra/debugger/probes`, async ({ request: req }) => {
         const body = (await req.json()) as Record<string, unknown>
-        expect(body.type).toBe('LOG')
-        expect(body.file).toBe('Main.kt')
-        expect(body.line).toBe(42)
+        expect(body.probeType).toBe('log_probe')
+        expect(body.sourceFile).toBe('Main.kt')
+        expect(body.sourceLines).toBe('42')
         return HttpResponse.json(mockProbe)
       })
     )

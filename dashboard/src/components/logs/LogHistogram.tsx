@@ -150,7 +150,13 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
           <Tooltip
             cursor={false}
             labelFormatter={(ts) => formatTooltipTime(ts as number)}
-            formatter={(value?: number, name?: string) => [(value ?? 0).toLocaleString(), name === 'total' ? 'logs' : (name ?? '')]}
+            formatter={(value: unknown, name: unknown) => {
+              const numericValue = typeof value === 'number' ? value : Number(value)
+              return [
+                Number.isFinite(numericValue) ? numericValue.toLocaleString() : '0',
+                name === 'total' ? 'logs' : String(name ?? ''),
+              ]
+            }}
             contentStyle={{
               backgroundColor: 'hsl(var(--popover) / 0.95)',
               border: '1px solid hsl(var(--border))',

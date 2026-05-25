@@ -75,13 +75,15 @@ describe('dashboardsMethods', () => {
       server.use(
         http.post(`${API_BASE}/v1/dashboards`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
-          expect(body.name).toBe('New Dashboard')
+          expect(body.title).toBe('New Dashboard')
+          expect(body.widgets).toEqual([])
           return HttpResponse.json(mock)
         })
       )
       const result = await api.createDashboard({
-        name: 'New Dashboard',
-      } as Parameters<typeof api.createDashboard>[0])
+        title: 'New Dashboard',
+        widgets: [],
+      })
       expect(result).toEqual(mock)
     })
   })
@@ -258,7 +260,14 @@ describe('dashboardsMethods', () => {
   describe('executeWidgetQuery', () => {
     it('posts a query config with projectId', async () => {
       const mockRows = [{ count: 42 }]
-      const queryConfig = { source: 'events', columns: ['count(*)'] }
+      const queryConfig = {
+        dataSource: 'events',
+        metrics: [{function: 'count', alias: 'count'}],
+        groupBy: [],
+        filters: [],
+        limit: 100,
+        timeRange: {from: 'now-24h', to: 'now'},
+      } satisfies Parameters<typeof api.executeWidgetQuery>[1]
       server.use(
         http.post(
           `${API_BASE}/v1/dashboards/1/query`,
@@ -273,15 +282,22 @@ describe('dashboardsMethods', () => {
       )
       const result = await api.executeWidgetQuery(
         1,
-        queryConfig as Parameters<typeof api.executeWidgetQuery>[1],
+        queryConfig,
         10
       )
       expect(result).toEqual(mockRows)
     })
 
     it('includes time_range and variables when provided', async () => {
-      const queryConfig = { source: 'events', columns: ['count(*)'] }
-      const timeRange = { type: 'relative', value: '24h' }
+      const queryConfig = {
+        dataSource: 'events',
+        metrics: [{function: 'count', alias: 'count'}],
+        groupBy: [],
+        filters: [],
+        limit: 100,
+        timeRange: {from: 'now-24h', to: 'now'},
+      } satisfies Parameters<typeof api.executeWidgetQuery>[1]
+      const timeRange = {from: 'now-24h', to: 'now'} satisfies NonNullable<Parameters<typeof api.executeWidgetQuery>[3]>
       const variables = { env: 'production' }
       server.use(
         http.post(
@@ -296,9 +312,9 @@ describe('dashboardsMethods', () => {
       )
       await api.executeWidgetQuery(
         1,
-        queryConfig as Parameters<typeof api.executeWidgetQuery>[1],
+        queryConfig,
         10,
-        timeRange as Parameters<typeof api.executeWidgetQuery>[3],
+        timeRange,
         variables
       )
     })
@@ -307,7 +323,15 @@ describe('dashboardsMethods', () => {
   describe('executeBatchQuery', () => {
     it('posts batch queries with projectId', async () => {
       const mockResult = { results: { q1: [{ count: 1 }] } }
-      const queries = [{ id: 'q1', source: 'events', columns: ['count(*)'] }]
+      const queries = [{
+        dataSource: 'events',
+        metrics: [{function: 'count', alias: 'count'}],
+        groupBy: [],
+        filters: [],
+        limit: 100,
+        timeRange: {from: 'now-24h', to: 'now'},
+        ref_id: 'q1',
+      }] satisfies Parameters<typeof api.executeBatchQuery>[1]
       server.use(
         http.post(
           `${API_BASE}/v1/dashboards/2/query/batch`,
@@ -322,15 +346,23 @@ describe('dashboardsMethods', () => {
       )
       const result = await api.executeBatchQuery(
         2,
-        queries as Parameters<typeof api.executeBatchQuery>[1],
+        queries,
         3
       )
       expect(result).toEqual(mockResult)
     })
 
     it('includes time_range and variables when provided', async () => {
-      const queries = [{ id: 'q1', source: 'events', columns: ['count(*)'] }]
-      const timeRange = { type: 'relative', value: '1h' }
+      const queries = [{
+        dataSource: 'events',
+        metrics: [{function: 'count', alias: 'count'}],
+        groupBy: [],
+        filters: [],
+        limit: 100,
+        timeRange: {from: 'now-1h', to: 'now'},
+        ref_id: 'q1',
+      }] satisfies Parameters<typeof api.executeBatchQuery>[1]
+      const timeRange = {from: 'now-1h', to: 'now'} satisfies NonNullable<Parameters<typeof api.executeBatchQuery>[3]>
       const variables = { region: 'us-east' }
       server.use(
         http.post(
@@ -345,9 +377,9 @@ describe('dashboardsMethods', () => {
       )
       await api.executeBatchQuery(
         2,
-        queries as Parameters<typeof api.executeBatchQuery>[1],
+        queries,
         3,
-        timeRange as Parameters<typeof api.executeBatchQuery>[3],
+        timeRange,
         variables
       )
     })
@@ -611,15 +643,15 @@ describe('dashboardsMethods', () => {
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body).not.toHaveProperty('data_source_id')
-            expect(body.sql).toBe('SELECT 1')
+            expect(body.query).toBe('SELECT 1')
             return HttpResponse.json(mockRows)
           }
         )
       )
       const result = await api.queryCustomDataSource(3, {
         data_source_id: 3,
-        sql: 'SELECT 1',
-      } as Parameters<typeof api.queryCustomDataSource>[1])
+        query: 'SELECT 1',
+      })
       expect(result).toEqual(mockRows)
     })
   })
