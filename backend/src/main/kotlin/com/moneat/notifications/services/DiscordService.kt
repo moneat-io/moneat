@@ -532,7 +532,7 @@ class DiscordService(
                 channelId = config.channelId,
                 embed = embed,
                 fallbackText = "🐛 New Issue: $issueTitle in $projectName"
-        )
+            )
         return success
     }
 
