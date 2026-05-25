@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo, useState} from 'react'
+import {useMemo, useState, type ComponentType, type ReactNode} from 'react'
 import {createFileRoute, redirect} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -39,9 +39,22 @@ import {Switch} from '@/components/ui/switch'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Textarea} from '@/components/ui/textarea'
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {useToast} from '@/hooks/useToast'
 import {cn} from '@/lib/utils'
-import {BarChart3, Check, Flag, KeyRound, Plus, RefreshCcw, Save, Shield, Trash2} from 'lucide-react'
+import {
+  BarChart3,
+  Check,
+  ChevronDown,
+  Flag,
+  Info,
+  KeyRound,
+  Plus,
+  RefreshCcw,
+  Save,
+  Shield,
+  Trash2,
+} from 'lucide-react'
 
 export const Route = createFileRoute('/feature-flags')({
   beforeLoad: async ({location}) => {
@@ -59,6 +72,50 @@ const defaultVariants = JSON.stringify([
   {key: 'on', name: 'On', value: true},
 ], null, 2)
 const defaultSegmentConditions = JSON.stringify({all: []}, null, 2)
+const tooltipText = {
+  environment: 'Choose which environment you are editing and evaluating flags for.',
+  refresh: 'Reload flags, analytics, SDK keys, segments, and audit data for this environment.',
+  flags: 'Total active feature flags returned for the selected environment.',
+  evaluations: 'Feature flag evaluations recorded over the analytics window.',
+  uniqueKeys: 'Distinct targeting keys, usually users or accounts, seen in flag evaluations.',
+  sdkKeys: 'SDK keys that can evaluate flags through the OpenFeature OFREP endpoint.',
+  flagKey: 'Stable identifier used by SDKs. Use a dotted name such as checkout.enabled.',
+  flagName: 'Human-readable name shown in the dashboard.',
+  valueType: 'The JSON value type returned by every variant for this flag.',
+  clientVisible: 'Allows client SDK keys to evaluate this flag. Leave off for server-only flags.',
+  variantsJson: 'Editable variant definitions. Keys are referenced by targeting and fallback rules.',
+  tags: 'Comma-separated labels for grouping and searching flags.',
+  createFlag: 'Create the flag with the variants, tags, and visibility settings shown here.',
+  environments: 'Named deployment scopes. Each environment has independent targeting configuration.',
+  environmentKey: 'Stable environment identifier used by SDK keys and evaluation requests.',
+  environmentName: 'Display name for the environment selector.',
+  addEnvironment: 'Create a new environment and switch the page to it.',
+  saveConfig: 'Save targeting, enabled state, default variant, and off variant for this environment.',
+  archive: 'Archive this flag so SDKs can no longer evaluate it.',
+  variantsTab: 'Review and edit the values this flag can return.',
+  targetingTab: 'Control whether the flag is on and which variant each audience receives.',
+  segmentsTab: 'Create reusable audience definitions for targeting rules.',
+  analyticsTab: 'See recent evaluation counts by variant for this flag.',
+  auditTab: 'Review recent changes to this flag and feature flag settings.',
+  setupTab: 'Create SDK keys and copy the OpenFeature provider setup example.',
+  enabled: 'Turns this flag on for the selected environment. Off returns the off variant.',
+  defaultVariant: 'Fallback variant returned when no targeting rule matches.',
+  offVariant: 'Variant returned while the flag is disabled.',
+  rulesJson: 'JSON targeting rules. Rules can reference segments and rollout percentages.',
+  segmentList: 'Saved audience groups that can be reused by targeting rules.',
+  segmentKey: 'Stable segment identifier used from targeting rules.',
+  segmentName: 'Human-readable segment name shown in this dashboard.',
+  segmentDescription: 'Optional internal note describing who belongs in this segment.',
+  segmentConditions: 'JSON conditions evaluated against the flag evaluation context.',
+  saveSegment: 'Create or update this reusable segment.',
+  deleteSegment: 'Archive this segment so new targeting rules cannot use it.',
+  sdkKeyName: 'Internal label for this key, such as Production server key.',
+  sdkKeyType: 'Server keys can evaluate all flags. Client keys can only evaluate client-visible flags.',
+  createKey: 'Create a new SDK key. The full secret is only shown once.',
+  revokeKey: 'Revoke this SDK key so it can no longer evaluate flags.',
+} as const
+
+type TooltipSide = 'top' | 'right' | 'bottom' | 'left'
 
 interface ConfigDraft {
   enabled: boolean
@@ -125,6 +182,60 @@ function segmentDraftFromSegment(segment: FeatureFlagSegment): SegmentDraft {
     description: segment.description ?? '',
     conditions: stringifyJson(segment.conditions),
   }
+}
+
+function TooltipWrap({
+  content,
+  children,
+  side = 'top',
+}: {
+  content: string
+  children: ReactNode
+  side?: TooltipSide
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side} className="max-w-72 leading-snug">
+        {content}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function HelpIcon({content}: {content: string}) {
+  return (
+    <TooltipWrap content={content}>
+      <button
+        type="button"
+        aria-label={content}
+        className={cn(
+          'inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground',
+          'transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2',
+          'focus-visible:ring-ring'
+        )}
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
+    </TooltipWrap>
+  )
+}
+
+function FieldLabel({
+  children,
+  htmlFor,
+  tooltip,
+}: {
+  children: ReactNode
+  htmlFor?: string
+  tooltip?: string
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Label htmlFor={htmlFor}>{children}</Label>
+      {tooltip && <HelpIcon content={tooltip} />}
+    </div>
+  )
 }
 
 function FeatureFlagsPage() {
@@ -345,51 +456,79 @@ val client = OpenFeatureAPI.getInstance().getClient()
 val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContext)`
 
   return (
-    <div className="flex min-h-full flex-col gap-4 p-4 md:p-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-normal">
-            <Flag className="h-5 w-5" />
-            Feature Flags
-          </h1>
+    <TooltipProvider delayDuration={200}>
+      <div className="flex min-h-full flex-col gap-3 p-3 md:p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0 space-y-2">
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-normal">
+              <Flag className="h-5 w-5" />
+              Feature Flags
+            </h1>
+            <div className="flex flex-wrap gap-2">
+              <CompactMetric
+                icon={Flag}
+                label="Flags"
+                value={flags.length.toLocaleString()}
+                tooltip={tooltipText.flags}
+              />
+              <CompactMetric
+                icon={Check}
+                label="Evaluations"
+                value={(analytics?.evaluations ?? 0).toLocaleString()}
+                tooltip={tooltipText.evaluations}
+              />
+              <CompactMetric
+                icon={Shield}
+                label="Unique Keys"
+                value={(analytics?.uniqueTargetingKeys ?? 0).toLocaleString()}
+                tooltip={tooltipText.uniqueKeys}
+              />
+              <CompactMetric
+                icon={KeyRound}
+                label="SDK Keys"
+                value={(sdkKeysQuery.data?.keys.length ?? 0).toLocaleString()}
+                tooltip={tooltipText.sdkKeys}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <TooltipWrap content={tooltipText.environment}>
+              <div>
+                <Select value={environment} onValueChange={setEnvironment}>
+                  <SelectTrigger className="h-9 w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {environments.map((env) => (
+                      <SelectItem key={env.key} value={env.key}>{env.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </TooltipWrap>
+            <TooltipWrap content={tooltipText.refresh}>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Refresh feature flag data"
+                className="h-9 w-9"
+                onClick={() => {
+                  queryClient.invalidateQueries({queryKey: ['feature-flags']})
+                  queryClient.invalidateQueries({queryKey: ['feature-flag-analytics']})
+                }}
+              >
+                <RefreshCcw className="h-4 w-4" />
+              </Button>
+            </TooltipWrap>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={environment} onValueChange={setEnvironment}>
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {environments.map((env) => (
-                <SelectItem key={env.key} value={env.key}>{env.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              queryClient.invalidateQueries({queryKey: ['feature-flags']})
-              queryClient.invalidateQueries({queryKey: ['feature-flag-analytics']})
-            }}
-          >
-            <RefreshCcw className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <MetricCard icon={Flag} label="Flags" value={flags.length.toLocaleString()} />
-        <MetricCard icon={Check} label="Evaluations" value={(analytics?.evaluations ?? 0).toLocaleString()} />
-        <MetricCard icon={Shield} label="Unique Keys" value={(analytics?.uniqueTargetingKeys ?? 0).toLocaleString()} />
-        <MetricCard icon={KeyRound} label="SDK Keys" value={(sdkKeysQuery.data?.keys.length ?? 0).toLocaleString()} />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(280px,360px)_1fr]">
+        <div className="grid gap-3 lg:grid-cols-[minmax(260px,320px)_1fr]">
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="p-3 pb-2">
             <CardTitle className="text-base">Flags</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 p-3 pt-0">
             <div className="space-y-2">
               {flagsQuery.isLoading && <div className="text-sm text-muted-foreground">Loading...</div>}
               {flags.map((flag) => {
@@ -400,7 +539,7 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
                     type="button"
                     onClick={() => setSelectedKey(flag.key)}
                     className={cn(
-                      'w-full rounded-md border p-3 text-left transition-colors hover:bg-muted/50',
+                      'w-full rounded-md border p-2.5 text-left transition-colors hover:bg-muted/50',
                       selectedFlag?.key === flag.key && 'border-primary bg-muted/60'
                     )}
                   >
@@ -420,68 +559,89 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
               })}
             </div>
 
-            <div className="space-y-3 border-t pt-4">
-              <div className="grid gap-2">
-                <Label htmlFor="new-flag-key">Key</Label>
-                <Input
-                  id="new-flag-key"
-                  value={newFlag.key}
-                  onChange={(event) => setNewFlag({...newFlag, key: event.target.value})}
-                  placeholder="checkout.enabled"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="new-flag-name">Name</Label>
-                <Input
-                  id="new-flag-name"
-                  value={newFlag.name}
-                  onChange={(event) => setNewFlag({...newFlag, name: event.target.value})}
-                  placeholder="Checkout Enabled"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="grid gap-2">
-                  <Label>Type</Label>
-                  <Select
-                    value={newFlag.valueType}
-                    onValueChange={(value) => setNewFlag({...newFlag, valueType: value as FeatureFlagValueType})}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {valueTypes.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end gap-2 pb-2">
-                  <Switch
-                    checked={newFlag.clientVisible}
-                    onCheckedChange={(checked) => setNewFlag({...newFlag, clientVisible: checked})}
-                  />
-                  <Label>Client</Label>
-                </div>
-              </div>
-              <Textarea
-                value={newFlag.variants}
-                onChange={(event) => setNewFlag({...newFlag, variants: event.target.value})}
-                className="min-h-32 font-mono text-xs"
-              />
-              <Input
-                value={newFlag.tags}
-                onChange={(event) => setNewFlag({...newFlag, tags: event.target.value})}
-                placeholder="billing, beta"
-              />
-              <Button
-                className="w-full gap-2"
-                onClick={() => createFlagMutation.mutate()}
-                disabled={!newFlag.key || !newFlag.name || createFlagMutation.isPending}
+            <details className="group border-t pt-2">
+              <summary
+                className={cn(
+                  'flex cursor-pointer list-none items-center justify-between rounded-md px-1 py-1',
+                  'text-sm font-medium hover:bg-muted/50 [&::-webkit-details-marker]:hidden'
+                )}
               >
-                <Plus className="h-4 w-4" />
-                Create Flag
-              </Button>
-            </div>
+                <span className="flex items-center gap-1.5">
+                  <Plus className="h-4 w-4" />
+                  Create Flag
+                </span>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-2 space-y-2.5">
+                <div className="grid gap-2">
+                  <FieldLabel htmlFor="new-flag-key" tooltip={tooltipText.flagKey}>Key</FieldLabel>
+                  <Input
+                    id="new-flag-key"
+                    value={newFlag.key}
+                    onChange={(event) => setNewFlag({...newFlag, key: event.target.value})}
+                    placeholder="checkout.enabled"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <FieldLabel htmlFor="new-flag-name" tooltip={tooltipText.flagName}>Name</FieldLabel>
+                  <Input
+                    id="new-flag-name"
+                    value={newFlag.name}
+                    onChange={(event) => setNewFlag({...newFlag, name: event.target.value})}
+                    placeholder="Checkout Enabled"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="grid gap-2">
+                    <FieldLabel tooltip={tooltipText.valueType}>Type</FieldLabel>
+                    <Select
+                      value={newFlag.valueType}
+                      onValueChange={(value) => setNewFlag({...newFlag, valueType: value as FeatureFlagValueType})}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {valueTypes.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end gap-2 pb-2">
+                    <Switch
+                      checked={newFlag.clientVisible}
+                      onCheckedChange={(checked) => setNewFlag({...newFlag, clientVisible: checked})}
+                    />
+                    <FieldLabel tooltip={tooltipText.clientVisible}>Client</FieldLabel>
+                  </div>
+                </div>
+                <FieldLabel tooltip={tooltipText.variantsJson}>Variants JSON</FieldLabel>
+                <Textarea
+                  value={newFlag.variants}
+                  onChange={(event) => setNewFlag({...newFlag, variants: event.target.value})}
+                  className="min-h-24 font-mono text-xs"
+                />
+                <FieldLabel tooltip={tooltipText.tags}>Tags</FieldLabel>
+                <Input
+                  value={newFlag.tags}
+                  onChange={(event) => setNewFlag({...newFlag, tags: event.target.value})}
+                  placeholder="billing, beta"
+                />
+                <TooltipWrap content={tooltipText.createFlag}>
+                  <Button
+                    className="w-full gap-2"
+                    onClick={() => createFlagMutation.mutate()}
+                    disabled={!newFlag.key || !newFlag.name || createFlagMutation.isPending}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Flag
+                  </Button>
+                </TooltipWrap>
+              </div>
+            </details>
 
-            <div className="space-y-3 border-t pt-4">
-              <div className="text-sm font-medium">Environments</div>
+            <div className="space-y-2.5 border-t pt-3">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                Environments
+                <HelpIcon content={tooltipText.environments} />
+              </div>
               <div className="flex flex-wrap gap-2">
                 {environments.map((env) => (
                   <Badge key={env.key} variant={env.key === environment ? 'default' : 'secondary'}>
@@ -489,27 +649,49 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
                   </Badge>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  value={environmentDraft.key}
-                  onChange={(event) => setEnvironmentDraft({...environmentDraft, key: event.target.value})}
-                  placeholder="qa"
-                />
-                <Input
-                  value={environmentDraft.name}
-                  onChange={(event) => setEnvironmentDraft({...environmentDraft, name: event.target.value})}
-                  placeholder="QA"
-                />
-              </div>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => createEnvironmentMutation.mutate()}
-                disabled={!environmentDraft.key || !environmentDraft.name || createEnvironmentMutation.isPending}
-              >
-                <Plus className="h-4 w-4" />
-                Add Environment
-              </Button>
+              <details className="group rounded-md border bg-muted/20 p-2">
+                <summary
+                  className={cn(
+                    'flex cursor-pointer list-none items-center justify-between text-sm font-medium',
+                    '[&::-webkit-details-marker]:hidden'
+                  )}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Plus className="h-4 w-4" />
+                    Add Environment
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="mt-2 space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <FieldLabel tooltip={tooltipText.environmentKey}>Key</FieldLabel>
+                    <FieldLabel tooltip={tooltipText.environmentName}>Name</FieldLabel>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      value={environmentDraft.key}
+                      onChange={(event) => setEnvironmentDraft({...environmentDraft, key: event.target.value})}
+                      placeholder="qa"
+                    />
+                    <Input
+                      value={environmentDraft.name}
+                      onChange={(event) => setEnvironmentDraft({...environmentDraft, name: event.target.value})}
+                      placeholder="QA"
+                    />
+                  </div>
+                  <TooltipWrap content={tooltipText.addEnvironment}>
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => createEnvironmentMutation.mutate()}
+                      disabled={!environmentDraft.key || !environmentDraft.name || createEnvironmentMutation.isPending}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Environment
+                    </Button>
+                  </TooltipWrap>
+                </div>
+              </details>
             </div>
           </CardContent>
         </Card>
@@ -551,31 +733,54 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </TooltipProvider>
   )
 }
 
-function MetricCard({
+function CompactMetric({
   icon: Icon,
   label,
   value,
+  tooltip,
 }: {
-  icon: React.ComponentType<{className?: string}>
+  icon: ComponentType<{className?: string}>
   label: string
   value: string
+  tooltip: string
 }) {
   return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div>
-          <div className="text-xs text-muted-foreground">{label}</div>
-          <div className="text-xl font-semibold">{value}</div>
-        </div>
-      </CardContent>
-    </Card>
+    <TooltipWrap content={tooltip}>
+      <button
+        type="button"
+        aria-label={`${label}: ${value}. ${tooltip}`}
+        className={cn(
+          'flex h-8 items-center gap-2 rounded-md border bg-card px-2.5 text-left text-sm shadow-sm',
+          'transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2',
+          'focus-visible:ring-ring'
+        )}
+      >
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="font-semibold tabular-nums">{value}</span>
+      </button>
+    </TooltipWrap>
+  )
+}
+
+function TooltipTabTrigger({
+  value,
+  children,
+  tooltip,
+}: {
+  value: string
+  children: ReactNode
+  tooltip: string
+}) {
+  return (
+    <TooltipWrap content={tooltip}>
+      <TabsTrigger value={value}>{children}</TabsTrigger>
+    </TooltipWrap>
   )
 }
 
@@ -608,8 +813,8 @@ function FlagDetail(props: {
   const flagAnalytics = props.analytics?.variants.filter((item) => item.flagKey === props.flag.key) ?? []
 
   return (
-    <Tabs defaultValue="variants" className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-md border bg-card p-4 md:flex-row md:items-start md:justify-between">
+    <Tabs defaultValue="variants" className="space-y-3">
+      <div className="flex flex-col gap-3 rounded-md border bg-card p-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="truncate text-lg font-semibold">{props.flag.name}</h2>
@@ -619,29 +824,33 @@ function FlagDetail(props: {
           <code className="mt-1 block truncate text-xs text-muted-foreground">{props.flag.key}</code>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={props.onSaveConfig} className="gap-2">
-            <Save className="h-4 w-4" />
-            Save
-          </Button>
-          <Button variant="destructive" size="sm" onClick={props.onArchive} className="gap-2">
-            <Trash2 className="h-4 w-4" />
-            Archive
-          </Button>
+          <TooltipWrap content={tooltipText.saveConfig}>
+            <Button variant="outline" size="sm" onClick={props.onSaveConfig} className="gap-2">
+              <Save className="h-4 w-4" />
+              Save
+            </Button>
+          </TooltipWrap>
+          <TooltipWrap content={tooltipText.archive}>
+            <Button variant="destructive" size="sm" onClick={props.onArchive} className="gap-2">
+              <Trash2 className="h-4 w-4" />
+              Archive
+            </Button>
+          </TooltipWrap>
         </div>
       </div>
 
       <TabsList className="flex h-auto flex-wrap justify-start">
-        <TabsTrigger value="variants">Variants</TabsTrigger>
-        <TabsTrigger value="targeting">Targeting</TabsTrigger>
-        <TabsTrigger value="segments">Segments</TabsTrigger>
-        <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        <TabsTrigger value="audit">Audit</TabsTrigger>
-        <TabsTrigger value="setup">SDK Setup</TabsTrigger>
+        <TooltipTabTrigger value="variants" tooltip={tooltipText.variantsTab}>Variants</TooltipTabTrigger>
+        <TooltipTabTrigger value="targeting" tooltip={tooltipText.targetingTab}>Targeting</TooltipTabTrigger>
+        <TooltipTabTrigger value="segments" tooltip={tooltipText.segmentsTab}>Segments</TooltipTabTrigger>
+        <TooltipTabTrigger value="analytics" tooltip={tooltipText.analyticsTab}>Analytics</TooltipTabTrigger>
+        <TooltipTabTrigger value="audit" tooltip={tooltipText.auditTab}>Audit</TooltipTabTrigger>
+        <TooltipTabTrigger value="setup" tooltip={tooltipText.setupTab}>SDK Setup</TooltipTabTrigger>
       </TabsList>
 
       <TabsContent value="variants">
           <Card>
-            <CardContent className="space-y-4 p-4">
+            <CardContent className="space-y-3 p-3">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -664,55 +873,63 @@ function FlagDetail(props: {
                 </TableBody>
               </Table>
               <div className="grid gap-2">
-                <Label>Variants JSON</Label>
+                <FieldLabel tooltip={tooltipText.variantsJson}>Variants JSON</FieldLabel>
                 <Textarea
                   value={props.variantDraft}
                   onChange={(event) => props.setVariantDraft(event.target.value)}
-                  className="min-h-56 font-mono text-xs"
+                  className="min-h-40 font-mono text-xs"
                 />
               </div>
-              <Button variant="outline" size="sm" onClick={props.onSaveVariants} className="gap-2">
-                <Save className="h-4 w-4" />
-                Save Variants
-              </Button>
+              <TooltipWrap content={tooltipText.variantsJson}>
+                <Button variant="outline" size="sm" onClick={props.onSaveVariants} className="gap-2">
+                  <Save className="h-4 w-4" />
+                  Save Variants
+                </Button>
+              </TooltipWrap>
             </CardContent>
           </Card>
         </TabsContent>
 
       <TabsContent value="targeting">
         <Card>
-          <CardContent className="space-y-4 p-4">
-            <div className="flex flex-wrap items-center gap-4">
+          <CardContent className="space-y-3 p-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <Switch
                   checked={props.configDraft.enabled}
                   onCheckedChange={(enabled) => props.setConfigDraft({...props.configDraft, enabled})}
                 />
-                <Label>Enabled in {props.environment}</Label>
+                <FieldLabel tooltip={tooltipText.enabled}>Enabled in {props.environment}</FieldLabel>
               </div>
-              <Badge variant="outline">{props.segments.length} segments</Badge>
-              <Badge variant="outline">v{props.config?.version ?? 0}</Badge>
+              <TooltipWrap content={tooltipText.segmentList}>
+                <Badge variant="outline" className="cursor-help">{props.segments.length} segments</Badge>
+              </TooltipWrap>
+              <TooltipWrap content="Configuration version for this flag in this environment.">
+                <Badge variant="outline" className="cursor-help">v{props.config?.version ?? 0}</Badge>
+              </TooltipWrap>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2">
               <VariantSelect
                 label="Default Variant"
+                tooltip={tooltipText.defaultVariant}
                 value={props.configDraft.defaultVariantKey}
                 variants={props.flag.variants}
                 onChange={(value) => props.setConfigDraft({...props.configDraft, defaultVariantKey: value})}
               />
               <VariantSelect
                 label="Off Variant"
+                tooltip={tooltipText.offVariant}
                 value={props.configDraft.offVariantKey}
                 variants={props.flag.variants}
                 onChange={(value) => props.setConfigDraft({...props.configDraft, offVariantKey: value})}
               />
             </div>
             <div className="grid gap-2">
-              <Label>Rules JSON</Label>
+              <FieldLabel tooltip={tooltipText.rulesJson}>Rules JSON</FieldLabel>
               <Textarea
                 value={props.configDraft.rules}
                 onChange={(event) => props.setConfigDraft({...props.configDraft, rules: event.target.value})}
-                className="min-h-72 font-mono text-xs"
+                className="min-h-52 font-mono text-xs"
               />
             </div>
           </CardContent>
@@ -720,10 +937,15 @@ function FlagDetail(props: {
         </TabsContent>
 
       <TabsContent value="segments">
-        <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
+        <div className="grid gap-3 lg:grid-cols-[300px_1fr]">
           <Card>
-            <CardHeader><CardTitle className="text-base">Segments</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="flex items-center gap-1.5 text-base">
+                Segments
+                <HelpIcon content={tooltipText.segmentList} />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 p-3 pt-0">
               {props.segments.map((segment) => (
                 <div key={segment.key} className="flex items-center justify-between rounded-md border p-2">
                   <button
@@ -734,9 +956,16 @@ function FlagDetail(props: {
                     <div className="truncate text-sm font-medium">{segment.name}</div>
                     <code className="text-xs text-muted-foreground">{segment.key}</code>
                   </button>
-                  <Button variant="ghost" size="icon" onClick={() => props.onDeleteSegment(segment.key)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <TooltipWrap content={tooltipText.deleteSegment}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Archive ${segment.name} segment`}
+                      onClick={() => props.onDeleteSegment(segment.key)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TooltipWrap>
                 </div>
               ))}
               {props.segments.length === 0 && (
@@ -745,8 +974,14 @@ function FlagDetail(props: {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle className="text-base">Segment Definition</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="text-base">Segment Definition</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2.5 p-3 pt-0">
+              <div className="grid grid-cols-2 gap-2">
+                <FieldLabel tooltip={tooltipText.segmentKey}>Key</FieldLabel>
+                <FieldLabel tooltip={tooltipText.segmentName}>Name</FieldLabel>
+              </div>
               <div className="grid gap-2 md:grid-cols-2">
                 <Input
                   value={props.segmentDraft.key}
@@ -759,24 +994,28 @@ function FlagDetail(props: {
                   placeholder="Beta Users"
                 />
               </div>
+              <FieldLabel tooltip={tooltipText.segmentDescription}>Description</FieldLabel>
               <Input
                 value={props.segmentDraft.description}
                 onChange={(event) => props.setSegmentDraft({...props.segmentDraft, description: event.target.value})}
                 placeholder="Optional description"
               />
+              <FieldLabel tooltip={tooltipText.segmentConditions}>Conditions JSON</FieldLabel>
               <Textarea
                 value={props.segmentDraft.conditions}
                 onChange={(event) => props.setSegmentDraft({...props.segmentDraft, conditions: event.target.value})}
-                className="min-h-64 font-mono text-xs"
+                className="min-h-44 font-mono text-xs"
               />
-              <Button
-                className="gap-2"
-                onClick={props.onSaveSegment}
-                disabled={!props.segmentDraft.key || !props.segmentDraft.name}
-              >
-                <Save className="h-4 w-4" />
-                Save Segment
-              </Button>
+              <TooltipWrap content={tooltipText.saveSegment}>
+                <Button
+                  className="gap-2"
+                  onClick={props.onSaveSegment}
+                  disabled={!props.segmentDraft.key || !props.segmentDraft.name}
+                >
+                  <Save className="h-4 w-4" />
+                  Save Segment
+                </Button>
+              </TooltipWrap>
             </CardContent>
           </Card>
         </div>
@@ -784,10 +1023,11 @@ function FlagDetail(props: {
 
       <TabsContent value="analytics">
         <Card>
-          <CardHeader>
+          <CardHeader className="p-3 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <BarChart3 className="h-4 w-4" />
               Recent Evaluations
+              <HelpIcon content={tooltipText.analyticsTab} />
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -848,15 +1088,22 @@ function FlagDetail(props: {
       </TabsContent>
 
       <TabsContent value="setup">
-        <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
+        <div className="grid gap-3 lg:grid-cols-[300px_1fr]">
           <Card>
-            <CardHeader><CardTitle className="text-base">SDK Keys</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="flex items-center gap-1.5 text-base">
+                SDK Keys
+                <HelpIcon content={tooltipText.sdkKeys} />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2.5 p-3 pt-0">
+              <FieldLabel tooltip={tooltipText.sdkKeyName}>Name</FieldLabel>
               <Input
                 value={props.sdkKeyDraft.name}
                 onChange={(event) => props.setSdkKeyDraft({...props.sdkKeyDraft, name: event.target.value})}
                 placeholder="Production server key"
               />
+              <FieldLabel tooltip={tooltipText.sdkKeyType}>Type</FieldLabel>
               <Select
                 value={props.sdkKeyDraft.keyType}
                 onValueChange={(value) => props.setSdkKeyDraft({
@@ -870,14 +1117,16 @@ function FlagDetail(props: {
                   <SelectItem value="client">Client</SelectItem>
                 </SelectContent>
               </Select>
-              <Button
-                className="w-full gap-2"
-                onClick={props.onCreateSdkKey}
-                disabled={!props.sdkKeyDraft.name}
-              >
-                <KeyRound className="h-4 w-4" />
-                Create Key
-              </Button>
+              <TooltipWrap content={tooltipText.createKey}>
+                <Button
+                  className="w-full gap-2"
+                  onClick={props.onCreateSdkKey}
+                  disabled={!props.sdkKeyDraft.name}
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Create Key
+                </Button>
+              </TooltipWrap>
               {props.createdKey && <CopyBlock code={props.createdKey.key} language="text" />}
               <div className="space-y-2">
                 {props.sdkKeys
@@ -888,9 +1137,16 @@ function FlagDetail(props: {
                         <div className="truncate text-sm font-medium">{key.name}</div>
                         <div className="text-xs text-muted-foreground">{key.keyPrefix} · {key.keyType}</div>
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => props.onRevokeSdkKey(key.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <TooltipWrap content={tooltipText.revokeKey}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Revoke ${key.name}`}
+                          onClick={() => props.onRevokeSdkKey(key.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipWrap>
                     </div>
                   ))}
               </div>
@@ -905,18 +1161,20 @@ function FlagDetail(props: {
 
 function VariantSelect({
   label,
+  tooltip,
   value,
   variants,
   onChange,
 }: {
   label: string
+  tooltip: string
   value: string
   variants: FeatureFlag['variants']
   onChange: (value: string) => void
 }) {
   return (
     <div className="grid gap-2">
-      <Label>{label}</Label>
+      <FieldLabel tooltip={tooltip}>{label}</FieldLabel>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger><SelectValue placeholder="Select variant" /></SelectTrigger>
         <SelectContent>
