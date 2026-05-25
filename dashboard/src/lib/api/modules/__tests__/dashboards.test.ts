@@ -75,13 +75,14 @@ describe('dashboardsMethods', () => {
       server.use(
         http.post(`${API_BASE}/v1/dashboards`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
-          expect(body.name).toBe('New Dashboard')
+          expect(body.title).toBe('New Dashboard')
           return HttpResponse.json(mock)
         })
       )
       const result = await api.createDashboard({
-        name: 'New Dashboard',
-      } as Parameters<typeof api.createDashboard>[0])
+        title: 'New Dashboard',
+        widgets: [],
+      })
       expect(result).toEqual(mock)
     })
   })
@@ -273,7 +274,7 @@ describe('dashboardsMethods', () => {
       )
       const result = await api.executeWidgetQuery(
         1,
-        queryConfig as Parameters<typeof api.executeWidgetQuery>[1],
+        queryConfig as unknown as Parameters<typeof api.executeWidgetQuery>[1],
         10
       )
       expect(result).toEqual(mockRows)
@@ -296,9 +297,9 @@ describe('dashboardsMethods', () => {
       )
       await api.executeWidgetQuery(
         1,
-        queryConfig as Parameters<typeof api.executeWidgetQuery>[1],
+        queryConfig as unknown as Parameters<typeof api.executeWidgetQuery>[1],
         10,
-        timeRange as Parameters<typeof api.executeWidgetQuery>[3],
+        timeRange as unknown as Parameters<typeof api.executeWidgetQuery>[3],
         variables
       )
     })
@@ -322,7 +323,7 @@ describe('dashboardsMethods', () => {
       )
       const result = await api.executeBatchQuery(
         2,
-        queries as Parameters<typeof api.executeBatchQuery>[1],
+        queries as unknown as Parameters<typeof api.executeBatchQuery>[1],
         3
       )
       expect(result).toEqual(mockResult)
@@ -345,9 +346,9 @@ describe('dashboardsMethods', () => {
       )
       await api.executeBatchQuery(
         2,
-        queries as Parameters<typeof api.executeBatchQuery>[1],
+        queries as unknown as Parameters<typeof api.executeBatchQuery>[1],
         3,
-        timeRange as Parameters<typeof api.executeBatchQuery>[3],
+        timeRange as unknown as Parameters<typeof api.executeBatchQuery>[3],
         variables
       )
     })
@@ -611,15 +612,15 @@ describe('dashboardsMethods', () => {
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body).not.toHaveProperty('data_source_id')
-            expect(body.sql).toBe('SELECT 1')
+            expect(body.query).toBe('SELECT 1')
             return HttpResponse.json(mockRows)
           }
         )
       )
       const result = await api.queryCustomDataSource(3, {
         data_source_id: 3,
-        sql: 'SELECT 1',
-      } as Parameters<typeof api.queryCustomDataSource>[1])
+        query: 'SELECT 1',
+      })
       expect(result).toEqual(mockRows)
     })
   })

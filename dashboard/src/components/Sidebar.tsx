@@ -242,7 +242,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false, group: 'core' },
     { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false, group: 'core' },
     ...(hasEnterpriseModule(features, 'datadog') ? [
-      { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, group: 'core' },
+      { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, group: 'core' } as NavItem,
     ] : []),
     // Infrastructure & Uptime
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false, group: 'infrastructure' },
@@ -256,13 +256,13 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false, group: 'insights' },
     // Operations (enterprise)
     ...(hasEnterpriseModule(features, 'datadog') ? [
-      { key: 'security', icon: ShieldAlert, label: 'Security', href: '/security', requiresProject: false, group: 'operations' },
-      { key: 'synthetics', icon: FlaskConical, label: 'Synthetics', href: '/synthetics', requiresProject: false, group: 'operations' },
+      { key: 'security', icon: ShieldAlert, label: 'Security', href: '/security', requiresProject: false, group: 'operations' } as NavItem,
+      { key: 'synthetics', icon: FlaskConical, label: 'Synthetics', href: '/synthetics', requiresProject: false, group: 'operations' } as NavItem,
     ] : []),
-    ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, group: 'operations', ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
+    ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, group: 'operations', ...(features?.selfHost && { badge: 'Enterprise' }) } as NavItem] : []),
     { key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, group: 'analytics' },
     // Management
-    ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false, group: 'management' }] : []),
+    ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false, group: 'management' } as NavItem] : []),
   ]
 
   const navItems = baseNavItems.filter(item => {

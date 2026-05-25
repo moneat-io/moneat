@@ -540,10 +540,10 @@ function FeedbackDetailPage() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-medium mb-1">Linked Event</p>
-                          {issueForEvent?.issueId ? (
+                          {issueForEvent ? (
                             <Link
                               to="/issues/$issueId"
-                              params={{ issueId: issueForEvent.issueId }}
+                              params={{ issueId: issueForEvent }}
                               className="inline-flex items-center gap-1 text-sm text-orange-600 dark:text-orange-400 hover:underline font-medium"
                             >
                               View related issue

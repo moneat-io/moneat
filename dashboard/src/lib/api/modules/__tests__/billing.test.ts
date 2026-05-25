@@ -146,12 +146,18 @@ describe('Billing API', () => {
     server.use(
       http.post(`${API_BASE}/v1/billing/checkout`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
-        expect(body.planId).toBe('pro-monthly')
+        expect(body.tierName).toBe('pro')
+        expect(body.billingInterval).toBe('monthly')
         return HttpResponse.json(mockSession)
       })
     )
 
-    const result = await api.createBillingCheckoutSession({ planId: 'pro-monthly' })
+    const result = await api.createBillingCheckoutSession({
+      tierName: 'pro',
+      billingInterval: 'monthly',
+      successUrl: 'https://app.example.com/settings?checkout=success',
+      cancelUrl: 'https://app.example.com/settings',
+    })
     expect(result).toEqual(mockSession)
   })
 

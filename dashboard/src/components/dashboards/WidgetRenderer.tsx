@@ -283,11 +283,23 @@ function formatTooltipLabel(v?: string | number) {
   return `${month}/${day} ${hours}:${mins}`
 }
 
-function formatTooltipValue(value?: number | string) {
+type TooltipValue = number | string | readonly (number | string)[] | undefined
+type TooltipFormatterResult = ReactNode | [ReactNode, string]
+type TooltipFormatterFn = (value: TooltipValue, name?: string | number) => TooltipFormatterResult
+
+function formatTooltipValue(value?: TooltipValue): string {
   if (value === undefined) return ''
-  if (typeof value !== 'number') return value
+  if (Array.isArray(value)) return value.map(formatTooltipValue).join(' - ')
+  if (typeof value !== 'number') return String(value)
   if (Number.isInteger(value)) return value.toLocaleString()
   return value.toLocaleString(undefined, {maximumFractionDigits: 2})
+}
+
+function formatUnitTooltipValue(value: TooltipValue, unit?: string, decimals?: string): string {
+  if (typeof value === 'number' && unit && unit !== 'none') {
+    return formatValue(value, unit, decimals)
+  }
+  return formatTooltipValue(value)
 }
 
 type DisplayConfig = Record<string, string>
@@ -506,9 +518,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
   const tickFormatter = unit && unit !== 'none'
     ? (v: number) => formatValue(v, unit, decimals)
     : undefined
-  const tooltipFormatter = unit && unit !== 'none'
-    ? (v?: number | string) => (v !== undefined && typeof v === 'number' ? formatValue(v, unit, decimals) : (v ?? ''))
-    : formatTooltipValue
+  const tooltipFormatter: TooltipFormatterFn = (value) => formatUnitTooltipValue(value, unit, decimals)
 
   const useArea = fillOpacity > 0 || stackMode !== 'none'
 
@@ -537,7 +547,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
             contentStyle={TOOLTIP_STYLE}
             wrapperStyle={TOOLTIP_WRAPPER_STYLE}
             labelFormatter={(label) => formatTooltipLabel(label as string | number)}
-            formatter={tooltipFormatter as (value: string | number | undefined, name: string | undefined, props: unknown) => ReactNode}
+            formatter={tooltipFormatter}
           />
           {legendProps && <Legend {...legendProps} />}
           {thresholds.map((t, i) => (
@@ -582,7 +592,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
             contentStyle={TOOLTIP_STYLE}
             wrapperStyle={TOOLTIP_WRAPPER_STYLE}
             labelFormatter={(label) => formatTooltipLabel(label as string | number)}
-            formatter={tooltipFormatter as (value: string | number | undefined, name: string | undefined, props: unknown) => ReactNode}
+            formatter={tooltipFormatter}
           />
           {legendProps && <Legend {...legendProps} />}
           {thresholds.map((t, i) => (
@@ -621,9 +631,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
   const tickFormatter = unit && unit !== 'none'
     ? (v: number) => formatValue(v, unit, decimals)
     : undefined
-  const tooltipFormatter = unit && unit !== 'none'
-    ? (v?: number | string) => (v !== undefined && typeof v === 'number' ? formatValue(v, unit, decimals) : (v ?? ''))
-    : formatTooltipValue
+  const tooltipFormatter: TooltipFormatterFn = (value) => formatUnitTooltipValue(value, unit, decimals)
 
   if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
     const {pivoted: rawPivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
@@ -658,7 +666,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
               contentStyle={TOOLTIP_STYLE}
               wrapperStyle={TOOLTIP_WRAPPER_STYLE}
               labelFormatter={(label) => formatTooltipLabel(label as string | number)}
-              formatter={tooltipFormatter as (value: string | number | undefined, name: string | undefined, props: unknown) => ReactNode}
+              formatter={tooltipFormatter}
             />
             {legendProps && <Legend {...legendProps} iconSize={8} />}
             {thresholds.map((t, i) => (

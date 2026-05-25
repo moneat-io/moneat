@@ -34,8 +34,10 @@ describe('AI API', () => {
     it('sends a chat message with conversationId', async () => {
       const mockResponse = {
         conversationId: 1,
-        message: 'Here is the answer',
-        actions: [],
+        response: {
+          message: 'Here is the answer',
+          actions: [],
+        },
       }
 
       server.use(
@@ -50,7 +52,7 @@ describe('AI API', () => {
 
       const result = await api.sendChatMessage(1, 'What happened?', '/dashboard')
       expect(result.conversationId).toBe(1)
-      expect(result.message).toBe('Here is the answer')
+      expect(result.response.message).toBe('Here is the answer')
     })
 
     it('sends a chat message with null conversationId for new conversation', async () => {
@@ -60,8 +62,10 @@ describe('AI API', () => {
           expect(body.conversationId).toBeNull()
           return HttpResponse.json({
             conversationId: 5,
-            message: 'New conversation started',
-            actions: [],
+            response: {
+              message: 'New conversation started',
+              actions: [],
+            },
           })
         })
       )

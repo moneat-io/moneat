@@ -43,7 +43,7 @@ describe('onCallMethods', () => {
 
   describe('updatePriorities', () => {
     it('sends PUT with request body', async () => {
-      const request = { priorities: [{ level: 'P1', label: 'Critical', color: '#ff0000' }] }
+      const request = { priorities: [{ severity: 'critical', priorityLevel: 'P1', isPageable: true, label: 'Critical' }] }
       const mock = [{ id: 1, level: 'P1', label: 'Critical', color: '#ff0000' }]
       server.use(
         http.put(`${API_BASE}/priorities`, async ({ request: req }) => {
@@ -72,7 +72,17 @@ describe('onCallMethods', () => {
 
   describe('updateBusinessHours', () => {
     it('sends PUT with business hours config', async () => {
-      const request = { timezone: 'US/Eastern', startHour: 8, endHour: 18, workDays: [1, 2, 3, 4, 5] }
+      const request = {
+        timezone: 'US/Eastern',
+        enabled: true,
+        windows: [
+          {dayOfWeek: 1, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 2, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 3, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 4, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 5, startTime: '08:00', endTime: '18:00'},
+        ],
+      }
       server.use(
         http.put(`${API_BASE}/business-hours`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
