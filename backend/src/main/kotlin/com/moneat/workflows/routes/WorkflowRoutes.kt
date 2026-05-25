@@ -42,6 +42,9 @@ import org.koin.core.context.GlobalContext
 private const val MIN_WORKFLOW_RUN_LIMIT = 1
 private const val MAX_WORKFLOW_RUN_LIMIT = 100
 private const val DEFAULT_WORKFLOW_RUN_LIMIT = 50
+private const val WORKFLOW_ID_ROUTE = "/{workflowId}"
+private const val INVALID_WORKFLOW_ID_MESSAGE = "Invalid workflow ID"
+private const val WORKFLOW_NOT_FOUND_MESSAGE = "Workflow not found"
 
 fun Route.workflowRoutes() {
     val workflowService = GlobalContext.get().get<WorkflowService>()
@@ -68,22 +71,22 @@ fun Route.workflowRoutes() {
                 )
             }
 
-            get("/{workflowId}") {
+            get(WORKFLOW_ID_ROUTE) {
                 val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
                 val workflowId = workflowIdFromPath() ?: return@get call.respond(
                     HttpStatusCode.BadRequest,
-                    ErrorResponse("Invalid workflow ID")
+                    ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
                 )
                 val workflow = workflowService.getWorkflow(organizationId, workflowId)
-                    ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("Workflow not found"))
+                    ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
                 call.respond(workflow)
             }
 
-            put("/{workflowId}") {
+            put(WORKFLOW_ID_ROUTE) {
                 val organizationId = currentOrganizationId() ?: return@put call.respond(HttpStatusCode.Forbidden)
                 val workflowId = workflowIdFromPath() ?: return@put call.respond(
                     HttpStatusCode.BadRequest,
-                    ErrorResponse("Invalid workflow ID")
+                    ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
                 )
                 val request = call.receive<UpdateWorkflowRequest>()
                 runCatching {
@@ -91,7 +94,7 @@ fun Route.workflowRoutes() {
                 }.fold(
                     onSuccess = { workflow ->
                         if (workflow == null) {
-                            call.respond(HttpStatusCode.NotFound, ErrorResponse("Workflow not found"))
+                            call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
                         } else {
                             call.respond(workflow)
                         }
@@ -100,25 +103,25 @@ fun Route.workflowRoutes() {
                 )
             }
 
-            delete("/{workflowId}") {
+            delete(WORKFLOW_ID_ROUTE) {
                 val organizationId = currentOrganizationId() ?: return@delete call.respond(HttpStatusCode.Forbidden)
                 val workflowId = workflowIdFromPath() ?: return@delete call.respond(
                     HttpStatusCode.BadRequest,
-                    ErrorResponse("Invalid workflow ID")
+                    ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
                 )
                 val deleted = workflowService.deleteWorkflow(organizationId, workflowId)
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Workflow not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
                 }
             }
 
-            get("/{workflowId}/runs") {
+            get("$WORKFLOW_ID_ROUTE/runs") {
                 val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
                 val workflowId = workflowIdFromPath() ?: return@get call.respond(
                     HttpStatusCode.BadRequest,
-                    ErrorResponse("Invalid workflow ID")
+                    ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
                 )
                 val limit =
                     call.request.queryParameters["limit"]

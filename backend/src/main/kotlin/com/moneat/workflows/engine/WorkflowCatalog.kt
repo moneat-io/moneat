@@ -19,6 +19,11 @@ package com.moneat.workflows.engine
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+private const val EQUALS_LABEL = "is equal to"
+private const val NOT_EQUALS_LABEL = "is not equal to"
+private const val ALERT_STATUS_REFERENCE = "alert.status"
+private const val ALERT_DEDUPLICATION_KEY_REFERENCE = "alert.deduplication_key"
+
 @Serializable
 data class WorkflowFieldConfig(
     val type: String,
@@ -86,8 +91,8 @@ object WorkflowCatalog {
     private val stringOperations = listOf(
         WorkflowOperationDefinition("is_set", "is set"),
         WorkflowOperationDefinition("is_not_set", "is not set"),
-        WorkflowOperationDefinition("eq", "is equal to", "String"),
-        WorkflowOperationDefinition("neq", "is not equal to", "String"),
+        WorkflowOperationDefinition("eq", EQUALS_LABEL, "String"),
+        WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "String"),
         WorkflowOperationDefinition("contains", "contains", "String"),
         WorkflowOperationDefinition("not_contains", "does not contain", "String")
     )
@@ -110,8 +115,8 @@ object WorkflowCatalog {
             label = "Number",
             fieldConfig = WorkflowFieldConfig(type = "number", placeholder = "0"),
             operations = listOf(
-                WorkflowOperationDefinition("eq", "is equal to", "Number"),
-                WorkflowOperationDefinition("neq", "is not equal to", "Number"),
+                WorkflowOperationDefinition("eq", EQUALS_LABEL, "Number"),
+                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "Number"),
                 WorkflowOperationDefinition("gt", "is greater than", "Number"),
                 WorkflowOperationDefinition("gte", "is greater than or equal to", "Number"),
                 WorkflowOperationDefinition("lt", "is less than", "Number"),
@@ -123,8 +128,8 @@ object WorkflowCatalog {
             label = "Severity",
             fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "CRITICAL, HIGH, MEDIUM, LOW"),
             operations = listOf(
-                WorkflowOperationDefinition("eq", "is equal to", "IncidentSeverity"),
-                WorkflowOperationDefinition("neq", "is not equal to", "IncidentSeverity"),
+                WorkflowOperationDefinition("eq", EQUALS_LABEL, "IncidentSeverity"),
+                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "IncidentSeverity"),
                 WorkflowOperationDefinition("at_least", "is at least", "IncidentSeverity")
             )
         ),
@@ -133,8 +138,8 @@ object WorkflowCatalog {
             label = "Alert Source",
             fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "HOST_ALERT, UPTIME_MONITOR"),
             operations = listOf(
-                WorkflowOperationDefinition("eq", "is equal to", "AlertSource"),
-                WorkflowOperationDefinition("neq", "is not equal to", "AlertSource")
+                WorkflowOperationDefinition("eq", EQUALS_LABEL, "AlertSource"),
+                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "AlertSource")
             )
         ),
         WorkflowResourceDefinition(
@@ -142,8 +147,8 @@ object WorkflowCatalog {
             label = "Alert Status",
             fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "FIRING, RESOLVED"),
             operations = listOf(
-                WorkflowOperationDefinition("eq", "is equal to", "IncidentStatus"),
-                WorkflowOperationDefinition("neq", "is not equal to", "IncidentStatus")
+                WorkflowOperationDefinition("eq", EQUALS_LABEL, "IncidentStatus"),
+                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "IncidentStatus")
             )
         )
     )
@@ -152,9 +157,9 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition("alert.title", "Alert title", "String"),
         WorkflowScopeReferenceDefinition("alert.description", "Alert description", "Text"),
         WorkflowScopeReferenceDefinition("alert.severity", "Severity", "IncidentSeverity"),
-        WorkflowScopeReferenceDefinition("alert.status", "Status", "IncidentStatus"),
+        WorkflowScopeReferenceDefinition(ALERT_STATUS_REFERENCE, "Status", "IncidentStatus"),
         WorkflowScopeReferenceDefinition("alert.source", "Source", "AlertSource"),
-        WorkflowScopeReferenceDefinition("alert.deduplication_key", "Deduplication key", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, "Deduplication key", "String"),
         WorkflowScopeReferenceDefinition("alert.url", "Moneat URL", "String"),
         WorkflowScopeReferenceDefinition("organization.id", "Organization ID", "String")
     )
@@ -165,14 +170,14 @@ object WorkflowCatalog {
             label = "When an alert triggers",
             description = "Runs when Moneat fires an alert lifecycle event.",
             scope = alertScope,
-            defaultOnceForTemplate = listOf("alert.deduplication_key")
+            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "alert.resolved",
             label = "When an alert resolves",
             description = "Runs when Moneat resolves an alert by deduplication key.",
             scope = alertScope,
-            defaultOnceForTemplate = listOf("alert.deduplication_key", "alert.status")
+            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE, ALERT_STATUS_REFERENCE)
         )
     )
 

@@ -64,6 +64,20 @@ private const val SEVERITY_HIGH_RANK = 3
 private const val SEVERITY_MEDIUM_RANK = 2
 private const val SEVERITY_LOW_RANK = 1
 private const val SEVERITY_UNKNOWN_RANK = 0
+private const val ALERT_TITLE_REFERENCE = "alert.title"
+private const val ALERT_DESCRIPTION_REFERENCE = "alert.description"
+private const val ALERT_SEVERITY_REFERENCE = "alert.severity"
+private const val ALERT_STATUS_REFERENCE = "alert.status"
+private const val ALERT_SOURCE_REFERENCE = "alert.source"
+private const val ALERT_DEDUPLICATION_KEY_REFERENCE = "alert.deduplication_key"
+private const val ALERT_URL_REFERENCE = "alert.url"
+private const val ORGANIZATION_ID_REFERENCE = "organization.id"
+private const val EMAIL_ORG_STEP = "notification.email_org"
+private const val SLACK_STEP = "notification.slack"
+private const val DISCORD_STEP = "notification.discord"
+private const val SKIP_IF_UNCONFIGURED_PARAM = "skip_if_unconfigured"
+private const val ALERT_SOURCE_TEMPLATE_LINE = "Source: {{alert.source}}\n"
+private const val ALERT_URL_TEMPLATE = "{{alert.url}}"
 
 class WorkflowService(
     private val emailService: EmailService = EmailService(),
@@ -284,14 +298,14 @@ class WorkflowService(
                 triggerName = ALERT_RESOLVED_TRIGGER,
                 organizationId = organizationId,
                 scope = mapOf(
-                    "alert.title" to title,
-                    "alert.description" to description,
-                    "alert.severity" to "",
-                    "alert.status" to IncidentStatus.RESOLVED.name,
-                    "alert.source" to source,
-                    "alert.deduplication_key" to deduplicationKey,
-                    "alert.url" to moneatUrl,
-                    "organization.id" to organizationId.toString()
+                    ALERT_TITLE_REFERENCE to title,
+                    ALERT_DESCRIPTION_REFERENCE to description,
+                    ALERT_SEVERITY_REFERENCE to "",
+                    ALERT_STATUS_REFERENCE to IncidentStatus.RESOLVED.name,
+                    ALERT_SOURCE_REFERENCE to source,
+                    ALERT_DEDUPLICATION_KEY_REFERENCE to deduplicationKey,
+                    ALERT_URL_REFERENCE to moneatUrl,
+                    ORGANIZATION_ID_REFERENCE to organizationId.toString()
                 )
             )
         )
@@ -414,20 +428,20 @@ class WorkflowService(
         scope: Map<String, String>
     ) {
         when (step.name) {
-            "notification.email_org" -> sendOrganizationEmail(organizationId, step.params, scope)
-            "notification.slack" -> {
+            EMAIL_ORG_STEP -> sendOrganizationEmail(organizationId, step.params, scope)
+            SLACK_STEP -> {
                 val message = interpolate(step.params["message"].orEmpty(), scope)
-                val skipIfUnconfigured = step.params["skip_if_unconfigured"]?.toBoolean() ?: true
-                if (!slackService.sendWorkflowMessage(organizationId, message, skipIfUnconfigured)) {
-                    throw IllegalStateException("Slack workflow message was not sent")
+                val skipIfUnconfigured = step.params[SKIP_IF_UNCONFIGURED_PARAM]?.toBoolean() ?: true
+                check(slackService.sendWorkflowMessage(organizationId, message, skipIfUnconfigured)) {
+                    "Slack workflow message was not sent"
                 }
             }
-            "notification.discord" -> {
+            DISCORD_STEP -> {
                 val title = interpolate(step.params["title"] ?: "Moneat workflow", scope)
                 val message = interpolate(step.params["message"].orEmpty(), scope)
-                val skipIfUnconfigured = step.params["skip_if_unconfigured"]?.toBoolean() ?: true
-                if (!discordService.sendWorkflowMessage(organizationId, title, message, skipIfUnconfigured)) {
-                    throw IllegalStateException("Discord workflow message was not sent")
+                val skipIfUnconfigured = step.params[SKIP_IF_UNCONFIGURED_PARAM]?.toBoolean() ?: true
+                check(discordService.sendWorkflowMessage(organizationId, title, message, skipIfUnconfigured)) {
+                    "Discord workflow message was not sent"
                 }
             }
             else -> throw IllegalArgumentException("Unknown workflow step ${step.name}")
@@ -487,7 +501,7 @@ class WorkflowService(
     }
 
     private fun validateCreateRequest(request: CreateWorkflowRequest) {
-        if (request.name.isBlank()) throw IllegalArgumentException("Workflow name is required")
+        require(request.name.isNotBlank()) { "Workflow name is required" }
         validateWorkflowConfig(request.triggerName, request.conditions, request.steps, request.onceForTemplate)
     }
 
@@ -501,28 +515,24 @@ class WorkflowService(
             ?: throw IllegalArgumentException("Unknown workflow trigger $triggerName")
         val scopeReferences = trigger.scope.map { it.name }.toSet()
         conditions.forEach { condition ->
-            if (condition.reference !in scopeReferences) {
-                throw IllegalArgumentException("Unknown workflow condition reference ${condition.reference}")
+            require(condition.reference in scopeReferences) {
+                "Unknown workflow condition reference ${condition.reference}"
             }
             val resourceType = checkNotNull(WorkflowCatalog.scopeType(triggerName, condition.reference))
             val resource = checkNotNull(WorkflowCatalog.resources.firstOrNull { it.type == resourceType })
-            if (resource.operations.none { it.name == condition.operation }) {
-                throw IllegalArgumentException(
-                    "Unsupported operation ${condition.operation} for ${condition.reference}"
-                )
+            require(resource.operations.any { it.name == condition.operation }) {
+                "Unsupported operation ${condition.operation} for ${condition.reference}"
             }
         }
         onceForTemplate.forEach { reference ->
-            if (reference !in scopeReferences) {
-                throw IllegalArgumentException("Unknown once-for reference $reference")
-            }
+            require(reference in scopeReferences) { "Unknown once-for reference $reference" }
         }
         steps.forEach { step ->
             val definition = WorkflowCatalog.step(step.name)
                 ?: throw IllegalArgumentException("Unknown workflow step ${step.name}")
             definition.params.filter { it.required }.forEach { param ->
-                if (step.params[param.name].isNullOrBlank()) {
-                    throw IllegalArgumentException("Missing required parameter ${param.name} for ${step.name}")
+                require(!step.params[param.name].isNullOrBlank()) {
+                    "Missing required parameter ${param.name} for ${step.name}"
                 }
             }
         }
@@ -548,8 +558,8 @@ class WorkflowService(
         when (operation) {
             "is_set" -> !actual.isNullOrBlank()
             "is_not_set" -> actual.isNullOrBlank()
-            "eq" -> actual.equals(expected.orEmpty(), ignoreCase = true)
-            "neq" -> !actual.equals(expected.orEmpty(), ignoreCase = true)
+            "eq" -> equalsIgnoringCase(actual, expected)
+            "neq" -> !equalsIgnoringCase(actual, expected)
             "contains" -> actual?.contains(expected.orEmpty(), ignoreCase = true) == true
             "not_contains" -> actual?.contains(expected.orEmpty(), ignoreCase = true) != true
             "gt", "gte", "lt", "lte" -> compareNumbers(actual, expected, operation)
@@ -576,6 +586,12 @@ class WorkflowService(
         }
     }
 
+    private fun equalsIgnoringCase(
+        actual: String?,
+        expected: String?
+    ): Boolean =
+        actual != null && actual.compareTo(expected.orEmpty(), ignoreCase = true) == 0
+
     private fun severityRank(value: String?): Int =
         when (value?.uppercase()) {
             "CRITICAL" -> SEVERITY_CRITICAL_RANK
@@ -590,7 +606,7 @@ class WorkflowService(
         scope: Map<String, String>
     ): String =
         onceForTemplate
-            .ifEmpty { listOf("alert.deduplication_key") }
+            .ifEmpty { listOf(ALERT_DEDUPLICATION_KEY_REFERENCE) }
             .joinToString("|") { reference -> "$reference=${scope[reference].orEmpty()}" }
 
     private fun loadExecutableRun(runId: Int): ExecutableWorkflowRun? =
@@ -743,14 +759,14 @@ class WorkflowService(
 
     private fun alertScope(event: IncidentEvent): Map<String, String> =
         mapOf(
-            "alert.title" to event.title,
-            "alert.description" to event.description,
-            "alert.severity" to event.severity.name,
-            "alert.status" to event.status.name,
-            "alert.source" to event.source.name,
-            "alert.deduplication_key" to event.deduplicationKey,
-            "alert.url" to event.moneatUrl,
-            "organization.id" to event.organizationId.toString()
+            ALERT_TITLE_REFERENCE to event.title,
+            ALERT_DESCRIPTION_REFERENCE to event.description,
+            ALERT_SEVERITY_REFERENCE to event.severity.name,
+            ALERT_STATUS_REFERENCE to event.status.name,
+            ALERT_SOURCE_REFERENCE to event.source.name,
+            ALERT_DEDUPLICATION_KEY_REFERENCE to event.deduplicationKey,
+            ALERT_URL_REFERENCE to event.moneatUrl,
+            ORGANIZATION_ID_REFERENCE to event.organizationId.toString()
         )
 
     companion object {
@@ -765,40 +781,40 @@ class WorkflowService(
                     systemKey = "default_alert_notifications",
                     name = "Send alert notifications",
                     triggerName = ALERT_TRIGGERED_TRIGGER,
-                    onceForTemplate = listOf("alert.deduplication_key"),
+                    onceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE),
                     steps = listOf(
                         WorkflowStepConfig(
-                            name = "notification.email_org",
+                            name = EMAIL_ORG_STEP,
                             params = mapOf(
                                 "subject" to "[Moneat] {{alert.title}}",
                                 "body" to "{{alert.title}}\n\n{{alert.description}}\n\n" +
                                     "Severity: {{alert.severity}}\n" +
-                                    "Source: {{alert.source}}\n" +
+                                    ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n\n" +
                                     "View in Moneat: {{alert.url}}"
                             )
                         ),
                         WorkflowStepConfig(
-                            name = "notification.slack",
+                            name = SLACK_STEP,
                             params = mapOf(
                                 "message" to "*{{alert.title}}*\n{{alert.description}}\n\n" +
                                     "*Severity:* {{alert.severity}}\n" +
                                     "*Source:* {{alert.source}}\n" +
                                     "*Status:* {{alert.status}}\n" +
-                                    "{{alert.url}}",
-                                "skip_if_unconfigured" to "true"
+                                    ALERT_URL_TEMPLATE,
+                                SKIP_IF_UNCONFIGURED_PARAM to "true"
                             )
                         ),
                         WorkflowStepConfig(
-                            name = "notification.discord",
+                            name = DISCORD_STEP,
                             params = mapOf(
                                 "title" to "{{alert.title}}",
                                 "message" to "{{alert.description}}\n\n" +
                                     "Severity: {{alert.severity}}\n" +
-                                    "Source: {{alert.source}}\n" +
+                                    ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n" +
-                                    "{{alert.url}}",
-                                "skip_if_unconfigured" to "true"
+                                    ALERT_URL_TEMPLATE,
+                                SKIP_IF_UNCONFIGURED_PARAM to "true"
                             )
                         )
                     )
@@ -807,37 +823,37 @@ class WorkflowService(
                     systemKey = "default_recovery_notifications",
                     name = "Send recovery notifications",
                     triggerName = ALERT_RESOLVED_TRIGGER,
-                    onceForTemplate = listOf("alert.deduplication_key", "alert.status"),
+                    onceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE, ALERT_STATUS_REFERENCE),
                     steps = listOf(
                         WorkflowStepConfig(
-                            name = "notification.email_org",
+                            name = EMAIL_ORG_STEP,
                             params = mapOf(
                                 "subject" to "[Moneat] Resolved: {{alert.title}}",
                                 "body" to "{{alert.title}}\n\n{{alert.description}}\n\n" +
-                                    "Source: {{alert.source}}\n" +
+                                    ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n\n" +
                                     "View in Moneat: {{alert.url}}"
                             )
                         ),
                         WorkflowStepConfig(
-                            name = "notification.slack",
+                            name = SLACK_STEP,
                             params = mapOf(
                                 "message" to "*Resolved: {{alert.title}}*\n{{alert.description}}\n\n" +
                                     "*Source:* {{alert.source}}\n" +
                                     "*Status:* {{alert.status}}\n" +
-                                    "{{alert.url}}",
-                                "skip_if_unconfigured" to "true"
+                                    ALERT_URL_TEMPLATE,
+                                SKIP_IF_UNCONFIGURED_PARAM to "true"
                             )
                         ),
                         WorkflowStepConfig(
-                            name = "notification.discord",
+                            name = DISCORD_STEP,
                             params = mapOf(
                                 "title" to "Resolved: {{alert.title}}",
                                 "message" to "{{alert.description}}\n\n" +
-                                    "Source: {{alert.source}}\n" +
+                                    ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n" +
-                                    "{{alert.url}}",
-                                "skip_if_unconfigured" to "true"
+                                    ALERT_URL_TEMPLATE,
+                                SKIP_IF_UNCONFIGURED_PARAM to "true"
                             )
                         )
                     )

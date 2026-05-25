@@ -66,6 +66,7 @@ import kotlin.time.Instant
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+private const val EMAIL_FRONTEND_URL_CONFIG = "email.frontendUrl"
 
 class MonitorAlertService(
     private val incidentService: IncidentService = IncidentService(),
@@ -339,7 +340,7 @@ class MonitorAlertService(
                 }
 
                 val metricLabel = getMetricLabel(alert.metric)
-                val frontendUrl = config.property("email.frontendUrl").getString()
+                val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
                 val dashboardUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
                 suspendRunCatching {
                     incidentService.autoResolveAlert(
@@ -623,7 +624,7 @@ class MonitorAlertService(
         val metricLabel = getMetricLabel(alert.metric)
         val formattedValue = formatMetricValue(alert.metric, currentValue)
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
-        val frontendUrl = config.property("email.frontendUrl").getString()
+        val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
 
         suspendRunCatching {
             val incidentSeverity =
@@ -762,7 +763,7 @@ class MonitorAlertService(
             }
 
         suspendRunCatching {
-            val frontendUrl = config.property("email.frontendUrl").getString()
+            val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
             val incidentEvent =
                 IncidentEvent(
                     title = "Host Down: $hostName",
@@ -792,7 +793,7 @@ class MonitorAlertService(
         organizationId: Int
     ): Boolean =
         suspendRunCatching {
-            val hostUrl = "${config.property("email.frontendUrl").getString()}/monitoring/hosts/$hostId"
+            val hostUrl = "${config.property(EMAIL_FRONTEND_URL_CONFIG).getString()}/monitoring/hosts/$hostId"
             incidentService.autoResolveAlert(
                 organizationId = organizationId,
                 source = AlertSource.HOST_DOWN,
