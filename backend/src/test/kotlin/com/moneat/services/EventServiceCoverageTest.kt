@@ -308,6 +308,50 @@ class EventServiceCoverageTest {
     }
 
     @Test
+    fun `processEnvelope stores feedback payload in event item as feedback`() = runBlocking {
+        val feedbackSlot = slot<FeedbackInsertData>()
+        coEvery { eventRepository.insertFeedback(capture(feedbackSlot)) } returns true
+
+        val fbJson =
+            """
+            {
+                "event_id": "44bad9a2e3774046977a21440ddb39b2",
+                "type": "feedback",
+                "level": "info",
+                "message": "User Feedback",
+                "timestamp": 1705329045.123,
+                "platform": "java",
+                "contexts": {
+                    "feedback": {
+                        "message": "The sync button is confusing",
+                        "contact_email": "android-user@example.com",
+                        "name": "Android User",
+                        "associated_event_id": "54bad9a2e3774046977a21440ddb39b2"
+                    }
+                },
+                "sdk": {"name": "sentry.java.android", "version": "8.35.0"}
+            }
+            """.trimIndent()
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "44bad9a2e3774046977a21440ddb39b2",
+                items = listOf(EnvelopeItem("event", fbJson))
+            )
+        )
+
+        assertTrue(feedbackSlot.isCaptured)
+        assertEquals("44bad9a2-e377-4046-977a-21440ddb39b2", feedbackSlot.captured.feedbackId)
+        assertEquals("The sync button is confusing", feedbackSlot.captured.message)
+        assertEquals("android-user@example.com", feedbackSlot.captured.contactEmail)
+        assertEquals("Android User", feedbackSlot.captured.name)
+        assertEquals("54bad9a2e3774046977a21440ddb39b2", feedbackSlot.captured.associatedEventId)
+        assertEquals("sentry.java.android", feedbackSlot.captured.sdkName)
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
+    }
+
+    @Test
     fun `processEnvelope routes replay_event and replay_recording`() = runBlocking {
         val replayEventJson = Json.encodeToString(
             SentryReplayEvent(
@@ -1068,6 +1112,34 @@ class EventServiceCoverageTest {
 
         assertTrue(errorSlot.isCaptured)
         assertEquals("IOError", errorSlot.captured.exceptionType)
+    }
+
+    @Test
+    fun `processStoreEvent stores feedback event payload as feedback`() = runBlocking {
+        val feedbackSlot = slot<FeedbackInsertData>()
+        coEvery { eventRepository.insertFeedback(capture(feedbackSlot)) } returns true
+
+        val body =
+            """
+            {
+                "event_id": "64bad9a2e3774046977a21440ddb39b2",
+                "type": "feedback",
+                "contexts": {
+                    "feedback": {
+                        "message": "Legacy store feedback",
+                        "contact_email": "legacy@example.com"
+                    }
+                }
+            }
+            """.trimIndent()
+
+        eventService.processStoreEvent(testProjectId, body)
+
+        assertTrue(feedbackSlot.isCaptured)
+        assertEquals("64bad9a2-e377-4046-977a-21440ddb39b2", feedbackSlot.captured.feedbackId)
+        assertEquals("Legacy store feedback", feedbackSlot.captured.message)
+        assertEquals("legacy@example.com", feedbackSlot.captured.contactEmail)
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
     }
 
     // ===================== verifyProjectKey caching =====================

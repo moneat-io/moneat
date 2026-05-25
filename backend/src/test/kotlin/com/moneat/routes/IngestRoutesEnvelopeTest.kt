@@ -18,8 +18,12 @@ package com.moneat.routes
 
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.services.QuotaReservationResult
+import com.moneat.events.models.EnvelopeItem
+import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.routes.ingestRoutes
+import com.moneat.events.routes.mapEnvelopeItemToQuotaType
 import com.moneat.events.routes.mapEnvelopeItemTypeToQuotaType
+import com.moneat.events.services.EventService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
@@ -39,6 +43,9 @@ import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -146,6 +153,106 @@ class IngestRoutesEnvelopeTest {
         }
 
     @Test
+    fun `envelope endpoint reserves event feedback payload as feedback quota`() =
+        testApplication {
+            val reservations = mutableListOf<Map<String, Int>>()
+
+            environment {
+                config =
+                    MapApplicationConfig(
+                        "ingest.queueKey" to "test:ingest:q",
+                        "logs.queueKey" to "test:logs:q"
+                    )
+            }
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        enqueueEnvelope = { _, _ -> },
+                        isQuotaEnforcementEnabled = { true },
+                        reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
+                            reservations.add(requestedUnitsByType)
+                            QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                        }
+                    )
+                }
+            }
+
+            val feedbackPayload =
+                """
+                {
+                    "event_id":"44bad9a2e3774046977a21440ddb39b2",
+                    "type":"feedback",
+                    "contexts":{"feedback":{"message":"Great app"}}
+                }
+                """.trimIndent()
+
+            val response =
+                client.post("/api/$testProjectId/envelope/") {
+                    contentType(ContentType.Application.OctetStream)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+                    setBody(
+                        buildEnvelope(
+                            eventId = "evt-feedback-1",
+                            items = listOf("event" to feedbackPayload.toByteArray())
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.Accepted, response.status)
+            assertEquals(1, reservations.size)
+            assertEquals(1, reservations[0]["feedback"])
+            assertEquals(null, reservations[0]["error"])
+        }
+
+    @Test
+    fun `store endpoint reserves feedback event payload as feedback quota`() =
+        testApplication {
+            val eventService = mockk<EventService>()
+            val reservedTypes = mutableListOf<String>()
+
+            every { eventService.verifyProjectKey(testProjectId, testPublicKey) } returns
+                ProjectKeyVerification(true, "jvm")
+            every { eventService.getOrganizationIdForProject(testProjectId) } returns testOrgId
+            coEvery { eventService.processStoreEvent(testProjectId, any()) } returns Unit
+
+            environment {
+                config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
+            }
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        eventService = eventService,
+                        isQuotaEnforcementEnabled = { true },
+                        reserveSingleQuota = { orgId, _, eventType, _ ->
+                            reservedTypes.add(eventType)
+                            QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                        }
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/store/") {
+                    contentType(ContentType.Application.Json)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+                    setBody(
+                        """
+                        {
+                            "event_id":"64bad9a2e3774046977a21440ddb39b2",
+                            "type":"feedback",
+                            "contexts":{"feedback":{"message":"Legacy store feedback"}}
+                        }
+                        """.trimIndent()
+                    )
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals(listOf("feedback"), reservedTypes)
+        }
+
+    @Test
     fun `envelope endpoint returns 429 when quota reservation rejects`() =
         testApplication {
             environment {
@@ -220,6 +327,21 @@ class IngestRoutesEnvelopeTest {
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("session"))
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("check_in"))
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("unknown_type"))
+    }
+
+    @Test
+    fun `envelope item quota mapping detects feedback event payloads`() {
+        val feedbackPayload =
+            """
+            {
+                "event_id": "44bad9a2e3774046977a21440ddb39b2",
+                "type": "feedback",
+                "contexts": {"feedback": {"message": "Great app"}}
+            }
+            """.trimIndent()
+
+        assertEquals("feedback", mapEnvelopeItemToQuotaType(EnvelopeItem("event", feedbackPayload)))
+        assertEquals("error", mapEnvelopeItemToQuotaType(EnvelopeItem("event", """{"message":"User Feedback"}""")))
     }
 
     private fun buildEnvelope(
