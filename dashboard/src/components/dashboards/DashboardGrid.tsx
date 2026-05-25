@@ -337,7 +337,13 @@ function WidgetCard({
   timeRange: TimeRangeDef
   autoRefresh: boolean
   variableValues?: Record<string, string>
-  alerts: {widget_id: number; enabled: boolean; last_triggered_at: string | null; incident_severity: string | null}[]
+  alerts: {
+    widget_id: number
+    enabled: boolean
+    last_triggered_at: string | null
+    last_triggered_level?: string | null
+    incident_severity: string | null
+  }[]
   onWidgetClick: (widget: DashboardWidget) => void
   onWidgetDelete: (widgetId: number) => void
 }) {
@@ -370,9 +376,12 @@ function WidgetCard({
             const widgetAlerts = alerts.filter((a) => a.widget_id === widget.id && a.enabled)
             if (widgetAlerts.length === 0) return null
             const firing = widgetAlerts.some((a) => a.last_triggered_at)
-            const severity = widgetAlerts.find((a) => a.last_triggered_at)?.incident_severity
+            const firingAlert = widgetAlerts.find((a) => a.last_triggered_at)
+            const severity = firingAlert?.incident_severity
             const dotColor = firing
-              ? severity === 'CRITICAL' || severity === 'HIGH' ? 'bg-red-500' : 'bg-orange-500'
+              ? firingAlert?.last_triggered_level === 'ERROR' || severity === 'CRITICAL' || severity === 'HIGH'
+                ? 'bg-red-500'
+                : 'bg-orange-500'
               : 'bg-muted-foreground/40'
             return (
               <span className="relative shrink-0" title={firing ? `Alert firing` : `${widgetAlerts.length} alert(s) configured`}>

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {memo, type CSSProperties, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 'react'
+import {memo, type ComponentProps, type CSSProperties, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
@@ -31,6 +31,7 @@ import {
     LineChart,
     Pie,
     PieChart,
+    ReferenceArea,
     ReferenceLine,
     Tooltip,
     XAxis,
@@ -43,6 +44,7 @@ import ReactMarkdown from 'react-markdown'
 import type {ValueMapping} from './formatValue'
 import {formatValue} from './formatValue'
 import {pivotData, valueKeySeries} from './widgetSeries'
+import {isWarningThresholdValid, type AlertThresholdPreview} from './alertThresholds'
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -126,6 +128,7 @@ interface WidgetRendererProps {
   timeRange: TimeRangeDef
   autoRefresh: boolean
   variables?: Record<string, string>
+  alertThresholdPreview?: AlertThresholdPreview | null
 }
 
 export const WidgetRenderer = memo(function WidgetRenderer({
@@ -135,6 +138,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   timeRange,
   autoRefresh,
   variables,
+  alertThresholdPreview,
 }: WidgetRendererProps) {
   const queries = widget.query_configs?.length > 0 ? widget.query_configs : []
   const isBatch = queries.length > 1
@@ -221,9 +225,23 @@ export const WidgetRenderer = memo(function WidgetRenderer({
 
   switch (widget.widget_type) {
     case 'timeseries':
-      return <TimeseriesChart data={chartData} timeRange={timeRange} displayConfig={dc} />
+      return (
+        <TimeseriesChart
+          data={chartData}
+          timeRange={timeRange}
+          displayConfig={dc}
+          alertThresholdPreview={alertThresholdPreview}
+        />
+      )
     case 'bar':
-      return <BarChartWidget data={chartData} timeRange={timeRange} displayConfig={dc} />
+      return (
+        <BarChartWidget
+          data={chartData}
+          timeRange={timeRange}
+          displayConfig={dc}
+          alertThresholdPreview={alertThresholdPreview}
+        />
+      )
     case 'donut':
       return <DonutChartWidget data={chartData} displayConfig={dc} />
     case 'stat':
@@ -391,6 +409,174 @@ function getYAxisDomain(dc: DisplayConfig): [string | number, string | number] {
   ]
 }
 
+function getNumericExtent(data: Record<string, unknown>[], valueKeys: string[]) {
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+
+  for (const row of data) {
+    for (const key of valueKeys) {
+      const value = row[key]
+      if (typeof value !== 'number' || !Number.isFinite(value)) continue
+      min = Math.min(min, value)
+      max = Math.max(max, value)
+    }
+  }
+
+  return Number.isFinite(min) && Number.isFinite(max) ? {min, max} : null
+}
+
+function getAlertAwareYAxisDomain(
+  dc: DisplayConfig,
+  data: Record<string, unknown>[],
+  valueKeys: string[],
+  alertThresholdPreview?: AlertThresholdPreview | null
+): [string | number, string | number] {
+  const baseDomain = getYAxisDomain(dc)
+  if (!alertThresholdPreview) return baseDomain
+
+  const explicitMin = typeof baseDomain[0] === 'number' ? baseDomain[0] : null
+  const explicitMax = typeof baseDomain[1] === 'number' ? baseDomain[1] : null
+  const extent = getNumericExtent(data, valueKeys)
+  const thresholds = [alertThresholdPreview.errorThreshold, alertThresholdPreview.warningThreshold]
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+
+  const minCandidates = [
+    extent?.min,
+    ...thresholds,
+  ].filter((value): value is number => typeof value === 'number')
+  const maxCandidates = [
+    extent?.max,
+    ...thresholds,
+  ].filter((value): value is number => typeof value === 'number')
+
+  if (minCandidates.length === 0 || maxCandidates.length === 0) return baseDomain
+
+  let min = Math.min(...minCandidates)
+  let max = Math.max(...maxCandidates)
+  if (min === max) {
+    min -= 1
+    max += 1
+  }
+  const padding = Math.max((max - min) * 0.08, 1)
+
+  return [
+    explicitMin ?? min - padding,
+    explicitMax ?? max + padding,
+  ]
+}
+
+interface AlertThresholdOverlay {
+  zones: {key: string; y1: number; y2: number; fill: string}[]
+  lines: {key: string; value: number; color: string}[]
+}
+
+const ALERT_WARNING_COLOR = '#f59e0b'
+const ALERT_ERROR_COLOR = '#ef4444'
+const ALERT_ZONE_OPACITY = 0.12
+
+function buildAlertThresholdOverlay(
+  alertThresholdPreview: AlertThresholdPreview | null | undefined,
+  yDomain: [string | number, string | number]
+): AlertThresholdOverlay {
+  const min = typeof yDomain[0] === 'number' ? yDomain[0] : null
+  const max = typeof yDomain[1] === 'number' ? yDomain[1] : null
+  if (!alertThresholdPreview || min == null || max == null) return {zones: [], lines: []}
+
+  const lines = [
+    {key: 'error-line', value: alertThresholdPreview.errorThreshold, color: ALERT_ERROR_COLOR},
+  ]
+  const canShowWarning = alertThresholdPreview.warningThreshold != null &&
+    isWarningThresholdValid(alertThresholdPreview)
+  const warningThreshold = canShowWarning ? alertThresholdPreview.warningThreshold : null
+  if (warningThreshold != null) {
+    lines.unshift({
+      key: 'warning-line',
+      value: warningThreshold,
+      color: ALERT_WARNING_COLOR,
+    })
+  }
+  if (alertThresholdPreview.condition === '==') return {zones: [], lines}
+
+  const errorThreshold = alertThresholdPreview.errorThreshold
+  const isUpperBound = alertThresholdPreview.condition === '>' || alertThresholdPreview.condition === '>='
+  const zones = isUpperBound
+    ? buildUpperBoundZones(min, max, warningThreshold, errorThreshold)
+    : buildLowerBoundZones(min, max, warningThreshold, errorThreshold)
+
+  return {
+    zones: zones.filter((zone) => zone.y2 > zone.y1),
+    lines,
+  }
+}
+
+function buildUpperBoundZones(
+  min: number,
+  max: number,
+  warningThreshold: number | null,
+  errorThreshold: number
+) {
+  const zones = [
+    {key: 'error-zone', y1: Math.max(min, errorThreshold), y2: max, fill: ALERT_ERROR_COLOR},
+  ]
+  if (warningThreshold != null) {
+    zones.unshift({
+      key: 'warning-zone',
+      y1: Math.max(min, warningThreshold),
+      y2: Math.min(max, errorThreshold),
+      fill: ALERT_WARNING_COLOR,
+    })
+  }
+  return zones
+}
+
+function buildLowerBoundZones(
+  min: number,
+  max: number,
+  warningThreshold: number | null,
+  errorThreshold: number
+) {
+  const zones = [
+    {key: 'error-zone', y1: min, y2: Math.min(max, errorThreshold), fill: ALERT_ERROR_COLOR},
+  ]
+  if (warningThreshold != null) {
+    zones.unshift({
+      key: 'warning-zone',
+      y1: Math.max(min, errorThreshold),
+      y2: Math.min(max, warningThreshold),
+      fill: ALERT_WARNING_COLOR,
+    })
+  }
+  return zones
+}
+
+function renderAlertThresholdOverlay(overlay: AlertThresholdOverlay) {
+  return (
+    <>
+      {overlay.zones.map((zone) => (
+        <ReferenceArea
+          key={zone.key}
+          y1={zone.y1}
+          y2={zone.y2}
+          fill={zone.fill}
+          fillOpacity={ALERT_ZONE_OPACITY}
+          strokeOpacity={0}
+          ifOverflow="visible"
+        />
+      ))}
+      {overlay.lines.map((line) => (
+        <ReferenceLine
+          key={line.key}
+          y={line.value}
+          stroke={line.color}
+          strokeDasharray="3 3"
+          strokeWidth={1.5}
+          ifOverflow="visible"
+        />
+      ))}
+    </>
+  )
+}
+
 function getLegendProps(dc: DisplayConfig) {
   const mode = dc.legendMode || 'list'
   if (mode === 'hidden') return null
@@ -500,8 +686,23 @@ const TOOLTIP_STYLE = {
   fontSize: '11px',
 }
 const TOOLTIP_WRAPPER_STYLE = {zIndex: 1000}
+type RechartsTooltipFormatter = NonNullable<ComponentProps<typeof Tooltip>['formatter']>
 
-const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayConfig: dc}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef; displayConfig: DisplayConfig}) {
+function asRechartsTooltipFormatter(formatter: TooltipFormatterFn): RechartsTooltipFormatter {
+  return (value, name) => formatter(value as TooltipValue, name)
+}
+
+const TimeseriesChart = memo(function TimeseriesChart({
+  data,
+  timeRange,
+  displayConfig: dc,
+  alertThresholdPreview,
+}: {
+  data: Record<string, unknown>[]
+  timeRange: TimeRangeDef
+  displayConfig: DisplayConfig
+  alertThresholdPreview?: AlertThresholdPreview | null
+}) {
   const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const xKey = timeKey || 'time_bucket'
   const spanMs = getTimeSpanMs(timeRange)
@@ -529,7 +730,8 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
 
   const thresholds = parseThresholds(dc)
   const legendProps = getLegendProps(dc)
-  const yDomain = getYAxisDomain(dc)
+  const yDomain = getAlertAwareYAxisDomain(dc, chartData, seriesKeys, alertThresholdPreview)
+  const alertOverlay = buildAlertThresholdOverlay(alertThresholdPreview, yDomain)
   const lineWidth = parseFloat(dc.lineWidth || '1.5')
   const fillOpacity = parseFloat(dc.fillOpacity || '0')
   const interpolation = (dc.lineInterpolation || 'monotone') as 'linear' | 'monotone' | 'step'
@@ -570,9 +772,10 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
             contentStyle={TOOLTIP_STYLE}
             wrapperStyle={TOOLTIP_WRAPPER_STYLE}
             labelFormatter={(label) => formatTooltipLabel(label as string | number)}
-            formatter={tooltipFormatter}
+            formatter={asRechartsTooltipFormatter(tooltipFormatter)}
           />
           {legendProps && <Legend {...legendProps} />}
+          {renderAlertThresholdOverlay(alertOverlay)}
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
           ))}
@@ -616,9 +819,10 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
             contentStyle={TOOLTIP_STYLE}
             wrapperStyle={TOOLTIP_WRAPPER_STYLE}
             labelFormatter={(label) => formatTooltipLabel(label as string | number)}
-            formatter={tooltipFormatter}
+            formatter={asRechartsTooltipFormatter(tooltipFormatter)}
           />
           {legendProps && <Legend {...legendProps} />}
+          {renderAlertThresholdOverlay(alertOverlay)}
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
           ))}
@@ -641,14 +845,23 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
   )
 })
 
-const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayConfig: dc}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef; displayConfig: DisplayConfig}) {
+const BarChartWidget = memo(function BarChartWidget({
+  data,
+  timeRange,
+  displayConfig: dc,
+  alertThresholdPreview,
+}: {
+  data: Record<string, unknown>[]
+  timeRange: TimeRangeDef
+  displayConfig: DisplayConfig
+  alertThresholdPreview?: AlertThresholdPreview | null
+}) {
   const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const spanMs = getTimeSpanMs(timeRange)
   const hasTime = !!timeKey
 
   const thresholds = parseThresholds(dc)
   const legendProps = getLegendProps(dc)
-  const yDomain = getYAxisDomain(dc)
   const showGrid = dc.showGrid !== 'false'
   const barMode = dc.barMode || 'grouped'
   const unit = dc.unit
@@ -665,6 +878,8 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
       if (typeof v === 'string') { const ms = parseUtcTimestamp(v); return isNaN(ms) ? row : {...row, [timeKey!]: ms} }
       return row
     })
+    const yDomain = getAlertAwareYAxisDomain(dc, pivoted, seriesKeys, alertThresholdPreview)
+    const alertOverlay = buildAlertThresholdOverlay(alertThresholdPreview, yDomain)
     return (
       <DebouncedChartContainer>
         {(w, h) => (
@@ -691,9 +906,10 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
               contentStyle={TOOLTIP_STYLE}
               wrapperStyle={TOOLTIP_WRAPPER_STYLE}
               labelFormatter={(label) => formatTooltipLabel(label as string | number)}
-              formatter={tooltipFormatter}
+              formatter={asRechartsTooltipFormatter(tooltipFormatter)}
             />
             {legendProps && <Legend {...legendProps} iconSize={8} />}
+            {renderAlertThresholdOverlay(alertOverlay)}
             {thresholds.map((t, i) => (
               <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
             ))}
@@ -716,6 +932,8 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
   const barKeys = valueKeys.length > 0 ? valueKeys : Object.keys(data[0] || {}).filter(
     k => !isTimeKey(k) && typeof data[0][k] === 'number'
   )
+  const yDomain = getAlertAwareYAxisDomain(dc, data, barKeys, alertThresholdPreview)
+  const alertOverlay = buildAlertThresholdOverlay(alertThresholdPreview, yDomain)
 
   return (
     <DebouncedChartContainer>
@@ -730,8 +948,13 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
             label={dc.yAxisLabel ? {value: dc.yAxisLabel, angle: -90, position: 'insideLeft', style: {fontSize: 10}} : undefined}
             tickFormatter={tickFormatter}
           />
-          <Tooltip cursor={{fill: 'transparent'}} contentStyle={TOOLTIP_STYLE} formatter={tooltipFormatter} />
+          <Tooltip
+            cursor={{fill: 'transparent'}}
+            contentStyle={TOOLTIP_STYLE}
+            formatter={asRechartsTooltipFormatter(tooltipFormatter)}
+          />
           {legendProps && <Legend {...legendProps} iconSize={8} />}
+          {renderAlertThresholdOverlay(alertOverlay)}
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
           ))}

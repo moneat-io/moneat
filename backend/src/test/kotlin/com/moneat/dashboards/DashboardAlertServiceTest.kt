@@ -187,12 +187,14 @@ class DashboardAlertServiceTest {
                     name VARCHAR(255) NOT NULL,
                     condition VARCHAR(5) NOT NULL,
                     threshold DOUBLE PRECISION NOT NULL,
+                    warning_threshold DOUBLE PRECISION,
                     metric_index INT DEFAULT 0 NOT NULL,
                     duration_seconds INT DEFAULT 0 NOT NULL,
                     incident_severity VARCHAR(20),
                     enabled BOOLEAN DEFAULT TRUE NOT NULL,
                     notification_channels TEXT NOT NULL, -- H2: JSONB unsupported; production uses JSONB
                     last_triggered_at TIMESTAMP,
+                    last_triggered_level VARCHAR(20),
                     last_value DOUBLE PRECISION,
                     created_by BIGINT NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -272,6 +274,7 @@ class DashboardAlertServiceTest {
         val name: String = "High Error Rate",
         val condition: String = ">",
         val threshold: Double = 100.0,
+        val warningThreshold: Double? = null,
         val metricIndex: Int = 0,
         val durationSeconds: Int = 0,
         val incidentSeverity: String? = null,
@@ -287,6 +290,7 @@ class DashboardAlertServiceTest {
         name = overrides.name,
         condition = overrides.condition,
         threshold = overrides.threshold,
+        warningThreshold = overrides.warningThreshold,
         metricIndex = overrides.metricIndex,
         durationSeconds = overrides.durationSeconds,
         incidentSeverity = overrides.incidentSeverity,
@@ -331,6 +335,7 @@ class DashboardAlertServiceTest {
         assertEquals("High Error Rate", response.name)
         assertEquals(">", response.condition)
         assertEquals(100.0, response.threshold)
+        assertNull(response.warningThreshold)
         assertEquals(widgetId, response.widgetId)
         assertEquals(dashboardId, response.dashboardId)
         assertTrue(response.enabled)
@@ -338,9 +343,26 @@ class DashboardAlertServiceTest {
         assertEquals(0, response.durationSeconds)
         assertNull(response.incidentSeverity)
         assertNull(response.lastTriggeredAt)
+        assertNull(response.lastTriggeredLevel)
         assertNull(response.lastValue)
         assertNotNull(response.createdAt)
         assertNotNull(response.updatedAt)
+    }
+
+    @Test
+    fun `createAlert persists warning threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val response = service.createAlert(
+            dashboardId = dashboardId,
+            orgId = ORG_ID,
+            createdBy = CREATED_BY,
+            request = buildCreateRequest(widgetId, AlertRequestOverrides(threshold = 100.0, warningThreshold = 80.0)),
+        )
+
+        assertEquals(100.0, response.threshold)
+        assertEquals(80.0, response.warningThreshold)
     }
 
     @Test
@@ -392,6 +414,42 @@ class DashboardAlertServiceTest {
                 orgId = ORG_ID,
                 createdBy = CREATED_BY,
                 request = buildCreateRequest(widgetId, AlertRequestOverrides(condition = "INVALID")),
+            )
+        }
+    }
+
+    @Test
+    fun `createAlert rejects warning threshold above upper-bound error threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.createAlert(
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                createdBy = CREATED_BY,
+                request = buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(condition = ">", threshold = 100.0, warningThreshold = 120.0),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `createAlert rejects warning threshold below lower-bound error threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.createAlert(
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                createdBy = CREATED_BY,
+                request = buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(condition = "<", threshold = 10.0, warningThreshold = 5.0),
+                ),
             )
         }
     }
@@ -488,7 +546,7 @@ class DashboardAlertServiceTest {
     }
 
     @Test
-    fun `updateAlert can change threshold and condition`() {
+    fun `updateAlert can change thresholds and condition`() {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
 
@@ -503,12 +561,35 @@ class DashboardAlertServiceTest {
             alertId = created.id,
             dashboardId = dashboardId,
             orgId = ORG_ID,
-            request = UpdateDashboardAlertRequest(condition = "<", threshold = 50.0),
+            request = UpdateDashboardAlertRequest(condition = "<", threshold = 50.0, warningThreshold = 75.0),
         )
 
         assertNotNull(updated)
         assertEquals("<", updated.condition)
         assertEquals(50.0, updated.threshold)
+        assertEquals(75.0, updated.warningThreshold)
+    }
+
+    @Test
+    fun `updateAlert validates warning threshold against existing condition`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val created = service.createAlert(
+            dashboardId,
+            ORG_ID,
+            CREATED_BY,
+            buildCreateRequest(widgetId, AlertRequestOverrides(condition = ">", threshold = 100.0)),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            service.updateAlert(
+                alertId = created.id,
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                request = UpdateDashboardAlertRequest(warningThreshold = 120.0),
+            )
+        }
     }
 
     @Test

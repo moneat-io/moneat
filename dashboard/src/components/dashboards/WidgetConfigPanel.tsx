@@ -22,6 +22,7 @@ import {WidgetRenderer} from './WidgetRenderer'
 import {AlertConfigForm} from './AlertConfigForm'
 import {X, BarChart3, LineChart, PieChart, Hash, Table2, List, Grid3X3, Type, Plus, Trash2, Gauge, BarChartHorizontalBig} from 'lucide-react'
 import type {ValueMapping} from './formatValue'
+import type {AlertThresholdPreview} from './alertThresholds'
 
 const WIDGET_TYPES = [
   {value: 'timeseries', label: 'Timeseries', icon: LineChart},
@@ -67,6 +68,7 @@ export function WidgetConfigPanel({
   const [editedWidget, setEditedWidget] = useState<DashboardWidget>({...widget})
   const [activeTab, setActiveTab] = useState<'query' | 'display' | 'alerts'>('query')
   const [activeQueryIndex, setActiveQueryIndex] = useState(0)
+  const [alertThresholdPreview, setAlertThresholdPreview] = useState<AlertThresholdPreview | null>(null)
 
   const queries = editedWidget.query_configs?.length > 0
     ? editedWidget.query_configs
@@ -223,6 +225,7 @@ export function WidgetConfigPanel({
               dashboardId={dashboardId}
               widgetId={editedWidget.id}
               queryConfigs={queries}
+              onPreviewChange={setAlertThresholdPreview}
             />
           ) : (
             <p className="text-xs text-muted-foreground">Save the widget first to configure alerts.</p>
@@ -244,6 +247,7 @@ export function WidgetConfigPanel({
               projectId={projectId}
               timeRange={queries[0]?.timeRange ?? {from: 'now-24h', to: 'now'}}
               autoRefresh={false}
+              alertThresholdPreview={activeTab === 'alerts' ? alertThresholdPreview : null}
             />
           </div>
         </div>
