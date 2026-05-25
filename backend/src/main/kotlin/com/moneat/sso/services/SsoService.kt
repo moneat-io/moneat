@@ -73,12 +73,18 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
 private const val DISCOVERY_CACHE_TTL_MS = 3_600_000L // 1 hour
 private const val ERROR_OIDC_ISSUER_URL_NOT_CONFIGURED = "OIDC issuer URL not configured"
+private const val OIDC_DISCOVERY_PATH = "/.well-known/openid-configuration"
+private const val OIDC_DISCOVERY_ERROR =
+    "OIDC discovery failed. Use the provider issuer URL from its openid-configuration document. " +
+        "For Authentik this looks like https://auth.example.com/application/o/<application-slug>/, " +
+        "not just the Authentik domain."
 
 @Serializable
 data class SsoStateData(
@@ -653,29 +659,49 @@ open class SsoService {
      * Results are cached in-memory with a 1-hour TTL.
      */
     private suspend fun discoverOidcEndpoints(issuerUrl: String): OidcDiscoveryCache {
-        val cached = discoveryCache[issuerUrl]
+        val discoveryUrl = oidcDiscoveryUrl(issuerUrl)
+        val cached = discoveryCache[discoveryUrl]
         val now = System.currentTimeMillis()
         if (cached != null && (now - cached.fetchedAt) < DISCOVERY_CACHE_TTL_MS) {
             return cached
         }
 
-        val discoveryUrl = "${issuerUrl.trimEnd('/')}/.well-known/openid-configuration"
         logger.info { "Fetching OIDC discovery from $discoveryUrl" }
 
-        val response = httpClient.get(discoveryUrl).bodyAsText()
-        val json = Json.parseToJsonElement(response) as JsonObject
-        val authEndpoint = json["authorization_endpoint"]?.jsonPrimitive?.content
-            ?: throw IllegalArgumentException(
-                "OIDC discovery missing authorization_endpoint"
-            )
-        val tokenEndpoint = json["token_endpoint"]?.jsonPrimitive?.content
-            ?: throw IllegalArgumentException(
-                "OIDC discovery missing token_endpoint"
-            )
+        val authEndpoint: String
+        val tokenEndpoint: String
+        try {
+            val response = httpClient.get(discoveryUrl).bodyAsText()
+            val json = Json.parseToJsonElement(response) as JsonObject
+            authEndpoint = json["authorization_endpoint"]?.jsonPrimitive?.content
+                ?: throw IllegalArgumentException(
+                    "OIDC discovery missing authorization_endpoint"
+                )
+            tokenEndpoint = json["token_endpoint"]?.jsonPrimitive?.content
+                ?: throw IllegalArgumentException(
+                    "OIDC discovery missing token_endpoint"
+                )
+            UrlValidator.validateExternalUrl(authEndpoint)
+            UrlValidator.validateExternalUrl(tokenEndpoint)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn(e) { "OIDC discovery failed for $discoveryUrl" }
+            throw IllegalArgumentException(OIDC_DISCOVERY_ERROR)
+        }
 
         val entry = OidcDiscoveryCache(authEndpoint, tokenEndpoint, now)
-        discoveryCache[issuerUrl] = entry
+        discoveryCache[discoveryUrl] = entry
         return entry
+    }
+
+    private fun oidcDiscoveryUrl(issuerUrl: String): String {
+        val trimmed = issuerUrl.trim()
+        return if (trimmed.endsWith(OIDC_DISCOVERY_PATH)) {
+            trimmed
+        } else {
+            trimmed.trimEnd('/') + OIDC_DISCOVERY_PATH
+        }
     }
 
     private suspend fun generateOidcRequest(

@@ -18,6 +18,7 @@ package com.moneat.events.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.EventResponse
+import com.moneat.events.models.EventTraceResponse
 import com.moneat.events.models.PerformanceStatsResponse
 import com.moneat.events.models.SpanDetailResponse
 import com.moneat.events.models.SpanResponse
@@ -34,6 +35,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -46,6 +48,13 @@ private val logger = KotlinLogging.logger {}
 class TransactionService(private val queryHelper: DashboardQueryHelper) {
     private val clickhouseDb: String get() = queryHelper.clickhouseDb
     private val json get() = queryHelper.json
+
+    private data class EventTraceLookup(
+        val eventId: String,
+        val eventType: String,
+        val projectId: Long,
+        val traceId: String
+    )
 
     companion object {
         private const val APDEX_THRESHOLD_MS = 500
@@ -98,6 +107,29 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
         """.trimIndent()
         return queryHelper.executeProjectIdQuery(query, "Transaction", eventId)?.takeIf { it > 0 }
+    }
+
+    private suspend fun getTraceLookupForEvent(eventId: String): EventTraceLookup? {
+        val normalizedEventId = queryHelper.normalizeUuid(eventId) ?: return null
+        val query = """
+            SELECT
+                toString(event_id) as event_id,
+                event_type,
+                toInt64(project_id) as project_id,
+                JSONExtractString(contexts, 'trace', 'trace_id') as trace_id
+            FROM `$clickhouseDb`.events
+            WHERE toString(event_id) = '$normalizedEventId'
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val obj = queryHelper.executeJsonEachRowQuery(query, "Event trace lookup")?.firstOrNull() ?: return null
+        return EventTraceLookup(
+            eventId = obj["event_id"]?.jsonPrimitive?.content ?: normalizedEventId,
+            eventType = obj["event_type"]?.jsonPrimitive?.content ?: "",
+            projectId = obj["project_id"]?.jsonPrimitive?.longOrNull ?: return null,
+            traceId = obj["trace_id"]?.jsonPrimitive?.contentOrNull ?: ""
+        )
     }
 
     suspend fun getTransactions(
@@ -343,6 +375,48 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
         return TransactionWithSpansResponse(transaction, spans)
     }
 
+    suspend fun getTraceForEvent(eventId: String): EventTraceResponse? {
+        val lookup = getTraceLookupForEvent(eventId) ?: return null
+        if (lookup.traceId.isBlank()) {
+            return EventTraceResponse(
+                eventId = lookup.eventId,
+                eventType = lookup.eventType,
+                projectId = lookup.projectId,
+                traceId = "",
+                transaction = null,
+                spans = emptyList()
+            )
+        }
+
+        val transactionWithSpans = if (lookup.eventType == "transaction") {
+            getTransactionSpans(lookup.eventId)
+        } else {
+            null
+        }
+        val traceSpans = getTraceDetails(lookup.projectId, lookup.traceId)?.spans.orEmpty()
+
+        return EventTraceResponse(
+            eventId = lookup.eventId,
+            eventType = lookup.eventType,
+            projectId = lookup.projectId,
+            traceId = lookup.traceId,
+            transaction = transactionWithSpans?.transaction,
+            spans = transactionWithSpans?.spans?.takeIf { it.isNotEmpty() } ?: traceSpans
+        )
+    }
+
+    suspend fun getTraceForTraceId(projectId: Long, traceId: String): EventTraceResponse? {
+        val trace = getTraceDetails(projectId, traceId) ?: return null
+        return EventTraceResponse(
+            eventId = null,
+            eventType = null,
+            projectId = projectId,
+            traceId = traceId,
+            transaction = null,
+            spans = trace.spans
+        )
+    }
+
     suspend fun getTraceDetails(
         projectId: Long,
         traceId: String
@@ -453,7 +527,8 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 tags,
                 contexts,
                 exception_value as exception,
-                breadcrumbs
+                breadcrumbs,
+                stack_trace
             FROM `$clickhouseDb`.events
             WHERE $projectIdClause
                 AND event_type = 'error'

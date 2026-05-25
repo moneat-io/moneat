@@ -18,6 +18,7 @@ package com.moneat.dashboards.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
 
@@ -29,12 +30,14 @@ object DashboardWidgetAlerts : Table("dashboard_widget_alerts") {
     val name = varchar("name", 255)
     val condition = varchar("condition", 5)
     val threshold = double("threshold")
+    val warningThreshold = double("warning_threshold").nullable()
     val metricIndex = integer("metric_index").default(0)
     val durationSeconds = integer("duration_seconds").default(0)
     val incidentSeverity = varchar("incident_severity", 20).nullable()
     val enabled = bool("enabled").default(true)
     val notificationChannels = jsonb("notification_channels")
     val lastTriggeredAt = timestamp("last_triggered_at").nullable()
+    val lastTriggeredLevel = varchar("last_triggered_level", 20).nullable()
     val lastValue = double("last_value").nullable()
     val createdBy = long("created_by")
     val createdAt = timestamp("created_at")
@@ -58,12 +61,14 @@ data class DashboardAlertResponse(
     val name: String,
     val condition: String,
     val threshold: Double,
+    @SerialName("warning_threshold") val warningThreshold: Double? = null,
     @SerialName("metric_index") val metricIndex: Int = 0,
     @SerialName("duration_seconds") val durationSeconds: Int = 0,
     @SerialName("incident_severity") val incidentSeverity: String? = null,
     val enabled: Boolean = true,
     @SerialName("notification_channels") val notificationChannels: NotificationChannels = NotificationChannels(),
     @SerialName("last_triggered_at") val lastTriggeredAt: String? = null,
+    @SerialName("last_triggered_level") val lastTriggeredLevel: String? = null,
     @SerialName("last_value") val lastValue: Double? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String
@@ -75,6 +80,7 @@ data class CreateDashboardAlertRequest(
     val name: String,
     val condition: String,
     val threshold: Double,
+    @SerialName("warning_threshold") val warningThreshold: Double? = null,
     @SerialName("metric_index") val metricIndex: Int = 0,
     @SerialName("duration_seconds") val durationSeconds: Int = 0,
     @SerialName("incident_severity") val incidentSeverity: String? = null,
@@ -87,9 +93,11 @@ data class UpdateDashboardAlertRequest(
     val name: String? = null,
     val condition: String? = null,
     val threshold: Double? = null,
+    @SerialName("warning_threshold") val warningThreshold: Double? = null,
     @SerialName("metric_index") val metricIndex: Int? = null,
     @SerialName("duration_seconds") val durationSeconds: Int? = null,
     @SerialName("incident_severity") val incidentSeverity: String? = null,
     val enabled: Boolean? = null,
-    @SerialName("notification_channels") val notificationChannels: NotificationChannels? = null
+    @SerialName("notification_channels") val notificationChannels: NotificationChannels? = null,
+    @Transient val warningThresholdProvided: Boolean = false
 )

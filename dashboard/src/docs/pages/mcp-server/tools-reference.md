@@ -272,15 +272,17 @@ Delete a dashboard.
 | `dashboard_id` | number | Yes | Dashboard ID |
 
 ### ✏️ `create_dashboard_alert`
-Create an alert on a dashboard.
+Create an alert on a dashboard widget.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `dashboard_id` | number | Yes | Dashboard ID |
+| `widget_id` | number | Yes | Widget ID |
 | `name` | string | Yes | Alert name |
-| `condition` | string | Yes | `gt`, `lt`, `eq` |
+| `condition` | string | Yes | `gt`, `lt`, `eq`, `gte`, `lte`, or persisted operators `>`, `<`, `==`, `>=`, `<=` |
 | `threshold` | number | Yes | Threshold value |
-| `severity` | string | No | `warning`, `critical` (default `warning`) |
+| `duration_seconds` | integer | No | Duration before firing (default 0) |
+| `incident_severity` | string | No | `P0`-`P5` or `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`; `P0` maps to `CRITICAL` |
 
 ### ✏️ `update_dashboard_alert`
 Update a dashboard alert.
@@ -290,9 +292,11 @@ Update a dashboard alert.
 | `dashboard_id` | number | Yes | Dashboard ID |
 | `alert_id` | number | Yes | Alert ID |
 | `name` | string | No | Alert name |
-| `condition` | string | No | `gt`, `lt`, `eq` |
+| `condition` | string | No | `gt`, `lt`, `eq`, `gte`, `lte`, or persisted operators `>`, `<`, `==`, `>=`, `<=` |
 | `threshold` | number | No | Threshold value |
-| `severity` | string | No | `warning`, `critical` |
+| `duration_seconds` | integer | No | Duration before firing |
+| `incident_severity` | string | No | `P0`-`P5` or `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`; `P0` maps to `CRITICAL` |
+| `enabled` | boolean | No | Enable or disable the alert |
 
 ### ✏️ `delete_dashboard_alert`
 Delete a dashboard alert.
@@ -332,7 +336,7 @@ Create a monitoring alert on a host.
 | `condition` | string | Yes | `gt`, `lt`, `eq` |
 | `threshold` | number | Yes | Threshold value |
 | `duration_seconds` | number | No | Duration before triggering (default 300) |
-| `incident_severity` | string | No | `P1`–`P5` (default `P3`) |
+| `incident_severity` | string | No | `P0`-`P5` (default `P3`) |
 
 ### ✏️ `update_alert`
 Update a monitoring alert.
@@ -590,7 +594,7 @@ List on-call incidents.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `status` | string | No | `triggered`, `acknowledged`, `resolved` |
-| `priority` | string | No | `P1`–`P5` |
+| `priority` | string | No | `P0`-`P5` |
 | `limit` | number | No | Max results (default 50) |
 
 ### `get_incident`

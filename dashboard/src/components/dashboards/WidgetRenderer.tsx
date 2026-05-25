@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {memo, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 'react'
+import {memo, type ComponentProps, type CSSProperties, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
@@ -31,6 +31,7 @@ import {
     LineChart,
     Pie,
     PieChart,
+    ReferenceArea,
     ReferenceLine,
     Tooltip,
     XAxis,
@@ -42,6 +43,8 @@ import {HeatmapWidget} from './HeatmapWidget'
 import ReactMarkdown from 'react-markdown'
 import type {ValueMapping} from './formatValue'
 import {formatValue} from './formatValue'
+import {pivotData, valueKeySeries} from './widgetSeries'
+import {isWarningThresholdValid, type AlertThresholdPreview} from './alertThresholds'
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -125,6 +128,7 @@ interface WidgetRendererProps {
   timeRange: TimeRangeDef
   autoRefresh: boolean
   variables?: Record<string, string>
+  alertThresholdPreview?: AlertThresholdPreview | null
 }
 
 export const WidgetRenderer = memo(function WidgetRenderer({
@@ -134,6 +138,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   timeRange,
   autoRefresh,
   variables,
+  alertThresholdPreview,
 }: WidgetRendererProps) {
   const queries = widget.query_configs?.length > 0 ? widget.query_configs : []
   const isBatch = queries.length > 1
@@ -220,9 +225,23 @@ export const WidgetRenderer = memo(function WidgetRenderer({
 
   switch (widget.widget_type) {
     case 'timeseries':
-      return <TimeseriesChart data={chartData} timeRange={timeRange} displayConfig={dc} />
+      return (
+        <TimeseriesChart
+          data={chartData}
+          timeRange={timeRange}
+          displayConfig={dc}
+          alertThresholdPreview={alertThresholdPreview}
+        />
+      )
     case 'bar':
-      return <BarChartWidget data={chartData} timeRange={timeRange} displayConfig={dc} />
+      return (
+        <BarChartWidget
+          data={chartData}
+          timeRange={timeRange}
+          displayConfig={dc}
+          alertThresholdPreview={alertThresholdPreview}
+        />
+      )
     case 'donut':
       return <DonutChartWidget data={chartData} displayConfig={dc} />
     case 'stat':
@@ -283,14 +302,40 @@ function formatTooltipLabel(v?: string | number) {
   return `${month}/${day} ${hours}:${mins}`
 }
 
-function formatTooltipValue(value?: number | string) {
+type TooltipValue = number | string | readonly (number | string)[] | undefined
+type TooltipFormatterResult = ReactNode | [ReactNode, string]
+type TooltipFormatterFn = (value: TooltipValue, name?: string | number) => TooltipFormatterResult
+
+function formatTooltipValue(value?: TooltipValue): string {
   if (value === undefined) return ''
-  if (typeof value !== 'number') return value
+  if (Array.isArray(value)) return value.map(formatTooltipValue).join(' - ')
+  if (typeof value !== 'number') return String(value)
   if (Number.isInteger(value)) return value.toLocaleString()
   return value.toLocaleString(undefined, {maximumFractionDigits: 2})
 }
 
+function formatUnitTooltipValue(value: TooltipValue, unit?: string, decimals?: string): string {
+  if (Array.isArray(value)) {
+    return value.map((v) => formatUnitTooltipValue(v, unit, decimals)).join(' - ')
+  }
+  if (typeof value === 'number' && unit && unit !== 'none') {
+    return formatValue(value, unit, decimals)
+  }
+  return formatTooltipValue(value)
+}
+
 type DisplayConfig = Record<string, string>
+
+interface LegendPayloadItem {
+  color?: string
+  inactive?: boolean
+  value?: string | number
+}
+
+interface ChartLegendProps {
+  payload?: LegendPayloadItem[]
+  placement?: 'bottom' | 'right'
+}
 
 const GRAFANA_COLORS: Record<string, string> = {
   green: '#73BF69', 'semi-dark-green': '#56A64B', 'dark-green': '#37872D', 'light-green': '#96D98D', 'super-light-green': '#C8F2C2',
@@ -364,18 +409,233 @@ function getYAxisDomain(dc: DisplayConfig): [string | number, string | number] {
   ]
 }
 
+function getNumericExtent(data: Record<string, unknown>[], valueKeys: string[]) {
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+
+  for (const row of data) {
+    for (const key of valueKeys) {
+      const value = row[key]
+      if (typeof value !== 'number' || !Number.isFinite(value)) continue
+      min = Math.min(min, value)
+      max = Math.max(max, value)
+    }
+  }
+
+  return Number.isFinite(min) && Number.isFinite(max) ? {min, max} : null
+}
+
+function getAlertAwareYAxisDomain(
+  dc: DisplayConfig,
+  data: Record<string, unknown>[],
+  valueKeys: string[],
+  alertThresholdPreview?: AlertThresholdPreview | null
+): [string | number, string | number] {
+  const baseDomain = getYAxisDomain(dc)
+  if (!alertThresholdPreview) return baseDomain
+
+  const explicitMin = typeof baseDomain[0] === 'number' ? baseDomain[0] : null
+  const explicitMax = typeof baseDomain[1] === 'number' ? baseDomain[1] : null
+  const extent = getNumericExtent(data, valueKeys)
+  const thresholds = [alertThresholdPreview.errorThreshold, alertThresholdPreview.warningThreshold]
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+
+  const minCandidates = [
+    extent?.min,
+    ...thresholds,
+  ].filter((value): value is number => typeof value === 'number')
+  const maxCandidates = [
+    extent?.max,
+    ...thresholds,
+  ].filter((value): value is number => typeof value === 'number')
+
+  if (minCandidates.length === 0 || maxCandidates.length === 0) return baseDomain
+
+  let min = Math.min(...minCandidates)
+  let max = Math.max(...maxCandidates)
+  if (min === max) {
+    min -= 1
+    max += 1
+  }
+  const padding = Math.max((max - min) * 0.08, 1)
+
+  return [
+    explicitMin ?? min - padding,
+    explicitMax ?? max + padding,
+  ]
+}
+
+interface AlertThresholdOverlay {
+  zones: {key: string; y1: number; y2: number; fill: string}[]
+  lines: {key: string; value: number; color: string}[]
+}
+
+const ALERT_WARNING_COLOR = '#f59e0b'
+const ALERT_ERROR_COLOR = '#ef4444'
+const ALERT_ZONE_OPACITY = 0.12
+
+function buildAlertThresholdOverlay(
+  alertThresholdPreview: AlertThresholdPreview | null | undefined,
+  yDomain: [string | number, string | number]
+): AlertThresholdOverlay {
+  const min = typeof yDomain[0] === 'number' ? yDomain[0] : null
+  const max = typeof yDomain[1] === 'number' ? yDomain[1] : null
+  if (!alertThresholdPreview || min == null || max == null) return {zones: [], lines: []}
+
+  const lines = [
+    {key: 'error-line', value: alertThresholdPreview.errorThreshold, color: ALERT_ERROR_COLOR},
+  ]
+  const canShowWarning = alertThresholdPreview.warningThreshold != null &&
+    isWarningThresholdValid(alertThresholdPreview)
+  const warningThreshold = canShowWarning ? alertThresholdPreview.warningThreshold : null
+  if (warningThreshold != null) {
+    lines.unshift({
+      key: 'warning-line',
+      value: warningThreshold,
+      color: ALERT_WARNING_COLOR,
+    })
+  }
+  if (alertThresholdPreview.condition === '==') return {zones: [], lines}
+
+  const errorThreshold = alertThresholdPreview.errorThreshold
+  const isUpperBound = alertThresholdPreview.condition === '>' || alertThresholdPreview.condition === '>='
+  const zones = isUpperBound
+    ? buildUpperBoundZones(min, max, warningThreshold, errorThreshold)
+    : buildLowerBoundZones(min, max, warningThreshold, errorThreshold)
+
+  return {
+    zones: zones.filter((zone) => zone.y2 > zone.y1),
+    lines,
+  }
+}
+
+function buildUpperBoundZones(
+  min: number,
+  max: number,
+  warningThreshold: number | null,
+  errorThreshold: number
+) {
+  const zones = [
+    {key: 'error-zone', y1: Math.max(min, errorThreshold), y2: max, fill: ALERT_ERROR_COLOR},
+  ]
+  if (warningThreshold != null) {
+    zones.unshift({
+      key: 'warning-zone',
+      y1: Math.max(min, warningThreshold),
+      y2: Math.min(max, errorThreshold),
+      fill: ALERT_WARNING_COLOR,
+    })
+  }
+  return zones
+}
+
+function buildLowerBoundZones(
+  min: number,
+  max: number,
+  warningThreshold: number | null,
+  errorThreshold: number
+) {
+  const zones = [
+    {key: 'error-zone', y1: min, y2: Math.min(max, errorThreshold), fill: ALERT_ERROR_COLOR},
+  ]
+  if (warningThreshold != null) {
+    zones.unshift({
+      key: 'warning-zone',
+      y1: Math.max(min, errorThreshold),
+      y2: Math.min(max, warningThreshold),
+      fill: ALERT_WARNING_COLOR,
+    })
+  }
+  return zones
+}
+
+function renderAlertThresholdOverlay(overlay: AlertThresholdOverlay) {
+  return (
+    <>
+      {overlay.zones.map((zone) => (
+        <ReferenceArea
+          key={zone.key}
+          y1={zone.y1}
+          y2={zone.y2}
+          fill={zone.fill}
+          fillOpacity={ALERT_ZONE_OPACITY}
+          strokeOpacity={0}
+          ifOverflow="visible"
+        />
+      ))}
+      {overlay.lines.map((line) => (
+        <ReferenceLine
+          key={line.key}
+          y={line.value}
+          stroke={line.color}
+          strokeDasharray="3 3"
+          strokeWidth={1.5}
+          ifOverflow="visible"
+        />
+      ))}
+    </>
+  )
+}
+
 function getLegendProps(dc: DisplayConfig) {
   const mode = dc.legendMode || 'list'
   if (mode === 'hidden') return null
   const placement = dc.legendPlacement || 'bottom'
+  const isRight = placement === 'right'
+  const wrapperStyle: CSSProperties = {
+    fontSize: '10px',
+    maxHeight: isRight ? '100%' : '56px',
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    paddingLeft: isRight ? '8px' : undefined,
+    paddingTop: isRight ? undefined : '4px',
+  }
   return {
-    wrapperStyle: {fontSize: '10px', paddingTop: '4px'},
+    wrapperStyle,
+    content: <ChartLegend placement={isRight ? 'right' : 'bottom'} />,
+    height: isRight ? undefined : 56,
     iconType: 'line' as const,
     iconSize: 8,
-    layout: (placement === 'right' ? 'vertical' : 'horizontal') as 'vertical' | 'horizontal',
-    verticalAlign: (placement === 'right' ? 'middle' : 'bottom') as 'top' | 'middle' | 'bottom',
-    align: (placement === 'right' ? 'right' : 'center') as 'left' | 'center' | 'right',
+    layout: (isRight ? 'vertical' : 'horizontal') as 'vertical' | 'horizontal',
+    verticalAlign: (isRight ? 'middle' : 'bottom') as 'top' | 'middle' | 'bottom',
+    align: (isRight ? 'right' : 'center') as 'left' | 'center' | 'right',
+    width: isRight ? 180 : undefined,
   }
+}
+
+function ChartLegend({payload, placement = 'bottom'}: ChartLegendProps) {
+  const items = payload ?? []
+  if (items.length === 0) return null
+
+  const isRight = placement === 'right'
+  const containerClass = isRight
+    ? 'flex h-full max-h-full flex-col gap-1 overflow-y-auto overflow-x-hidden pr-1'
+    : 'flex max-h-14 flex-wrap gap-x-3 gap-y-1 overflow-y-auto overflow-x-hidden px-1 pt-1'
+  const itemClass = isRight
+    ? 'flex min-w-0 max-w-44 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground'
+    : 'flex min-w-0 max-w-56 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground'
+
+  return (
+    <div className={containerClass}>
+      {items.map((item, index) => {
+        const label = String(item.value ?? '')
+        return (
+          <div
+            key={`${label}-${index}`}
+            className={itemClass}
+            style={item.inactive ? {opacity: 0.45} : undefined}
+            title={label}
+          >
+            <span
+              className="h-0.5 w-3 shrink-0 rounded-full"
+              style={{backgroundColor: item.color ?? 'currentColor'}}
+            />
+            <span className="min-w-0 truncate">{label}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function getDotProp(showPoints: string | undefined) {
@@ -418,45 +678,6 @@ function classifyColumns(data: Record<string, unknown>[]) {
   return {timeKey, labelKeys, valueKeys}
 }
 
-/**
- * Pivots flat multi-series data into one-row-per-timestamp format for recharts.
- * Input:  [{time_bucket: 100, platform: "android", value: 5}, {time_bucket: 100, platform: "ios", value: 3}]
- * Output: [{time_bucket: 100, "android": 5, "ios": 3}]
- */
-function pivotData(data: Record<string, unknown>[], timeKey: string, labelKeys: string[], valueKeys: string[]) {
-  if (labelKeys.length === 0 || valueKeys.length === 0) {
-    return {pivoted: data, seriesKeys: valueKeys}
-  }
-
-  const grouped = new Map<string | number, Record<string, unknown>>()
-  const seriesSet = new Set<string>()
-
-  for (const row of data) {
-    const t = row[timeKey] as string | number
-    if (!grouped.has(t)) {
-      grouped.set(t, {[timeKey]: t})
-    }
-    const entry = grouped.get(t)!
-
-    const labelParts = labelKeys.map(k => String(row[k] ?? '')).filter(Boolean)
-    const seriesLabel = labelParts.join(', ') || 'value'
-
-    for (const vk of valueKeys) {
-      const key = valueKeys.length > 1 ? `${seriesLabel} (${vk})` : seriesLabel
-      entry[key] = row[vk]
-      seriesSet.add(key)
-    }
-  }
-
-  const pivoted = Array.from(grouped.values()).sort((a, b) => {
-    const ta = a[timeKey] as number
-    const tb = b[timeKey] as number
-    return ta - tb
-  })
-
-  return {pivoted, seriesKeys: Array.from(seriesSet)}
-}
-
 const CHART_MARGIN = {top: 5, right: 5, left: 20, bottom: 20}
 const TOOLTIP_STYLE = {
   backgroundColor: 'hsl(var(--popover))',
@@ -465,17 +686,33 @@ const TOOLTIP_STYLE = {
   fontSize: '11px',
 }
 const TOOLTIP_WRAPPER_STYLE = {zIndex: 1000}
+type RechartsTooltipFormatter = NonNullable<ComponentProps<typeof Tooltip>['formatter']>
 
-const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayConfig: dc}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef; displayConfig: DisplayConfig}) {
+function asRechartsTooltipFormatter(formatter: TooltipFormatterFn): RechartsTooltipFormatter {
+  return (value, name) => formatter(value as TooltipValue, name)
+}
+
+const TimeseriesChart = memo(function TimeseriesChart({
+  data,
+  timeRange,
+  displayConfig: dc,
+  alertThresholdPreview,
+}: {
+  data: Record<string, unknown>[]
+  timeRange: TimeRangeDef
+  displayConfig: DisplayConfig
+  alertThresholdPreview?: AlertThresholdPreview | null
+}) {
   const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const xKey = timeKey || 'time_bucket'
   const spanMs = getTimeSpanMs(timeRange)
 
   const hasLabels = labelKeys.length > 0 && valueKeys.length > 0
-  const {pivoted, seriesKeys} = useMemo(
-    () => hasLabels ? pivotData(data, xKey, labelKeys, valueKeys) : {pivoted: data, seriesKeys: valueKeys},
+  const {pivoted, series} = useMemo(
+    () => hasLabels ? pivotData(data, xKey, labelKeys, valueKeys) : {pivoted: data, series: valueKeySeries(valueKeys)},
     [data, xKey, labelKeys, valueKeys, hasLabels]
   )
+  const seriesKeys = useMemo(() => series.map(({key}) => key), [series])
 
   // Recharts type="number" scale="time" requires numeric epoch ms values.
   // ClickHouse returns time_bucket as a string ("2026-02-24 19:00:00.000"), so
@@ -494,7 +731,8 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
 
   const thresholds = parseThresholds(dc)
   const legendProps = getLegendProps(dc)
-  const yDomain = getYAxisDomain(dc)
+  const yDomain = getAlertAwareYAxisDomain(dc, chartData, seriesKeys, alertThresholdPreview)
+  const alertOverlay = buildAlertThresholdOverlay(alertThresholdPreview, yDomain)
   const lineWidth = parseFloat(dc.lineWidth || '1.5')
   const fillOpacity = parseFloat(dc.fillOpacity || '0')
   const interpolation = (dc.lineInterpolation || 'monotone') as 'linear' | 'monotone' | 'step'
@@ -506,9 +744,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
   const tickFormatter = unit && unit !== 'none'
     ? (v: number) => formatValue(v, unit, decimals)
     : undefined
-  const tooltipFormatter = unit && unit !== 'none'
-    ? (v?: number | string) => (v !== undefined && typeof v === 'number' ? formatValue(v, unit, decimals) : (v ?? ''))
-    : formatTooltipValue
+  const tooltipFormatter: TooltipFormatterFn = (value) => formatUnitTooltipValue(value, unit, decimals)
 
   const useArea = fillOpacity > 0 || stackMode !== 'none'
 
@@ -537,17 +773,19 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
             contentStyle={TOOLTIP_STYLE}
             wrapperStyle={TOOLTIP_WRAPPER_STYLE}
             labelFormatter={(label) => formatTooltipLabel(label as string | number)}
-            formatter={tooltipFormatter as (value: string | number | undefined, name: string | undefined, props: unknown) => ReactNode}
+            formatter={asRechartsTooltipFormatter(tooltipFormatter)}
           />
           {legendProps && <Legend {...legendProps} />}
+          {renderAlertThresholdOverlay(alertOverlay)}
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
           ))}
-          {seriesKeys.map((key, i) => (
+          {series.map((s, i) => (
             <Area
-              key={key}
+              key={s.key}
               type={interpolation}
-              dataKey={key}
+              dataKey={s.key}
+              name={s.name}
               stroke={COLORS[i % COLORS.length]}
               strokeWidth={lineWidth}
               fill={COLORS[i % COLORS.length]}
@@ -582,17 +820,19 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
             contentStyle={TOOLTIP_STYLE}
             wrapperStyle={TOOLTIP_WRAPPER_STYLE}
             labelFormatter={(label) => formatTooltipLabel(label as string | number)}
-            formatter={tooltipFormatter as (value: string | number | undefined, name: string | undefined, props: unknown) => ReactNode}
+            formatter={asRechartsTooltipFormatter(tooltipFormatter)}
           />
           {legendProps && <Legend {...legendProps} />}
+          {renderAlertThresholdOverlay(alertOverlay)}
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
           ))}
-          {seriesKeys.map((key, i) => (
+          {series.map((s, i) => (
             <Line
-              key={key}
+              key={s.key}
               type={interpolation}
-              dataKey={key}
+              dataKey={s.key}
+              name={s.name}
               stroke={COLORS[i % COLORS.length]}
               strokeWidth={lineWidth}
               dot={dotProp}
@@ -606,14 +846,23 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
   )
 })
 
-const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayConfig: dc}: {data: Record<string, unknown>[]; timeRange: TimeRangeDef; displayConfig: DisplayConfig}) {
+const BarChartWidget = memo(function BarChartWidget({
+  data,
+  timeRange,
+  displayConfig: dc,
+  alertThresholdPreview,
+}: {
+  data: Record<string, unknown>[]
+  timeRange: TimeRangeDef
+  displayConfig: DisplayConfig
+  alertThresholdPreview?: AlertThresholdPreview | null
+}) {
   const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const spanMs = getTimeSpanMs(timeRange)
   const hasTime = !!timeKey
 
   const thresholds = parseThresholds(dc)
   const legendProps = getLegendProps(dc)
-  const yDomain = getYAxisDomain(dc)
   const showGrid = dc.showGrid !== 'false'
   const barMode = dc.barMode || 'grouped'
   const unit = dc.unit
@@ -621,17 +870,18 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
   const tickFormatter = unit && unit !== 'none'
     ? (v: number) => formatValue(v, unit, decimals)
     : undefined
-  const tooltipFormatter = unit && unit !== 'none'
-    ? (v?: number | string) => (v !== undefined && typeof v === 'number' ? formatValue(v, unit, decimals) : (v ?? ''))
-    : formatTooltipValue
+  const tooltipFormatter: TooltipFormatterFn = (value) => formatUnitTooltipValue(value, unit, decimals)
 
   if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
-    const {pivoted: rawPivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    const {pivoted: rawPivoted, series} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    const seriesKeys = series.map(({key}) => key)
     const pivoted = rawPivoted.map(row => {
       const v = row[timeKey!]
       if (typeof v === 'string') { const ms = parseUtcTimestamp(v); return isNaN(ms) ? row : {...row, [timeKey!]: ms} }
       return row
     })
+    const yDomain = getAlertAwareYAxisDomain(dc, pivoted, seriesKeys, alertThresholdPreview)
+    const alertOverlay = buildAlertThresholdOverlay(alertThresholdPreview, yDomain)
     return (
       <DebouncedChartContainer>
         {(w, h) => (
@@ -658,14 +908,21 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
               contentStyle={TOOLTIP_STYLE}
               wrapperStyle={TOOLTIP_WRAPPER_STYLE}
               labelFormatter={(label) => formatTooltipLabel(label as string | number)}
-              formatter={tooltipFormatter as (value: string | number | undefined, name: string | undefined, props: unknown) => ReactNode}
+              formatter={asRechartsTooltipFormatter(tooltipFormatter)}
             />
             {legendProps && <Legend {...legendProps} iconSize={8} />}
+            {renderAlertThresholdOverlay(alertOverlay)}
             {thresholds.map((t, i) => (
               <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
             ))}
-            {seriesKeys.map((key, i) => (
-              <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} stackId={barMode === 'stacked' ? 'stack' : undefined} />
+            {series.map((s, i) => (
+              <Bar
+                key={s.key}
+                dataKey={s.key}
+                name={s.name}
+                fill={COLORS[i % COLORS.length]}
+                stackId={barMode === 'stacked' ? 'stack' : undefined}
+              />
             ))}
           </BarChart>
         )}
@@ -677,6 +934,8 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
   const barKeys = valueKeys.length > 0 ? valueKeys : Object.keys(data[0] || {}).filter(
     k => !isTimeKey(k) && typeof data[0][k] === 'number'
   )
+  const yDomain = getAlertAwareYAxisDomain(dc, data, barKeys, alertThresholdPreview)
+  const alertOverlay = buildAlertThresholdOverlay(alertThresholdPreview, yDomain)
 
   return (
     <DebouncedChartContainer>
@@ -691,13 +950,25 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
             label={dc.yAxisLabel ? {value: dc.yAxisLabel, angle: -90, position: 'insideLeft', style: {fontSize: 10}} : undefined}
             tickFormatter={tickFormatter}
           />
-          <Tooltip cursor={{fill: 'transparent'}} contentStyle={TOOLTIP_STYLE} formatter={tooltipFormatter} />
+          <Tooltip
+            cursor={{fill: 'transparent'}}
+            contentStyle={TOOLTIP_STYLE}
+            formatter={asRechartsTooltipFormatter(tooltipFormatter)}
+          />
           {legendProps && <Legend {...legendProps} iconSize={8} />}
+          {renderAlertThresholdOverlay(alertOverlay)}
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
           ))}
           {barKeys.map((key, i) => (
-            <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} stackId={barMode === 'stacked' ? 'stack' : undefined} />
+            <Bar
+              key={key}
+              dataKey={key}
+              name={key.replace(/_/g, ' ')}
+              fill={COLORS[i % COLORS.length]}
+              radius={[2, 2, 0, 0]}
+              stackId={barMode === 'stacked' ? 'stack' : undefined}
+            />
           ))}
         </BarChart>
       )}
@@ -737,7 +1008,10 @@ const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc
           {legendProps && (
             <Legend
               {...legendProps}
-              wrapperStyle={{fontSize: '11px'}}
+              wrapperStyle={{
+                ...legendProps.wrapperStyle,
+                fontSize: '11px',
+              }}
               iconSize={10}
             />
           )}

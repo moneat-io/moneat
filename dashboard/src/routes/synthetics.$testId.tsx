@@ -243,7 +243,7 @@ function SyntheticTestDetail() {
                       borderRadius: '8px',
                       fontSize: 12,
                     }}
-                    formatter={(value: number) => [`${value}ms`, 'Duration']}
+                    formatter={(value: unknown) => [`${Number(value) || 0}ms`, 'Duration']}
                   />
                   <Line
                     type="monotone"

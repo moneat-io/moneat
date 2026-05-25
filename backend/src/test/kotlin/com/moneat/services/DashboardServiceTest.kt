@@ -28,6 +28,9 @@ import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -182,6 +185,50 @@ class DashboardServiceTest {
                 assertNotNull(issue.latestEvent)
                 assertEquals("evt-1", issue.latestEvent.eventId)
                 assertEquals("prod", issue.latestEvent.tags["env"])
+                assertEquals("stack", issue.latestEvent.stackTrace)
+                val traceContext = issue.latestEvent.contextsJson?.jsonObject?.get("trace")?.jsonObject
+                assertEquals("t1", traceContext?.get("trace_id")?.jsonPrimitive?.contentOrNull)
+            }
+        }
+
+    @Test
+    fun `getIssueTransactions returns transactions linked by issue error trace id`() =
+        runBlocking {
+            val queries = Collections.synchronizedList(mutableListOf<String>())
+            MockHttpServer { exchange ->
+                val query = exchange.requestBodyText()
+                queries += query
+                when {
+                    query.contains("FROM `test`.issues") && query.contains("WHERE issue_id = 'issue-1'") -> {
+                        exchange.respond(200, """{"project_id":-1}""", contentType = "text/plain")
+                    }
+
+                    query.contains("event_type = 'transaction'") && query.contains("issue_id = 'issue-1'") -> {
+                        exchange.respond(
+                            200,
+                            """{"event_id":"txn-1","name":"ProjectWorkChain","op":"project.workchain",""" +
+                                """"duration":1250.0,"event_ts":"2026-02-03T00:00:00.000Z",""" +
+                                """"status":"internal_error","trace_id":"trace-1"}""",
+                            contentType = "text/plain"
+                        )
+                    }
+
+                    else -> {
+                        exchange.respond(200, "", contentType = "text/plain")
+                    }
+                }
+            }.use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+                val service = DashboardService.create()
+                val transactions = service.getIssueTransactions("issue-1", limit = 10)
+
+                assertEquals(1, transactions.size)
+                assertEquals("txn-1", transactions.first().eventId)
+                assertEquals("trace-1", transactions.first().traceId)
+                val traceSubquery = "SELECT DISTINCT JSONExtractString(contexts, 'trace', 'trace_id')"
+                assertTrue(queries.any { it.contains(traceSubquery) })
             }
         }
 

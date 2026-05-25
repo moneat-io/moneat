@@ -17,15 +17,24 @@
 package com.moneat.dashboards
 
 import com.moneat.config.RedisConfig
+import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
+import com.moneat.dashboards.models.CustomDataSourceResponse
+import com.moneat.dashboards.models.CustomDataSourceType
 import com.moneat.dashboards.models.DashboardWidgetAlerts
 import com.moneat.dashboards.models.DashboardWidgets
 import com.moneat.dashboards.models.Dashboards
+import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.NotificationChannels
+import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
-import com.moneat.incident.models.AlertSource
+import com.moneat.dashboards.services.CustomDataSourceExecutor
+import com.moneat.dashboards.services.CustomDataSourceService
+import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
+import com.moneat.incident.models.AlertSource
+import com.moneat.incident.models.IncidentSeverity
 import com.moneat.incident.services.IncidentService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
@@ -40,8 +49,10 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -69,6 +80,8 @@ class DashboardAlertServiceTest {
     private val prefsService: AlertNotificationPreferencesService = mockk(relaxed = true)
     private val queryEngine: DashboardQueryEngine = mockk(relaxed = true)
     private val retentionPolicyService: RetentionPolicyService = mockk(relaxed = true)
+    private val dataSourceService: CustomDataSourceService = mockk(relaxed = true)
+    private val dataSourceExecutor: CustomDataSourceExecutor = mockk(relaxed = true)
     private var redisConfigMocked = false
 
     private val service = DashboardAlertService(
@@ -79,6 +92,8 @@ class DashboardAlertServiceTest {
         prefsService = prefsService,
         queryEngine = queryEngine,
         retentionPolicyService = retentionPolicyService,
+        dataSourceService = dataSourceService,
+        dataSourceExecutor = dataSourceExecutor,
     )
 
     companion object {
@@ -174,12 +189,14 @@ class DashboardAlertServiceTest {
                     name VARCHAR(255) NOT NULL,
                     condition VARCHAR(5) NOT NULL,
                     threshold DOUBLE PRECISION NOT NULL,
+                    warning_threshold DOUBLE PRECISION,
                     metric_index INT DEFAULT 0 NOT NULL,
                     duration_seconds INT DEFAULT 0 NOT NULL,
                     incident_severity VARCHAR(20),
                     enabled BOOLEAN DEFAULT TRUE NOT NULL,
                     notification_channels TEXT NOT NULL, -- H2: JSONB unsupported; production uses JSONB
                     last_triggered_at TIMESTAMP,
+                    last_triggered_level VARCHAR(20),
                     last_value DOUBLE PRECISION,
                     created_by BIGINT NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -209,6 +226,15 @@ class DashboardAlertServiceTest {
             }
         fn.isAccessible = true
         return fn.callSuspend(service, *args)
+    }
+
+    private fun callPrivate(name: String, vararg args: Any?): Any? {
+        val fn =
+            DashboardAlertService::class.declaredFunctions.single { f ->
+                f.name == name && f.parameters.drop(1).size == args.size
+            }
+        fn.isAccessible = true
+        return fn.call(service, *args)
     }
 
     private fun seedDashboard(
@@ -250,6 +276,7 @@ class DashboardAlertServiceTest {
         val name: String = "High Error Rate",
         val condition: String = ">",
         val threshold: Double = 100.0,
+        val warningThreshold: Double? = null,
         val metricIndex: Int = 0,
         val durationSeconds: Int = 0,
         val incidentSeverity: String? = null,
@@ -265,11 +292,32 @@ class DashboardAlertServiceTest {
         name = overrides.name,
         condition = overrides.condition,
         threshold = overrides.threshold,
+        warningThreshold = overrides.warningThreshold,
         metricIndex = overrides.metricIndex,
         durationSeconds = overrides.durationSeconds,
         incidentSeverity = overrides.incidentSeverity,
         enabled = overrides.enabled,
         notificationChannels = overrides.notificationChannels,
+    )
+
+    private fun customDataSource(
+        id: Long = 10,
+        sourceType: String = CustomDataSourceType.PROMETHEUS.name.lowercase(),
+        enabled: Boolean = true,
+        hasCredentials: Boolean = false,
+    ): CustomDataSourceResponse = CustomDataSourceResponse(
+        id = id,
+        orgId = ORG_ID,
+        name = "Prometheus",
+        sourceType = sourceType,
+        host = "https://prometheus.example.com",
+        port = null,
+        databaseName = null,
+        enabled = enabled,
+        createdBy = CREATED_BY,
+        createdAt = Clock.System.now().toString(),
+        updatedAt = Clock.System.now().toString(),
+        hasCredentials = hasCredentials,
     )
 
     // ──── createAlert tests ────
@@ -289,6 +337,7 @@ class DashboardAlertServiceTest {
         assertEquals("High Error Rate", response.name)
         assertEquals(">", response.condition)
         assertEquals(100.0, response.threshold)
+        assertNull(response.warningThreshold)
         assertEquals(widgetId, response.widgetId)
         assertEquals(dashboardId, response.dashboardId)
         assertTrue(response.enabled)
@@ -296,9 +345,26 @@ class DashboardAlertServiceTest {
         assertEquals(0, response.durationSeconds)
         assertNull(response.incidentSeverity)
         assertNull(response.lastTriggeredAt)
+        assertNull(response.lastTriggeredLevel)
         assertNull(response.lastValue)
         assertNotNull(response.createdAt)
         assertNotNull(response.updatedAt)
+    }
+
+    @Test
+    fun `createAlert persists warning threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val response = service.createAlert(
+            dashboardId = dashboardId,
+            orgId = ORG_ID,
+            createdBy = CREATED_BY,
+            request = buildCreateRequest(widgetId, AlertRequestOverrides(threshold = 100.0, warningThreshold = 80.0)),
+        )
+
+        assertEquals(100.0, response.threshold)
+        assertEquals(80.0, response.warningThreshold)
     }
 
     @Test
@@ -352,6 +418,78 @@ class DashboardAlertServiceTest {
                 request = buildCreateRequest(widgetId, AlertRequestOverrides(condition = "INVALID")),
             )
         }
+    }
+
+    @Test
+    fun `createAlert rejects warning threshold above upper-bound error threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.createAlert(
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                createdBy = CREATED_BY,
+                request = buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(condition = ">", threshold = 100.0, warningThreshold = 120.0),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `createAlert rejects warning threshold below lower-bound error threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.createAlert(
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                createdBy = CREATED_BY,
+                request = buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(condition = "<", threshold = 10.0, warningThreshold = 5.0),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `createAlert rejects equality warning threshold that does not match error threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.createAlert(
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                createdBy = CREATED_BY,
+                request = buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(condition = "==", threshold = 100.0, warningThreshold = 90.0),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `createAlert accepts equality warning threshold that matches error threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val response = service.createAlert(
+            dashboardId = dashboardId,
+            orgId = ORG_ID,
+            createdBy = CREATED_BY,
+            request = buildCreateRequest(
+                widgetId,
+                AlertRequestOverrides(condition = "==", threshold = 100.0, warningThreshold = 100.0),
+            ),
+        )
+
+        assertEquals(100.0, response.warningThreshold)
     }
 
     @Test
@@ -446,7 +584,7 @@ class DashboardAlertServiceTest {
     }
 
     @Test
-    fun `updateAlert can change threshold and condition`() {
+    fun `updateAlert can change thresholds and condition`() {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
 
@@ -461,12 +599,58 @@ class DashboardAlertServiceTest {
             alertId = created.id,
             dashboardId = dashboardId,
             orgId = ORG_ID,
-            request = UpdateDashboardAlertRequest(condition = "<", threshold = 50.0),
+            request = UpdateDashboardAlertRequest(condition = "<", threshold = 50.0, warningThreshold = 75.0),
         )
 
         assertNotNull(updated)
         assertEquals("<", updated.condition)
         assertEquals(50.0, updated.threshold)
+        assertEquals(75.0, updated.warningThreshold)
+    }
+
+    @Test
+    fun `updateAlert validates warning threshold against existing condition`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val created = service.createAlert(
+            dashboardId,
+            ORG_ID,
+            CREATED_BY,
+            buildCreateRequest(widgetId, AlertRequestOverrides(condition = ">", threshold = 100.0)),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            service.updateAlert(
+                alertId = created.id,
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                request = UpdateDashboardAlertRequest(warningThreshold = 120.0),
+            )
+        }
+    }
+
+    @Test
+    fun `updateAlert clears warning threshold when request explicitly provides null`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val created = service.createAlert(
+            dashboardId,
+            ORG_ID,
+            CREATED_BY,
+            buildCreateRequest(widgetId, AlertRequestOverrides(threshold = 100.0, warningThreshold = 80.0)),
+        )
+
+        val updated = service.updateAlert(
+            alertId = created.id,
+            dashboardId = dashboardId,
+            orgId = ORG_ID,
+            request = UpdateDashboardAlertRequest(warningThreshold = null, warningThresholdProvided = true),
+        )
+
+        assertNotNull(updated)
+        assertNull(updated.warningThreshold)
     }
 
     @Test
@@ -661,6 +845,9 @@ class DashboardAlertServiceTest {
                 )
             every { redis.get("dashboard_alert_state:${created.id}") } returns "TRIGGERED"
             every { redis.del(any<String>()) } returns REDIS_DELETE_COUNT
+            every {
+                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "email")
+            } returns listOf(1 to "alerts@example.com")
 
             callPrivateSuspend("evaluateAlerts")
 
@@ -671,7 +858,698 @@ class DashboardAlertServiceTest {
                     deduplicationKey = "moneat-dashboard-alert-${created.id}"
                 )
             }
+            verify(exactly = 1) {
+                emailService.sendEmail(
+                    "alerts@example.com",
+                    match { it.contains("Dashboard Alert Resolved") },
+                    any(),
+                    any(),
+                    "dashboard_alert_recovery"
+                )
+            }
         }
+
+    @Test
+    fun `evaluateAlerts sends warning threshold notifications with low incident severity`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            every {
+                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "email")
+            } returns listOf(1 to "alerts@example.com")
+            every {
+                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "slack")
+            } returns listOf(1 to "alerts@example.com")
+            every {
+                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "discord")
+            } returns listOf(1 to "alerts@example.com")
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(
+                        widgetId,
+                        AlertRequestOverrides(
+                            threshold = 100.0,
+                            warningThreshold = 80.0,
+                            incidentSeverity = "CRITICAL",
+                        ),
+                    ),
+                )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            val fired = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
+            assertEquals("WARNING", fired.lastTriggeredLevel)
+            assertEquals(90.0, fired.lastValue)
+            coVerify(exactly = 1) {
+                incidentService.fireAlert(
+                    match {
+                        it.severity == IncidentSeverity.LOW &&
+                            it.title == "Dashboard Warning: High Error Rate"
+                    }
+                )
+            }
+            verify(exactly = 1) {
+                emailService.sendEmail(
+                    "alerts@example.com",
+                    match { it.contains("Dashboard Warning") },
+                    match { it.contains("Dashboard Warning") },
+                    match { it.contains("Dashboard Warning") },
+                    "dashboard_alert"
+                )
+            }
+            coVerify(exactly = 1) {
+                slackService.sendDashboardAlert(
+                    organizationId = ORG_ID.toInt(),
+                    alertName = "Warning: High Error Rate",
+                    dashboardTitle = "Test Dashboard",
+                    widgetTitle = "Test Widget",
+                    condition = ">",
+                    threshold = "80.00",
+                    currentValue = "90.00",
+                    severity = "LOW",
+                    dashboardId = dashboardId,
+                    baseUrl = any(),
+                )
+            }
+            coVerify(exactly = 1) {
+                discordService.sendDashboardAlert(
+                    organizationId = ORG_ID.toInt(),
+                    alertName = "Warning: High Error Rate",
+                    dashboardTitle = "Test Dashboard",
+                    widgetTitle = "Test Widget",
+                    condition = ">",
+                    threshold = "80.00",
+                    currentValue = "90.00",
+                    severity = "LOW",
+                    dashboardId = dashboardId,
+                    baseUrl = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `evaluateAlerts fires configured severity incident for error threshold`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(125.0)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(
+                        widgetId,
+                        AlertRequestOverrides(
+                            threshold = 100.0,
+                            warningThreshold = 80.0,
+                            incidentSeverity = "HIGH",
+                            notificationChannels = NotificationChannels(email = false, slack = false, discord = false),
+                        ),
+                    ),
+                )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            val fired = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
+            assertEquals("ERROR", fired.lastTriggeredLevel)
+            assertEquals(125.0, fired.lastValue)
+            coVerify(exactly = 1) {
+                incidentService.fireAlert(
+                    match {
+                        it.severity == IncidentSeverity.HIGH &&
+                            it.title == "Dashboard Error: High Error Rate"
+                    }
+                )
+            }
+        }
+
+    @Test
+    fun `evaluateAlerts waits for configured duration before firing`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(
+                        widgetId,
+                        AlertRequestOverrides(
+                            threshold = 100.0,
+                            warningThreshold = 80.0,
+                            durationSeconds = 300,
+                        ),
+                    ),
+                )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            val pending = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
+            assertNull(pending.lastTriggeredLevel)
+            assertEquals(90.0, pending.lastValue)
+            coVerify(exactly = 0) { incidentService.fireAlert(any()) }
+        }
+
+    @Test
+    fun `evaluateAlerts throttles repeated notifications at same threshold level`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            service.createAlert(
+                dashboardId,
+                ORG_ID,
+                CREATED_BY,
+                buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(
+                        threshold = 100.0,
+                        warningThreshold = 80.0,
+                        notificationChannels = NotificationChannels(email = false, slack = false, discord = false),
+                    ),
+                ),
+            )
+
+            callPrivateSuspend("evaluateAlerts")
+            callPrivateSuspend("evaluateAlerts")
+
+            coVerify(exactly = 1) { incidentService.fireAlert(any()) }
+        }
+
+    @Test
+    fun `evaluateAlerts leaves alert inactive when value is below warning range`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(70.0)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(
+                        widgetId,
+                        AlertRequestOverrides(threshold = 100.0, warningThreshold = 80.0),
+                    ),
+                )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            val inactive = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
+            assertNull(inactive.lastTriggeredLevel)
+            assertEquals(70.0, inactive.lastValue)
+            coVerify(exactly = 0) { incidentService.fireAlert(any()) }
+        }
+
+    @Test
+    fun `evaluateAlerts ignores invalid widget query config`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+
+            val dashboardId = seedDashboard()
+            val widgetId = seedWidget(dashboardId, queryConfigs = "not-json")
+            service.createAlert(
+                dashboardId,
+                ORG_ID,
+                CREATED_BY,
+                buildCreateRequest(widgetId, AlertRequestOverrides(threshold = 100.0)),
+            )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            coVerify(exactly = 0) { queryEngine.executeQuery(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `evaluateAlerts ignores query execution failures`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } throws RuntimeException("query failed")
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(widgetId, AlertRequestOverrides(threshold = 100.0)),
+                )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            val unchanged = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
+            assertNull(unchanged.lastValue)
+            coVerify(exactly = 0) { incidentService.fireAlert(any()) }
+        }
+
+    @Test
+    fun `executeQueryForAlert executes custom datasource query without project`() =
+        runBlocking {
+            val source = customDataSource(id = 10)
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns source
+            every { dataSourceService.getDecryptedCredentials(10, ORG_ID) } returns DataSourceCredentials()
+            coEvery {
+                dataSourceExecutor.executeQuery(
+                    sourceId = 10,
+                    sourceType = CustomDataSourceType.PROMETHEUS,
+                    host = source.host,
+                    port = source.port,
+                    databaseName = source.databaseName,
+                    credentials = any(),
+                    query = "up",
+                    limit = 25,
+                    timeRange = any(),
+                )
+            } returns listOf(mapOf("value" to JsonPrimitive(1.0)))
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = null,
+                queryDsl = QueryDsl(
+                    dataSource = "custom:10",
+                    rawQuery = "up",
+                    limit = 25,
+                ),
+            )
+
+            assertEquals(1.0, result.single()["value"]?.jsonPrimitive?.content?.toDouble())
+        }
+
+    @Test
+    fun `executeQueryForAlert resolves prometheus alias to custom datasource`() =
+        runBlocking {
+            val source = customDataSource(id = 11)
+            every { dataSourceService.listDataSources(ORG_ID) } returns listOf(source)
+            every { dataSourceService.getDecryptedCredentials(11, ORG_ID) } returns null
+            coEvery {
+                dataSourceExecutor.executeQuery(
+                    sourceId = 11,
+                    sourceType = CustomDataSourceType.PROMETHEUS,
+                    host = source.host,
+                    port = source.port,
+                    databaseName = source.databaseName,
+                    credentials = any(),
+                    query = "process_cpu_usage",
+                    limit = any(),
+                    timeRange = any(),
+                )
+            } returns listOf(mapOf("value" to JsonPrimitive(0.25)))
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = null,
+                queryDsl = QueryDsl(
+                    dataSource = "__prometheus",
+                    rawQuery = "process_cpu_usage",
+                ),
+            )
+
+            assertEquals(0.25, result.single()["value"]?.jsonPrimitive?.content?.toDouble())
+        }
+
+    @Test
+    fun `executeQueryForAlert skips built in datasource without project`() =
+        runBlocking {
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = null,
+                queryDsl = QueryDsl(dataSource = "events"),
+            )
+
+            assertTrue(result.isEmpty())
+            coVerify(exactly = 0) {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert executes built in datasource with default retention`() =
+        runBlocking {
+            val query = QueryDsl(dataSource = "events")
+            val rows = listOf(mapOf("total" to JsonPrimitive(7.0)))
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(DEFAULT_PROJECT_ID)
+            } returns null
+            coEvery {
+                queryEngine.executeQuery(query, DEFAULT_PROJECT_ID, null, RECOVERY_RETENTION_DAYS)
+            } returns rows
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = DEFAULT_PROJECT_ID,
+                queryDsl = query,
+            )
+
+            assertEquals(rows, result)
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects prometheus alias without enabled source`() =
+        runBlocking {
+            every { dataSourceService.listDataSources(ORG_ID) } returns emptyList()
+
+            assertFailsWith<IllegalStateException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "__prometheus",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert selects first enabled prometheus datasource`() =
+        runBlocking {
+            val disabledPrometheus = customDataSource(id = 10, enabled = false)
+            val postgres = customDataSource(
+                id = 11,
+                sourceType = CustomDataSourceType.POSTGRESQL.name.lowercase(),
+            )
+            val prometheus = customDataSource(id = 12)
+            every { dataSourceService.listDataSources(ORG_ID) } returns listOf(
+                disabledPrometheus,
+                postgres,
+                prometheus,
+            )
+            every { dataSourceService.getDecryptedCredentials(12, ORG_ID) } returns null
+            coEvery {
+                dataSourceExecutor.executeQuery(
+                    sourceId = 12,
+                    sourceType = CustomDataSourceType.PROMETHEUS,
+                    host = prometheus.host,
+                    port = prometheus.port,
+                    databaseName = prometheus.databaseName,
+                    credentials = any(),
+                    query = "up",
+                    limit = any(),
+                    timeRange = any(),
+                )
+            } returns listOf(mapOf("value" to JsonPrimitive(1.0)))
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = null,
+                queryDsl = QueryDsl(dataSource = "__prometheus", rawQuery = "up"),
+            )
+
+            assertEquals(1.0, result.single()["value"]?.jsonPrimitive?.content?.toDouble())
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects invalid custom datasource references`() =
+        runBlocking {
+            assertFailsWith<IllegalArgumentException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:not-a-number",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects missing custom datasource`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(404, ORG_ID) } returns null
+
+            assertFailsWith<IllegalStateException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:404",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects disabled custom datasource`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns customDataSource(
+                id = 10,
+                enabled = false,
+            )
+
+            assertFailsWith<IllegalStateException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:10",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects custom datasource query without raw query`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns customDataSource(id = 10)
+
+            assertFailsWith<IllegalArgumentException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(dataSource = "custom:10"),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects custom datasource query with blank raw query`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns customDataSource(id = 10)
+
+            assertFailsWith<IllegalArgumentException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:10",
+                        rawQuery = "   ",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects unsupported custom datasource type`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns customDataSource(
+                id = 10,
+                sourceType = "unsupported",
+            )
+
+            assertFailsWith<IllegalStateException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:10",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects missing credentials for credentialed datasource`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns customDataSource(
+                id = 10,
+                hasCredentials = true,
+            )
+            every { dataSourceService.getDecryptedCredentials(10, ORG_ID) } returns null
+
+            assertFailsWith<IllegalStateException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:10",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert uses resolved credentials for credentialed datasource`() =
+        runBlocking {
+            val source = customDataSource(id = 10, hasCredentials = true)
+            val credentials = DataSourceCredentials(apiKey = "secret")
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns source
+            every { dataSourceService.getDecryptedCredentials(10, ORG_ID) } returns credentials
+            coEvery {
+                dataSourceExecutor.executeQuery(
+                    sourceId = 10,
+                    sourceType = CustomDataSourceType.PROMETHEUS,
+                    host = source.host,
+                    port = source.port,
+                    databaseName = source.databaseName,
+                    credentials = credentials,
+                    query = "up",
+                    limit = any(),
+                    timeRange = any(),
+                )
+            } returns listOf(mapOf("value" to JsonPrimitive(1.0)))
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = null,
+                queryDsl = QueryDsl(
+                    dataSource = "custom:10",
+                    rawQuery = "up",
+                ),
+            )
+
+            assertEquals(1.0, result.single()["value"]?.jsonPrimitive?.content?.toDouble())
+        }
+
+    @Test
+    fun `extractMetricValue scans fallback row fields for numeric values`() {
+        val result = callPrivate(
+            "extractMetricValue",
+            listOf(
+                mapOf(
+                    "worker" to JsonPrimitive("primary"),
+                    "value" to JsonPrimitive(0.25),
+                )
+            ),
+            QueryDsl(dataSource = "custom:10"),
+            0,
+        )
+
+        assertEquals(0.25, result)
+    }
+
+    @Test
+    fun `extractMetricValue prefers metric alias when present`() {
+        val result = callPrivate(
+            "extractMetricValue",
+            listOf(mapOf("cpu_avg" to JsonPrimitive(0.5))),
+            QueryDsl(
+                dataSource = "custom:10",
+                metrics = listOf(MetricDef(AggFunction.AVG, field = "cpu", alias = "cpu_avg")),
+            ),
+            0,
+        )
+
+        assertEquals(0.5, result)
+    }
+
+    @Test
+    fun `extractMetricValue continues to older rows until a numeric value is found`() {
+        val result = callPrivate(
+            "extractMetricValue",
+            listOf(
+                mapOf("value" to JsonPrimitive(2.0)),
+                mapOf(
+                    "time" to JsonPrimitive("2026-05-25T00:00:00Z"),
+                    "host" to JsonPrimitive("api-1"),
+                ),
+            ),
+            QueryDsl(dataSource = "custom:10"),
+            0,
+        )
+
+        assertEquals(2.0, result)
+    }
 
     // ──── CRUD round-trip ────
 

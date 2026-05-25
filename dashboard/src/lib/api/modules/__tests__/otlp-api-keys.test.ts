@@ -78,7 +78,7 @@ describe('OTLP API Keys', () => {
 
   describe('createOtlpApiKey', () => {
     it('creates a new OTLP API key', async () => {
-      let capturedBody: Record<string, unknown> | null = null
+      let capturedBody: Record<string, unknown> = {}
       server.use(
         http.post(`${API_BASE}/v1/logs/api-keys`, async ({ request }) => {
           capturedBody = (await request.json()) as Record<string, unknown>

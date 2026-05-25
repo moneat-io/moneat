@@ -32,7 +32,12 @@ describe('Notifications API', () => {
 
   it('fetches notification preferences', async () => {
     const mockPrefs = {
-      global: { emailEnabled: true, slackEnabled: false },
+      global: {
+        issueAlerts: true,
+        errorAlerts: true,
+        weeklySummary: false,
+        alertFrequencyMinutes: 15,
+      },
       projects: [],
     }
 
@@ -52,12 +57,12 @@ describe('Notifications API', () => {
     server.use(
       http.put(`${API_BASE}/v1/notification-preferences`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
-        expect(body.emailEnabled).toBe(false)
+        expect(body.issueAlerts).toBe(false)
         return new HttpResponse(null, { status: 204 })
       })
     )
 
-    await api.updateNotificationPreferences({ emailEnabled: false })
+    await api.updateNotificationPreferences({ issueAlerts: false })
   })
 
   // ──── updateProjectNotificationPreferences ────
@@ -68,13 +73,13 @@ describe('Notifications API', () => {
         `${API_BASE}/v1/notification-preferences/5`,
         async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
-          expect(body.slackEnabled).toBe(true)
+          expect(body.weeklySummary).toBe(true)
           return new HttpResponse(null, { status: 204 })
         }
       )
     )
 
-    await api.updateProjectNotificationPreferences(5, { slackEnabled: true })
+    await api.updateProjectNotificationPreferences(5, { weeklySummary: true })
   })
 
   // ──── deleteProjectNotificationPreferences ────
@@ -95,7 +100,7 @@ describe('Notifications API', () => {
     const mockPrefs = {
       preferences: [
         {
-          alertSource: 'UPTIME',
+          alertSource: 'UPTIME_MONITOR',
           emailEnabled: true,
           slackEnabled: false,
           discordEnabled: false,
@@ -128,7 +133,7 @@ describe('Notifications API', () => {
 
   it('updates alert notification preference', async () => {
     const mockPref = {
-      alertSource: 'UPTIME',
+      alertSource: 'UPTIME_MONITOR',
       emailEnabled: true,
       slackEnabled: true,
       discordEnabled: false,
@@ -136,7 +141,7 @@ describe('Notifications API', () => {
 
     server.use(
       http.put(
-        `${API_BASE}/v1/alert-notification-preferences/UPTIME`,
+        `${API_BASE}/v1/alert-notification-preferences/UPTIME_MONITOR`,
         async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.emailEnabled).toBe(true)
@@ -147,7 +152,7 @@ describe('Notifications API', () => {
       )
     )
 
-    const result = await api.updateAlertNotificationPreference('UPTIME', {
+    const result = await api.updateAlertNotificationPreference('UPTIME_MONITOR', {
       emailEnabled: true,
       slackEnabled: true,
       discordEnabled: false,

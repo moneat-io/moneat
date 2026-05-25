@@ -236,6 +236,8 @@ val dashboardsModule = module {
             prefsService = get(),
             queryEngine = get(),
             retentionPolicyService = get(),
+            dataSourceService = get(),
+            dataSourceExecutor = get(),
         )
     }
     single {
