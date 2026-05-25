@@ -17,7 +17,7 @@
 package com.moneat.uptime.services
 
 import com.moneat.billing.services.BillingQuotaService
-import com.moneat.incident.models.AlertSource
+import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
@@ -298,20 +298,20 @@ class UptimeScheduler(
                 // We always fire the incident; IncidentService will check routing rules
                 val severityOverride =
                     monitor.incidentSeverity?.let {
-                        com.moneat.incident.models.IncidentSeverity
+                        com.moneat.alerts.models.AlertSeverity
                             .fromString(it)
                     }
 
                 // Use override severity if set, otherwise use a default that routing rules can override
-                val severity = severityOverride ?: com.moneat.incident.models.IncidentSeverity.HIGH
+                val severity = severityOverride ?: com.moneat.alerts.models.AlertSeverity.HIGH
 
                 val incidentEvent =
-                    com.moneat.incident.models.IncidentEvent(
+                    com.moneat.alerts.models.AlertLifecycleEvent(
                         title = "Uptime Monitor Down: ${monitor.name}",
                         description = "Monitor '${monitor.name}' (${monitor.type}) is down.\nError: ${result.message}",
                         severity = severity,
-                        status = com.moneat.incident.models.IncidentStatus.FIRING,
-                        source = com.moneat.incident.models.AlertSource.UPTIME_MONITOR,
+                        status = com.moneat.alerts.models.AlertStatus.FIRING,
+                        source = com.moneat.alerts.models.AlertSource.UPTIME_MONITOR,
                         deduplicationKey = "moneat-uptime-${monitor.id}",
                         organizationId = monitor.organizationId,
                         metadata =

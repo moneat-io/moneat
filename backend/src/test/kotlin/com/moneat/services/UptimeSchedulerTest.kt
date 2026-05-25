@@ -16,7 +16,7 @@
 
 package com.moneat.services
 
-import com.moneat.incident.models.AlertSource
+import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.models.CheckResult

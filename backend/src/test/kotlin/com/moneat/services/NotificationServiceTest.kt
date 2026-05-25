@@ -17,7 +17,7 @@
 package com.moneat.services
 
 import com.moneat.events.models.SentryEvent
-import com.moneat.incident.models.IncidentEvent
+import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.shared.models.EmailsSent
@@ -122,7 +122,7 @@ class NotificationServiceTest {
                         message = "NullPointerException in checkout flow",
                         environment = "production"
                     )
-                val publishedEvents = mutableListOf<IncidentEvent>()
+                val publishedEvents = mutableListOf<AlertLifecycleEvent>()
 
                 notificationService.onNewIssue(projectId, "1001", event)
                 notificationService.onNewIssue(projectId, "1002", event.copy(eventId = "evt-2"))

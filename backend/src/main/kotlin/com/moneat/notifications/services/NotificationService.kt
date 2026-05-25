@@ -18,10 +18,10 @@ package com.moneat.notifications.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.SentryEvent
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentEvent
-import com.moneat.incident.models.IncidentSeverity
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Projects
@@ -161,12 +161,12 @@ class NotificationService(
                 )
 
             workflowService.publishAlertTriggered(
-                IncidentEvent(
+                AlertLifecycleEvent(
                     title = "New Issue: ${emailData.issueTitle}",
                     description = "${emailData.projectName} reported ${emailData.issueLevel.uppercase()}: " +
                         emailData.issueMessage,
                     severity = severityForIssueLevel(emailData.issueLevel),
-                    status = IncidentStatus.FIRING,
+                    status = AlertStatus.FIRING,
                     source = AlertSource.ERROR_ALERT,
                     deduplicationKey = "moneat-error-$issueId",
                     organizationId = orgId,
@@ -639,12 +639,12 @@ class NotificationService(
         return formatter.format(instant.atZone(ZoneId.of("UTC")))
     }
 
-    private fun severityForIssueLevel(level: String): IncidentSeverity {
+    private fun severityForIssueLevel(level: String): AlertSeverity {
         return when (level.lowercase(Locale.getDefault())) {
-            "fatal" -> IncidentSeverity.CRITICAL
-            "error" -> IncidentSeverity.HIGH
-            "warning" -> IncidentSeverity.MEDIUM
-            else -> IncidentSeverity.LOW
+            "fatal" -> AlertSeverity.CRITICAL
+            "error" -> AlertSeverity.HIGH
+            "warning" -> AlertSeverity.MEDIUM
+            else -> AlertSeverity.LOW
         }
     }
 

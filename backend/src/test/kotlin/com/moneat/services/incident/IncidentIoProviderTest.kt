@@ -16,10 +16,10 @@
 
 package com.moneat.services.incident
 
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentEvent
-import com.moneat.incident.models.IncidentSeverity
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.models.ProviderConfig
 import com.moneat.incident.services.IncidentIoProvider
 import kotlinx.coroutines.runBlocking
@@ -30,11 +30,11 @@ import kotlin.test.assertTrue
 
 class IncidentIoProviderTest {
     private val event =
-        IncidentEvent(
+        AlertLifecycleEvent(
             title = "Database down",
             description = "Primary database is unavailable",
-            severity = IncidentSeverity.HIGH,
-            status = IncidentStatus.FIRING,
+            severity = AlertSeverity.HIGH,
+            status = AlertStatus.FIRING,
             source = AlertSource.HOST_DOWN,
             deduplicationKey = "db-down-1",
             organizationId = 1,

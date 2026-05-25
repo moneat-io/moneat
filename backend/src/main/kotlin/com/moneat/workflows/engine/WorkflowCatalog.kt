@@ -124,13 +124,13 @@ object WorkflowCatalog {
             )
         ),
         WorkflowResourceDefinition(
-            type = "IncidentSeverity",
+            type = "AlertSeverity",
             label = "Severity",
             fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "CRITICAL, HIGH, MEDIUM, LOW"),
             operations = listOf(
-                WorkflowOperationDefinition("eq", EQUALS_LABEL, "IncidentSeverity"),
-                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "IncidentSeverity"),
-                WorkflowOperationDefinition("at_least", "is at least", "IncidentSeverity")
+                WorkflowOperationDefinition("eq", EQUALS_LABEL, "AlertSeverity"),
+                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "AlertSeverity"),
+                WorkflowOperationDefinition("at_least", "is at least", "AlertSeverity")
             )
         ),
         WorkflowResourceDefinition(
@@ -143,12 +143,12 @@ object WorkflowCatalog {
             )
         ),
         WorkflowResourceDefinition(
-            type = "IncidentStatus",
+            type = "AlertStatus",
             label = "Alert Status",
             fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "FIRING, RESOLVED"),
             operations = listOf(
-                WorkflowOperationDefinition("eq", EQUALS_LABEL, "IncidentStatus"),
-                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "IncidentStatus")
+                WorkflowOperationDefinition("eq", EQUALS_LABEL, "AlertStatus"),
+                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "AlertStatus")
             )
         )
     )
@@ -156,8 +156,8 @@ object WorkflowCatalog {
     private val alertScope = listOf(
         WorkflowScopeReferenceDefinition("alert.title", "Alert title", "String"),
         WorkflowScopeReferenceDefinition("alert.description", "Alert description", "Text"),
-        WorkflowScopeReferenceDefinition("alert.severity", "Severity", "IncidentSeverity"),
-        WorkflowScopeReferenceDefinition(ALERT_STATUS_REFERENCE, "Status", "IncidentStatus"),
+        WorkflowScopeReferenceDefinition("alert.severity", "Severity", "AlertSeverity"),
+        WorkflowScopeReferenceDefinition(ALERT_STATUS_REFERENCE, "Status", "AlertStatus"),
         WorkflowScopeReferenceDefinition("alert.source", "Source", "AlertSource"),
         WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, "Deduplication key", "String"),
         WorkflowScopeReferenceDefinition("alert.url", "Moneat URL", "String"),

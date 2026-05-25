@@ -1,6 +1,6 @@
 -- V31: Priority levels and business hours configuration
 
--- Alert priority mappings (maps IncidentSeverity to priority levels)
+-- Alert priority mappings (maps AlertSeverity to priority levels)
 CREATE TABLE alert_priorities (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

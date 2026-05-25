@@ -27,10 +27,10 @@ import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.NotificationChannels
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentEvent
-import com.moneat.incident.models.IncidentSeverity
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.TaskLock
@@ -644,23 +644,23 @@ class DashboardAlertService(
         val formattedValue = "%.2f".format(currentValue)
         val formattedThreshold = "%.2f".format(trigger.threshold)
 
-        val incidentSeverity =
+        val alertSeverity =
             if (trigger.level == DashboardAlertLevel.ERROR) {
-                alert.incidentSeverity?.let { IncidentSeverity.fromString(it) }
+                alert.incidentSeverity?.let { AlertSeverity.fromString(it) }
             } else {
                 null
             }
-        val workflowSeverity = incidentSeverity ?: when (trigger.level) {
-            DashboardAlertLevel.WARNING -> IncidentSeverity.LOW
-            DashboardAlertLevel.ERROR -> IncidentSeverity.HIGH
+        val workflowSeverity = alertSeverity ?: when (trigger.level) {
+            DashboardAlertLevel.WARNING -> AlertSeverity.LOW
+            DashboardAlertLevel.ERROR -> AlertSeverity.HIGH
         }
         val event =
-            IncidentEvent(
+            AlertLifecycleEvent(
                 title = "Dashboard ${trigger.level.label}: ${alert.name}",
                 description = "${alert.widgetTitle} on ${alert.dashboardTitle}:" +
                     " value $formattedValue ${alert.condition} $formattedThreshold",
                 severity = workflowSeverity,
-                status = IncidentStatus.FIRING,
+                status = AlertStatus.FIRING,
                 source = AlertSource.DASHBOARD_ALERT,
                 deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
                 organizationId = orgId,
@@ -669,8 +669,8 @@ class DashboardAlertService(
 
         suspendRunCatching {
             workflowService.publishAlertTriggered(event)
-            if (incidentSeverity != null) {
-                incidentService.fireAlert(event.copy(severity = incidentSeverity), publishWorkflow = false)
+            if (alertSeverity != null) {
+                incidentService.fireAlert(event.copy(severity = alertSeverity), publishWorkflow = false)
             }
         }.onFailure { e ->
             logger.error(e) { "Failed to publish dashboard alert workflow" }

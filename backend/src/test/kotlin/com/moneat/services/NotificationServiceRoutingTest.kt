@@ -21,10 +21,10 @@ import com.moneat.events.models.ExceptionValue
 import com.moneat.events.models.SentryEvent
 import com.moneat.events.models.StackFrame
 import com.moneat.events.models.StackTrace
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentEvent
-import com.moneat.incident.models.IncidentSeverity
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.shared.models.Organizations
@@ -141,7 +141,7 @@ class NotificationServiceRoutingTest {
         runBlocking {
             val orgId = seedOrg("Workflow Route Org")
             val projectId = seedProject(orgId, "WorkflowProject")
-            val eventSlot = slot<IncidentEvent>()
+            val eventSlot = slot<AlertLifecycleEvent>()
             val service = NotificationService(emailService, workflowService)
 
             try {
@@ -157,8 +157,8 @@ class NotificationServiceRoutingTest {
             val event = eventSlot.captured
             assertEquals("New Issue: Test error", event.title)
             assertTrue(event.description.contains("WorkflowProject reported ERROR"))
-            assertEquals(IncidentSeverity.HIGH, event.severity)
-            assertEquals(IncidentStatus.FIRING, event.status)
+            assertEquals(AlertSeverity.HIGH, event.severity)
+            assertEquals(AlertStatus.FIRING, event.status)
             assertEquals(AlertSource.ERROR_ALERT, event.source)
             assertEquals("moneat-error-2001", event.deduplicationKey)
             assertEquals(orgId, event.organizationId)
@@ -169,7 +169,7 @@ class NotificationServiceRoutingTest {
         runBlocking {
             val orgId = seedOrg("Exception Org")
             val projectId = seedProject(orgId, "ExceptionProject")
-            val eventSlot = slot<IncidentEvent>()
+            val eventSlot = slot<AlertLifecycleEvent>()
             val service = NotificationService(emailService, workflowService)
 
             try {
@@ -185,7 +185,7 @@ class NotificationServiceRoutingTest {
             val event = eventSlot.captured
             assertEquals("New Issue: Cannot invoke method on null", event.title)
             assertTrue(event.description.contains("ExceptionProject reported FATAL"))
-            assertEquals(IncidentSeverity.CRITICAL, event.severity)
+            assertEquals(AlertSeverity.CRITICAL, event.severity)
             assertEquals(orgId, event.organizationId)
         }
 

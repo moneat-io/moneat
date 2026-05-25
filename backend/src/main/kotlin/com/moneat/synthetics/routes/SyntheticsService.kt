@@ -19,10 +19,10 @@ package com.moneat.synthetics.routes
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentEvent
-import com.moneat.incident.models.IncidentSeverity
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
@@ -379,11 +379,11 @@ class SyntheticsService(
         )
 
         workflowService.publishAlertTriggered(
-            IncidentEvent(
+            AlertLifecycleEvent(
                 title = subject,
                 description = message,
-                severity = IncidentSeverity.HIGH,
-                status = IncidentStatus.FIRING,
+                severity = AlertSeverity.HIGH,
+                status = AlertStatus.FIRING,
                 source = AlertSource.UPTIME_MONITOR,
                 deduplicationKey = "moneat-synthetic-${test.id}",
                 organizationId = test.organizationId,

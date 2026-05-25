@@ -17,8 +17,8 @@
 package com.moneat.workflows.services
 
 import com.moneat.config.RedisConfig
-import com.moneat.incident.models.IncidentEvent
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
@@ -269,9 +269,9 @@ class WorkflowService(
                 .map { runResponse(it) }
         }
 
-    suspend fun publishAlertTriggered(event: IncidentEvent) {
+    suspend fun publishAlertTriggered(event: AlertLifecycleEvent) {
         val triggerName =
-            if (event.status == IncidentStatus.RESOLVED) {
+            if (event.status == AlertStatus.RESOLVED) {
                 ALERT_RESOLVED_TRIGGER
             } else {
                 ALERT_TRIGGERED_TRIGGER
@@ -301,7 +301,7 @@ class WorkflowService(
                     ALERT_TITLE_REFERENCE to title,
                     ALERT_DESCRIPTION_REFERENCE to description,
                     ALERT_SEVERITY_REFERENCE to "",
-                    ALERT_STATUS_REFERENCE to IncidentStatus.RESOLVED.name,
+                    ALERT_STATUS_REFERENCE to AlertStatus.RESOLVED.name,
                     ALERT_SOURCE_REFERENCE to source,
                     ALERT_DEDUPLICATION_KEY_REFERENCE to deduplicationKey,
                     ALERT_URL_REFERENCE to moneatUrl,
@@ -565,7 +565,7 @@ class WorkflowService(
             "gt", "gte", "lt", "lte" -> compareNumbers(actual, expected, operation)
             "at_least" -> {
                 val expectedRank = severityRank(expected)
-                resourceType == "IncidentSeverity" && expectedRank > 0 && severityRank(actual) >= expectedRank
+                resourceType == "AlertSeverity" && expectedRank > 0 && severityRank(actual) >= expectedRank
             }
             else -> false
         }
@@ -757,7 +757,7 @@ class WorkflowService(
             .filter { it.startsWith("alert.") || it.startsWith("organization.") }
             .distinct()
 
-    private fun alertScope(event: IncidentEvent): Map<String, String> =
+    private fun alertScope(event: AlertLifecycleEvent): Map<String, String> =
         mapOf(
             ALERT_TITLE_REFERENCE to event.title,
             ALERT_DESCRIPTION_REFERENCE to event.description,

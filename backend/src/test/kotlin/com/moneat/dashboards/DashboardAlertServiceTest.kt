@@ -33,8 +33,8 @@ import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentSeverity
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertSeverity
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.TestDatabaseHelper
@@ -892,7 +892,7 @@ class DashboardAlertServiceTest {
             coVerify(exactly = 1) {
                 workflowService.publishAlertTriggered(
                     match {
-                        it.severity == IncidentSeverity.LOW &&
+                        it.severity == AlertSeverity.LOW &&
                             it.title == "Dashboard Warning: High Error Rate" &&
                             it.source == AlertSource.DASHBOARD_ALERT
                     }
@@ -943,7 +943,7 @@ class DashboardAlertServiceTest {
             coVerify(exactly = 1) {
                 incidentService.fireAlert(
                     match {
-                        it.severity == IncidentSeverity.HIGH &&
+                        it.severity == AlertSeverity.HIGH &&
                             it.title == "Dashboard Error: High Error Rate"
                     },
                     publishWorkflow = false,

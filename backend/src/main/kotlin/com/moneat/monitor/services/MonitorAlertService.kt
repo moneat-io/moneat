@@ -18,10 +18,10 @@ package com.moneat.monitor.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentEvent
-import com.moneat.incident.models.IncidentSeverity
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
@@ -627,7 +627,7 @@ class MonitorAlertService(
         val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
 
         suspendRunCatching {
-            val incidentSeverity =
+            val alertSeverity =
                 if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
                     transaction {
                         OrganizationAlertTemplates
@@ -636,7 +636,7 @@ class MonitorAlertService(
                             .firstOrNull()
                             ?.get(OrganizationAlertTemplates.incident_severity)
                             ?.let {
-                                IncidentSeverity.fromString(it)
+                                AlertSeverity.fromString(it)
                             }
                     }
                 } else {
@@ -647,19 +647,19 @@ class MonitorAlertService(
                             .firstOrNull()
                             ?.get(HostAlerts.incident_severity)
                             ?.let {
-                                IncidentSeverity.fromString(it)
+                                AlertSeverity.fromString(it)
                             }
                     }
                 }
 
             val incidentEvent =
-                IncidentEvent(
+                AlertLifecycleEvent(
                     title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
                     description =
                     "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold" +
                         "\nCurrent Value: $formattedValue",
-                    severity = incidentSeverity ?: IncidentSeverity.HIGH,
-                    status = IncidentStatus.FIRING,
+                    severity = alertSeverity ?: AlertSeverity.HIGH,
+                    status = AlertStatus.FIRING,
                     source = AlertSource.HOST_ALERT,
                     deduplicationKey = hostAlertDedupKey(alert),
                     organizationId = organizationId,
@@ -675,7 +675,7 @@ class MonitorAlertService(
                 )
 
             workflowService.publishAlertTriggered(incidentEvent)
-            if (incidentSeverity != null) {
+            if (alertSeverity != null) {
                 incidentService.fireAlert(incidentEvent, publishWorkflow = false)
             }
         }.getOrElse { e ->
@@ -765,11 +765,11 @@ class MonitorAlertService(
         suspendRunCatching {
             val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
             val incidentEvent =
-                IncidentEvent(
+                AlertLifecycleEvent(
                     title = "Host Down: $hostName",
                     description = "The monitoring agent has stopped reporting metrics.\nStatus: $lastSeenText",
-                    severity = IncidentSeverity.CRITICAL,
-                    status = IncidentStatus.FIRING,
+                    severity = AlertSeverity.CRITICAL,
+                    status = AlertStatus.FIRING,
                     source = AlertSource.HOST_DOWN,
                     deduplicationKey = hostDownDedupKey(hostId),
                     organizationId = organizationId,
