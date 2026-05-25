@@ -235,6 +235,8 @@ class PricingTierService {
                 request.replayRetentionDays ?: currentConfig?.replayRetentionDays ?: request.retentionDays
             val resolvedLlmRetentionDays =
                 request.llmRetentionDays ?: currentConfig?.llmRetentionDays ?: request.retentionDays
+            val resolvedApmTraceRetentionDays =
+                request.apmTraceRetentionDays ?: currentConfig?.apmTraceRetentionDays ?: request.retentionDays
             val resolvedErrorOverageRateCentsPer1k =
                 request.errorOverageRateCentsPer1k ?: currentConfig?.errorOverageRateCentsPer1k ?: 0
             val resolvedReplayOverageRateCentsPerGb =
@@ -360,6 +362,7 @@ class PricingTierService {
                     it[log_retention_days] = resolvedLogRetentionDays
                     it[replay_retention_days] = resolvedReplayRetentionDays
                     it[llm_retention_days] = resolvedLlmRetentionDays
+                    it[apm_trace_retention_days] = resolvedApmTraceRetentionDays
                     it[status_pages_enabled] = resolvedStatusPagesEnabled
                     it[status_page_custom_domain_enabled] = resolvedStatusPageCustomDomainEnabled
                     it[session_replay_enabled] = resolvedSessionReplayEnabled
@@ -438,6 +441,11 @@ class PricingTierService {
         }
         if (request.llmRetentionDays != null) {
             require(request.llmRetentionDays in 1..MAX_RETENTION_DAYS) { "LLM retention days must be between 1 and 90" }
+        }
+        if (request.apmTraceRetentionDays != null) {
+            require(request.apmTraceRetentionDays in 1..MAX_RETENTION_DAYS) {
+                "APM trace retention days must be between 1 and 90"
+            }
         }
         if (request.monthlyGbLimit != null) {
             require(request.monthlyGbLimit >= 0) { "Monthly GB limit must be non-negative" }

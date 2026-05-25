@@ -438,7 +438,7 @@ describe('pricing-display – branch coverage', () => {
       )
       expect(
         model.includedLimits.some(
-          (l) => l.includes('90d errors') && l.includes('30d logs')
+          (l) => l.includes('90d errors') && l.includes('30d logs') && l.includes('90d APM traces')
         )
       ).toBe(true)
     })

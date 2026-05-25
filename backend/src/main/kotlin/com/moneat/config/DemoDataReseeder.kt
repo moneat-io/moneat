@@ -22,7 +22,7 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 /**
- * Periodically re-inserts demo data so that ClickHouse TTL (90-day default)
+ * Periodically re-inserts demo data so that ClickHouse TTL windows
  * does not silently delete the one-time seed migrations (V6/V7/V8/V10/V12).
  *
  * Strategy: delete demo-project rows older than 30 days, then re-insert fresh

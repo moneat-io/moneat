@@ -86,6 +86,48 @@ const KNOWN_TIERS = ['FREE', 'PRO', 'TEAM', 'BUSINESS']
 const TIER_ORDER: Record<string, number> = {FREE: 0, PRO: 1, TEAM: 2, BUSINESS: 3}
 const BYTES_PER_GB = 1024 * 1024 * 1024
 
+function formatRetentionSummary(
+  errorDays: number,
+  logDays: number,
+  replayDays: number,
+  llmDays: number,
+  apmDays: number
+): string {
+  const coreSame = errorDays === logDays && errorDays === replayDays && errorDays === llmDays
+  if (coreSame && errorDays === apmDays) {
+    return `${errorDays}d all`
+  }
+  if (coreSame) {
+    return `${errorDays}d core, ${apmDays}d APM`
+  }
+  return [
+    `${errorDays}d errors`,
+    `${logDays}d logs`,
+    `${replayDays}d replays`,
+    `${llmDays}d LLM`,
+    `${apmDays}d APM`,
+  ].join(', ')
+}
+
+function retentionSummary(tier: BillingTierConfig): string {
+  const errorDays = tier.retentionDays
+  const logDays = tier.logRetentionDays ?? errorDays
+  const replayDays = tier.replayRetentionDays ?? errorDays
+  const llmDays = tier.llmRetentionDays ?? errorDays
+  const apmDays = tier.apmTraceRetentionDays ?? errorDays
+  return formatRetentionSummary(errorDays, logDays, replayDays, llmDays, apmDays)
+}
+
+function createFormRetentionSummary(form: CreateFormState): string {
+  return formatRetentionSummary(
+    form.retentionDays,
+    form.logRetentionDays,
+    form.replayRetentionDays,
+    form.llmRetentionDays,
+    form.apmTraceRetentionDays
+  )
+}
+
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 interface ValidationErrors {
@@ -98,6 +140,7 @@ interface ValidationErrors {
   logRetentionDays?: string
   replayRetentionDays?: string
   llmRetentionDays?: string
+  apmTraceRetentionDays?: string
   maxSystems?: string
   monitorIntervalSeconds?: string
   monthlyPriceCents?: string
@@ -134,6 +177,9 @@ function validateCreateForm(form: CreateFormState): ValidationErrors {
   }
   if (form.llmRetentionDays < 1 || form.llmRetentionDays > 90) {
     errors.llmRetentionDays = 'Must be between 1 and 90 days'
+  }
+  if (form.apmTraceRetentionDays < 1 || form.apmTraceRetentionDays > 90) {
+    errors.apmTraceRetentionDays = 'Must be between 1 and 90 days'
   }
   if (form.maxSystems < 1) {
     errors.maxSystems = 'Must be at least 1 system'
@@ -183,6 +229,7 @@ interface CreateFormState {
   logRetentionDays: number
   replayRetentionDays: number
   llmRetentionDays: number
+  apmTraceRetentionDays: number
   maxProjects: string
   maxSystems: number
   monitorIntervalSeconds: number
@@ -221,6 +268,7 @@ const DEFAULT_FORM: CreateFormState = {
   logRetentionDays: 30,
   replayRetentionDays: 14,
   llmRetentionDays: 30,
+  apmTraceRetentionDays: 30,
   maxProjects: '',
   maxSystems: 5,
   monitorIntervalSeconds: 15,
@@ -262,6 +310,7 @@ function buildCreateFormFromConfig(config: BillingTierConfig): CreateFormState {
     logRetentionDays: config.logRetentionDays ?? config.retentionDays,
     replayRetentionDays: config.replayRetentionDays ?? config.retentionDays,
     llmRetentionDays: config.llmRetentionDays ?? config.retentionDays,
+    apmTraceRetentionDays: config.apmTraceRetentionDays ?? config.retentionDays,
     maxProjects: config.maxProjects != null ? String(config.maxProjects) : '',
     maxSystems: config.maxSystems,
     monitorIntervalSeconds: config.monitorIntervalSeconds,
@@ -469,6 +518,7 @@ function AdminBillingPage() {
           monthlyGbLimit: Math.max(0, Math.round(createForm.monthlyGbLimitGb * BYTES_PER_GB)),
           monthlyLlmEventLimit: createForm.monthlyLlmEventLimit,
           retentionDays: createForm.retentionDays,
+          apmTraceRetentionDays: createForm.apmTraceRetentionDays,
           maxProjects: createForm.maxProjects.trim() ? Number(createForm.maxProjects) : null,
           maxSystems: createForm.maxSystems,
           monitorIntervalSeconds: createForm.monitorIntervalSeconds,
@@ -524,6 +574,7 @@ function AdminBillingPage() {
         logRetentionDays: Number(createForm.logRetentionDays),
         replayRetentionDays: Number(createForm.replayRetentionDays),
         llmRetentionDays: Number(createForm.llmRetentionDays),
+        apmTraceRetentionDays: Number(createForm.apmTraceRetentionDays),
         maxProjects: createForm.maxProjects.trim() ? Number(createForm.maxProjects) : null,
         maxSystems: Number(createForm.maxSystems),
         monitorIntervalSeconds: Number(createForm.monitorIntervalSeconds),
@@ -679,7 +730,9 @@ function AdminBillingPage() {
                       <TableCell>{plan.tier.monthlyReplayLimit.toLocaleString()}</TableCell>
                       <TableCell>{plan.tier.monthlyFeedbackLimit.toLocaleString()}</TableCell>
                       <TableCell>{(plan.tier.monthlyLlmEventLimit ?? 0).toLocaleString()}</TableCell>
-                      <TableCell>{plan.tier.retentionDays}d</TableCell>
+                      <TableCell className="max-w-[240px] text-xs leading-5">
+                        {retentionSummary(plan.tier)}
+                      </TableCell>
                       <TableCell>{plan.tier.maxSystems}</TableCell>
                       <TableCell>{formatInterval(plan.tier.monitorIntervalSeconds)}</TableCell>
                       <TableCell>
@@ -879,6 +932,26 @@ function AdminBillingPage() {
                     />
                     {validationErrors.llmRetentionDays && (
                       <p className="text-xs text-destructive">{validationErrors.llmRetentionDays}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="apmTraceRetentionDays">
+                      APM Trace Retention (days)
+                      <HelpTip text="How long stored APM spans and trace resource stats are retained for this tier." />
+                    </Label>
+                    <Input
+                      id="apmTraceRetentionDays"
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={createForm.apmTraceRetentionDays}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({...p, apmTraceRetentionDays: Number(e.target.value)}))
+                      }
+                    />
+                    {validationErrors.apmTraceRetentionDays && (
+                      <p className="text-xs text-destructive">{validationErrors.apmTraceRetentionDays}</p>
                     )}
                   </div>
 
@@ -1546,7 +1619,7 @@ function AdminBillingPage() {
                 <p><strong>Replays:</strong> {createForm.monthlyReplayLimit.toLocaleString()}</p>
                 <p><strong>Feedback:</strong> {createForm.monthlyFeedbackLimit.toLocaleString()}</p>
                 <p><strong>LLM Events:</strong> {createForm.monthlyLlmEventLimit.toLocaleString()}</p>
-                <p><strong>Retention:</strong> {createForm.retentionDays}d errors, {createForm.logRetentionDays}d logs, {createForm.replayRetentionDays}d replays, {createForm.llmRetentionDays}d LLM</p>
+                <p><strong>Retention:</strong> {createFormRetentionSummary(createForm)}</p>
                 <p><strong>Max Projects:</strong> {createForm.maxProjects || 'Unlimited'}</p>
                 <p><strong>Max Systems:</strong> {createForm.maxSystems}</p>
                 <p><strong>Monitor Interval:</strong> {formatInterval(createForm.monitorIntervalSeconds)}</p>
@@ -1816,7 +1889,7 @@ function AdminBillingPage() {
                 <p>Replays: {targetTierConfig.monthlyReplayLimit.toLocaleString()}</p>
                 <p>Feedback: {targetTierConfig.monthlyFeedbackLimit.toLocaleString()}</p>
                 <p>LLM Events: {(targetTierConfig.monthlyLlmEventLimit ?? 0).toLocaleString()}</p>
-                <p>Retention: {targetTierConfig.retentionDays}d errors, {targetTierConfig.replayRetentionDays ?? targetTierConfig.retentionDays}d replays, {targetTierConfig.llmRetentionDays ?? targetTierConfig.retentionDays}d LLM</p>
+                <p>Retention: {retentionSummary(targetTierConfig)}</p>
                 <p>Max Systems: {targetTierConfig.maxSystems}</p>
                 <p>PAYG: {targetTierConfig.paygEnabled ? 'Enabled' : 'Disabled'}</p>
               </div>
@@ -2086,6 +2159,14 @@ function ChangeSummary({current, form}: {current: BillingTierConfig; form: Creat
       field: 'LLM Retention',
       from: `${currentLlmRet}d`,
       to: `${form.llmRetentionDays}d`,
+    })
+  }
+  const currentApmTraceRet = current.apmTraceRetentionDays ?? current.retentionDays
+  if (currentApmTraceRet !== form.apmTraceRetentionDays) {
+    changes.push({
+      field: 'APM Trace Retention',
+      from: `${currentApmTraceRet}d`,
+      to: `${form.apmTraceRetentionDays}d`,
     })
   }
   const formMaxProjects = form.maxProjects.trim() ? Number(form.maxProjects) : null

@@ -21,10 +21,11 @@ import com.moneat.billing.services.PricingTierService
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
+import com.moneat.utils.suspendRunCatching
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.*
+import java.util.LinkedHashMap
 
 class RetentionPolicyService(
     private val pricingTierService: PricingTierService = PricingTierService()
@@ -151,6 +152,24 @@ class RetentionPolicyService(
                     .getOrDefault(PricingTier.FREE.retentionDays)
         }
         return llmRetentionByOrg
+    }
+
+    suspend fun getApmTraceRetentionDaysForOrganization(organizationId: Int): Int {
+        return CacheService.cached("cache:apm_trace_retention:org:$organizationId", RETENTION_CACHE_TTL_SECONDS) {
+            pricingTierService.getEffectiveTierForOrganization(organizationId).tier.apmTraceRetentionDays
+        }
+    }
+
+    suspend fun getApmTraceRetentionDaysByOrganization(): Map<Int, Int> {
+        val orgIds = transaction { Organizations.selectAll().map { it[Organizations.id] } }
+        if (orgIds.isEmpty()) return emptyMap()
+        val apmTraceRetentionByOrg = LinkedHashMap<Int, Int>(orgIds.size)
+        for (orgId in orgIds) {
+            apmTraceRetentionByOrg[orgId] =
+                suspendRunCatching { getApmTraceRetentionDaysForOrganization(orgId) }
+                    .getOrDefault(PricingTier.FREE.retentionDays)
+        }
+        return apmTraceRetentionByOrg
     }
 
     suspend fun getAnalyticsRetentionDaysForOrganization(organizationId: Int): Int {

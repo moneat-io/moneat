@@ -180,6 +180,7 @@ class BillingRoutesTest {
         periodStart = "2024-01-01",
         periodEnd = "2024-01-31",
         retentionDays = 30,
+        apmTraceRetentionDays = 30,
         usedUnits = 100,
         usedErrors = 10,
         errorLimit = 1000,
