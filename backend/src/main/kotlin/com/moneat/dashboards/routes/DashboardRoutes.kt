@@ -50,10 +50,12 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
@@ -72,7 +74,6 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -689,9 +690,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAlert(
 
 private suspend fun io.ktor.server.routing.RoutingContext.receiveUpdateAlertRequest(): UpdateDashboardAlertRequest {
     val body = call.receiveText()
-    val request = json.decodeFromString<UpdateDashboardAlertRequest>(body)
-    val hasWarningThreshold = json.parseToJsonElement(body).jsonObject.containsKey("warning_threshold")
-    return request.copy(warningThresholdProvided = hasWarningThreshold)
+    return suspendRunCatching {
+        val request = json.decodeFromString<UpdateDashboardAlertRequest>(body)
+        val hasWarningThreshold = json.parseToJsonElement(body).jsonObject.containsKey("warning_threshold")
+        request.copy(warningThresholdProvided = hasWarningThreshold)
+    }.getOrElse { e ->
+        throw BadRequestException("Invalid alert update payload", e)
+    }
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAlert(
