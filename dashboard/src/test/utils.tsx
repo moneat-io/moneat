@@ -55,7 +55,10 @@ export function renderRouteWithProviders(Component: React.ComponentType) {
 
 /** Extracts and renders a TanStack file-route component. Reduces boilerplate in route tests. */
 export function renderRoute(Route: unknown) {
-  const Component = (Route as { component: React.ComponentType }).component
+  if (!Route || typeof Route !== 'object' || !('component' in Route)) {
+    throw new Error('Route has no component')
+  }
+  const Component = (Route as { component?: React.ComponentType }).component
   if (!Component) throw new Error('Route has no component')
   return renderRouteWithProviders(Component)
 }

@@ -148,6 +148,8 @@ describe('Billing API', () => {
         const body = (await request.json()) as Record<string, unknown>
         expect(body.tierName).toBe('pro')
         expect(body.billingInterval).toBe('monthly')
+        expect(body.successUrl).toBe('https://app.example.com/settings?checkout=success')
+        expect(body.cancelUrl).toBe('https://app.example.com/settings')
         return HttpResponse.json(mockSession)
       })
     )

@@ -72,6 +72,8 @@ describe('AI API', () => {
 
       const result = await api.sendChatMessage(null, 'Hello', '/home')
       expect(result.conversationId).toBe(5)
+      expect(result.response.message).toBe('New conversation started')
+      expect(result.response.actions).toEqual([])
     })
   })
 

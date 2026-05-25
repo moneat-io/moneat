@@ -69,6 +69,13 @@ describe('authMethods', () => {
         http.post(`${API_BASE}/auth/signup`, async ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('inviteToken')).toBe('inv-123')
+          const body = await request.json()
+          expect(body).toEqual({
+            email: 'b@c.com',
+            password: TEST_PASSWORD_BOB,
+            name: 'Bob',
+            ...legalConsent,
+          })
           return HttpResponse.json(authResponse)
         })
       )

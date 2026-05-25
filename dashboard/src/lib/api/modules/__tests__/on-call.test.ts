@@ -48,7 +48,7 @@ describe('onCallMethods', () => {
       server.use(
         http.put(`${API_BASE}/priorities`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
-          expect(body.priorities).toBeDefined()
+          expect(body).toEqual(request)
           return HttpResponse.json(mock)
         })
       )
@@ -86,7 +86,7 @@ describe('onCallMethods', () => {
       server.use(
         http.put(`${API_BASE}/business-hours`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
-          expect(body.timezone).toBe('US/Eastern')
+          expect(body).toEqual(request)
           return HttpResponse.json(request)
         })
       )

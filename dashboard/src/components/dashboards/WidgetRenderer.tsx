@@ -296,6 +296,9 @@ function formatTooltipValue(value?: TooltipValue): string {
 }
 
 function formatUnitTooltipValue(value: TooltipValue, unit?: string, decimals?: string): string {
+  if (Array.isArray(value)) {
+    return value.map((v) => formatUnitTooltipValue(v, unit, decimals)).join(' - ')
+  }
   if (typeof value === 'number' && unit && unit !== 'none') {
     return formatValue(value, unit, decimals)
   }
