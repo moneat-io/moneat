@@ -62,7 +62,11 @@ class RetentionPolicyServiceTest {
             } get Organizations.id
         }
 
-    private fun seedFreeTier(retentionDays: Int = 3, logRetentionDays: Int = 3): Int =
+    private fun seedFreeTier(
+        retentionDays: Int = 3,
+        logRetentionDays: Int = 3,
+        apmTraceRetentionDays: Int = retentionDays
+    ): Int =
         transaction {
             PricingTierConfigs.insert {
                 it[tier_name] = "FREE"
@@ -71,6 +75,7 @@ class RetentionPolicyServiceTest {
                 it[monthly_error_limit] = 5000
                 it[retention_days] = retentionDays
                 it[log_retention_days] = logRetentionDays
+                it[apm_trace_retention_days] = apmTraceRetentionDays
                 it[max_systems] = 3
                 it[monitor_interval_seconds] = 60
                 it[monthly_price_cents] = 0
@@ -79,7 +84,11 @@ class RetentionPolicyServiceTest {
             } get PricingTierConfigs.id
         }
 
-    private fun seedProTier(retentionDays: Int = 30, logRetentionDays: Int = 30): Int =
+    private fun seedProTier(
+        retentionDays: Int = 30,
+        logRetentionDays: Int = 30,
+        apmTraceRetentionDays: Int = retentionDays
+    ): Int =
         transaction {
             PricingTierConfigs.insert {
                 it[tier_name] = "PRO"
@@ -88,6 +97,7 @@ class RetentionPolicyServiceTest {
                 it[monthly_error_limit] = 50_000
                 it[retention_days] = retentionDays
                 it[log_retention_days] = logRetentionDays
+                it[apm_trace_retention_days] = apmTraceRetentionDays
                 it[max_systems] = 10
                 it[monitor_interval_seconds] = 30
                 it[monthly_price_cents] = 2900
@@ -225,5 +235,32 @@ class RetentionPolicyServiceTest {
             assertEquals(2, map.size)
             assertEquals(3, map[org1])
             assertEquals(30, map[org2])
+        }
+
+    @Test
+    fun `getApmTraceRetentionDaysForOrganization returns tier APM trace retention`() =
+        runBlocking {
+            seedFreeTier(apmTraceRetentionDays = 7)
+            val orgId = seedOrg()
+
+            val days = service.getApmTraceRetentionDaysForOrganization(orgId)
+
+            assertEquals(7, days)
+        }
+
+    @Test
+    fun `getApmTraceRetentionDaysByOrganization returns map of org to APM trace retention`() =
+        runBlocking {
+            seedFreeTier(apmTraceRetentionDays = 3)
+            val proTierId = seedProTier(retentionDays = 30, apmTraceRetentionDays = 45)
+            val org1 = seedOrg("Org 1")
+            val org2 = seedOrg("Org 2")
+            seedSubscription(org2, proTierId)
+
+            val map = service.getApmTraceRetentionDaysByOrganization()
+
+            assertEquals(2, map.size)
+            assertEquals(3, map[org1])
+            assertEquals(45, map[org2])
         }
 }
