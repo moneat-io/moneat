@@ -18,6 +18,7 @@ package com.moneat.dashboards.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
 
@@ -97,5 +98,6 @@ data class UpdateDashboardAlertRequest(
     @SerialName("duration_seconds") val durationSeconds: Int? = null,
     @SerialName("incident_severity") val incidentSeverity: String? = null,
     val enabled: Boolean? = null,
-    @SerialName("notification_channels") val notificationChannels: NotificationChannels? = null
+    @SerialName("notification_channels") val notificationChannels: NotificationChannels? = null,
+    @Transient val warningThresholdProvided: Boolean = false
 )

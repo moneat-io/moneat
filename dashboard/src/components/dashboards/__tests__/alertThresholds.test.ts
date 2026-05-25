@@ -28,12 +28,17 @@ describe('alertThresholds', () => {
       })).toBe(true)
     })
 
-    it('allows equality alerts to share the threshold line handling', () => {
+    it('requires equality alerts to share the error threshold', () => {
       expect(isWarningThresholdValid({
         condition: '==',
         warningThreshold: 100,
         errorThreshold: 100,
       })).toBe(true)
+      expect(isWarningThresholdValid({
+        condition: '==',
+        warningThreshold: 90,
+        errorThreshold: 100,
+      })).toBe(false)
     })
 
     it.each<DashboardAlertCondition>(['>', '>='])(
@@ -75,7 +80,7 @@ describe('alertThresholds', () => {
       ['>=', 'Warning threshold must be below the error threshold.'],
       ['<', 'Warning threshold must be above the error threshold.'],
       ['<=', 'Warning threshold must be above the error threshold.'],
-      ['==', 'Equality alerts show threshold lines without alert range sections.'],
+      ['==', 'Warning threshold must match the error threshold.'],
     ] as const)('returns validation copy for %s alerts', (condition, message) => {
       expect(getWarningThresholdMessage(condition)).toBe(message)
     })

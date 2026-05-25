@@ -27,7 +27,8 @@ export function isWarningThresholdValid({
   warningThreshold,
   errorThreshold,
 }: AlertThresholdPreview): boolean {
-  if (warningThreshold == null || condition === '==') return true
+  if (warningThreshold == null) return true
+  if (condition === '==') return warningThreshold === errorThreshold
   if (condition === '>' || condition === '>=') return warningThreshold < errorThreshold
   return warningThreshold > errorThreshold
 }
@@ -39,5 +40,5 @@ export function getWarningThresholdMessage(condition: DashboardAlertCondition): 
   if (condition === '<' || condition === '<=') {
     return 'Warning threshold must be above the error threshold.'
   }
-  return 'Equality alerts show threshold lines without alert range sections.'
+  return 'Warning threshold must match the error threshold.'
 }

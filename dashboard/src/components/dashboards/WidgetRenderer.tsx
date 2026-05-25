@@ -712,6 +712,7 @@ const TimeseriesChart = memo(function TimeseriesChart({
     () => hasLabels ? pivotData(data, xKey, labelKeys, valueKeys) : {pivoted: data, series: valueKeySeries(valueKeys)},
     [data, xKey, labelKeys, valueKeys, hasLabels]
   )
+  const seriesKeys = useMemo(() => series.map(({key}) => key), [series])
 
   // Recharts type="number" scale="time" requires numeric epoch ms values.
   // ClickHouse returns time_bucket as a string ("2026-02-24 19:00:00.000"), so
@@ -873,6 +874,7 @@ const BarChartWidget = memo(function BarChartWidget({
 
   if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
     const {pivoted: rawPivoted, series} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    const seriesKeys = series.map(({key}) => key)
     const pivoted = rawPivoted.map(row => {
       const v = row[timeKey!]
       if (typeof v === 'string') { const ms = parseUtcTimestamp(v); return isNaN(ms) ? row : {...row, [timeKey!]: ms} }

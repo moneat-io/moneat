@@ -84,6 +84,29 @@ describe('widgetSeries', () => {
     ])
   })
 
+  it('returns unpivoted data when label keys are absent', () => {
+    const data = [{time_bucket: 1, queue_depth: 12}]
+
+    expect(pivotData(data, 'time_bucket', [], ['queue_depth'])).toEqual({
+      pivoted: data,
+      series: [{key: 'queue_depth', name: 'queue depth'}],
+    })
+  })
+
+  it('sorts pivoted rows by timestamp', () => {
+    const result = pivotData(
+      [
+        {time_bucket: 2, worker: 'DBM', depth: 4},
+        {time_bucket: 1, worker: 'DBM', depth: 12},
+      ],
+      'time_bucket',
+      ['worker'],
+      ['depth'],
+    )
+
+    expect(result.pivoted.map((row) => row.time_bucket)).toEqual([1, 2])
+  })
+
   it('uses readable names for unpivoted numeric series', () => {
     expect(valueKeySeries(['queue_depth', 'dlq_depth'])).toEqual([
       {key: 'queue_depth', name: 'queue depth'},
