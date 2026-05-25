@@ -128,7 +128,10 @@ data class EventResponse(
     val tags: HashMap<String, String> = hashMapOf(),
     val contexts: String,
     val exception: String?,
-    val breadcrumbs: String?
+    val breadcrumbs: String?,
+    val stackTrace: String? = null,
+    val contextsJson: JsonElement? = null,
+    val breadcrumbsJson: JsonElement? = null
 )
 
 @Serializable
@@ -233,6 +236,16 @@ data class TraceDetailResponse(
     val startTimestamp: Double,
     val endTimestamp: Double,
     val duration: Double
+)
+
+@Serializable
+data class EventTraceResponse(
+    val eventId: String?,
+    val eventType: String?,
+    val projectId: Long,
+    val traceId: String,
+    val transaction: TransactionDetailResponse? = null,
+    val spans: List<SpanResponse> = emptyList()
 )
 
 @Serializable

@@ -56,7 +56,7 @@ class GetIssueTransactionsTool : McpTool {
             args["limit"]?.jsonPrimitive?.intOrNull
                 ?: DEFAULT_FEEDBACK_LIMIT
             ).coerceIn(1, MAX_FEEDBACK_LIMIT)
-        val events = correlatedService.getIssueEvents(
+        val events = correlatedService.getIssueTransactions(
             issueId,
             limit
         )

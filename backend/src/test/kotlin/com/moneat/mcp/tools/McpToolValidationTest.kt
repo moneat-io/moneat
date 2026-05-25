@@ -16,16 +16,38 @@
 
 package com.moneat.mcp.tools
 
+import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.config.ClickHouseClient
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.McpTool
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Subscriptions
+import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.requestBodyText
+import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class McpToolValidationTest {
+    companion object {
+        private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
+        private const val EVENT_ID = "01234567-89ab-cdef-0123-456789abcdef"
+        private const val TRACE_ID = "trace-1"
+        private var db: Database? = null
+    }
+
     private val context = McpContext(
         organizationId = 1,
         userId = 2,
@@ -33,6 +55,34 @@ class McpToolValidationTest {
         scopes = setOf("project:write"),
         sessionId = "validation-test",
     )
+
+    @BeforeEach
+    fun setupDatabase() {
+        db = db ?: Database.connect(
+            url = "jdbc:h2:mem:moneat_mcp_tool_validation;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(
+            Organizations,
+            Projects,
+            Subscriptions,
+            PricingTierConfigs,
+        )
+        transaction {
+            Organizations.insert {
+                it[id] = 1
+                it[name] = "Test Org"
+                it[slug] = "test-org"
+            }
+            Projects.insert {
+                it[id] = 1
+                it[organization_id] = 1
+                it[name] = "Test Project"
+                it[slug] = "test-project"
+            }
+        }
+    }
 
     @Test
     fun `tools return validation errors before calling services`() = runBlocking {
@@ -46,6 +96,99 @@ class McpToolValidationTest {
                 errorText.contains(case.expectedError),
                 "${case.name} expected '${case.expectedError}' but got '$errorText'"
             )
+        }
+    }
+
+    @Test
+    fun `getTrace tool reports not found for invalid event id`() = runBlocking {
+        val result = GetTraceTool().execute(obj("event_id" to "not-a-uuid"), context)
+
+        assertTrue(result.isError)
+        assertTrue(result.content.first().text.orEmpty().contains("Trace not found"))
+    }
+
+    @Test
+    fun `getTrace tool returns trace by event id`() = runBlocking {
+        MockHttpServer { exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("event_type,") -> {
+                    exchange.respond(
+                        200,
+                        """{"event_id":"$EVENT_ID","event_type":"error","project_id":1,"trace_id":"$TRACE_ID"}""",
+                        CONTENT_TYPE_TEXT_PLAIN
+                    )
+                }
+
+                query.contains("FROM `test`.apm_spans") && query.contains("trace_id_hex = '$TRACE_ID'") -> {
+                    exchange.respond(200, spanRow(), CONTENT_TYPE_TEXT_PLAIN)
+                }
+
+                else -> exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+            }
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val result = GetTraceTool().execute(obj("event_id" to EVENT_ID), context)
+
+            assertFalse(result.isError)
+            assertTrue(result.content.first().text.orEmpty().contains("TrimFrameWorker"))
+        }
+    }
+
+    @Test
+    fun `getTrace tool returns trace by trace id and project id`() = runBlocking {
+        MockHttpServer { exchange ->
+            val query = exchange.requestBodyText()
+            if (query.contains("FROM `test`.apm_spans") && query.contains("trace_id_hex = '$TRACE_ID'")) {
+                exchange.respond(200, spanRow(), CONTENT_TYPE_TEXT_PLAIN)
+            } else {
+                exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+            }
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val result = GetTraceTool().execute(
+                obj("trace_id" to TRACE_ID, "project_id" to 1),
+                context
+            )
+
+            assertFalse(result.isError)
+            assertTrue(result.content.first().text.orEmpty().contains(TRACE_ID))
+        }
+    }
+
+    @Test
+    fun `getIssueTransactions tool returns correlated transaction rows`() = runBlocking {
+        MockHttpServer { exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("FROM `test`.issues") && query.contains("WHERE issue_id = 'issue-1'") -> {
+                    exchange.respond(200, """{"project_id":1}""", CONTENT_TYPE_TEXT_PLAIN)
+                }
+
+                query.contains("event_type = 'transaction'") && query.contains("issue_id = 'issue-1'") -> {
+                    exchange.respond(
+                        200,
+                        """{"event_id":"txn-1","name":"ProjectWorkChain","op":"project.workchain",""" +
+                            """"duration":1250.0,"event_ts":"2026-02-03T00:00:00.000Z",""" +
+                            """"status":"internal_error","trace_id":"$TRACE_ID"}""",
+                        CONTENT_TYPE_TEXT_PLAIN
+                    )
+                }
+
+                else -> exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+            }
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val result = GetIssueTransactionsTool().execute(obj("issue_id" to "issue-1"), context)
+
+            assertFalse(result.isError)
+            assertTrue(result.content.first().text.orEmpty().contains("txn-1"))
         }
     }
 
@@ -223,6 +366,13 @@ class McpToolValidationTest {
             ),
             case("create_uptime_name", CreateUptimeMonitorTool(), obj(), "name is required"),
             case("create_uptime_url", CreateUptimeMonitorTool(), obj("name" to "API"), "url is required"),
+            case("get_trace_lookup", GetTraceTool(), obj(), "event_id or trace_id is required"),
+            case(
+                "get_trace_project_id",
+                GetTraceTool(),
+                obj("trace_id" to TRACE_ID),
+                "project_id is required when trace_id is used without event_id",
+            ),
             case("create_datasource_name", CreateDataSourceTool(), obj(), "name is required"),
             case(
                 "create_datasource_type",
@@ -280,6 +430,12 @@ class McpToolValidationTest {
         is Number -> JsonPrimitive(value)
         else -> JsonPrimitive(value.toString())
     }
+
+    private fun spanRow(): String =
+        """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_ID",""" +
+            """"meta":{"sentry.project_id":"1"},"op":"worker",""" +
+            """"description":"TrimFrameWorker","start_ns":"1000000000",""" +
+            """"duration_ns":"500000000","error":1}"""
 
     private data class ValidationCase(
         val name: String,

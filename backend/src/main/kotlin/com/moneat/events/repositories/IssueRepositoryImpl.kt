@@ -216,7 +216,8 @@ class IssueRepositoryImpl(
                 tags,
                 contexts,
                 exception_value as exception,
-                breadcrumbs
+                breadcrumbs,
+                stack_trace
             FROM `$clickhouseDb`.events
             WHERE $projectIdClause AND issue_id = '$escapedIssueId' AND event_type = 'error'
                 AND $retentionClause
@@ -247,8 +248,17 @@ class IssueRepositoryImpl(
                 JSONExtractString(contexts, 'trace', 'status') as status,
                 JSONExtractString(contexts, 'trace', 'trace_id') as trace_id
             FROM `$clickhouseDb`.events
-            WHERE $projectIdClause AND issue_id = '$escapedIssueId'
+            WHERE $projectIdClause
                 AND event_type = 'transaction'
+                AND JSONExtractString(contexts, 'trace', 'trace_id') IN (
+                    SELECT DISTINCT JSONExtractString(contexts, 'trace', 'trace_id')
+                    FROM `$clickhouseDb`.events
+                    WHERE $projectIdClause
+                        AND issue_id = '$escapedIssueId'
+                        AND event_type = 'error'
+                        AND JSONExtractString(contexts, 'trace', 'trace_id') != ''
+                        AND $retentionClause
+                )
                 AND $retentionClause
             ORDER BY timestamp DESC
             LIMIT $limit
