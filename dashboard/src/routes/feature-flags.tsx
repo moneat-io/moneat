@@ -31,6 +31,7 @@ import type {
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {CodeEditor} from '@/components/ui/code-editor'
 import {CopyBlock} from '@/components/ui/copy-block'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
@@ -76,6 +77,7 @@ const defaultVariants = JSON.stringify([
 ], null, 2)
 const defaultSegmentConditions = JSON.stringify({all: []}, null, 2)
 const tabTriggerClass = [
+  'cursor-pointer',
   'border border-transparent',
   'data-[state=active]:border-foreground data-[state=active]:bg-background',
   'data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-foreground/20',
@@ -524,34 +526,28 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
                 Docs
               </a>
             </Button>
-            <TooltipWrap content={tooltipText.environment}>
-              <div>
-                <Select value={environment} onValueChange={setEnvironment}>
-                  <SelectTrigger className="h-9 w-44">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {environments.map((env) => (
-                      <SelectItem key={env.key} value={env.key}>{env.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </TooltipWrap>
-            <TooltipWrap content={tooltipText.refresh}>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Refresh feature flag data"
-                className="h-9 w-9"
-                onClick={() => {
-                  queryClient.invalidateQueries({queryKey: ['feature-flags']})
-                  queryClient.invalidateQueries({queryKey: ['feature-flag-analytics']})
-                }}
-              >
-                <RefreshCcw className="h-4 w-4" />
-              </Button>
-            </TooltipWrap>
+            <Select value={environment} onValueChange={setEnvironment}>
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {environments.map((env) => (
+                  <SelectItem key={env.key} value={env.key}>{env.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Refresh feature flag data"
+              className="h-9 w-9"
+              onClick={() => {
+                queryClient.invalidateQueries({queryKey: ['feature-flags']})
+                queryClient.invalidateQueries({queryKey: ['feature-flag-analytics']})
+              }}
+            >
+              <RefreshCcw className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
@@ -678,10 +674,11 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
                   </div>
                 </div>
                 <FieldLabel tooltip={tooltipText.variantsJson}>Variants JSON</FieldLabel>
-                <Textarea
+                <CodeEditor
                   value={newFlag.variants}
-                  onChange={(event) => setNewFlag({...newFlag, variants: event.target.value})}
-                  className="min-h-24 font-mono text-xs"
+                  onChange={(variants) => setNewFlag({...newFlag, variants})}
+                  language="json"
+                  rows={5}
                 />
                 <FieldLabel tooltip={tooltipText.tags}>Tags</FieldLabel>
                 <Input
@@ -689,16 +686,14 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
                   onChange={(event) => setNewFlag({...newFlag, tags: event.target.value})}
                   placeholder="billing, beta"
                 />
-                <TooltipWrap content={tooltipText.createFlag}>
-                  <Button
-                    className="w-full gap-2"
-                    onClick={() => createFlagMutation.mutate()}
-                    disabled={!newFlag.key || !newFlag.name || createFlagMutation.isPending}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Create Flag
-                  </Button>
-                </TooltipWrap>
+                <Button
+                  className="w-full gap-2"
+                  onClick={() => createFlagMutation.mutate()}
+                  disabled={!newFlag.key || !newFlag.name || createFlagMutation.isPending}
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Flag
+                </Button>
               </div>
             </details>
 
@@ -744,17 +739,15 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
                       placeholder="QA"
                     />
                   </div>
-                  <TooltipWrap content={tooltipText.addEnvironment}>
-                    <Button
-                      variant="outline"
-                      className="w-full gap-2"
-                      onClick={() => createEnvironmentMutation.mutate()}
-                      disabled={!environmentDraft.key || !environmentDraft.name || createEnvironmentMutation.isPending}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Environment
-                    </Button>
-                  </TooltipWrap>
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={() => createEnvironmentMutation.mutate()}
+                    disabled={!environmentDraft.key || !environmentDraft.name || createEnvironmentMutation.isPending}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Environment
+                  </Button>
                 </div>
               </details>
             </div>
@@ -815,21 +808,17 @@ function CompactMetric({
   tooltip: string
 }) {
   return (
-    <TooltipWrap content={tooltip}>
-      <button
-        type="button"
-        aria-label={`${label}: ${value}. ${tooltip}`}
-        className={cn(
-          'flex h-8 items-center gap-2 rounded-md border bg-card px-2.5 text-left text-sm shadow-sm',
-          'transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2',
-          'focus-visible:ring-ring'
-        )}
-      >
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+    <div
+      aria-label={`${label}: ${value}`}
+      className="flex h-8 items-center gap-2 rounded-md border bg-card px-2.5 text-left text-sm shadow-sm"
+    >
+      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      <span className="flex items-center gap-1.5">
         <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="font-semibold tabular-nums">{value}</span>
-      </button>
-    </TooltipWrap>
+        <HelpIcon content={tooltip} />
+      </span>
+      <span className="font-semibold tabular-nums">{value}</span>
+    </div>
   )
 }
 
@@ -873,18 +862,14 @@ function FlagDetail(props: {
           <code className="mt-1 block truncate text-xs text-muted-foreground">{props.flag.key}</code>
         </div>
         <div className="flex gap-2">
-          <TooltipWrap content={tooltipText.saveConfig}>
-            <Button variant="outline" size="sm" onClick={props.onSaveConfig} className="gap-2">
-              <Save className="h-4 w-4" />
-              Save
-            </Button>
-          </TooltipWrap>
-          <TooltipWrap content={tooltipText.archive}>
-            <Button variant="destructive" size="sm" onClick={props.onArchive} className="gap-2">
-              <Trash2 className="h-4 w-4" />
-              Archive
-            </Button>
-          </TooltipWrap>
+          <Button variant="outline" size="sm" onClick={props.onSaveConfig} className="gap-2">
+            <Save className="h-4 w-4" />
+            Save
+          </Button>
+          <Button variant="destructive" size="sm" onClick={props.onArchive} className="gap-2">
+            <Trash2 className="h-4 w-4" />
+            Archive
+          </Button>
         </div>
       </div>
 
@@ -923,18 +908,17 @@ function FlagDetail(props: {
               </Table>
               <div className="grid gap-2">
                 <FieldLabel tooltip={tooltipText.variantsJson}>Variants JSON</FieldLabel>
-                <Textarea
+                <CodeEditor
                   value={props.variantDraft}
-                  onChange={(event) => props.setVariantDraft(event.target.value)}
-                  className="min-h-40 font-mono text-xs"
+                  onChange={props.setVariantDraft}
+                  language="json"
+                  rows={10}
                 />
               </div>
-              <TooltipWrap content={tooltipText.variantsJson}>
-                <Button variant="outline" size="sm" onClick={props.onSaveVariants} className="gap-2">
-                  <Save className="h-4 w-4" />
-                  Save Variants
-                </Button>
-              </TooltipWrap>
+              <Button variant="outline" size="sm" onClick={props.onSaveVariants} className="gap-2">
+                <Save className="h-4 w-4" />
+                Save Variants
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -950,12 +934,8 @@ function FlagDetail(props: {
                 />
                 <FieldLabel tooltip={tooltipText.enabled}>Enabled in {props.environment}</FieldLabel>
               </div>
-              <TooltipWrap content={tooltipText.segmentList}>
-                <Badge variant="outline" className="cursor-help">{props.segments.length} segments</Badge>
-              </TooltipWrap>
-              <TooltipWrap content="Configuration version for this flag in this environment.">
-                <Badge variant="outline" className="cursor-help">v{props.config?.version ?? 0}</Badge>
-              </TooltipWrap>
+              <Badge variant="outline">{props.segments.length} segments</Badge>
+              <Badge variant="outline">v{props.config?.version ?? 0}</Badge>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <VariantSelect
@@ -1005,16 +985,14 @@ function FlagDetail(props: {
                     <div className="truncate text-sm font-medium">{segment.name}</div>
                     <code className="text-xs text-muted-foreground">{segment.key}</code>
                   </button>
-                  <TooltipWrap content={tooltipText.deleteSegment}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Archive ${segment.name} segment`}
-                      onClick={() => props.onDeleteSegment(segment.key)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TooltipWrap>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Archive ${segment.name} segment`}
+                    onClick={() => props.onDeleteSegment(segment.key)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               ))}
               {props.segments.length === 0 && (
@@ -1055,16 +1033,14 @@ function FlagDetail(props: {
                 onChange={(event) => props.setSegmentDraft({...props.segmentDraft, conditions: event.target.value})}
                 className="min-h-44 font-mono text-xs"
               />
-              <TooltipWrap content={tooltipText.saveSegment}>
-                <Button
-                  className="gap-2"
-                  onClick={props.onSaveSegment}
-                  disabled={!props.segmentDraft.key || !props.segmentDraft.name}
-                >
-                  <Save className="h-4 w-4" />
-                  Save Segment
-                </Button>
-              </TooltipWrap>
+              <Button
+                className="gap-2"
+                onClick={props.onSaveSegment}
+                disabled={!props.segmentDraft.key || !props.segmentDraft.name}
+              >
+                <Save className="h-4 w-4" />
+                Save Segment
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -1166,16 +1142,14 @@ function FlagDetail(props: {
                   <SelectItem value="client">Client</SelectItem>
                 </SelectContent>
               </Select>
-              <TooltipWrap content={tooltipText.createKey}>
-                <Button
-                  className="w-full gap-2"
-                  onClick={props.onCreateSdkKey}
-                  disabled={!props.sdkKeyDraft.name}
-                >
-                  <KeyRound className="h-4 w-4" />
-                  Create Key
-                </Button>
-              </TooltipWrap>
+              <Button
+                className="w-full gap-2"
+                onClick={props.onCreateSdkKey}
+                disabled={!props.sdkKeyDraft.name}
+              >
+                <KeyRound className="h-4 w-4" />
+                Create Key
+              </Button>
               {props.createdKey && <CopyBlock code={props.createdKey.key} language="text" />}
               <div className="space-y-2">
                 {props.sdkKeys
@@ -1186,16 +1160,14 @@ function FlagDetail(props: {
                         <div className="truncate text-sm font-medium">{key.name}</div>
                         <div className="text-xs text-muted-foreground">{key.keyPrefix} · {key.keyType}</div>
                       </div>
-                      <TooltipWrap content={tooltipText.revokeKey}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Revoke ${key.name}`}
-                          onClick={() => props.onRevokeSdkKey(key.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TooltipWrap>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Revoke ${key.name}`}
+                        onClick={() => props.onRevokeSdkKey(key.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
               </div>
