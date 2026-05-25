@@ -348,9 +348,30 @@ class LogServicePureLogicTest {
     }
 
     @Test
-    fun `autoInterval returns 1d for range over 7d`() {
+    fun `autoInterval returns 2h for range over 10d`() {
         val from = 0L
         val to = 14 * 86_400_000L // 14 days
+        assertEquals("2h", service.autoInterval(from, to))
+    }
+
+    @Test
+    fun `autoInterval returns 4h for range around 30d`() {
+        val from = 0L
+        val to = 30 * 86_400_000L // 30 days
+        assertEquals("4h", service.autoInterval(from, to))
+    }
+
+    @Test
+    fun `autoInterval returns 12h for range around 90d`() {
+        val from = 0L
+        val to = 75 * 86_400_000L // 75 days
+        assertEquals("12h", service.autoInterval(from, to))
+    }
+
+    @Test
+    fun `autoInterval returns 1d for range over 90d`() {
+        val from = 0L
+        val to = 120 * 86_400_000L // 120 days
         assertEquals("1d", service.autoInterval(from, to))
     }
 

@@ -57,7 +57,7 @@ class AggregateLogsTool : McpTool {
                 "to" to schemaString("End time (ISO 8601)"),
                 "interval" to schemaEnum(
                     "Bucket interval",
-                    listOf("1m", "5m", "15m", "1h", "1d")
+                    listOf("1m", "5m", "15m", "1h", "2h", "4h", "12h", "1d")
                 ),
                 "query" to schemaString("Search query"),
                 "levels" to schemaString(
