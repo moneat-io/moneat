@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {memo, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 'react'
+import {memo, type CSSProperties, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
@@ -42,6 +42,7 @@ import {HeatmapWidget} from './HeatmapWidget'
 import ReactMarkdown from 'react-markdown'
 import type {ValueMapping} from './formatValue'
 import {formatValue} from './formatValue'
+import {pivotData, valueKeySeries} from './widgetSeries'
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -307,6 +308,17 @@ function formatUnitTooltipValue(value: TooltipValue, unit?: string, decimals?: s
 
 type DisplayConfig = Record<string, string>
 
+interface LegendPayloadItem {
+  color?: string
+  inactive?: boolean
+  value?: string | number
+}
+
+interface ChartLegendProps {
+  payload?: LegendPayloadItem[]
+  placement?: 'bottom' | 'right'
+}
+
 const GRAFANA_COLORS: Record<string, string> = {
   green: '#73BF69', 'semi-dark-green': '#56A64B', 'dark-green': '#37872D', 'light-green': '#96D98D', 'super-light-green': '#C8F2C2',
   red: '#F2495C', 'semi-dark-red': '#E02F44', 'dark-red': '#C4162A', 'light-red': '#FF7383', 'super-light-red': '#FFA6B0',
@@ -383,14 +395,61 @@ function getLegendProps(dc: DisplayConfig) {
   const mode = dc.legendMode || 'list'
   if (mode === 'hidden') return null
   const placement = dc.legendPlacement || 'bottom'
+  const isRight = placement === 'right'
+  const wrapperStyle: CSSProperties = {
+    fontSize: '10px',
+    maxHeight: isRight ? '100%' : '56px',
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    paddingLeft: isRight ? '8px' : undefined,
+    paddingTop: isRight ? undefined : '4px',
+  }
   return {
-    wrapperStyle: {fontSize: '10px', paddingTop: '4px'},
+    wrapperStyle,
+    content: <ChartLegend placement={isRight ? 'right' : 'bottom'} />,
+    height: isRight ? undefined : 56,
     iconType: 'line' as const,
     iconSize: 8,
-    layout: (placement === 'right' ? 'vertical' : 'horizontal') as 'vertical' | 'horizontal',
-    verticalAlign: (placement === 'right' ? 'middle' : 'bottom') as 'top' | 'middle' | 'bottom',
-    align: (placement === 'right' ? 'right' : 'center') as 'left' | 'center' | 'right',
+    layout: (isRight ? 'vertical' : 'horizontal') as 'vertical' | 'horizontal',
+    verticalAlign: (isRight ? 'middle' : 'bottom') as 'top' | 'middle' | 'bottom',
+    align: (isRight ? 'right' : 'center') as 'left' | 'center' | 'right',
+    width: isRight ? 180 : undefined,
   }
+}
+
+function ChartLegend({payload, placement = 'bottom'}: ChartLegendProps) {
+  const items = payload ?? []
+  if (items.length === 0) return null
+
+  const isRight = placement === 'right'
+  const containerClass = isRight
+    ? 'flex h-full max-h-full flex-col gap-1 overflow-y-auto overflow-x-hidden pr-1'
+    : 'flex max-h-14 flex-wrap gap-x-3 gap-y-1 overflow-y-auto overflow-x-hidden px-1 pt-1'
+  const itemClass = isRight
+    ? 'flex min-w-0 max-w-44 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground'
+    : 'flex min-w-0 max-w-56 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground'
+
+  return (
+    <div className={containerClass}>
+      {items.map((item, index) => {
+        const label = String(item.value ?? '')
+        return (
+          <div
+            key={`${label}-${index}`}
+            className={itemClass}
+            style={item.inactive ? {opacity: 0.45} : undefined}
+            title={label}
+          >
+            <span
+              className="h-0.5 w-3 shrink-0 rounded-full"
+              style={{backgroundColor: item.color ?? 'currentColor'}}
+            />
+            <span className="min-w-0 truncate">{label}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function getDotProp(showPoints: string | undefined) {
@@ -433,45 +492,6 @@ function classifyColumns(data: Record<string, unknown>[]) {
   return {timeKey, labelKeys, valueKeys}
 }
 
-/**
- * Pivots flat multi-series data into one-row-per-timestamp format for recharts.
- * Input:  [{time_bucket: 100, platform: "android", value: 5}, {time_bucket: 100, platform: "ios", value: 3}]
- * Output: [{time_bucket: 100, "android": 5, "ios": 3}]
- */
-function pivotData(data: Record<string, unknown>[], timeKey: string, labelKeys: string[], valueKeys: string[]) {
-  if (labelKeys.length === 0 || valueKeys.length === 0) {
-    return {pivoted: data, seriesKeys: valueKeys}
-  }
-
-  const grouped = new Map<string | number, Record<string, unknown>>()
-  const seriesSet = new Set<string>()
-
-  for (const row of data) {
-    const t = row[timeKey] as string | number
-    if (!grouped.has(t)) {
-      grouped.set(t, {[timeKey]: t})
-    }
-    const entry = grouped.get(t)!
-
-    const labelParts = labelKeys.map(k => String(row[k] ?? '')).filter(Boolean)
-    const seriesLabel = labelParts.join(', ') || 'value'
-
-    for (const vk of valueKeys) {
-      const key = valueKeys.length > 1 ? `${seriesLabel} (${vk})` : seriesLabel
-      entry[key] = row[vk]
-      seriesSet.add(key)
-    }
-  }
-
-  const pivoted = Array.from(grouped.values()).sort((a, b) => {
-    const ta = a[timeKey] as number
-    const tb = b[timeKey] as number
-    return ta - tb
-  })
-
-  return {pivoted, seriesKeys: Array.from(seriesSet)}
-}
-
 const CHART_MARGIN = {top: 5, right: 5, left: 20, bottom: 20}
 const TOOLTIP_STYLE = {
   backgroundColor: 'hsl(var(--popover))',
@@ -487,8 +507,8 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
   const spanMs = getTimeSpanMs(timeRange)
 
   const hasLabels = labelKeys.length > 0 && valueKeys.length > 0
-  const {pivoted, seriesKeys} = useMemo(
-    () => hasLabels ? pivotData(data, xKey, labelKeys, valueKeys) : {pivoted: data, seriesKeys: valueKeys},
+  const {pivoted, series} = useMemo(
+    () => hasLabels ? pivotData(data, xKey, labelKeys, valueKeys) : {pivoted: data, series: valueKeySeries(valueKeys)},
     [data, xKey, labelKeys, valueKeys, hasLabels]
   )
 
@@ -556,11 +576,12 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
           ))}
-          {seriesKeys.map((key, i) => (
+          {series.map((s, i) => (
             <Area
-              key={key}
+              key={s.key}
               type={interpolation}
-              dataKey={key}
+              dataKey={s.key}
+              name={s.name}
               stroke={COLORS[i % COLORS.length]}
               strokeWidth={lineWidth}
               fill={COLORS[i % COLORS.length]}
@@ -601,11 +622,12 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
           ))}
-          {seriesKeys.map((key, i) => (
+          {series.map((s, i) => (
             <Line
-              key={key}
+              key={s.key}
               type={interpolation}
-              dataKey={key}
+              dataKey={s.key}
+              name={s.name}
               stroke={COLORS[i % COLORS.length]}
               strokeWidth={lineWidth}
               dot={dotProp}
@@ -637,7 +659,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
   const tooltipFormatter: TooltipFormatterFn = (value) => formatUnitTooltipValue(value, unit, decimals)
 
   if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
-    const {pivoted: rawPivoted, seriesKeys} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    const {pivoted: rawPivoted, series} = pivotData(data, timeKey!, labelKeys, valueKeys)
     const pivoted = rawPivoted.map(row => {
       const v = row[timeKey!]
       if (typeof v === 'string') { const ms = parseUtcTimestamp(v); return isNaN(ms) ? row : {...row, [timeKey!]: ms} }
@@ -675,8 +697,14 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
             {thresholds.map((t, i) => (
               <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
             ))}
-            {seriesKeys.map((key, i) => (
-              <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} stackId={barMode === 'stacked' ? 'stack' : undefined} />
+            {series.map((s, i) => (
+              <Bar
+                key={s.key}
+                dataKey={s.key}
+                name={s.name}
+                fill={COLORS[i % COLORS.length]}
+                stackId={barMode === 'stacked' ? 'stack' : undefined}
+              />
             ))}
           </BarChart>
         )}
@@ -708,7 +736,14 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
           ))}
           {barKeys.map((key, i) => (
-            <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} radius={[2, 2, 0, 0]} stackId={barMode === 'stacked' ? 'stack' : undefined} />
+            <Bar
+              key={key}
+              dataKey={key}
+              name={key.replace(/_/g, ' ')}
+              fill={COLORS[i % COLORS.length]}
+              radius={[2, 2, 0, 0]}
+              stackId={barMode === 'stacked' ? 'stack' : undefined}
+            />
           ))}
         </BarChart>
       )}
@@ -748,7 +783,10 @@ const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc
           {legendProps && (
             <Legend
               {...legendProps}
-              wrapperStyle={{fontSize: '11px'}}
+              wrapperStyle={{
+                ...legendProps.wrapperStyle,
+                fontSize: '11px',
+              }}
               iconSize={10}
             />
           )}
