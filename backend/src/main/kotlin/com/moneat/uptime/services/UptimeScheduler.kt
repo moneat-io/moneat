@@ -291,11 +291,10 @@ class UptimeScheduler(
                 .ApplicationConfig("application.conf")
         val baseUrl = config.property("email.frontendUrl").getString()
 
-        // Fire or resolve incident alert
+        // Build an alert lifecycle event; IncidentService applies incident-provider routing.
         suspendRunCatching {
             if (newStatus == "down") {
-                // Get severity from monitor override or fall back to routing rules
-                // We always fire the incident; IncidentService will check routing rules
+                // Get severity from the monitor override or fall back to routing rules.
                 val severityOverride =
                     monitor.incidentSeverity?.let {
                         com.moneat.alerts.models.AlertSeverity
@@ -305,7 +304,7 @@ class UptimeScheduler(
                 // Use override severity if set, otherwise use a default that routing rules can override
                 val severity = severityOverride ?: com.moneat.alerts.models.AlertSeverity.HIGH
 
-                val incidentEvent =
+                val alertLifecycleEvent =
                     com.moneat.alerts.models.AlertLifecycleEvent(
                         title = "Uptime Monitor Down: ${monitor.name}",
                         description = "Monitor '${monitor.name}' (${monitor.type}) is down.\nError: ${result.message}",
@@ -324,8 +323,7 @@ class UptimeScheduler(
                         ),
                         moneatUrl = "$baseUrl/uptime/${monitor.id}"
                     )
-                // IncidentService will check routing rules and only fire if configured
-                incidentService.fireAlert(incidentEvent)
+                incidentService.fireAlert(alertLifecycleEvent)
             } else if (newStatus == "up") {
                 // Resolve the incident
                 incidentService.autoResolveAlert(
@@ -338,7 +336,7 @@ class UptimeScheduler(
                 )
             }
         }.onFailure { e ->
-            logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
+            logger.error(e) { "Failed to fire/resolve incident provider alert for uptime monitor" }
         }
     }
 

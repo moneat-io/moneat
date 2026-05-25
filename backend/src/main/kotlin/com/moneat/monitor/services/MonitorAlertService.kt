@@ -346,7 +346,7 @@ class MonitorAlertService(
         val metricLabel = getMetricLabel(alert.metric)
         val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
         val dashboardUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
-        val incidentSeverity = hostAlertIncidentSeverity(alert)
+        val alertSeverityOverride = hostAlertSeverityOverride(alert)
         val title = "$hostName - $metricLabel recovered"
         val description = "The alert for $metricLabel is no longer active."
         val deduplicationKey = hostAlertDedupKey(alert)
@@ -358,7 +358,7 @@ class MonitorAlertService(
             title = title,
             description = description,
             dashboardUrl = dashboardUrl,
-            severity = incidentSeverity ?: AlertSeverity.HIGH
+            severity = alertSeverityOverride ?: AlertSeverity.HIGH
         )
         autoResolveRecoveredHostIncident(
             alert = alert,
@@ -367,7 +367,7 @@ class MonitorAlertService(
             title = title,
             description = description,
             dashboardUrl = dashboardUrl,
-            incidentSeverity = incidentSeverity
+            alertSeverityOverride = alertSeverityOverride
         )
         logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
     }
@@ -403,9 +403,9 @@ class MonitorAlertService(
         title: String,
         description: String,
         dashboardUrl: String,
-        incidentSeverity: AlertSeverity?
+        alertSeverityOverride: AlertSeverity?
     ) {
-        if (incidentSeverity == null) return
+        if (alertSeverityOverride == null) return
 
         suspendRunCatching {
             incidentService.autoResolveAlert(
@@ -731,8 +731,8 @@ class MonitorAlertService(
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
         val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
 
-        val alertSeverity = hostAlertIncidentSeverity(alert)
-        val incidentEvent =
+        val alertSeverity = hostAlertSeverityOverride(alert)
+        val alertLifecycleEvent =
             AlertLifecycleEvent(
                 title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
                 description =
@@ -755,20 +755,20 @@ class MonitorAlertService(
             )
 
         suspendRunCatching {
-            workflowService.publishAlertTriggered(incidentEvent)
+            workflowService.publishAlertTriggered(alertLifecycleEvent)
         }.getOrElse { e ->
             logger.error(e) { "Failed to publish host alert workflow" }
         }
         if (alertSeverity != null) {
             suspendRunCatching {
-                incidentService.fireAlert(incidentEvent, publishWorkflow = false)
+                incidentService.fireAlert(alertLifecycleEvent, publishWorkflow = false)
             }.getOrElse { e ->
                 logger.error(e) { "Failed to fire host alert incident" }
             }
         }
     }
 
-    private fun hostAlertIncidentSeverity(alert: AlertData): AlertSeverity? =
+    private fun hostAlertSeverityOverride(alert: AlertData): AlertSeverity? =
         if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
             transaction {
                 OrganizationAlertTemplates
@@ -870,7 +870,7 @@ class MonitorAlertService(
 
         suspendRunCatching {
             val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
-            val incidentEvent =
+            val alertLifecycleEvent =
                 AlertLifecycleEvent(
                     title = "Host Down: $hostName",
                     description = "The monitoring agent has stopped reporting metrics.\nStatus: $lastSeenText",
@@ -887,9 +887,9 @@ class MonitorAlertService(
                     ),
                     moneatUrl = "$frontendUrl/monitoring/hosts/$hostId"
                 )
-            incidentService.fireAlert(incidentEvent)
+            incidentService.fireAlert(alertLifecycleEvent)
         }.getOrElse { e ->
-            logger.error(e) { "Failed to fire incident alert for host down" }
+            logger.error(e) { "Failed to fire incident provider alert for host down" }
         }
     }
 

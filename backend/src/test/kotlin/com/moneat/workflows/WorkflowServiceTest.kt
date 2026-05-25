@@ -117,6 +117,8 @@ class WorkflowServiceTest {
         )
         transaction {
             SchemaUtils.create(Users, Organizations, Memberships, Workflows)
+            exec("DROP TABLE IF EXISTS workflow_runs")
+            exec("DROP TABLE IF EXISTS workflow_versions")
             exec(
                 """
                 CREATE TABLE workflow_versions (
@@ -146,6 +148,13 @@ class WorkflowServiceTest {
                     once_for TEXT NOT NULL,
                     scope TEXT NOT NULL DEFAULT '{}',
                     status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    active_once_for VARCHAR(4096) GENERATED ALWAYS AS (
+                        CASEWHEN(
+                            status = 'pending',
+                            CAST(once_for AS VARCHAR(4096)),
+                            CASEWHEN(status = 'running', CAST(once_for AS VARCHAR(4096)), NULL)
+                        )
+                    ),
                     progress TEXT NOT NULL DEFAULT '[]',
                     error_message TEXT,
                     created_at TIMESTAMP NOT NULL,
@@ -160,7 +169,12 @@ class WorkflowServiceTest {
                 )
                 """.trimIndent()
             )
-            exec("CREATE INDEX idx_workflow_runs_idempotency_key ON workflow_runs (workflow_id, once_for)")
+            exec(
+                """
+                CREATE UNIQUE INDEX idx_workflow_runs_idempotency_key
+                    ON workflow_runs (workflow_id, active_once_for)
+                """.trimIndent()
+            )
             exec("CREATE INDEX idx_workflow_runs_workflow_created ON workflow_runs (workflow_id, created_at DESC)")
         }
     }
